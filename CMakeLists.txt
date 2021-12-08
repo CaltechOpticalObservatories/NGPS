@@ -18,5 +18,6 @@ set( CMAKE_CXX_COMPILER /usr/bin/g++ )
 
 find_package( Threads )
 
+add_subdirectory( ${PROJECT_BASE_DIR}/AndorCamera2 )
 add_subdirectory( ${PROJECT_BASE_DIR}/utils )
 add_subdirectory( ${PROJECT_BASE_DIR}/camerad )
