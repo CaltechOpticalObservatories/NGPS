@@ -1,0 +1,328 @@
+       COMMENT *
+
+	*
+
+; LEFT CHANNEL READOUT
+
+; Miscellaneous definitions
+CLKAD 	EQU	$200000
+VIDEO	EQU	$000000	; Video processor board select = 0
+CLK2	EQU	$002000	; Clock driver board lower half 
+CLK3	EQU	$003000	; Clock driver board upper half
+
+; Delay numbers for clocking
+P_DLY	EQU	$B80000	; Parallel clock delay
+S_DLY	EQU	$090000	; Serial shift time per state.  
+                        ; Gets noisy if shorter (or is it the shorter dwell?)
+;SS_DLY	EQU	$310000	; Serial skip time per state
+SS_DLY	EQU	$030000	; Serial skip time per state
+SW_DLY	EQU	$040000	; summing well settling time.  2 may be ok. 
+NS_CLR	EQU	2100	; Serial clocks to clear
+NP_CLR	EQU	1024	; Parallel clocks to clear (per amplifier)
+SH_DEL	EQU	50	; Shutter delay in milliseconds
+ADC_DLY EQU	$070000	; ADC sample time = 300 ns, but some slew occurs during integration.
+RG_DLY	EQU	$040000 ; reset gate settling before DC restore
+
+CNV_DLY	EQU	$110000 ; RG_DLY+CNV_DLY+40ns >> 815 ns, say 880ns.
+DCR_DLY	EQU	$030000	; DC Restore, settle time after xmit > 160ns
+
+;INT_DLY EQU	$000000 ; integration delay -> measured 2.48 usecs/pix
+;INT_DLY EQU	$140000 ; adjust to extend dwell time  -> measured 3.28 usecs/pix
+;INT_DLY EQU	$260000 ; adjust to extend dwell time  -> measured 4.00 usecs/pix
+INT_DLY EQU	$3F0000 ; adjust to extend dwell time  -> measured 5.00 usecs/pix
+;INT_DLY EQU	$580000 ; adjust to extend dwell time  -> measured 6.00 usecs/pix
+;INT_DLY EQU	$7D0000 ; adjust to extend dwell time  -> measured 7.00 usecs/pix
+;INT_DLY2 EQU	$310000 ; add to 7us dwell time to get 9.00 usecs/pix
+;INT_DLY EQU	$130000 ;
+;INT_DLY2 EQU	$130000 ;
+
+; clocking voltages
+P_HI	EQU	+1.0	; Parallel clock	; datasheet +10
+P_LO	EQU	-9.0				; datasheet 0.0
+RG_HI	EQU     +3.0	; Reset Gate		; datasheet +12.0
+RG_LO	EQU	-3.0				; datasheet 0.0
+S_HI	EQU	+2.0	; Serial clocks		; datasheet +11.0
+S_LO	EQU	-8.0				; datasheet 1.0
+SW_HI	EQU	+2.0	; Summing well		; datasheet +11.0
+SW_LO	EQU	-9.0				; datasheet 0.0
+DG_HI	EQU	3.0	; Dump Gate
+DG_LO	EQU	-9.0	; Dump Gate
+ZERO	EQU	 -9.0
+CLKmax	EQU	+12.4
+
+; DC Bias definition, in volts
+BOD	EQU	+20.0	; Output Drain both	; datasheet +29
+BJD	EQU	+22	; Jfet Drain both	; datasheet +31
+BRDL	EQU	+8.0	; Reset Drain		; datasheet +17
+BRDR	EQU	+8.0
+BDD	EQU	+15.0	; Dump Drain		; datasheet +24
+BOG1	EQU	-6.0	; Output gate 1		; datasheet +3
+BOG2	EQU	-3.0	; Output gate 2		; datasheet +4
+
+; Output video offset parameters
+OFFSET0	EQU	1503
+OFFSET1	EQU	1601
+
+; ******************************************************
+; ******************************************************
+
+; Define switch state bits for the CCD clocks - CLK2, which is lower bank
+P1	EQU	1	; Parallel shift register phase #1, L & R amps 
+P2	EQU	2	; Parallel shift register phase #2, L & R amps
+P3	EQU	4	; Parallel shift register phase #3, L & R amps 
+H_DG	EQU	8	; Dump Gate
+L_DG	EQU	0	; Dump Gate
+
+; Define switch state bits for the CCD clocks - CLK3, which is upper bank
+S1L	EQU	1	; Serial shift register phase #1, left quadrant
+S2L	EQU	2	; Serial shift register phase #2, left
+SWL	EQU	4	; Summing well, Left quadrant 
+S1R	EQU	8	; Serial shift register phase #1, right quadrant 
+S2R	EQU	$10	; Serial shift register phase #2, right
+SWR	EQU	$20	; Summing well, Right quadrant 
+S3	EQU	$40	; Serial shift register phase #3, both
+RGL	EQU	$80	; Reset Gate left
+RGR	EQU	$100	; Reset Gate right
+
+
+;  ***  Definitions for Y: memory waveform tables  *****
+
+; waveforms para el borrado paralelo (ie parallel erase.)
+PARALLEL_CLEAR
+	DC END_PARALLEL_CLEAR-PARALLEL_CLEAR-1
+	DC	CLK2+P_DLY+00+P2+P3+H_DG						
+	DC	CLK2+P_DLY+00+00+P3+H_DG						
+	DC	CLK2+P_DLY+P1+00+P3+H_DG						
+	DC	CLK2+P_DLY+P1+00+00+H_DG						
+	DC	CLK2+P_DLY+P1+P2+00+H_DG						
+	DC	CLK2+P_DLY+00+P2+00+H_DG						
+END_PARALLEL_CLEAR
+
+; Clock the image down
+PARALLEL_SHIFT
+	DC	END_PARALLEL_SHIFT-PARALLEL_SHIFT-1
+	DC	CLK3+S_DLY+S1L+S1R+S2L+S2R+00+RGL+RGR+SWR+SWL
+	DC	CLK2+P_DLY+00+P2+P3+L_DG						
+	DC	CLK2+P_DLY+00+00+P3+L_DG						
+	DC	CLK2+P_DLY+P1+00+P3+L_DG						
+	DC	CLK2+P_DLY+P1+00+00+L_DG						
+	DC	CLK2+P_DLY+P1+P2+00+L_DG						
+	DC	CLK2+P_DLY+00+P2+00+L_DG						
+END_PARALLEL_SHIFT
+
+PREPARE_DUMP
+	DC	END_PREPARE_DUMP-PREPARE_DUMP-1
+	DC	CLK3+S_DLY+S1L+S1R+S2L+S2R+00+RGL+RGR+SWR+SWL
+END_PREPARE_DUMP
+
+PARALLEL_DUMP
+	DC	END_PARALLEL_DUMP-PARALLEL_DUMP-1
+	DC	CLK2+P_DLY+00+P2+P3+H_DG						
+	DC	CLK2+P_DLY+00+00+P3+H_DG						
+	DC	CLK2+P_DLY+P1+00+P3+H_DG						
+	DC	CLK2+P_DLY+P1+00+00+H_DG						
+	DC	CLK2+P_DLY+P1+P2+00+H_DG						
+	DC	CLK2+P_DLY+00+P2+00+H_DG						
+END_PARALLEL_DUMP
+
+CLEAR_READ_REGISTER
+	DC	END_CLEAR_READ_REGISTER-CLEAR_READ_REGISTER-1
+	DC	CLK3+S_DLY+000+000+000+000+00+RGL+RGR+000+000
+	DC	CLK2+P_DLY+00+P2+00+L_DG						
+END_CLEAR_READ_REGISTER
+
+; Serial clocking waveform for skipping
+SERIAL_SKIP
+	DC	END_SERIAL_SKIP-SERIAL_SKIP-1
+	DC	VIDEO+$000000+%1110100	        ; DC Restore(!b1)
+ 	DC	CLK3+SS_DLY+S1L+S2R+S2L+S1R+00+000+000+000+000
+	DC	CLK3+SS_DLY+000+000+S2L+S1R+00+000+000+000+000
+	DC	VIDEO+$000000+%1110110	        ; end DC restore
+	DC	CLK3+SS_DLY+000+000+S2L+S1R+S3+RGL+RGR+SWL+SWR
+ 	DC	CLK3+SS_DLY+000+000+000+000+S3+RGL+RGR+SWL+SWR
+	DC	CLK3+SS_DLY+S1L+S2R+000+000+S3+RGL+RGR+SWL+SWR
+	DC	CLK3+SS_DLY+S1L+S2R+000+000+00+000+000+000+000
+END_SERIAL_SKIP
+
+; Serial clocking waveform for binning (shift only) (SW high and RG low)
+SERIAL_SHIFT
+	DC	END_SERIAL_SHIFT-SERIAL_SHIFT-1
+ 	DC	CLK3+S_DLY+S1L+S2R+S2L+S1R+00+000+000+SWR+SWL
+	DC	CLK3+S_DLY+000+000+S2L+S1R+00+000+000+SWR+SWL
+	DC	CLK3+S_DLY+000+000+S2L+S1R+S3+000+000+SWL+SWR
+ 	DC	CLK3+S_DLY+000+000+000+000+S3+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+S3+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+END_SERIAL_SHIFT
+
+; Serial clocking waveform for reading (shift plus video proc)
+; CLK3 = Delay+S1L+S1R+S2L+S2L+S3+RGL+RGR+SWL+SWR
+;
+SERIAL_READ
+ 	DC	END_SERIAL_READ-SERIAL_READ-1
+ 	DC	VIDEO+$000000+%0010111		; Stop resetting integrator
+
+ 	DC	VIDEO+000000+%0000111		; Integrate
+ 	DC	CLK3+S_DLY+S1L+S2R+S2L+S1R+00+000+000+SWR+SWL
+	DC	CLK3+S_DLY+000+000+S2L+S1R+00+000+000+SWR+SWL
+	DC	CLK3+S_DLY+000+000+S2L+S1R+S3+000+000+SWL+SWR
+ 	DC	CLK3+S_DLY+000+000+000+000+S3+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+S3+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+INT_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+;	DC	CLK3+INT_DLY2+S1L+S2R+000+000+00+000+000+SWL+SWR
+ 	DC	VIDEO+$000000+%0011011		; Stop Integrate
+	
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+000+000
+	DC	CLK3+SW_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+
+ 	DC	VIDEO+$00000+%0001011		; Integrate
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+INT_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+;	DC	CLK3+INT_DLY2+S1L+S2R+000+000+00+000+000+SWL+SWR
+ 	DC	VIDEO+$000000+%0011011		; Stop integrator
+
+	DC	CLK3+ADC_DLY+S1L+S2R+000+000+00+RGL+RGR+SWL+SWR ; Reset Gate, ADC sample>300 ns
+	DC	VIDEO+$000000+%0111011		; Start convert=hold (lo to hi on bit 5 -SS5-)
+	DC	VIDEO+$000000+%0111011		; redundant write manage beat frequencies
+	DC	VIDEO+$000000+%0111011		; redundant write manage beat frequencies
+	DC	CLK3+$000000+S1L+S2R+000+000+00+000+000+SWR+SWL  ; end of RG pulse
+ 	DC	VIDEO+RG_DLY+%1110110	        ; Reset Integrator(!b0), RG settling
+ 	DC	VIDEO+CNV_DLY+%1110100	        ; DC Restore(!b1)
+	DC	$00F000				; Transmit A/D data to host
+	DC	CLK3+DCR_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR ; DC restore & settle after xmit
+END_SERIAL_READ
+
+DUMMY_READ
+ 	DC	END_DUMMY_READ-DUMMY_READ-1
+ 	DC	VIDEO+$000000+%0010111		; Stop resetting integrator
+ ;	DC	VIDEO+$000000+%0010111		; Stop resetting integrator (unnecessary?)
+
+ 	DC	VIDEO+00000+%0000111		; Integrate
+ 	DC	CLK3+S_DLY+S1L+S2R+S2L+S1R+00+000+000+SWR+SWL
+	DC	CLK3+S_DLY+000+000+S2L+S1R+00+000+000+SWR+SWL
+	DC	CLK3+S_DLY+000+000+S2L+S1R+S3+000+000+SWL+SWR
+ 	DC	CLK3+S_DLY+000+000+000+000+S3+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+S3+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+INT_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+;	DC	CLK3+INT_DLY2+S1L+S2R+000+000+00+000+000+SWL+SWR
+ 	DC	VIDEO+$000000+%0011011		; Stop Integrate
+	
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+000+000
+	DC	CLK3+SW_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+
+ 	DC	VIDEO+$000000+%0001011		; Integrate
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+S_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+	DC	CLK3+INT_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR
+;	DC	CLK3+INT_DLY2+S1L+S2R+000+000+00+000+000+SWL+SWR
+ 	DC	VIDEO+$00000+%0011011		; Stop integrator 
+
+	DC	CLK3+ADC_DLY+S1L+S2R+000+000+00+RGL+RGR+SWL+SWR ; Reset Gate, ADC sample>300 ns
+	DC	VIDEO+$000000+%0111011		; Start convert=hold (lo to hi on bit 5 -SS5-)
+	DC	CLK3+$000000+S1L+S2R+000+000+00+000+000+SWR+SWL  ; end of RG pulse
+ 	DC	VIDEO+RG_DLY+%1110110	        ; Reset Integrator(!b0), RG settling
+ 	DC	VIDEO+CNV_DLY+%1110100	        ; DC Restore(!b1)
+						; transmit >>815 ns after start convert.
+	DC	CLK3+DCR_DLY+S1L+S2R+000+000+00+000+000+SWL+SWR ; DC restore & settle after xmit
+END_DUMMY_READ
+
+
+
+; Initialization of clock driver and video processor DACs and switches
+DACS	DC	END_DACS-DACS-1
+ 	DC      CLKAD+$0A0080
+ 	DC      CLKAD+$000100+@CVI((P_HI+CLKmax)/(2*CLKmax)*255)		; Pin #1, P1
+ 	DC      CLKAD+$000200+@CVI((P_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$000400+@CVI((P_HI+CLKmax)/(2*CLKmax)*255)		; Pin #2, P2
+ 	DC      CLKAD+$000800+@CVI((P_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$002000+@CVI((P_HI+CLKmax)/(2*CLKmax)*255)		; Pin #3, P3
+ 	DC      CLKAD+$004000+@CVI((P_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$008000+@CVI((DG_HI+CLKmax)/(2*CLKmax)*255)		; Pin #4, DG
+ 	DC      CLKAD+$010000+@CVI((DG_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$020100+@CVI((P_HI+CLKmax)/(2*CLKmax)*255)		; Pin #5, ??
+ 	DC      CLKAD+$020200+@CVI((P_LO+CLKmax)/(2*CLKmax)*255)
+
+
+        DC      CLKAD+$020400+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #6, Unused
+        DC      CLKAD+$020800+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$022000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #7, Unused
+        DC      CLKAD+$024000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$028000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #8, Unused
+        DC      CLKAD+$030000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$040100+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #9, Unused
+        DC      CLKAD+$040200+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$040400+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #10, Unused
+        DC      CLKAD+$040800+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$042000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #11, Unused
+        DC      CLKAD+$044000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$048000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #12, Unused
+        DC      CLKAD+$050000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+
+
+ 	DC      CLKAD+$060100+@CVI((S_HI+CLKmax)/(2*CLKmax)*255)	; Pin #13, S1L
+ 	DC      CLKAD+$060200+@CVI((S_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$060400+@CVI((S_HI+CLKmax)/(2*CLKmax)*255)	; Pin #14, S2L
+ 	DC      CLKAD+$060800+@CVI((S_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$062000+@CVI((SW_HI+CLKmax)/(2*CLKmax)*255)	; Pin #15, SWL
+ 	DC      CLKAD+$064000+@CVI((SW_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$068000+@CVI((S_HI+CLKmax)/(2*CLKmax)*255)	; Pin #16, S1R
+ 	DC      CLKAD+$070000+@CVI((S_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$080100+@CVI((S_HI+CLKmax)/(2*CLKmax)*255)	; Pin #17, S2R
+ 	DC      CLKAD+$080200+@CVI((S_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$080400+@CVI((SW_HI+CLKmax)/(2*CLKmax)*255)	; Pin #18, SWR
+ 	DC      CLKAD+$080800+@CVI((SW_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$082000+@CVI((S_HI+CLKmax)/(2*CLKmax)*255)	; Pin #19, S3
+ 	DC      CLKAD+$084000+@CVI((S_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$088000+@CVI((RG_HI+CLKmax)/(2*CLKmax)*255)	; Pin #33, RGL
+ 	DC      CLKAD+$090000+@CVI((RG_LO+CLKmax)/(2*CLKmax)*255)
+ 	DC      CLKAD+$0A0100+@CVI((RG_HI+CLKmax)/(2*CLKmax)*255)	; Pin #34, RGR
+ 	DC      CLKAD+$0A0200+@CVI((RG_LO+CLKmax)/(2*CLKmax)*255)
+
+
+        DC      CLKAD+$0A0400+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #35, Unused
+        DC      CLKAD+$0A0800+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$0A2000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #36, Unused
+        DC      CLKAD+$0A4000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+        DC      CLKAD+$0A8000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)     ; Pin #37, Unused
+        DC      CLKAD+$0B0000+@CVI((ZERO+CLKmax)/(2*CLKmax)*255)
+
+
+ 
+; Set gain and integrator speed. (77, bb, dd, ee; low gain to high)
+;	DC	$0c3c77			; Gain x1, slow integ. speed, board #0
+	DC	$0c3f77			; Gain x1, fast integrate speed
+;	DC	$0c3fbb			; Gain x2
+;	DC	$0c3fdd			; Gain x4.75
+;	DC	$0c3fee			; Gain x9.50
+
+; 	DC	$0c3fbb			; Default x2 gain, fast integration
+;	DC	$0c33bb			; Default x2 gain, fast integration (to read the sawtooth waveform)
+
+; Output offset voltages
+	DC	$0c4000+OFFSET0 	; Output video offset, channel 0
+	DC	$0cc000+OFFSET1
+
+; DC bias voltages. Gain and offsets adjusted for video boards SN205 and SN304. Feb. 24, 2005
+;  (if it is wrong, blame on DG, if it is right, applauses to MB)
+
+	DC	$0d0000+@CVI((BOD-6.3)/23.7*4095)	; pin #1, VID0
+	DC	$0d4000+@CVI((BJD-6.3)/23.7*4095)	; pin #2, VID0
+	DC	$0d8000+@CVI((BRDL-3.9)/16.1*4095)	; pin #3, VID0
+	DC	$0dc000+@CVI((BRDR-3.9)/16.1*4095)	; pin #4, VID0
+	DC	$0e0000+@CVI((BDD-3.9)/16.1*4095)	; pin #5, VID0
+
+	DC	$0f8000+@CVI((BOG1+10.0)/20.0*4095)	; pin #11, VID0
+	DC	$0fc000+@CVI((BOG2+10.0)/20.0*4095)	; pin #12, VID0
+
+END_DACS

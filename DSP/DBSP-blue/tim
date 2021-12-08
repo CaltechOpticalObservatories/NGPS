@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+	echo ""
+	echo "Assembling DSP code for the 8x IR video processor"
+	echo ""
+#
+# DOWNLOAD selects application code to be loaded from EEPROM or 
+#   downloaded from the host over the fiber optic link
+#
+# DOWNLOAD = HOST or ROM
+
+DOWNLOAD=HOST
+WAVEFORM_FILE=CCD44-82.waveforms
+DST_FILE=tim
+
+wine /opt/CLAS563/BIN/ASM56300 -b -ltim.ls -d DOWNLOAD $DOWNLOAD -d WAVEFORM_FILE "$WAVEFORM_FILE" tim.asm
+wine /opt/CLAS563/BIN/DSPLNK -btim.cld -v tim.cln 
+rm -f "$DST_FILE".lod
+wine /opt/CLAS563/BIN/CLDLOD tim.cld > "$DST_FILE".lod
+rm tim.cln ; rm tim.cld
+
+	echo ""
+	echo "Created file 'tim.lod' for downloading over optical fiber"
+	echo ""
