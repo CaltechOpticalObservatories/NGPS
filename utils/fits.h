@@ -199,17 +199,23 @@ class FITS_file {
         }
       }
 
-      // Add a header keyword for the time the file was written (right now!)
-      //
-      this->pFits->pHDU().addKey("DATE", get_timestamp(), "FITS file write time");
+      try {
+        // Add a header keyword for the time the file was written (right now!)
+        //
+        this->pFits->pHDU().addKey("DATE", get_timestamp(), "FITS file write time");
 
-      // Write the checksum
-      //
-      this->pFits->pHDU().writeChecksum();
+        // Write the checksum
+        //
+        this->pFits->pHDU().writeChecksum();
 
-      // Deallocate the CCfits object and close the FITS file
-      //
-      this->pFits->destroy();
+        // Deallocate the CCfits object and close the FITS file
+        //
+        this->pFits->destroy();
+      }
+      catch (CCfits::FitsError& error){
+        message.str(""); message << "ERROR writing checksum and closing file: " << error.message();
+        logwrite(function, message.str());
+      }
 
       // Let the world know that the file is closed
       //
@@ -546,17 +552,23 @@ class FITS_file {
         return;
       }
 
-      if (type.compare("INT") == 0) {
-        this->pFits->pHDU().addKey(keyword, std::stoi(value), comment);
+      try {
+        if (type.compare("INT") == 0) {
+          this->pFits->pHDU().addKey(keyword, std::stoi(value), comment);
+        }
+        else if (type.compare("FLOAT") == 0) {
+          this->pFits->pHDU().addKey(keyword, std::stof(value), comment);
+        }
+        else if (type.compare("STRING") == 0) {
+          this->pFits->pHDU().addKey(keyword, value, comment);
+        }
+        else {
+          message.str(""); message << "error unknown type: " << type << " for user keyword: " << keyword << "=" << value << " / " << comment;
+          logwrite(function, message.str());
+        }
       }
-      else if (type.compare("FLOAT") == 0) {
-        this->pFits->pHDU().addKey(keyword, std::stof(value), comment);
-      }
-      else if (type.compare("STRING") == 0) {
-        this->pFits->pHDU().addKey(keyword, value, comment);
-      }
-      else {
-        message.str(""); message << "error unknown type: " << type << " for user keyword: " << keyword << "=" << value << " / " << comment;
+      catch (CCfits::FitsError & err) {
+        message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << ") : " << err.message();
         logwrite(function, message.str());
       }
     }
