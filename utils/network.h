@@ -12,6 +12,7 @@
 #ifndef NEWTCPLINUX_H
 #define NEWTCPLINUX_H
 
+#include <chrono>                      // for timing timeouts
 #include <cstdio>
 #include <string>
 #include <cstring>
@@ -53,6 +54,7 @@ namespace Network {
     public:
       TcpSocket();                       //!< basic class constructor
       TcpSocket(int port_in, bool block_in, int totime_in, int id_in);  //!< useful constructor for a server
+      TcpSocket( std::string host, int port );                          //!< client constructor
       TcpSocket(const TcpSocket &obj);   //!< copy constructor
       ~TcpSocket();                      //!< class destructor
 

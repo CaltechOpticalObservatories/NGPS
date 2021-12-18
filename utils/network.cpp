@@ -241,7 +241,6 @@ namespace Network {
    * @param  block_in, true|false -- will the connection be blocking?
    * @param  totime_in, timeout time for poll, in msec
    * @param  id_in, ID number (for keeping track of threads)
-   * @param  wo_in, optional write-only flag, will shut down read side of socket if true
    * @return none
    *
    * Use this to construct a server's listening socket object
@@ -258,6 +257,28 @@ namespace Network {
     this->addrs = NULL;
     this->connection_open = false;
   };
+  /**************** Network::TcpSocket::TcpSocket *****************************/
+
+
+  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /**
+   * @fn     TcpSocket
+   * @brief  TcpSocket class constructor
+   * @param  host, hostname to which client will connect
+   * @param  port_in, port to which client will connect
+   * @return none
+   *
+   * Use this to construct a client object
+   *
+   */
+  TcpSocket::TcpSocket( std::string host, int port ) {
+    this->host = host;
+    this->port = port;
+    this->totime = POLLTIMEOUT;    //!< default Poll timeout in msec
+    this->fd = -1;
+    this->addrs = NULL;
+    this->connection_open = false;
+  }
   /**************** Network::TcpSocket::TcpSocket *****************************/
 
 
@@ -366,6 +387,15 @@ namespace Network {
     //
     int on=1;
     setsockopt(this->listenfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+    // allow kernel to linger on close --
+    // if there is any data remaining in the socket send buffer then then process
+    // sleeps until data is sent and acknowledged by the peer or until POLLTIMEOUT.
+    //
+    struct linger so_linger;
+    so_linger.l_onoff = 1;
+    so_linger.l_linger = POLLTIMEOUT;
+    setsockopt( this->listenfd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger) );
 
     // get address information and bind it to the socket
     //
@@ -555,11 +585,40 @@ namespace Network {
    * @brief  read data from connected socket
    * @param  buf, pointer to buffer
    * @param  count, number of bytes to read
-   * @return number of bytes read
+   * @return number of bytes read or -1 on error
+   *
+   * If data not immediately available then wait for up to POLLTIMEOUT
    *
    */
   int TcpSocket::Read(void* buf, size_t count) {
-    return read(this->fd, buf, count);
+    std::string function = "Network::TcpSocket::Read";
+    std::stringstream message;
+    int nread;
+
+    // get the time now for timeout purposes
+    //
+    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    while ( ( nread = read( this->fd, buf, count ) ) < 0 ) {
+      if ( errno != EAGAIN ) {
+        message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
+        logwrite( function, message.str() );
+        break;
+      }
+
+      // get time now and check for timeout
+      //
+      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
+
+      if ( elapsed > POLLTIMEOUT ) {
+        message << "ERROR: timeout waiting for data on fd " << this->fd;
+        logwrite( function, message.str() );
+        break;
+      }
+    }
+    return( nread );
   }
   /**************** Network::TcpSocket::Read **********************************/
 
