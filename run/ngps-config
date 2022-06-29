@@ -1,0 +1,66 @@
+# ngps-config
+# 
+# This file defines the fully qualified path to each
+# software component and its associated configuration file.
+
+# observation sequencer
+#
+SEQUENCERD="/home/developer/Software/bin/sequencerd"
+SEQUENCERD_CONFIG="/home/developer/Software/Config/sequencerd.cfg"
+
+# calib daemon
+#
+CALIBD="/home/developer/Software/bin/calibd"
+CALIBD_CONFIG="/home/developer/Software/Config/calibd.cfg"
+CALIB_EMULATOR="/home/developer/Software/bin/emulatord.calib"
+
+# camera daemon
+#
+CAMERAD="/home/developer/Software/bin/camerad"
+CAMERAD_CONFIG="/home/developer/Software/Config/camerad.cfg"
+CAMERA_EMULATOR="/home/developer/Software/bin/emulatord.camera"
+
+# flexure daemon
+#
+FLEXURED="/home/developer/Software/bin/flexured"
+FLEXURED_CONFIG="/home/developer/Software/Config/flexured.cfg"
+FLEXURE_EMULATOR="/home/developer/Software/bin/emulatord.flexure"
+
+# focus daemon
+#
+FOCUSD="/home/developer/Software/bin/focusd"
+FOCUSD_CONFIG="/home/developer/Software/Config/focusd.cfg"
+FOCUS_EMULATOR="/home/developer/Software/bin/emulatord.focus"
+
+# power daemon
+#
+POWERD="/home/developer/Software/bin/powerd"
+POWERD_CONFIG="/home/developer/Software/Config/powerd.cfg"
+POWER_EMULATOR="/home/developer/Software/bin/emulatord.power"
+
+# slit daemon
+#
+SLITD="/home/developer/Software/bin/slitd"
+SLITD_CONFIG="/home/developer/Software/Config/slitd.cfg"
+SLIT_EMULATOR="/home/developer/Software/bin/emulatord.slit"
+
+# tcs daemon
+#
+TCSD="/home/developer/Software/bin/tcsd"
+TCSD_CONFIG="/home/developer/Software/Config/tcsd.cfg"
+TCS_EMULATOR="/home/developer/Software/java/TCS-SIM-1_00_00/bin/tcs-sim"
+
+
+# Arrays of all the above processes, their associated names, and their associated config files
+# These three arrays must be aligned!
+#
+# sequencer must be last!
+#
+PROCS=("$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$POWERD" "$SLITD" "$TCSD" "$SEQUENCERD")
+PROCNAMES=("calibd" "camerad" "flexured" "focusd" "powerd" "slitd" "tcsd" "sequencerd")
+CONFIGS=("$CALIBD_CONFIG" "$CAMERAD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" \
+         "$POWERD_CONFIG" "$SLITD_CONFIG" "$TCSD_CONFIG" "$SEQUENCERD_CONFIG")
+
+EMULATORS=("$CALIB_EMULATOR" "$CAMERA_EMULATOR" "$FLEXURE_EMULATOR" "$FOCUS_EMULATOR" \
+           "$POWER_EMULATOR" "$SLIT_EMULATOR" "$TCS_EMULATOR")
+EMUNAMES=("calib" "camera" "flexure" "focus" "power" "slit" "tcs")
