@@ -32,7 +32,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define POLLTIMEOUT 5000               //!< default Poll timeout in msec
+#define POLLTIMEOUT 10000              //!< default Poll timeout in msec
 #define LISTENQ 64                     //!< listen(3n) backlog 
 
 namespace Network {
@@ -74,9 +74,11 @@ namespace Network {
       int Accept();                      //!< creates a new connected socket for pending connection
       int Listen();                      //!< create a TCP listening socket
       int Poll();                        //!< polls a single file descriptor to wait for incoming data to read
+      int Poll( int timeout );           //!< polls a single file descriptor with specified timeout
       int Connect();                     //!< connect to this->host on this->port
       int Close();                       //!< close a socket connection
       int Read(void* buf, size_t count); //!< read data from connected socket
+      int Read(std::string &retstring, char delim); //!< read data from connected socket until delimiter found
       int Bytes_ready();                 //!< get the number of bytes available on the socket descriptor this->fd
 
       int Write(std::string msg_in);     //!< write data to a socket

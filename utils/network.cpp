@@ -430,12 +430,19 @@ namespace Network {
    * @param  none
    * @return 0 on timeout, -1 on error, a non-negative value on success
    *
+   * This function is overloaded. One version accepts a timeout to be passed in,
+   * and the other version takes no argument and uses the default timeout that
+   * was set for the class object.
+   *
    */
-  int TcpSocket::Poll() {
+  int TcpSocket::Poll() {                /// uses default timeout
+    return( this->Poll( this->totime ) );
+  }
+  int TcpSocket::Poll( int timeout ) {   // uses timeout arg
     struct pollfd poll_struct;
     poll_struct.events = POLLIN;
     poll_struct.fd     = this->fd;
-    return poll(&poll_struct, 1, this->totime);
+    return poll( &poll_struct, 1, timeout );
   }
   /**************** Network::TcpSocket::Poll **********************************/
 
@@ -589,9 +596,12 @@ namespace Network {
    *
    * If data not immediately available then wait for up to POLLTIMEOUT
    *
+   * This function is overloaded; this version accepts a pointer to a
+   * buffer and the number of bytes to read.
+   *
    */
   int TcpSocket::Read(void* buf, size_t count) {
-    std::string function = "Network::TcpSocket::Read";
+    std::string function = "Network::TcpSocket::Read[cbuf]";
     std::stringstream message;
     int nread;
 
@@ -619,6 +629,65 @@ namespace Network {
       }
     }
     return( nread );
+  }
+  /**************** Network::TcpSocket::Read **********************************/
+
+
+  /**************** Network::TcpSocket::Read **********************************/
+  /**
+   * @fn     Read
+   * @brief  read data from connected socket until delimeter char
+   * @param  std::string retstring
+   * @param  char delimiter
+   * @return number of bytes read or -1 on error
+   *
+   * If data not immediately available then wait for up to POLLTIMEOUT
+   *
+   * This function is overloaded; this version accepts a reference to a string
+   * and a delimiter char to read until.
+   *
+   */
+  int TcpSocket::Read(std::string &retstring, char delim) {
+    std::string function = "Network::TcpSocket::Read[delim]";
+    std::stringstream message;
+    std::stringstream bufstream;
+    int nread, bytesread=0;
+    char buf[2];
+    memset(buf,'\0',2);
+
+    // get the time now for timeout purposes
+    //
+    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    while ( 1 ) {
+      nread = read( this->fd, buf, 1 );  // read a byte at a time
+      if ( nread<0 ) {
+        message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
+        logwrite( function, message.str() );
+        break;
+      }
+      bytesread++;                       // keep count of total bytes read
+      bufstream << buf;                  // build up return string from each byte read
+
+      // get time now and check for timeout
+      //
+      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
+
+      if ( elapsed > POLLTIMEOUT ) {
+        message << "ERROR: timeout waiting for data on fd " << this->fd;
+        logwrite( function, message.str() );
+        break;
+      }
+
+      if ( strchr(buf, delim) ) break;   // break when the delim character is found
+    }
+
+    retstring = bufstream.str();         // assign the assembled stream to the return string
+
+    if ( nread <= 0 ) return( nread );   // return error
+    else return( bytesread );            // or bytes read
   }
   /**************** Network::TcpSocket::Read **********************************/
 
