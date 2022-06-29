@@ -124,7 +124,8 @@ int main(int argc, char **argv) {
   if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
   else
   if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
+  else
+  if ( !daemon_in.empty() ) {
     message.str(""); message << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }";
     logwrite( function, message.str() );
     server.exit_cleanly();
@@ -147,8 +148,13 @@ int main(int argc, char **argv) {
     server.exit_cleanly();
   }
 
+  // log and add server build date to system keys db
+  //
   message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
   logwrite(function, message.str());
+
+  message.str(""); message << "CAMD_VER=" << BUILD_DATE << " " << BUILD_TIME << " // camerad build date";
+  server.systemkeys.addkey( message.str() );
 
   message.str(""); message << server.config.n_entries << " lines read from " << server.config.filename;
   logwrite(function, message.str());
@@ -482,6 +488,27 @@ void doit(Network::TcpSocket sock) {
                     sock.Write(" ");
                     }
     else
+    if (cmd.compare("longerror")==0) {
+                    std::string retstring;   // string for the return value
+                    ret = server.common.longerror(args, retstring);
+                    sock.Write(retstring);
+                    sock.Write(" ");
+                    }
+    else
+    if (cmd.compare("preexposures")==0) {
+                    std::string retstring;   // string for the return value
+                    ret = server.camera_info.pre_exposures( args, retstring );
+                    sock.Write( retstring );
+                    sock.Write( " " );
+                    }
+    else
+    if (cmd.compare("cubeamps")==0) {
+                    std::string retstring;   // string for the return value
+                    ret = server.common.cubeamps(args, retstring);
+                    sock.Write(retstring);
+                    sock.Write(" ");
+                    }
+    else
     if (cmd.compare("fitsnaming")==0) {
                     std::string retstring;
                     ret = server.common.fitsnaming(args, retstring);
@@ -501,10 +528,14 @@ void doit(Network::TcpSocket sock) {
                     }
     else
     if (cmd.compare("key")==0) {
-                    if (args.compare(0, 4, "list")==0)
-                      ret = server.userkeys.listkeys();
-                    else
+                    if (args.compare(0, 4, "list")==0) {
+                      logwrite( function, "systemkeys:" ); ret = server.systemkeys.listkeys();
+                      logwrite( function, "userkeys:" );   ret = server.userkeys.listkeys();
+                    }
+                    else {
                       ret = server.userkeys.addkey(args);
+                      if ( ret != NO_ERROR ) server.common.log_error( function, "bad syntax" );
+                    }
                     }
     else
     if (cmd.compare("abort")==0) {
@@ -538,6 +569,13 @@ void doit(Network::TcpSocket sock) {
                     }
 #endif
 #ifdef STA_ARCHON
+    else
+    if (cmd.compare("isloaded")==0) {
+                    std::string retstring = server.firmwareloaded ? "true" : "false";
+                    sock.Write(retstring);
+                    sock.Write(" ");
+                    ret = NO_ERROR;
+                    }
     else
     if (cmd.compare("mode")==0) {
                     if (args.empty()) {     // no argument means asking for current mode
@@ -573,7 +611,7 @@ void doit(Network::TcpSocket sock) {
     else
     if (cmd.compare("printstatus")==0) {
                     ret = server.get_frame_status();
-                    if (ret==NO_ERROR) ret = server.print_frame_status();
+                    if (ret==NO_ERROR) server.print_frame_status();
                     }
     else
     if (cmd.compare("readframe")==0) {
@@ -683,6 +721,7 @@ void doit(Network::TcpSocket sock) {
 
     if (ret != NOTHING) {
       std::string retstr=(ret==0?"DONE\n":"ERROR\n");
+      if ( ret==0 ) retstr="DONE\n"; else retstr="ERROR" + server.common.get_longerror() + "\n";
       if (sock.Write(retstr)<0) connection_open=false;
     }
 

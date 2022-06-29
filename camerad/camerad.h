@@ -117,11 +117,11 @@ namespace Camera {
               port = std::stoi( config.arg[entry] );
             }
             catch (std::invalid_argument &) {
-              logwrite(function, "ERROR: bad NBPORT: unable to convert to integer");
+              this->common.log_error( function, "bad NBPORT: unable to convert to integer" );
               return(ERROR);
             }
             catch (std::out_of_range &) {
-              logwrite(function, "NBPORT number out of integer range");
+              this->common.log_error( function, "NBPORT number out of integer range" );
               return(ERROR);
             }
             this->nbport = port;
@@ -135,11 +135,11 @@ namespace Camera {
               port = std::stoi( config.arg[entry] );
             }
             catch (std::invalid_argument &) {
-              logwrite(function, "ERROR: bad BLKPORT: unable to convert to integer");
+              this->common.log_error( function, "bad BLKPORT: unable to convert to integer" );
               return(ERROR);
             }
             catch (std::out_of_range &) {
-              logwrite(function, "BLKPORT number out of integer range");
+              this->common.log_error( function, "BLKPORT number out of integer range" );
               return(ERROR);
             }
             this->blkport = port;
@@ -153,11 +153,11 @@ namespace Camera {
               port = std::stoi( config.arg[entry] );
             }
             catch (std::invalid_argument &) {
-              logwrite(function, "ERROR: bad ASYNCPORT: unable to convert to integer");
+              this->common.log_error( function, "bad ASYNCPORT: unable to convert to integer" );
               return(ERROR);
             }
             catch (std::out_of_range &) {
-              logwrite(function, "ASYNCPORT number out of integer range");
+              this->common.log_error( function, "ASYNCPORT number out of integer range" );
               return(ERROR);
             }
             this->asyncport = port;
@@ -167,6 +167,16 @@ namespace Camera {
           // ASYNCGROUP
           if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
             this->asyncgroup = config.arg[entry];
+            applied++;
+          }
+
+          // LONGERROR
+          if (config.param[entry].compare(0, 9, "LONGERROR")==0) {
+            std::string dontcare;
+            if ( this->common.longerror( config.arg[entry], dontcare ) == ERROR ) {
+              this->common.log_error( function, "setting longerror" );
+              return( ERROR );
+            }
             applied++;
           }
 
@@ -181,7 +191,7 @@ namespace Camera {
           error = NO_ERROR;
         } 
         message << "applied " << applied << " configuration lines to server";
-        logwrite(function, message.str());
+        error==NO_ERROR ? logwrite(function, message.str()) : this->common.log_error( function, message.str() );
         return error;
       }
       /** Camera::Server::configure_server *****************************************/

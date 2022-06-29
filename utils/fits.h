@@ -182,7 +182,7 @@ class FITS_file {
       //
       if ( ! this->file_open ) {
 #ifdef LOGLEVEL_DEBUG
-        logwrite(function, "no open FITS file to close");
+        logwrite(function, "[DEBUG] no open FITS file to close");
 #endif
         return;
       }
@@ -215,6 +215,7 @@ class FITS_file {
       catch (CCfits::FitsError& error){
         message.str(""); message << "ERROR writing checksum and closing file: " << error.message();
         logwrite(function, message.str());
+        this->file_open = false;   // must set this false on exception
       }
 
       // Let the world know that the file is closed
@@ -254,8 +255,8 @@ class FITS_file {
 
       // copy the data into an array of the appropriate type  //TODO use multiple threads for this??
       //
-      std::valarray<T> array(info.image_size);
-      for (long i = 0; i < info.image_size; i++) {
+      std::valarray<T> array( info.section_size );
+      for ( long i = 0; i < info.section_size; i++ ) {
         array[i] = data[i];
       }
 
@@ -268,6 +269,12 @@ class FITS_file {
       //
       this->threadcount++;                                   // increment threadcount for each thread spawned
 
+#ifdef LOGLEVEL_DEBUG
+      message.str("");
+      message << "[DEBUG] threadcount=" << this->threadcount << " iscube=" << info.iscube << " section_size=" << info.section_size 
+              << ". spawning image writing thread for frame " << this->framen << " of " << info.fits_name;
+      logwrite(function, message.str());
+#endif
       std::thread([&]() {                                    // create the detached thread here
         if (info.iscube) {
           this->write_cube_thread(array, info, this);
@@ -280,7 +287,7 @@ class FITS_file {
       }).detach();
 #ifdef LOGLEVEL_DEBUG
       message.str("");
-      message << "*** [DEBUG] spawned image writing thread for frame " << this->framen << " of " << info.fits_name;
+      message << "[DEBUG] spawned image writing thread for frame " << this->framen << " of " << info.fits_name;
       logwrite(function, message.str());
 #endif
 
@@ -317,7 +324,7 @@ class FITS_file {
 #ifdef LOGLEVEL_DEBUG
       else {
         message.str("");
-        message << "*** [DEBUG] " << info.fits_name << " complete";
+        message << "[DEBUG] " << info.fits_name << " complete";
         logwrite(function, message.str());
       }
 #endif
@@ -374,7 +381,7 @@ class FITS_file {
       //
       try {
         long fpixel(1);        // start with the first pixel always
-        self->pFits->pHDU().write(fpixel, info.image_size, data);
+        self->pFits->pHDU().write( fpixel, info.section_size, data );
         self->pFits->flush();  // make sure the image is written to disk
       }
       catch (CCfits::FitsError& error){
@@ -407,6 +414,11 @@ class FITS_file {
     void write_cube_thread(std::valarray<T> &data, Common::Information &info, FITS_file *self) {
       std::string function = "FITS_file::write_cube_thread";
       std::stringstream message;
+
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] info.extension=" << info.extension << " this->framen=" << this->framen;
+      logwrite( function, message.str() );
+#endif
 
       // This makes the thread wait while another thread is writing images. This
       // thread will only start writing once the extension number matches the
@@ -471,9 +483,29 @@ class FITS_file {
           this->imageExt->addKey("BSCALE", 1, "scaling factor");
         }
 
+        // Add AMPSEC keys
+        //
+        if ( info.amp_section.size() > 0 ) {
+          try {
+            int x1 = info.amp_section.at( info.extension ).at( 0 );
+            int x2 = info.amp_section.at( info.extension ).at( 1 );
+            int y1 = info.amp_section.at( info.extension ).at( 2 );
+            int y2 = info.amp_section.at( info.extension ).at( 3 );
+
+            message.str(""); message << "[" << x1 << ":" << x2 << "," << y1 << ":" << y2 << "]";
+            this->imageExt->addKey( "AMPSEC", message.str(), "amplifier section" );
+          }
+          catch ( std::out_of_range & ) {
+            logwrite( function, "ERROR: no amplifier section referenced for this extension" );
+          }
+        }
+        else {
+          logwrite( function, "no AMPSEC key: missing amplifier section information" );
+        }
+
         // Write and flush to make sure image is written to disk
         //
-        this->imageExt->write(fpixel, info.image_size, data);
+        this->imageExt->write( fpixel, info.section_size, data );
         self->pFits->flush();
       }
       catch (CCfits::FitsError& error){
@@ -500,26 +532,17 @@ class FITS_file {
      * @return 
      *
      * Uses CCFits
+     *
+     * TODO is this function obsolete?
+     *
      */
     void make_camera_header(Common::Information &info) {
       std::string function = "FITS_file::make_camera_header";
       std::stringstream message;
       try {
-        std::string build(BUILD_DATE); build.append(" "); build.append(BUILD_TIME);
-        this->pFits->pHDU().addKey("SERV_VER", build, "server build date");
-
         // To put just the filename into the header (and not the path), find the last slash
         // and substring from there to the end.
         //
-        int loc = info.fits_name.find_last_of("/");
-        std::string filename;
-        filename = info.fits_name.substr(loc+1);
-        this->pFits->pHDU().addKey("FILENAME", filename, "this filename");
-
-        this->pFits->pHDU().addKey("SHUTTEN", info.shutterenable, "shutter was enabled" );
-
-        message.str(""); message << "exposure time in " << info.exposure_unit;
-        this->pFits->pHDU().addKey("EXPTIME", info.exposure_time, message.str().c_str() );
       }
       catch (CCfits::FitsError & err) {
         message.str(""); message << "error creating FITS header: " << err.message();
@@ -553,7 +576,11 @@ class FITS_file {
       }
 
       try {
-        if (type.compare("INT") == 0) {
+        if (type.compare("BOOL") == 0) {
+          bool boolvalue = ( value == "T" ? true : false );
+          this->pFits->pHDU().addKey( keyword, boolvalue, comment );
+        }
+        else if (type.compare("INT") == 0) {
           this->pFits->pHDU().addKey(keyword, std::stoi(value), comment);
         }
         else if (type.compare("FLOAT") == 0) {
@@ -563,7 +590,7 @@ class FITS_file {
           this->pFits->pHDU().addKey(keyword, value, comment);
         }
         else {
-          message.str(""); message << "error unknown type: " << type << " for user keyword: " << keyword << "=" << value << " / " << comment;
+          message.str(""); message << "ERROR unknown type: " << type << " for user keyword: " << keyword << "=" << value << ": expected {INT,FLOAT,STRING,BOOL}";
           logwrite(function, message.str());
         }
       }

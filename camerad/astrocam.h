@@ -456,8 +456,8 @@ namespace AstroCam {
       //
       Config config;
       Common::Common common;            //!< instantiate a Common object
-//    Common::Information camera_info;  //!< this is the main camera_info object
-      Common::Information fits_info;    //!< used to copy the camera_info object to preserve info for FITS writing
+      Common::Information camera_info;  //!< this is the main camera_info object
+//    Common::Information fits_info;    //!< used to copy the camera_info object to preserve info for FITS writing
       Common::FitsKeys userkeys;        //!< create a FitsKeys object for FITS keys specified by the user
       Common::FitsKeys systemkeys;      //!< create a FitsKeys object for FITS keys provided by the server
 

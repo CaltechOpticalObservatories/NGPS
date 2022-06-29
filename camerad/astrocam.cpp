@@ -753,7 +753,7 @@ namespace AstroCam {
 #ifdef LOGLEVEL_DEBUG
     message.str("");
     message << "*** [DEBUG] _controller.devnum=" << _controller.devnum 
-            << " .devname=" << _controller.devname << " _controller.image_size=" << _controller.info.image_size
+            << " .devname=" << _controller.devname << " _controller.section_size=" << _controller.info.section_size
             << " shutterenable=" << _controller.info.shutterenable;
     logwrite(function, message.str());
 #endif
@@ -1101,7 +1101,8 @@ namespace AstroCam {
         this->controller.at(dev).info.binning[1] = 1;
 
         this->controller.at(dev).info.bitpix = 16;
-        if ( this->controller.at(dev).info.set_axes(USHORT_IMG) != NO_ERROR ) {
+        this->controller.at(dev).info.frame_type = Common::FRAME_RAW;
+        if ( this->controller.at(dev).info.set_axes() != NO_ERROR ) {
           message.str(""); message << "ERROR setting axes for device " << dev;
           logwrite( function, message.str() );
           return( ERROR );
@@ -2095,6 +2096,11 @@ namespace AstroCam {
     message << "shutter is " << shutter_out;
     logwrite( function, message.str() );
 
+    // Add the shutter enable keyword to the system keys db
+    //
+    message.str(""); message << "SHUTTEN=" << ( this->camera_info.shutterenable ? "T" : "F" ) << "// shutter was enabled";
+    this->systemkeys.addkey( message.str() );
+
     return error;
   }
   /** AstroCam::Interface::shutter ********************************************/
@@ -2950,7 +2956,7 @@ message.str(""); message << "datatype=" << this->info.datatype; logwrite( functi
 
     // Maybe the size of the existing buffer is already just right
     //
-    if ( this->info.image_size == this->workbuf_size ) return( (void*)this->workbuf );
+    if ( this->info.section_size == this->workbuf_size ) return( (void*)this->workbuf );
 
     // But if it's not, then free whatever space is allocated, ...
     //
@@ -2958,8 +2964,8 @@ message.str(""); message << "datatype=" << this->info.datatype; logwrite( functi
 
     // ...and then allocate new space.
     //
-    this->workbuf = (T*) new T [ this->info.image_size ];
-    this->workbuf_size = this->info.image_size;
+    this->workbuf = (T*) new T [ this->info.section_size ];
+    this->workbuf_size = this->info.section_size;
 
     message << "allocated " << this->workbuf_size << " bytes for device " << this->devnum << " deinterlacing buffer " 
             << std::hex << this->workbuf;
