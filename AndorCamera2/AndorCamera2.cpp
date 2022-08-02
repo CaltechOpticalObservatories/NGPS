@@ -354,7 +354,7 @@ void printerror( int status){
 void writeAcquireimage(char *filename,int naxis_1,int naxis_2,int *data_array ){
     fitsfile *fptr;       /* pointer to the FITS file, defined in fitsio.h */
     int status;
-    long nelements;
+//  long nelements;
     /* initialize FITS image parameters */
 //    char filename[] = "atestfil.fits";             /* name for new FITS file */
     int bitpix   =  LONG_IMG; /* 16-bit unsigned short pixel values       */
@@ -367,8 +367,8 @@ void writeAcquireimage(char *filename,int naxis_1,int naxis_2,int *data_array ){
     if ( fits_create_img(fptr,  bitpix, naxis, naxes, &status) )
          printerror( status );
 //    fpixel = 1;                               /* first pixel to write      */
-    nelements = naxes[0] * naxes[1];          /* number of pixels to write *
-    / write the array of unsigned integers to the FITS file */
+//  nelements = naxes[0] * naxes[1];          /* number of pixels to write */
+    /* write the array of unsigned integers to the FITS file */
     if ( fits_write_2d_int(fptr, 0, naxis_1,naxis_1,naxis_2,data_array, &status) )
         printerror( status );
     if ( fits_close_file(fptr, &status) )                /* close the file */
@@ -401,9 +401,9 @@ JNIEXPORT jintArray JNICALL Java_andor2_AndorCamera2_acquire(JNIEnv *env, jclass
 	int width, height;
 	at_32*     imageData;
 	int        status;
-	int        datasize;
-    at_32      accumulations, kinetics;
-    int        error;
+//	int        datasize;
+//  at_32      accumulations, kinetics;
+//  int        error;
     jintArray  jimage_array;
 	const char *nativeString;
 	char       *current_filename;
@@ -418,12 +418,12 @@ JNIEXPORT jintArray JNICALL Java_andor2_AndorCamera2_acquire(JNIEnv *env, jclass
 	    read_progress_cam2     = 0.0;
 	    write_progress_cam2    = 0.0;
 	  }
-	  error = SetReadMode(READ_MODE_IMAGE);                      //Set Read Mode to --Image--
-	  error = SetAcquisitionMode(ACQUISITION_MODE_SINGLE_SCAN);  //Set Acquisition mode to --Single scan--
-	  error = GetDetector(&width, &height);                      //Get Detector dimensions
-	  error = SetExposureTime(0.1);                              //Set initial exposure time
-	  error = SetShutter(SHUTTER_OUTPUT_TTL_HIGH,SHUTTER_AUTO,SHUTTER_CLOSING_TIME,SHUTTER_OPENING_TIME);//Initialize Shutter
-	  error = SetImage(1,1,1,width,1,height);                    //Setup Image dimensions
+	  SetReadMode(READ_MODE_IMAGE);                      //Set Read Mode to --Image--
+	  SetAcquisitionMode(ACQUISITION_MODE_SINGLE_SCAN);  //Set Acquisition mode to --Single scan--
+	  GetDetector(&width, &height);                      //Get Detector dimensions
+	  SetExposureTime(0.1);                              //Set initial exposure time
+	  SetShutter(SHUTTER_OUTPUT_TTL_HIGH,SHUTTER_AUTO,SHUTTER_CLOSING_TIME,SHUTTER_OPENING_TIME);//Initialize Shutter
+	  SetImage(1,1,1,width,1,height);                    //Setup Image dimensions
 	  printf("Height = %d Width = %d \n",height,width);
 	  jsize  stringlength     = env->GetStringLength(fileName);
 	         nativeString     = new char[stringlength];
@@ -434,13 +434,13 @@ JNIEXPORT jintArray JNICALL Java_andor2_AndorCamera2_acquire(JNIEnv *env, jclass
 	  printf("Current File Name = %s\n",current_filename);
 
 		imageData = new at_32[width*height];
-		error = StartAcquisition();
+		StartAcquisition();
 		//Loop until acquisition finished
-		error = GetStatus(&status);
+		GetStatus(&status);
 		while(status==DRV_ACQUIRING){
-			error = GetStatus(&status);
+			GetStatus(&status);
 		}
-		error = GetAcquiredData(imageData, width*height);
+		GetAcquiredData(imageData, width*height);
 //		for(int i=0;i<width*height;i++){
 //			printf("%i\n",imageData[i]);
 //		}
@@ -1098,7 +1098,7 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetADChannel(JNIEnv *env, jclass
  */
 JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_GetBitDepth(JNIEnv *env, jclass obj, jint channel){
 int   error = 0;
-int   native_channel = channel;
+//int   native_channel = channel;
 int   depth          = MISSING_INTEGER;
  if(isInitialized()){
  	error = GetBitDepth(channel,&depth);
@@ -1239,7 +1239,7 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	error = GetCapabilities(andor_capabilities);
 	printf("%i",error);
 
-	bool test = true;
+//	bool test = true;
 	cls = (*env).GetObjectClass(capabilities);
 	jfieldID fid_AcqModes_SINGLE                   = (*env).GetFieldID(cls,"AcqModes_SINGLE","Z");
 	jfieldID fid_AcqModes_VIDEO                    = (*env).GetFieldID(cls,"AcqModes_VIDEO","Z");
@@ -1557,7 +1557,7 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 
 	      current_capabilities->PCICard                                 = andor_capabilities->ulPCICard;
 		  (*env).SetIntField(capabilities,fid_PCICard,current_capabilities->PCICard);
-	    int ulsize             = andor_capabilities->ulSize;
+//	    int ulsize             = andor_capabilities->ulSize;
 	 }
 	 free(andor_capabilities);
 	 free(current_capabilities);
@@ -1804,7 +1804,7 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	     if(isInitialized()){
 	    	 error = GetPixelSize(&xSize,&ySize);
 		    	if(error == DRV_SUCCESS){
-		    	  printf("Pixel Size = %i %i\n",xSize,ySize);
+		    	  printf("Pixel Size = %f %f\n",xSize,ySize);
 		    	}
 		    	if(error == DRV_NOT_INITIALIZED){
 		    	  printf("Driver Not Initialized = %i\n",error);
@@ -2301,7 +2301,7 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
   int  native_mode        = (int)mode;
   int  native_closingTime = (int)closingTime;
   int  native_openingTime = (int)openingTime;
-  int  native_extmode     = (int)extmode;
+//int  native_extmode     = (int)extmode;
   int  error = 0;
      if(isInitialized()){
     	 error = SetShutterEx(native_type,native_mode,native_closingTime,native_openingTime,extmode);
@@ -2445,11 +2445,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	  unsigned long  current_pixels = (unsigned long)pixels;
 	                 image_array    = new at_32[current_pixels];
 	  int            error          = 0;
-	  printf("PIXELS = %i\n",current_pixels);
+	  printf("PIXELS = %lu\n",current_pixels);
 	  if(isInitialized()){
 	   	 error = GetAcquiredData(image_array,current_pixels);
 		    	if(error == DRV_SUCCESS){
-		    	  printf("Data copied Pixels = %i\n",current_pixels);
+		    	  printf("Data copied Pixels = %lu\n",current_pixels);
 		    		jimage_array = env->NewIntArray(current_pixels);
 		    		printf("Writing image to Java Array\n");
 		    		env->SetIntArrayRegion(jimage_array,0,current_pixels,image_array);
@@ -2493,11 +2493,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	  unsigned long  current_pixels = (unsigned long)pixels;
 	                 image_array    = new at_32[current_pixels];
 	  int            error          = 0;
-	  printf("PIXELS = %i\n",current_pixels);
+	  printf("PIXELS = %lu\n",current_pixels);
 	  if(isInitialized()){
 	   	 error = GetNewData(image_array,current_pixels);
 		    	if(error == DRV_SUCCESS){
-		    	  printf("Data copied Pixels = %i\n",current_pixels);
+		    	  printf("Data copied Pixels = %lu\n",current_pixels);
 		    		jimage_array = env->NewIntArray(current_pixels);
 		    		printf("Writing image to Java Array\n");
 		    		env->SetIntArrayRegion(jimage_array,0,current_pixels,image_array);
@@ -2594,11 +2594,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	  unsigned long  current_pixels = (unsigned long)pixels;
 	                 image_array    = new at_32[current_pixels];
 	  int            error          = 0;
-	  printf("PIXELS = %i\n",current_pixels);
+	  printf("PIXELS = %lu\n",current_pixels);
 	  if(isInitialized()){
 	   	 error = GetMostRecentImage(image_array,current_pixels);
 		    	if(error == DRV_SUCCESS){
-		    	  printf("Data copied Pixels = %i\n",current_pixels);
+		    	  printf("Data copied Pixels = %lu\n",current_pixels);
 		    		jimage_array = env->NewIntArray(current_pixels);
 		    		printf("Writing image to Java Array\n");
 		    		env->SetIntArrayRegion(jimage_array,0,current_pixels,image_array);
@@ -2642,11 +2642,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	  unsigned long  current_pixels = (unsigned long)pixels;
 	                 image_array    = new at_32[current_pixels];
 	  int            error          = 0;
-	  printf("PIXELS = %i\n",current_pixels);
+	  printf("PIXELS = %lu\n",current_pixels);
 	  if(isInitialized()){
 	   	 error = GetOldestImage(image_array,current_pixels);
 		    	if(error == DRV_SUCCESS){
-		    	  printf("Data copied Pixels = %i\n",current_pixels);
+		    	  printf("Data copied Pixels = %lu\n",current_pixels);
 		    		jimage_array = env->NewIntArray(current_pixels);
 		    		printf("Writing image to Java Array\n");
 		    		env->SetIntArrayRegion(jimage_array,0,current_pixels,image_array);
@@ -2690,11 +2690,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
 	  unsigned long   current_pixels = (unsigned long)pixels;
 	                  image_array    = new unsigned short[current_pixels];
 	  int             error          = 0;
-	  printf("PIXELS = %i\n",current_pixels);
+	  printf("PIXELS = %lu\n",current_pixels);
 	  if(isInitialized()){
 	   	 error = GetAcquiredData16(image_array,current_pixels);
 		    	if(error == DRV_SUCCESS){
-		    	  printf("Data copied Pixels = %i\n",current_pixels);
+		    	  printf("Data copied Pixels = %lu\n",current_pixels);
 		    		jimage_array = env->NewShortArray(current_pixels);
 		    		printf("Writing image to Java Array\n");
 		    		env->SetShortArrayRegion(jimage_array,0,current_pixels,(jshort *)image_array);
@@ -2800,11 +2800,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
   unsigned long   current_pixels = (unsigned long)pixels;
                   image_array    = new unsigned short[current_pixels];
   int             error          = 0;
-  printf("PIXELS = %i\n",current_pixels);
+  printf("PIXELS = %lu\n",current_pixels);
   if(isInitialized()){
    	 error = GetMostRecentImage16(image_array,current_pixels);
 	    	if(error == DRV_SUCCESS){
-	    	  printf("Data copied Pixels = %i\n",current_pixels);
+	    	  printf("Data copied Pixels = %lu\n",current_pixels);
 	    		jimage_array = env->NewShortArray(current_pixels);
 	    		printf("Writing image to Java Array\n");
 	    		env->SetShortArrayRegion(jimage_array,0,current_pixels,(jshort *)image_array);
@@ -2848,11 +2848,11 @@ JNIEXPORT jint JNICALL Java_andor2_AndorCamera2_SetAccumulationCycleTime(JNIEnv 
   unsigned long   current_pixels = (unsigned long)pixels;
                   image_array    = new unsigned short[current_pixels];
   int             error          = 0;
-  printf("PIXELS = %i\n",current_pixels);
+  printf("PIXELS = %lu\n",current_pixels);
   if(isInitialized()){
    	 error = GetOldestImage16(image_array,current_pixels);
 	    	if(error == DRV_SUCCESS){
-	    	  printf("Data copied Pixels = %i\n",current_pixels);
+	    	  printf("Data copied Pixels = %lu\n",current_pixels);
 	    		jimage_array = env->NewShortArray(current_pixels);
 	    		printf("Writing image to Java Array\n");
 	    		env->SetShortArrayRegion(jimage_array,0,current_pixels,(jshort *)image_array);
@@ -3104,7 +3104,7 @@ JNIEXPORT jfloat JNICALL Java_andor2_AndorCamera2_GetReadOutTime(JNIEnv *env, jc
 	 if(isInitialized()){
 	 	error = GetReadOutTime(&readout_time);
 	 	if(error == DRV_SUCCESS){
-	 	  printf("GetReadOutTime SUCCESSFUL = %i\n",readout_time);
+	 	  printf("GetReadOutTime SUCCESSFUL = %f\n",readout_time);
 	 	}
 	 	if(error == DRV_NOT_INITIALIZED){
 		   printf("GetReadOutTime Driver Not Initialized  = %i\n",error);
@@ -3130,7 +3130,7 @@ JNIEXPORT jfloat JNICALL Java_andor2_AndorCamera2_GetKeepCleanTime(JNIEnv *env, 
 	 if(isInitialized()){
 	 	error = GetKeepCleanTime(&keep_clean_time);
 	 	if(error == DRV_SUCCESS){
-	 	  printf("GetKeepCleanTime SUCCESSFUL = %i\n",keep_clean_time);
+	 	  printf("GetKeepCleanTime SUCCESSFUL = %f\n",keep_clean_time);
 	 	}
 	 	if(error == DRV_NOT_INITIALIZED){
 		   printf("GetKeepCleanTime Driver Not Initialized  = %i\n",error);
@@ -3244,7 +3244,7 @@ int   error  = 0;
  if(isInitialized()){
  	error = GetVSSpeed(native_index,&speed);
  	if(error == DRV_SUCCESS){
- 	  printf("GetVSSpeed SUCCESSFUL = %i\n",speed);
+ 	  printf("GetVSSpeed SUCCESSFUL = %f\n",speed);
  	}
  	if(error == DRV_NOT_INITIALIZED){
 	   printf("GetVSSpeed Driver Not Initialized  = %i\n",error);
@@ -3309,7 +3309,7 @@ int   error  = 0;
  if(isInitialized()){
  	error = GetHSSpeed(native_channel,native_type,native_index,&speed);
  	if(error == DRV_SUCCESS){
- 	  printf("GetHSSpeed SUCCESSFUL = %i\n",speed);
+ 	  printf("GetHSSpeed SUCCESSFUL = %f\n",speed);
  	}
  	if(error == DRV_NOT_INITIALIZED){
 	   printf("GetHSSpeed Driver Not Initialized  = %i\n",error);
