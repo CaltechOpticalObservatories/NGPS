@@ -362,11 +362,11 @@ void doit(Network::TcpSocket sock) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        message.str(""); message << "Poll timeout on thread " << sock.id;
+        message.str(""); message << "Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
         logwrite(function, message.str());
       }
       if (pollret <0) {
-        message.str(""); message << "Poll error on thread " << sock.id << ": " << strerror(errno);
+        message.str(""); message << "Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       break;                      // this will close the connection
@@ -374,9 +374,15 @@ void doit(Network::TcpSocket sock) {
 
     // Data available, now read from connected socket...
     //
-    if ( (ret=sock.Read(buf, (size_t)BUFSIZE)) <= 0 ) {
+    std::string sbuf = buf;
+    char delim='\n';
+    if ( ( ret=sock.Read( sbuf, delim ) ) <= 0 ) {
       if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error: " << strerror(errno); logwrite(function, message.str());
+        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
+      }
+      if (ret==0) {               // or a timeout
+        message.str(""); message << "timeout reading from fd " << sock.getfd();
+        logwrite( function, message.str() );
       }
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
@@ -387,16 +393,17 @@ void doit(Network::TcpSocket sock) {
     // convert the input buffer into a string and remove any trailing linefeed
     // and carriage return
     //
-    std::string sbuf = buf;
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+
+    if (sbuf.empty()) {sock.Write("\n"); continue;}  // acknowledge empty command so client doesn't time out
 
     try {
       std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
 
       cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
 
-      if (cmd.empty()) continue;                     // If no command then skip over everything.
+      if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
       if (cmd_sep == std::string::npos) {            // If no space was found,
         args="";                                     // then the arg list is empty,
@@ -408,7 +415,7 @@ void doit(Network::TcpSocket sock) {
       sock.id = ++slitd.cmd_num;
       if ( slitd.cmd_num == INT_MAX ) slitd.cmd_num = 0;
 
-      message.str(""); message << "received command (" << sock.id << "): " << cmd << " " << args;
+      message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
       logwrite(function, message.str());
     }
     catch ( std::runtime_error &e ) {
@@ -437,8 +444,17 @@ void doit(Network::TcpSocket sock) {
 
     // open
     //
-    if ( cmd.compare( "open" ) == 0 ) {
+    if ( cmd.compare( SLITD_OPEN ) == 0 ) {
                     ret = slitd.interface.open( );
+    }
+    else
+
+    // isopen
+    //
+    if ( cmd.compare( SLITD_ISOPEN ) == 0 ) {
+                    bool isopen = slitd.interface.isopen( );
+                    if ( isopen ) retstring = "true"; else retstring = "false";
+                    ret = NO_ERROR;
     }
     else
 
@@ -458,8 +474,15 @@ void doit(Network::TcpSocket sock) {
 
     // home
     //
-    if ( cmd.compare( "home" ) == 0 ) {
+    if ( cmd.compare( SLITD_HOME ) == 0 ) {
                     ret = slitd.interface.home( );
+    }
+    else
+
+    // is_home
+    //
+    if ( cmd.compare( SLITD_ISHOME ) == 0 ) {
+                    ret = slitd.interface.is_home( retstring );
     }
     else
 
@@ -467,7 +490,6 @@ void doit(Network::TcpSocket sock) {
     //
     if ( cmd.compare( SLITD_SET ) == 0 ) {
                     ret = slitd.interface.set( args, retstring );
-                    if ( !retstring.empty() ) retstring.append( " " );
     }
     else
 
@@ -475,7 +497,6 @@ void doit(Network::TcpSocket sock) {
     //
     if ( cmd.compare( "get" ) == 0 ) {
                     ret = slitd.interface.get( retstring );
-                    if ( !retstring.empty() ) retstring.append( " " );
     }
     else
 
@@ -502,7 +523,6 @@ void doit(Network::TcpSocket sock) {
     // all other commands go straight to the controller interface
     //
     else {
-message.str(""); message << "unrecognized command: " << sbuf; logwrite( function, message.str() );
       try {
         std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );  // make uppercase
       }
@@ -510,11 +530,13 @@ message.str(""); message << "unrecognized command: " << sbuf; logwrite( function
         logwrite( function, "error converting command to uppercae" );
         ret=ERROR;
       }
+      message.str(""); message << "NOTICE: sending unrecognized command: " << sbuf << " to motor controller";
+      logwrite( function, message.str() );
       ret = slitd.interface.send_command( sbuf, retstring );
-      if ( !retstring.empty() ) retstring.append( " " );
     }
 
     if (ret != NOTHING) {
+      if ( !retstring.empty() ) retstring.append( " " );
       std::string term=(ret==0?"DONE\n":"ERROR\n");
       retstring.append( term );
       if ( sock.Write( retstring ) < 0 ) connection_open=false;

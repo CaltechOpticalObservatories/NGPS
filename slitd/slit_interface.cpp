@@ -208,7 +208,7 @@ namespace Slit {
         try {
           std::string retstring;
           this->pi.is_home( this->controller_info.at(con).addr, retstring );
-          this->controller_info.at(con).ishome = ( retstring == "1" ? true : false );
+          this->controller_info.at(con).ishome = ( retstring == "true" ? true : false );
           this->controller_info.at(con).ontarget = this->controller_info.at(con).ishome;
           if ( this->controller_info.at(con).ishome ) num_home++;
         }
@@ -220,7 +220,9 @@ namespace Slit {
       }
       if ( num_home == this->controller_info.size() ) break;
       else {
-        logwrite( function, "homing..." );
+#ifdef LOGLEVEL_DEBUG
+        logwrite( function, "[DEBUG] waiting for homing..." );
+#endif
         usleep( 1000000 );
       }
 
@@ -241,6 +243,59 @@ namespace Slit {
     return( error );
   }
   /**************** Slit::Interface::home *************************************/
+
+
+  /**************** Slit::Interface::is_home **********************************/
+  /**
+   * @fn          is_home
+   * @brief       return the home state of the motors
+   * @param[in]   none
+   * @param[out]  retstring contains the home state ("true" | "false")
+   * @return      ERROR or NO_ERROR
+   *
+   * All motors must be homed for this to return "true".
+   *
+   */
+  long Interface::is_home( std::string &retstring ) {
+    std::string function = "Slit::Interface::is_home";
+    std::stringstream message;
+    std::stringstream homestream;
+    long error = NO_ERROR;
+
+    // Loop through all motor controllers, asking each if homed,
+    // setting each controller's .ishome flag, and keeping count 
+    // of the number that are homed.
+    //
+    size_t num_home=0;
+    for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+      try {
+        std::string state;
+        error |= this->pi.is_home( this->controller_info.at(con).addr, state );  // error is OR'd so any error is preserved
+        this->controller_info.at(con).ishome = ( state == "true" ? true : false );
+        homestream << this->controller_info.at(con).addr << ":" << state << " ";
+        if ( this->controller_info.at(con).ishome ) num_home++;
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "ERROR: controller element " << con << " out of range";
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+    }
+
+    // Set the retstring true or false, true only if all controllers are homed.
+    //
+    if ( num_home == this->controller_info.size() ) retstring = "true"; else retstring = "false";
+
+    // If not all are the same state then log that
+    //
+    if ( num_home > 0 && num_home < this->controller_info.size() ) {
+      message.str(""); message << "NOTICE: " << homestream.str();
+      logwrite( function, message.str() );
+    }
+
+    return( error );
+  }
+  /**************** Slit::Interface::is_home **********************************/
 
 
   /**************** Slit::Interface::set **************************************/

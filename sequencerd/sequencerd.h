@@ -23,6 +23,8 @@
 #include <atomic>
 #include <climits>
 #include <condition_variable>
+#include <cmath>
+#include <ctgmath>
 
 #include "logentry.h"
 #include "config.h"
@@ -47,6 +49,18 @@ namespace Sequencer {
         this->blkport=-1;
         this->asyncport=-1;
         this->cmd_num=0;
+
+        // The names of all of the daemons defined in the Sequencer::Sequence class
+        // are initialized here. The names are useful just for logging.
+        //
+        this->sequence.calibd.name   = "calibd";
+        this->sequence.camerad.name  = "camerad";
+        this->sequence.filterd.name  = "filterd";
+        this->sequence.flexured.name = "flexured";
+        this->sequence.focusd.name   = "focusd";
+        this->sequence.powerd.name   = "powerd";
+        this->sequence.slitd.name    = "slitd";
+        this->sequence.tcsd.name     = "tcsd";
       }
 
       /** Sequencer::~Server *******************************************************/
@@ -185,7 +199,25 @@ namespace Sequencer {
               logwrite(function, "CAMERAD_PORT number out of integer range");
               return(ERROR);
             }
-            this->sequence.camerad.configure( "camerad", port );
+            this->sequence.camerad.port =  port;
+            applied++;
+          }
+
+          // POWERD_PORT
+          if (config.param[entry].compare(0, 11, "POWERD_PORT")==0) {
+            int port;
+            try {
+              port = std::stoi( config.arg[entry] );
+            }
+            catch (std::invalid_argument &) {
+              logwrite(function, "ERROR: bad POWERD_PORT: unable to convert to integer");
+              return(ERROR);
+            }
+            catch (std::out_of_range &) {
+              logwrite(function, "POWERD_PORT number out of integer range");
+              return(ERROR);
+            }
+            this->sequence.powerd.port =  port;
             applied++;
           }
 
@@ -203,7 +235,7 @@ namespace Sequencer {
               logwrite(function, "SLITD_PORT number out of integer range");
               return(ERROR);
             }
-            this->sequence.slitd.configure( "slitd", port );
+            this->sequence.slitd.port =  port;
             applied++;
           }
 
@@ -221,7 +253,7 @@ namespace Sequencer {
               logwrite(function, "TCSD_PORT number out of integer range");
               return(ERROR);
             }
-            this->sequence.tcsd.configure( "tcsd", port );
+            this->sequence.tcsd.port =  port;
             applied++;
           }
 
@@ -239,8 +271,103 @@ namespace Sequencer {
               logwrite(function, "CALIBD_PORT number out of integer range");
               return(ERROR);
             }
-            this->sequence.calibd.configure( "calibd", port );
+            this->sequence.calibd.port =  port;
             applied++;
+          }
+
+          // FILTERD_PORT
+          if (config.param[entry].compare(0, 12, "FILTERD_PORT")==0) {
+            int port;
+            try {
+              port = std::stoi( config.arg[entry] );
+            }
+            catch (std::invalid_argument &) {
+              logwrite(function, "ERROR: bad FILTERD_PORT: unable to convert to integer");
+              return(ERROR);
+            }
+            catch (std::out_of_range &) {
+              logwrite(function, "FILTERD_PORT number out of integer range");
+              return(ERROR);
+            }
+            this->sequence.filterd.port =  port;
+            applied++;
+          }
+
+          // FOCUSD_PORT
+          if (config.param[entry].compare(0, 11, "FOCUSD_PORT")==0) {
+            int port;
+            try {
+              port = std::stoi( config.arg[entry] );
+            }
+            catch (std::invalid_argument &) {
+              logwrite(function, "ERROR: bad FOCUSD_PORT: unable to convert to integer");
+              return(ERROR);
+            }
+            catch (std::out_of_range &) {
+              logwrite(function, "FOCUSD_PORT number out of integer range");
+              return(ERROR);
+            }
+            this->sequence.focusd.port =  port;
+            applied++;
+          }
+
+          // TCS_TIMEOUT
+          if (config.param[entry].compare(0, 11, "TCS_TIMEOUT")==0) {
+            double to;
+            try {
+              to = std::stod( config.arg[entry] );
+            }
+            catch (std::invalid_argument &) {
+              logwrite(function, "ERROR: bad TCS_TIMEOUT: unable to convert to double");
+              return(ERROR);
+            }
+            catch (std::out_of_range &) {
+              logwrite(function, "TCS_TIMEOUT number out of double range");
+              return(ERROR);
+            }
+            this->sequence.tcs_timeout = to;
+            applied++;
+          }
+
+          //
+          // To configure the database parameters, call configure_db( param, value ) with the
+          // parameter name and the value. This function will parse and perform error checking and
+          // assign to the correct private variable.  If this returns NO_ERROR then increment applied.
+          //
+
+          // DB_HOST
+          if (config.param[entry].compare( 0, Sequencer::DB_HOST.length(), DB_HOST )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_HOST, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // DB_PORT
+          if (config.param[entry].compare( 0, Sequencer::DB_PORT.length(), DB_PORT )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_PORT, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // DB_USER
+          if (config.param[entry].compare( 0, Sequencer::DB_USER.length(), DB_USER )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_USER, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // DB_PASS
+          if (config.param[entry].compare( 0, Sequencer::DB_PASS.length(), DB_PASS )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_PASS, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // DB_SCHEMA
+          if (config.param[entry].compare( 0, Sequencer::DB_SCHEMA.length(), DB_SCHEMA )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // DB_ACTIVE
+          if (config.param[entry].compare( 0, Sequencer::DB_ACTIVE.length(), DB_ACTIVE )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // DB_COMPLETED
+          if (config.param[entry].compare( 0, Sequencer::DB_COMPLETED.length(), DB_COMPLETED )==0) {
+            if ( this->sequence.target.configure_db( Sequencer::DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
         } // end loop through the entries in the configuration file

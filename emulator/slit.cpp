@@ -141,7 +141,7 @@ namespace Slit {
       return( ERROR );
     }
 
-    if ( myaddr < 1 || myaddr > this->controller_info.size() ) {
+    if ( myaddr < 1 || myaddr > (long)this->controller_info.size() ) {
       std::cerr << function << "bad address " << myaddr << ". expected {0:" << this->controller_info.size() << "}\n";
       return( ERROR );
     }

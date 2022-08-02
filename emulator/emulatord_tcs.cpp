@@ -6,7 +6,7 @@
  *
  */
 
-#include "emulatord_slit.h"
+#include "emulatord_tcs.h"
 #include "daemonize.h"
 
 Emulator::Server emulator;
@@ -134,15 +134,6 @@ int main( int argc, char **argv ) {
     emulator.exit_cleanly();
   }
 
-/*
-  if ( emulator.slitdevice.size() == 0 ||
-       emulator.emu_info.size()   == 0 ||
-       emulator.slitdevice.size() != emulator.emu_info.size() ) {
-    std::cerr << function << "ERROR: slit device not initialized for " << emulator.subsystem << "\n";
-    emulator.exit_cleanly();
-  }
-*/
-
   // create a thread for a single listening port
   // The TcpSocket object is instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
 
@@ -200,9 +191,12 @@ void doit( Network::TcpSocket sock ) {
   std::stringstream message;
   std::string cmd, args;        // arg string is everything after command
   std::vector<std::string> tokens;
+  char delim = '\r';           /// commands sent to me (the TCS) have been terminated with this
+  std::string term = "\r";     /// my replies (as the TCS) get terminated with this
 
   bool connection_open=true;
 
+  std::cerr << function << "accepted connection on fd " << sock.getfd() << "\n";
   while (connection_open) {
 
     // Wait (poll) connected socket for incoming data...
@@ -210,12 +204,10 @@ void doit( Network::TcpSocket sock ) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        std::cerr << function << emulator.subsystem << " Poll timeout on thread "
-                  << sock.id << "\n";
+        std::cerr << function << emulator.subsystem << " Poll timeout on fd " << sock.getfd() << " thread " << sock.id << "\n";
       }
       if (pollret <0) {
-        std::cerr << function << emulator.subsystem << " Poll error on thread "
-                  << sock.id << ": " << strerror(errno) << "\n";
+        std::cerr << function << emulator.subsystem << " Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno) << "\n";
       }
       break;                      // this will close the connection
     }
@@ -223,7 +215,6 @@ void doit( Network::TcpSocket sock ) {
     // Data available, now read from connected socket...
     //
     std::string sbuf;
-    char delim='\n';
     if ( (ret=sock.Read( sbuf, delim )) <= 0 ) {     // read until newline delimiter
       if (ret<0) {                // could be an actual read error
         std::cerr << function << emulator.subsystem 
@@ -259,8 +250,7 @@ void doit( Network::TcpSocket sock ) {
       sock.id = ++emulator.cmd_num;
       if ( emulator.cmd_num == INT_MAX ) emulator.cmd_num = 0;
 
-      std::cerr << function << emulator.subsystem << " received command on fd "
-                << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args << "\n";
+      std::cerr << function << emulator.subsystem << " received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args << "\n";
     }
     catch ( std::runtime_error &e ) {
       std::stringstream errstream; errstream << e.what();
@@ -280,30 +270,30 @@ void doit( Network::TcpSocket sock ) {
     std::string retstring="";   // string for the return value
 
     if ( cmd.compare( "exit" ) == 0 ) {
-                    emulator.exit_cleanly();                   // shutdown the daemon
+                    emulator.exit_cleanly();                                   // shutdown the daemon
     }
     else
-    if ( cmd.compare( "close" ) == 0 ) {
+    if ( cmd.compare( TCSD_CLOSE ) == 0 ) {
                     sock.Close();
                     return;
     }
-    else
-    if ( cmd.compare( "test" ) == 0 ) {
-                    ret = emulator.interface.test();
-    }
     else {  // if no matching command found then send it straight to the interface's command parser
       try {
-        std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );    // make uppercase
+        std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );   // make uppercase
       }
       catch (...) {
         std::cerr << function << "error converting command to uppercase\n";
         ret=ERROR;
       }
-      ret = emulator.interface.parse_command( sbuf, retstring );
+      ret = emulator.interface.parse_command( sbuf, retstring );               // send the command to the parser
     }
 
+#ifdef LOGLEVEL_DEBUG
+    std::cerr << function << "[DEBUG] ret=" << ret << " retstring=" << retstring << "\n";
+#endif
+
     if ( ret != NOTHING && !retstring.empty() ) {
-      retstring.append( "\n" );
+      retstring.append( term );          // terminate my reply
       if ( sock.Write( retstring ) <0 ) connection_open=false;
     }
 

@@ -7,6 +7,7 @@ cmake_minimum_required( VERSION 3.12 )
 set( TCSD_DIR ${PROJECT_BASE_DIR}/tcsd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
+include_directories( ${PROJECT_BASE_DIR}/common )
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(tcsd 

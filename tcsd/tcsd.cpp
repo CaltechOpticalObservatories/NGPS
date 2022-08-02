@@ -354,6 +354,9 @@ void doit(Network::TcpSocket sock) {
 
   bool connection_open=true;
 
+  message.str(""); message << "accepted connection on fd " << sock.getfd();
+  logwrite( function, message.str() );
+
   while (connection_open) {
     memset(buf,  '\0', BUFSIZE);  // init buffers
 
@@ -362,11 +365,11 @@ void doit(Network::TcpSocket sock) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        message.str(""); message << "Poll timeout on thread " << sock.id;
+        message.str(""); message << "Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
         logwrite(function, message.str());
       }
       if (pollret <0) {
-        message.str(""); message << "Poll error on thread " << sock.id << ": " << strerror(errno);
+        message.str(""); message << "Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       break;                      // this will close the connection
@@ -374,10 +377,17 @@ void doit(Network::TcpSocket sock) {
 
     // Data available, now read from connected socket...
     //
-    if ( (ret=sock.Read(buf, (size_t)BUFSIZE)) <= 0 ) {
+    std::string sbuf = buf;
+    char delim='\n';
+    if ( ( ret=sock.Read( sbuf, delim ) ) <= 0 ) {
       if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error: " << strerror(errno); logwrite(function, message.str());
+        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
+        logwrite(function, message.str());
       }
+      if (ret==0) {
+        message.str(""); message << "timeout reading from fd " << sock.getfd();
+        logwrite( function, message.str() );
+       }
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough
@@ -387,16 +397,17 @@ void doit(Network::TcpSocket sock) {
     // convert the input buffer into a string and remove any trailing linefeed
     // and carriage return
     //
-    std::string sbuf = buf;
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+
+    if (sbuf.empty()) {sock.Write("\n"); continue;}  // acknowledge empty command so client doesn't time out
 
     try {
       std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
 
       cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
 
-      if (cmd.empty()) continue;                     // If no command then skip over everything.
+      if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
       if (cmd_sep == std::string::npos) {            // If no space was found,
         args="";                                     // then the arg list is empty,
@@ -408,7 +419,7 @@ void doit(Network::TcpSocket sock) {
       sock.id = ++tcsd.cmd_num;
       if ( tcsd.cmd_num == INT_MAX ) tcsd.cmd_num = 0;
 
-      message.str(""); message << "received command (" << sock.id << "): " << cmd << " " << args;
+      message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
       logwrite(function, message.str());
     }
     catch ( std::runtime_error &e ) {
@@ -427,6 +438,7 @@ void doit(Network::TcpSocket sock) {
      * process commands here
      */
     ret = NOTHING;
+    std::string retstring="";
 
     if ( cmd.compare( "exit" ) == 0 ) {
 //                  tcsd.common.message.enqueue("exit");      // shutdown the async message thread if running
@@ -436,15 +448,24 @@ void doit(Network::TcpSocket sock) {
 
     // open
     //
-    if ( cmd.compare( "open" ) == 0 ) {
+    if ( cmd.compare( TCSD_OPEN ) == 0 ) {
                     ret = tcsd.interface.open( );
     }
     else
 
     // close
     //
-    if ( cmd.compare( "close" ) == 0 ) {
+    if ( cmd.compare( TCSD_CLOSE ) == 0 ) {
                     ret = tcsd.interface.close();
+    }
+    else
+
+    // isopen
+    //
+    if ( cmd.compare( TCSD_ISOPEN ) == 0 ) {
+                    bool isopen = tcsd.interface.isopen( );
+                    if ( isopen ) retstring = "true"; else retstring = "false";
+                    ret = NO_ERROR;
     }
 
     // all other commands go straight to the TCS interface
@@ -457,14 +478,19 @@ void doit(Network::TcpSocket sock) {
         logwrite( function, "error converting command to uppercae" );
         ret=ERROR;
       }
-      std::string retstring;
       ret = tcsd.interface.send_command( sbuf, retstring );
-      if ( !retstring.empty() ) { sock.Write( retstring ); sock.Write( " " ); }
     }
 
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
+    logwrite( function, message.str() );
+#endif
+
     if (ret != NOTHING) {
-      std::string retstr=(ret==0?"DONE\n":"ERROR\n");
-      if (sock.Write(retstr)<0) connection_open=false;
+      if ( not retstring.empty() ) retstring.append( " " );
+      std::string term=(ret==NO_ERROR?"DONE\n":"ERROR\n");
+      retstring.append( term );
+      if ( sock.Write( retstring ) < 0 ) connection_open=false;
     }
 
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.

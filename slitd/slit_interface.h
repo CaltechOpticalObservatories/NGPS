@@ -119,10 +119,13 @@ namespace Slit {
       //
       std::vector<Slit::ControllerInfo> controller_info;
 
+      bool isopen() { return this->pi.controller.isconnected(); }    /// is this interface connected to hardware?
+
       long initialize_class();
       long open();
       long close();
       long home();
+      long is_home( std::string &retstring );
       long set( std::string args, std::string &retstring );
       long get( std::string &retstring );
       long move_abs( std::string args );

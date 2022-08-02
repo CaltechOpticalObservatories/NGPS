@@ -7,11 +7,46 @@ namespace Sequencer {
   /**
    * @fn     TargetInfo
    * @brief  class constructor
-   * @param  
-   * @return 
+   * @param  none
+   * @return none
+   *
+   * This constructor initializes the database configuration variables as empty,
+   * requiring them to be properly configured from the .cfg file.
+   *
+   * This also defines the target list fields which are accessed in the active 
+   * target table, the table identified by DB_ACTIVE.
    *
    */
   TargetInfo::TargetInfo() {
+    this->db_host       = "";
+    this->db_port       = -1;
+    this->db_user       = "";
+    this->db_pass       = "";
+    this->db_schema     = "";
+    this->db_active     = "";
+    this->db_completed  = "";
+    this->db_configured = false;
+
+    this->init_record();
+
+    // These are the fields (or columns) to be accessed in the DB_ACTIVE table.
+    // They can be listed in any order.
+    //
+    this->targetlist = { "OBSERVATION_ID",
+                         "OBS_ORDER",
+                         "STATE",
+                         "NAME",
+                         "RA",
+                         "DECL",
+                         "EPOCH",
+                         "EXPTIME",
+                         "NEXP",
+                         "SLITWIDTH",
+                         "SLITOFFSET",
+                         "BINSPECT",
+                         "BINSPAT",
+                         "CASANGLE"
+                       };                /// initialize the target list fields for accessing the active target table
   }
   /** Sequencer::TargetInfo::TargetInfo ***************************************/
 
@@ -29,153 +64,508 @@ namespace Sequencer {
   /** Sequencer::TargetInfo::~TargetInfo **************************************/
 
 
+  /** Sequencer::TargetInfo::colnum *******************************************/
+  /**
+   * @fn         colnum
+   * @brief      get column number of requested field from this->targetlist
+   * @param[in]  field, string to search for
+   * @return     integer, -1 on error
+   *
+   * This function is used to return the location of the field name in the targetlist
+   * vector. This is needed because the mysqlx Connector/C++ X DEV API does not have
+   * its own capability for this. If the field is not found then return -1. This should
+   * cause a std::exception row column to be thrown if you try to access a row[ -1 ].
+   *
+   */
+  int TargetInfo::colnum( std::string field ) {
+    std::string function = "Sequencer::TargetInfo::colnum";
+    std::stringstream message;
+    std::vector<std::string>::iterator it;
+    it = std::find( this->targetlist.begin(), this->targetlist.end(), field );
+    if ( it != this->targetlist.end() ) {
+      return ( it - this->targetlist.begin() );
+    }
+    else {
+      message.str(""); message << "ERROR: requested field " << field << " not found in targetlist";
+      logwrite( function, message.str() );
+      return -1;
+    }
+  }
+  /** Sequencer::TargetInfo::colnum *******************************************/
+
+
+  /** Sequencer::TargetInfo::init_record **************************************/
+  /**
+   * @fn         init_record
+   * @brief      initialize current target record variables
+   * @param[in]  none
+   * @return     none
+   *
+   */
+  void TargetInfo::init_record() {
+    std::string function = "Sequencer::TargetInfo::init_record";
+    std::stringstream message;
+    this->obsid=-1;
+    this->obsorder=-1;
+    this->name="";
+    this->ra="";
+    this->dec="";
+    this->epoch="";
+    this->casangle="";
+    this->slitwidth=-1;
+    this->slitoffset=-1;
+    this->exptime=-1;
+    this->nexp=-1;
+    this->obsplan="";
+    this->binspect=-1;
+    this->binspat=-1;
+
+  }
+  /** Sequencer::TargetInfo::init_record **************************************/
+
+
+  /** Sequencer::TargetInfo::configure_db *************************************/
+  /**
+   * @fn         configure_db
+   * @brief      configure database connection parameters
+   * @param[in]  param, name of parameter
+   * @param[in]  value, value of parameter
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long TargetInfo::configure_db( std::string param, std::string value ) {
+    std::string function = "Sequencer::TargetInfo::configure_db";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    if ( param == Sequencer::DB_HOST ) {
+      this->db_host = value;
+    }
+    else
+    if ( param == Sequencer::DB_PORT ) {
+      int port;
+      try {
+        port = std::stoi( value );
+      }
+      catch (std::invalid_argument &) {
+        message.str(""); message << "ERROR: bad value " << value << " for parameter " << param << ": unable to convert to integer";
+        logwrite(function, message.str() );
+        return( ERROR );
+      }
+      catch (std::out_of_range &) {
+        message.str(""); message << "ERROR: bad value " << value << " for parameter " << param << ": out of integer range";
+        logwrite(function, message.str() );
+        return( ERROR );
+      }
+      this->db_port = port;
+    }
+    else
+    if ( param == Sequencer::DB_USER ) {
+      this->db_user = value;
+    }
+    else
+    if ( param == Sequencer::DB_PASS ) {
+      this->db_pass = value;
+    }
+    else
+    if ( param == Sequencer::DB_SCHEMA ) {
+      this->db_schema = value;
+    }
+    else
+    if ( param == Sequencer::DB_ACTIVE ) {
+      this->db_active = value;
+    }
+    else
+    if ( param == Sequencer::DB_COMPLETED ) {
+      this->db_completed = value;
+    }
+    else
+    {
+      message.str(""); message << "ERROR: unknown parameter \"" << param << "\"";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // If everything has been set then set the db_configured state true
+    //
+    if ( !this->db_host.empty()       &&
+         !this->db_user.empty()       &&
+         !this->db_pass.empty()       &&
+         !this->db_schema.empty()     &&
+         !this->db_active.empty()     &&
+         !this->db_completed.empty()  &&
+         this->db_port  != -1         ) {
+      this->db_configured = true;
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] host=" << this->db_host << " port=" << this->db_port
+                               << " user=" << this->db_user << " pass=" << this->db_pass
+                               << " schema=" << this->db_schema << " active table=" << this->db_active
+                               << " completed table=" << this->db_completed;
+      logwrite( function, message.str() );
+#endif
+    }
+    else { this->db_configured = false; }
+
+    return( error );
+  }
+  /** Sequencer::TargetInfo::configure_db *************************************/
+
+
+
+  /** Sequencer::TargetInfo::add_row ******************************************/
+  /**
+   * @fn         add_row
+   * @brief      adds a row to the database (non-production)
+   * @param[in]  none
+   * @return     none
+   *
+   * This is for testing purposes. Adds a row to the database.
+   *
+   */
+  long TargetInfo::add_row() {
+    std::string function = "Sequencer::TargetInfo::add_row";
+    std::stringstream message;
+
+    if ( !is_db_configured() ) {
+      logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      return( ERROR );
+    }
+
+    try {
+      // create a session for accessing the database
+      //
+      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
+                                 mysqlx::SessionOption::PORT, this->db_port,
+                                 mysqlx::SessionOption::USER, this->db_user,
+                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+
+      // connect to database
+      //
+      mysqlx::Schema db( mySession, this->db_schema );
+
+      // create a table object
+      //
+      mysqlx::Table targettable = db.getTable( this->db_active );
+
+      // add the row
+      //
+      targettable.insert( "OBSERVATION_ID",
+                         "SET_ID",
+                         "OBS_ORDER",
+                         "STATE",
+                         "NAME",
+                         "RA",
+                         "DECL",
+                         "EPOCH",
+                         "EXPTIME",
+                         "NEXP",
+                         "SLITWIDTH",
+                         "SLITOFFSET",
+                         "BINSPECT",
+                         "BINSPAT",
+                         "CASANGLE"
+                        )
+                .values( 6,
+                         1,
+                         6,
+                         Sequencer::TARGET_PENDING,
+                         "ZTF22aajmnr6",
+                         "06:42:57.35",
+                         "+51:16:18.53",
+                         "J2000",
+                         0,
+                         1,
+                         1.0,
+                         0,
+                         1,
+                         1,
+                         0 )
+                .execute();
+    }
+    catch ( const mysqlx::Error &err ) {
+      message.str(""); message << "ERROR from mySQL: " << err;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::exception &ex ) {
+      message.str(""); message << "ERROR std exception: " << ex.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( const char *ex ) {
+      message.str(""); message << "ERROR other exception: " << ex;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /** Sequencer::TargetInfo::add_row ******************************************/
+
+
   /** Sequencer::TargetInfo::get_next *****************************************/
   /**
    * @fn         get_next
    * @brief      
    * @param[in]  none
-   * @return     TARGET_FOUND or TARGET_NOT_FOUND
+   * @return     ERROR, NO_ERROR, TARGET_FOUND, TARGET_NOT_FOUND
    *
    */
-  long TargetInfo::get_next() {
+  TargetInfo::TargetState TargetInfo::get_next() {
     std::string function = "Sequencer::TargetInfo::get_next";
-    logwrite( function, "reading database" );
+    std::stringstream message;
+    mysqlx::row_count_t rowcount=-1;  /// number of rows that match the select criteria
+    mysqlx::col_count_t col=-1;       /// column number returned from this->colnum( FIELD )
+    mysqlx::col_count_t colcount=-1;  /// the number of columns in the currently read row
 
-    // hard-code some numbers for now
-    //
-    this->name       = "alp_ori";
-    this->ra         = 5.9195278;
-    this->dec        = 7.4070556;
-    this->epoch      = "J2000";
-    this->slitwidth  = 4.0;
-    this->slitoffset = 0.0;
-    this->exptime    = 10;
-    this->repeat     = 1;
-    this->binspect   = 1;
-    this->binspat    = 1;
+    if ( !is_db_configured() ) {
+      logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      return( TARGET_ERROR );
+    }
+
+    try {
+      // create a session for accessing the database
+      //
+      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
+                                 mysqlx::SessionOption::PORT, this->db_port,
+                                 mysqlx::SessionOption::USER, this->db_user,
+                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+
+      // connect to database
+      //
+      mysqlx::Schema db( mySession, this->db_schema );
+
+      // create a table object
+      //
+      mysqlx::Table targettable = db.getTable( this->db_active );
+
+      // Find a row in the SQL active observations table,
+      // the next one (in order) where state is Sequencer::TARGET_PENDING.
+      //
+      mysqlx::RowResult result = targettable.select( this->targetlist )
+                                           .where( "STATE like :state" )
+                                           .orderBy( "OBS_ORDER" )
+                                           .bind( "state", Sequencer::TARGET_PENDING )
+                                           .execute();
+
+      rowcount = result.count();
+      colcount = result.getColumnCount();
+
+      if ( rowcount < 1 ) {
+        message.str(""); message << "no active targets found with state = " << Sequencer::TARGET_PENDING;
+        logwrite( function, message.str() );
+        return( TARGET_NOT_FOUND );
+      }
+
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] retrieved " << colcount << " columns from row";
+      logwrite( function, message.str() );
+#endif
+
+      // fetch the current row
+      //
+      mysqlx::Row row = result.fetchOne();
+
+      // all of the columns are needed, none can be null
+      //
+      for ( mysqlx::col_count_t cc = 0; cc < colcount; cc++ ) {
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] " << cc << ": " << this->targetlist.at(cc) << " = " << row[cc];
+        logwrite( function, message.str() );
+#endif
+        if ( row[cc].isNull() ) {
+          message.str(""); message << this->targetlist.at(cc) << " cannot be empty!";
+          logwrite( function, message.str() );
+        }
+      }
+
+      // Connector/C++ does not support referring to row columns by their name yet (!)
+      // so you have to get them by the order requested. The colnum() function returns
+      // the correct column number.
+      //
+      col = this->colnum( "OBSERVATION_ID" ); this->obsid      = row.get( col );
+      col = this->colnum( "OBS_ORDER" );      this->obsorder   = row.get( col );
+      col = this->colnum( "NAME" );           this->name       = row.get( col );
+      col = this->colnum( "RA" );             this->ra         = row.get( col );
+      col = this->colnum( "DECL" );           this->dec        = row.get( col );
+      col = this->colnum( "EPOCH" );          this->epoch      = row.get( col );
+      col = this->colnum( "CASANGLE" );       this->casangle   = row.get( col );
+      col = this->colnum( "SLITWIDTH" );      this->slitwidth  = row.get( col );
+      col = this->colnum( "SLITOFFSET" );     this->slitoffset = row.get( col );
+      col = this->colnum( "EXPTIME" );        this->exptime    = row.get( col );
+      col = this->colnum( "NEXP" );           this->nexp       = row.get( col );
+      col = this->colnum( "BINSPECT" );       this->binspect   = row.get( col );
+      col = this->colnum( "BINSPAT" );        this->binspat    = row.get( col );
+    }
+    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
+      message.str(""); message << "ERROR from mySQL ";
+      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist.at(col) << ")"; }
+      else { message << "( col = " << col << " )"; }
+      message << ": " << err;
+      logwrite( function, message.str() );
+      return( TARGET_ERROR );
+    }
+    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      message.str(""); message << "ERROR std exception ";
+      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist.at(col) << ")"; }
+      else { message << "( col = " << col << " )"; }
+      message << ": " << ex.what();
+      logwrite( function, message.str() );
+      return( TARGET_ERROR );
+    }
+    catch ( const char *ex ) {            /// catch everything else
+      message.str(""); message << "ERROR other exception ";
+      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist.at(col) << ")"; }
+      else { message << "( col = " << col << " )"; }
+      message << ": " << ex;
+      logwrite( function, message.str() );
+      return( TARGET_ERROR );
+    }
+
+    message.str(""); message << "retrieved target " << this->name << " from database ID=" << this->obsid << " ORDER=" << this->obsorder;
+    logwrite( function, message.str() );
 
     return TARGET_FOUND;
   }
   /** Sequencer::TargetInfo::get_next *****************************************/
 
 
-  /** Sequencer::TcpDevice::TcpDevice *****************************************/
+  /** Sequencer::TargetInfo::update_state *************************************/
   /**
-   * @fn     TcpDevice
-   * @brief  class constructor
-   * @param  
-   * @return 
+   * @fn         update_state
+   * @brief      update the target state in the database DB_ACTIVE table
+   * @param[in]  newstate, string to update the STATE column
+   * @return     ERROR or NO_ERROR
    *
    */
-  TcpDevice::TcpDevice() {
-    this->socket.sethost( "localhost" );
-  }
-  /** Sequencer::TcpDevice::TcpDevice *****************************************/
-
-
-  /** Sequencer::TcpDevice::~TcpDevice ****************************************/
-  /**
-   * @fn     ~TcpDevice
-   * @brief  class deconstructor
-   * @param  
-   * @return 
-   *
-   */
-  TcpDevice::~TcpDevice() {
-  }
-  /** Sequencer::TcpDevice::~TcpDevice ****************************************/
-
-
-  /** Sequencer::TcpDevice::send **********************************************/
-  /**
-   * @fn     send
-   * @brief  
-   * @param  
-   * @return 
-   *
-   */
-  long TcpDevice::send( std::string command, std::string &reply ) {
-    std::string function = "Sequencer::TcpDevice::send";
+  long TargetInfo::update_state( std::string newstate ) {
+    std::string function = "Sequencer::TargetInfo::update_state";
     std::stringstream message;
-    char buf[BUFSIZE+1];
-    long ret;
+    mysqlx::row_count_t rowcount=-1;
 
-    memset( buf, '\0', BUFSIZE+1 );
+    if ( !is_db_configured() ) {
+      logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      return( ERROR );
+    }
 
-    // send the command
-    //
-    this->socket.Write( command );
+    if ( this->obsid < 0 ) {
+      logwrite( function, "ERROR: no current target selected!" );
+      return( ERROR );
+    }
 
-    // Wait (poll) connected socket for incoming data...
-    //
-    int pollret;
-    if ( ( pollret = this->socket.Poll() ) <= 0 ) {
-      if ( pollret == 0 ) {
-        logwrite( function, "Poll timeout" );
-      }
-      if ( pollret <0 ) {
-        message.str(""); message << "Poll error: " << strerror(errno);
+    try {
+      // create a session for accessing the database
+      //
+      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
+                                 mysqlx::SessionOption::PORT, this->db_port,
+                                 mysqlx::SessionOption::USER, this->db_user,
+                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+
+      // connect to database
+      //
+      mysqlx::Schema db( mySession, this->db_schema );
+
+      // create a table object
+      //
+      mysqlx::Table targettable = db.getTable( this->db_active );
+
+      // Find the row in the SQL active observations table
+      // which matches the current observation ID.
+      //
+      mysqlx::RowResult result = targettable.select( this->targetlist )
+                                           .where( "OBSERVATION_ID like :obsid" )
+                                           .bind( "obsid", this->obsid )
+                                           .execute();
+
+      rowcount = result.count();  /// number or rows that match the select criteria
+
+      // there should be only one row with this OBSERVATION_ID
+      //
+      if ( rowcount != 1 ) {
+        message.str(""); message << "ERROR: expected 1 but " << rowcount << " rows matched search criteria OBSERVATION_ID=" << this->obsid;
         logwrite( function, message.str() );
+        return( ERROR );
       }
-      return ERROR;
-    }
 
-    // read the response
-    //
-    if ( ( ret = this->socket.Read(buf, (size_t)BUFSIZE) ) <= 0 ) {
-      if ( ret < 0) {             // could be an actual read error
-        message.str(""); message << "Read error: " << strerror(errno); logwrite(function, message.str());
-      }
-    }
+      // update the state here
+      //
+      targettable.update( )
+                 .set( "STATE", newstate )
+                 .where( "OBSERVATION_ID like :obsid" )
+                 .bind( "obsid", this->obsid )
+                 .execute();
 
-    // assign the response to the reply string, passed in by reference
-    //
-    reply.assign( buf, BUFSIZE );
-    reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
-    reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
+      message.str(""); message << "updated OBSERVATION_ID " << this->obsid << " for target " << this->name << " to " << newstate;
+      logwrite( function, message.str() );
+    }
+    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
+      message.str(""); message << "ERROR from mySQL: " << err;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      message.str(""); message << "ERROR std exception: " << ex.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( const char *ex ) {            /// catch everything else
+      message.str(""); message << "ERROR other exception: " << ex;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
 
     return NO_ERROR;
   }
-  /** Sequencer::TcpDevice::send **********************************************/
+  /** Sequencer::TargetInfo::update_state *************************************/
 
 
   /** Sequencer::Daemon::Daemon ***********************************************/
   /**
-   * @fn     Daemon
-   * @brief  class constructor
-   * @param  
-   * @return 
+   * @fn         Daemon
+   * @brief      class constructor
+   * @param[in]  none
+   * @return     none
    *
    */
   Daemon::Daemon() {
+    this->name = "";
     this->socket.sethost( "localhost" );
-    this->port = -1;
+    this->port = -1;    /// port comes from config file, in Sequencer::Server::configure_sequencer()
   }
   /** Sequencer::Daemon::Daemon ***********************************************/
 
 
   /** Sequencer::Daemon::~Daemon **********************************************/
   /**
-   * @fn     ~Daemon
-   * @brief  class deconstructor
-   * @param  
-   * @return 
+   * @fn         ~Daemon
+   * @brief      class deconstructor
+   * @param[in]  none
+   * @return     none
    *
    */
-  Daemon::~Daemon() {
+  Daemon::~Daemon( ) {
   }
   /** Sequencer::Daemon::~Daemon **********************************************/
 
 
-  void Daemon::configure( std::string name, int port ) {
-    std::string function = "Sequences::Daemon::configure";
+  /** Sequencer::Daemon::configure ********************************************/
+  /**
+   * @fn         configure
+   * @brief      configure the (private) variables for daemon communication
+   * @param[in]  port of daemon (int)
+   * @return     none
+   *
+  void Daemon::configure( int port ) {
+    std::string function = "Sequencer::Daemon::configure";
     std::stringstream message;
-    this->name = name;
     this->port = port;
     message << this->name << " configured with port " << this->port;
     logwrite( function, message.str() );
     return;
   }
+   */
+  /** Sequencer::Daemon::configure ********************************************/
+
 
   /** Sequencer::Daemon::send *************************************************/
   /**
@@ -186,10 +576,14 @@ namespace Sequencer {
    *
    */
   long Daemon::send( std::string command, std::string &reply ) {
-    std::string function = "Sequencer::Daemon::send";
+    std::string function = "Sequencer::Daemon::send["+this->name+"]";
     std::stringstream message;
     long ret;
 
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] Write \"" << command << "\" to " << this->name << " on fd " << this->socket.getfd();
+    logwrite( function, message.str() );
+#endif
 
     // send the command
     //
@@ -201,10 +595,11 @@ namespace Sequencer {
     int pollret;
     if ( ( pollret = this->socket.Poll() ) <= 0 ) {
       if ( pollret == 0 ) {
-        logwrite( function, "Poll timeout" );
+        message.str(""); message << "Poll timeout on fd " << this->socket.getfd();
+        logwrite( function, message.str() );
       }
       if ( pollret <0 ) {
-        message.str(""); message << "Poll error: " << strerror(errno);
+        message.str(""); message << "Poll error on fd " << this->socket.getfd() << ": " << strerror(errno);
         logwrite( function, message.str() );
       }
       return ERROR;
@@ -215,9 +610,13 @@ namespace Sequencer {
     char delim = '\n';
     if ( ( ret = this->socket.Read( reply, delim ) ) <= 0 ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
-        message.str(""); message << "Read error: " << strerror(errno); logwrite(function, message.str());
+        message.str(""); message << "Read error on fd " << this->socket.getfd() << ": " << strerror(errno);
+        logwrite(function, message.str());
       }
-      if ( ret==0 ) logwrite( function, "timeout reading from socket" );
+      if ( ret==0 ) {
+        message.str(""); message << "timeout reading from socket on fd " << this->socket.getfd();
+        logwrite( function, message.str() );
+      }
     }
 
     // assign the response to the reply string, passed in by reference
@@ -239,11 +638,25 @@ namespace Sequencer {
    *
    */
   long Daemon::command( std::string args ) {
-    std::string dontcare;
-    return( this->command( args, dontcare ) );
+    std::string function = "Sequencer::Daemon::command["+this->name+"]";
+    std::stringstream message;
+    std::string reply;
+    std::string done = "DONE";
+    long retval = this->command( args, reply );
+    if ( reply.find( std::string( "DONE" ) ) == std::string::npos ) {
+      message.str(""); message << "sending " << args << " to " << this->name << " returned " << reply;
+      logwrite( function, message.str() );
+    }
+#ifdef LOGLEVEL_DEBUG
+    else {
+      message.str(""); message << "[DEBUG] sending " << args << " to " << this->name << " returned " << reply;
+      logwrite( function, message.str() );
+    }
+#endif
+    return( retval );
   }
   long Daemon::command( std::string args, std::string &retstring ) {
-    std::string function = "Sequencer::Daemon::command";
+    std::string function = "Sequencer::Daemon::command["+this->name+"]";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -255,13 +668,13 @@ namespace Sequencer {
       return( ERROR );
     }
 
-    // open
+    // connect to the daemon
     //
-    if ( args == "open" ) {
+    if ( args == "connect" ) {
       // initialize socket connection
       //
-      if ( ( error = this->connect() ) != NO_ERROR ) return( error );
-
+      if ( ( error = this->connect() ) != NO_ERROR ) retstring="ERROR"; else retstring="DONE"; 
+/***
       // send the open command
       //
       error = this->send( "open", retstring );
@@ -273,21 +686,38 @@ namespace Sequencer {
         message.str(""); message << "error opening " << this->name << "...";
       }
       logwrite( function, message.str() );
+***/
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] connected to " << this->name << " on fd " << this->socket.getfd();
+      logwrite( function, message.str() );
+#endif
     }
     else
 
-    // close
+    if ( args == "isconnected" ) {
+      error = this->is_connected( retstring );
+    }
+    else
+
+    // disconnect from the daemon
     //
-    if ( args == "close" ) {
+    if ( args == "disconnect" ) {
+/***
       // send the close command
       //
       message.str(""); message << "closing " << this->name << "...";
       logwrite( function, message.str() );
       error = this->send( "close", retstring );
+***/
 
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] disconnecting " << this->name << " from fd " << this->socket.getfd();
+      logwrite( function, message.str() );
+#endif
       // then close the connection
       //
       this->socket.Close();
+      retstring="DONE";
     }
 
     // all other commands go straight on through, as-is
@@ -302,7 +732,7 @@ namespace Sequencer {
       }
       else {
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] sending to " << this->name << ": " << args;
+        message.str(""); message << "[DEBUG] sending to " << this->name << " on fd " << this->socket.getfd() << ": " << args;
         logwrite( function, message.str() );
 #endif
         error = this->send( args, retstring );
@@ -310,7 +740,7 @@ namespace Sequencer {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] reply from " << this->name << ": " << retstring;
+    message.str(""); message << "[DEBUG] reply from " << this->name << " on fd " << this->socket.getfd() << ": " << retstring;
     logwrite( function, message.str() );
 #endif
 
@@ -331,7 +761,7 @@ namespace Sequencer {
    *
    */
   long Daemon::connect( ) {
-    std::string function = "Sequencer::Daemon::connect";
+    std::string function = "Sequencer::Daemon::connect["+this->name+"]";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -369,5 +799,28 @@ namespace Sequencer {
     return( error );
   }
   /** Sequencer::Daemon::connect **********************************************/
+
+
+  /** Sequencer::Daemon::is_connected *****************************************/
+  /**
+   * @fn         connect
+   * @brief      initialize socket connection to the daemon
+   * @param[in]  none  
+   * @return     ERROR or NO_ERROR
+   *
+   * This function establishes a socket connection to the daemon
+   * using the Network::TcpSocket class.
+   *
+   */
+  long Daemon::is_connected( std::string &reply ) {
+    std::string function = "Sequencer::Daemon::is_connected["+this->name+"]";
+
+    reply = ( this->socket.isconnected() ? "true" : "false" );
+
+    logwrite( function, reply );
+
+    return( NO_ERROR );
+  }
+  /** Sequencer::Daemon::is_connected *****************************************/
 
 }

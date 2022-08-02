@@ -42,6 +42,8 @@ namespace TCS {
       long close();
       long send_command( std::string cmd, std::string &reply );
 
+      bool isopen() { return this->tcs.isconnected(); }    /// is this interface connected to hardware?
+
       Network::TcpSocket tcs;
   };
   /** Interface ***************************************************************/

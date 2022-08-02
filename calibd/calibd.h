@@ -28,6 +28,7 @@
 #include "network.h"
 #include "common.h"
 #include "calib_interface.h"
+#include "calibd_commands.h"
 
 #define  N_THREADS    10    //!< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
 #define  BUFSIZE      1024  //!< size of the input command buffer
@@ -58,11 +59,11 @@ namespace Calib {
       }
       /** Calib::~Server ***********************************************************/
 
-//    int camerad_port;                  //!< camerad port TODO replace with something else?
-      int nbport;                        //!< non-blocking port
-      int blkport;                       //!< blocking port
-      int asyncport;                     //!< asynchronous message port
-      std::string asyncgroup;            //!< asynchronous multicast group
+//    int camerad_port;                  /// camerad port TODO replace with something else?
+      int nbport;                        /// non-blocking port
+      int blkport;                       /// blocking port
+      int asyncport;                     /// asynchronous message port
+      std::string asyncgroup;            /// asynchronous multicast group
 
       int nonblocking_socket;
       int blocking_socket;
@@ -71,7 +72,9 @@ namespace Calib {
 
       Config config;
 
-      std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
+      Interface interface;               /// the Interface class connects to the hardware
+
+      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
 
       /** Calib::Server::exit_cleanly **********************************************/
       /**

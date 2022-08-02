@@ -583,6 +583,7 @@ namespace AstroCam {
       long test(std::string args, std::string &retstring);
       long interface(std::string &iface);
       long connect_controller(std::string devices_in);
+      long is_connected( std::string &retstring );
       long disconnect_controller();
       long configure_controller();
       long access_useframes(std::string& useframes);

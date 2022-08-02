@@ -510,7 +510,7 @@ namespace Network {
       return(-1);
     }
 
-    flags |= O_NONBLOCK;
+//  flags |= O_NONBLOCK;
 
     if (fcntl(this->fd, F_SETFL, flags) < 0) {
       errstm << "error " << errno << " setting socket file descriptor flags: " << std::strerror(errno);

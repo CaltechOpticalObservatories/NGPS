@@ -1,5 +1,5 @@
 /** ---------------------------------------------------------------------------
- * @file     emulatord_slit.h
+ * @file     emulatord_power.h
  * @brief    
  * @author   David Hale <dhale@astro.caltech.edu>
  * @date     
@@ -7,8 +7,8 @@
  *
  */
 
-#ifndef EMULATORD_SLIT_H
-#define EMULATORD_SLIT_H
+#ifndef EMULATORD_POWER_H
+#define EMULATORD_POWER_H
 
 #include <fstream>
 #include <iostream>
@@ -26,7 +26,8 @@
 #include "config.h"
 #include "network.h"
 #include "common.h"
-#include "slit.h"
+#include "power.h"
+#include "powerd_commands.h"
 
 #define  BUFSIZE      1024  //!< size of the input command buffer
 
@@ -39,7 +40,7 @@ namespace Emulator {
    * @brief  emulator server class
    *
    * This class contains everything needed to run the emulator server,
-   * the server which responds as the slit controller.
+   * the server which responds as the NPS.
    *
    */
   class Server {
@@ -51,7 +52,7 @@ namespace Emulator {
       Config config;
       std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
 
-      Slit::Interface interface;
+      Power::Interface interface;
 
       /** Emulator::Server ****************************************************/
       /**
@@ -60,7 +61,7 @@ namespace Emulator {
        */
       Server() {
         this->port=-1;
-        this->subsystem="slit";
+        this->subsystem="power";
         this->cmd_num=0;
       }
       /** Emulator::Server ****************************************************/
@@ -114,20 +115,16 @@ namespace Emulator {
         //
         for ( int entry=0; entry < this->config.n_entries; entry++ ) {
 
-          // MOTOR_CONTROLLER
-          if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
-            Slit::ControllerInfo c;
-            if ( c.load_info( config.arg[entry] ) == NO_ERROR ) {
-              this->interface.controller_info.push_back( c );
-              std::cerr << function << "loaded " << config.arg[entry] << "\n";
+          try {
+            // EMULATOR_PORT
+            if ( config.param[entry].compare( 0, 13, "EMULATOR_PORT" ) == 0 ) {
+              this->port = std::stoi( config.arg[entry] );
               applied++;
             }
           }
-
-          // EMULATOR
-          if ( config.param[entry].compare( 0, 8, "EMULATOR" ) == 0 ) {
-            this->port = std::stoi( config.arg[entry] );
-            applied++;
+          catch ( std::invalid_argument &e ) {
+            std::cerr << function << "ERROR interpreting string as number for " << config.arg[entry] << "\n";
+            return( ERROR );
           }
 
         } // end loop through the entries in the configuration file
@@ -141,7 +138,7 @@ namespace Emulator {
         else {
           error = NO_ERROR;
         } 
-        std::cerr << function << "applied " << applied << " configuration lines to emulatord." << this->subsystem << "\n";
+        std::cerr << "applied " << applied << " configuration lines to emulatord." << this->subsystem << "\n";
 
         return error;
       }

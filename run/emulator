@@ -37,13 +37,8 @@ start_proc( ) {
 	# build and execute the command
 	echo "starting "$1"..."
 	#
-	# special case for TCS emulator because it's a Java GUI
-	if [ "$1" == "tcs" ]; then
-		sh $2 &
-	else
-		cmd="$2 $3"$DAEMON
-		output=$(eval "$cmd")
-	fi
+	cmd="$2 $3"$DAEMON
+	output=$(eval "$cmd")
 
 	# wait 1 sec and check if the process is running
 	#

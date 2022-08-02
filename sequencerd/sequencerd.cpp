@@ -372,11 +372,11 @@ void doit(Network::TcpSocket sock) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        message.str(""); message << "Poll timeout on thread " << sock.id;
+        message.str(""); message << "Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
         logwrite(function, message.str());
       }
       if (pollret <0) {
-        message.str(""); message << "Poll error on thread " << sock.id << ": " << strerror(errno);
+        message.str(""); message << "Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       break;                      // this will close the connection
@@ -384,12 +384,16 @@ void doit(Network::TcpSocket sock) {
 
     // Data available, now read from connected socket...
     //
-    if ( (ret=sock.Read(buf, (size_t)BUFSIZE)) <= 0 ) {
+    std::string sbuf;
+    char delim='\n';
+    if ( ( ret=sock.Read( sbuf, delim ) ) <= 0 ) {
       if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error: " << strerror(errno); logwrite(function, message.str());
+        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
+        logwrite(function, message.str());
       }
       if (ret==0) {               // or a timeout
-        message.str(""); message << "Timeout reading from socket";
+        message.str(""); message << "timeout reading from fd " << sock.getfd();
+        logwrite( function, message.str() );
       }
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
@@ -400,16 +404,17 @@ void doit(Network::TcpSocket sock) {
     // convert the input buffer into a string and remove any trailing linefeed
     // and carriage return
     //
-    std::string sbuf = buf;
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+
+    if (sbuf.empty()) {sock.Write("\n"); continue;}  // acknowledge empty command so client doesn't time out
 
     try {
       std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
 
       cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
 
-      if (cmd.empty()) continue;                     // If no command then skip over everything.
+      if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
       if (cmd_sep == std::string::npos) {            // If no space was found,
         args="";                                     // then the arg list is empty,
@@ -421,7 +426,7 @@ void doit(Network::TcpSocket sock) {
       sock.id = ++sequencer.cmd_num;
       if ( sequencer.cmd_num == INT_MAX ) sequencer.cmd_num = 0;
 
-      message.str(""); message << "received command (" << sock.id << "): " << cmd << " " << args;
+      message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
       logwrite(function, message.str());
     }
     catch ( std::runtime_error &e ) {
@@ -452,7 +457,19 @@ void doit(Network::TcpSocket sock) {
     // This is needed before any sequences can be run.
     //
     if ( cmd.compare( "startup" ) == 0 ) {
-                    ret = sequencer.sequence.startup();
+                    ret = sequencer.sequence.startup( sequencer.sequence );
+    }
+    else
+
+    // These commands go to calibd
+    //
+    if ( cmd.compare( SEQUENCERD_CALIB )==0 ) {
+                    ret = sequencer.sequence.calibd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "calibd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
     }
     else
 
@@ -463,6 +480,19 @@ void doit(Network::TcpSocket sock) {
                     if ( !retstring.empty() ) {
                       message.str(""); message << "camerad reply (" << sock.id << "): " << retstring;
                       logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+    }
+    else
+
+    // These commands go to filterd
+    //
+    if ( cmd.compare( SEQUENCERD_FILTER )==0 ) {
+                    ret = sequencer.sequence.filterd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "filterd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
                     }
     }
     else
@@ -474,20 +504,27 @@ void doit(Network::TcpSocket sock) {
                     if ( !retstring.empty() ) {
                       message.str(""); message << "slitd reply (" << sock.id << "): " << retstring;
                       logwrite( function, message.str() );
+                      retstring.append( " " );
                     }
     }
     else
 
-    // These commands go to calibd
+    // These commands go to tcsd
     //
-    if ( cmd.compare( SEQUENCERD_CALIB )==0 ) {
-                    ret = sequencer.sequence.calibd.command( args, retstring );
+    if ( cmd.compare( SEQUENCERD_TCS )==0 ) {
+                    ret = sequencer.sequence.tcsd.command( args, retstring );
                     if ( !retstring.empty() ) {
-                      message.str(""); message << "calibd reply (" << sock.id << "): " << retstring;
+                      message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
                       logwrite( function, message.str() );
+                      retstring.append( " " );
                     }
     }
     else
+
+    if ( cmd.compare( "foo" )==0 ) {
+                      std::thread( std::ref( Sequencer::Sequence::dothread_slit_init ),
+                                   std::ref( sequencer.sequence) ).detach();
+    } else
 
     // Sequence "start"
     //
@@ -516,6 +553,13 @@ void doit(Network::TcpSocket sock) {
                     logwrite( function, "disabling run state" );
                     sequencer.sequence.runstate = Sequencer::STOPPED;
                     ret = NO_ERROR;
+    }
+
+    else
+
+    if ( cmd.compare( SEQUENCERD_TEST ) == 0 ) {
+                    ret = sequencer.sequence.test( args, retstring );
+                    if ( not retstring.empty() ) retstring.append( " " );
     }
 
     // Unknown commands generate an error

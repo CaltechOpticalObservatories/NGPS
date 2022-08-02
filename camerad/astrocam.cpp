@@ -398,6 +398,56 @@ namespace AstroCam {
   /** AstroCam::Interface::disconnect_controller ******************************/
 
 
+  /** AstroCam::Interface::is_connected ***************************************/
+  /**
+   * @fn         is_connected
+   * @brief      are all selected controllers connected?
+   * @param[out] retstring, reference to string to return true|false
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::is_connected( std::string &retstring ) {
+    std::string function = "AstroCam::Interface::is_connected";
+    std::stringstream message;
+
+    size_t ndev = this->devlist.size();  /// number of connected devices
+    size_t nopen=0;                      /// number of open devices (should be equal to ndev if all are open)
+
+    // look through all connected devices
+    //
+    for ( auto dev : this->devlist ) {
+      try {
+        if ( this->controller.at(dev).connected ) nopen++;    // increment counter for each open device
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] dev " << dev << " is " << ( this->controller.at(dev).connected ? "connected" : "disconnected" );
+        logwrite( function, message.str() );
+#endif
+      }
+      catch( std::out_of_range & ) {
+        message.str(""); message << "ERROR: requested device number " << dev << " not in list: { ";
+        for ( auto devcheck : this->devlist ) message << devcheck << " ";
+        message << "}";
+        logwrite(function, message.str());
+        return( ERROR );
+      }
+      catch(...) { logwrite(function, "unknown error accessing device list"); return( ERROR ); }
+    }
+
+    // If all devices in (non-empty) devlist are connected then return true,
+    // otherwise return false with a space-delimited list of the disconnected devices.
+    //
+    if ( ndev !=0 && ndev == nopen ) {
+      retstring = "true";
+    }
+    else {
+      retstring = "false";
+    }
+
+    return( NO_ERROR );
+  }
+  /** AstroCam::Interface::is_connected ***************************************/
+
+
   /** AstroCam::Interface::configure_controller *******************************/
   /**
    * @fn     configure_controller

@@ -7,6 +7,7 @@ cmake_minimum_required( VERSION 3.12 )
 set( POWERD_DIR ${PROJECT_BASE_DIR}/powerd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
+include_directories( ${PROJECT_BASE_DIR}/common )
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(powerd 

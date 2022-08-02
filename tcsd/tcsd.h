@@ -27,6 +27,7 @@
 #include "network.h"
 #include "common.h"
 #include "tcs_interface.h"
+#include "tcsd_commands.h"
 
 #define  N_THREADS    10    //!< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
 #define  BUFSIZE      1024  //!< size of the input command buffer

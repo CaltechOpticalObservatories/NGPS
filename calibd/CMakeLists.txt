@@ -7,6 +7,8 @@ cmake_minimum_required( VERSION 3.12 )
 set( CALIBD_DIR ${PROJECT_BASE_DIR}/calibd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
+include_directories( ${PROJECT_BASE_DIR}/PI )
+include_directories( ${PROJECT_BASE_DIR}/common )
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(calibd 
@@ -15,6 +17,7 @@ add_executable(calibd
         )
 
 target_link_libraries(calibd
+        physik_instrumente
         network
         logentry
         utilities

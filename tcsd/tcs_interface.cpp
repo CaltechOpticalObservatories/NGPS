@@ -134,39 +134,67 @@ namespace TCS {
     std::string function = "TCS::Interface::send_command";
     std::stringstream message;
     long error=NO_ERROR;
-    int retval;
-    char buffer[ BUFSZ ];
+    int ret;
+    std::string sbuf;
+    char delim       = '\r';   /// replies from the TCS are terminated with this
+    std::string term = "\r";   /// all commands to TCS are terminated with this
 
     if ( !this->tcs.isconnected() ) {
       logwrite( function, "ERROR: no connection open to the TCS" );
       return( ERROR );
     }
 
-    cmd.append( "\n" );
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] sending to TCS on fd " << this->tcs.getfd() << ": " << cmd;
+    logwrite( function, message.str() );
+#endif
+
+    cmd.append( term );        // add terminator before sending command to the TCS
 
     if ( this->tcs.Write( cmd ) == -1 ) {
-      logwrite( function, "ERROR writing to TCS" );
+      message.str(""); message << "ERROR writing to TCS on fd " << this->tcs.getfd();
+      logwrite( function, message.str() );
       return( ERROR );
     }
 
     // receive the reply
     //
-    reply.clear();
     do {
-      if ( ( retval = this->tcs.Poll() ) <= 0 ) {
-        if ( retval==0 ) { message.str(""); message << "Poll timeout waiting for response from TCS"; error = TIMEOUT; }
-        if ( retval <0 ) { message.str(""); message << "Poll error waiting for response from TCS"; error = ERROR; }
+      // wait for incoming data
+      //
+      if ( ( ret = this->tcs.Poll() ) <= 0 ) {
+        if ( ret==0 ) { message.str(""); message << "Poll timeout on fd " << tcs.getfd() << " waiting for response from TCS"; error = TIMEOUT; }
+        if ( ret <0 ) { message.str(""); message << "Poll error on fd "   << tcs.getfd() << " waiting for response from TCS"; error = ERROR; }
         if ( error != NO_ERROR ) logwrite( function, message.str() );
         break;
       }
-      memset( buffer, '\0', BUFSZ );
-      retval = this->tcs.Read( buffer, BUFSZ );
-      if ( retval <= 0 ) {
-        logwrite( function, "ERROR reading from TCS" );
+
+      // data available, read from socket
+      //
+      if ( ( ret = this->tcs.Read( sbuf, delim ) ) <= 0 ) {
+        if ( ret < 0 ) {
+          message.str(""); message << "ERROR reading from TCS on fd " << tcs.getfd() << ": " << strerror(errno);
+          logwrite( function, message.str() );
+        }
+        if ( ret == 0 ) {
+          message.str(""); message << "TIMEOUT reading from TCS on fd " << tcs.getfd() << ": " << strerror(errno);
+          logwrite( function, message.str() );
+        }
         break;
       }
-      reply.append( buffer );
-    } while ( retval > 0 && reply.find( "\n" ) == std::string::npos );
+    } while ( ret > 0 && sbuf.find( delim ) == std::string::npos );
+
+    // remove any trailing linefeed and carriage return
+    //
+    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
+    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+
+    reply = sbuf;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] received from TCS on fd " << this->tcs.getfd() << ": " << reply;
+    logwrite( function, message.str() );
+#endif
 
     return( error );
   }

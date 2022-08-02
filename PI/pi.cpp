@@ -205,21 +205,19 @@ namespace Physik_Instrumente {
     cmd << "FRF";
     if ( axis > 0 ) cmd << " " << axis;
 
-    this->send_command( cmd.str() );
-
-    return NO_ERROR;
+    return( this->send_command( cmd.str() ) );
   }
   /**************** Physik_Instrumente::ServoInterface::home_axis *************/
 
 
   /**************** Physik_Instrumente::ServoInterface::is_home ***************/
   /**
-   * @fn     is_home
-   * @brief  queries whether referencing has been done
-   * @param  int addr, address of controller in daisy-chain
-   * @param  int axis, axis to move
-   * @param  string &retsrting, contains return value (1=homed, 0=not homed)
-   * @return ERROR or NO_ERROR
+   * @fn          is_home
+   * @brief       queries whether referencing has been done
+   * @param[in]   int addr, address of controller in daisy-chain
+   * @param[in]   int axis, axis to move
+   * @param[out]  string &retsrting, contains return value (1=homed, 0=not homed)
+   * @return      ERROR or NO_ERROR
    *
    * This function is overloaded with a version where the axis can be specified;
    * the default is all axes when not specified.
@@ -237,9 +235,18 @@ namespace Physik_Instrumente {
     cmd << "FRF?";
     if ( axis > 0 ) cmd << " " << axis;
 
-    this->send_command( cmd.str(), retstring );
+    long retval = this->send_command( cmd.str(), retstring );
 
-    return NO_ERROR;
+    if ( retstring == "1" ) retstring = "true";
+    else
+    if ( retstring == "0" ) retstring = "false";
+    else
+    retstring = "error";
+
+    message.str(""); message << "[DEBUG] retstring=" << retstring << " retval=" << retval;
+    logwrite( function, message.str() );
+
+    return retval;
   }
   /**************** Physik_Instrumente::ServoInterface::is_home ***************/
 
@@ -295,7 +302,6 @@ namespace Physik_Instrumente {
     std::string function = "Physik_Instrumente::ServoInterface::get_pos";
     std::stringstream message;
     std::stringstream cmd;
-    long error, retval;
 
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "POS?";
@@ -361,19 +367,20 @@ namespace Physik_Instrumente {
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
+    long retval=0;
 
     // send the command
     //
-    long retval = this->send_command( cmd );
+    error = this->send_command( cmd );
 
-    if ( retval == ERROR ) {
+    if ( error == ERROR ) {
       message.str(""); message << "ERROR sending command: " << cmd;
       logwrite( function, message.str() );
     }
 
     // read the reply
     //
-    do {
+    while ( error == NO_ERROR && retval >= 0 ) {
 
       if ( ( retval=this->controller.Poll() ) <= 0 ) {
         if ( retval==0 ) { message.str(""); message << "Poll timeout waiting for response"; error = TIMEOUT; }
@@ -394,7 +401,7 @@ namespace Physik_Instrumente {
       reply.erase(std::remove(reply.begin(), reply.end(), '\n' ), reply.end());
       break;
 
-    } while ( retval>=0 );
+    }
 
     retstring = reply;
 
