@@ -12,6 +12,7 @@ const std::string SEQUENCERD_TEST   = "test";
 const std::string SEQUENCERD_CALIB  = "calib";
 const std::string SEQUENCERD_CAMERA = "camera";
 const std::string SEQUENCERD_FILTER = "filter";
+const std::string SEQUENCERD_POWER  = "power";
 const std::string SEQUENCERD_SLIT   = "slit";
 const std::string SEQUENCERD_TCS    = "tcs";
 #endif

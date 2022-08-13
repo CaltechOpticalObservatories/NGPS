@@ -173,6 +173,11 @@ namespace AstroCam {
    * numbers. This vector will be updated here to represent only the devices that
    * are actually connected.
    *
+   * All devices requested must be connected in order to return success. It is
+   * considered an error condition if not all requested can be connected. If the
+   * user wishes to connect to only the device(s) available then the user must
+   * call with the specific device(s). In other words, it's all (requested) or nothing.
+   *
    */
   long Interface::connect_controller(std::string devices_in="") {
     std::string function = "AstroCam::Interface::connect_controller";
@@ -285,10 +290,17 @@ namespace AstroCam {
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: creating controller object for device number " << dev << ": out of range";
         logwrite(function, message.str());
+        this->disconnect_controller();
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error creating controller object"); return(ERROR); }
+      catch(...) { logwrite(function, "unknown error creating controller object"); this->disconnect_controller(); return(ERROR); }
     }
+
+    // The size of devlist at this point is the number of devices that will
+    // be requested to be opened. This should match the number of opened
+    // devices at the end of this function.
+    //
+    size_t requested_device_count = this->devlist.size();
 
     // Open only the devices specified by the devlist vector
     //
@@ -317,16 +329,19 @@ namespace AstroCam {
         for (auto devcheck : this->devlist) message << devcheck << " ";
         message << "}";
         logwrite(function, message.str());
+        this->disconnect_controller();
         return(ERROR);
       }
       catch(const std::exception &e) {
         message.str(""); message << "ERROR: " << this->controller.at(dev).devname << ": " << e.what();
         logwrite(function, message.str());
+        this->disconnect_controller();
         return (ERROR);
       }
       catch(...) {
         message.str(""); message << "unknown error connecting to " << this->controller.at(dev).devname;
         logwrite(function, message.str());
+        this->disconnect_controller();
         return (ERROR);
       }
     }
@@ -344,9 +359,10 @@ namespace AstroCam {
         for (auto devcheck : this->devlist) message << devcheck << " ";
         message << "}";
         logwrite(function, message.str());
+        this->disconnect_controller();
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error updaing device list"); return(ERROR); }
+      catch(...) { logwrite(function, "unknown error updaing device list"); this->disconnect_controller(); return(ERROR); }
     }
 
     // Now remove the marked devices (those not connected) 
@@ -360,7 +376,24 @@ namespace AstroCam {
     for (auto devcheck : this->devlist) { message << devcheck << " "; } message << "}";
     logwrite(function, message.str());
 
-    return(0);
+    // check the size of the devlist now, against the size requested
+    //
+    if ( this->devlist.size() != requested_device_count ) {
+      message.str(""); message << "ERROR: " << this->devlist.size() <<" connected devices but "
+                               << requested_device_count << " requested";
+      logwrite( function, message.str() );
+
+      // disconnect/deconstruct everything --
+      //
+      // If the user might want to use what is available then the user
+      // must call again, requesting only what is available. It is an
+      // error if the interface cannot deliver what was requested.
+      //
+      this->disconnect_controller();
+
+      return( ERROR );
+    }
+    else return( NO_ERROR );
   }
   /** AstroCam::Interface::connect_controller *********************************/
 

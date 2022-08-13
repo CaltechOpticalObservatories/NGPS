@@ -354,8 +354,10 @@ void doit(Network::TcpSocket sock) {
 
   bool connection_open=true;
 
-  message.str(""); message << "accepted connection on fd " << sock.getfd();
+#ifdef LOGLEVEL_DEBUG
+  message.str(""); message << "[DEBUG] accepted connection on fd " << sock.getfd();
   logwrite( function, message.str() );
+#endif
 
   while (connection_open) {
     memset(buf,  '\0', BUFSIZE);  // init buffers
@@ -407,6 +409,18 @@ void doit(Network::TcpSocket sock) {
 
       cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
 
+      // If cmd is "poll" then set a polling flag to indicate not to log incoming command.
+      // Then shift the sbuf to the next part of the string after "poll" and look again
+      // for a command.
+      //
+      bool polling = false;
+      if ( cmd == "poll" ) {
+        sbuf = sbuf.substr( cmd_sep+1 );             // shift sbuf to start after the space
+        cmd_sep = sbuf.find_first_of(" ");           // find again the first space, which separates command from argument list
+        cmd = sbuf.substr(0, cmd_sep);               // cmd is everything up until that space
+        polling = true;
+      }
+
       if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
       if (cmd_sep == std::string::npos) {            // If no space was found,
@@ -419,8 +433,10 @@ void doit(Network::TcpSocket sock) {
       sock.id = ++tcsd.cmd_num;
       if ( tcsd.cmd_num == INT_MAX ) tcsd.cmd_num = 0;
 
-      message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
-      logwrite(function, message.str());
+      if ( not polling ) {
+        message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
+        logwrite(function, message.str());
+      }
     }
     catch ( std::runtime_error &e ) {
       std::stringstream errstream; errstream << e.what();

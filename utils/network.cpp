@@ -439,10 +439,36 @@ namespace Network {
     return( this->Poll( this->totime ) );
   }
   int TcpSocket::Poll( int timeout ) {   // uses timeout arg
+    std::string function = "Network::TcpSocket::Poll";
+    std::stringstream message;
     struct pollfd poll_struct;
     poll_struct.events = POLLIN;
     poll_struct.fd     = this->fd;
-    return poll( &poll_struct, 1, timeout );
+
+    int ret = poll( &poll_struct, 1, timeout );
+    short revents = poll_struct.revents;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str("");
+    message << "[DEBUG] fd " << this->fd << " events: "
+            << ( revents & POLLIN   ? "POLLIN "  : "" )
+            << ( revents & POLLHUP  ? "POLLHUP " : "" )
+            << ( revents & POLLERR  ? "POLLERR " : "" )
+            << ( revents & POLLNVAL ? "POLLNVAL" : "" );
+    logwrite( function, message.str() );
+#endif
+
+    if ( ( revents & POLLHUP ) || ( revents & POLLERR) || ( revents & POLLNVAL ) ) {
+      message.str(""); message << "received "
+                               << ( revents & POLLHUP  ? "POLLHUP "  : "" )
+                               << ( revents & POLLERR  ? "POLLERR "  : "" )
+                               << ( revents & POLLNVAL ? "POLLNVAL " : "" )
+                               << ": closing fd " << this->fd;
+      logwrite( function, message.str() );
+      this->Close();
+    }
+
+    return( ret );
   }
   /**************** Network::TcpSocket::Poll **********************************/
 
@@ -664,6 +690,12 @@ namespace Network {
       if ( nread<0 ) {
         message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
         logwrite( function, message.str() );
+        break;
+      }
+      if ( nread == 0 ) {
+        message << "no data on fd " << this->fd << ": closing socket";
+        logwrite( function, message.str() );
+        this->Close();
         break;
       }
       bytesread++;                       // keep count of total bytes read

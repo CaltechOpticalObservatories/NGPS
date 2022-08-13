@@ -364,6 +364,9 @@ void doit(Network::TcpSocket sock) {
 
   bool connection_open=true;
 
+  message.str(""); message << "thread " << sock.id << " accepted connection on fd " << sock.getfd();
+  logwrite( function, message.str() );
+
   while ( connection_open ) {
     memset(buf,  '\0', BUFSIZE);  // init buffers
 
@@ -491,6 +494,18 @@ void doit(Network::TcpSocket sock) {
                     ret = sequencer.sequence.filterd.command( args, retstring );
                     if ( !retstring.empty() ) {
                       message.str(""); message << "filterd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+    }
+    else
+
+    // These commands go to powerd
+    //
+    if ( cmd.compare( SEQUENCERD_POWER )==0 ) {
+                    ret = sequencer.sequence.powerd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "powerd reply (" << sock.id << "): " << retstring;
                       logwrite( function, message.str() );
                       retstring.append( " " );
                     }

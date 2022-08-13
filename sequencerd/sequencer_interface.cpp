@@ -267,8 +267,8 @@ namespace Sequencer {
                         )
                 .values( 6,
                          1,
-                         6,
-                         Sequencer::TARGET_PENDING,
+                         999,
+                         "test",
                          "ZTF22aajmnr6",
                          "06:42:57.35",
                          "+51:16:18.53",
@@ -306,12 +306,37 @@ namespace Sequencer {
   /** Sequencer::TargetInfo::get_next *****************************************/
   /**
    * @fn         get_next
-   * @brief      
+   * @brief      get next target from DB whose state is Sequencer::TARGET_PENDING
    * @param[in]  none
    * @return     ERROR, NO_ERROR, TARGET_FOUND, TARGET_NOT_FOUND
    *
+   * This function is overloaded.
+   *
+   * This version takes no argument. When no argument is supplied then the
+   * other function is called with Sequencer::TARGET_PENDING as the argument.
+   * This is the normal default usage to look for targets in the TARGET_PENDING
+   * state.
+   *
    */
   TargetInfo::TargetState TargetInfo::get_next() {
+    return( this->get_next( Sequencer::TARGET_PENDING ) );
+  }
+  /** Sequencer::TargetInfo::get_next *****************************************/
+
+
+  /** Sequencer::TargetInfo::get_next *****************************************/
+  /**
+   * @fn         get_next
+   * @brief      get next target from DB whose state is state_in
+   * @param[in]  state_in, the state to search for
+   * @return     ERROR, NO_ERROR, TARGET_FOUND, TARGET_NOT_FOUND
+   *
+   * This function is overloaded.
+   *
+   * This version accepts (and requires) a state to look for.
+   *
+   */
+  TargetInfo::TargetState TargetInfo::get_next( std::string state_in ) {
     std::string function = "Sequencer::TargetInfo::get_next";
     std::stringstream message;
     mysqlx::row_count_t rowcount=-1;  /// number of rows that match the select criteria
@@ -320,6 +345,7 @@ namespace Sequencer {
 
     if ( !is_db_configured() ) {
       logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
       return( TARGET_ERROR );
     }
 
@@ -340,20 +366,21 @@ namespace Sequencer {
       mysqlx::Table targettable = db.getTable( this->db_active );
 
       // Find a row in the SQL active observations table,
-      // the next one (in order) where state is Sequencer::TARGET_PENDING.
+      // the next one (in order) where state is state_in.
       //
       mysqlx::RowResult result = targettable.select( this->targetlist )
                                            .where( "STATE like :state" )
                                            .orderBy( "OBS_ORDER" )
-                                           .bind( "state", Sequencer::TARGET_PENDING )
+                                           .bind( "state", state_in )
                                            .execute();
 
       rowcount = result.count();
       colcount = result.getColumnCount();
 
       if ( rowcount < 1 ) {
-        message.str(""); message << "no active targets found with state = " << Sequencer::TARGET_PENDING;
+        message.str(""); message << "no active targets found with state = " << state_in;
         logwrite( function, message.str() );
+        init_record();    // ensures that any previous record's info is not mistaken for this one
         return( TARGET_NOT_FOUND );
       }
 
@@ -403,6 +430,7 @@ namespace Sequencer {
       else { message << "( col = " << col << " )"; }
       message << ": " << err;
       logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
       return( TARGET_ERROR );
     }
     catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
@@ -411,6 +439,7 @@ namespace Sequencer {
       else { message << "( col = " << col << " )"; }
       message << ": " << ex.what();
       logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
       return( TARGET_ERROR );
     }
     catch ( const char *ex ) {            /// catch everything else
@@ -419,10 +448,11 @@ namespace Sequencer {
       else { message << "( col = " << col << " )"; }
       message << ": " << ex;
       logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
       return( TARGET_ERROR );
     }
 
-    message.str(""); message << "retrieved target " << this->name << " from database ID=" << this->obsid << " ORDER=" << this->obsorder;
+    message.str(""); message << "retrieved target " << this->name << " id " << this->obsid << " order " << this->obsorder;
     logwrite( function, message.str() );
 
     return TARGET_FOUND;
@@ -482,7 +512,8 @@ namespace Sequencer {
       // there should be only one row with this OBSERVATION_ID
       //
       if ( rowcount != 1 ) {
-        message.str(""); message << "ERROR: expected 1 but " << rowcount << " rows matched search criteria OBSERVATION_ID=" << this->obsid;
+        message.str(""); message << "ERROR: expected 1 but " << rowcount
+                                 << " rows matched search criteria OBSERVATION_ID=" << this->obsid;
         logwrite( function, message.str() );
         return( ERROR );
       }
@@ -495,7 +526,7 @@ namespace Sequencer {
                  .bind( "obsid", this->obsid )
                  .execute();
 
-      message.str(""); message << "updated OBSERVATION_ID " << this->obsid << " for target " << this->name << " to " << newstate;
+      message.str(""); message << "target " << this->name << " id " << this->obsid << " state " << newstate;
       logwrite( function, message.str() );
     }
     catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
@@ -517,6 +548,155 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /** Sequencer::TargetInfo::update_state *************************************/
+
+
+  /** Sequencer::TargetInfo::insert_completed *********************************/
+  /**
+   * @fn         insert_completed
+   * @brief      insert current target record into completed observations table
+   * @param[in]  none
+   * @return     none
+   *
+   */
+  long TargetInfo::insert_completed() {
+    std::string function = "Sequencer::TargetInfo::insert_completed";
+    std::stringstream message;
+
+    if ( !is_db_configured() ) {
+      logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      return( ERROR );
+    }
+
+    if ( this->name.empty() ) {
+      logwrite( function, "ERROR: no record selected" );
+      return( ERROR );
+    }
+
+    try {
+      // create a session for accessing the database
+      //
+      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
+                                 mysqlx::SessionOption::PORT, this->db_port,
+                                 mysqlx::SessionOption::USER, this->db_user,
+                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+
+      // connect to database
+      //
+      mysqlx::Schema db( mySession, this->db_schema );
+
+      // create a table object
+      //
+      mysqlx::Table targettable = db.getTable( this->db_completed );
+
+      // add the row
+      //
+      targettable.insert( "OBSERVATION_ID",
+                          "OBS_ORDER",
+                          "STATE",
+                          "NAME",
+                          "RA",
+                          "DECL",
+                          "EPOCH",
+                          "EXPTIME",
+                          "NEXP",
+                          "SLITWIDTH",
+                          "SLITOFFSET",
+                          "BINSPECT",
+                          "BINSPAT",
+                          "CASANGLE"
+                        )
+                .values( this->obsid,
+                         this->obsorder,
+                         Sequencer::TARGET_COMPLETE,
+                         this->name,
+                         this->ra,
+                         this->dec,
+                         this->epoch,
+                         this->exptime,
+                         this->nexp,
+                         this->slitwidth,
+                         this->slitoffset,
+                         this->binspect,
+                         this->binspat,
+                         this->casangle )
+                .execute();
+    }
+    catch ( const mysqlx::Error &err ) {
+      message.str(""); message << "ERROR from mySQL: " << err;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::exception &ex ) {
+      message.str(""); message << "ERROR std exception: " << ex.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( const char *ex ) {
+      message.str(""); message << "ERROR other exception: " << ex;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /** Sequencer::TargetInfo::insert_completed *********************************/
+
+
+  /** Sequencer::TargetInfo::get_table_names **********************************/
+  /**
+   * @fn         get_table_names
+   * @brief      utility to print all of the table names from the database
+   * @param[in]  none
+   * @return     none
+   *
+   */
+  long TargetInfo::get_table_names() {
+    std::string function = "Sequencer::TargetInfo::get_table_names";
+    std::stringstream message;
+    std::list<std::string> mylist;
+
+    if ( !is_db_configured() ) {
+      logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      return( ERROR );
+    }
+
+    try {
+      // create a session for accessing the database
+      //
+      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
+                                 mysqlx::SessionOption::PORT, this->db_port,
+                                 mysqlx::SessionOption::USER, this->db_user,
+                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+
+      // connect to database
+      //
+      mysqlx::Schema db( mySession, this->db_schema );
+
+      mylist = db.getTableNames();
+    }
+    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
+      message.str(""); message << "ERROR from mySQL: " << err;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      message.str(""); message << "ERROR std exception: " << ex.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( const char *ex ) {            /// catch everything else
+      message.str(""); message << "ERROR other exception: " << ex;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    message.str("");
+    for ( auto name : mylist ) message << name << " ";
+    logwrite( function, message.str() );
+
+    return( NO_ERROR );
+  }
+  /** Sequencer::TargetInfo::get_table_names **********************************/
 
 
   /** Sequencer::Daemon::Daemon ***********************************************/
@@ -580,10 +760,12 @@ namespace Sequencer {
     std::stringstream message;
     long ret;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] Write \"" << command << "\" to " << this->name << " on fd " << this->socket.getfd();
-    logwrite( function, message.str() );
-#endif
+//#ifdef LOGLEVEL_DEBUG
+    if ( command.find( std::string( "poll" ) ) == std::string::npos ) {
+      message.str(""); message << "sending \"" << command << "\" to " << this->name << " on fd " << this->socket.getfd();
+      logwrite( function, message.str() );
+    }
+//#endif
 
     // send the command
     //
@@ -624,7 +806,12 @@ namespace Sequencer {
     reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
     reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
 
-    return NO_ERROR;
+    // If the reply contains "ERROR" then return ERROR, otherwise NO_ERROR.
+    //
+    if ( reply.find( std::string( "ERROR" ) ) != std::string::npos ) {
+      return( ERROR );
+    }
+    else return( NO_ERROR );
   }
   /** Sequencer::Daemon::send *************************************************/
 

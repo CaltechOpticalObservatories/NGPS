@@ -85,8 +85,8 @@ namespace Emulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = "(Emulator::Server::exit_cleanly) ";
-        std::cerr << function << "emulatord." << this->subsystem << " exiting\n";
+        std::string function = " (Emulator::Server::exit_cleanly) ";
+        std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connection
         //
@@ -105,7 +105,7 @@ namespace Emulator {
        *
        */
       long configure_emulator() {
-        std::string function = "(Emulator::Server::configure_emulator) ";
+        std::string function = " (Emulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;
@@ -119,20 +119,20 @@ namespace Emulator {
             Slit::ControllerInfo c;
             if ( c.load_info( config.arg[entry] ) == NO_ERROR ) {
               this->interface.controller_info.push_back( c );
-              std::cerr << function << "loaded " << config.arg[entry] << "\n";
+              std::cerr << get_timestamp() << function << "loaded " << config.arg[entry] << "\n";
               applied++;
             }
           }
 
-          // EMULATOR
-          if ( config.param[entry].compare( 0, 8, "EMULATOR" ) == 0 ) {
+          // EMULATOR_PORT
+          if ( config.param[entry].compare( 0, 13, "EMULATOR_PORT" ) == 0 ) {
             this->port = std::stoi( config.arg[entry] );
             applied++;
           }
 
         } // end loop through the entries in the configuration file
 
-        std::cerr << function ;
+        std::cerr << get_timestamp() << function ;
 
         if ( applied==0 ) {
           std::cerr << "ERROR: " ;
@@ -141,7 +141,8 @@ namespace Emulator {
         else {
           error = NO_ERROR;
         } 
-        std::cerr << function << "applied " << applied << " configuration lines to emulatord." << this->subsystem << "\n";
+        std::cerr << get_timestamp() << function << "applied " << applied << " configuration lines to emulatord." 
+                  << this->subsystem << "\n";
 
         return error;
       }

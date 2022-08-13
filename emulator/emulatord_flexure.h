@@ -73,8 +73,8 @@ namespace Emulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = "(Emulator::Server::exit_cleanly) ";
-        std::cerr << function << "emulatord." << this->subsystem << " exiting\n";
+        std::string function = " (Emulator::Server::exit_cleanly) ";
+        std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connections to daemons
         //
@@ -93,7 +93,7 @@ namespace Emulator {
        *
        */
       long configure_emulator() {
-        std::string function = "(Emulator::Server::configure_emulator) ";
+        std::string function = " (Emulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;
@@ -109,11 +109,11 @@ namespace Emulator {
               port = std::stoi( config.arg[entry] );
             }
             catch ( std::invalid_argument & ) {
-              std::cerr << function << "ERROR: bad EMULATOR_PORT: unable to convert to integer\n";
+              std::cerr << get_timestamp() << function << "ERROR: bad EMULATOR_PORT: unable to convert to integer\n";
               return( ERROR );
             }
             catch ( std::out_of_range & ) {
-              std::cerr << function << "EMULATOR_PORT number out of integer range\n";
+              std::cerr << get_timestamp() << function << "EMULATOR_PORT number out of integer range\n";
               return( ERROR );
             }
             this->emulatorport = port;
@@ -122,7 +122,7 @@ namespace Emulator {
 
         } // end loop through the entries in the configuration file
 
-        std::cerr << function ;
+        std::cerr << get_timestamp() << function ;
 
         if ( applied==0 ) {
           std::cerr << "ERROR: " ;

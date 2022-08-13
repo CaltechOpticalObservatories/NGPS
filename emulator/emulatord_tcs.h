@@ -86,8 +86,8 @@ namespace Emulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = "(Emulator::Server::exit_cleanly) ";
-        std::cerr << function << "emulatord." << this->subsystem << " exiting\n";
+        std::string function = " (Emulator::Server::exit_cleanly) ";
+        std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connection
         //
@@ -106,7 +106,7 @@ namespace Emulator {
        *
        */
       long configure_emulator() {
-        std::string function = "(Emulator::Server::configure_emulator) ";
+        std::string function = " (Emulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;
@@ -159,13 +159,13 @@ namespace Emulator {
             }
           }
           catch ( std::invalid_argument &e ) {
-            std::cerr << function << "ERROR interpreting string as number for " << config.arg[entry] << "\n";
+            std::cerr << get_timestamp() << function << "ERROR interpreting string as number for " << config.arg[entry] << "\n";
             return( ERROR );
           }
 
         } // end loop through the entries in the configuration file
 
-        std::cerr << function ;
+        std::cerr << get_timestamp() << function ;
 
         if ( applied==0 ) {
           std::cerr << "ERROR: " ;

@@ -35,10 +35,12 @@ namespace Slit {
       float pos;                  //!< current position of this actuator
       std::string name;           //!< controller name
       float min, max;             //!< min,max travel range of motor connected to this controller
-      bool ishome;
-      bool ontarget;
+      bool servo;                 /// servo state (true=on, false=off)
+      bool ishome;                /// is axis homed?
+      bool ontarget;              /// is axis on target?
 
       ControllerInfo() {
+        this->servo=false;
         this->ishome=false;
         this->ontarget=false;
         }

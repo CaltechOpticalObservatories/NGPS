@@ -203,6 +203,24 @@ namespace Sequencer {
             applied++;
           }
 
+          // FLEXURED_PORT
+          if (config.param[entry].compare(0, 13, "FLEXURED_PORT")==0) {
+            int port;
+            try {
+              port = std::stoi( config.arg[entry] );
+            }
+            catch (std::invalid_argument &) {
+              logwrite(function, "ERROR: bad FLEXURED_PORT: unable to convert to integer");
+              return(ERROR);
+            }
+            catch (std::out_of_range &) {
+              logwrite(function, "FLEXURED_PORT number out of integer range");
+              return(ERROR);
+            }
+            this->sequence.flexured.port =  port;
+            applied++;
+          }
+
           // POWERD_PORT
           if (config.param[entry].compare(0, 11, "POWERD_PORT")==0) {
             int port;

@@ -40,6 +40,7 @@ namespace Slit {
       ControllerInfo();
       ~ControllerInfo();
 
+      bool servo;
       bool homed;
       bool ontarget;
       int addr;
@@ -48,13 +49,13 @@ namespace Slit {
       float pos;
 
       long load_info( std::string &input ) {
-        std::string function = "(Slit::ControllerInfo::load_info) ";
+        std::string function = " (Slit::ControllerInfo::load_info) ";
         std::vector<std::string> tokens;
 
         Tokenize( input, tokens, " \"" );
 
         if ( tokens.size() != 4 ) {
-          std::cerr << function << "bad number of tokens: " << tokens.size() << ". expected 2\n";
+          std::cerr << get_timestamp() << function << "bad number of tokens: " << tokens.size() << ". expected 2\n";
           return( ERROR );
         }
 
@@ -65,10 +66,10 @@ namespace Slit {
           this->max =  std::stof( tokens.at(3) );
         }
         catch ( std::invalid_argument &e ) {
-          std::cerr << function << "error loading tokens from input: " << input << ": " << e.what() << "\n";
+          std::cerr << get_timestamp() << function << "error loading tokens from input: " << input << ": " << e.what() << "\n";
         }
         catch ( std::out_of_range &e ) {
-          std::cerr << function << "error loading tokens from input: " << input << ": " << e.what() << "\n";
+          std::cerr << get_timestamp() << function << "error loading tokens from input: " << input << ": " << e.what() << "\n";
         }
 
         return( NO_ERROR );

@@ -125,7 +125,30 @@ namespace Slit {
       return( ERROR );
     }
 
-    return( this->pi.open() );
+    // open a connection
+    //
+    long error = this->pi.open();
+
+    if ( error != NO_ERROR ) return( error );
+
+    // clear any error codes on startup, and
+    // enable the servo for each address in controller_info
+    //
+    for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+      try {
+        int axis=1;
+        int errcode;
+        error |= this->pi.get_error( this->controller_info.at(con).addr, errcode );     // read error to clear, don't care the value
+        error |= this->pi.set_servo( this->controller_info.at(con).addr, axis, true );  // turn the servos on
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "ERROR: controller element " << con << " out of range";
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+    }
+
+    return( error );
   }
   /**************** Slit::Interface::open *************************************/
 
@@ -164,7 +187,7 @@ namespace Slit {
   /**************** Slit::Interface::home *************************************/
   /**
    * @fn     home
-   * @brief  home all daisy-chained motors
+   * @brief  home all daisy-chained motors using the neg limit switch
    * @param  none
    * @return ERROR or NO_ERROR
    *
@@ -172,6 +195,7 @@ namespace Slit {
   long Interface::home( ) {
     std::string function = "Slit::Interface::home";
     std::stringstream message;
+    int axis=1;
     long error = NO_ERROR;
 
     if ( !this->pi.controller.isconnected() ) {
@@ -183,7 +207,7 @@ namespace Slit {
     //
     for ( size_t con=0; con < this->controller_info.size(); con++ ) {
       try {
-        this->pi.home_axis( this->controller_info.at(con).addr );
+        this->pi.home_axis( this->controller_info.at(con).addr, axis, "neg" );
         this->controller_info.at(con).ishome   = false;
         this->controller_info.at(con).ontarget = false;
       }
@@ -206,10 +230,10 @@ namespace Slit {
       size_t num_home=0;
       for ( size_t con=0; con < this->controller_info.size(); con++ ) {
         try {
-          std::string retstring;
-          this->pi.is_home( this->controller_info.at(con).addr, retstring );
-          this->controller_info.at(con).ishome = ( retstring == "true" ? true : false );
-          this->controller_info.at(con).ontarget = this->controller_info.at(con).ishome;
+          bool state;
+          this->pi.is_home( this->controller_info.at(con).addr, axis, state );
+          this->controller_info.at(con).ishome = state;
+          this->controller_info.at(con).ontarget = state;
           if ( this->controller_info.at(con).ishome ) num_home++;
         }
         catch( std::out_of_range &e ) {
@@ -269,10 +293,12 @@ namespace Slit {
     size_t num_home=0;
     for ( size_t con=0; con < this->controller_info.size(); con++ ) {
       try {
-        std::string state;
-        error |= this->pi.is_home( this->controller_info.at(con).addr, state );  // error is OR'd so any error is preserved
-        this->controller_info.at(con).ishome = ( state == "true" ? true : false );
-        homestream << this->controller_info.at(con).addr << ":" << state << " ";
+        int axis=1;
+        error |= this->pi.is_home( this->controller_info.at(con).addr,
+                                   axis,
+                                   this->controller_info.at(con).ishome );  // error is OR'd so any error is preserved
+        homestream << this->controller_info.at(con).addr << ":"
+                   << ( this->controller_info.at(con).ishome ? "true" : "false" ) << " ";
         if ( this->controller_info.at(con).ishome ) num_home++;
       }
       catch( std::out_of_range &e ) {
@@ -462,13 +488,12 @@ namespace Slit {
     std::stringstream movstr;
     std::string posstring;
     try {
+      int axis=1;
       if ( this->leftcon >= 0 && this->leftcon < this->controller_info.size() ) {
-        error = this->pi.get_pos( this->controller_info.at( this->leftcon ).addr, posstring );
-        if ( error == NO_ERROR && !posstring.empty() ) left = std::stof( posstring ); else return( error );
+        error = this->pi.get_pos( this->controller_info.at( this->leftcon ).addr, axis, left );
       }
       if ( this->rightcon >= 0 && this->rightcon < this->controller_info.size() ) {
-        error = this->pi.get_pos( this->controller_info.at( this->rightcon ).addr, posstring );
-        if ( error == NO_ERROR && !posstring.empty() ) right = std::stof( posstring ); else return( error );
+        error = this->pi.get_pos( this->controller_info.at( this->rightcon ).addr, axis, right );
       }
     }
     catch( std::invalid_argument &e ) {
@@ -536,12 +561,13 @@ namespace Slit {
     }
 
     try {
+      int axis=1;
       addr   = std::stoi( tokens.at(0) );
       trypos = std::stof( tokens.at(1) );
 
       // send the move command
       //
-      error = this->pi.move_abs( addr, trypos );
+      error = this->pi.move_abs( addr, axis, trypos );
 
       // which controller has this addr?
       //
@@ -562,9 +588,9 @@ namespace Slit {
       std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
 
       do {
-        std::string retstring;
-        error = this->pi.on_target( addr, retstring );
-        this->controller_info.at( mycon ).ontarget = ( retstring == "1" ? true : false );
+        bool state;
+        error = this->pi.on_target( addr, axis, state );
+        this->controller_info.at( mycon ).ontarget = state;
         
         if ( this->controller_info.at( mycon ).ontarget ) break;
         else {
@@ -616,6 +642,7 @@ namespace Slit {
   long Interface::move_rel( std::string args ) {
     std::string function = "Slit::Interface::move_rel";
     std::stringstream message;
+    int axis=1;
     int addr;
     float pos;
 
@@ -649,7 +676,7 @@ namespace Slit {
       return( ERROR );
     }
 
-    return( this->pi.move_rel( addr, pos ) );
+    return( this->pi.move_rel( addr, axis, pos ) );
   }
   /**************** Slit::Interface::move_rel *********************************/
 

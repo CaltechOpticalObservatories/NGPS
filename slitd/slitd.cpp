@@ -530,8 +530,6 @@ void doit(Network::TcpSocket sock) {
         logwrite( function, "error converting command to uppercae" );
         ret=ERROR;
       }
-      message.str(""); message << "NOTICE: sending unrecognized command: " << sbuf << " to motor controller";
-      logwrite( function, message.str() );
       ret = slitd.interface.send_command( sbuf, retstring );
     }
 

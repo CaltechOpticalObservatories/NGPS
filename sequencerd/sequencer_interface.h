@@ -129,12 +129,15 @@ namespace Sequencer {
       int            binspat;             /// binning in spatial direction for this target
 
       int  colnum( std::string field );   /// get column number of requested field from this->targetlist
-      TargetInfo::TargetState get_next();                    /// get the next target from the database
+      TargetInfo::TargetState get_next(); /// get the next target from the database with state=Sequencer::TARGET_PENDING
+      TargetInfo::TargetState get_next( std::string state_in);    /// get the next target from the database with state=state_in
       long add_row();                     /// connect to the database
-      long update_state( std::string newstate );        /// update the target status in the database DB_ACTIVE table
+      long update_state( std::string newstate );  /// update the target status in the database DB_ACTIVE table
+      long insert_completed();            /// insert target record into completed observations table
+      long get_table_names();             /// utility to print all database table names
       void init_record();
 
-      long configure_db( std::string param, std::string value );      /// configure the database connection parameters (host, user, etc.)
+      long configure_db( std::string param, std::string value );  /// configure the database connection parameters (host, user, etc.)
 
   };
   /** TargetInfo **************************************************************/

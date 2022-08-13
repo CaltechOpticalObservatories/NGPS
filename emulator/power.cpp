@@ -40,9 +40,9 @@ namespace Power {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = "(Power::Interface::parse_command) ";
+    std::string function = " (Power::Interface::parse_command) ";
 
-    std::cerr << function << "received command: " << cmd << "\n";
+    std::cerr << get_timestamp() << function << "received command: " << cmd << "\n";
 
     std::vector<std::string> tokens;
     Tokenize( cmd, tokens, " " );
@@ -51,7 +51,7 @@ namespace Power {
     size_t nargs;                      // number of args (after command)
 
     if ( tokens.size() < 1 ) {         // should be impossible since already checked for cmd.empty()
-      std::cerr << function << "ERROR: no tokens\n";
+      std::cerr << get_timestamp() << function << "ERROR: no tokens\n";
       retstring = "-2";                // invalid parameters
       return( ERROR );
     }
@@ -62,12 +62,12 @@ namespace Power {
       nargs = tokens.size();           // number of args after removing command
     }
     catch( std::invalid_argument &e ) {
-      std::cerr << function << "unable to convert one or more values: " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "unable to convert one or more values: " << e.what() << "\n";
       retstring = "-1";                // unrecognized command
       return( ERROR );
     }
     catch( std::out_of_range &e ) {
-      std::cerr << function << "one or more values out of range: " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "one or more values out of range: " << e.what() << "\n";
       retstring = "-1";                // unrecognized command
       return( ERROR );
     }
@@ -98,16 +98,16 @@ namespace Power {
             else
             if ( tokens.at(3) == "off" ) state=0;
             else {
-              std::cerr << function << "ERROR: state " << tokens.at(3) << " not { on | off }\n";
+              std::cerr << get_timestamp() << function << "ERROR: state " << tokens.at(3) << " not { on | off }\n";
             }
           }
         }
         catch( std::invalid_argument &e ) {
-          std::cerr << function << "unable to convert one or more values: " << e.what() << "\n";
+          std::cerr << get_timestamp() << function << "unable to convert one or more values: " << e.what() << "\n";
           return( ERROR );
         }
         catch( std::out_of_range &e ) {
-          std::cerr << function << "one or more values out of range: " << e.what() << "\n";
+          std::cerr << get_timestamp() << function << "one or more values out of range: " << e.what() << "\n";
           return( ERROR );
         }
 //    this->power_mutex.lock();
@@ -117,19 +117,19 @@ namespace Power {
       if ( outlet > 0 && outlet < NUM_OUTLETS ) {
       }
       else {
-        std::cerr << function << "ERROR: outlet " << outlet << " out of range { 1:" << NUM_OUTLETS << " }\n";
+        std::cerr << get_timestamp() << function << "ERROR: outlet " << outlet << " out of range { 1:" << NUM_OUTLETS << " }\n";
       }
 */
       }
       else {
-        std::cerr << function << "ignoring command " << cmd << "\n";
+        std::cerr << get_timestamp() << function << "ignoring command " << cmd << "\n";
       }
     }
     else {
-      std::cerr << function << "ignoring command " << cmd << "\n";
+      std::cerr << get_timestamp() << function << "ignoring command " << cmd << "\n";
     }
 
-    std::cerr << function << "reply from power emulator: " << retstring << "\n";
+    std::cerr << get_timestamp() << function << "reply from power emulator: " << retstring << "\n";
 
     return ( NO_ERROR );
   }

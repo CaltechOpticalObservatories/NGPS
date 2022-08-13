@@ -91,7 +91,7 @@ namespace Tcs {
    *
    */
   void Telescope::do_coords( Tcs::Telescope &telescope, std::string args ) {
-    std::string function = "(Tcs::Telescope::do_coords) ";
+    std::string function = " (Tcs::Telescope::do_coords) ";
 
     double newra, newdec;
 
@@ -106,11 +106,11 @@ namespace Tcs {
       newdec = std::stof( tokens.at(1) );
     }
     catch( std::invalid_argument &e ) {
-      std::cerr << function << "unable to convert one or more values from \"" << args << "\": " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "unable to convert one or more values from \"" << args << "\": " << e.what() << "\n";
       return;
     }
     catch( std::out_of_range &e ) {
-      std::cerr << function << "one or more value from \"" << args << "\" is out of range: " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "one or more value from \"" << args << "\" is out of range: " << e.what() << "\n";
       return;
     }
 
@@ -146,7 +146,7 @@ namespace Tcs {
       double ra  = telescope.ra.load();
       double dec = telescope.dec.load();
 
-      std::cerr << function << "slewing...  ra " << ra << "  dec " << dec << "\n";
+      std::cerr << get_timestamp() << function << "slewing...  ra " << ra << "  dec " << dec << "\n";
 
       // add the slewrate to ra, dec
       // store it permanently as long as we don't overshoot
@@ -171,7 +171,7 @@ namespace Tcs {
       double ra  = telescope.ra.load();
       double dec = telescope.dec.load();
 
-      std::cerr << function << "settling...  ra " << ra << "  dec " << dec << "\n";
+      std::cerr << get_timestamp() << function << "settling...  ra " << ra << "  dec " << dec << "\n";
 
       // add the slewrate to ra, dec
       // store it permanently as long as we don't overshoot
@@ -189,7 +189,8 @@ namespace Tcs {
     telescope.ra.store( newra );
     telescope.dec.store( newdec );
     telescope.motionstate.store( MOTION_TRACKING_STABLY );
-    std::cerr << function << "tracking stably!  ra " << telescope.ra.load() << "  dec " << telescope.dec.load() << "\n";
+    std::cerr << get_timestamp() << function << "tracking stably!  ra " 
+              << telescope.ra.load() << "  dec " << telescope.dec.load() << "\n";
 
     // clear the running flag now that this thread is done
     //
@@ -216,14 +217,14 @@ namespace Tcs {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = "(Tcs::Interface::parse_command) ";
+    std::string function = " (Tcs::Interface::parse_command) ";
 
     // The real TCS allows an empty command but I don't,
     // only because I don't forsee anyone using it.
     //
     if ( cmd.empty() ) { retstring = "-1"; return( NO_ERROR ); }
 
-    std::cerr << function << "received command: " << cmd << "\n";
+    std::cerr << get_timestamp() << function << "received command: " << cmd << "\n";
 
     std::vector<std::string> tokens;
     Tokenize( cmd, tokens, " " );
@@ -232,7 +233,7 @@ namespace Tcs {
     size_t nargs;                      // number of args (after command)
 
     if ( tokens.size() < 1 ) {         // should be impossible since already checked for cmd.empty()
-      std::cerr << function << "ERROR: no tokens\n";
+      std::cerr << get_timestamp() << function << "ERROR: no tokens\n";
       retstring = "-2";                // invalid parameters
       return( ERROR );
     }
@@ -243,12 +244,12 @@ namespace Tcs {
       nargs = tokens.size();           // number of args after removing command
     }
     catch( std::invalid_argument &e ) {
-      std::cerr << function << "unable to convert one or more values: " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "unable to convert one or more values: " << e.what() << "\n";
       retstring = "-1";                // unrecognized command
       return( ERROR );
     }
     catch( std::out_of_range &e ) {
-      std::cerr << function << "one or more values out of range: " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "one or more values out of range: " << e.what() << "\n";
       retstring = "-1";                // unrecognized command
       return( ERROR );
     }
@@ -268,12 +269,12 @@ namespace Tcs {
       // can only run one of these threads at a time
       //
       if ( this->telescope.coords_running.load() ) {
-        std::cerr << function << "ERROR: coordinates have already been sent\n";
+        std::cerr << get_timestamp() << function << "ERROR: coordinates have already been sent\n";
         retstring = "-3";               // unable to execute at this time
       }
       else
       if ( nargs < 5 ) {
-        std::cerr << function << "ERROR: expected minimum 5 args but received " << nargs << "\n";
+        std::cerr << get_timestamp() << function << "ERROR: expected minimum 5 args but received " << nargs << "\n";
         retstring = "-2";              // invalid parameters
       }
       else {
@@ -286,11 +287,11 @@ namespace Tcs {
       }
     }
     else {
-      std::cerr << function << "ERROR: unknown command " << cmd << "\n";
+      std::cerr << get_timestamp() << function << "ERROR: unknown command " << cmd << "\n";
       retstring = "-1";                // unrecognized command
     }
 
-    std::cerr << function << "reply from TCS emulator: " << retstring << "\n";
+    std::cerr << get_timestamp() << function << "reply from TCS emulator: " << retstring << "\n";
 
     return ( NO_ERROR );
   }

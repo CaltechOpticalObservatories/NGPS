@@ -20,25 +20,25 @@ Emulator::Server emulator;
  *
  */
 void signal_handler( int signo ) {
-  std::string function = "(Emulator::signal_handler) ";
+  std::string function = " (Emulator::signal_handler) ";
   switch ( signo ) {
     case SIGTERM:
     case SIGINT:
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " received termination signal\n";
       emulator.exit_cleanly();                   // shutdown the daemon
       break;
     case SIGHUP:
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " caught SIGHUP\n";
       emulator.configure_emulator();             // TODO can (/should) this be done while running?
       break;
     case SIGPIPE:
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " caught SIGPIPE\n";
       break;
     default:
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " received unknown signal\n";
       emulator.exit_cleanly();                   // shutdown the daemon
       break;
@@ -62,7 +62,7 @@ void doit( Network::TcpSocket sock );       // the worker thread
  *
  */
 int main( int argc, char **argv ) {
-  std::string function = "(Emulator::main) ";
+  std::string function = " (Emulator::main) ";
   std::stringstream message;
   long ret=NO_ERROR;
   std::string daemon_in;     // daemon setting read from config file
@@ -91,13 +91,13 @@ int main( int argc, char **argv ) {
     emulator.config.filename = std::string( argv[1] );
   }
   else {
-    std::cerr << function << emulator.subsystem
+    std::cerr << get_timestamp() << function << emulator.subsystem
               << "ERROR: no configuration file specified\n";
     emulator.exit_cleanly();
   }
 
   if ( emulator.config.read_config(emulator.config) != NO_ERROR) {    // read configuration file specified on command line
-    std::cerr << function << emulator.subsystem
+    std::cerr << get_timestamp() << function << emulator.subsystem
               << "ERROR: unable to configure system\n";
     emulator.exit_cleanly();
   }
@@ -110,7 +110,7 @@ int main( int argc, char **argv ) {
   else
   if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
   else {
-    std::cerr << function << emulator.subsystem 
+    std::cerr << get_timestamp() << function << emulator.subsystem 
               << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }\n";
     emulator.exit_cleanly();
   }
@@ -123,23 +123,23 @@ int main( int argc, char **argv ) {
   }
 
   if ( start_daemon ) {
-    std::cerr << function << "starting emulator daemon for " << emulator.subsystem << "\n";
+    std::cerr << get_timestamp() << function << "starting emulator daemon for " << emulator.subsystem << "\n";
     std::string name = "emulatord." + emulator.subsystem;
     Daemon::daemonize( name, "/tmp", "", "", "" );
   }
 
-  std::cerr << function << emulator.subsystem << " "
+  std::cerr << get_timestamp() << function << emulator.subsystem << " "
             << emulator.config.n_entries << " lines read from " << emulator.config.filename << "\n";
 
   ret = emulator.configure_emulator();    // get needed values out of read-in configuration file for the daemon
 
   if (ret != NO_ERROR) {
-    std::cerr << function << "ERROR: unable to configure emulator for " << emulator.subsystem << "\n";
+    std::cerr << get_timestamp() << function << "ERROR: unable to configure emulator for " << emulator.subsystem << "\n";
     emulator.exit_cleanly();
   }
 
   if ( emulator.emulatorport == -1  ) {
-    std::cerr << function << "ERROR: emulator port not configured for " << emulator.subsystem << "\n";
+    std::cerr << get_timestamp() << function << "ERROR: emulator port not configured for " << emulator.subsystem << "\n";
     emulator.exit_cleanly();
   }
 
@@ -194,7 +194,7 @@ void block_main(Network::TcpSocket sock) {
  *
  */
 void doit(Network::TcpSocket sock) {
-  std::string function = "(Emulator::doit) ";
+  std::string function = " (Emulator::doit) ";
   char  buf[BUFSIZE+1];
   long  ret;
   std::stringstream message;
@@ -211,12 +211,12 @@ void doit(Network::TcpSocket sock) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        std::cerr << function << emulator.subsystem
-                  << " Poll timeout on thread " << sock.id << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem
+                  << " Poll timeout on fd " << sock.getfd() << " thread " << sock.id << "\n";
       }
       if (pollret <0) {
-        std::cerr << function << emulator.subsystem
-                  << " Poll error on thread " << sock.id << ": " << strerror(errno) << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem
+                  << " Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno) << "\n";
       }
       break;                      // this will close the connection
     }
@@ -225,8 +225,12 @@ void doit(Network::TcpSocket sock) {
     //
     if ( (ret=sock.Read(buf, (size_t)BUFSIZE)) <= 0 ) {
       if (ret<0) {                // could be an actual read error
-        std::cerr << function << emulator.subsystem
-                  << " Read error: " << strerror(errno) << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem
+                  << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
+      }
+      if (ret==0) {
+        std::cerr << get_timestamp() << function << emulator.subsystem
+                  << " timeout reading from fd " << sock.getfd() << "\n";
       }
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
@@ -258,17 +262,17 @@ void doit(Network::TcpSocket sock) {
       sock.id = ++emulator.cmd_num;
       if ( emulator.cmd_num == INT_MAX ) emulator.cmd_num = 0;
 
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " received command (" << sock.id << "): " << cmd << " " << args << "\n";
     }
     catch ( std::runtime_error &e ) {
       std::stringstream errstream; errstream << e.what();
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " error parsing arguments: " << errstream.str() << "\n";
       ret = -1;
     }
     catch ( ... ) {
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " unknown error parsing arguments: " << args << "\n";
       ret = -1;
     }
@@ -285,7 +289,7 @@ void doit(Network::TcpSocket sock) {
     // Unknown commands generate an error
     //
     else {
-      std::cerr << function << emulator.subsystem
+      std::cerr << get_timestamp() << function << emulator.subsystem
                 << " ERROR: unknown command: " << cmd << "\n";
       ret = ERROR;
     }
