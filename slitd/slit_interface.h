@@ -106,7 +106,7 @@ namespace Slit {
   class Interface {
     private:
       bool class_initialized;
-      int numdev;
+      size_t numdev;
       float maxwidth;
       float minwidth;
     public:

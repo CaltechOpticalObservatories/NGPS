@@ -23,6 +23,7 @@ namespace Slit {
   Interface::Interface() {
     this->leftcon=-1;
     this->rightcon=-1;
+    this->numdev=-1;
   }
   /**************** Slit::Interface::Interface ********************************/
 
@@ -42,7 +43,7 @@ namespace Slit {
 
   /**************** Slit::Interface::initialize_class *************************/
   /**
-   * @fn         initialize
+   * @fn         initialize_class
    * @brief      initializes the class from configure_slit()
    * @param[in]  none
    * @return     ERROR or NO_ERROR
@@ -76,8 +77,10 @@ namespace Slit {
       error = ERROR;
     }
     else if ( this->numdev == 1 ) {
-      logwrite( function, "WARNING: limited slit range with only one motor controller" );
-      error = NO_ERROR;
+      logwrite( function, "ERROR: only one motor controller was defined" );
+      error = ERROR;
+//    logwrite( function, "WARNING: limited slit range with only one motor controller" );  // consider allowing this?
+//    error = NO_ERROR;
     }
     else if ( this->numdev < 1 ) {
       message.str(""); message << "ERROR: no motor controllers: " << this->numdev << ". expected 2";
@@ -88,7 +91,7 @@ namespace Slit {
     this->minwidth=0;
     this->maxwidth=0;
 
-    for ( int con = 0; con < this->numdev; con++ ) {
+    for ( size_t con = 0; con < this->numdev; con++ ) {
       this->maxwidth += ( this->controller_info.at(con).max - this->controller_info.at(con).min );
       this->minwidth += this->controller_info.at(con).min;
       if ( this->controller_info.at(con).name == "left" ) this->leftcon   = con;
@@ -147,7 +150,7 @@ namespace Slit {
     // clear any error codes on startup, and
     // enable the servo for each address in controller_info
     //
-    for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+    for ( size_t con=0; con < this->numdev; con++ ) {
       try {
         int axis=1;
         int errcode;
@@ -218,7 +221,7 @@ namespace Slit {
 
     // send the home_axis command for each address in controller_info
     //
-    for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+    for ( size_t con=0; con < this->numdev; con++ ) {
       try {
         this->pi.home_axis( this->controller_info.at(con).addr, axis, "neg" );
         this->controller_info.at(con).ishome   = false;
@@ -241,7 +244,7 @@ namespace Slit {
 
     do {
       size_t num_home=0;
-      for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+      for ( size_t con=0; con < this->numdev; con++ ) {
         try {
           bool state;
           this->pi.is_home( this->controller_info.at(con).addr, axis, state );
@@ -255,7 +258,7 @@ namespace Slit {
           return( ERROR );
         }
       }
-      if ( num_home == this->controller_info.size() ) break;
+      if ( num_home == this->numdev ) break;
       else {
 #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] waiting for homing..." );
@@ -304,7 +307,7 @@ namespace Slit {
     // of the number that are homed.
     //
     size_t num_home=0;
-    for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+    for ( size_t con=0; con < this->numdev; con++ ) {
       try {
         int axis=1;
         error |= this->pi.is_home( this->controller_info.at(con).addr,
@@ -323,11 +326,11 @@ namespace Slit {
 
     // Set the retstring true or false, true only if all controllers are homed.
     //
-    if ( num_home == this->controller_info.size() ) retstring = "true"; else retstring = "false";
+    if ( num_home == this->numdev ) retstring = "true"; else retstring = "false";
 
     // If not all are the same state then log that
     //
-    if ( num_home > 0 && num_home < this->controller_info.size() ) {
+    if ( num_home > 0 && num_home < this->numdev ) {
       message.str(""); message << "NOTICE: " << homestream.str();
       logwrite( function, message.str() );
     }
@@ -480,14 +483,14 @@ namespace Slit {
 
     // spawn the left motor thread
     //
-    if ( this->leftcon >= 0 && this->leftcon < this->controller_info.size() ) {
+    if ( this->leftcon >= 0 && this->leftcon < this->numdev ) {
       movstr.str(""); movstr << this->controller_info.at( this->leftcon ).addr << " " << left;
       std::thread( dothread_move_abs, std::ref( iface ), movstr.str() ).detach();
     }
 
     // spawn the right motor thread
     //
-    if ( this->rightcon >= 0 && this->rightcon < this->controller_info.size() ) {
+    if ( this->rightcon >= 0 && this->rightcon < this->numdev ) {
       movstr.str(""); movstr << this->controller_info.at( this->rightcon ).addr << " " << right;
       std::thread( dothread_move_abs, std::ref( iface ), movstr.str() ).detach();
     }
@@ -544,10 +547,10 @@ namespace Slit {
     std::string posstring;
     try {
       int axis=1;
-      if ( this->leftcon >= 0 && this->leftcon < this->controller_info.size() ) {
+      if ( this->leftcon >= 0 && this->leftcon < this->numdev ) {
         error = this->pi.get_pos( this->controller_info.at( this->leftcon ).addr, axis, left );
       }
-      if ( this->rightcon >= 0 && this->rightcon < this->controller_info.size() ) {
+      if ( this->rightcon >= 0 && this->rightcon < this->numdev ) {
         error = this->pi.get_pos( this->controller_info.at( this->rightcon ).addr, axis, right );
       }
     }
@@ -677,12 +680,17 @@ namespace Slit {
 
       // which controller has this addr?
       //
-      int mycon;
-      for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+      int mycon=-1;
+      for ( size_t con=0; con < this->numdev; con++ ) {
         if ( this->controller_info.at(con).addr == addr ) {
           mycon = con;
           break;
         }
+      }
+
+      if ( mycon == -1 ) {  // should be impossible because numdev was checked in initialize_class()
+        logwrite( function, "ERROR: no motor controllers defined" );
+        return( ERROR );
       }
 
       // Loop sending the on_target command for this address
@@ -808,7 +816,7 @@ namespace Slit {
 
     // send the stop_motion command for each address in controller_info
     //
-    for ( size_t con=0; con < this->controller_info.size(); con++ ) {
+    for ( size_t con=0; con < this->numdev; con++ ) {
       try {
         this->pi.stop_motion( this->controller_info.at(con).addr );
       }
