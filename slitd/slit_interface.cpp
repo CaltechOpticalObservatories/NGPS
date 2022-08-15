@@ -1,13 +1,23 @@
+/**
+ * @file    slit_interface.cpp
+ * @brief   this contains the slit interface code
+ * @author  David Hale <dhale@astro.caltech.edu>
+ *
+ * This file contains the code for the Interface class in the Slit namespace,
+ * and is how the slit daemon interfaces to the slit hardware.
+ *
+ */
+
 #include "slit_interface.h"
 
 namespace Slit {
 
   /**************** Slit::Interface::Interface ********************************/
   /**
-   * @fn     Interface
-   * @brief  class constructor
-   * @param  none
-   * @return none
+   * @fn         Interface
+   * @brief      class constructor
+   * @param[in]  none
+   * @return     none
    *
    */
   Interface::Interface() {
@@ -19,10 +29,10 @@ namespace Slit {
 
   /**************** Slit::Interface::~Interface *******************************/
   /**
-   * @fn     ~Interface
-   * @brief  class deconstructor
-   * @param  none
-   * @return none
+   * @fn         ~Interface
+   * @brief      class deconstructor
+   * @param[in]  none
+   * @return     none
    *
    */
   Interface::~Interface() {
@@ -32,10 +42,13 @@ namespace Slit {
 
   /**************** Slit::Interface::initialize_class *************************/
   /**
-   * @fn     initialize
-   * @brief  
-   * @param  
-   * @return 
+   * @fn         initialize
+   * @brief      initializes the class from configure_slit()
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
+   *
+   * This is called by Slit::Server::configure_slit() after reading the
+   * configuration file to apply the config file setting.
    *
    */
   long Interface::initialize_class() {
@@ -106,10 +119,10 @@ namespace Slit {
 
   /**************** Slit::Interface::open *************************************/
   /**
-   * @fn     open
-   * @brief  opens the PI socket connection
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         open
+   * @brief      opens the PI socket connection
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::open( ) {
@@ -155,10 +168,10 @@ namespace Slit {
 
   /**************** Slit::Interface::close ************************************/
   /**
-   * @fn     close
-   * @brief  closes the PI socket connection
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         close
+   * @brief      closes the PI socket connection
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::close( ) {
@@ -186,10 +199,10 @@ namespace Slit {
 
   /**************** Slit::Interface::home *************************************/
   /**
-   * @fn     home
-   * @brief  home all daisy-chained motors using the neg limit switch
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         home
+   * @brief      home all daisy-chained motors using the neg limit switch
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::home( ) {
@@ -326,13 +339,26 @@ namespace Slit {
 
   /**************** Slit::Interface::set **************************************/
   /**
-   * @fn     set
-   * @brief  
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         set
+   * @brief      set the slit width and offset
+   * @param[in]  iface, reference to main Slit::Interface object
+   * @param[in]  args, string containing width, or width and offset
+   * @param[out] retstring, string contains the width and offset after move
+   * @return     ERROR or NO_ERROR
+   *
+   * This function moves the "left" and "right" motors to achieve the requested
+   * width (and offset, if specified, default 0). Each motor is commanded in its
+   * own thread so that they can be moved in parallel.
+   *
+   * Note that "left" and "right" are just my words here, and don't necessarily
+   * correspond with any real notion of left and right.
+   *
+   * This function requires a reference to the slit interface object because it's
+   * going to spawn threads for each motor and the threads, being static, would
+   * not otherwise have access to this-> object.
    *
    */
-  long Interface::set( std::string args, std::string &retstring ) {
+  long Interface::set( Slit::Interface &iface, std::string args, std::string &retstring ) {
     std::string function = "Slit::Interface::set";
     std::stringstream message;
     long error = NO_ERROR;
@@ -356,8 +382,8 @@ namespace Slit {
       return( ERROR );
     }
 
-    float setwidth  = 0.0;  //!< slit width
-    float setoffset = 0.0;  //!< default offset unless otherwise set below
+    float setwidth  = 0.0;  // slit width
+    float setoffset = 0.0;  // default offset unless otherwise set below
 
     // tokens.size() is guaranteed to be either 1 OR 2 at this point
     //
@@ -440,17 +466,45 @@ namespace Slit {
     logwrite( function, message.str() );
 #endif
 
-    // move the left and right motors now
+    // move the left and right motors now,
+    // simultaneously, each in its own thread.
     //
-    std::stringstream movstr;
+
+    std::unique_lock<std::mutex> wait_lock( iface.wait_mtx );  // create a mutex object for waiting for threads
+
+    iface.motors_running = 2;                                  // set both motors running (number of threads to wait for)
+
+    iface.thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
+
+    std::stringstream movstr;                                  // string to contain the move_abs() arguments
+
+    // spawn the left motor thread
+    //
     if ( this->leftcon >= 0 && this->leftcon < this->controller_info.size() ) {
       movstr.str(""); movstr << this->controller_info.at( this->leftcon ).addr << " " << left;
-      error = this->move_abs( movstr.str() );
+      std::thread( dothread_move_abs, std::ref( iface ), movstr.str() ).detach();
     }
+
+    // spawn the right motor thread
+    //
     if ( this->rightcon >= 0 && this->rightcon < this->controller_info.size() ) {
       movstr.str(""); movstr << this->controller_info.at( this->rightcon ).addr << " " << right;
-      error = this->move_abs( movstr.str() );
+      std::thread( dothread_move_abs, std::ref( iface ), movstr.str() ).detach();
     }
+
+    // wait for the threads to finish
+    //
+    while ( iface.motors_running != 0 ) {
+      message.str(""); message << "waiting for " << iface.motors_running << " motor" << ( iface.motors_running > 1 ? "s":"" );
+      logwrite( function, message.str() );
+      iface.cv.wait( wait_lock );
+    }
+
+    logwrite( function, "slit motor moves complete" );
+
+    // get any errors from the threads
+    //
+    error = iface.thr_error.load();
 
     // after all the moves, read and return the position
     //
@@ -463,10 +517,11 @@ namespace Slit {
 
   /**************** Slit::Interface::get **************************************/
   /**
-   * @fn     get
-   * @brief  
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         get
+   * @brief      get the current width and offset
+   * @param[in]  none
+   * @param[out] retstring, string contains the current width and offset
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::get( std::string &retstring ) {
@@ -530,12 +585,59 @@ namespace Slit {
   /**************** Slit::Interface::get **************************************/
 
 
+  /**************** Slit::Interface::dothread_move_abs ************************/
+  /**
+   * @fn         dothread_move_abs
+   * @brief      threaded move_abs function
+   * @param[in]  reference to interface object
+   * @param[in]  string to pass to move_abs
+   * @return     none
+   *
+   * This is the work function to call move_abs() in a thread, intended
+   * to be spawned in a detached thread. Any errors returned by the move_abs()
+   * function are set in the thr_error class variable.
+   *
+   */
+  void Interface::dothread_move_abs( Slit::Interface &iface, std::string movstr ) {
+    std::string function = "Slit::Interface::dothread_move_abs";
+    std::stringstream message;
+    long error;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread sending mov_abs( " << movstr << " )";
+    logwrite( function, message.str() );
+#endif
+
+    error = iface.move_abs( movstr );    // send the move_abs command here
+
+    iface.thr_error.fetch_or( error );   // preserve any error returned
+
+    --iface.motors_running;              // atomically decrement the number of motors waiting
+
+    iface.cv.notify_all();               // notify parent that I'm done
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread completed mov_abs( " << movstr << " ) *** motors_running = " << iface.motors_running;
+    logwrite( function, message.str() );
+#endif
+
+    return;
+  }
+  /**************** Slit::Interface::dothread_move_abs ************************/
+
+
   /**************** Slit::Interface::move_abs *********************************/
   /**
-   * @fn     move_abs
-   * @brief  send move-absolute command to specified controllers
-   * @param  
-   * @return ERROR or NO_ERROR
+   * @fn         move_abs
+   * @brief      send move-absolute command to specified controllers
+   * @param[in]  args, string containing addr and pos
+   * @return     ERROR or NO_ERROR
+   *
+   * The single string parameter must contain two space-delimited tokens,
+   * for the address and the position to move that address.
+   *
+   * This could be called by a thread, so hardware interactions with the PI
+   * controller are protected by a mutex.
    *
    */
   long Interface::move_abs( std::string args ) {
@@ -550,6 +652,8 @@ namespace Slit {
       return( ERROR );
     }
 
+    // The input args string must contain two tokens, addr pos
+    //
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
@@ -567,7 +671,9 @@ namespace Slit {
 
       // send the move command
       //
+      this->pi_mutex.lock();
       error = this->pi.move_abs( addr, axis, trypos );
+      this->pi_mutex.unlock();
 
       // which controller has this addr?
       //
@@ -589,7 +695,9 @@ namespace Slit {
 
       do {
         bool state;
+        this->pi_mutex.lock();
         error = this->pi.on_target( addr, axis, state );
+        this->pi_mutex.unlock();
         this->controller_info.at( mycon ).ontarget = state;
         
         if ( this->controller_info.at( mycon ).ontarget ) break;
@@ -633,10 +741,10 @@ namespace Slit {
 
   /**************** Slit::Interface::move_rel *********************************/
   /**
-   * @fn     move_rel
-   * @brief  send move-absolute command to specified controllers
-   * @param  
-   * @return ERROR or NO_ERROR
+   * @fn         move_rel
+   * @brief      send move-relative command to specified controllers
+   * @param[in]  args, string containing addr and offset
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::move_rel( std::string args ) {
@@ -683,10 +791,10 @@ namespace Slit {
 
   /**************** Slit::Interface::stop *************************************/
   /**
-   * @fn     stop
-   * @brief  send the stop-all-motion command to all controllers
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         stop
+   * @brief      send the stop-all-motion command to all controllers
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::stop( ) {
@@ -718,10 +826,13 @@ namespace Slit {
 
   /**************** Slit::Interface::send_command *****************************/
   /**
-   * @fn     send_command
-   * @brief  writes the raw command as received to the master controller
-   * @param  string cmd
-   * @return ERROR or NO_ERROR
+   * @fn         send_command
+   * @brief      writes the raw command as received to the master controller
+   * @param[in]  string cmd
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   * This version writes a command that expects no reply.
    *
    */
   long Interface::send_command( std::string cmd ) {
@@ -735,6 +846,21 @@ namespace Slit {
 
     return( this->pi.send_command( cmd ) );
   }
+  /**************** Slit::Interface::send_command *****************************/
+
+
+  /**************** Slit::Interface::send_command *****************************/
+  /**
+   * @fn         send_command
+   * @brief      writes the raw command to the master controller, reads back reply
+   * @param[in]  string cmd
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   * This version writes a command and then reads a reply if that command contains
+   * a question mark, "?".
+   *
+   */
   long Interface::send_command( std::string cmd, std::string &retstring ) {
     std::string function = "Slit::Interface::send_command";
     std::stringstream message;

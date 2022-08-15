@@ -29,9 +29,9 @@
 #include "slit_interface.h"
 #include "slitd_commands.h"
 
-#define  N_THREADS    10    //!< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
-#define  BUFSIZE      1024  //!< size of the input command buffer
-#define  CONN_TIMEOUT 3000  //<! incoming (non-blocking) connection timeout in milliseconds
+#define  N_THREADS    10    /// total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
+#define  BUFSIZE      1024  /// size of the input command buffer
+#define  CONN_TIMEOUT 3000  /// incoming (non-blocking) connection timeout in milliseconds
 
 namespace Slit {
 
@@ -46,48 +46,54 @@ namespace Slit {
   class Server {
     private:
     public:
+
+      /** Slit::Server ********************************************************/
+      /**
+       * @fn     Server
+       * @brief  class constructor
+       *
+       */
       Server() {
         this->nbport=-1;
         this->blkport=-1;
         this->asyncport=-1;
         this->cmd_num=0;
       }
+      /** Slit::Server ********************************************************/
 
-      /** Slit::~Server ************************************************************/
+
+      /** Slit::~Server *******************************************************/
       /**
        * @fn     ~Server
        * @brief  class deconstructor cleans up on exit
+       *
        */
       ~Server() {
-        close(this->nonblocking_socket);
-        close(this->blocking_socket);
         close_log();  // close the logfile, if open
       }
-      /** Slit::~Server ************************************************************/
-
-      int nbport;                        //!< non-blocking port
-      int blkport;                       //!< blocking port
-      int asyncport;                     //!< asynchronous message port
-      std::string asyncgroup;            //!< asynchronous multicast group
-
-      int nonblocking_socket;
-      int blocking_socket;
-
-      std::atomic<int> cmd_num;
-
-      Config config;
-
-      Interface interface;
-
-      std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
+      /** Slit::~Server *******************************************************/
 
 
-      /** Slit::Server::exit_cleanly ***********************************************/
+      int nbport;                        /// non-blocking port
+      int blkport;                       /// blocking port
+      int asyncport;                     /// asynchronous message port
+      std::string asyncgroup;            /// asynchronous multicast group
+
+      std::atomic<int> cmd_num;          /// keep a running tally of number of commands received by slitd
+
+      Config config;                     /// create a Config object for reading the configuration file
+
+      Interface interface;               /// create an Interface object for the slit hardware
+
+      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
+
+
+      /** Slit::Server::exit_cleanly ******************************************/
       /**
-       * @fn     signal_handler
-       * @brief  handles ctrl-C and exits
-       * @param  int signo
-       * @return nothing
+       * @fn         signal_handler
+       * @brief      handles ctrl-C and exits
+       * @param[in]  int signo
+       * @return     nothing
        *
        */
       void exit_cleanly(void) {
@@ -96,15 +102,15 @@ namespace Slit {
 
         exit(EXIT_SUCCESS);
       }
-      /** Slit::Server::exit_cleanly ***********************************************/
+      /** Slit::Server::exit_cleanly ******************************************/
 
 
-      /** Slit::Server::configure_slit *********************************************/
+      /** Slit::Server::configure_slit ****************************************/
       /**
-       * @fn     configure_slitd
-       * @brief  read and apply the configuration file for the slit daemon
-       * @param  none
-       * @return ERROR or NO_ERROR
+       * @fn         configure_slitd
+       * @brief      read and apply the configuration file for the slit daemon
+       * @param[in]  none
+       * @return     ERROR or NO_ERROR
        *
        */
       long configure_slitd() {
@@ -237,11 +243,13 @@ namespace Slit {
         message << "applied " << applied << " configuration lines to slitd";
         logwrite(function, message.str());
 
+        // Initialize the class using the config parameters just read
+        //
         if ( error == NO_ERROR ) error = this->interface.initialize_class();
 
         return error;
       }
-      /** Slit::Server::configure_slit *********************************************/
+      /** Slit::Server::configure_slit ****************************************/
 
   };
   /** Server ******************************************************************/

@@ -15,6 +15,8 @@
 #include "common.h"
 #include <sys/stat.h>
 #include <map>
+#include <condition_variable>
+#include <atomic>
 
 #define MOVE_TIMEOUT 20000
 
@@ -117,26 +119,35 @@ namespace Slit {
       Interface();
       ~Interface();
 
-      // This is a vector of all daisy-chain connected controllers
-      //
-      std::vector<Slit::ControllerInfo> controller_info;
+      std::vector<Slit::ControllerInfo> controller_info;                            /// vector of all daisy-chain connected controllers
 
-      bool isopen() { return this->pi.controller.isconnected(); }    /// is this interface connected to hardware?
+      bool isopen() { return this->pi.controller.isconnected(); }                   /// is this interface connected to hardware?
 
       long initialize_class();
-      long open();
-      long close();
-      long home();
-      long is_home( std::string &retstring );
-      long set( std::string args, std::string &retstring );
-      long get( std::string &retstring );
-      long move_abs( std::string args );
-      long move_rel( std::string args );
-      long stop();
-      long send_command( std::string cmd );
-      long send_command( std::string cmd, std::string &retstring );
+      long open();                               /// opens the PI socket connection
+      long close();                              /// closes the PI socket connection
+      long home();                               /// home all daisy-chained motors using the neg limit switch
+      long is_home( std::string &retstring );    /// return the home state of the motors
 
-      Physik_Instrumente::ServoInterface pi;
+      long set( Slit::Interface &iface, std::string args, std::string &retstring ); /// set the slit width and offset
+      long get( std::string &retstring );                                           /// get the current width and offset
+
+      static void dothread_move_abs( Slit::Interface &iface, std::string movstr );  /// threaded move_abs function
+
+      long move_abs( std::string args );         /// send move-absolute command to specified controllers
+      long move_rel( std::string args );         /// send move-relative command to specified controllers
+      long stop();                               /// send the stop-all-motion command to all controllers
+      long send_command( std::string cmd );      /// writes the raw command as received to the master controller, no reply
+      long send_command( std::string cmd, std::string &retstring );                 /// writes command?, reads reply
+
+      Physik_Instrumente::ServoInterface pi;     /// Object for communicating with the PI
+
+      std::mutex pi_mutex;                       /// mutex to protect multi-threaded access to PI controller
+
+      volatile std::atomic<int> motors_running;  /// number of motors that are running in threads
+      volatile std::atomic<long> thr_error;      /// error state of threads
+      std::mutex wait_mtx;                       /// mutex object for waiting for threads
+      std::condition_variable cv;                /// condition variable for waiting for threads
 
   };
   /** Interface ***************************************************************/

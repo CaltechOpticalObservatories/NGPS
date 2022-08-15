@@ -242,6 +242,19 @@ namespace Slit {
       std::cerr << get_timestamp() << function << retstring << "\n";
     }
 
+    else
+
+    // ERR?
+    //
+    if ( mycmd == "ERR?" ) {
+      this->pos_mutex.lock();
+      std::stringstream ss;
+      ss << "0 " << myaddr << " " << myaxis << "=0";  // always return no error
+      retstring = ss.str();
+      this->pos_mutex.unlock();
+      std::cerr << get_timestamp() << function << retstring << "\n";
+    }
+
     // unknown command
     //
     else {

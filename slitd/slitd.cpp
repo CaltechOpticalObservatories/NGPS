@@ -489,7 +489,7 @@ void doit(Network::TcpSocket sock) {
     // set width, offset
     //
     if ( cmd.compare( SLITD_SET ) == 0 ) {
-                    ret = slitd.interface.set( args, retstring );
+                    ret = slitd.interface.set( std::ref( slitd.interface ), args, retstring );
     }
     else
 
