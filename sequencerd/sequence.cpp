@@ -105,6 +105,47 @@ namespace Sequencer {
   /**************** Sequencer::Sequence::get_reqstate *************************/
 
 
+  /**************** Sequencer::Sequence::dothread_sequence_async_listener *****/
+  /**
+   * @fn         dothread_sequence_async_listener
+   * @brief      async message listening thread
+   * @param[in]  ref to Sequencer::Sequence object
+   * @param[in]  UDP socket object, pre-configured
+   * @return     none
+   *
+   * This thread allows the sequencer to listen for asynchronous messages.
+   * The UDP socket object that is passed in must have already been configured
+   * with the async port and group, which would have been read from a config
+   * file by the sequencer daemon.
+   *
+   * This thread never terminates unless there is an error.
+   *
+   */
+  void Sequence::dothread_sequence_async_listener( Sequencer::Sequence &seq, Network::UdpSocket udp ) {
+    std::string function = "Sequencer::Sequence::dothread_sequence_async_listener";
+    std::stringstream message;
+
+    int retval = udp.Listener();
+
+    if ( retval < 0 ) {
+      logwrite(function, "error creating UDP listening socket. thread terminating.");
+      return;
+    }
+
+    logwrite( function, "running" );
+
+    // forever receive and process UDP messages
+    //
+    while ( true ) {
+      std::string message="";
+      udp.Receive( message );
+//    logwrite( function, message );
+    }
+    return;
+  }
+  /**************** Sequencer::Sequence::dothread_sequence_async_listener *****/
+
+
   /**************** Sequencer::Sequence::dothread_sequence_start **************/
   /**
    * @fn         thr_sequence_start
@@ -694,7 +735,6 @@ namespace Sequencer {
     if (error==NO_ERROR) { logwrite( function, "loading firmware" );  error = seq.camerad.send( "load /home/developer/ss/DSP/SWIFT/sg2_48khz.lod", reply ); }
     if (error==NO_ERROR) { logwrite( function, "setting buffer");     error = seq.camerad.send( "buffer 1024 1024", reply ); }
     if (error==NO_ERROR) { logwrite( function, "setting geometry" );  error = seq.camerad.send( "geometry 1024 1024", reply ); }
-    if (error==NO_ERROR) { logwrite( function, "setting exptime" );   error = seq.camerad.send( "exptime 5000", reply ); }
     if (error==NO_ERROR) { logwrite( function, "setting readmode" );  error = seq.camerad.send( "readout U1", reply ); }
     if (error==NO_ERROR) { logwrite( function, "setting useframes" ); error = seq.camerad.send( "useframes false", reply ); }
 

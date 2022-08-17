@@ -206,6 +206,11 @@ int main(int argc, char **argv) {
   Network::UdpSocket async(sequencer.asyncport, sequencer.asyncgroup);
   std::thread(async_main, async).detach();
 
+  std::thread( std::ref( Sequencer::Sequence::dothread_sequence_async_listener ), 
+               std::ref( sequencer.sequence),
+               async
+             ).detach();
+
   // thread to start a new logbook each day
   //
   std::thread( new_log_day ).detach();
@@ -307,11 +312,28 @@ void thread_main(Network::TcpSocket sock) {
  */
 void async_main(Network::UdpSocket sock) {
   std::string function = "Sequencer::async_main";
+  std::stringstream message;
   int retval;
 
-  logwrite( function, "NOT IMPLEMENTED" );
+  logwrite( function, "disabled" );
   return;
 
+  retval = sock.Listener();
+
+  if (retval < 0) {
+    logwrite(function, "error creating UDP listening socket");
+    sequencer.exit_cleanly();                                  // do not continue on error
+  }
+
+  // now just enter a read-print loop
+  //
+  while (1) {
+    std::string message="";
+    sock.Receive( message );
+    logwrite( function, message );
+  }
+
+/***
   retval = sock.Create();                                   // create the UDP socket
   if (retval < 0) {
     logwrite(function, "error creating UDP multicast socket for asynchronous messages");
@@ -321,7 +343,6 @@ void async_main(Network::UdpSocket sock) {
     logwrite(function, "asyncrhonous message port disabled by request");
   }
 
-/***
   while (1) {
     std::string message = sequencer.common.message.dequeue();  // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message

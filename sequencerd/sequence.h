@@ -95,6 +95,9 @@ namespace Sequencer {
       uint32_t get_seqstate();                  /// get the seqstate word
       uint32_t get_reqstate();                  /// get the reqstate word
 
+      static void dothread_sequence_async_listener( Sequencer::Sequence &seq,
+                                                    Network::UdpSocket udp );  /// UDP ASYNC message listening thread
+
       long startup( Sequencer::Sequence &seq );         /// nightly startup sequence
       bool is_ready() { return this->ready_to_start; }  /// returns the ready_to_start state, set true only after nightly startup
 

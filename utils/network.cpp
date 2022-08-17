@@ -204,6 +204,133 @@ namespace Network {
   /**************** Network::UdpSocket::Send **********************************/
 
 
+  /**************** Network::UdpSocket::Listener ******************************/
+  /**
+   * @fn         Listener
+   * @brief      creates a UDP listener, returns a file descriptor
+   * @param[in]  none
+   * @return     fd on success, -1 on error
+   *
+   */
+  int UdpSocket::Listener( ) {
+    std::string function = "Network::UdpSocket::Listener";
+    std::stringstream message;
+
+    // don't create more than one UDP multicast socket
+    //
+    if ( this->service_running ) {
+      logwrite( function, "ERROR: service already running" );
+      return -1;
+    }
+
+    // don't do anything if the ASYNCGROUP is not initialized
+    //
+    if ( this->group.empty() ) {
+      logwrite( function, "ERROR: ASYNCGROUP not initialized. Cannot create socket" );
+      return -1;
+    }
+
+    // the user can set ASYNCGROUP=none to disable the async status message port
+    //
+    try {
+      std::transform( this->group.begin(), this->group.end(), this->group.begin(), ::toupper );    // make uppercase
+    }
+    catch (...) {
+      logwrite( function, "error converting ASYNCGROUP to uppercase" );
+      return -1;
+    }
+    if ( this->group == "NONE" ) {
+      logwrite( function, "ASYNCGROUP=none. UDP multicast socket disabled." );
+      return 1;
+    }
+
+    // now that there is a group, check that the port is initialized
+    //
+    if ( this->port < 0 ) {
+      logwrite( function, "ERROR: ASYNCPORT not initialized. Cannot create socket" );
+      return -1;
+    }
+
+    // now that there is a group and port, create the socket
+    //
+    if ( ( this->fd = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ) {
+      message << "error " << errno << " creating socket: " << strerror( errno );
+      logwrite(function, message.str());
+      return(-1);
+    }
+
+    // allow multiple sockets to use the same PORT number
+    //
+    u_int yes = 1;
+    if ( setsockopt( fd, SOL_SOCKET, SO_REUSEADDR, (char*) &yes, sizeof(yes) ) < 0 ) {
+      message << "ERROR: reusing ADDR failed: " << strerror( errno );
+      logwrite( function, message.str() );
+      return -1;
+    }
+
+    // set up the source address
+    //
+    memset( &this->addr, 0, sizeof( this->addr ) );
+    this->addr.sin_family = AF_INET;
+    this->addr.sin_addr.s_addr = htonl( INADDR_ANY ); // differs from sender
+    this->addr.sin_port = htons( this->port );
+
+    // bind to receive address
+    //
+    if ( bind( this->fd, (struct sockaddr*) &this->addr, sizeof(this->addr) ) < 0 ) {
+      message << "ERROR binding to receive address: " << strerror( errno );
+      logwrite( function, message.str() );
+      return -1;
+    }
+
+    // use setsockopt() to request that the kernel join a multicast group
+    //
+    this->mreq.imr_multiaddr.s_addr = inet_addr( this->group.c_str() );
+    this->mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    if ( setsockopt( fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*) &this->mreq, sizeof(this->mreq) ) < 0 ) {
+      message << "ERROR joining multicast group: " << strerror( errno );
+      logwrite( function, message.str() );
+      return -1;
+    }
+
+#ifdef LOGLEVEL_DEBUG
+    message << "created UDP listening socket on fd " << this->fd;
+    logwrite( function, message.str() );
+#endif
+
+    return( this->fd );
+  }
+  /**************** Network::UdpSocket::Listener ******************************/
+
+
+  /**************** Network::UdpSocket::Receive *******************************/
+  /**
+   * @fn         Receive
+   * @brief      receive a UDP message from the Listener fd
+   * @param[out] reference to string, to contain the message read
+   * @return     number of bytes received
+   *
+   */
+  int UdpSocket::Receive( std::string &message ) {
+    char msgbuf[ UDPMSGLEN ];
+    socklen_t addrlen = sizeof( this->addr );
+    int nbytes = recvfrom ( this->fd,
+                            msgbuf,
+                            UDPMSGLEN,
+                            0,
+                            (struct sockaddr *) &this->addr,
+                            &addrlen
+                          );
+    msgbuf[ nbytes ] = '\0';
+
+    std::string msg( msgbuf, nbytes );
+    message = msg;
+
+    return nbytes;
+  }
+  /**************** Network::UdpSocket::Receive *******************************/
+
+
   /**************** Network::UdpSocket::Close *********************************/
   /**
    * @fn     Close
