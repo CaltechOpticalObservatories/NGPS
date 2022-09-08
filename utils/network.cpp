@@ -575,15 +575,15 @@ namespace Network {
     int ret = poll( &poll_struct, 1, timeout );
     short revents = poll_struct.revents;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str("");
-    message << "[DEBUG] fd " << this->fd << " events: "
-            << ( revents & POLLIN   ? "POLLIN "  : "" )
-            << ( revents & POLLHUP  ? "POLLHUP " : "" )
-            << ( revents & POLLERR  ? "POLLERR " : "" )
-            << ( revents & POLLNVAL ? "POLLNVAL" : "" );
-    logwrite( function, message.str() );
-#endif
+//#ifdef LOGLEVEL_DEBUG
+//    message.str("");
+//    message << "[DEBUG] fd " << this->fd << " events: "
+//            << ( revents & POLLIN   ? "POLLIN "  : "" )
+//            << ( revents & POLLHUP  ? "POLLHUP " : "" )
+//            << ( revents & POLLERR  ? "POLLERR " : "" )
+//            << ( revents & POLLNVAL ? "POLLNVAL" : "" );
+//    logwrite( function, message.str() );
+//#endif
 
     if ( ( revents & POLLHUP ) || ( revents & POLLERR) || ( revents & POLLNVAL ) ) {
       message.str(""); message << "received "

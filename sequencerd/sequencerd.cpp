@@ -141,10 +141,10 @@ int main(int argc, char **argv) {
 
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
-    Daemon::daemonize( "sequencerd", "/tmp", "", "", "" );
+    Daemon::daemonize( Sequencer::DAEMON_NAME, "/tmp", "", "", "" );
   }
 
-  if ( (init_log(logpath) != 0) ) {                      // initialize the logging system
+  if ( ( init_log( logpath, Sequencer::DAEMON_NAME ) != 0 ) ) {      // initialize the logging system
     logwrite(function, "ERROR: unable to initialize logging system");
     sequencer.exit_cleanly();
   }
@@ -239,7 +239,7 @@ void new_log_day( ) {
   while (1) {
     std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
     close_log();
-    init_log( logpath );
+    init_log( logpath, Sequencer::DAEMON_NAME );
   }
 }
 /** new_log_day **************************************************************/
@@ -477,14 +477,6 @@ void doit(Network::TcpSocket sock) {
     }
     else
 
-    // system startup (nightly)
-    // This is needed before any sequences can be run.
-    //
-    if ( cmd.compare( "startup" ) == 0 ) {
-                    ret = sequencer.sequence.startup( sequencer.sequence );
-    }
-    else
-
     // These commands go to calibd
     //
     if ( cmd.compare( SEQUENCERD_CALIB )==0 ) {
@@ -557,40 +549,122 @@ void doit(Network::TcpSocket sock) {
     }
     else
 
-    if ( cmd.compare( "foo" )==0 ) {
-                      std::thread( std::ref( Sequencer::Sequence::dothread_slit_init ),
-                                   std::ref( sequencer.sequence) ).detach();
-    } else
+    // system startup (nightly)
+    // This is needed before any sequences can be run.
+    //
+    if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
+                    ret = sequencer.sequence.startup( sequencer.sequence );
+    }
+    else
 
     // Sequence "start"
     //
     if ( cmd.compare( SEQUENCERD_START )==0 ) {
 
-                    if ( !sequencer.sequence.is_ready() ) {
-                      logwrite( function, "sequencer not ready" );
+                    // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
+                    //
+                    if ( sequencer.sequence.seqstate.load() != Sequencer::SEQ_READY ) {
+                      // log applicable causes
+                      //
+                      if ( sequencer.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+                        logwrite( function, "ERROR: sequencer already running" );
+                      }
+                      else
+                      if ( sequencer.sequence.is_seqstate_set( Sequencer::SEQ_ABORTING ) ||
+                           sequencer.sequence.is_seqstate_set( Sequencer::SEQ_STOPREQ  ) ) {
+                        logwrite( function, "ERROR: sequencer waiting for stop" );
+                      }
+                      else
+                      if ( not sequencer.sequence.is_seqstate_set( Sequencer::SEQ_READY ) ) {
+                        logwrite( function, "ERROR: sequencer not ready. try startup" );
+                      }
                       ret = ERROR;
                     }
-                    else
-                    if ( sequencer.sequence.runstate == Sequencer::STOPPED ) {
-                      sequencer.sequence.runstate = Sequencer::RUNNING;
+
+                    // seqstate is SEQ_READY so change both it and reqstate to SEQ_RUNNING,
+                    // then spawn a thread to start
+                    //
+                    else {
+                      sequencer.sequence.set_seqstate_bit( Sequencer::SEQ_RUNNING );
+                      sequencer.sequence.set_reqstate_bit( Sequencer::SEQ_RUNNING );
+                      sequencer.sequence.clr_seqstate_bit( Sequencer::SEQ_READY );
+                      sequencer.sequence.clr_reqstate_bit( Sequencer::SEQ_READY );
 
                       std::thread( std::ref( Sequencer::Sequence::dothread_sequence_start ),
                                    std::ref( sequencer.sequence) ).detach();
                       ret = NO_ERROR;
                     }
-                    else {
-                      logwrite( function, "sequencer already started" );
-                      ret = ERROR;
-                    }
     }
     else
 
     if ( cmd.compare( SEQUENCERD_STOP ) == 0 ) {
-                    logwrite( function, "disabling run state" );
-                    sequencer.sequence.runstate = Sequencer::STOPPED;
-                    ret = NO_ERROR;
-    }
+                    // don't request a stop if the SEQ_RUNNING bit isn't set
+                    //
+                    if ( not sequencer.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+                      logwrite( function, "ERROR: sequencer not running" );
+                      ret = ERROR;
+                    }
 
+                    // To request a stop, set the STOPREQ bit in both seqstate and reqstate.
+                    //
+                    else {
+                      logwrite( function, "stop requested" );
+                      sequencer.sequence.set_seqstate_bit( Sequencer::SEQ_STOPREQ );
+                      sequencer.sequence.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
+
+                      // If not already running then spawn a thread to wait for this state,
+                      // which will send out any needed notifications.
+                      //
+                      if ( not sequencer.sequence.waiting_for_state.load() ) {
+                        std::thread( sequencer.sequence.dothread_wait_for_state, std::ref(sequencer.sequence) ).detach();
+                      }
+                      ret = NO_ERROR;
+                    }
+    }
+    else
+
+    if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
+                    // don't request an abort if the SEQ_RUNNING bit isn't set
+                    //
+                    if ( not sequencer.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+                      logwrite( function, "ERROR: sequencer not running" );
+                      ret = ERROR;
+                    }
+
+                    // To abort, set the ABORTING bit in both seqstate and reqstate.
+                    //
+                    else {
+                      logwrite( function, "abort requested" );
+                      sequencer.sequence.set_seqstate_bit( Sequencer::SEQ_ABORTING );
+                      sequencer.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTING );
+
+                      // If not already running then spawn a thread to wait for this state,
+                      // which will send out any needed notifications.
+                      //
+                      if ( not sequencer.sequence.waiting_for_state.load() ) {
+                        std::thread( sequencer.sequence.dothread_wait_for_state, std::ref(sequencer.sequence) ).detach();
+                      }
+                      ret = NO_ERROR;
+                    }
+    }
+    else
+
+    if ( cmd.compare( SEQUENCERD_PAUSE ) == 0) {
+                    logwrite( function, "ERROR not yet implemented" );
+                    ret = ERROR;
+    }
+    else
+
+    if ( cmd.compare( SEQUENCERD_RESUME ) == 0) {
+                    logwrite( function, "ERROR not yet implemented" );
+                    ret = ERROR;
+    }
+    else
+
+    if ( cmd.compare( SEQUENCERD_NEXT ) == 0) {
+                    logwrite( function, "ERROR not yet implemented" );
+                    ret = ERROR;
+    }
     else
 
     if ( cmd.compare( SEQUENCERD_TEST ) == 0 ) {

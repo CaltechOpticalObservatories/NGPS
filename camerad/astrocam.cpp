@@ -1253,6 +1253,12 @@ namespace AstroCam {
       }
     }
 
+    if ( nseq > 1 ) {
+      message.str(""); message << "NOTICE: multiple exposures not currently supported";
+      logwrite( function, message.str() );
+      server.common.message.enqueue( message.str() );
+    }
+
     // Clear the abort flag for a new exposure, in case it was previously set
     //
     this->common.set_abortstate( false );

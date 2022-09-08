@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# log files are located in this directory
+#
+DIR="/home/logs"
+
+# if supplied with an argument then that argument is the date
+#
+if [ "$#" == "1" ]; then
+  DATE=$1
+# otherwise use the current UTC date
+#
+else
+  DATE=`date --utc +"%Y%m%d"`
+fi
+
+# these are all of the log files
+#
+FILES="-f $DIR/calibd_$DATE.log \
+       -f $DIR/camerad_$DATE.log \
+       -f $DIR/flexured_$DATE.log \
+       -f $DIR/focusd_$DATE.log \
+       -f $DIR/powerd_$DATE.log \
+       -f $DIR/slitd_$DATE.log \
+       -f $DIR/tcsd_$DATE.log \
+       -f $DIR/sequencerd_$DATE.log "
+
+# tail them all here
+# look for various key words to set various colors
+#
+tail $FILES \
+     | awk '{if ($3 ~ /ERROR/) print "\a\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /ERROR:/) print "\a\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /error/) print "\a\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /timeout/) print "\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /TIMEOUT/) print "\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /\[NOTICE\]/) print "\033[7;33m"$0"\033[0m"; \
+             else if ($3 ~ /NOTICE/) print "\033[7;33m"$0"\033[0m"; \
+             else if ($3 ~ /NOTICE:/) print "\033[7;33m"$0"\033[0m"; \
+             else if ($3 ~ /TODO/) print "\033[7;33m"$0"\033[0m"; \
+             else if ($3 ~ /\[TODO\]/) print "\033[7;33m"$0"\033[0m"; \
+             else if ($3 ~ /\[DEBUG\]/) print "\033[7;36m"$0"\033[0m"; \
+             else if ($3 ~ /seqstate/) print "\033[1;36m"$0"\033[0m"; \
+             else if ($3 ~ /reqstate/) print "\033[1;36m"$0"\033[0m"; \
+             else if ($3 ~ /threads/) print "\033[1;36m"$0"\033[0m"; \
+             else print $0}'

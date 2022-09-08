@@ -76,10 +76,13 @@
 
             if (line.at(0) == '#') continue;                    // If the first character is a #, ignore it.
 
+
             // At this point, all that is left to check are PARAM=ARG pairs, plus
             // possibly comments tagged on the end of the line.
             //
             else {
+              line = line.substr( 0, line.find_first_of("#") ); // If # appears elsewhere then take only the line up until that
+              rtrim( line );                                    // remove trailing whitespace
               index1 = line.find_first_of("=");                 // Find the = delimiter in the line
               this->param.push_back(line.substr(0, index1));    // Put the variable name into the vector holding the names
 

@@ -41,6 +41,8 @@
 
 namespace Sequencer {
 
+  const std::string DAEMON_NAME = "sequencerd";  /// when run as a daemon, this is my name
+
   class Server {
     private:
     public:
@@ -125,14 +127,31 @@ namespace Sequencer {
         //
         for (int entry=0; entry < this->config.n_entries; entry++) {
 
+          std::string configkey;          // the current configuration key read from file
+          std::string configval;          // the current configuration value read from file
+
+          try {
+            configkey = config.param.at(entry);
+            configval = config.arg.at(entry);
+          }
+          catch (std::out_of_range &) {   // should be impossible
+            message.str(""); message << "ERROR: entry " << entry 
+                                     << " out of range in config parameters (" << this->config.n_entries << ")";
+            logwrite( function, message.str() );
+            return(ERROR);
+          }
+
+message.str(""); message << "configkey=" << configkey << " configval=" << configval;
+logwrite( function, message.str() );
           // NBPORT
-          if (config.param[entry].compare(0, 6, "NBPORT")==0) {
+          if ( configkey.compare(0, 6, "NBPORT")==0 ) {
             int port;
             try {
-              port = std::stoi( config.arg[entry] );
+              port = std::stoi( configval );
             }
             catch (std::invalid_argument &) {
-              logwrite(function, "ERROR: bad NBPORT: unable to convert to integer");
+              message.str(""); message << "ERROR: bad NBPORT: unable to convert " << configval << " to integer";
+              logwrite( function, message.str() );
               return(ERROR);
             }
             catch (std::out_of_range &) {
@@ -329,21 +348,40 @@ namespace Sequencer {
             applied++;
           }
 
-          // TCS_TIMEOUT
-          if (config.param[entry].compare(0, 11, "TCS_TIMEOUT")==0) {
+          // TCS_SETTLE_TIMEOUT
+          if (config.param[entry].compare(0, 18, "TCS_SETTLE_TIMEOUT")==0) {
             double to;
             try {
               to = std::stod( config.arg[entry] );
             }
             catch (std::invalid_argument &) {
-              logwrite(function, "ERROR: bad TCS_TIMEOUT: unable to convert to double");
+              message.str(""); message << "ERROR: bad TCS_SETTLE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
+              logwrite(function, message.str());
               return(ERROR);
             }
             catch (std::out_of_range &) {
-              logwrite(function, "TCS_TIMEOUT number out of double range");
+              logwrite(function, "TCS_SETTLE_TIMEOUT number out of double range");
               return(ERROR);
             }
-            this->sequence.tcs_timeout = to;
+            this->sequence.tcs_settle_timeout = to;
+            applied++;
+          }
+
+          // TCS_PREAUTH_TIME
+          if (config.param[entry].compare(0, 16, "TCS_PREAUTH_TIME")==0) {
+            double to;
+            try {
+              to = std::stod( config.arg[entry] );
+            }
+            catch (std::invalid_argument &) {
+              logwrite(function, "ERROR: bad TCS_PREAUTH_TIME: unable to convert to double");
+              return(ERROR);
+            }
+            catch (std::out_of_range &) {
+              logwrite(function, "TCS_PREAUTH_TIME number out of double range");
+              return(ERROR);
+            }
+            this->sequence.tcs_preauth_time = to;
             applied++;
           }
 

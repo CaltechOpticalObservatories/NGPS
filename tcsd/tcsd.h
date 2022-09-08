@@ -35,6 +35,8 @@
 
 namespace TCS {
 
+  const std::string DAEMON_NAME = "tcsd";        /// when run as a daemon, this is my name
+
   /** Server ******************************************************************/
   /**
    * @class  Server

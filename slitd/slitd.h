@@ -35,6 +35,8 @@
 
 namespace Slit {
 
+  const std::string DAEMON_NAME = "slitd";       /// when run as a daemon, this is my name
+
   /** Server ******************************************************************/
   /**
    * @class  Server

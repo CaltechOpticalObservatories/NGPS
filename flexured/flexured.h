@@ -35,6 +35,8 @@
 
 namespace Flexure {
 
+  const std::string DAEMON_NAME = "flexured";    /// when run as a daemon, this is my name
+
   class Server {
     private:
     public:

@@ -131,10 +131,10 @@ int main(int argc, char **argv) {
 
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
-    Daemon::daemonize( "powerd", "/tmp", "", "", "" );
+    Daemon::daemonize( Power::DAEMON_NAME, "/tmp", "", "", "" );
   }
 
-  if ( (init_log(logpath) != 0) ) {                      // initialize the logging system
+  if ( ( init_log( logpath, Power::DAEMON_NAME ) != 0 ) ) {          // initialize the logging system
     logwrite(function, "ERROR: unable to initialize logging system");
     powerd.exit_cleanly();
   }
@@ -224,7 +224,7 @@ void new_log_day( ) {
   while (1) {
     std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
     close_log();
-    init_log( logpath );
+    init_log( logpath, Power::DAEMON_NAME );
   }
 }
 /** new_log_day **************************************************************/

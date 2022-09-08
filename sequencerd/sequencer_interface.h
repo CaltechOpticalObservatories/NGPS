@@ -31,6 +31,7 @@ namespace Sequencer {
   // These are the possible target states
   //
   const std::string TARGET_PENDING="pending";        /// target status pending
+  const std::string TARGET_EXPOSING="exposing";      /// target status exposing
   const std::string TARGET_COMPLETE="complete";      /// target status complete
   const std::string TARGET_UNASSIGNED="unassigned";  /// target status unassigned
 
@@ -108,8 +109,6 @@ namespace Sequencer {
       const float SLIT_MAX = 10;          /// maximum slit width
       const long  EXPTIME_MIN = 0;        /// minimum value for exptime
       const long  EXPTIME_MAX = 1 << 24;  /// maximum value for exptime
-      const long  NEXP_MIN = 0;           /// minimum value for nexp
-      const long  NEXP_MAX = 1 << 24;     /// maximum value for nexp
 
       std::vector<std::string> targetlist;/// target list fields, used for accessing the target table, which accepts a variadic param
 
@@ -119,11 +118,13 @@ namespace Sequencer {
       mysqlx::string ra;                  /// current target right ascension
       mysqlx::string dec;                 /// current target declination
       mysqlx::string epoch;               /// current target coordinates epoch
-      mysqlx::string casangle;            /// current target cass angle
+      double         casangle;            /// current target cass angle
       double         slitwidth;           /// slit width for this target
       double         slitoffset;          /// slit offset for this target
       double         exptime;             /// exposure time in seconds for this target
       long           nexp;                /// number of repeat exposures on this target
+      long           targetnum;           /// ??
+      long           sequencenum;         /// ??
       mysqlx::string obsplan;             /// TBD
       int            binspect;            /// binning in spectral direction for this target
       int            binspat;             /// binning in spatial direction for this target
@@ -131,7 +132,7 @@ namespace Sequencer {
       int  colnum( std::string field );   /// get column number of requested field from this->targetlist
       TargetInfo::TargetState get_next(); /// get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in);    /// get the next target from the database with state=state_in
-      long add_row();                     /// connect to the database
+      long add_row( int number, std::string name, std::string ra, std::string dec );   /// add a row to the database
       long update_state( std::string newstate );  /// update the target status in the database DB_ACTIVE table
       long insert_completed();            /// insert target record into completed observations table
       long get_table_names();             /// utility to print all database table names

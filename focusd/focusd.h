@@ -35,6 +35,8 @@
 
 namespace Focus {
 
+  const std::string DAEMON_NAME = "focusd";       // when run as a daemon, this is my name
+
   class Server {
     private:
     public:

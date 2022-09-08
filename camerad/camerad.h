@@ -37,6 +37,8 @@
 
 namespace Camera {
 
+  const std::string DAEMON_NAME = "camerad";     /// when run as a daemon, this is my name
+
 // Camera::Server class must inherit appropriate interface class
 //
 #ifdef ASTROCAM

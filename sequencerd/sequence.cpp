@@ -1,3 +1,16 @@
+/**
+ * @file    sequence.cpp
+ * @brief   code for the Sequence class, the guts of the actual sequence functions
+ * @author  David Hale <dhale@astro.caltech.edu>
+ *
+ * This file contains the code for the Sequencer::Sequence class functions;
+ * these are the functions which perform the sequence operations, called by
+ * the sequencer daemon.
+ *
+ * For example, the nightly startup and the start sequences are contained herein.
+ *
+ */
+
 #include "sequence.h"
 
 namespace Sequencer {
@@ -11,12 +24,55 @@ namespace Sequencer {
    *
    */
   Sequence::Sequence() {
-    this->seqstate.store( Sequencer::SEQ_STOPPED );  /// all bits clear when not running
-    this->reqstate.store( Sequencer::SEQ_STOPPED );  /// no currently requested state
+    this->seqstate.store( Sequencer::SEQ_STOPPED );
+    this->reqstate.store( Sequencer::SEQ_STOPPED );
+    this->waiting_for_state.store( false );          /// not currently waiting for a state
     this->ready_to_start = false;                    /// the sequencer is not ready by default (needs nightly startup)
-    this->runstate.store(Sequencer::STOPPED);        /// the sequencer run state is STOPPED by default
-    this->tcs_timeout = 0;                           /// telescope move timeout (set by config file)
-    this->last_target_name = "";
+    this->notify_tcs_next_target = false;            /// default do not notify TCS of next target before end of exposure
+    this->tcs_preauth_time = 0;                      /// default disable notifing TCS of next target's coords before exposure end
+    this->tcs_settle_timeout = 0;                    /// telescope settling timeout (set by config file)
+    this->last_target_name = "";                     /// default no previous target
+
+    // Initializes the STL map of bit-number-to-string for the SequenceStateBits.
+    // This map is used to obtain a human-friendly string of the bits which have been set in seqstate
+    //
+    this->sequence_state_bits.push_back( STOPPED_BIT ); this->sequence_states[ STOPPED_BIT  ] = "STOPPED";
+    this->sequence_state_bits.push_back( ABORTING_BIT );this->sequence_states[ ABORTING_BIT ] = "ABORTING";
+    this->sequence_state_bits.push_back( STOPREQ_BIT ); this->sequence_states[ STOPREQ_BIT  ] = "STOPREQ";
+    this->sequence_state_bits.push_back( STARTING_BIT); this->sequence_states[ STARTING_BIT ] = "STARTING";
+    this->sequence_state_bits.push_back( READY_BIT );   this->sequence_states[ READY_BIT    ] = "READY";
+    this->sequence_state_bits.push_back( RUNNING_BIT ); this->sequence_states[ RUNNING_BIT  ] = "RUNNING";
+    this->sequence_state_bits.push_back( CALIB_BIT );   this->sequence_states[ CALIB_BIT    ] = "CALIB";
+    this->sequence_state_bits.push_back( CAMERA_BIT );  this->sequence_states[ CAMERA_BIT   ] = "CAMERA";
+    this->sequence_state_bits.push_back( FILTER_BIT );  this->sequence_states[ FILTER_BIT   ] = "FILTER";
+    this->sequence_state_bits.push_back( FLEXURE_BIT ); this->sequence_states[ FLEXURE_BIT  ] = "FLEXURE";
+    this->sequence_state_bits.push_back( FOCUS_BIT );   this->sequence_states[ FOCUS_BIT    ] = "FOCUS";
+    this->sequence_state_bits.push_back( POWER_BIT );   this->sequence_states[ POWER_BIT    ] = "POWER";
+    this->sequence_state_bits.push_back( SLIT_BIT );    this->sequence_states[ SLIT_BIT     ] = "SLIT";
+    this->sequence_state_bits.push_back( TCS_BIT );     this->sequence_states[ TCS_BIT      ] = "TCS";
+
+    // Initializes the STL map of bit-number-to-string for the ThreadStatusBits.
+    // This map is used to obtain a human-friendly string of which threads are running.
+    //
+    this->thread_state_bits.push_back( ASYNCLISTENER_BIT ); this->thread_states[ ASYNCLISTENER_BIT ] = "sequencer_async_listener";
+    this->thread_state_bits.push_back( TRIGEXPO_BIT );      this->thread_states[ TRIGEXPO_BIT ]      = "trigger_exposure";
+    this->thread_state_bits.push_back( WAITFORSTATE_BIT );  this->thread_states[ WAITFORSTATE_BIT ]  = "wait_for_state";
+    this->thread_state_bits.push_back( SEQSTART_BIT );      this->thread_states[ SEQSTART_BIT ]      = "sequence_start";
+    this->thread_state_bits.push_back( CALIBSET_BIT );      this->thread_states[ CALIBSET_BIT ]      = "calib_set";
+    this->thread_state_bits.push_back( CAMERASET_BIT );     this->thread_states[ CAMERASET_BIT ]     = "camera_set";
+    this->thread_state_bits.push_back( SLITSET_BIT );       this->thread_states[ SLITSET_BIT ]       = "slit_set";
+    this->thread_state_bits.push_back( MOVETOTARGET_BIT );  this->thread_states[ MOVETOTARGET_BIT ]  = "move_to_target";
+    this->thread_state_bits.push_back( NOTIFYTCS_BIT );     this->thread_states[ NOTIFYTCS_BIT ]     = "notify_tcs";
+    this->thread_state_bits.push_back( FOCUSSET_BIT );      this->thread_states[ FOCUSSET_BIT ]      = "focus_set";
+    this->thread_state_bits.push_back( FLEXURESET_BIT );    this->thread_states[ FLEXURESET_BIT ]    = "flexure_set";
+    this->thread_state_bits.push_back( CALIBRATORSET_BIT ); this->thread_states[ CALIBRATORSET_BIT ] = "calibrator_set";
+    this->thread_state_bits.push_back( CALIBINIT_BIT );     this->thread_states[ CALIBINIT_BIT ]     = "calib_init";
+    this->thread_state_bits.push_back( TCSINIT_BIT );       this->thread_states[ TCSINIT_BIT ]       = "tcs_init";
+    this->thread_state_bits.push_back( SLITINIT_BIT );      this->thread_states[ SLITINIT_BIT ]      = "slit_init";
+    this->thread_state_bits.push_back( CAMERAINIT_BIT );    this->thread_states[ CAMERAINIT_BIT ]    = "camera_init";
+    this->thread_state_bits.push_back( FLEXUREINIT_BIT );   this->thread_states[ FLEXUREINIT_BIT ]   = "flexure_init";
+    this->thread_state_bits.push_back( FOCUSINIT_BIT );     this->thread_states[ FOCUSINIT_BIT ]     = "focus_init";
+    this->thread_state_bits.push_back( POWERINIT_BIT );     this->thread_states[ POWERINIT_BIT ]     = "power_init";
   }
   /**************** Sequencer::Sequence ***************************************/
 
@@ -25,20 +81,21 @@ namespace Sequencer {
   /**
    * @fn         set_seqstate_bit
    * @brief      atomically sets the requested bit in the seqstate word
-   * @param[in]  state
+   * @param[in]  mb, masked bit is uint32 word containing the bit to set
    * @return     none
    *
    */
-  void Sequence::set_seqstate_bit( uint32_t state ) {
+  void Sequence::set_seqstate_bit( uint32_t mb ) {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::set_seqstate_bit";
     std::stringstream message;
     std::uint32_t oldstate = this->seqstate.load();
-    std::uint32_t newstate =  oldstate | state;
-    message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate;
+    std::uint32_t newstate =  oldstate | mb;
+    message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate
+                             << ": " << this->seqstate_string( newstate );
     logwrite( function, message.str() );
 #endif
-    this->seqstate.fetch_or( state );
+    this->seqstate.fetch_or( mb );
   }
   /**************** Sequencer::Sequence::set_seqstate_bit *********************/
 
@@ -47,20 +104,21 @@ namespace Sequencer {
   /**
    * @fn         clr_seqstate_bit
    * @brief      atomically clears the requested bit in the seqstate word
-   * @param[in]  state
+   * @param[in]  mb, masked bit is uint32 word containing the bit to clear
    * @return     none
    *
    */
-  void Sequence::clr_seqstate_bit( uint32_t state ) {
+  void Sequence::clr_seqstate_bit( uint32_t mb ) {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::clr_seqstate_bit";
     std::stringstream message;
     std::uint32_t oldstate = this->seqstate.load();
-    std::uint32_t newstate = oldstate & ~state;
-    message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate;
+    std::uint32_t newstate = oldstate & ~mb;
+    message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate
+                             << ": " << this->seqstate_string( newstate );
     logwrite( function, message.str() );
 #endif
-    this->seqstate.fetch_and( ~state );
+    this->seqstate.fetch_and( ~mb );
   }
   /**************** Sequencer::Sequence::clr_seqstate_bit *********************/
 
@@ -77,12 +135,59 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::get_seqstate";
     std::stringstream message;
-    message.str(""); message << "[DEBUG] seqstate is " << this->seqstate.load();
+    message.str(""); message << "[DEBUG] seqstate is " << this->seqstate.load()
+                             << ": " << this->seqstate_string( this->seqstate.load() );
     logwrite( function, message.str() );
 #endif
     return( this->seqstate.load() );
   }
   /**************** Sequencer::Sequence::get_seqstate *************************/
+
+
+  /**************** Sequencer::Sequence::set_reqstate_bit *********************/
+  /**
+   * @fn         set_reqstate_bit
+   * @brief      atomically sets the requested bit in the reqstate word
+   * @param[in]  mb, masked bit is uint32 word containing the bit to set
+   * @return     none
+   *
+   */
+  void Sequence::set_reqstate_bit( uint32_t mb ) {
+#ifdef LOGLEVEL_DEBUG
+    std::string function = "Sequencer::Sequence::set_reqstate_bit";
+    std::stringstream message;
+    std::uint32_t oldstate = this->reqstate.load();
+    std::uint32_t newstate =  oldstate | mb;
+    message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate
+                             << ": " << this->seqstate_string( newstate );
+    logwrite( function, message.str() );
+#endif
+    this->reqstate.fetch_or( mb );
+  }
+  /**************** Sequencer::Sequence::set_reqstate_bit *********************/
+
+
+  /**************** Sequencer::Sequence::clr_reqstate_bit *********************/
+  /**
+   * @fn         clr_reqstate_bit
+   * @brief      atomically clears the requested bit in the reqstate word
+   * @param[in]  mb, masked bit is uint32 word containing the bit to clear
+   * @return     none
+   *
+   */
+  void Sequence::clr_reqstate_bit( uint32_t mb ) {
+#ifdef LOGLEVEL_DEBUG
+    std::string function = "Sequencer::Sequence::clr_reqstate_bit";
+    std::stringstream message;
+    std::uint32_t oldstate = this->reqstate.load();
+    std::uint32_t newstate = oldstate & ~mb;
+    message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate
+                             << ": " << this->seqstate_string( newstate );
+    logwrite( function, message.str() );
+#endif
+    this->reqstate.fetch_and( ~mb );
+  }
+  /**************** Sequencer::Sequence::clr_reqstate_bit *********************/
 
 
   /**************** Sequencer::Sequence::get_reqstate *************************/
@@ -122,6 +227,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_sequence_async_listener( Sequencer::Sequence &seq, Network::UdpSocket udp ) {
+    seq.set_thrstate_bit( THR_SEQUENCE_ASYNC_LISTENER );
     std::string function = "Sequencer::Sequence::dothread_sequence_async_listener";
     std::stringstream message;
 
@@ -129,18 +235,57 @@ namespace Sequencer {
 
     if ( retval < 0 ) {
       logwrite(function, "error creating UDP listening socket. thread terminating.");
+      seq.clr_thrstate_bit( THR_SEQUENCE_ASYNC_LISTENER );
       return;
     }
 
     logwrite( function, "running" );
 
-    // forever receive and process UDP messages
+    // forever receive and process UDP async status messages
     //
     while ( true ) {
-      std::string message="";
-      udp.Receive( message );
-//    logwrite( function, message );
+
+      if ( not seq.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) continue;  // don't check anything if system is idle
+
+      // Receive the UDP mesage
+      //
+      std::string statstr="";
+      udp.Receive( statstr );
+
+      // Act on the mesage
+      //
+      try {
+
+        // ---------------------------------------------------------------------------------------
+        // NOTIFY TCS OPERATOR OF NEXT TARGET COORDS FOR PREAUTHORIZATION PRIOR TO END OF EXPOSURE
+        // ---------------------------------------------------------------------------------------
+        //
+        // Monitor the elapsed exposure time. When the remaining time is within TCS_PREAUTH_TIME sec
+        // of the end of the exposure time, then alert the TCS operator of the next
+        // target's coordinates. notify_tcs_next_target has to be set true by dothread_trigger_exposure().
+        //
+        if ( seq.notify_tcs_next_target && statstr.compare( 0, 11, "ELAPSEDTIME" ) == 0 ) {
+          std::string::size_type pos = statstr.find( ":" );
+          std::string elapsedstr = statstr.substr( pos + 1 );
+          double remaining = (double)( seq.target.exptime - stol( elapsedstr )/1000. );
+          if ( remaining <= seq.tcs_preauth_time ) {
+            std::thread( dothread_notify_tcs, std::ref(seq) ).detach();
+            seq.notify_tcs_next_target = false;  // don't do it again until the next exposure
+          }
+        }
+
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "out of range parsing status string " << statstr << ": " << e.what();
+        logwrite( function, message.str() );
+      }
+      catch( std::invalid_argument &e ) {
+        message.str(""); message << "invalid argument parsing status string " << statstr << ": " << e.what();
+        logwrite( function, message.str() );
+      }
+
     }
+    seq.clr_thrstate_bit( THR_SEQUENCE_ASYNC_LISTENER );
     return;
   }
   /**************** Sequencer::Sequence::dothread_sequence_async_listener *****/
@@ -156,10 +301,11 @@ namespace Sequencer {
    * This thread is spawned in response to the sequencer receiving the "start"
    * command. This thread will in turn spawn additional needed threads.
    *
-   * This thread will run as long as the runstate is RUNNING
+   * This thread will run as long as the seqstate is RUNNING
    *
    */
   void Sequence::dothread_sequence_start( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_SEQUENCE_START );
     std::string function = "Sequencer::Sequence::dothread_sequence_start";
     std::stringstream message;
     std::string reply;
@@ -170,18 +316,28 @@ namespace Sequencer {
     //
     std::lock_guard<std::mutex> start_lock (seq.start_mtx);
 
-    logwrite( function, "starting" );
-
     // clear the thread error state
     //
     seq.thr_error.store( NO_ERROR );
 
-    // This is the main loop, runs forever until stopped, or an error occurs.
+    // This is the main loop which runs as long as seqstate is 
+    // has the SEQ_RUNNING bit set and neither ABORTING nor STOPPED nor STOPREQuested bits set.
     //
-    while ( seq.runstate.load() == Sequencer::RUNNING ) {
+    while ( seq.is_seqstate_set( Sequencer::SEQ_RUNNING ) &&
+          ( not seq.is_seqstate_set( Sequencer::SEQ_STOPPED )  || 
+            not seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) || 
+            not seq.is_seqstate_set( Sequencer::SEQ_STOPREQ ) ) ) {
 
-      message.str(""); message << "runstate=" << seq.runstate.load();
-      logwrite( function, message.str() );
+      // If the ABORTING or STOPREQ or STOPPED bits are set then break the while loop
+      //
+      if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ||
+           seq.is_seqstate_set( Sequencer::SEQ_STOPPED )  ||
+           seq.is_seqstate_set( Sequencer::SEQ_STOPREQ ) ) {
+        logwrite( function, "stopping" );
+        break;
+      }
+
+      logwrite( function, "sequencer running" );
 
       // Get the next target from the database
       //
@@ -199,6 +355,10 @@ namespace Sequencer {
       }
       else
       if ( targetstate == TargetInfo::TARGET_ERROR ) {                    // request stop on error
+        logwrite( function, "ERROR getting next target. stopping" );
+        seq.set_seqstate_bit( Sequencer::SEQ_STOPREQ );
+        seq.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
+        break;
       }
 
       // get the threads going --
@@ -209,19 +369,15 @@ namespace Sequencer {
       //
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_set, std::ref(seq) ).detach();
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_set, std::ref(seq) ).detach();
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );     std::thread( dothread_acquire_target, std::ref(seq) ).detach();
+      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );     std::thread( dothread_move_to_target, std::ref(seq) ).detach();
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_set, std::ref(seq) ).detach();
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_set, std::ref(seq) ).detach();
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calibrator_set, std::ref(seq) ).detach();
 
-      // set the SEQ_READY bit
-      //
-      seq.set_seqstate_bit( Sequencer::SEQ_READY );
-
       // Now that the threads are running, wait until they are all finished.
-      // When the SEQ_READY bit is the only bit set then we are ready.
+      // When the SEQ_RUNNING bit is the only bit set then we are ready.
       //
-      seq.reqstate.store( Sequencer::SEQ_READY );                      // set the requested state
+      seq.set_reqstate_bit( Sequencer::SEQ_RUNNING );                  // set the requested state bit
       std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
 
       logwrite( function, "waiting on notification" );
@@ -229,7 +385,8 @@ namespace Sequencer {
       std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );  // create a mutex object for waiting
 
       while ( seq.seqstate.load() != seq.reqstate.load() ) {
-        message.str(""); message << "wait for state " << seq.reqstate.load(); logwrite( function, message.str() );
+        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
+        logwrite( function, message.str() );
         seq.cv.wait( wait_lock );
       }
 /*
@@ -238,11 +395,20 @@ namespace Sequencer {
         logwrite( function, "waiting" );
       }
 */
+      // Now that we're done waiting, check for errors or abort
+      //
       if ( seq.thr_error.load() != NO_ERROR ) {
-        logwrite( function, "one or more threads returned an error -- start aborted!" );
-        seq.clr_seqstate_bit( Sequencer::SEQ_READY );
-//TODO I probably have to change the run state here as well
-        return;
+        logwrite( function, "ERROR from one or more threads" );
+        break;
+      }
+
+      if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ) {
+        logwrite( function, "ABORT requested" );
+        seq.clr_seqstate_bit( ( Sequencer::SEQ_ABORTING | Sequencer::SEQ_RUNNING ) );
+        seq.clr_reqstate_bit( ( Sequencer::SEQ_ABORTING | Sequencer::SEQ_RUNNING ) );
+        seq.set_seqstate_bit( Sequencer::SEQ_READY );
+        seq.set_reqstate_bit( Sequencer::SEQ_READY );
+        break;
       }
 
       logwrite( function, "starting exposure" );       // TODO log to telemetry!
@@ -252,36 +418,69 @@ namespace Sequencer {
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
       std::thread( dothread_trigger_exposure, std::ref(seq) ).detach();  // trigger exposure in a thread
 
-      seq.reqstate.store( Sequencer::SEQ_READY );                        // set the requested state
+      seq.set_reqstate_bit( Sequencer::SEQ_RUNNING );                    // set the requested state
       std::thread( dothread_wait_for_state, std::ref(seq) ).detach();    // wait for requested state
 
       // ...then wait for it to complete
       //
       logwrite( function, "waiting on notification" );
       while ( seq.seqstate.load() != seq.reqstate.load() ) {
-        message.str(""); message << "wait for state " << seq.reqstate.load(); logwrite( function, message.str() );
+        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
+        logwrite( function, message.str() );
         seq.cv.wait( wait_lock );
       }
 
-      logwrite( function, "exposure complete. update target state in database now" );
-
-      // Update this target state in the database
+      // Now that we're done waiting, check for errors or abort
       //
-      long error = seq.target.update_state( Sequencer::TARGET_COMPLETE );
-      seq.thr_error.fetch_or( error );
-
-      if ( seq.runstate.load() == Sequencer::STOPPED ) {
-        logwrite( function, "runstate is stopped. bye!" );
+      if ( seq.thr_error.load() != NO_ERROR ) {
+        logwrite( function, "ERROR from one or more threads" );
         break;
       }
 
-      // save this target
+      // When an exposure is aborted then it will be marked as UNASSIGNED
       //
-      seq.last_target_name = seq.target.name;
+      if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ) {
+        logwrite( function, "ABORT requested" );
+        seq.clr_seqstate_bit( ( Sequencer::SEQ_ABORTING | Sequencer::SEQ_RUNNING ) );
+        seq.clr_reqstate_bit( ( Sequencer::SEQ_ABORTING | Sequencer::SEQ_RUNNING ) );
+        seq.set_seqstate_bit( Sequencer::SEQ_READY );
+        seq.set_reqstate_bit( Sequencer::SEQ_READY );
 
+        long error = seq.target.update_state( Sequencer::TARGET_UNASSIGNED );
+        message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << seq.target.name 
+                                 << " id " << seq.target.obsid << " order " << seq.target.obsorder
+                                 << " as " << Sequencer::TARGET_UNASSIGNED;
+        logwrite( function, message.str() );
+        seq.thr_error.fetch_or( error );
+        break;
+      }
+
+      // If not aborted then this exposure is now complete
+      //
+      message.str(""); message << "exposure complete for target " << seq.target.name 
+                               << " id " << seq.target.obsid << " order " << seq.target.obsorder;
+      logwrite( function, message.str() );
+
+      // Update this target's state in the database
+      //
+      long error = seq.target.update_state( Sequencer::TARGET_COMPLETE );  // update the active target table
+      if (error==NO_ERROR) error = seq.target.insert_completed();          // insert into the completed table
+      seq.thr_error.fetch_or( error );                                     // report any error
+
+    } // end while the SEQ_RUNNING bit is set in seqstate
+
+    // The STOPREQ got us out of the while loop. Now that the loop has exited,
+    // clear the STOPREQ and RUNNING bits and set the READY bits.
+    //
+    if ( seq.is_seqstate_set( Sequencer::SEQ_STOPREQ ) ) {
+      seq.clr_seqstate_bit( ( Sequencer::SEQ_STOPREQ | Sequencer::SEQ_RUNNING ) );
+      seq.clr_reqstate_bit( ( Sequencer::SEQ_STOPREQ | Sequencer::SEQ_RUNNING ) );
+      seq.set_seqstate_bit( Sequencer::SEQ_READY );
+      seq.set_reqstate_bit( Sequencer::SEQ_READY );
     }
 
-    logwrite( function, "list processing stopped" );
+    logwrite( function, "target list processing has stopped" );
+    seq.clr_thrstate_bit( THR_SEQUENCE_START );
     return;
   }
   /**************** Sequencer::Sequence::dothread_sequence_start **************/
@@ -298,6 +497,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_camera_set( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_CAMERA_SET );
     std::string function = "Sequencer::Sequence::dothread_camera_set";
     std::string reply;
     long error;
@@ -305,7 +505,11 @@ namespace Sequencer {
 
     // send the EXPTIME command to camerad
     //
-    camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << seq.target.exptime;
+    // Everywhere is maintained that exptime is specified in sec except
+    // the camera takes msec, so convert just before sending the command.
+    //
+    long exptime = (long)( seq.target.exptime * 1000 );
+    camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime;
 
     error = seq.camerad.send( camcmd.str(), reply );
 
@@ -316,6 +520,7 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );
 
+    seq.clr_thrstate_bit( THR_CAMERA_SET );
     return;
   }
   /**************** Sequencer::Sequence::dothread_camera_set ******************/
@@ -330,6 +535,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_slit_set( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_SLIT_SET );
     std::string function = "Sequencer::Sequence::dothread_slit_set";
     std::string reply;
     long error;
@@ -348,6 +554,7 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );
 
+    seq.clr_thrstate_bit( THR_SLIT_SET );
     return;
   }
   /**************** Sequencer::Sequence::dothread_slit_set ********************/
@@ -362,6 +569,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_power_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_POWER_INIT );
     std::string function = "Sequencer::Sequence::dothread_power_init";
     std::stringstream message;
     std::string reply;
@@ -396,8 +604,10 @@ namespace Sequencer {
       seq.thr_error.fetch_or( error );
     }
 
+    logwrite( function, "ready" );
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_POWER );
 
+    seq.clr_thrstate_bit( THR_POWER_INIT );
     return;
   }
   /**************** Sequencer::Sequence::dothread_power_init ******************/
@@ -412,6 +622,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_slit_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_SLIT_INIT );
     std::string function = "Sequencer::Sequence::dothread_slit_init";
     std::stringstream message;
     std::string reply;
@@ -422,12 +633,13 @@ namespace Sequencer {
     //
     // TODO
     std::stringstream cmd;
-    cmd << "1";
-    seq.powerd.send( cmd.str(), reply );
+    cmd << "something";
+//  error = seq.powerd.send( cmd.str(), reply ); // TODO send command to turn on slit hardware here
+    logwrite( function, "[TODO] power on slit hardware not yet implemented" );
 
     // if not connected to the slit daemon then connect
     //
-    if ( !seq.slitd.socket.isconnected() ) {
+    if ( error==NO_ERROR && !seq.slitd.socket.isconnected() ) {
       logwrite( function, "connecting to slit daemon" );
       error = seq.slitd.connect();                  // connect to the daemon
     }
@@ -463,12 +675,13 @@ namespace Sequencer {
     // atomically set thr_error so the main thread knows we had an error
     //
     if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR: unable to initialize slit control" );
+      logwrite( function, "ERROR initializing slit control" );
       seq.thr_error.fetch_or( error );
     }
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );
 
+    seq.clr_thrstate_bit( THR_SLIT_INIT );
     return;
   }
   /**************** Sequencer::Sequence::dothread_slit_init *******************/
@@ -483,6 +696,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_calib_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_CALIB_INIT );
     std::string function = "Sequencer::Sequence::dothread_calib_init";
     std::stringstream message;
     std::string reply;
@@ -492,6 +706,7 @@ namespace Sequencer {
     // if required systems not powered on then turn them on
     //
     // TODO
+    logwrite( function, "[TODO] power on calib hardware not yet implemented" );
 
     // if not connected to the calib daemon then connect
     //
@@ -523,6 +738,7 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );
 
+    seq.clr_thrstate_bit( THR_CALIB_INIT );
     return;
   }
   /**************** Sequencer::Sequence::dothread_calib_init ******************/
@@ -537,15 +753,12 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_tcs_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_TCS_INIT );
     std::string function = "Sequencer::Sequence::dothread_tcs_init";
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
     bool isopen=false;
-
-    // if required systems not powered on then turn them on
-    //
-    // TODO
 
     // if not connected to the tcs daemon then connect
     //
@@ -577,6 +790,7 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS );
 
+    seq.clr_thrstate_bit( THR_TCS_INIT );
     return;
   }
   /**************** Sequencer::Sequence::dothread_tcs_init ********************/
@@ -591,6 +805,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_flexure_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_FLEXURE_INIT );
     std::string function = "Sequencer::Sequence::dothread_flexure_init";
     std::stringstream message;
     std::string reply;
@@ -600,6 +815,7 @@ namespace Sequencer {
     // if required systems not powered on then turn them on
     //
     // TODO
+    logwrite( function, "[TODO] power on flexure hardware not yet implemented" );
 
     // if not connected to the flexure daemon then connect
     //
@@ -631,6 +847,7 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE );
 
+    seq.clr_thrstate_bit( THR_FLEXURE_INIT );
     return;
   }
   /**************** Sequencer::Sequence::dothread_flexure_init ****************/
@@ -645,6 +862,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_focus_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_FOCUS_SET );
     std::string function = "Sequencer::Sequence::dothread_focus_init";
     std::stringstream message;
     std::string reply;
@@ -654,6 +872,7 @@ namespace Sequencer {
     // if required systems not powered on then turn them on
     //
     // TODO
+    logwrite( function, "[TODO] power on focus hardware not yet implemented" );
 
     // if not connected to the focus daemon then connect
     //
@@ -685,6 +904,7 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );
 
+    seq.clr_thrstate_bit( THR_FOCUS_SET );
     return;
   }
   /**************** Sequencer::Sequence::dothread_focus_init ******************/
@@ -699,6 +919,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_camera_init( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_CAMERA_INIT );
     std::string function = "Sequencer::Sequence::dothread_camera_init";
     std::stringstream message;
     std::string reply;
@@ -708,6 +929,7 @@ namespace Sequencer {
     // if required systems not powered on then turn them on
     //
     // TODO
+    logwrite( function, "[TODO] power on cameras not yet implemented" );
 
     // if not connected to the camera daemon then connect
     //
@@ -747,22 +969,33 @@ namespace Sequencer {
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );
 
+    seq.clr_thrstate_bit( THR_CAMERA_INIT );
     return;
   }
   /**************** Sequencer::Sequence::dothread_camera_init *****************/
 
 
-  /**************** Sequencer::Sequence::dothread_acquire_target **************/
+  /**************** Sequencer::Sequence::dothread_move_to_target **************/
   /**
-   * @fn         dothread_acquire_target
-   * @brief  
+   * @fn         dothread_move_to_target
+   * @brief      send request to TCS to move to target coordinates
    * @param[in]  ref to Sequencer::Sequence object
    * @return     none
    *
+   * Disable guiding and send the new target coordinates to the TCS with
+   * the instruction to move immediately.
+   *
    */
-  void Sequence::dothread_acquire_target( Sequencer::Sequence &seq ) {
-    std::string function = "Sequencer::Sequence::dothread_acquire_target";
+  void Sequence::dothread_move_to_target( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_MOVE_TO_TARGET );
+    std::string function = "Sequencer::Sequence::dothread_move_to_target";
+    std::stringstream message;
     long error=NO_ERROR;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] this target.name=" << seq.target.name << " last_target_name=" << seq.last_target_name;
+    logwrite( function, message.str() );
+#endif
 
     // If this target is the same as the last then this section gets skipped;
     // no need to repoint the telescope and wait for a slew if it's already
@@ -772,7 +1005,7 @@ namespace Sequencer {
 
       // disable guiding
       //
-      logwrite( function, "TODO: disable guiding" );  // TODO
+      logwrite( function, "[TODO] disable guiding not yet implemented" );  // TODO
       error = NO_ERROR;
 
       // send coordinates to TCS
@@ -784,10 +1017,18 @@ namespace Sequencer {
         // convert ra, dec to decimal
         // can't be NaN
         //
-        if ( std::isnan( seq.radec_to_decimal( seq.target.ra,  ra  ) ) ||
-             std::isnan( seq.radec_to_decimal( seq.target.dec, dec ) ) ) {
-          logwrite( function, "ERROR: can't handle NaN value for RA, DEC" );
-          seq.thr_error.fetch_or( ERROR );
+        bool ra_isnan  = std::isnan( seq.radec_to_decimal( seq.target.ra,  ra  ) );
+        bool dec_isnan = std::isnan( seq.radec_to_decimal( seq.target.dec, dec ) );
+
+        if ( ra_isnan || dec_isnan ) {
+          message.str(""); message << "ERROR converting";
+          if ( ra_isnan  ) { message << " RA=\"" << seq.target.ra << "\""; }
+          if ( dec_isnan ) { message << " DEC=\"" << seq.target.dec << "\""; }
+          message << " to decimal";
+          logwrite( function, message.str() );
+          seq.thr_error.fetch_or( ERROR );                 
+          seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS );
+          seq.clr_thrstate_bit( THR_MOVE_TO_TARGET );
           return;
         }
 
@@ -812,9 +1053,18 @@ namespace Sequencer {
       // After sending the COORDS command, the TCS could be in STOPPED or TRACKING
       // from the last target.
       //
-      while ( error==NO_ERROR ) {  // TODO add an abort
+      while ( error==NO_ERROR && 
+            ( not seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) || not seq.is_seqstate_set( Sequencer::SEQ_STOPPED ) ) ) {
+
+        // if an abort has been requested then stop polling the TCS
+        //
+        if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ) {
+          logwrite( function, "abort requested. no longer waiting for TCS" );
+          break;
+        }
+
         std::string reply;
-        int tcsvalue;
+        int tcsvalue=TCS_UNDEFINED;
         error = seq.tcsd.send( "poll ?MOTION", reply );  // "poll" prevents excessive logging in tcsd
         if ( error == NO_ERROR) error = seq.extract_tcs_value( reply, tcsvalue );
 
@@ -824,9 +1074,18 @@ namespace Sequencer {
       }
       logwrite( function, "TCS slew started" );  // TODO log telemetry!
 
-      while ( error==NO_ERROR ) {  // TODO add an abort
+      while ( error==NO_ERROR && 
+            ( not seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) || not seq.is_seqstate_set( Sequencer::SEQ_STOPPED ) ) ) {
+
+        // if an abort has been requested then stop polling the TCS
+        //
+        if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ) {
+          logwrite( function, "abort requested. no longer waiting for TCS" );
+          break;
+        }
+
         std::string reply;
-        int tcsvalue;
+        int tcsvalue=TCS_UNDEFINED;
         error = seq.tcsd.send( "poll ?MOTION", reply );  // "poll" prevents excessive logging in tcsd
         if ( error == NO_ERROR) error = seq.extract_tcs_value( reply, tcsvalue );
 
@@ -834,25 +1093,41 @@ namespace Sequencer {
 
         usleep( 100000 );  // don't poll the TCS too fast
       }
-      logwrite( function, "TCS slew stopped" );  // TODO log telemetry!
+
+      if ( error==NO_ERROR && 
+         ( not seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) || not seq.is_seqstate_set( Sequencer::SEQ_STOPPED ) ) ) {
+        logwrite( function, "TCS slew stopped" );  // TODO log telemetry!
+      }
 
     }  // end if ( seq.target.name != seq.last_target_name ) 
 
-    logwrite( function, "waiting for TCS to settle" );  // TODO log telemetry!
+    if ( error==NO_ERROR && 
+       ( not seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) || not seq.is_seqstate_set( Sequencer::SEQ_STOPPED ) ) ) {
+      logwrite( function, "waiting for TCS to settle" );  // TODO log telemetry!
+    }
 
     // Before entering loop waiting for telescope to settle
     // get the current time (in seconds) to be used for timeout.
     //
     bool   settled       = false;
     double clock_now     = get_clock_time();
-    double clock_timeout = clock_now + seq.tcs_timeout;  // must arrive by this time
+    double clock_timeout = clock_now + seq.tcs_settle_timeout;  // must settle by this time
 
     // Wait for telescope to settle (MOTION_TRACKING).
     // This wait can time out.
     //
-    while ( error==NO_ERROR && not settled ) {
+    while ( error==NO_ERROR && not settled &&
+          ( not seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) || not seq.is_seqstate_set( Sequencer::SEQ_STOPPED ) ) ) {
+
+      // if an abort has been requested then stop polling the TCS
+      //
+      if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ) {
+        logwrite( function, "abort requested. no longer waiting for TCS" );
+        break;
+      }
+
       std::string reply;
-      int tcsvalue;
+      int tcsvalue=TCS_UNDEFINED;
       error = seq.tcsd.send( "poll ?MOTION", reply );  // "poll" prevents excessive logging in tcsd
       if ( error == NO_ERROR) error = seq.extract_tcs_value( reply, tcsvalue );
 
@@ -888,11 +1163,80 @@ namespace Sequencer {
       seq.thr_error.fetch_or( error );
     }
 
-    seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS );
+    // otherwise, if no errors then save this target
+    //
+    else {
+      seq.last_target_name = seq.target.name;
+    }
 
+    seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS );
+    seq.clr_thrstate_bit( THR_MOVE_TO_TARGET );
     return;
   }
-  /**************** Sequencer::Sequence::dothread_acquire_target **************/
+  /**************** Sequencer::Sequence::dothread_move_to_target **************/
+
+
+  /**************** Sequencer::Sequence::dothread_notify_tcs ******************/
+  /**
+   * @fn         dothread_notify_tcs
+   * @brief      notify TCS operator of next target coords for preauthorization, no move
+   * @param[in]  ref to Sequencer::Sequence object
+   * @return     none
+   *
+   * This function sends the coordinates of the *next* target to the TCS
+   * operator for the purposes of readiness and pre-authorization. The 
+   * telescope should *not* move!
+   *
+   */
+  void Sequence::dothread_notify_tcs( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_NOTIFY_TCS );
+    std::string function = "Sequencer::Sequence::dothread_notify_tcs";
+    std::stringstream message;
+    long error=NO_ERROR;
+
+    // If this target is the same as the last then this section gets skipped;
+    // no need to repoint the telescope and wait for a slew if it's already
+    // on target.
+    //
+    if ( seq.target.name != seq.last_target_name ) {
+
+      message << "requesting early pre-auth for next target: " << seq.target.name << " " << seq.target.ra << " " << seq.target.dec;
+      logwrite( function, message.str() );
+
+      // send coordinates to TCS
+      //
+      if ( error == NO_ERROR ) {
+        std::stringstream coords;
+        std::string reply, ra, dec;
+
+        // convert ra, dec to decimal
+        // can't be NaN
+        //
+        if ( std::isnan( seq.radec_to_decimal( seq.target.ra,  ra  ) ) ||
+             std::isnan( seq.radec_to_decimal( seq.target.dec, dec ) ) ) {
+          logwrite( function, "ERROR: can't handle NaN value for RA, DEC" );
+          seq.thr_error.fetch_or( ERROR );
+          seq.clr_thrstate_bit( THR_NOTIFY_TCS );
+          return;
+        }
+
+        coords << "NEXT " << ra << " " << dec << " 0 0 0 \"" << seq.target.name << "\"";
+//      error  = seq.tcsd.send( coords.str(), reply ); TODO
+        message.str(""); message << "TODO: send command to TCS: " << coords.str();
+        logwrite( function, message.str() );
+        int tcsvalue;
+        if ( error == NO_ERROR ) error = seq.extract_tcs_value( reply, tcsvalue );
+        if ( error == NO_ERROR ) error = seq.parse_tcs_generic( tcsvalue );
+      }
+
+      // send casangle
+      //
+      if ( error == NO_ERROR ) logwrite( function, "TODO send casangle" ); // TODO break this out in its own thread?
+    }
+    seq.clr_thrstate_bit( THR_NOTIFY_TCS );
+    return;
+  }
+  /**************** Sequencer::Sequence::dothread_notify_tcs ******************/
 
 
   /**************** Sequencer::Sequence::dothread_focus_set *******************/
@@ -904,10 +1248,11 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_focus_set( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_FOCUS_SET );
     std::string function = "Sequencer::Sequence::dothread_focus_set";
     long error=NO_ERROR;
 
-    logwrite( function, "delaying 5s for focus" );
+    logwrite( function, "[TODO] not yet implemented. delaying 5s for focus" );
     usleep( 5000000 );
 
     // atomically set thr_error so the main thread knows we had an error
@@ -918,6 +1263,7 @@ namespace Sequencer {
     }
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );
+    seq.clr_thrstate_bit( THR_FOCUS_SET );
     return;
   }
   /**************** Sequencer::Sequence::dothread_focus_set *******************/
@@ -932,10 +1278,11 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_flexure_set( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_FLEXURE_SET );
     std::string function = "Sequencer::Sequence::dothread_flexure_set";
     long error=NO_ERROR;
 
-    logwrite( function, "delaying 5s for flexure" );
+    logwrite( function, "[TODO] not yet implemented. delaying 5s for flexure" );
     usleep( 5000000 );
 
     // atomically set thr_error so the main thread knows we had an error
@@ -946,6 +1293,7 @@ namespace Sequencer {
     }
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE );
+    seq.clr_thrstate_bit( THR_FLEXURE_SET );
     return;
   }
   /**************** Sequencer::Sequence::dothread_flexure_set *****************/
@@ -960,9 +1308,11 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_calibrator_set( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_CALIBRATOR_SET );
     std::string function = "Sequencer::Sequence::dothread_calibrator_set";
     long error=NO_ERROR;
-    logwrite( function, "delaying 6s for calibrator" );
+
+    logwrite( function, "[TODO] not yet implemented. delaying 6s for calibrator" );
     usleep( 6000000 );
 
     // atomically set thr_error so the main thread knows we had an error
@@ -973,6 +1323,7 @@ namespace Sequencer {
     }
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );
+    seq.clr_thrstate_bit( THR_CALIBRATOR_SET );
     return;
   }
   /**************** Sequencer::Sequence::dothread_calibrator_set **************/
@@ -985,21 +1336,36 @@ namespace Sequencer {
    * @param[in]  ref to Sequencer::Sequence object
    * @return     none
    *
+   * This function updates the target's state in the DB active table to EXPOSING
+   * then sends the expose command to the cameras.
+   *
+   * TODO this is not yet ABORT-able
+   *
    */
   void Sequence::dothread_trigger_exposure( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_TRIGGER_EXPOSURE );
     std::string function = "Sequencer::Sequence::dothread_trigger_exposure";
     std::stringstream message;
     std::string reply;
     long error;
 
-logwrite( function, "sleeping 10s for dummy exposure" );
-usleep( 10000000 );
-seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );
-return;
+    // When the preauth_time is non-zero, set this flag to true in order
+    // to notify the TCS of the next target, when the remaining exposure
+    // time is within TCS_PREAUTH_TIME of the end of the exposure time.
+    //
+    // When this flag is true, the async_listener thread will spawn a thread
+    // to send the command to the TCS at the requested time, to get ready 
+    // for the next target.
+    //
+    if ( seq.tcs_preauth_time > 0 ) seq.notify_tcs_next_target = true; else seq.notify_tcs_next_target = false;
+
+    // Update this target's state in the database
+    //
+    error = seq.target.update_state( Sequencer::TARGET_EXPOSING );
 
     // send the EXPOSE command to camerad
     //
-    error = seq.camerad.send( CAMERAD_EXPOSE, reply );
+    if (error==NO_ERROR) error = seq.camerad.send( CAMERAD_EXPOSE, reply );
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR: unable to start exposure" );
@@ -1008,6 +1374,7 @@ return;
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );
 
+    seq.clr_thrstate_bit( THR_TRIGGER_EXPOSURE );
     return;
   }
   /**************** Sequencer::Sequence::dothread_trigger_exposure ************/
@@ -1022,35 +1389,45 @@ return;
    *
    * This function is spawned in a thread. It waits forever until the seq.seqstate
    * matches the requested state, at which point it sends a cv.notify_all signal
-   * to unblock all threads currently waiting on cv.
+   * to unblock all threads currently waiting on cv. Note that the requested state
+   * can be changed at any time.
    *
    */
   void Sequence::dothread_wait_for_state( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_WAIT_FOR_STATE );
     std::string function = "Sequencer::Sequence::dothread_wait_for_state";
     std::stringstream message;
-//  std::string reason = "";
-    message.str(""); message << "waiting for sequencer state = " << seq.reqstate.load();
+    uint32_t last_reqstate = seq.reqstate.load();
+
+    seq.waiting_for_state.store( true );            // let other threads know that I'm already waiting for a state
+
+    message.str(""); message << "sequencer state: " << seq.seqstate_string( seq.seqstate.load() )
+                             << ". waiting for state: " << seq.seqstate_string( last_reqstate );
     logwrite( function, message.str() );
 
     // wait forever or until seqstate is the requested state.
-    // Note that other threads can (atomically) change reqstate, which is another
-    // way to get out of the while-forever loop.
+    // Note that other threads can (atomically) change reqstate at any time.
     //
-    while ( 1 ) {
-      if ( seq.seqstate.load() == seq.reqstate.load() ) break;
-//    if ( seq.seqstate.load() == state_in ) { reason = "state reached"; break; }
-//    if ( seq.seqstate.load() == Sequencer::SEQ_STOPPED ) { reason = "stop requested"; break; }
-//    if ( seq.thr_error.load() == ERROR ) { reason = "thread signaled an error"; break; }
+    while ( true ) {
+      uint32_t new_reqstate = seq.reqstate.load();         // reqstate is checked only once per loop here
+      if ( last_reqstate != new_reqstate ) {               // log if reqstate has changed
+        message.str(""); message << "requested state changed: " << seq.seqstate_string( new_reqstate );
+        logwrite( function, message.str() );
+        last_reqstate = new_reqstate;
+      }
+      if ( seq.seqstate.load() == last_reqstate ) break;   // condition met: seqstate is reqstate
     }
 
     // done waiting so send notification
     //
     std::unique_lock<std::mutex> lck(seq.wait_mtx);
-//  message.str(""); message << reason << ": notifying threads to stop waiting";
-    message.str(""); message << "requested state " << seq.seqstate.load() << " reached: notifying threads to stop waiting";
+    message.str(""); message << "requested state " << seq.seqstate_string( seq.seqstate.load() ) 
+                             << " reached: notifying threads";
     logwrite( function, message.str() );
+    seq.waiting_for_state.store( false );           // let other threads know that I'm done waiting
     seq.cv.notify_all();
 
+    seq.clr_thrstate_bit( THR_WAIT_FOR_STATE );
     return;
   }
   /**************** Sequencer::Sequence::dothread_wait_for_state **************/
@@ -1069,8 +1446,14 @@ return;
     std::stringstream message;
     std::string retstring;
 
-    if ( seq.runstate.load() != STOPPED && seq.seqstate.load() != Sequencer::SEQ_STOPPED ) {
-      logwrite( function, "ERROR: cannot run nightly startup while sequencer is running" );
+    // there are certain conditions when the startup sequence cannot be run
+    //
+    if ( seq.is_seqstate_set( Sequencer::SEQ_STOPREQ ) || seq.is_seqstate_set( Sequencer::SEQ_ABORTING ) ) {
+      logwrite( function, "ERROR: stop/abort has been requested but not complete. please wait for sequencer to stop." );
+      return( ERROR );
+    }
+    if ( seq.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+      logwrite( function, "ERROR: cannot run startup while sequencer is currently running." );
       return( ERROR );
     }
 
@@ -1080,23 +1463,24 @@ return;
     //
     seq.thr_error.store( NO_ERROR );
 
-    // set the SEQ_READY bit
-    //
-    seq.set_seqstate_bit( Sequencer::SEQ_READY );
-
     // Everything (except TCS) needs the power control to be running 
     // so initialize the power control first.
+    // For this, set READY and WAIT_POWER bits, and clear STOPPED bit.
     //
-    seq.set_seqstate_bit( Sequencer::SEQ_WAIT_POWER );               // set the current state
-    std::thread( dothread_power_init, std::ref(seq) ).detach();      // start power initialization thread
+    seq.clr_seqstate_bit( Sequencer::SEQ_STOPPED );
+    seq.set_seqstate_bit( Sequencer::SEQ_STARTING | Sequencer::SEQ_WAIT_POWER );  // set the current state
+    seq.clr_reqstate_bit( Sequencer::SEQ_STOPPED );
+    seq.set_reqstate_bit( Sequencer::SEQ_STARTING );                              // set the requested state
 
-    seq.reqstate.store( Sequencer::SEQ_READY );                      // set the requested state
-    std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
+    std::thread( dothread_power_init, std::ref(seq) ).detach();                   // start power initialization thread
+
+    std::thread( dothread_wait_for_state, std::ref(seq) ).detach();               // wait for requested state
 
     logwrite( function, "waiting for power control to initialize" );
 
     while ( seq.seqstate.load() != seq.reqstate.load() ) {
-      message.str(""); message << "wait for state " << seq.reqstate.load(); logwrite( function, message.str() );
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
+      logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
 
@@ -1108,7 +1492,10 @@ return;
     else {
       logwrite( function, "ERROR initializing power control. startup aborted" );
       this->ready_to_start = false;
-      seq.clr_seqstate_bit( Sequencer::SEQ_READY );
+      seq.clr_seqstate_bit( Sequencer::SEQ_STARTING );
+      seq.set_seqstate_bit( Sequencer::SEQ_STOPPED );
+      seq.clr_reqstate_bit( Sequencer::SEQ_STARTING );
+      seq.set_reqstate_bit( Sequencer::SEQ_STOPPED );
       return( ERROR );
     }
 
@@ -1124,29 +1511,36 @@ return;
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_init, std::ref(seq) ).detach();
 
     // Now that the threads are running, wait until they are all finished.
-    // When the SEQ_READY bit is the only bit set then we are ready.
+    // When the SEQ_STARTING bit is the only bit set then we are ready.
     //
-    seq.reqstate.store( Sequencer::SEQ_READY );                      // set the requested state
     std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
 
     logwrite( function, "waiting for init threads to complete" );
 
     while ( seq.seqstate.load() != seq.reqstate.load() ) {
-      message.str(""); message << "wait for state " << seq.reqstate.load(); logwrite( function, message.str() );
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
+      logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
 
+    // all done now so clear the STARTING bits
+    //
     logwrite( function, "init threads completed" );
+    seq.clr_seqstate_bit( Sequencer::SEQ_STARTING );
+    seq.clr_reqstate_bit( Sequencer::SEQ_STARTING );
 
     // if any thread returned an error then we are not ready
     //
     if ( seq.thr_error.load() != NO_ERROR ) {
-      logwrite( function, "one or more threads returned an error. startup failed" );
+      logwrite( function, "ERROR from one or more threads. startup failed" );
+      seq.set_seqstate_bit( Sequencer::SEQ_STOPPED );
+      seq.set_reqstate_bit( Sequencer::SEQ_STOPPED );
       this->ready_to_start = false;
-      seq.clr_seqstate_bit( Sequencer::SEQ_READY );
       return( ERROR );
     }
     else {
+      seq.set_seqstate_bit( Sequencer::SEQ_READY );
+      seq.set_reqstate_bit( Sequencer::SEQ_READY );
       logwrite( function, "ready to start" );
       this->ready_to_start = true;
       return( NO_ERROR );
@@ -1176,7 +1570,8 @@ return;
     std::vector<std::string> tokens;
     Tokenize( reply, tokens, " " );
     if ( tokens.size() != 2 ) {
-      message.str(""); message << "ERROR reading true|false state from string \"" << reply << "\" from " << whoami << ": expected two tokens";
+      message.str(""); message << "ERROR reading true|false state from string \"" << reply 
+                               << "\" from " << whoami << ": expected two tokens";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -1276,7 +1671,7 @@ return;
     Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
 
     if ( tokens.size() != 3 ) {
-      message.str(""); message << "expected 3 tokens but received " << tokens.size() << ": " << str_in;
+      message.str(""); message << "ERROR: expected 3 tokens but received " << tokens.size() << ": " << str_in;
       logwrite( function, message.str() );
       return( NAN );
     }
@@ -1289,12 +1684,12 @@ return;
       ss = std::stod( tokens.at(2) ) / 3600.0;
     }
     catch( std::out_of_range &e ) {
-      message.str(""); message << "out of range parsing input string " << str_in << ": " << e.what();
+      message.str(""); message << "ERROR: out of range parsing input string " << str_in << ": " << e.what();
       logwrite( function, message.str() );
       return( NAN );
     }
     catch( std::invalid_argument &e ) {
-      message.str(""); message << "invalid argument parsing input string " << str_in << ": " << e.what();
+      message.str(""); message << "ERROR: invalid argument parsing input string " << str_in << ": " << e.what();
       logwrite( function, message.str() );
       return( NAN );
     }
@@ -1348,7 +1743,7 @@ return;
       }
       else
       if ( tokens.at(0) == "ERROR" ) {
-        logwrite( function, "error received from tcsd" );
+        logwrite( function, "ERROR received from tcsd" );
         error = ERROR;
       }
       else {
@@ -1449,6 +1844,56 @@ return;
   /**************** Sequencer::Sequence::parse_tcs_generic *******************/
 
 
+  /**************** Sequencer::Sequence::seqstate_string *********************/
+  /**
+   * @fn         seqstate_string
+   * @brief      returns the string form of the states set in state word
+   * @param[in]  state word to check
+   * @return     string
+   *
+   * This function serves only to make human-readable strings of the bits set
+   * in the seqstate word.
+   *
+   */
+  std::string Sequence::seqstate_string( uint32_t state ) {
+    if ( state == 0 ) return "(none)";                     // no bits set
+    std::stringstream message;
+    for ( auto bit : this->sequence_state_bits ) {         // loop through all of the bits in the vector of bits
+      if ( (1<<bit) & state ) {                            // if that bit is set in state then
+        if ( not message.str().empty() ) message << " ";
+        message << this->sequence_states[ bit ];           // get the string associated with that bit
+      }
+    }
+    return( message.str() );
+  }
+  /**************** Sequencer::Sequence::seqstate_string *********************/
+
+
+  /**************** Sequencer::Sequence::thrstate_string *********************/
+  /**
+   * @fn         thrstate_string
+   * @brief      returns the string form of the states set in thread state word
+   * @param[in]  state word to check
+   * @return     string
+   *
+   * This function serves only to make human-readable strings of the bits set
+   * in the seqstate word.
+   *
+   */
+  std::string Sequence::thrstate_string( uint32_t state ) {
+    if ( state == 0 ) return "(none)";                     // no need to check anything if the word is 0
+    std::stringstream message;
+    for ( auto bit : this->thread_state_bits ) {           // loop through all of the bits in the vector of bits
+      if ( (1<<bit) & state ) {                            // if that bit is set in state then
+        if ( not message.str().empty() ) message << " ";
+        message << this->thread_states[ bit ];             // get the string associated with that bit
+      }
+    }
+    return( message.str() );
+  }
+  /**************** Sequencer::Sequence::thrstate_string *********************/
+
+
   /**************** Sequencer::Sequence::test ********************************/
   /**
    * @fn         test
@@ -1487,12 +1932,33 @@ return;
     // ----------------------------------------------------
     //
     if ( testname == "states" ) {
+
+      // get the seqstate and reqstate and put them (numerically) into the return string
+      //
       message.str("");
-      error = this->get_seqstate();
-      message << error << " ";
-      error = this->get_reqstate();
-      message << error << " ";
+      uint32_t ss = this->seqstate.load();
+      message << ss << " ";
+      uint32_t rs = this->reqstate.load();
+      message << rs << " ";
+      uint32_t ts = this->thrstate.load();
+      message << ts << " ";
       retstring = message.str();
+
+      // but now I'm going to write to the log (textually) which bits are set
+      //
+      message.str(""); message << "seqstate: " << this->seqstate_string( ss );
+      logwrite( function, message.str() );
+
+      // same for the requested state
+      //
+      message.str(""); message << "reqstate: " << this->seqstate_string( rs );
+      logwrite( function, message.str() );
+
+      // and for the thread state
+      //
+      message.str(""); message << "threads : " << this->thrstate_string( ts );
+      logwrite( function, message.str() );
+
       error = NO_ERROR;
     }
     else
@@ -1528,7 +1994,29 @@ return;
     // ----------------------------------------------------
     //
     if ( testname == "addrow" ) {
-      error = this->target.add_row();   // 
+      int number=0;
+      std::string name="";
+      std::string ra="";
+      std::string dec="";
+      if ( tokens.size() != 5 ) {
+        logwrite( function, "ERROR: expected <number> <name> <RA> <DEC>" );
+        return( ERROR );
+      }
+      try {
+        number = std::stoi( tokens.at(1) );
+        name   = tokens.at(2);
+        ra     = tokens.at(3);
+        dec    = tokens.at(4);
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "out of range parsing args " << args << ": " << e.what();
+        logwrite( function, message.str() );
+      }
+      catch( std::invalid_argument &e ) {
+        message.str(""); message << "invalid argument parsing args " << args << ": " << e.what();
+        logwrite( function, message.str() );
+      }
+      error = this->target.add_row( number, name, ra, dec );
     }
     else
 
@@ -1537,7 +2025,8 @@ return;
     // ----------------------------------------------------
     //
     if ( testname == "completed" ) {
-      error = this->target.insert_completed();
+      error = this->target.update_state( Sequencer::TARGET_COMPLETE );
+      if (error==NO_ERROR) error = this->target.insert_completed();
     }
     else
 

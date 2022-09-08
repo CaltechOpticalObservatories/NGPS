@@ -28,11 +28,11 @@ char* getCmdOption( char** begin, char** end, const std::string &option );
 int my_hardware_concurrency();
 int cores_available();
 
-unsigned int parse_val(const std::string& str);     //!< returns an unsigned int from a string
+unsigned int parse_val(const std::string& str);     /// returns an unsigned int from a string
 
 int Tokenize(const std::string& str, 
              std::vector<std::string>& tokens, 
-             const std::string& delimiters);        //!< break a string into a vector
+             const std::string& delimiters);        /// break a string into a vector
 
 void Tokenize(const std::string &str, 
               std::vector<uint32_t> &devlist, 
@@ -40,19 +40,23 @@ void Tokenize(const std::string &str,
               std::vector<std::string> &arglist, 
               int &narg );
 
-void chrrep(char *str, char oldchr, char newchr);   //!< replace one character within a string with a new character
+void chrrep(char *str, char oldchr, char newchr);   /// replace one character within a string with a new character
 void string_replace_char(std::string &str, const char *oldchar, const char *newchar);
 
 long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
 
-std::string get_timestamp();                        //!< return current time in formatted string "YYYY-MM-DDTHH:MM:SS.ssssss"
-std::string get_system_date();                      //!< return current date in formatted string "YYYYMMDD"
-std::string get_file_time();                        //!< return current time in formatted string "YYYYMMDDHHMMSS" used for filenames
+std::string get_timestamp();                        /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.ssssss"
+std::string get_system_date();                      /// return current date in formatted string "YYYYMMDD"
+std::string get_file_time();                        /// return current time in formatted string "YYYYMMDDHHMMSS" used for filenames
 
 double get_clock_time();
 
 void timeout(float seconds=0, bool next_sec=true);
 
 int compare_versions(std::string v1, std::string v2);
+
+static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
+  s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );
+}
 
 #endif

@@ -104,9 +104,24 @@ int main(int argc, char **argv) {
   }
 
   for (int entry=0; entry < slitd.config.n_entries; entry++) {
-    if (slitd.config.param[entry] == "LOGPATH") logpath = slitd.config.arg[entry];
-    if (slitd.config.param[entry] == "TM_ZONE") zone = slitd.config.arg[entry];
-    if (slitd.config.param[entry] == "DAEMON")  daemon_in = slitd.config.arg[entry];
+
+    std::string configkey;          // the current configuration key read from file
+    std::string configval;          // the current configuration value read from file
+
+    try {
+      configkey = slitd.config.param.at(entry);
+      configval = slitd.config.arg.at(entry);
+    }
+    catch (std::out_of_range &) {   // should be impossible
+      message.str(""); message << "ERROR: entry " << entry 
+                               << " out of range in config parameters (" << slitd.config.n_entries << ")";
+      logwrite( function, message.str() );
+      return(ERROR);
+    }
+
+    if ( configkey == "LOGPATH") logpath = configval;
+    if ( configkey == "TM_ZONE") zone = configval;
+    if ( configkey == "DAEMON")  daemon_in = configval;
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
@@ -131,10 +146,10 @@ int main(int argc, char **argv) {
 
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
-    Daemon::daemonize( "slitd", "/tmp", "", "", "" );
+    Daemon::daemonize( Slit::DAEMON_NAME, "/tmp", "", "", "" );
   }
 
-  if ( (init_log(logpath) != 0) ) {                      // initialize the logging system
+  if ( ( init_log( logpath, Slit::DAEMON_NAME ) != 0 ) ) {           // initialize the logging system
     logwrite(function, "ERROR: unable to initialize logging system");
     slitd.exit_cleanly();
   }
@@ -224,7 +239,7 @@ void new_log_day( ) {
   while (1) {
     std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
     close_log();
-    init_log( logpath );
+    init_log( logpath, Slit::DAEMON_NAME );
   }
 }
 /** new_log_day **************************************************************/

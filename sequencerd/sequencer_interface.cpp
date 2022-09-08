@@ -40,7 +40,8 @@ namespace Sequencer {
                          "DECL",
                          "EPOCH",
                          "EXPTIME",
-                         "NEXP",
+                         "TARGET_NUMBER",
+                         "SEQUENCE_NUMBER",
                          "SLITWIDTH",
                          "SLITOFFSET",
                          "BINSPECT",
@@ -111,11 +112,12 @@ namespace Sequencer {
     this->ra="";
     this->dec="";
     this->epoch="";
-    this->casangle="";
+    this->casangle=-1;
     this->slitwidth=-1;
     this->slitoffset=-1;
     this->exptime=-1;
-    this->nexp=-1;
+    this->targetnum=-1;
+    this->sequencenum=-1;
     this->obsplan="";
     this->binspect=-1;
     this->binspat=-1;
@@ -216,13 +218,17 @@ namespace Sequencer {
   /**
    * @fn         add_row
    * @brief      adds a row to the database (non-production)
-   * @param[in]  none
+   * @param[in]  number, int used for both OBSERVATION_ID and OBS_ORDER
+   * @param[in]  name, string target name
+   * @param[in]  ra, string RA
+   * @param[in]  dec, string DECL
    * @return     none
    *
-   * This is for testing purposes. Adds a row to the database.
+   * This is for testing purposes. Adds a row to the database using the passed-in
+   * parameters which set the ID, ORDER, NAME, RA, DECL. Everything else is fixed.
    *
    */
-  long TargetInfo::add_row() {
+  long TargetInfo::add_row( int number, std::string name, std::string ra, std::string dec ) {
     std::string function = "Sequencer::TargetInfo::add_row";
     std::stringstream message;
 
@@ -258,22 +264,24 @@ namespace Sequencer {
                          "DECL",
                          "EPOCH",
                          "EXPTIME",
-                         "NEXP",
+                         "TARGET_NUMBER",
+                         "SEQUENCE_NUMBER",
                          "SLITWIDTH",
                          "SLITOFFSET",
                          "BINSPECT",
                          "BINSPAT",
                          "CASANGLE"
                         )
-                .values( 6,
+                .values( number,
                          1,
-                         999,
-                         "test",
-                         "ZTF22aajmnr6",
-                         "06:42:57.35",
-                         "+51:16:18.53",
+                         number,
+                         Sequencer::TARGET_PENDING,
+                         name,
+                         ra,
+                         dec,
                          "J2000",
-                         0,
+                         15,
+                         1,
                          1,
                          1.0,
                          0,
@@ -378,7 +386,7 @@ namespace Sequencer {
       colcount = result.getColumnCount();
 
       if ( rowcount < 1 ) {
-        message.str(""); message << "no active targets found with state = " << state_in;
+        message.str(""); message << "no active targets found with requested state = " << state_in;
         logwrite( function, message.str() );
         init_record();    // ensures that any previous record's info is not mistaken for this one
         return( TARGET_NOT_FOUND );
@@ -410,19 +418,24 @@ namespace Sequencer {
       // so you have to get them by the order requested. The colnum() function returns
       // the correct column number.
       //
-      col = this->colnum( "OBSERVATION_ID" ); this->obsid      = row.get( col );
-      col = this->colnum( "OBS_ORDER" );      this->obsorder   = row.get( col );
-      col = this->colnum( "NAME" );           this->name       = row.get( col );
-      col = this->colnum( "RA" );             this->ra         = row.get( col );
-      col = this->colnum( "DECL" );           this->dec        = row.get( col );
-      col = this->colnum( "EPOCH" );          this->epoch      = row.get( col );
-      col = this->colnum( "CASANGLE" );       this->casangle   = row.get( col );
-      col = this->colnum( "SLITWIDTH" );      this->slitwidth  = row.get( col );
-      col = this->colnum( "SLITOFFSET" );     this->slitoffset = row.get( col );
-      col = this->colnum( "EXPTIME" );        this->exptime    = row.get( col );
-      col = this->colnum( "NEXP" );           this->nexp       = row.get( col );
-      col = this->colnum( "BINSPECT" );       this->binspect   = row.get( col );
-      col = this->colnum( "BINSPAT" );        this->binspat    = row.get( col );
+      col = this->colnum( "OBSERVATION_ID" );  this->obsid       = row.get( col );
+      col = this->colnum( "OBS_ORDER" );       this->obsorder    = row.get( col );
+      col = this->colnum( "NAME" );            this->name        = row.get( col );
+      col = this->colnum( "RA" );              this->ra          = row.get( col );
+      col = this->colnum( "DECL" );            this->dec         = row.get( col );
+      col = this->colnum( "EPOCH" );           this->epoch       = row.get( col );
+      col = this->colnum( "CASANGLE" );        this->casangle    = row.get( col );
+      col = this->colnum( "SLITWIDTH" );       this->slitwidth   = row.get( col );
+      col = this->colnum( "SLITOFFSET" );      this->slitoffset  = row.get( col );
+      col = this->colnum( "EXPTIME" );         this->exptime     = row.get( col );
+      col = this->colnum( "TARGET_NUMBER" );   this->targetnum   = row.get( col );
+      col = this->colnum( "SEQUENCE_NUMBER" ); this->sequencenum = row.get( col );
+      col = this->colnum( "BINSPECT" );        this->binspect    = row.get( col );
+      col = this->colnum( "BINSPAT" );         this->binspat     = row.get( col );
+
+// TODO
+// TEMPORARY OVERRIDE OF EXPTIME
+this->exptime=20;
     }
     catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
       message.str(""); message << "ERROR from mySQL ";
@@ -591,14 +604,14 @@ namespace Sequencer {
       // add the row
       //
       targettable.insert( "OBSERVATION_ID",
-                          "OBS_ORDER",
-                          "STATE",
+//                        "STATE",
                           "NAME",
                           "RA",
                           "DECL",
                           "EPOCH",
                           "EXPTIME",
-                          "NEXP",
+                          "TARGET_NUMBER",
+                          "SEQUENCE_NUMBER",
                           "SLITWIDTH",
                           "SLITOFFSET",
                           "BINSPECT",
@@ -606,14 +619,14 @@ namespace Sequencer {
                           "CASANGLE"
                         )
                 .values( this->obsid,
-                         this->obsorder,
-                         Sequencer::TARGET_COMPLETE,
+//                       Sequencer::TARGET_COMPLETE,
                          this->name,
                          this->ra,
                          this->dec,
                          this->epoch,
                          this->exptime,
-                         this->nexp,
+                         this->targetnum,
+                         this->sequencenum,
                          this->slitwidth,
                          this->slitoffset,
                          this->binspect,
@@ -777,11 +790,11 @@ namespace Sequencer {
     int pollret;
     if ( ( pollret = this->socket.Poll() ) <= 0 ) {
       if ( pollret == 0 ) {
-        message.str(""); message << "Poll timeout on fd " << this->socket.getfd();
+        message.str(""); message << "TIMEOUT polling fd " << this->socket.getfd();
         logwrite( function, message.str() );
       }
       if ( pollret <0 ) {
-        message.str(""); message << "Poll error on fd " << this->socket.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR polling fd " << this->socket.getfd() << ": " << strerror(errno);
         logwrite( function, message.str() );
       }
       return ERROR;
@@ -792,11 +805,11 @@ namespace Sequencer {
     char delim = '\n';
     if ( ( ret = this->socket.Read( reply, delim ) ) <= 0 ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
-        message.str(""); message << "Read error on fd " << this->socket.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR reading from socket on fd " << this->socket.getfd() << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       if ( ret==0 ) {
-        message.str(""); message << "timeout reading from socket on fd " << this->socket.getfd();
+        message.str(""); message << "TIMEOUT reading from socket on fd " << this->socket.getfd();
         logwrite( function, message.str() );
       }
     }
