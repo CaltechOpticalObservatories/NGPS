@@ -1,7 +1,6 @@
 /**
  * @file    pi.cpp
- * @brief   
- * @details 
+ * @brief   this file contains the code for the PI interface
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
@@ -13,10 +12,10 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
   /**
-   * @fn     ServoInterface
-   * @brief  default ServoInterface class constructor
-   * @param  none
-   * @return none
+   * @fn         ServoInterface
+   * @brief      default ServoInterface class constructor
+   * @param[in]  none
+   * @return     none
    *
    */
   ServoInterface::ServoInterface() {
@@ -25,12 +24,37 @@ namespace Physik_Instrumente {
     this->port=-1;
     this->initialized = false;
   }
+  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+
+
+  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /**
+   * @fn         ServoInterface
+   * @brief      default ServoInterface class constructor
+   * @param[in]  host
+   * @param[in]  port
+   * @return     none
+   *
+   */
   ServoInterface::ServoInterface( std::string host, int port ) {
     this->name = "";
     this->host = host;
     this->port = port;
     this->initialized = true;
   }
+  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+
+
+  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /**
+   * @fn         ServoInterface
+   * @brief      default ServoInterface class constructor
+   * @param[in]  name
+   * @param[in]  host
+   * @param[in]  port
+   * @return     none
+   *
+   */
   ServoInterface::ServoInterface( std::string name, std::string host, int port ) {
     this->name = name;
     this->port = port;
@@ -42,10 +66,10 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::~ServoInterface *******/
   /**
-   * @fn     ~ServoInterface
-   * @brief  ServoInterface class deconstructor
-   * @param  none
-   * @return none
+   * @fn         ~ServoInterface
+   * @brief      ServoInterface class deconstructor
+   * @param[in]  none
+   * @return     none
    *
    */
   ServoInterface::~ServoInterface() {
@@ -55,10 +79,10 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::open ******************/
   /**
-   * @fn     open
-   * @brief  open a connection to the servo controller
-   * @param  
-   * @return ERROR or NO_ERROR
+   * @fn         open
+   * @brief      open a connection to the servo controller
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long ServoInterface::open() {
@@ -96,10 +120,10 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::close *****************/
   /**
-   * @fn     close
-   * @brief  close the connection to the servo controller
-   * @param  
-   * @return ERROR or NO_ERROR
+   * @fn         close
+   * @brief      close the connection to the servo controller
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long ServoInterface::close() {
@@ -221,12 +245,11 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::move_abs **************/
   /**
-   * @fn     move_abs
-   * @brief  send move command in absolute coordinates
-   * @param  int addr, address of controller
-   * @param  int axis, axis to move
-   * @param  float pos, absolute position to move to
-   * @return ERROR or NO_ERROR
+   * @fn         move_abs
+   * @brief      send move command in absolute coordinates
+   * @param[in]  int addr, address of controller
+   * @param[in]  float pos, absolute position to move to
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded with a version where the axis can be specified;
    * the default is all axes when not specified.
@@ -235,6 +258,21 @@ namespace Physik_Instrumente {
   long ServoInterface::move_abs( int addr, float pos ) {
     return( this->move_abs( addr, -1, pos ) );
   }
+  /**************** Physik_Instrumente::ServoInterface::move_abs **************/
+
+
+  /**************** Physik_Instrumente::ServoInterface::move_abs **************/
+  /**
+   * @fn         move_abs
+   * @brief      send move command in absolute coordinates
+   * @param[in]  int addr, address of controller
+   * @param[in]  int axis, axis to move
+   * @param[in]  float pos, absolute position to move to
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded with a version where the axis is not specified.
+   *
+   */
   long ServoInterface::move_abs( int addr, int axis, float pos ) {
     std::stringstream cmd;
     if ( addr > 0 ) cmd << addr << " ";
@@ -249,12 +287,11 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::move_rel **************/
   /**
-   * @fn     move_rel
-   * @brief  move in relative coordinates
-   * @param  int addr, address of controller
-   * @param  int axis, axis to move
-   * @param  float pos, absolute position to move to
-   * @return ERROR or NO_ERROR
+   * @fn         move_rel
+   * @brief      move in relative coordinates
+   * @param[in]  int addr, address of controller
+   * @param[in]  float pos, absolute position to move to
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded with a version where the axis can be specified;
    * the default is all axes when not specified.
@@ -263,6 +300,21 @@ namespace Physik_Instrumente {
   long ServoInterface::move_rel( int addr, float pos ) {
     return( this->move_rel( addr, -1, pos ) );
   }
+  /**************** Physik_Instrumente::ServoInterface::move_rel **************/
+
+
+  /**************** Physik_Instrumente::ServoInterface::move_rel **************/
+  /**
+   * @fn         move_rel
+   * @brief      move in relative coordinates
+   * @param[in]  int addr, address of controller
+   * @param[in]  int axis, axis to move
+   * @param[in]  float pos, absolute position to move to
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded with a version where the axis is not specified.
+   *
+   */
   long ServoInterface::move_rel( int addr, int axis, float pos ) {
     std::stringstream cmd;
     if ( addr > 0 ) cmd << addr << " ";
@@ -277,11 +329,11 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::home_axis *************/
   /**
-   * @fn     home_axis
-   * @brief  home an axis by moving to reference switch
+   * @fn         home_axis
+   * @brief      home an axis by moving to reference switch
    * @param[in]  int addr, address of controller in daisy-chain
    * @param[in]  string ref, what to use for the homing
-   * @return ERROR or NO_ERROR
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded with a version where the axis can be specified;
    * the default is all axes when not specified.
@@ -293,19 +345,19 @@ namespace Physik_Instrumente {
   long ServoInterface::home_axis( int addr, std::string ref ) {
     return( this->home_axis( addr, -1, ref ) );       //!< all axes at this addr
   }
+  /**************** Physik_Instrumente::ServoInterface::home_axis *************/
 
 
   /**************** Physik_Instrumente::ServoInterface::home_axis *************/
   /**
-   * @fn     home_axis
-   * @brief  home an axis by moving to reference switch
+   * @fn         home_axis
+   * @brief      home an axis by moving to reference switch
    * @param[in]  int addr, address of controller in daisy-chain
    * @param[in]  int axis, axis to move
    * @param[in]  string ref, what to use for the homing
-   * @return ERROR or NO_ERROR
+   * @return     ERROR or NO_ERROR
    *
-   * This function is overloaded with a version where the axis can be specified;
-   * the default is all axes when not specified.
+   * This function is overloaded with a version where the axis is not specified.
    *
    * Homing can be performed using a reference switch (if equipped), or the 
    * positive or negative limit switches, as indicated by the "ref" argument.
@@ -372,11 +424,11 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::on_target *************/
   /**
-   * @fn     on_target
-   * @brief  query the on target state for given addr and axis
-   * @param  int addr, address of controller in daisy-chain
-   * @param  bool state (true|false) if on target or not
-   * @return ERROR or NO_ERROR
+   * @fn         on_target
+   * @brief      query the on target state for given addr and axis
+   * @param[in]  int addr, address of controller in daisy-chain
+   * @param[in]  bool state (true|false) if on target or not
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded with a version where the axis can be specified;
    * the default is all axes when not specified.
@@ -390,15 +442,14 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::on_target *************/
   /**
-   * @fn     on_target
-   * @brief  query the on target state for given addr and axis
-   * @param  int addr, address of controller in daisy-chain
-   * @param  int axis, axis to move
-   * @param  bool state (true|false) if on target or not
-   * @return ERROR or NO_ERROR
+   * @fn         on_target
+   * @brief      query the on target state for given addr and axis
+   * @param[in]  int addr, address of controller in daisy-chain
+   * @param[in]  int axis, axis to move
+   * @param[in]  bool state (true|false) if on target or not
+   * @return     ERROR or NO_ERROR
    *
-   * This function is overloaded with a version where the axis can be specified;
-   * the default is all axes when not specified.
+   * This function is overloaded with a version where the axis is not specified.
    * 
    */
   long ServoInterface::on_target( int addr, int axis, bool &state ) {
@@ -447,8 +498,7 @@ namespace Physik_Instrumente {
    * @param[out] float position read
    * @return     ERROR or NO_ERROR
    *
-   * This function is overloaded with a version where the axis can be specified;
-   * the default is all axes when not specified.
+   * This function is overloaded with a version where the axis is not specified.
    * 
    */
   long ServoInterface::get_pos( int addr, int axis, float &pos ) {
@@ -472,10 +522,10 @@ namespace Physik_Instrumente {
 
   /**************** Physik_Instrumente::ServoInterface::stop_motion ***********/
   /**
-   * @fn     stop_motion
-   * @brief  stop all movement on all axes
-   * @param  addr
-   * @return ERROR or NO_ERROR
+   * @fn         stop_motion
+   * @brief      stop all movement on all axes
+   * @param[in]  addr
+   * @return     ERROR or NO_ERROR
    *
    */
   long ServoInterface::stop_motion( int addr ) {
@@ -556,8 +606,10 @@ namespace Physik_Instrumente {
     while ( error == NO_ERROR && retval >= 0 ) {
 
       if ( ( retval=this->controller.Poll() ) <= 0 ) {
-        if ( retval==0 ) { message.str(""); message << "Poll timeout waiting for response"; error = TIMEOUT; }
-        if ( retval <0 ) { message.str(""); message << "Poll error waiting for response"; error = ERROR; }
+        if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->controller.getfd() << ": " << strerror(errno);
+                           error = TIMEOUT; }
+        if ( retval <0 ) { message.str(""); message << "ERROR on fd " << this->controller.getfd() << ": " << strerror(errno);
+                           error = ERROR; }
         if ( error != NO_ERROR ) logwrite( function, message.str() );
         break;
       }

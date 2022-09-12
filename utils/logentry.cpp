@@ -13,8 +13,8 @@
 #include "logentry.h"
 
 std::mutex loglock;
-std::ofstream filestream;      //!< IO stream class
-unsigned int nextday = 86410;  //!< number of seconds until a new day
+std::ofstream filestream;      /// IO stream class
+unsigned int nextday = 86410;  /// number of seconds until a new day
 
 
 /** init_log *****************************************************************/
@@ -72,10 +72,10 @@ long init_log( std::string logpath, std::string name ) {
 
 /** close_log ****************************************************************/
 /**
- * @fn     close_log
- * @brief  closes the logfile stream
- * @param  none
- * @return none
+ * @fn         close_log
+ * @brief      closes the logfile stream
+ * @param[in]  none
+ * @return     none
  *
  * Call this from the main class deconstructor to clean up the log file.
  *
@@ -91,11 +91,11 @@ void close_log() {
 
 /** logwrite *****************************************************************/
 /**
- * @fn     logwrite
- * @brief  create a log file entry
- * @param  function
- * @param  message
- * @return none
+ * @fn         logwrite
+ * @brief      create a log file entry
+ * @param[in]  function
+ * @param[in]  message
+ * @return     none
  *
  * Create a time-stamped entry in the log file in the form of:
  * YYYY-MM-DDTHH:MM:SS.ssssss (function) message\n

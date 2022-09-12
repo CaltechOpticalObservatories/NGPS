@@ -30,10 +30,10 @@
 
       /** Config::read_config ******************************************************/
       /**
-       * @fn     read_config
-       * @brief  read the configuration file
-       * @param  reference to Config class object
-       * @return 0 (no error) or 1 (error)
+       * @fn         read_config
+       * @brief      read the configuration file
+       * @param[in]  reference to Config class object
+       * @return     0 (no error) or 1 (error)
        *
        */
       long read_config(Config &config) {

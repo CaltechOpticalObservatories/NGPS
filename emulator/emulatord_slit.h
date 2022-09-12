@@ -28,7 +28,7 @@
 #include "common.h"
 #include "slit.h"
 
-#define  BUFSIZE      1024  //!< size of the input command buffer
+#define  BUFSIZE      1024  /// size of the input command buffer
 
 namespace Emulator {
 
@@ -46,17 +46,19 @@ namespace Emulator {
     private:
     public:
       int port;
-      std::string subsystem;             //!< subsystem name
+      std::string subsystem;             /// subsystem name
       std::atomic<int> cmd_num;
       Config config;
-      std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
 
       Slit::Interface interface;
 
       /** Emulator::Server ****************************************************/
       /**
-       * @fn     Server
-       * @brief  class constructor
+       * @fn         Server
+       * @brief      class constructor
+       * @param[in]  none
+       * @return     none
        */
       Server() {
         this->port=-1;
@@ -68,8 +70,10 @@ namespace Emulator {
 
       /** Emulator::~Server ***************************************************/
       /**
-       * @fn     ~Server
-       * @brief  class deconstructor cleans up on exit
+       * @fn         ~Server
+       * @brief      class deconstructor cleans up on exit
+       * @param[in]  none
+       * @return     none
        */
       ~Server() {
       }
@@ -78,10 +82,10 @@ namespace Emulator {
 
       /** Emulator::Server::exit_cleanly **************************************/
       /**
-       * @fn     exit_cleanly
-       * @brief  closes things nicely and exits
-       * @param  none
-       * @return none
+       * @fn         exit_cleanly
+       * @brief      closes things nicely and exits
+       * @param[in]  none
+       * @return     none
        *
        */
       void exit_cleanly(void) {
@@ -98,10 +102,10 @@ namespace Emulator {
 
       /** Emulator::Server::configure_emulator ********************************/
       /**
-       * @fn     configure_emulator
-       * @brief  
-       * @param  none
-       * @return ERROR or NO_ERROR
+       * @fn         configure_emulator
+       * @brief      
+       * @param[in]  none
+       * @return     ERROR or NO_ERROR
        *
        */
       long configure_emulator() {

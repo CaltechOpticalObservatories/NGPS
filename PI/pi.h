@@ -1,7 +1,6 @@
 /**
  * @file    pi.h
- * @brief   
- * @details 
+ * @brief   this file contains the definitions for the PI interface
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */

@@ -29,9 +29,9 @@
 #include "tcs_interface.h"
 #include "tcsd_commands.h"
 
-#define  N_THREADS    10    //!< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
-#define  BUFSIZE      1024  //!< size of the input command buffer
-#define  CONN_TIMEOUT 3000  //<! incoming (non-blocking) connection timeout in milliseconds
+#define  N_THREADS    10    /// total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
+#define  BUFSIZE      1024  /// size of the input command buffer
+#define  CONN_TIMEOUT 3000  /// incoming (non-blocking) connection timeout in milliseconds
 
 namespace TCS {
 
@@ -57,8 +57,11 @@ namespace TCS {
 
       /** TCS::~Server ********************************************************/
       /**
-       * @fn     ~Server
-       * @brief  class deconstructor cleans up on exit
+       * @fn         ~Server
+       * @brief      class deconstructor cleans up on exit
+       * @param[in]  none
+       * @return     none
+       *
        */
       ~Server() {
         close(this->nonblocking_socket);
@@ -67,10 +70,10 @@ namespace TCS {
       }
       /** TCS::~Server ********************************************************/
 
-      int nbport;                        //!< non-blocking port
-      int blkport;                       //!< blocking port
-      int asyncport;                     //!< asynchronous message port
-      std::string asyncgroup;            //!< asynchronous multicast group
+      int nbport;                        /// non-blocking port
+      int blkport;                       /// blocking port
+      int asyncport;                     /// asynchronous message port
+      std::string asyncgroup;            /// asynchronous multicast group
 
       int nonblocking_socket;
       int blocking_socket;
@@ -81,15 +84,15 @@ namespace TCS {
 
       Interface interface;
 
-      std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
 
 
       /** TCS::Server::exit_cleanly *******************************************/
       /**
-       * @fn     signal_handler
-       * @brief  handles ctrl-C and exits
-       * @param  int signo
-       * @return nothing
+       * @fn         signal_handler
+       * @brief      handles ctrl-C and exits
+       * @param[in]  int signo
+       * @return     nothing
        *
        */
       void exit_cleanly(void) {
@@ -103,10 +106,10 @@ namespace TCS {
 
       /** TCS::Server::configure_tcs ******************************************/
       /**
-       * @fn     configure_tcsd
-       * @brief  read and apply the configuration file for the tcs daemon
-       * @param  none
-       * @return ERROR or NO_ERROR
+       * @fn         configure_tcsd
+       * @brief      read and apply the configuration file for the tcs daemon
+       * @param[in]  none
+       * @return     ERROR or NO_ERROR
        *
        */
       long configure_tcsd() {

@@ -33,10 +33,10 @@ namespace Slit {
    */
   class ControllerInfo {
     public:
-      int addr;                   //!< controller address
-      float pos;                  //!< current position of this actuator
-      std::string name;           //!< controller name
-      float min, max;             //!< min,max travel range of motor connected to this controller
+      int addr;                   /// controller address
+      float pos;                  /// current position of this actuator
+      std::string name;           /// controller name
+      float min, max;             /// min,max travel range of motor connected to this controller
       bool servo;                 /// servo state (true=on, false=off)
       bool ishome;                /// is axis homed?
       bool ontarget;              /// is axis on target?
@@ -47,6 +47,20 @@ namespace Slit {
         this->ontarget=false;
         }
 
+      /**************** Slit::ControllerInfo::load_info ***********************/
+      /**
+       * @fn         load_info
+       * @brief      loads information from the configuration file into the class
+       * @param[in]  input
+       * @return     ERROR or NO_ERROR
+       *
+       * This function is called whenever the MOTOR_CONTROLLER key is found
+       * in the configuration file, to parse and load all of the information
+       * assigned by that key into the appropriate class variables.
+       *
+       * The input string specifies: "<address> <name> <min> <max>"
+       *
+       */
       long load_info( std::string &input ) {
         std::string function = "Slit::ControllerInfo::load_info";
         std::stringstream message;
@@ -55,7 +69,7 @@ namespace Slit {
         Tokenize( input, tokens, " \"" );
 
         if ( tokens.size() != 4 ) {
-          message.str(""); message << "bad number of tokens: " << tokens.size() << ". expected 4";
+          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 4";
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -67,17 +81,17 @@ namespace Slit {
           this->max =  std::stof( tokens.at(3) );
         }
         catch ( std::invalid_argument &e ) {
-          message.str(""); message << "error loading tokens from input: " << input << ": " << e.what();
+          message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
           logwrite( function, message.str() );
           return( ERROR );
         }
         catch ( std::out_of_range &e ) {
-          message.str(""); message << "error loading tokens from input: " << input << ": " << e.what();
+          message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
           logwrite( function, message.str() );
         }
 
         if ( this->addr < 1 ) {
-          message.str(""); message << "error: addr " << this->addr << " cannot be < 1";
+          message.str(""); message << "ERROR: addr " << this->addr << " cannot be < 1";
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -90,6 +104,7 @@ namespace Slit {
 
         return( NO_ERROR );
       }
+      /**************** Slit::ControllerInfo::load_info ***********************/
   };
   /** ControllerInfo **********************************************************/
 

@@ -4,10 +4,10 @@ namespace TCS {
 
   /**************** TCS::Interface::Interface *********************************/
   /**
-   * @fn     Interface
-   * @brief  class constructor
-   * @param  none
-   * @return none
+   * @fn         Interface
+   * @brief      class constructor
+   * @param[in]  none
+   * @return     none
    *
    */
   Interface::Interface() {
@@ -17,10 +17,10 @@ namespace TCS {
 
   /**************** TCS::Interface::~Interface ********************************/
   /**
-   * @fn     ~Interface
-   * @brief  class deconstructor
-   * @param  none
-   * @return none
+   * @fn         ~Interface
+   * @brief      class deconstructor
+   * @param[in]  none
+   * @return     none
    *
    */
   Interface::~Interface() {
@@ -30,10 +30,10 @@ namespace TCS {
 
   /**************** TCS::Interface::initialize_class **************************/
   /**
-   * @fn     initialize
-   * @brief  
-   * @param  
-   * @return 
+   * @fn         initialize
+   * @brief      
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::initialize_class() {
@@ -57,10 +57,10 @@ namespace TCS {
 
   /**************** TCS::Interface::open **************************************/
   /**
-   * @fn     open
-   * @brief  opens the PI socket connection
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         open
+   * @brief      opens the PI socket connection
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::open( ) {
@@ -94,10 +94,10 @@ namespace TCS {
 
   /**************** TCS::Interface::close *************************************/
   /**
-   * @fn     close
-   * @brief  closes the PI socket connection
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @fn         close
+   * @brief      closes the PI socket connection
+   * @param[in]  none
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::close( ) {
@@ -124,10 +124,10 @@ namespace TCS {
 
   /**************** TCS::Interface::send_command ******************************/
   /**
-   * @fn     send_command
-   * @brief  writes the raw command, as received, to the TCS
-   * @param  string cmd
-   * @return ERROR or NO_ERROR
+   * @fn         send_command
+   * @brief      writes the raw command, as received, to the TCS
+   * @param[in]  string cmd
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::send_command( std::string cmd, std::string &reply ) {
@@ -163,8 +163,10 @@ namespace TCS {
       // wait for incoming data
       //
       if ( ( ret = this->tcs.Poll() ) <= 0 ) {
-        if ( ret==0 ) { message.str(""); message << "Poll timeout on fd " << tcs.getfd() << " waiting for response from TCS"; error = TIMEOUT; }
-        if ( ret <0 ) { message.str(""); message << "Poll error on fd "   << tcs.getfd() << " waiting for response from TCS"; error = ERROR; }
+        if ( ret==0 ) { message.str(""); message << "TIMEOUT polling fd " << tcs.getfd() 
+                                                 << " waiting for response from TCS"; error = TIMEOUT; }
+        if ( ret <0 ) { message.str(""); message << "ERROR polling fd "   << tcs.getfd() 
+                                                 << " waiting for response from TCS"; error = ERROR; }
         if ( error != NO_ERROR ) logwrite( function, message.str() );
         break;
       }

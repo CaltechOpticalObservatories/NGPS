@@ -2,28 +2,60 @@
 
 namespace Slit {
 
+  /**************** Slit::ControllerInfo::ControllerInfo **********************/
+  /**
+   * @fn         ControllerInfo
+   * @brief      class constructor
+   * @param[in]  none
+   * @return     none
+   *
+   */
   ControllerInfo::ControllerInfo() {
     this->servo    = false;
     this->homed    = false;
     this->ontarget = false;
     this->pos      = -1;
   }
+  /**************** Slit::ControllerInfo::ControllerInfo **********************/
 
 
+  /**************** Slit::ControllerInfo::~ControllerInfo *********************/
+  /**
+   * @fn         ~ControllerInfo
+   * @brief      class deconstructor
+   * @param[in]  none
+   * @return     none
+   *
+   */
   ControllerInfo::~ControllerInfo() {
   }
+  /**************** Slit::ControllerInfo::~ControllerInfo *********************/
 
 
-  // Slit::Interface constructor
-  //
+  /**************** Slit::Interface::Interface ********************************/
+  /**
+   * @fn         Interface
+   * @brief      class constructor
+   * @param[in]  none
+   * @return     none
+   *
+   */
   Interface::Interface() {
   }
+  /**************** Slit::Interface::Interface ********************************/
 
 
-  // Slit::Interface deconstructor
-  //
+  /**************** Slit::Interface::~Interface *******************************/
+  /**
+   * @fn         ~Interface
+   * @brief      class deconstructor
+   * @param[in]  none
+   * @return     none
+   *
+   */
   Interface::~Interface() {
   }
+  /**************** Slit::Interface::~Interface *******************************/
 
 
   long Interface::test() {
@@ -35,11 +67,11 @@ namespace Slit {
 
   /**************** Slit::Interface::do_home **********************************/
   /**
-   * @fn     do_home
-   * @brief  thread to emulate homing (just sleeps)
-   * @param  reference to Slit::ControllerInfo object
-   * @param  reference to mutex
-   * @return ERROR or NO_ERROR
+   * @fn         do_home
+   * @brief      thread to emulate homing (just sleeps)
+   * @param[in]  reference to Slit::ControllerInfo object
+   * @param[in]  reference to mutex
+   * @return     ERROR or NO_ERROR
    *
    */
   void Interface::do_home( Slit::ControllerInfo &info, std::mutex &mlock ) {
@@ -67,13 +99,13 @@ namespace Slit {
 
   /**************** Slit::Interface::do_move **********************************/
   /**
-   * @fn     do_move
-   * @brief  thread to emulate moving (just sleeps)
-   * @param  reference to Slit::ControllerInfo object
-   * @param  reference to mutex
-   * @param  int distance to move
-   * @param  float final position
-   * @return ERROR or NO_ERROR
+   * @fn         do_move
+   * @brief      thread to emulate moving (just sleeps)
+   * @param[in]  reference to Slit::ControllerInfo object
+   * @param[in]  reference to mutex
+   * @param[in]  int distance to move
+   * @param[in]  float final position
+   * @return     ERROR or NO_ERROR
    *
    */
   void Interface::do_move( Slit::ControllerInfo &info, std::mutex &mlock, int distance, float pos ) {
@@ -100,10 +132,11 @@ namespace Slit {
 
   /**************** Slit::Interface::parse_command ****************************/
   /**
-   * @fn     parse_command
-   * @brief  
-   * @param  
-   * @return ERROR or NO_ERROR
+   * @fn         parse_command
+   * @brief      parse incomming command
+   * @param[in]  cmd
+   * @param[out] retstring
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {

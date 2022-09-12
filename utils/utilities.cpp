@@ -12,9 +12,12 @@ std::string zone="";
 
   /** cmdOptionExists *********************************************************/
   /**
-   * @fn     cmdOptionExists
-   * @brief  returns true if option is found in argv
-   * @return bool
+   * @fn         cmdOptionExists
+   * @brief      returns true if option is found in argv
+   * @param[in]  begin char**
+   * @param[in]  end char**
+   * @param[out] option ref to string
+   * @return     true or false
    *
    * Intended to be called as cmdOptionExists( argv, argv+argc, "-X" )
    * to search for "-X" option in argv.
@@ -30,9 +33,12 @@ std::string zone="";
 
   /** getCmdOption ************************************************************/
   /**
-   * @fn     getCmdOption
-   * @brief  returns pointer to command line option specified with "-X option"
-   * @return char*
+   * @fn         getCmdOption
+   * @brief      returns pointer to command line option specified with "-X option"
+   * @param[in]  begin char**
+   * @param[in]  end char**
+   * @param[out] option ref to string
+   * @return     char*
    *
    * Intended to be called as char* option = getCmdOption( argv, argv+argc, "-X" );
    * to get option associated with "-X option" in argv.
@@ -52,10 +58,10 @@ std::string zone="";
 
   /** my_hardware_concurrency *************************************************/
   /**
-   * @fn     my_hardware_concurrency
-   * @brief  return number of concurrent threads supported by the implementation
-   * @param  none
-   * @return int
+   * @fn         my_hardware_concurrency
+   * @brief      return number of concurrent threads supported by the implementation
+   * @param[in]  none
+   * @return     int
    *
    * Counts the number of processors listed in /proc/cpuinfo
    *
@@ -71,10 +77,10 @@ std::string zone="";
 
   /** cores_available *********************************************************/
   /**
-   * @fn     cores_available
-   * @brief  return number of concurrent threads supported by the implementation
-   * @param  none
-   * @return int
+   * @fn         cores_available
+   * @brief      return number of concurrent threads supported by the implementation
+   * @param[in]  none
+   * @return     int
    *
    * If the value is not known then check /proc/cpuinfo
    *
@@ -88,10 +94,10 @@ std::string zone="";
 
   /** parse_val ***************************************************************/
   /**
-   * @fn     parse_val
-   * @brief  returns an unsigned int from a string
-   * @param  string
-   * @return unsigned int
+   * @fn         parse_val
+   * @brief      returns an unsigned int from a string
+   * @param[in]  string
+   * @return     unsigned int
    *
    */
   unsigned int parse_val(const std::string& str) {
@@ -109,12 +115,12 @@ std::string zone="";
 
   /** Tokenize ****************************************************************/
   /**
-   * @fn     Tokenize
-   * @brief  break a string into a vector
-   * @param  str, input string
-   * @param  tokens, vector of tokens
-   * @param  delimiters, string
-   * @return number of tokens
+   * @fn         Tokenize
+   * @brief      break a string into a vector
+   * @param[in]  str, input string
+   * @param[out] tokens, vector of tokens
+   * @param[in]  delimiters, string
+   * @return     number of tokens
    *
    */
   int Tokenize(const std::string& str, std::vector<std::string>& tokens, const std::string& delimiters) {
@@ -172,14 +178,14 @@ std::string zone="";
 
   /** Tokenize ****************************************************************/
   /**
-   * @fn     Tokenize
-   * @brief  break a string into device list and arg list vectors
-   * @param  &str, reference to input string
-   * @param  &devlist, reference to vector for device list
-   * @param  &ndev, reference to number of devices
-   * @param  &arglist, reference to vector for arg list
-   * @param  &narg, reference to number of args
-   * @return nothing
+   * @fn         Tokenize
+   * @brief      break a string into device list and arg list vectors
+   * @param[in]  &str, reference to input string
+   * @param[in]  &devlist, reference to vector for device list
+   * @param[in]  &ndev, reference to number of devices
+   * @param[out] &arglist, reference to vector for arg list
+   * @param[in]  &narg, reference to number of args
+   * @return     nothing
    *
    * This is a special version of Tokenize.
    *
@@ -235,12 +241,12 @@ std::string zone="";
 
   /** chrrep ******************************************************************/
   /**
-   * @fn     chrrep
-   * @brief  replace one character within a string with a new character
-   * @param  str     pointer to string
-   * @param  oldchr  the old character to replace in the string
-   * @param  newchr  the replacement value
-   * @return none
+   * @fn         chrrep
+   * @brief      replace one character within a string with a new character
+   * @param[out] str     pointer to string
+   * @param[in]  oldchr  the old character to replace in the string
+   * @param[in]  newchr  the replacement value
+   * @return     none
    *
    * This function modifies the original string pointed to by *str.
    *
@@ -268,12 +274,12 @@ std::string zone="";
 
   /** string_replace_char *****************************************************/
   /**
-   * @fn     string_replace_char
-   * @brief  replace one character within a std::string with a new character
-   * @param  reference to str
-   * @param  oldchar is the char to replace
-   * @param  newchar is the replacement value
-   * @return none
+   * @fn         string_replace_char
+   * @brief      replace one character within a std::string with a new character
+   * @param[out] reference to str
+   * @param[in]  oldchar is the char to replace
+   * @param[in]  newchar is the replacement value
+   * @return     none
    *
    */
   void string_replace_char(std::string &str, const char *oldchar, const char *newchar) {
@@ -286,20 +292,16 @@ std::string zone="";
 
   /** get_time ****************************************************************/
   /**
-   * @fn     get_time
-   * @brief  gets the current time and returns values by reference
-   * @param  string zone, "local" or "utc"
-   * @param  int & year
-   * @param  int & mon
-   * @param  int & mday
-   * @param  int & hour
-   * @param  int & min
-   * @param  int & sec
-   * @param  int & usec
-   * @return 1 on error, 0 if okay
-   *
-   * This function is overloaded, to include a form where the zone may be omitted,
-   * which defaults to "utc".
+   * @fn         get_time
+   * @brief      gets the current time and returns values by reference
+   * @param[out] int & year
+   * @param[out] int & mon
+   * @param[out] int & mday
+   * @param[out] int & hour
+   * @param[out] int & min
+   * @param[out] int & sec
+   * @param[out] int & usec
+   * @return     1 on error, 0 if okay
    *
    */
   long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec ) {
@@ -351,14 +353,10 @@ std::string zone="";
 
   /** get_timestamp ***********************************************************/
   /**
-   * @fn     get_timestamp
-   * @brief  return a string of the current time "YYYY-MM-DDTHH:MM:SS.ssssss"
-   * @param  none
-   * @return string
-   *
-   * This function is overloaded with a version that takes a time zone
-   * string "local" or "utc" to specify that the time stamp should be
-   * in localtime or UTC, respectively.
+   * @fn         get_timestamp
+   * @brief      return a string of the current time "YYYY-MM-DDTHH:MM:SS.ssssss"
+   * @param[in]  none
+   * @return     string
    *
    */
   std::string get_timestamp() {
@@ -394,10 +392,10 @@ std::string zone="";
 
   /** get_system_date *********************************************************/
   /**
-   * @fn     get_system_date
-   * @brief  return current date in formatted string "YYYYMMDD"
-   * @param  none
-   * @return string
+   * @fn         get_system_date
+   * @brief      return current date in formatted string "YYYYMMDD"
+   * @param[in]  none
+   * @return     string
    *
    */
   std::string get_system_date() {
@@ -429,10 +427,10 @@ std::string zone="";
 
   /** get_file_time ***********************************************************/
   /**
-   * @fn     get_file_time
-   * @brief  return current time in formatted string "YYYYMMDDHHMMSS"
-   * @param  none
-   * @return string
+   * @fn         get_file_time
+   * @brief      return current time in formatted string "YYYYMMDDHHMMSS"
+   * @param[in]  none
+   * @return     string
    *
    * Used for filenames
    *
@@ -469,10 +467,10 @@ std::string zone="";
 
   /** get_clock_time **********************************************************/
   /**
-   * @fn     get_clock_time
-   * @brief  get the current clock time using REALTIME flag from the processor
-   * @param  nonw
-   * @return time in seconds
+   * @fn         get_clock_time
+   * @brief      get the current clock time using REALTIME flag from the processor
+   * @param[in]  none
+   * @return     time in seconds
    *
    */
   double get_clock_time() {
@@ -485,10 +483,11 @@ std::string zone="";
 
   /** timeout *****************************************************************/
   /**
-   * @fn     timeout
-   * @brief  
-   * @param  
-   * @return 
+   * @fn         timeout
+   * @brief      
+   * @param[in]  seconds
+   * @param[in]  next_sec
+   * @return     none
    *
    */
   void timeout(float seconds, bool next_sec) {
@@ -521,11 +520,11 @@ std::string zone="";
 
   /** compare_versions ********************************************************/
   /**
-   * @fn     compare_versions
-   * @brief  compares two version numbers represented as strings
-   * @param  v1
-   * @param  v2
-   * @return 0,1,-1,-999
+   * @fn         compare_versions
+   * @brief      compares two version numbers represented as strings
+   * @param[in]  v1
+   * @param[in]  v2
+   * @return     0,1,-1,-999
    *
    * This function compares version or revision numbers which are represented
    * as strings which contain decimals. Each portion of a version number is
@@ -572,4 +571,5 @@ std::string zone="";
 
     return 0;      // or they are equal
   }
+  /** compare_versions ********************************************************/
 

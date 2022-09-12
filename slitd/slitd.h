@@ -51,8 +51,10 @@ namespace Slit {
 
       /** Slit::Server ********************************************************/
       /**
-       * @fn     Server
-       * @brief  class constructor
+       * @fn         Server
+       * @brief      class constructor
+       * @param[in]  none
+       * @return     none
        *
        */
       Server() {
@@ -66,8 +68,10 @@ namespace Slit {
 
       /** Slit::~Server *******************************************************/
       /**
-       * @fn     ~Server
-       * @brief  class deconstructor cleans up on exit
+       * @fn         ~Server
+       * @brief      class deconstructor cleans up on exit
+       * @param[in]  none
+       * @return     none
        *
        */
       ~Server() {

@@ -123,21 +123,23 @@ namespace Sequencer {
       std::map<int, std::string> thread_states;
       std::vector<int> thread_state_bits;
 
-      volatile std::atomic<bool>          waiting_for_state;   /// set if dothread_wait_for_state is running
+      volatile std::atomic<bool>          waiting_for_state;  /// set if dothread_wait_for_state is running
 
-      volatile std::atomic<std::uint32_t> thrstate;  /// word to indicate which threads are running
+      volatile std::atomic<std::uint32_t> thrstate;           /// word to indicate which threads are running
       volatile std::atomic<std::uint32_t> runstate;
-      volatile std::atomic<std::uint32_t> seqstate;  /// word to define the current state of a sequence
-      volatile std::atomic<std::uint32_t> reqstate;  /// the currently requested state (not necc. current)
+      volatile std::atomic<std::uint32_t> seqstate;           /// word to define the current state of a sequence
+      volatile std::atomic<std::uint32_t> reqstate;           /// the currently requested state (not necc. current)
 
-      volatile std::atomic<long>          thr_error;      /// error state of threads
-      volatile std::atomic<std::uint32_t> thr_which_err;  /// word to define which thread caused an error
+      volatile std::atomic<long>          thr_error;          /// error state of threads
+      volatile std::atomic<std::uint32_t> thr_which_err;      /// word to define which thread caused an error
 
       TargetInfo target;              /// TargetInfo object contains info for a target row and how to read it
+                                      /// Sequencer::TargetInfo is defined in sequencer_interface.h
 
       std::string last_target_name;   /// remember the last target observed to prevent uneccessary slews
 
-      // Here are all the daemon objects that the Sequencer connects to
+      // Here are all the daemon objects that the Sequencer connects to.
+      // The Sequencer::Daemon class is defined in sequencer_interface.h
       //
       Daemon calibd;
       Daemon camerad;
