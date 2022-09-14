@@ -27,6 +27,7 @@ namespace Power {
   }
   /**************** Power::Interface::~Interface ******************************/
 
+
   /**************** Power::Interface::parse_command ***************************/
   /**
    * @fn         parse_command
@@ -40,7 +41,7 @@ namespace Power {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = " (Power::Interface::parse_command) ";
+    std::string function = "  (Power::Interface::parse_command) ";
 
     std::cerr << get_timestamp() << function << "received command: " << cmd << "\n";
 

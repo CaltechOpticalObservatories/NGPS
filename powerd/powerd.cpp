@@ -15,10 +15,10 @@ std::string logpath;
 
 /** signal_handler ***********************************************************/
 /**
- * @fn     signal_handler
- * @brief  handles ctrl-C
- * @param  int signo
- * @return nothing
+ * @fn         signal_handler
+ * @brief      handles ctrl-C
+ * @param[in]  int signo
+ * @return     nothing
  *
  */
 void signal_handler(int signo) {
@@ -58,10 +58,10 @@ void doit(Network::TcpSocket sock);         // the worker thread
 
 /** main *********************************************************************/
 /**
- * @fn     main
- * @brief  the main function
- * @param  int argc, char** argv
- * @return 0
+ * @fn         main
+ * @brief      the main function
+ * @param[in]  int argc, char** argv
+ * @return     0
  *
  */
 int main(int argc, char **argv) {
@@ -208,9 +208,10 @@ int main(int argc, char **argv) {
 
 /** new_log_day **************************************************************/
 /**
- * @fn     new_log_day
- * @brief  creates a new logbook each day
- * @return nothing
+ * @fn         new_log_day
+ * @brief      creates a new logbook each day
+ * @param[in]  none
+ * @return     nothing
  *
  * This thread is started by main and never terminates.
  * It sleeps for the number of seconds that logentry determines
@@ -232,10 +233,10 @@ void new_log_day( ) {
 
 /** block_main ***************************************************************/
 /**
- * @fn     block_main
- * @brief  main function for blocking connection thread
- * @param  Network::TcpSocket sock, socket object
- * @return nothing
+ * @fn         block_main
+ * @brief      main function for blocking connection thread
+ * @param[in]  Network::TcpSocket sock, socket object
+ * @return     nothing
  *
  * accepts a socket connection and processes the request by
  * calling function doit()
@@ -256,10 +257,10 @@ void block_main(Network::TcpSocket sock) {
 
 /** thread_main **************************************************************/
 /**
- * @fn     thread_main
- * @brief  main function for all non-blocked threads
- * @param  Network::TcpSocket sock, socket object
- * @return nothing
+ * @fn         thread_main
+ * @brief      main function for all non-blocked threads
+ * @param[in]  Network::TcpSocket sock, socket object
+ * @return     nothing
  *
  * accepts a socket connection and processes the request by
  * calling function doit()
@@ -286,10 +287,10 @@ void thread_main(Network::TcpSocket sock) {
 
 /** async_main ***************************************************************/
 /**
- * @fn     async_main
- * @brief  asynchronous message sending thread
- * @param  Network::UdpSocket sock, socket object
- * @return nothing
+ * @fn         async_main
+ * @brief      asynchronous message sending thread
+ * @param[in]  Network::UdpSocket sock, socket object
+ * @return     nothing
  *
  * Loops forever, when a message arrives in the status message queue it is
  * sent out via multi-cast UDP datagram.
@@ -333,10 +334,10 @@ void async_main(Network::UdpSocket sock) {
 
 /** doit *********************************************************************/
 /**
- * @fn     doit
- * @brief  the workhorse of each thread connetion
- * @param  int thr
- * @return nothin
+ * @fn         doit
+ * @brief      the workhorse of each thread connetion
+ * @param[in]  int thr
+ * @return     nothing
  *
  * stays open until closed by client
  *
@@ -453,6 +454,13 @@ void doit(Network::TcpSocket sock) {
     }
     else
 
+    // close
+    //
+    if ( cmd.compare( POWERD_CLOSE ) == 0 ) {
+                    ret = powerd.interface.close( );
+    }
+    else
+
     // isopen
     //
     if ( cmd.compare( POWERD_ISOPEN ) == 0 ) {
@@ -461,12 +469,17 @@ void doit(Network::TcpSocket sock) {
                     ret = NO_ERROR;
     }
 
-    // Unknown commands generate an error
+    // all other commands go to the powerd interface for parsing
     //
     else {
-      message.str(""); message << "ERROR: unknown command: " << cmd;
-      logwrite( function, message.str() );
-      ret = ERROR;
+                    try {
+                      std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );  // make uppercase
+                    }
+                    catch( ...) {
+                      logwrite( function, "ERROR converting command to uppercase" );
+                      ret = ERROR;
+                    }
+                    ret = powerd.interface.command( sbuf, retstring );                      // send the command
     }
 
     if (ret != NOTHING) {

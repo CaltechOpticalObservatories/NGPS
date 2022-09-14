@@ -8,6 +8,7 @@ set( POWERD_DIR ${PROJECT_BASE_DIR}/powerd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
+include_directories( ${PROJECT_BASE_DIR}/WTI )
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(powerd 
@@ -16,6 +17,7 @@ add_executable(powerd
         )
 
 target_link_libraries(powerd
+        wti
         network
         logentry
         utilities
