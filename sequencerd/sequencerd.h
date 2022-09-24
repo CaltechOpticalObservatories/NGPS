@@ -141,8 +141,11 @@ namespace Sequencer {
             return(ERROR);
           }
 
-message.str(""); message << "configkey=" << configkey << " configval=" << configval;
-logwrite( function, message.str() );
+#ifdef LOGLEVEL_DEBUG
+          message.str(""); message << "[DEBUG] configkey " << configkey << "=" << configval;
+          logwrite( function, message.str() );
+#endif
+
           // NBPORT
           if ( configkey.compare(0, 6, "NBPORT")==0 ) {
             int port;
@@ -392,38 +395,87 @@ logwrite( function, message.str() );
           //
 
           // DB_HOST
-          if (config.param[entry].compare( 0, Sequencer::DB_HOST.length(), DB_HOST )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_HOST, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_HOST.length(), DB_HOST )==0) {
+            if ( this->sequence.target.configure_db( DB_HOST, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
           // DB_PORT
-          if (config.param[entry].compare( 0, Sequencer::DB_PORT.length(), DB_PORT )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_PORT, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_PORT.length(), DB_PORT )==0) {
+            if ( this->sequence.target.configure_db( DB_PORT, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
           // DB_USER
-          if (config.param[entry].compare( 0, Sequencer::DB_USER.length(), DB_USER )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_USER, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_USER.length(), DB_USER )==0) {
+            if ( this->sequence.target.configure_db( DB_USER, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
           // DB_PASS
-          if (config.param[entry].compare( 0, Sequencer::DB_PASS.length(), DB_PASS )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_PASS, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_PASS.length(), DB_PASS )==0) {
+            if ( this->sequence.target.configure_db( DB_PASS, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
           // DB_SCHEMA
-          if (config.param[entry].compare( 0, Sequencer::DB_SCHEMA.length(), DB_SCHEMA )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_SCHEMA.length(), DB_SCHEMA )==0) {
+            if ( this->sequence.target.configure_db( DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
           // DB_ACTIVE
-          if (config.param[entry].compare( 0, Sequencer::DB_ACTIVE.length(), DB_ACTIVE )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_ACTIVE.length(), DB_ACTIVE )==0) {
+            if ( this->sequence.target.configure_db( DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
           // DB_COMPLETED
-          if (config.param[entry].compare( 0, Sequencer::DB_COMPLETED.length(), DB_COMPLETED )==0) {
-            if ( this->sequence.target.configure_db( Sequencer::DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) applied++;
+          if (config.param[entry].compare( 0, DB_COMPLETED.length(), DB_COMPLETED )==0) {
+            if ( this->sequence.target.configure_db( DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          //
+          // configure the power switch parameters
+          //
+
+          // POWER_SLIT
+          if (config.param[entry].compare( 0, POWER_SLIT.length(), POWER_SLIT )==0) {
+            if ( this->sequence.power_switch[POWER_SLIT].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_CAMERA
+          if (config.param[entry].compare( 0, POWER_CAMERA.length(), POWER_CAMERA )==0) {
+            if ( this->sequence.power_switch[POWER_CAMERA].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_CALIB
+          if (config.param[entry].compare( 0, POWER_CALIB.length(), POWER_CALIB )==0) {
+            if ( this->sequence.power_switch[POWER_CALIB].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_FLEXURE
+          if (config.param[entry].compare( 0, POWER_FLEXURE.length(), POWER_FLEXURE )==0) {
+            if ( this->sequence.power_switch[POWER_FLEXURE].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_FILTER
+          if (config.param[entry].compare( 0, POWER_FILTER.length(), POWER_FILTER )==0) {
+            if ( this->sequence.power_switch[POWER_FILTER].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_FOCUS
+          if (config.param[entry].compare( 0, POWER_FOCUS.length(), POWER_FOCUS )==0) {
+            if ( this->sequence.power_switch[POWER_FOCUS].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_TELEM
+          if (config.param[entry].compare( 0, POWER_TELEM.length(), POWER_TELEM )==0) {
+            if ( this->sequence.power_switch[POWER_TELEM].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_THERMAL
+          if (config.param[entry].compare( 0, POWER_THERMAL.length(), POWER_THERMAL )==0) {
+            if ( this->sequence.power_switch[POWER_THERMAL].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+          }
+
+          // POWER_AG
+          if (config.param[entry].compare( 0, POWER_AG.length(), POWER_AG )==0) {
+            if ( this->sequence.power_switch[POWER_AG].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
           }
 
         } // end loop through the entries in the configuration file

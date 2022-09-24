@@ -90,7 +90,9 @@ namespace Network {
       int Close();                       /// close a socket connection
       int Read(void* buf, size_t count); /// read data from connected socket
       int Read(std::string &retstring, char delim); /// read data from connected socket until delimiter found
+      int Read(std::string &retstring, std::string endstr);
       int Bytes_ready();                 /// get the number of bytes available on the socket descriptor this->fd
+      void Flush();                      /// flush a socket by reading until it's empty
 
       int Write(std::string msg_in);     /// write data to a socket
 

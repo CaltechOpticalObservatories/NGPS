@@ -20,7 +20,7 @@ Emulator::Server emulator;
  *
  */
 void signal_handler( int signo ) {
-  std::string function = "(Emulator::signal_handler) ";
+  std::string function = "  (Emulator::signal_handler) ";
   switch ( signo ) {
     case SIGTERM:
     case SIGINT:
@@ -58,7 +58,7 @@ void doit( Network::TcpSocket sock );               // the worker thread
  *
  */
 int main( int argc, char **argv ) {
-  std::string function = "(Emulator::main) ";
+  std::string function = "  (Emulator::main) ";
   std::stringstream message;
   long ret=NO_ERROR;
   std::string daemon_in;     // daemon setting read from config file
@@ -188,7 +188,7 @@ int main( int argc, char **argv ) {
 void block_main( Network::TcpSocket sock ) {
   while(1) {
     int fd = sock.Accept();
-    std::cerr << get_timestamp() << " (Emulator::block_main) Accept returns connection on fd = " << fd << "\n";
+    std::cerr << get_timestamp() << "  (Emulator::block_main) Accept returns connection on fd = " << fd << "\n";
     doit( sock );                  // call function to do the work
     sock.Close();
   }
@@ -211,7 +211,7 @@ void block_main( Network::TcpSocket sock ) {
  *
  */
 void doit( Network::TcpSocket sock ) {
-  std::string function = "(Emulator::doit) ";
+  std::string function = "  (Emulator::doit) ";
   long  ret;
   std::stringstream message;
   std::string cmd, args;        // arg string is everything after command

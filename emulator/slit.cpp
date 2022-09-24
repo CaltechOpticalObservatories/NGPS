@@ -59,7 +59,7 @@ namespace Slit {
 
 
   long Interface::test() {
-    std::string function = " (Slit::Interface::test) ";
+    std::string function = "  (Slit::Interface::test) ";
     std::cerr << get_timestamp() << function << "controller_info.size() = " << this->controller_info.size() << "\n";
     return( NO_ERROR );
   }
@@ -75,12 +75,12 @@ namespace Slit {
    *
    */
   void Interface::do_home( Slit::ControllerInfo &info, std::mutex &mlock ) {
-    std::string function = " (Slit::Interface::do_home) ";
+    std::string function = "  (Slit::Interface::do_home) ";
 
     // sleep here
     //
     for ( int i = 0; i < 15; i++ ) {
-      std::cerr << get_timestamp() << function << "homing " << info.name << "... \n ";
+      std::cerr << get_timestamp() << function << "homing " << info.name << "... \n";
       usleep( 500000 );
     }
 
@@ -92,7 +92,7 @@ namespace Slit {
     info.pos      = 0.0;
     mlock.unlock();
 
-    std::cerr << get_timestamp() << function << "home " << info.name << " complete!\n ";
+    std::cerr << get_timestamp() << function << "home " << info.name << " complete!\n";
   }
   /**************** Slit::Interface::do_home **********************************/
 
@@ -109,12 +109,12 @@ namespace Slit {
    *
    */
   void Interface::do_move( Slit::ControllerInfo &info, std::mutex &mlock, int distance, float pos ) {
-    std::string function = " (Slit::Interface::do_move) ";
+    std::string function = "  (Slit::Interface::do_move) ";
 
     // sleep here
     //
     for ( int i = 0; i < distance; i++ ) {
-      std::cerr << get_timestamp() << function << "moving " << info.name << "... \n ";
+      std::cerr << get_timestamp() << function << "moving " << info.name << "... \n";
       usleep( 500000 );
     }
 
@@ -125,7 +125,7 @@ namespace Slit {
     info.pos      = pos;
     mlock.unlock();
 
-    std::cerr << get_timestamp() << function << "move " << info.name << " complete!\n ";
+    std::cerr << get_timestamp() << function << "move " << info.name << " complete!\n";
   }
   /**************** Slit::Interface::do_move **********************************/
 
@@ -140,7 +140,7 @@ namespace Slit {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = " (Slit::Interface::parse_command) ";
+    std::string function = "  (Slit::Interface::parse_command) ";
     int myaddr=-1;
     int mydev=-1;
     int myaxis=1;

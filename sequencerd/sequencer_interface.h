@@ -28,6 +28,16 @@ namespace Sequencer {
   const std::string DB_ACTIVE="DB_ACTIVE";        /// name of the active target table configuration parameter
   const std::string DB_COMPLETED="DB_COMPLETED";  /// name of the completed observations table configuration parameter
 
+  const std::string POWER_SLIT="POWER_SLIT";         /// parameter name which defines NPS_PLUG names required for slit hardware
+  const std::string POWER_CAMERA="POWER_CAMERA";     /// parameter name which defines NPS_PLUG names required for camera hardware
+  const std::string POWER_CALIB="POWER_CALIB";       /// parameter name which defines NPS_PLUG names required for calib hardware
+  const std::string POWER_FLEXURE="POWER_FLEXURE";   /// parameter name which defines NPS_PLUG names required for flexure hardware
+  const std::string POWER_FILTER="POWER_FILTER";     /// parameter name which defines NPS_PLUG names required for filter hardware
+  const std::string POWER_FOCUS="POWER_FOCUS";       /// parameter name which defines NPS_PLUG names required for focus hardware
+  const std::string POWER_TELEM="POWER_TELEM";       /// parameter name which defines NPS_PLUG names required for telem hardware
+  const std::string POWER_THERMAL="POWER_THERMAL";   /// parameter name which defines NPS_PLUG names required for thermal hardware
+  const std::string POWER_AG="POWER_AG";             /// parameter name which defines NPS_PLUG names required for A&G hardware
+
   // These are the possible target states
   //
   const std::string TARGET_PENDING="pending";        /// target status pending
@@ -67,6 +77,38 @@ namespace Sequencer {
       long is_connected( std::string &reply );
   };
   /** Daemon ******************************************************************/
+
+
+  /** PowerSwitch *************************************************************/
+  /**
+   * @class  PowerSwitch
+   * @brief  power switch information class
+   *
+   * This class contains the list of plug names for a given subsystem
+   * and a function for loading the vector from the configuration file.
+   *
+   * For proper usage, an STL map is created in the Sequence class,
+   *   std::map<std::string, class PowerSwitch> power_switch
+   * so there is a map between each hardware subsystem and this class.
+   *
+   * The subsystem names mirror the configuration parameter names defined
+   * above, i.e.
+   *   const std::string POWER_SLIT
+   *   const std::string POWER_CAMERA
+   *   etc.
+   *
+   */
+  class PowerSwitch {
+    private:
+    public:
+      PowerSwitch();
+      ~PowerSwitch();
+
+      std::vector<std::string> plugname;      /// vector of plug names required for this hardware subsystem
+
+      long configure( std::string arglist );  /// function to load plugname from cfg file
+  };
+  /** PowerSwitch *************************************************************/
 
 
   /** TargetInfo **************************************************************/

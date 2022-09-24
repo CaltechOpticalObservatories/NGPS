@@ -86,12 +86,13 @@ namespace Tcs {
   /**
    * @fn         do_coords
    * @brief      perform the COORDS command work, which "moves" the telescope
+   * @param[in]  telescope
    * @param[in]  args
    * @return     none
    *
    */
   void Telescope::do_coords( Tcs::Telescope &telescope, std::string args ) {
-    std::string function = " (Tcs::Telescope::do_coords) ";
+    std::string function = "  (Tcs::Telescope::do_coords) ";
 
     double newra, newdec;
 
@@ -217,7 +218,7 @@ namespace Tcs {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = " (Tcs::Interface::parse_command) ";
+    std::string function = "  (Tcs::Interface::parse_command) ";
 
     // The real TCS allows an empty command but I don't,
     // only because I don't forsee anyone using it.

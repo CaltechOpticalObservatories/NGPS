@@ -189,7 +189,7 @@ namespace Power {
 
             if ( npsinfo.load_nps_info( config.arg[entry], npsnum ) == NO_ERROR ) {
               this->interface.nps_info.insert( { npsnum, npsinfo } );  // insert this into the nps_info map
-              this->interface.configure_interface( npsinfo );
+              this->interface.configure_interface( npsinfo );          // create an interface to the NPS described by this object
               applied++;
             }
           }
@@ -201,15 +201,15 @@ namespace Power {
             Power::NpsInfo npsinfo;
 
             // The following variables (plugname, npsnum, plugnum) are extracted from this config file
-            // by the get_plug_info() function.
+            // by the load_plug_info() function.
             //
             std::string plugname;
             int         npsnum;
             int         plugnum;
 
-            if ( npsinfo.get_plug_info( config.arg[entry], npsnum, plugnum, plugname ) == NO_ERROR ) {
+            if ( npsinfo.load_plug_info( config.arg[entry], npsnum, plugnum, plugname ) == NO_ERROR ) {
 
-              // get_plug_info() cannot check for maxplugs so check for that now
+              // load_plug_info() cannot check for maxplugs so check for that now
               //
               int maxplugs=-1;
 
@@ -243,6 +243,7 @@ namespace Power {
 
               applied++;
             }
+            else error = ERROR;
           }
 
         } // end loop through the entries in the configuration file

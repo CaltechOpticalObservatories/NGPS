@@ -89,7 +89,7 @@ namespace Emulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = " (Emulator::Server::exit_cleanly) ";
+        std::string function = "  (Emulator::Server::exit_cleanly) ";
         std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connection
@@ -109,7 +109,7 @@ namespace Emulator {
        *
        */
       long configure_emulator() {
-        std::string function = " (Emulator::Server::configure_emulator) ";
+        std::string function = "  (Emulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;

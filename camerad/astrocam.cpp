@@ -1408,7 +1408,7 @@ namespace AstroCam {
     for (auto dev : this->devlist) {
       try {
         this->controller.at(dev).close_file( this->common.writekeys_when );
-        if ( this->controller.at(dev).pFits->is_error() ) error = ERROR;  // allow error to be set (but not cleared)
+        if ( this->controller.at(dev).pFits->iserror() ) error = ERROR;   // allow error to be set (but not cleared)
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR closing FITS file: unable to find device " << dev << " in list: { ";

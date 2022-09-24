@@ -100,7 +100,7 @@ namespace Power {
        * The input string specifies: "<nps#> <plug#> <plugname>"
        *
        */
-      long get_plug_info( std::string &input, int &npsnum, int &plugnum, std::string &plugname ) {
+      long load_plug_info( std::string &input, int &npsnum, int &plugnum, std::string &plugname ) {
         std::string function = "Power::NpsInfo::load_plug_info";
         std::stringstream message;
         std::vector<std::string> tokens;
@@ -108,7 +108,7 @@ namespace Power {
         Tokenize( input, tokens, " \"" );
 
         if ( tokens.size() != 3 ) {
-          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 3";
+          message.str(""); message << "ERROR bad number of tokens in \"" << input << "\": expected 3 but received " << tokens.size();
           logwrite( function, message.str() );
           return( ERROR );
         }

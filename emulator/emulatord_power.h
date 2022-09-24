@@ -22,6 +22,7 @@
 #include <vector>
 #include <atomic>
 #include <climits>
+#include <regex>
 
 #include "config.h"
 #include "network.h"
@@ -52,7 +53,7 @@ namespace Emulator {
       Config config;
       std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
 
-      Power::Interface interface;
+      Power::Interface interface;        /// create an emulated interface
 
       /** Emulator::Server ****************************************************/
       /**
@@ -111,24 +112,80 @@ namespace Emulator {
        */
       long configure_emulator() {
         std::string function = "  (Emulator::Server::configure_emulator) ";
-        std::stringstream message;
         int applied=0;
-        long error;
+        long error = NO_ERROR;
 
         // loop through the entries in the configuration file, stored in config class
         //
         for ( int entry=0; entry < this->config.n_entries; entry++ ) {
 
-          try {
-            // EMULATOR_PORT
-            if ( config.param[entry].compare( 0, 13, "EMULATOR_PORT" ) == 0 ) {
-              this->port = std::stoi( config.arg[entry] );
+          // NPS_UNIT
+          if ( config.param[entry].compare( 0, 8, "NPS_UNIT" ) == 0 ) {
+            // Create a local NpsInfo object for checking the config file input.
+            //
+            Power::NpsInfo npsinfo;
+
+            // The nps_info map is indexed by nps number.
+            // Pass this variable by reference to the load_nps_info() function, which will
+            // set it to a valid value for insertion into the nps_info map.
+            //
+            int npsnum=-1;
+
+            if ( npsinfo.load_nps_info( config.arg[entry], npsnum ) == NO_ERROR ) {
+              this->interface.nps_info.insert( { npsnum, npsinfo } );  // insert this into the nps_info map
               applied++;
             }
           }
-          catch ( std::invalid_argument &e ) {
-            std::cerr << get_timestamp() << function << "ERROR interpreting string as number for " << config.arg[entry] << "\n";
-            return( ERROR );
+
+          // NPS_PLUG
+          if (config.param[entry].compare(0, 8, "NPS_PLUG")==0) {
+            // Create a local NpsInfo object for checking the config file input.
+            //
+            Power::NpsInfo npsinfo;
+
+            // The following variables (plugname, npsnum, plugnum) are extracted from this config file
+            // by the load_plug_info() function.
+            //
+            std::string plugname;
+            int         npsnum;
+            int         plugnum;
+            int         state=0;   /// default off
+
+            if ( npsinfo.load_plug_info( config.arg[entry], npsnum, plugnum, plugname ) == NO_ERROR ) {
+
+              // load_plug_info() cannot check for maxplugs so check for that now
+              //
+              int maxplugs=-1;
+
+              // Make sure the plug's npsnum has a matching NPS unit definition in the interface's nps_info map.
+              //
+              auto loc = this->interface.nps_info.find( npsnum );      // find this plug's npsnum in the nps_info map.
+
+              if ( loc != this->interface.nps_info.end() ) {           // found
+                maxplugs = loc->second.maxplugs;                       // here's the maxplugs for this unit
+              }
+              else {                                                   // else not found
+                std::cerr << get_timestamp() << function << "ERROR plug " << plugnum << " " << plugname
+                                             << " has no matching NPS unit number " << npsnum << " defined by NPS_UNIT";
+                error = ERROR;
+                break;
+              }
+
+              if ( plugnum > maxplugs ) {
+                std::cerr << get_timestamp() << function << "ERROR bad plug number " << plugnum << " for " << plugname
+                                             << " on unit " << npsnum << ": must be < " << maxplugs;
+                error = ERROR;
+                break;
+              }
+
+              // This plug passed all the tests so insert the plug into the plugstate map.
+              // This map provides for locating the state by plugnum.
+              //
+              this->interface.nps_info.at(npsnum).plugstate.insert( { plugnum, state } );
+
+              applied++;
+            }
+            else error = ERROR;
           }
 
         } // end loop through the entries in the configuration file
@@ -138,9 +195,6 @@ namespace Emulator {
         if ( applied==0 ) {
           std::cerr << "ERROR: " ;
           error = ERROR;
-        } 
-        else {
-          error = NO_ERROR;
         } 
         std::cerr << "applied " << applied << " configuration lines to emulatord." << this->subsystem << "\n";
 

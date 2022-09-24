@@ -150,6 +150,8 @@ namespace Sequencer {
       Daemon slitd;
       Daemon tcsd;
 
+      std::map<std::string, class PowerSwitch> power_switch;  /// STL map of PowerSwitch objects maps all plugnames to each subsystem 
+
       inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  /// is the masked bit set in seqstate?
 
       void set_seqstate_bit( uint32_t mb );     /// set the specified masked bit in the seqstate word

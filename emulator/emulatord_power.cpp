@@ -94,7 +94,7 @@ int main( int argc, char **argv ) {
 
   if ( emulator.config.read_config(emulator.config) != NO_ERROR) {    // read configuration file specified on command line
     std::cerr << get_timestamp() << function << emulator.subsystem
-              << "ERROR: unable to configure system\n";
+              << " ERROR: unable to configure system\n";
     emulator.exit_cleanly();
   }
 
@@ -150,12 +150,16 @@ int main( int argc, char **argv ) {
     emulator.exit_cleanly();
   }
 
-  // create a thread for a single listening port
+  // create a thread for each listening port
   // The TcpSocket object is instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
-
-  Network::TcpSocket s(emulator.port, true, -1, 0);    // instantiate TcpSocket object
-  s.Listen();                                                      // create listening socket
-  std::thread( block_main, s ).detach();                           // spawn thread to handle requests
+  //
+  for ( auto nps : emulator.interface.nps_info ) {
+    std::cerr << get_timestamp() << function << emulator.subsystem << " "
+              << "configured nps" << nps.first << " on port " << nps.second.port << "\n";
+    Network::TcpSocket s( nps.second.port, true, -1, nps.first );  // instantiate TcpSocket object
+    s.Listen();                                                    // create listening socket
+    std::thread( block_main, s ).detach();                         // spawn thread to handle requests
+  }
 
   for (;;) pause();                                                // main thread suspends
   return 0;
@@ -179,7 +183,8 @@ int main( int argc, char **argv ) {
 void block_main( Network::TcpSocket sock ) {
   while(1) {
     int fd = sock.Accept();
-    std::cerr << get_timestamp() << "  (Emulator::block_main) Accept returns connection on fd = " << fd << "\n";
+    std::cerr << get_timestamp() << "  (Emulator::block_main) Accept returns connection on port "
+                                 << sock.getport() << " fd " << fd << "\n";
     doit( sock );                  // call function to do the work
     sock.Close();
   }
@@ -207,12 +212,13 @@ void doit( Network::TcpSocket sock ) {
   std::stringstream message;
   std::string cmd, args;        // arg string is everything after command
   std::vector<std::string> tokens;
-  char delim = '\n';           /// commands sent to me have been terminated with this
+  char delim = '\r';           /// commands sent to me have been terminated with this
   std::string term = "\n";     /// my replies get terminated with this
 
   bool connection_open=true;
 
-  std::cerr << get_timestamp() << function << "accepted connection on fd " << sock.getfd() << "\n";
+  std::cerr << get_timestamp() << function << "nps" << sock.id << ": accepted connection on port "
+            << sock.getport() << " fd " << sock.getfd() << "\n";
   while (connection_open) {
 
     // Wait (poll) connected socket for incoming data...
@@ -220,12 +226,12 @@ void doit( Network::TcpSocket sock ) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        std::cerr << get_timestamp() << function << emulator.subsystem << " Poll timeout on fd "
-                  << sock.getfd() << " thread " << sock.id << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem << " nps" << sock.id << ": Poll timeout on port "
+                  << sock.getport() << " fd " << sock.getfd() << " thread " << sock.id << "\n";
       }
       if (pollret <0) {
-        std::cerr << get_timestamp() << function << emulator.subsystem << " Poll error on fd "
-                  << sock.getfd() << " thread " << sock.id << ": " << strerror(errno) << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem << " nps" << sock.id << ": Poll error on port "
+                  << sock.getport() << " fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno) << "\n";
       }
       break;                      // this will close the connection
     }
@@ -236,10 +242,12 @@ void doit( Network::TcpSocket sock ) {
     if ( (ret=sock.Read( sbuf, delim )) <= 0 ) {     // read until newline delimiter
       if (ret<0) {                // could be an actual read error
         std::cerr << get_timestamp() << function << emulator.subsystem 
-                  << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
+                  << " nps" << sock.id << ": Read error on port " << sock.getport() << " fd " 
+                  << sock.getfd() << ": " << strerror(errno) << "\n";
       }
       if (ret==0) { std::cerr << get_timestamp() << function << emulator.subsystem 
-                              << " timeout reading from fd " << sock.getfd() << "\n"; }
+                              << " nps" << sock.id << ": timeout reading from port " << sock.getport() 
+                              << " fd " << sock.getfd() << "\n"; }
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough
@@ -266,20 +274,22 @@ void doit( Network::TcpSocket sock ) {
         args= sbuf.substr(cmd_sep+1);                // otherwise args is everything after that space.
       }
 
-      sock.id = ++emulator.cmd_num;
+      ++emulator.cmd_num;
       if ( emulator.cmd_num == INT_MAX ) emulator.cmd_num = 0;
 
-      std::cerr << get_timestamp() << function << emulator.subsystem << " received command on fd "
-                << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args << "\n";
+      std::cerr << get_timestamp() << function << emulator.subsystem << " nps" << sock.id 
+                << ": received command (" << emulator.cmd_num << ") on port " << sock.getport()
+                << " fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args << "\n";
     }
     catch ( std::runtime_error &e ) {
       std::stringstream errstream; errstream << e.what();
       std::cerr << get_timestamp() << function << emulator.subsystem 
-                << " error parsing arguments: " << errstream.str() << "\n";
+                << " nps" << sock.id << ": error parsing arguments: " << errstream.str() << "\n";
       ret = -1;
     }
     catch ( ... ) {
-      std::cerr << get_timestamp() << function << emulator.subsystem << " unknown error parsing arguments: " << args << "\n";
+      std::cerr << get_timestamp() << function << emulator.subsystem << " nps" << sock.id
+                << ": unknown error parsing arguments: " << args << "\n";
       ret = -1;
     }
 
@@ -299,20 +309,22 @@ void doit( Network::TcpSocket sock ) {
     }
 
     else {  // if no matching command found then send it straight to the interface's command parser
-/*
       try {
         std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );   // make uppercase
       }
       catch (...) {
-        std::cerr << get_timestamp() << function << "error converting command to uppercase\n";
+        std::cerr << get_timestamp() << function << "nps" << sock.id << ": error converting " << sbuf << " to uppercase\n";
         ret=ERROR;
       }
-*/
-      ret = emulator.interface.parse_command( sbuf, retstring );               // send the command to the parser
+      ret = emulator.interface.parse_command( sock.id, sbuf, retstring );      // send the command to the parser
     }
 
 #ifdef LOGLEVEL_DEBUG
-    std::cerr << get_timestamp() << function << "[DEBUG] ret=" << ret << " retstring=" << retstring << "\n";
+//  std::cerr << get_timestamp() << function << "[DEBUG] nps" << sock.id << ": ret=" << ret << " retstring=" << retstring << "\n";
+    std::string debug_reply = retstring;
+    debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
+    debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
+    std::cerr << get_timestamp() << function << "[DEBUG] nps" << sock.id << ": ret=" << ret << " retstring=" << debug_reply << "\n";
 #endif
 
 //  if ( ret != NOTHING && !retstring.empty() ) {
@@ -326,7 +338,7 @@ void doit( Network::TcpSocket sock ) {
 
   connection_open = false;
   sock.Close();
-  std::cerr << get_timestamp() << function << "connection closed\n";
+  std::cerr << get_timestamp() << function << "nps" << sock.id << ": connection closed\n";
   return;
 }
 /** doit *********************************************************************/

@@ -193,7 +193,8 @@ namespace Network {
 
     if ( !this->is_running() ) return 0;  // silently do nothing if the UDP multicast socket isn't running
 
-    if ( (nbytes = sendto( this->fd, message.c_str(), (size_t)message.length(), 0, (struct sockaddr*) &this->addr, (socklen_t)sizeof(this->addr) )) < 0 ) {
+    if ( ( nbytes = sendto( this->fd, message.c_str(), (size_t)message.length(), 0, 
+                            (struct sockaddr*) &this->addr, (socklen_t)sizeof(this->addr) ) ) < 0 ) {
       errstm << "error " << errno << " calling sendto: " << strerror(errno);
       logwrite(function, errstm.str());
       return -1;
@@ -532,7 +533,7 @@ namespace Network {
     servaddr.sin_port        = htons(this->port);
 
     if ( bind(this->listenfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ) {
-      errstm << "error " << errno << " binding to fd " << this->listenfd << ": " << strerror(errno);
+      errstm << "error " << errno << " binding to fd " << this->listenfd << " on port " << this->port << ": " << strerror(errno);
       logwrite(function, errstm.str());
       return(-1);
     }
@@ -540,7 +541,7 @@ namespace Network {
     // start listening
     //
     if (listen(this->listenfd, LISTENQ)!=0) {
-      errstm << "error " << errno << " listening to fd " << this->listenfd << ": " << strerror(errno);
+      errstm << "error " << errno << " listening to fd " << this->listenfd << " on port " << this->port << ": " << strerror(errno);
       logwrite(function, errstm.str());
       return(-1);
     }
@@ -590,22 +591,11 @@ namespace Network {
     int ret = poll( &poll_struct, 1, timeout );
     short revents = poll_struct.revents;
 
-//#ifdef LOGLEVEL_DEBUG
-//    message.str("");
-//    message << "[DEBUG] fd " << this->fd << " events: "
-//            << ( revents & POLLIN   ? "POLLIN "  : "" )
-//            << ( revents & POLLHUP  ? "POLLHUP " : "" )
-//            << ( revents & POLLERR  ? "POLLERR " : "" )
-//            << ( revents & POLLNVAL ? "POLLNVAL" : "" );
-//    logwrite( function, message.str() );
-//#endif
-
     if ( ( revents & POLLHUP ) || ( revents & POLLERR) || ( revents & POLLNVAL ) ) {
-      message.str(""); message << "received "
-                               << ( revents & POLLHUP  ? "POLLHUP "  : "" )
+      message.str(""); message << ( revents & POLLHUP  ? "POLLHUP "  : "" )
                                << ( revents & POLLERR  ? "POLLERR "  : "" )
                                << ( revents & POLLNVAL ? "POLLNVAL " : "" )
-                               << ": closing fd " << this->fd;
+                               << "recevied: closing socket " << this->host << "/" << this->port << " on fd " << this->fd;
       logwrite( function, message.str() );
       this->Close();
     }
@@ -703,6 +693,10 @@ namespace Network {
    */
   int TcpSocket::Close() {
     int error = -1;
+#ifdef LOGLEVEL_DEBUG
+    int oldfd = this->fd;
+#endif
+
     if (this->fd >= 0) {               // if the file descriptor is valid
       if (close(this->fd) == 0) {      // then close it
         error = 0;
@@ -722,6 +716,13 @@ namespace Network {
     }
 
     this->connection_open = false;     // clear the connection_open flag
+
+#ifdef LOGLEVEL_DEBUG
+    std::stringstream message;
+    message << "[DEBUG] closed socket " << this->host << "/" << this->port << " connection to fd " << oldfd;
+    if ( oldfd >= 0 ) logwrite( "Network::TcpSocket::Close", message.str() );
+#endif
+
     return (error);
   }
   /**************** Network::TcpSocket::Close *********************************/
@@ -835,7 +836,7 @@ namespace Network {
         break;
       }
       if ( nread == 0 ) {
-        message << "no data on fd " << this->fd << ": closing socket";
+        message << "no data on socket " << this->host << "/" << this->port << " fd " << this->fd << ": closing connection";
         logwrite( function, message.str() );
         this->Close();
         break;
@@ -866,6 +867,74 @@ namespace Network {
   /**************** Network::TcpSocket::Read **********************************/
 
 
+  /**************** Network::TcpSocket::Read **********************************/
+  /**
+   * @fn         Read
+   * @brief      read data from connected socket until an end string
+   * @param[out] std::string retstring
+   * @param[in]  std::string endstr
+   * @return     number of bytes read or -1 on error
+   *
+   * If data not immediately available then wait for up to POLLTIMEOUT
+   *
+   * This function is overloaded; this version accepts a reference to a string
+   * and an end string to read until.
+   *
+   */
+  int TcpSocket::Read(std::string &retstring, std::string endstr) {
+    std::string function = "Network::TcpSocket::Read[endstr]";
+    std::stringstream message;
+    std::stringstream bufstream;
+    int nread, bytesread=0;
+    const int bufsz=8192;                // read buffer in chunks
+    char buf[bufsz+1];
+    memset(buf,'\0',bufsz+1);
+
+    // get the time now for timeout purposes
+    //
+    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    while ( 1 ) {
+      nread = read( this->fd, buf, bufsz );
+      if ( nread<0 ) {
+        message << "ERROR reading socket " << this->host << "/" << this->port << " on fd " << this->fd << ": " << strerror(errno);
+        logwrite( function, message.str() );
+        break;
+      }
+      if ( nread == 0 ) {
+        message << "ERROR no data from socket " << this->host << "/" << this->port << " on fd " << this->fd << ": closing connection";
+        logwrite( function, message.str() );
+        this->Close();
+        break;
+      }
+      bytesread += nread;                // keep count of total bytes read
+      bufstream << buf;                  // build up return string from each byte read
+
+      // get time now and check for timeout
+      //
+      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
+
+      if ( elapsed > POLLTIMEOUT ) {
+        message << "ERROR: timeout waiting for data on fd " << this->fd;
+        logwrite( function, message.str() );
+        break;
+      }
+
+      // Break when the endstr is found in the buffer read
+      //
+      if ( bufstream.str().find( endstr ) != std::string::npos ) break;
+    }
+
+    retstring = bufstream.str();         // assign the assembled stream to the return string
+
+    if ( nread <= 0 ) return( nread );   // return error
+    else return( bytesread );            // or bytes read
+  }
+  /**************** Network::TcpSocket::Read **********************************/
+
+
   /**************** Network::TcpSocket::Bytes_ready ***************************/
   /**
    * @fn         Bytes_ready
@@ -882,5 +951,30 @@ namespace Network {
     return(bytesready);
   }
   /**************** Network::TcpSocket::Bytes_ready ***************************/
+
+
+  /**************** Network::TcpSocket::Flush *********************************/
+  /**
+   * @fn         Flush
+   * @brief      flush a socket by reading until it's empty
+   * @param[in]  none
+   * @return     none
+   *
+   */
+  void TcpSocket::Flush() {
+    struct pollfd poll_struct;
+    poll_struct.events = POLLIN;
+    poll_struct.fd     = this->fd;  // poll the current file descriptor
+
+    poll( &poll_struct, 1, 1000 );  // poll up to 1 sec
+
+    while ( true ) {
+      char buf[1024];
+      int len = recv( poll_struct.fd, buf, sizeof(buf), MSG_DONTWAIT );
+      if ( len == -1 ) break;
+    }
+    return;
+  }
+  /**************** Network::TcpSocket::Flush *********************************/
 
 }

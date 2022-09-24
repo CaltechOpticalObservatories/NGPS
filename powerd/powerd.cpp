@@ -300,7 +300,7 @@ void async_main(Network::UdpSocket sock) {
   std::string function = "Power::async_main";
   int retval;
 
-  logwrite( function, "NOT IMPLEMENTED" );
+  logwrite( function, "[TODO] async status not yet implemented for powerd" );
   return;
 
   retval = sock.Create();                                   // create the UDP socket
@@ -483,6 +483,7 @@ void doit(Network::TcpSocket sock) {
     }
 
     if (ret != NOTHING) {
+      if ( not retstring.empty() ) { message.str(""); message << "reply=" << retstring; logwrite( function, message.str() ); }
       if ( not retstring.empty() ) retstring.append( " " );
       std::string term=(ret==0?"DONE\n":"ERROR\n");
       retstring.append( term );

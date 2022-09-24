@@ -49,7 +49,7 @@ namespace Slit {
       float pos;
 
       long load_info( std::string &input ) {
-        std::string function = " (Slit::ControllerInfo::load_info) ";
+        std::string function = "  (Slit::ControllerInfo::load_info) ";
         std::vector<std::string> tokens;
 
         Tokenize( input, tokens, " \"" );

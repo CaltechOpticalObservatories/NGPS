@@ -93,6 +93,10 @@ namespace WTI {
       return( ERROR );
     }
 
+    // Need to flush the buffer because the WTI will write stuff upon opening the socket
+    //
+    this->sock.Flush();
+
     message.str(""); message << "socket connection to " 
                              << this->sock.gethost() << ":" << this->sock.getport()
                              << " established on fd " << this->sock.getfd() << " for " << this->name;
@@ -140,25 +144,76 @@ namespace WTI {
   /**************** WTI::Interface::send_command ******************************/
   /**
    * @fn         send_command
-   * @brief      
+   * @brief      send specified command to WTI socket interface, don't return reply
    * @param[in]  cmd, string
    * @return     ERROR or NO_ERROR
+   *
+   * This function writes the command an although it reads the reply it does not
+   * return the reply. The reply is read only as confirmation that the command
+   * was sent successfully.
    *
    */
   long Interface::send_command( std::string cmd ) {
     std::string function = "WTI::Interface::send_command";
     std::stringstream message;
+    std::string reply;
+    long error=NO_ERROR;
+    long retval=0;
 
 #ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] to " << this->name << ": " << cmd;
+    message << "[DEBUG] to " << this->name << " on socket " << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
     logwrite( function, message.str() );
 #endif
 
-    cmd.append( "\n" );                            // add the newline character
-
+    cmd.append( "\r" );                            // add the CR character
     int written = this->sock.Write( cmd );         // write the command
+    if ( written <= 0 ) {                          // return error if error writing to socket
+      message.str(""); message << "ERROR sending " << cmd << " to " << this->name;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
 
-    if ( written <= 0 ) return( ERROR );           // return error if error writing to socket
+    // read the reply
+    //
+    while ( error == NO_ERROR && retval >= 0 ) {
+
+      if ( ( retval=this->sock.Poll() ) <= 0 ) {
+        message.str("");
+        if ( retval==0 ) { message << "TIMEOUT on " << this->name << " polling socket " << this->sock.gethost()
+                                   << "/" << this->sock.getport() << " on fd " << this->sock.getfd() << ": " << strerror(errno);
+                           error = TIMEOUT; }
+        if ( retval <0 ) { message << "ERROR on " << this->name << " polling socket " << this->sock.gethost()
+                                   << "/" << this->sock.getport() << " on fd " << this->sock.getfd() << ": " << strerror(errno);
+                           error = ERROR; }
+        if ( error != NO_ERROR ) logwrite( function, message.str() );
+        break;
+      }
+
+      if ( ( retval = this->sock.Read( reply, "NPS>" ) ) < 0 ) {
+        message.str(""); message << "error reading from socket " << this->sock.gethost() << "/" << this->sock.getport()
+                                 << " for " << this->name << ": " << strerror( errno );
+        logwrite( function, message.str() );
+        break;
+      }
+
+      // Check that the reply contains the command, which is acknowledgement of receipt
+      //
+      if ( reply.find( cmd ) == std::string::npos ) {
+        message.str(""); message << "ERROR did not receive command ack: " << reply;
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+      else {
+#ifdef LOGLEVEL_DEBUG
+        std::string debug_reply = reply;
+        debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
+        debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
+        message.str(""); message << "[DEBUG] " << this->name << " reply: " << debug_reply;
+        logwrite( function, message.str() );
+#endif
+        break;
+      }
+    }
 
     return( NO_ERROR );
   }
@@ -168,7 +223,7 @@ namespace WTI {
   /**************** WTI::Interface::send_command ******************************/
   /**
    * @fn         send_command
-   * @brief      
+   * @brief      send specified command to WTI socket interface and return reply
    * @param[in]  cmd, string
    * @param[out] retstring, reference to string
    * @return     ERROR or NO_ERROR
@@ -181,13 +236,19 @@ namespace WTI {
     long error=NO_ERROR;
     long retval=0;
 
+#ifdef LOGLEVEL_DEBUG
+    message << "[DEBUG] to " << this->name << " on socket " << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
+    logwrite( function, message.str() );
+#endif
+
     // send the command
     //
-    error = this->send_command( cmd );
-
-    if ( error == ERROR ) {
+    cmd.append( "\r" );                            // add the CR character
+    int written = this->sock.Write( cmd );         // write the command
+    if ( written <= 0 ) {                          // return error if error writing to socket
       message.str(""); message << "ERROR sending " << cmd << " to " << this->name;
       logwrite( function, message.str() );
+      return( ERROR );
     }
 
     // read the reply
@@ -196,29 +257,55 @@ namespace WTI {
 
       if ( ( retval=this->sock.Poll() ) <= 0 ) {
         message.str("");
-        if ( retval==0 ) { message << "TIMEOUT on " << this->name << " fd " << this->sock.getfd() << ": " << strerror(errno);
+        if ( retval==0 ) { message << "TIMEOUT on " << this->name << " polling socket " << this->sock.gethost()
+                                   << "/" << this->sock.getport() << " on fd " << this->sock.getfd() << ": " << strerror(errno);
                            error = TIMEOUT; }
-        if ( retval <0 ) { message << "ERROR on " << this->name << " fd " << this->sock.getfd() << ": " << strerror(errno);
+        if ( retval <0 ) { message << "ERROR on " << this->name << " polling socket " << this->sock.gethost()
+                                   << "/" << this->sock.getport() << " on fd " << this->sock.getfd() << ": " << strerror(errno);
                            error = ERROR; }
         if ( error != NO_ERROR ) logwrite( function, message.str() );
         break;
       }
 
-      if ( ( retval = this->sock.Read( reply, '\n' ) ) < 0 ) {
-        message.str(""); message << "error reading from socket for " << this->name << ": " << strerror( errno );
+      if ( ( retval = this->sock.Read( reply, "NPS>" ) ) < 0 ) {
+        message.str(""); message << "error reading from socket " << this->sock.gethost() << "/" << this->sock.getport()
+                                 << " for " << this->name << ": " << strerror( errno );
         logwrite( function, message.str() );
         break;
       }
 
-      // remove any newline characters and get out
+      // Check that the reply contains the command, which is acknowledgement of receipt
       //
-      reply.erase(std::remove(reply.begin(), reply.end(), '\r' ), reply.end());
-      reply.erase(std::remove(reply.begin(), reply.end(), '\n' ), reply.end());
-      break;
-
+      if ( reply.find( cmd ) == std::string::npos ) {
+        message.str(""); message << "ERROR did not receive command ack: " << reply;
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+      else {
+#ifdef LOGLEVEL_DEBUG
+        std::string debug_reply = reply;
+        debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
+        debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
+        message.str(""); message << "[DEBUG] " << this->name << " reply: " << debug_reply;
+        logwrite( function, message.str() );
+#endif
+        break;
+      }
     }
 
-    retstring = reply;
+    // Tokenize reply on CR and LF
+    // Reply should contain 3 tokens: <cmd> <response> "NPS>"
+    //
+    std::vector<std::string> tokens;
+    Tokenize( reply, tokens, "\r\n" );
+    if ( tokens.size() == 3 ) {
+      retstring = tokens[1];
+    }
+    else {
+      message.str(""); message << "ERROR malformed response: " << reply << ": expected <cmd> <response> \"NPS>\"";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
 
     return( error );
   }
@@ -304,9 +391,19 @@ namespace WTI {
     std::stringstream cmdstr;
     long error = NO_ERROR;
 
-    logwrite( function, "not yet implemented" );
+    cmdstr << "/S " << plugnum;
 
-    state="N/A";
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] sending " << cmdstr.str() << " to " << this->interface.get_name();
+    logwrite( function, message.str() );
+#endif
+
+    error = this->interface.send_command( cmdstr.str(), state );
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] received " << state;
+    logwrite( function, message.str() );
+#endif
 
     return( error );
   }

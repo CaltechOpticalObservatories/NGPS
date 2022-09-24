@@ -225,6 +225,9 @@ namespace Sequencer {
    *
    * This thread never terminates unless there is an error.
    *
+   * This thread listens for the following asynchronous message tags:
+   *    ELAPSEDTIME
+   *
    */
   void Sequence::dothread_sequence_async_listener( Sequencer::Sequence &seq, Network::UdpSocket udp ) {
     seq.set_thrstate_bit( THR_SEQUENCE_ASYNC_LISTENER );
@@ -264,7 +267,11 @@ namespace Sequencer {
         // of the end of the exposure time, then alert the TCS operator of the next
         // target's coordinates. notify_tcs_next_target has to be set true by dothread_trigger_exposure().
         //
-        if ( seq.notify_tcs_next_target && statstr.compare( 0, 11, "ELAPSEDTIME" ) == 0 ) {
+        // Since the only purpose of this is to alert the TCS near the end of the exposure, it is
+        // not important to differentiate which camera's elapsed time that is being read here;
+        // they are all going to be close enough for this purpose.
+        //
+        if ( seq.notify_tcs_next_target && statstr.compare( 0, 11, "ELAPSEDTIME" ) == 0 ) {   /// async message tag ELAPSEDTIME
           std::string::size_type pos = statstr.find( ":" );
           std::string elapsedstr = statstr.substr( pos + 1 );
           double remaining = (double)( seq.target.exptime - stol( elapsedstr )/1000. );
@@ -575,12 +582,17 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
     bool isopen=false;
+logwrite( function, "[DEBUG] starting" );//TODO temporary
+
+message.str(""); message << "[DEBUG] powerd socket isconnected=" << seq.powerd.socket.isconnected();//TODO temporary
+logwrite( function, message.str() );//TODO temporary
 
     // if not connected to the power daemon then connect
     //
     if ( !seq.powerd.socket.isconnected() ) {
       logwrite( function, "connecting to power daemon" );
       error = seq.powerd.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to power daemon" );
     }
 
     // Ask powerd if hardware connection is open,
@@ -588,6 +600,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.powerd.send( POWERD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with power hardware" );
     }
 
     // and open it if necessary.
@@ -595,6 +608,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to network power switch" );
       error = seq.powerd.send( POWERD_OPEN, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR opening connection to power hardware" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -631,17 +645,19 @@ namespace Sequencer {
 
     // Turn on power to slit hardware.
     //
-    // TODO
-    std::stringstream cmd;
-    cmd << "something";
-//  error = seq.powerd.send( cmd.str(), reply ); // TODO send command to turn on slit hardware here
-    logwrite( function, "[TODO] power on slit hardware not yet implemented" );
+    for ( auto plug : seq.power_switch[POWER_SLIT].plugname ) {
+      std::stringstream cmd;
+      cmd << plug << " ON";
+      error |= seq.powerd.send( cmd.str(), reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR turning on power to slit hardware" );
+    }
 
     // if not connected to the slit daemon then connect
     //
     if ( error==NO_ERROR && !seq.slitd.socket.isconnected() ) {
       logwrite( function, "connecting to slit daemon" );
       error = seq.slitd.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to slit daemon" );
     }
 
     // Ask slitd if hardware connection is open,
@@ -649,6 +665,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.slitd.send( SLITD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with slit hardware" );
     }
 
     // and open it if necessary.
@@ -656,6 +673,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to slit hardware" );
       error = seq.slitd.send( SLITD_OPEN, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR opening connection to slit hardware" );
     }
 
     // Ask slitd if the slit motors are homed,
@@ -663,6 +681,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.slitd.send( SLITD_ISHOME, reply );
       error |= seq.parse_state( function, reply, ishomed );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with slit hardware" );
     }
 
     // and send the HOME command to slitd if needed.
@@ -670,6 +689,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !ishomed ) {
       logwrite( function, "sending home command" );
       error = seq.slitd.send( SLITD_HOME, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with slit hardware" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -703,16 +723,21 @@ namespace Sequencer {
     long error=NO_ERROR;
     bool isopen=false;
 
-    // if required systems not powered on then turn them on
+    // Turn on power to calib hardware.
     //
-    // TODO
-    logwrite( function, "[TODO] power on calib hardware not yet implemented" );
+    for ( auto plug : seq.power_switch[POWER_CALIB].plugname ) {
+      std::stringstream cmd;
+      cmd << plug << " ON";
+      error |= seq.powerd.send( cmd.str(), reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR turning on power to calib hardware" );
+    }
 
     // if not connected to the calib daemon then connect
     //
     if ( !seq.calibd.socket.isconnected() ) {
       logwrite( function, "connecting to calib daemon" );
       error = seq.calibd.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to calib daemon" );
     }
 
     // Ask calibd if hardware connection is open,
@@ -720,6 +745,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.calibd.send( CALIBD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with calib hardware" );
     }
 
     // and open it if necessary.
@@ -727,6 +753,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to calib hardware" );
       error = seq.calibd.send( CALIBD_OPEN, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR opening connection to calib hardware" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -765,6 +792,7 @@ namespace Sequencer {
     if ( !seq.tcsd.socket.isconnected() ) {
       logwrite( function, "connecting to tcs daemon" );
       error = seq.tcsd.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to tcs daemon" );
     }
 
     // Ask tcsd if hardware connection is open,
@@ -772,6 +800,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.tcsd.send( TCSD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with TCS" );
     }
 
     // and open it if necessary.
@@ -779,6 +808,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to tcs hardware" );
       error = seq.tcsd.send( TCSD_OPEN, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to TCS" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -812,16 +842,22 @@ namespace Sequencer {
     long error=NO_ERROR;
     bool isopen=false;
 
-    // if required systems not powered on then turn them on
+    // Turn on power to flexure hardware.
     //
-    // TODO
-    logwrite( function, "[TODO] power on flexure hardware not yet implemented" );
+    logwrite( function, "powering on flexure hardware" );
+    for ( auto plug : seq.power_switch[POWER_FLEXURE].plugname ) {
+      std::stringstream cmd;
+      cmd << plug << " ON";
+      error |= seq.powerd.send( cmd.str(), reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR turning on power to flexure hardware" );
+    }
 
     // if not connected to the flexure daemon then connect
     //
     if ( !seq.flexured.socket.isconnected() ) {
       logwrite( function, "connecting to flexure daemon" );
       error = seq.flexured.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to flexure daemon" );
     }
 
     // Ask flexured if hardware connection is open,
@@ -829,6 +865,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.flexured.send( FLEXURED_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with flexure hardware" );
     }
 
     // and open it if necessary.
@@ -836,6 +873,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to flexure hardware" );
       error = seq.flexured.send( FLEXURED_OPEN, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR opening connection to flexure hardware" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -869,16 +907,22 @@ namespace Sequencer {
     long error=NO_ERROR;
     bool isopen=false;
 
-    // if required systems not powered on then turn them on
+    // Turn on power to focus hardware.
     //
-    // TODO
-    logwrite( function, "[TODO] power on focus hardware not yet implemented" );
+    logwrite( function, "powering on focus hardware" );
+    for ( auto plug : seq.power_switch[POWER_FOCUS].plugname ) {
+      std::stringstream cmd;
+      cmd << plug << " ON";
+      error |= seq.powerd.send( cmd.str(), reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR turning on power to focus hardware" );
+    }
 
     // if not connected to the focus daemon then connect
     //
     if ( !seq.focusd.socket.isconnected() ) {
       logwrite( function, "connecting to focus daemon" );
       error = seq.focusd.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to focus daemon" );
     }
 
     // Ask focusd if hardware connection is open,
@@ -886,6 +930,7 @@ namespace Sequencer {
     if ( error == NO_ERROR ) {
       error  = seq.focusd.send( FOCUSD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with focus hardware" );
     }
 
     // and open it if necessary.
@@ -893,6 +938,7 @@ namespace Sequencer {
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to focus hardware" );
       error = seq.focusd.send( FOCUSD_OPEN, reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR opening connection to focus hardware" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -926,16 +972,22 @@ namespace Sequencer {
     long error=NO_ERROR;
     bool isopen=false;
 
-    // if required systems not powered on then turn them on
+    // Turn on power to focus hardware.
     //
-    // TODO
-    logwrite( function, "[TODO] power on cameras not yet implemented" );
+    logwrite( function, "powering on science cameras" );
+    for ( auto plug : seq.power_switch[POWER_CAMERA].plugname ) {
+      std::stringstream cmd;
+      cmd << plug << " ON";
+      error |= seq.powerd.send( cmd.str(), reply );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR turning on power to science cameras" );
+    }
 
     // if not connected to the camera daemon then connect
     //
     if ( !seq.camerad.socket.isconnected() ) {
       logwrite( function, "connecting to camera daemon" );
       error = seq.camerad.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) logwrite( function, "ERROR connecting to camera daemon" );
     }
 
     // Ask camerad if hardware connection is open,
@@ -949,6 +1001,7 @@ namespace Sequencer {
       logwrite( function, "connecting to camera hardware" );
 //    error = seq.camerad.send( CAMERAD_OPEN, reply );
       error = seq.camerad.send( "open 2 3", reply );     // TODO two controllers working for testing
+      if ( error != NO_ERROR ) logwrite( function, "ERROR communicating with science camera controller(s)" );
     }
 
     // send a bunch of stuff, will get cleaned up later
@@ -1041,7 +1094,7 @@ namespace Sequencer {
 
       // send casangle
       //
-      if ( error == NO_ERROR ) logwrite( function, "TODO send casangle" ); // TODO break this out in its own thread?
+      if ( error == NO_ERROR ) logwrite( function, "[TODO] send casangle not yet implemented" ); // TODO put into its own thread?
 
       // Wait for telescope slew to start.
       //
@@ -1153,7 +1206,7 @@ namespace Sequencer {
 
       // trigger A&G acquire sequence
       //
-      logwrite( function, "TODO: trigger A&G acquire" );  //TODO
+      logwrite( function, "[TODO] trigger A&G acquire not yet implemented" );  //TODO
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1222,7 +1275,7 @@ namespace Sequencer {
 
         coords << "NEXT " << ra << " " << dec << " 0 0 0 \"" << seq.target.name << "\"";
 //      error  = seq.tcsd.send( coords.str(), reply ); TODO
-        message.str(""); message << "TODO: send command to TCS: " << coords.str();
+        message.str(""); message << "[TODO] new command not implemented in TCS: " << coords.str();
         logwrite( function, message.str() );
         int tcsvalue;
         if ( error == NO_ERROR ) error = seq.extract_tcs_value( reply, tcsvalue );
@@ -1231,7 +1284,7 @@ namespace Sequencer {
 
       // send casangle
       //
-      if ( error == NO_ERROR ) logwrite( function, "TODO send casangle" ); // TODO break this out in its own thread?
+      if ( error == NO_ERROR ) logwrite( function, "[TODO] send casangle not yet implemented" ); // TODO put into its own thread?
     }
     seq.clr_thrstate_bit( THR_NOTIFY_TCS );
     return;
@@ -1252,7 +1305,7 @@ namespace Sequencer {
     std::string function = "Sequencer::Sequence::dothread_focus_set";
     long error=NO_ERROR;
 
-    logwrite( function, "[TODO] not yet implemented. delaying 5s for focus" );
+    logwrite( function, "[TODO] focus not yet implemented. sleeping 5s" );
     usleep( 5000000 );
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1282,7 +1335,7 @@ namespace Sequencer {
     std::string function = "Sequencer::Sequence::dothread_flexure_set";
     long error=NO_ERROR;
 
-    logwrite( function, "[TODO] not yet implemented. delaying 5s for flexure" );
+    logwrite( function, "[TODO] flexure not yet implemented. sleeping 5s" );
     usleep( 5000000 );
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1312,7 +1365,7 @@ namespace Sequencer {
     std::string function = "Sequencer::Sequence::dothread_calibrator_set";
     long error=NO_ERROR;
 
-    logwrite( function, "[TODO] not yet implemented. delaying 6s for calibrator" );
+    logwrite( function, "[TODO] calibrator not yet implemented. sleeping 6s" );
     usleep( 6000000 );
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1416,6 +1469,10 @@ namespace Sequencer {
         last_reqstate = new_reqstate;
       }
       if ( seq.seqstate.load() == last_reqstate ) break;   // condition met: seqstate is reqstate
+    }
+
+    if ( seq.thr_error.load() != NO_ERROR ) {
+      logwrite( function, "ERROR a thread had an error!" );
     }
 
     // done waiting so send notification
@@ -1570,8 +1627,7 @@ namespace Sequencer {
     std::vector<std::string> tokens;
     Tokenize( reply, tokens, " " );
     if ( tokens.size() != 2 ) {
-      message.str(""); message << "ERROR reading true|false state from string \"" << reply 
-                               << "\" from " << whoami << ": expected two tokens";
+      message.str(""); message << "ERROR parsing \"" << reply << "\" from " << whoami << ": expected <state> <error>";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -1926,6 +1982,25 @@ namespace Sequencer {
     }
 
     std::string testname = tokens[0];                                // the first token is the test name
+
+    // ----------------------------------------------------
+    // async -- queue an asynchronous message
+    // ----------------------------------------------------
+    //
+/*
+    if ( testname == "async" ) {
+      if ( tokens.size() > 1 ) {
+        if ( tokens.size() > 2 ) logwrite( function, "NOTICE multiple strings ignored, only the first will be queued" );
+        logwrite( function, tokens[1] );
+        this->common.message.enqueue( tokens[1] );
+      }
+      else {
+        logwrite( function, "test" );
+        this->common.message.enqueue( "test" );
+      }
+    }
+    else
+*/
 
     // ----------------------------------------------------
     // states -- get the current seqstate and reqstate

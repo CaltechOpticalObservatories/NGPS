@@ -32,6 +32,9 @@ tail $FILES \
      | awk '{if ($3 ~ /ERROR/) print "\a\033[1;31m"$0"\033[0m"; \
              else if ($3 ~ /ERROR:/) print "\a\033[1;31m"$0"\033[0m"; \
              else if ($3 ~ /error/) print "\a\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /POLLHUP/) print "\a\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /POLLERR/) print "\a\033[1;31m"$0"\033[0m"; \
+             else if ($3 ~ /POLLNVAL/) print "\a\033[1;31m"$0"\033[0m"; \
              else if ($3 ~ /timeout/) print "\033[1;31m"$0"\033[0m"; \
              else if ($3 ~ /TIMEOUT/) print "\033[1;31m"$0"\033[0m"; \
              else if ($3 ~ /\[NOTICE\]/) print "\033[7;33m"$0"\033[0m"; \

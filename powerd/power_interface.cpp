@@ -99,6 +99,8 @@ namespace Power {
 
     return;
   }
+  /**************** Power::Interface::configure_interface *********************/
+
 
   /**************** Power::Interface::initialize_class ************************/
   /**
@@ -374,7 +376,7 @@ namespace Power {
           return( ERROR );
         }
 
-        if ( plug < 0 || plug > loc_unit->second.maxplugs ) {
+        if ( plug < 1 || plug > loc_unit->second.maxplugs ) {
           message.str(""); message << "ERROR requested plug " << plug << " outside range {1:" << loc_unit->second.maxplugs << "}";
           logwrite( function, message.str() );
           return( ERROR );
@@ -414,8 +416,20 @@ namespace Power {
       if ( tokens.at(2) == "OFF" ) command =  0;  // turn off plug
       else
       if ( tokens.at(2) == "ON"  ) command =  1;  // turn on plug
-      else
-                                   command = -1;  // read plug state
+      else {
+        message.str(""); message << "ERROR unrecognized command " << tokens.at(2);
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+
+      // find the name associated with unit/plug
+      //
+      for ( auto plug_it = this->plugmap.begin(); plug_it != this->plugmap.end(); ++plug_it ) {
+        if ( plug_it->second.npsnum == unit && plug_it->second.plugnum == plug ) {
+          name = plug_it->first;
+          break;
+        }
+      }
     }
     else
 
@@ -423,6 +437,22 @@ namespace Power {
     //
     {
       logwrite( function, "ERROR bad number of arguments" );
+      return( ERROR );
+    }
+
+    // Final check of plug and unit numbers
+    //
+    auto loc_unit = this->nps_info.find( unit );
+
+    if ( loc_unit == this->nps_info.end() ) {
+      message.str(""); message << "ERROR requested nps unit " << unit << " not found in configuration";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    if ( plug < 1 || plug > loc_unit->second.maxplugs ) {
+      message.str(""); message << "ERROR requested plug " << plug << " outside range {1:" << loc_unit->second.maxplugs << "}";
+      logwrite( function, message.str() );
       return( ERROR );
     }
 
@@ -434,7 +464,13 @@ namespace Power {
       return( ERROR );
     }
 
-    // Form and the command string
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] command=" << command << ( command==-1 ? " (get) " : " (set) " )
+                             << "unit=" << unit << " plug=" << plug;
+    logwrite( function, message.str() );
+#endif
+
+    // Send the command
     //
     long error = NO_ERROR;
     switch( command ) {
@@ -443,7 +479,7 @@ namespace Power {
       case  0:
       case  1: error = this->nps.at(unit).set_switch( plug, command );
                message.str(""); message << ( error != NO_ERROR ? "ERROR setting " : "set " )
-                                        << name << ( command == 0 ? " OFF" : " ON" );
+                                        << ( name.empty() ? "empty" : name ) << ( command == 0 ? " OFF" : " ON" );
                logwrite( function, message.str() );
                break;
       default: message.str(""); message << "ERROR bad command " << command;                   // should be impossible

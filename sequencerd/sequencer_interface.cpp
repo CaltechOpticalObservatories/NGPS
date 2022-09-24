@@ -769,7 +769,7 @@ this->exptime=20;
    *
    */
   long Daemon::send( std::string command, std::string &reply ) {
-    std::string function = "Sequencer::Daemon::send["+this->name+"]";
+    std::string function = "Sequencer::Daemon::send";
     std::stringstream message;
     long ret;
 
@@ -790,11 +790,13 @@ this->exptime=20;
     int pollret;
     if ( ( pollret = this->socket.Poll() ) <= 0 ) {
       if ( pollret == 0 ) {
-        message.str(""); message << "TIMEOUT polling fd " << this->socket.getfd();
+        message.str(""); message << "TIMEOUT " << this->name << " polling socket " << this->socket.gethost()
+                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
         logwrite( function, message.str() );
       }
       if ( pollret <0 ) {
-        message.str(""); message << "ERROR polling fd " << this->socket.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR " << this->name << " polling socket " << this->socket.gethost()
+                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << strerror(errno);
         logwrite( function, message.str() );
       }
       return ERROR;
@@ -805,11 +807,13 @@ this->exptime=20;
     char delim = '\n';
     if ( ( ret = this->socket.Read( reply, delim ) ) <= 0 ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
-        message.str(""); message << "ERROR reading from socket on fd " << this->socket.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR " << this->name << " reading from socket " << this->socket.gethost()
+                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       if ( ret==0 ) {
-        message.str(""); message << "TIMEOUT reading from socket on fd " << this->socket.getfd();
+        message.str(""); message << "TIMEOUT " << this->name << " reading from socket " << this->socket.gethost()
+                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
         logwrite( function, message.str() );
       }
     }
@@ -838,7 +842,7 @@ this->exptime=20;
    *
    */
   long Daemon::command( std::string args ) {
-    std::string function = "Sequencer::Daemon::command["+this->name+"]";
+    std::string function = "Sequencer::Daemon::command";
     std::stringstream message;
     std::string reply;
     std::string done = "DONE";
@@ -856,7 +860,7 @@ this->exptime=20;
     return( retval );
   }
   long Daemon::command( std::string args, std::string &retstring ) {
-    std::string function = "Sequencer::Daemon::command["+this->name+"]";
+    std::string function = "Sequencer::Daemon::command";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -874,23 +878,11 @@ this->exptime=20;
       // initialize socket connection
       //
       if ( ( error = this->connect() ) != NO_ERROR ) retstring="ERROR"; else retstring="DONE"; 
-/***
-      // send the open command
-      //
-      error = this->send( "open", retstring );
-
-      if ( error == NO_ERROR ) {
-        message.str(""); message << "opened " << this->name << "...";
-      }
-      else {
-        message.str(""); message << "error opening " << this->name << "...";
-      }
+//#ifdef LOGLEVEL_DEBUG  //TODO
+      message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
       logwrite( function, message.str() );
-***/
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] connected to " << this->name << " on fd " << this->socket.getfd();
-      logwrite( function, message.str() );
-#endif
+//#endif  //TODO
     }
     else
 
@@ -902,18 +894,11 @@ this->exptime=20;
     // disconnect from the daemon
     //
     if ( args == "disconnect" ) {
-/***
-      // send the close command
-      //
-      message.str(""); message << "closing " << this->name << "...";
+//#ifdef LOGLEVEL_DEBUG  //TODO
+      message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
       logwrite( function, message.str() );
-      error = this->send( "close", retstring );
-***/
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] disconnecting " << this->name << " from fd " << this->socket.getfd();
-      logwrite( function, message.str() );
-#endif
+//#endif  //TODO
       // then close the connection
       //
       this->socket.Close();
@@ -932,7 +917,8 @@ this->exptime=20;
       }
       else {
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] sending to " << this->name << " on fd " << this->socket.getfd() << ": " << args;
+        message.str(""); message << "[DEBUG] sending to " << this->name << " socket " << this->socket.gethost()
+                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << args;
         logwrite( function, message.str() );
 #endif
         error = this->send( args, retstring );
@@ -940,7 +926,8 @@ this->exptime=20;
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] reply from " << this->name << " on fd " << this->socket.getfd() << ": " << retstring;
+    message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
+                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
     logwrite( function, message.str() );
 #endif
 
@@ -961,7 +948,7 @@ this->exptime=20;
    *
    */
   long Daemon::connect( ) {
-    std::string function = "Sequencer::Daemon::connect["+this->name+"]";
+    std::string function = "Sequencer::Daemon::connect";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -977,7 +964,8 @@ this->exptime=20;
       // If already connected then close the connection
       //
       if ( this->socket.isconnected() ) {
-        message.str(""); message << "closing existing connection to " << this->name;
+        message.str(""); message << "closing existing connection to " << this->name << " socket " << this->socket.gethost()
+                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
         logwrite( function, message.str() );
         this->socket.Close();
       }
@@ -987,7 +975,7 @@ this->exptime=20;
       // Create and connect to the socket
       //
       if ( this->socket.Connect() < 0 ) {
-        message.str(""); message << "ERROR: connecting to " << this->name << " on port " << this->port;
+        message.str(""); message << "ERROR connecting to " << this->name << " on port " << this->port;
         logwrite( function, message.str() );
         error = ERROR;
       } else {
@@ -1003,9 +991,9 @@ this->exptime=20;
 
   /** Sequencer::Daemon::is_connected *****************************************/
   /**
-   * @fn         connect
-   * @brief      initialize socket connection to the daemon
-   * @param[in]  none  
+   * @fn         is_connected
+   * @brief      return the connected state of a socket connection to the daemon
+   * @param[out] reply, string = "true" | "false"
    * @return     ERROR or NO_ERROR
    *
    * This function establishes a socket connection to the daemon
@@ -1013,14 +1001,65 @@ this->exptime=20;
    *
    */
   long Daemon::is_connected( std::string &reply ) {
-    std::string function = "Sequencer::Daemon::is_connected["+this->name+"]";
+    std::string function = "Sequencer::Daemon::is_connected";
+    std::stringstream message;
 
     reply = ( this->socket.isconnected() ? "true" : "false" );
 
-    logwrite( function, reply );
+    message << this->name << " is" << ( this->socket.isconnected() ? " " : " not " ) << "connected";
+    logwrite( function, message.str() );
 
     return( NO_ERROR );
   }
   /** Sequencer::Daemon::is_connected *****************************************/
 
+
+  /** Sequencer::PowerSwitch::PowerSwitch *************************************/
+  /**
+   * @fn         PowerSwitch
+   * @brief      class constructor
+   * @param[in]  none
+   * @return     none
+   *
+   */
+  PowerSwitch::PowerSwitch() {
+  }
+  /** Sequencer::PowerSwitch::PowerSwitch *************************************/
+
+
+  /** Sequencer::PowerSwitch::~PowerSwitch ************************************/
+  /**
+   * @fn         ~PowerSwitch
+   * @brief      class deconstructor
+   * @param[in]  none
+   * @return     none
+   *
+   */
+  PowerSwitch::~PowerSwitch( ) {
+  }
+  /** Sequencer::PowerSwitch::~PowerSwitch ************************************/
+
+
+  /** Sequencer::PowerSwitch::configure ***************************************/
+  /**
+   * @fn         configure
+   * @brief      
+   * @param[in]  
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long PowerSwitch::configure( std::string arglist ) {
+    std::string function = "Sequencer::PowerSwitch::PowerSwitch";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    int size = Tokenize( arglist, tokens, " \t" );
+
+    for ( auto tok : tokens ) {
+      this->plugname.push_back( tok );
+    }
+
+    return( size < 1 ? ERROR : NO_ERROR );
+  }
+  /** Sequencer::PowerSwitch::configure ***************************************/
 }

@@ -37,7 +37,8 @@ class FITS_file {
     std::string fits_name;
 
   public:
-    bool is_error() { return this->error; };        /// allows outsiders access to errors that occurred in a fits writing thread
+    bool iserror() { return this->error; };         /// allows outsiders access to errors that occurred in a fits writing thread
+    bool isopen()  { return this->file_open; };     /// allows outsiders access file open status
     FITS_file() {                                   /// constructor
       this->threadcount = 0;
       this->framen = 0;

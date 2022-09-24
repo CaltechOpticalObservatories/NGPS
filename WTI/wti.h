@@ -14,6 +14,7 @@
 
 #include <string>
 #include <vector>
+#include <regex>
 
 namespace WTI {
 
