@@ -27,7 +27,7 @@ void signal_handler(int signo) {
     case SIGTERM:
     case SIGINT:
       logwrite(function, "received termination signal");
-      server.async.enqueue("exit");         // shutdown the async_main thread if running
+      server.camera.async.enqueue("exit");  // shutdown the async_main thread if running
       server.exit_cleanly();                // shutdown the server
       break;
     case SIGHUP:
@@ -39,7 +39,7 @@ void signal_handler(int signo) {
       break;
     default:
       logwrite(function, "received unknown signal");
-      server.async.enqueue("exit");         // shutdown the async_main thread if running
+      server.camera.async.enqueue("exit");  // shutdown the async_main thread if running
       server.exit_cleanly();                // shutdown the server
       break;
   }
@@ -324,7 +324,7 @@ void async_main(Network::UdpSocket sock) {
   }
 
   while (1) {
-    std::string message = server.async.dequeue();           // get the latest message from the queue (blocks)
+    std::string message = server.camera.async.dequeue();    // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message
     if (retval < 0) {
       std::stringstream errstm;
@@ -446,7 +446,7 @@ void doit(Network::TcpSocket sock) {
     ret = NOTHING;
 
     if (cmd.compare("exit")==0) {
-                    server.async.enqueue("exit");           // shutdown the async message thread if running
+                    server.camera.async.enqueue("exit");    // shutdown the async message thread if running
                     server.exit_cleanly();                  // shutdown the server
                     }
     else

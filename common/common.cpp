@@ -21,6 +21,7 @@ namespace Common {
     std::lock_guard<std::mutex> lock(queue_mutex);
     message_queue.push(message);
     notifier.notify_one();
+    return;
   }
   /** Common::Queue::enqueue **************************************************/
 

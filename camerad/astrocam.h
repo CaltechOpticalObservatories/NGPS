@@ -460,9 +460,6 @@ namespace AstroCam {
       Common::FitsKeys userkeys;        /// create a FitsKeys object for FITS keys specified by the user
       Common::FitsKeys systemkeys;      /// create a FitsKeys object for FITS keys provided by the server
 
-      Common::Queue async;              /// async message queue object
-
-
       // The frameinfo structure holds frame information for each frame
       // received by the callback. This is used to keep track of all the 
       // threads spawned by handle_frame.
