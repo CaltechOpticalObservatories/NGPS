@@ -17,7 +17,7 @@
 #include <thread>
 #include <atomic>
 #include <string>
-// #include "common.h"
+#include "common.h"
 #include "build_date.h"
 #include "utilities.h"
 #include "logentry.h"
@@ -62,7 +62,7 @@ class FITS_file {
      * primary header data to it.
      *
      */
-    long open_file( bool writekeys, Common::Information & info ) {
+    long open_file( bool writekeys, Camera::Information & info ) {
       std::string function = "FITS_file::open_file";
       std::stringstream message;
 
@@ -175,7 +175,7 @@ class FITS_file {
      * Nothing called returns anything so this doesn't return anything.
      *
      */
-    void close_file( bool writekeys, Common::Information & info ) {
+    void close_file( bool writekeys, Camera::Information & info ) {
       std::string function = "FITS_file::close_file";
       std::stringstream message;
 
@@ -242,7 +242,7 @@ class FITS_file {
      *
      */
     template <class T>
-    long write_image(T* data, Common::Information& info) {
+    long write_image(T* data, Camera::Information& info) {
       std::string function = "FITS::write_image";
       std::stringstream message;
 
@@ -340,7 +340,7 @@ class FITS_file {
      * @fn         write_image_thread
      * @brief      This is where the data are actually written for flat fits files
      * @param[in]  T &data, reference to the data
-     * @param[in]  Common::Information &info, reference to the info structure
+     * @param[in]  Camera::Information &info, reference to the info structure
      * @param[in]  FITS_file *self, pointer to this-> object
      * @return     nothing
      *
@@ -349,7 +349,7 @@ class FITS_file {
      *
      */
     template <class T>
-    void write_image_thread(std::valarray<T> &data, Common::Information &info, FITS_file *self) {
+    void write_image_thread(std::valarray<T> &data, Camera::Information &info, FITS_file *self) {
       std::string function = "FITS_file::write_image_thread";
       std::stringstream message;
 
@@ -403,7 +403,7 @@ class FITS_file {
      * @fn         write_cube_thread
      * @brief      This is where the data are actually written for datacubes
      * @param[in]  T &data, reference to the data
-     * @param[in]  Common::Information &info, reference to the info structure
+     * @param[in]  Camera::Information &info, reference to the info structure
      * @param[in]  FITS_file *self, pointer to this-> object
      * @return     nothing
      *
@@ -412,7 +412,7 @@ class FITS_file {
      *
      */
     template <class T>
-    void write_cube_thread(std::valarray<T> &data, Common::Information &info, FITS_file *self) {
+    void write_cube_thread(std::valarray<T> &data, Camera::Information &info, FITS_file *self) {
       std::string function = "FITS_file::write_cube_thread";
       std::stringstream message;
 
@@ -538,7 +538,7 @@ class FITS_file {
      * TODO is this function obsolete?
      *
      */
-    void make_camera_header(Common::Information &info) {
+    void make_camera_header(Camera::Information &info) {
       std::string function = "FITS_file::make_camera_header";
       std::stringstream message;
       try {

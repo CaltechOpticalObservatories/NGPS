@@ -255,7 +255,7 @@ namespace AstroCam {
     //
     for (int dev = 0; dev < this->numdev; dev++) {
       try {
-        // The Controller class holds the Common::Information class and the FITS_file class,
+        // The Controller class holds the Camera::Information class and the FITS_file class,
         // as well as wrappers for calling the functions inside the FITS_file class.
         // Then a vector of Controller class objects is created, with one element for each ARC device.
         // This is where that vector is pushed.
@@ -514,7 +514,7 @@ namespace AstroCam {
         }
         else {
           try {
-            this->common.firmware[ parse_val(tokens.at(0)) ] = tokens.at(1);
+            this->camera.firmware[ parse_val(tokens.at(0)) ] = tokens.at(1);
             applied++;
           }
           catch(std::out_of_range &) {  // should be impossible but here for safety
@@ -525,12 +525,12 @@ namespace AstroCam {
       }
 
       if (this->config.param[entry].compare(0, 5, "IMDIR")==0) {
-        this->common.imdir( config.arg[entry] );
+        this->camera.imdir( config.arg[entry] );
         applied++;
       }
 
       if (this->config.param[entry].compare(0, 6, "BASENAME")==0) {
-        this->common.basename( config.arg[entry] );
+        this->camera.basename( config.arg[entry] );
         applied++;
       }
 
@@ -857,7 +857,7 @@ namespace AstroCam {
                                   _controller.info.exposure_time, 
                                   _controller.info.detector_pixels[0], 
                                   _controller.info.detector_pixels[1], 
-                                  server.common.abortstate, 
+                                  server.camera.abortstate, 
                                   _controller.pCallback, 
                                   _controller.info.shutterenable);
 #ifdef LOGLEVEL_DEBUG
@@ -883,7 +883,7 @@ namespace AstroCam {
       else {
         message << "ERROR on " << _controller.devname << ": " << e.what();
       }
-      server.common.set_abortstate( true );
+      server.camera.set_abortstate( true );
       logwrite(function, message.str());
       _controller.error = ERROR;
       return;
@@ -891,7 +891,7 @@ namespace AstroCam {
     catch(...) {
       message.str(""); message << "unknown error calling pArcDev->expose() on " << _controller.devname << ". forcing abort.";
       logwrite(function, message.str() );
-      server.common.set_abortstate( true );
+      server.camera.set_abortstate( true );
       _controller.error = ERROR;
       return;
     }
@@ -1198,7 +1198,7 @@ namespace AstroCam {
         this->controller.at(dev).info.binning[1] = 1;
 
         this->controller.at(dev).info.bitpix = 16;
-        this->controller.at(dev).info.frame_type = Common::FRAME_RAW;
+        this->controller.at(dev).info.frame_type = Camera::FRAME_RAW;
         if ( this->controller.at(dev).info.set_axes() != NO_ERROR ) {
           message.str(""); message << "ERROR setting axes for device " << dev;
           logwrite( function, message.str() );
@@ -1256,12 +1256,12 @@ namespace AstroCam {
     if ( nseq > 1 ) {
       message.str(""); message << "NOTICE: multiple exposures not currently supported";
       logwrite( function, message.str() );
-      server.common.message.enqueue( message.str() );
+      server.camera.async.enqueue( message.str() );
     }
 
     // Clear the abort flag for a new exposure, in case it was previously set
     //
-    this->common.set_abortstate( false );
+    this->camera.set_abortstate( false );
 
     // Initialize framethread count -- this keeps track of threads
     // spawned by frameCallback, to make sure that all have been completed.
@@ -1274,7 +1274,7 @@ namespace AstroCam {
 
 //  this->camera_info.start_time = get_timestamp( );                // current system time formatted as YYYY-MM-DDTHH:MM:SS.sss
     _start_time = get_timestamp( );                                 // current system time formatted as YYYY-MM-DDTHH:MM:SS.sss
-    this->common.set_fitstime( _start_time );                       // sets common.fitstime (YYYYMMDDHHMMSS) used for filename
+    this->camera.set_fitstime( _start_time );                       // sets camera.fitstime (YYYYMMDDHHMMSS) used for filename
 
     message.str(""); message << "starting exposure at " << _start_time;
     logwrite(function, message.str());
@@ -1290,7 +1290,7 @@ namespace AstroCam {
 
         // Copy the camera_info into each dev's info class object
         //
-//      this->camera.at(dev).info = this->camera_info;  // TODO I think this is obsolete now that I've included Common::Information in the Controller class
+//      this->camera.at(dev).info = this->camera_info;  // TODO I think this is obsolete now that I've included Camera::Information in the Controller class
 
         // Allocate workspace memory for deinterlacing (each dev has its own workbuf)
         //
@@ -1308,7 +1308,7 @@ namespace AstroCam {
         else {
           devstr = "";
         }
-        if ( ( error = this->common.get_fitsname( devstr, this->controller.at(dev).info.fits_name ) ) != NO_ERROR ) return( error );
+        if ( ( error = this->camera.get_fitsname( devstr, this->controller.at(dev).info.fits_name ) ) != NO_ERROR ) return( error );
 
 #ifdef LOGLEVEL_DEBUG
         message.str("");
@@ -1337,7 +1337,7 @@ namespace AstroCam {
       try {
         // Open the fits file, ...
         //
-        error = this->controller.at(dev).open_file( this->common.writekeys_when );
+        error = this->controller.at(dev).open_file( this->camera.writekeys_when );
 
         // ... then spawn the expose thread.
         //
@@ -1396,7 +1396,7 @@ namespace AstroCam {
     }
 
     if ( error == NO_ERROR ) {
-      this->common.increment_imnum();                                 // increment image_num when fitsnaming == "number"
+      this->camera.increment_imnum();                                 // increment image_num when fitsnaming == "number"
       logwrite(function, "all frames written");
     }
     else {
@@ -1407,7 +1407,7 @@ namespace AstroCam {
     //
     for (auto dev : this->devlist) {
       try {
-        this->controller.at(dev).close_file( this->common.writekeys_when );
+        this->controller.at(dev).close_file( this->camera.writekeys_when );
         if ( this->controller.at(dev).pFits->iserror() ) error = ERROR;   // allow error to be set (but not cleared)
       }
       catch(std::out_of_range &) {
@@ -1460,7 +1460,7 @@ namespace AstroCam {
     // Use these to build a string of the form "<dev> <filename>" to pass to the
     // load_firmware() function to load each controller with the specified file.
     //
-    for (auto fw = this->common.firmware.begin(); fw != this->common.firmware.end(); ++fw) {
+    for (auto fw = this->camera.firmware.begin(); fw != this->camera.firmware.end(); ++fw) {
       std::stringstream lodfilestream;
       // But only use it if the device is open
       //
@@ -2364,7 +2364,7 @@ namespace AstroCam {
 
 
   void Interface::handle_queue(std::string message) {
-    server.common.message.enqueue( message );
+    server.camera.async.enqueue( message );
   }
 
   /**************** AstroCam::Interface::handle_frame *************************/
@@ -2456,13 +2456,13 @@ namespace AstroCam {
         break;                                     // note that frameinfo_mutex remains locked now until completion
       }
 
-      if ( server.common.get_abortstate() ) break; // provide the user a way to get out
+      if ( server.camera.get_abortstate() ) break; // provide the user a way to get out
 
     } while ( server.useframes );                  // some firmware doesn't support frames so get out after one frame if it doesn't
 
     // If not aborted then write this frame
     //
-    if ( ! server.common.get_abortstate() ) {
+    if ( ! server.camera.get_abortstate() ) {
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] calling server.write_frame for devnum=" << devnum << " fpbcount=" << fpbcount;
     logwrite(function, message.str());
@@ -2710,7 +2710,7 @@ namespace AstroCam {
     int nthreads = cores_available();
 nthreads=2;  // TODO *** come back to this !!! ***
 logwrite( function, "NOTICE:override nthreads=2 !!!" );
-server.common.message.enqueue( "NOTICE:override nthreads=2 !!!" );
+server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
 
 #ifdef LOGLEVEL_DEBUG
     message << "[DEBUG] devnum=" << this->devnum << " nthreads=" << nthreads << " imbuf=" << std::hex << imbuf << " workbuf=" << std::hex << this->workbuf
@@ -2831,7 +2831,7 @@ server.common.message.enqueue( "NOTICE:override nthreads=2 !!!" );
    * @return ERROR or NO_ERROR
    *
    * This is the place to put various debugging and system testing tools.
-   * It is placed here, rather than in common, to allow for controller-
+   * It is placed here, rather than in camera, to allow for controller-
    * specific tests. This means some common tests may need to be duplicated
    * for each controller.
    *
@@ -2868,17 +2868,17 @@ server.common.message.enqueue( "NOTICE:override nthreads=2 !!!" );
     //
     if (testname == "fitsname") {
       std::string msg;
-      this->common.set_fitstime( get_timestamp( ) );                 // must set common.fitstime first
+      this->camera.set_fitstime( get_timestamp( ) );                 // must set camera.fitstime first
       if ( this->devlist.size() > 1 ) {
         for (auto dev : this->devlist) {
-          this->common.get_fitsname( std::to_string(dev), msg );     // get the fitsname (by reference)
-          this->common.message.enqueue( msg );                       // queue the fitsname
+          this->camera.get_fitsname( std::to_string(dev), msg );     // get the fitsname (by reference)
+          this->camera.async.enqueue( msg );                         // queue the fitsname
           logwrite( function, msg );                                 // log ths fitsname
         }
       }
       else {
-        this->common.get_fitsname( msg );                            // get the fitsname (by reference)
-        this->common.message.enqueue( msg );                         // queue the fitsname
+        this->camera.get_fitsname( msg );                            // get the fitsname (by reference)
+        this->camera.async.enqueue( msg );                           // queue the fitsname
         logwrite( function, msg );                                   // log ths fitsname
       }
     } // end if (testname == fitsname)
@@ -2896,11 +2896,11 @@ server.common.message.enqueue( "NOTICE:override nthreads=2 !!!" );
           logwrite(function, "NOTICE: received multiple strings -- only the first will be queued");
         }
         logwrite( function, tokens[1] );
-        this->common.message.enqueue( tokens[1] );
+        this->camera.async.enqueue( tokens[1] );
       }
       else {                                // if no string passed then queue a simple test message
         logwrite(function, "test");
-        this->common.message.enqueue("test");
+        this->camera.async.enqueue("test");
       }
     } // end if (testname == async)
 
@@ -2959,7 +2959,7 @@ server.common.message.enqueue( "NOTICE:override nthreads=2 !!!" );
     std::stringstream message;
     long retval;
 
-if ( server.common.get_abortstate() ) {
+if ( server.camera.get_abortstate() ) {
   logwrite(function, "* * * * * GOT ABORT * * * * * skipping write !");
   return( NO_ERROR );
 }

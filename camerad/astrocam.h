@@ -23,6 +23,7 @@
 
 #include "utilities.h"
 #include "common.h"
+#include "camera.h"
 #include "config.h"
 #include "fits.h"
 #include "CArcBase.h"
@@ -34,7 +35,6 @@
 #include "CArcDevice.h"
 #include "CArcBase.h"
 #include "CooExpIFace.h"
-
 
 namespace AstroCam {
 
@@ -455,11 +455,13 @@ namespace AstroCam {
       // Class Objects
       //
       Config config;
-      Common::Common common;            //!< instantiate a Common object
-      Common::Information camera_info;  //!< this is the main camera_info object
-//    Common::Information fits_info;    //!< used to copy the camera_info object to preserve info for FITS writing
-      Common::FitsKeys userkeys;        //!< create a FitsKeys object for FITS keys specified by the user
-      Common::FitsKeys systemkeys;      //!< create a FitsKeys object for FITS keys provided by the server
+      Camera::Camera camera;            /// instantiate a Camera object
+      Camera::Information camera_info;  /// this is the main camera_info object
+      Common::FitsKeys userkeys;        /// create a FitsKeys object for FITS keys specified by the user
+      Common::FitsKeys systemkeys;      /// create a FitsKeys object for FITS keys provided by the server
+
+      Common::Queue async;              /// async message queue object
+
 
       // The frameinfo structure holds frame information for each frame
       // received by the callback. This is used to keep track of all the 
@@ -490,7 +492,7 @@ namespace AstroCam {
 
 
       // The Controller class is a sub-class of Interface and is here to contain
-      // the Common::Information class and FITS_file class objects.
+      // the Camera::Information class and FITS_file class objects.
       // There will be a vector of Controller class objects which matches the
       // vector of controller objects.
       //
@@ -504,8 +506,8 @@ namespace AstroCam {
         public:
           Controller();                 //!< class constructor
           ~Controller() { };            //!< no deconstructor
-          Common::Information info;     //!< this is the main controller info object
-//        Common::FitsKeys userkeys;    //!< create a FitsKeys object for FITS keys specified by the user
+          Camera::Information info;     //!< this is the main controller info object
+//        Camera::FitsKeys userkeys;    //!< create a FitsKeys object for FITS keys specified by the user
           FITS_file *pFits;             //!< FITS container object has to be a pointer here
 
           int error;

@@ -27,8 +27,8 @@ void signal_handler(int signo) {
     case SIGTERM:
     case SIGINT:
       logwrite(function, "received termination signal");
-      server.common.message.enqueue("exit");  // shutdown the async_main thread if running
-      server.exit_cleanly();                  // shutdown the server
+      server.async.enqueue("exit");         // shutdown the async_main thread if running
+      server.exit_cleanly();                // shutdown the server
       break;
     case SIGHUP:
       logwrite(function, "caught SIGHUP");
@@ -39,8 +39,8 @@ void signal_handler(int signo) {
       break;
     default:
       logwrite(function, "received unknown signal");
-      server.common.message.enqueue("exit");  // shutdown the async_main thread if running
-      server.exit_cleanly();                  // shutdown the server
+      server.async.enqueue("exit");         // shutdown the async_main thread if running
+      server.exit_cleanly();                // shutdown the server
       break;
   }
   return;
@@ -324,7 +324,7 @@ void async_main(Network::UdpSocket sock) {
   }
 
   while (1) {
-    std::string message = server.common.message.dequeue();  // get the latest message from the queue (blocks)
+    std::string message = server.async.dequeue();           // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message
     if (retval < 0) {
       std::stringstream errstm;
@@ -446,19 +446,12 @@ void doit(Network::TcpSocket sock) {
     ret = NOTHING;
 
     if (cmd.compare("exit")==0) {
-                    server.common.message.enqueue("exit");  // shutdown the async message thread if running
+                    server.async.enqueue("exit");           // shutdown the async message thread if running
                     server.exit_cleanly();                  // shutdown the server
                     }
     else
     if (cmd.compare("open")==0) {
                     ret = server.connect_controller(args);
-                    }
-    else
-    if (cmd.compare("isopen")==0) {
-                    std::string retstring;
-                    ret = server.is_connected( retstring );
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if (cmd.compare("close")==0) {
@@ -474,40 +467,40 @@ void doit(Network::TcpSocket sock) {
     else
     if (cmd.compare("basename")==0) {
                     std::string retstring;  // string for the return value
-                    ret = server.common.basename(args, retstring);
+                    ret = server.camera.basename(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
     if (cmd.compare("imnum")==0) {
                     std::string retstring;   // string for the return value
-                    ret = server.common.imnum(args, retstring);
+                    ret = server.camera.imnum(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if (cmd.compare("imdir")==0) {
                     std::string retstring;   // string for the return value
-                    ret = server.common.imdir(args, retstring);
+                    ret = server.camera.imdir(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
     if (cmd.compare("autodir")==0) {
                     std::string retstring;
-                    ret = server.common.autodir(args, retstring);
+                    ret = server.camera.autodir(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if (cmd.compare("datacube")==0) {
                     std::string retstring;   // string for the return value
-                    ret = server.common.datacube(args, retstring);
+                    ret = server.camera.datacube(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
     if (cmd.compare("longerror")==0) {
                     std::string retstring;   // string for the return value
-                    ret = server.common.longerror(args, retstring);
+                    ret = server.camera.longerror(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
@@ -521,14 +514,14 @@ void doit(Network::TcpSocket sock) {
     else
     if (cmd.compare("cubeamps")==0) {
                     std::string retstring;   // string for the return value
-                    ret = server.common.cubeamps(args, retstring);
+                    ret = server.camera.cubeamps(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
     if (cmd.compare("fitsnaming")==0) {
                     std::string retstring;
-                    ret = server.common.fitsnaming(args, retstring);
+                    ret = server.camera.fitsnaming(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
@@ -540,7 +533,7 @@ void doit(Network::TcpSocket sock) {
     else
     if (cmd.compare("writekeys")==0) {
                     std::string retstring;
-                    ret = server.common.writekeys(args, retstring);
+                    ret = server.camera.writekeys(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
@@ -551,15 +544,22 @@ void doit(Network::TcpSocket sock) {
                     }
                     else {
                       ret = server.userkeys.addkey(args);
-                      if ( ret != NO_ERROR ) server.common.log_error( function, "bad syntax" );
+                      if ( ret != NO_ERROR ) server.camera.log_error( function, "bad syntax" );
                     }
                     }
     else
     if (cmd.compare("abort")==0) {
-                    server.common.abort();
+                    server.camera.abort();
                     ret = 0;
                     }
 #ifdef ASTROCAM
+    else
+    if (cmd.compare("isopen")==0) {
+                    std::string retstring;
+                    ret = server.is_connected( retstring );
+                    sock.Write(retstring);
+                    sock.Write(" ");
+                    }
     else
     if (cmd.compare("useframes")==0) {
                     std::string retstring;
@@ -738,7 +738,7 @@ void doit(Network::TcpSocket sock) {
 
     if (ret != NOTHING) {
       std::string retstr=(ret==0?"DONE\n":"ERROR\n");
-      if ( ret==0 ) retstr="DONE\n"; else retstr="ERROR" + server.common.get_longerror() + "\n";
+      if ( ret==0 ) retstr="DONE\n"; else retstr="ERROR" + server.camera.get_longerror() + "\n";
       if (sock.Write(retstr)<0) connection_open=false;
     }
 

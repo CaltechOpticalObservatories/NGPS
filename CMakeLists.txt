@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------------------
-# CMakeLists.txt
-# top-level CMake input file for NGPS
+# @file    CMakeLists.txt
+# @brief   top-level CMake input file for NGPS
+# @author  David Hale <dhale@caltech.edu>
 # ----------------------------------------------------------------------------
 
 #add_definitions(-DLOGLEVEL_DEBUG)
@@ -24,6 +25,7 @@ find_package( Threads )
 
 add_subdirectory( ${PROJECT_BASE_DIR}/AndorCamera2 )
 add_subdirectory( ${PROJECT_BASE_DIR}/utils )
+add_subdirectory( ${PROJECT_BASE_DIR}/common )
 add_subdirectory( ${PROJECT_BASE_DIR}/camerad )
 add_subdirectory( ${PROJECT_BASE_DIR}/sequencerd )
 add_subdirectory( ${PROJECT_BASE_DIR}/flexured )
@@ -35,3 +37,4 @@ add_subdirectory( ${PROJECT_BASE_DIR}/powerd )
 add_subdirectory( ${PROJECT_BASE_DIR}/emulator )
 add_subdirectory( ${PROJECT_BASE_DIR}/tcsd )
 add_subdirectory( ${PROJECT_BASE_DIR}/PI )
+add_subdirectory( ${PROJECT_BASE_DIR}/WTI )

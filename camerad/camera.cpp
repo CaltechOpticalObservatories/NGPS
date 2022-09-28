@@ -1,6 +1,6 @@
 /**
- * @file    common.cpp
- * @brief   common interface functions
+ * @file    camera.cpp
+ * @brief   camera interface functions common to all camera interfaces
  * @details 
  * @author  David Hale <dhale@astro.caltech.edu>
  *
@@ -20,11 +20,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "common.h"
+#include "camera.h"
 
-namespace Common {
+namespace Camera {
 
-  Common::Common() {
+  Camera::Camera() {
     this->is_cubeamps = false;           // don't force amplifiers to be written as multi-extension cubes
     this->is_longerror = false;
     this->is_datacube = false;
@@ -40,7 +40,7 @@ namespace Common {
   }
 
 
-  /** Common::Common::abort ***************************************************/
+  /** Camera::Camera::abort ***************************************************/
   /**
    * @fn     abort
    * @brief  abort the current operation (exposure, readout, etc.)
@@ -48,23 +48,23 @@ namespace Common {
    * @return none
    *
    */
-  void Common::abort() {
-    std::string function = "Common::Common::abort";
+  void Camera::abort() {
+    std::string function = "Camera::Camera::abort";
     std::stringstream message;
     this->abortstate = true;
     logwrite(function, "received abort");
     return;
   }
-  /** Common::Common::abort ***************************************************/
+  /** Camera::Camera::abort ***************************************************/
 
-void Common::set_abortstate(bool state) {
+void Camera::set_abortstate(bool state) {
   this->abort_mutex.lock();
   this->abortstate = state;
   this->_abortstate = state;
   this->abort_mutex.unlock();
 }
 
-bool Common::get_abortstate() {
+bool Camera::get_abortstate() {
   bool state;
   this->abort_mutex.lock();
   state = this->abortstate;
@@ -73,7 +73,7 @@ bool Common::get_abortstate() {
 }
 
 
-  /** Common::Common::log_error ***********************************************/
+  /** Camera::Camera::log_error ***********************************************/
   /**
    * @fn     log_error
    * @brief  logs the error and saves the message to be returned on the command port
@@ -82,7 +82,7 @@ bool Common::get_abortstate() {
    * @return ERROR or NO_ERROR
    *
    */
-  void Common::log_error( std::string function, std::string message ) {
+  void Camera::log_error( std::string function, std::string message ) {
     std::stringstream err;
 
     // Save this message in class variable
@@ -95,12 +95,12 @@ bool Common::get_abortstate() {
     // Log and send to async port in the usual ways
     //
     logwrite( function, err.str() );
-    this->message.enqueue( err.str() );
+    this->async.enqueue( err.str() );
   }
-  /** Common::Common::log_error ***********************************************/
+  /** Camera::Camera::log_error ***********************************************/
 
 
-  /** Common::Common::get_longerror *******************************************/
+  /** Camera::Camera::get_longerror *******************************************/
   /**
    * @fn     get_longerror
    * @brief  return the saved error message
@@ -113,15 +113,15 @@ bool Common::get_abortstate() {
    * If is_longerror is clear (false) then return an empty string.
    *
    */
-  std::string Common::get_longerror() {
+  std::string Camera::get_longerror() {
     std::string err = ( this->is_longerror ? ( " " + this->lasterrorstring.str() ) : "" );
     this->lasterrorstring.str("");
     return ( err );
   }
-  /** Common::Common::get_longerror *******************************************/
+  /** Camera::Camera::get_longerror *******************************************/
 
 
-  /** Common::Common::writekeys ***********************************************/
+  /** Camera::Camera::writekeys ***********************************************/
   /**
    * @fn     writekeys
    * @brief  set or get the writekeys_when value
@@ -130,8 +130,8 @@ bool Common::get_abortstate() {
    * @return ERROR or NO_ERROR
    *
    */
-  long Common::writekeys(std::string writekeys_in, std::string &writekeys_out) {
-    std::string function = "Common::Common::writekeys";
+  long Camera::writekeys(std::string writekeys_in, std::string &writekeys_out) {
+    std::string function = "Camera::Camera::writekeys";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -155,10 +155,10 @@ bool Common::get_abortstate() {
     writekeys_out = this->writekeys_when;
     return error;
   }
-  /** Common::Common::writekeys ***********************************************/
+  /** Camera::Camera::writekeys ***********************************************/
 
 
-  /** Common::Common::fitsnaming **********************************************/
+  /** Camera::Camera::fitsnaming **********************************************/
   /**
    * @fn     fitsnaming
    * @brief  set or get the fits naming type
@@ -167,8 +167,8 @@ bool Common::get_abortstate() {
    * @return ERROR or NO_ERROR
    *
    */
-  long Common::fitsnaming(std::string naming_in, std::string& naming_out) {
-    std::string function = "Common::Common::fitsnaming";
+  long Camera::fitsnaming(std::string naming_in, std::string& naming_out) {
+    std::string function = "Camera::Camera::fitsnaming";
     std::stringstream message;
     long error;
 
@@ -191,10 +191,10 @@ bool Common::get_abortstate() {
     naming_out = this->fits_naming;    // return the current value
     return error;
   }
-  /** Common::Common::fitsnaming **********************************************/
+  /** Camera::Camera::fitsnaming **********************************************/
 
 
-  /** Common::Common::imnum ***************************************************/
+  /** Camera::Camera::imnum ***************************************************/
   /**
    * @fn     imnum
    * @brief  set or get the image_num member
@@ -203,8 +203,8 @@ bool Common::get_abortstate() {
    * @return ERROR or NO_ERROR
    *
    */
-  long Common::imnum(std::string num_in, std::string& num_out) {
-    std::string function = "Common::Common::imnum";
+  long Camera::imnum(std::string num_in, std::string& num_out) {
+    std::string function = "Camera::Camera::imnum";
     std::stringstream message;
 
     // If no string is passed then this is a request; return the current value.
@@ -241,10 +241,10 @@ bool Common::get_abortstate() {
       }
     }
   }
-  /** Common::Common::imnum ***************************************************/
+  /** Camera::Camera::imnum ***************************************************/
 
 
-  /** Common::Common::basename ************************************************/
+  /** Camera::Camera::basename ************************************************/
   /**
    * @fn     basename
    * @brief  set or get the base_name member
@@ -256,12 +256,12 @@ bool Common::get_abortstate() {
    * The only restriction on base name is that it can't contain a '/' character.
    *
    */
-  long Common::basename(std::string name_in) {
+  long Camera::basename(std::string name_in) {
     std::string dontcare;
     return( basename(name_in, dontcare) );
   }
-  long Common::basename(std::string name_in, std::string& name_out) {
-    std::string function = "Common::Common::basename";
+  long Camera::basename(std::string name_in, std::string& name_out) {
+    std::string function = "Camera::Camera::basename";
     std::stringstream message;
     long error=NO_ERROR;
 
@@ -285,10 +285,10 @@ bool Common::get_abortstate() {
 
     return(error);
   }
-  /** Common::Common::basename ************************************************/
+  /** Camera::Camera::basename ************************************************/
 
 
-  /** Common::Common::imdir ***************************************************/
+  /** Camera::Camera::imdir ***************************************************/
   /**
    * @fn     imdir
    * @brief  set or get the image_dir base directory
@@ -304,12 +304,12 @@ bool Common::get_abortstate() {
    * UTC date subdirectory is added later, in the get_fitsname() function.
    *
    */
-  long Common::imdir(std::string dir_in) {
+  long Camera::imdir(std::string dir_in) {
     std::string dontcare;
     return( imdir(dir_in, dontcare) );
   }
-  long Common::imdir(std::string dir_in, std::string& dir_out) {
-    std::string function = "Common::Common::imdir";
+  long Camera::imdir(std::string dir_in, std::string& dir_out) {
+    std::string function = "Camera::Camera::imdir";
     std::stringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;
@@ -390,10 +390,10 @@ bool Common::get_abortstate() {
     dir_out = this->image_dir;
     return( error );
   }
-  /** Common::Common::imdir ***************************************************/
+  /** Camera::Camera::imdir ***************************************************/
 
 
-  /** Common::Common::autodir *************************************************/
+  /** Camera::Camera::autodir *************************************************/
   /**
    * @fn     autodir
    * @brief  set or get autodir_state used for creating UTC date subdirectory
@@ -406,8 +406,8 @@ bool Common::get_abortstate() {
    * the get_fitsname() function.
    *
    */
-  long Common::autodir(std::string state_in, std::string& state_out) {
-    std::string function = "Common::Common::autodir";
+  long Camera::autodir(std::string state_in, std::string& state_out) {
+    std::string function = "Camera::Camera::autodir";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -442,26 +442,26 @@ bool Common::get_abortstate() {
     return error;
 
   }
-  /** Common::Common::autodir *************************************************/
+  /** Camera::Camera::autodir *************************************************/
 
 
 
-  /** Common::Common:set_fitstime *********************************************/
+  /** Camera::Camera:set_fitstime *********************************************/
   /**
    * @fn     set_fitstime
    * @brief  set the "fitstime" variable used for the filename
    * @param  string formatted as "YYYY-MM-DDTHH:MM:SS.ssssss"
    * @return std::string
    *
-   * The Common class has a public string variable "fitstime" which is
+   * The Camera class has a public string variable "fitstime" which is
    * to be used for the FITS filename, when the time-format is selected.
    * This time should be the whole-second of the time that the exposure
    * was started, so that time is passed in here. This function strips
    * that string down to just the numerals for use in the filename.
    *
    */
-  void Common::set_fitstime(std::string time_in) {
-    std::string function = "Common::Common::set_fitstime";
+  void Camera::set_fitstime(std::string time_in) {
+    std::string function = "Camera::Camera::set_fitstime";
     std::stringstream message;
 
     if ( time_in.length() != 26 ) {  // wrong number of characters, input can't be formatted correctly
@@ -480,10 +480,10 @@ bool Common::get_abortstate() {
 
     return;
   }
-  /** Common::Common:set_fitstime *********************************************/
+  /** Camera::Camera:set_fitstime *********************************************/
 
 
-  /** Common::Common:get_fitsname *********************************************/
+  /** Camera::Camera:get_fitsname *********************************************/
   /**
    * @fn     get_fitsname
    * @brief  assemble the FITS filename
@@ -492,18 +492,18 @@ bool Common::get_abortstate() {
    * @return ERROR or NO_ERROR
    *
    * This function assembles the fully qualified path to the output FITS filename
-   * using the parts (dir, basename, time or number) stored in the Common::Common class.
+   * using the parts (dir, basename, time or number) stored in the Camera::Camera class.
    * If the filename already exists then a -number is inserted, incrementing that
    * number until a unique name is achieved.
    *
    * This function is overloaded, to allow passing a controller id to include in the filename.
    *
    */
-  long Common::get_fitsname(std::string &name_out) {
+  long Camera::get_fitsname(std::string &name_out) {
     return ( this->get_fitsname("", name_out) );
   }
-  long Common::get_fitsname(std::string controllerid, std::string &name_out) {
-    std::string function = "Common::Common::get_fitsname";
+  long Camera::get_fitsname(std::string controllerid, std::string &name_out) {
+    std::string function = "Camera::Camera::get_fitsname";
     std::stringstream message;
     std::stringstream fn, fitsname;
 
@@ -595,175 +595,10 @@ bool Common::get_abortstate() {
     name_out = fn.str();
     return(NO_ERROR);
   }
-  /** Common::Common:get_fitsname *********************************************/
+  /** Camera::Camera:get_fitsname *********************************************/
 
 
-  /** Common::FitsKeys::get_keytype *******************************************/
-  /**
-   * @fn     get_keytype
-   * @brief  return the keyword type based on the keyvalue
-   * @param  std::string value
-   * @return std::string type: "BOOL", "STRING", "FLOAT", "INT"
-   *
-   * This function looks at the contents of the value string to determine if it
-   * contains an INT, FLOAT, BOOL or STRING, and returns a string identifying the type.
-   * That type is used in FITS_file::add_user_key() for adding keywords to the header.
-   *
-   */
-  std::string FitsKeys::get_keytype(std::string keyvalue) {
-    std::size_t pos(0);
-
-    // if the entire string is either (exactly) T or F then it's a boolean
-    if ( keyvalue == "T" || keyvalue == "F" ) {
-      return std::string( "BOOL" );
-    }
-
-    // skip the whitespaces
-    pos = keyvalue.find_first_not_of(' ');
-    if (pos == keyvalue.size()) return std::string("STRING");   // all spaces, so it's a string
-
-    // check the significand
-    if (keyvalue[pos] == '+' || keyvalue[pos] == '-') ++pos;    // skip the sign if exist
-
-    // count the number of digits and number of decimal points
-    int n_nm, n_pt;
-    for (n_nm = 0, n_pt = 0; std::isdigit(keyvalue[pos]) || keyvalue[pos] == '.'; ++pos) {
-        keyvalue[pos] == '.' ? ++n_pt : ++n_nm;
-    }
-
-    if (n_pt>1 || n_nm<1 || pos<keyvalue.size()){ // no more than one point, no numbers, or a non-digit character
-      return std::string("STRING");               // then it's a string
-    }
-
-    // skip the trailing whitespaces
-    while (keyvalue[pos] == ' ') {
-        ++pos;
-    }
-
-    if (pos == keyvalue.size()) {
-      if (keyvalue.find(".") == std::string::npos)    // all numbers and no decimals, it's an integer
-        return std::string("INT");
-      else                                            // otherwise numbers with a decimal, it's a float
-        return std::string("FLOAT");
-    }
-    else return std::string("STRING");                // lastly, must be a string
-  }
-  /** Common::FitsKeys::get_keytype *******************************************/
-
-
-  /** Common::FitsKeys::listkeys **********************************************/
-  /**
-   * @fn     listkeys
-   * @brief  list FITS keywords in internal database
-   * @param  none
-   * @return NO_ERROR
-   *
-   */
-  long FitsKeys::listkeys() {
-    std::string function = "Common::FitsKeys::listkeys";
-    std::stringstream message;
-    fits_key_t::iterator keyit;
-    for (keyit  = this->keydb.begin();
-         keyit != this->keydb.end();
-         keyit++) {
-      message.str("");
-      message << keyit->second.keyword << " = " << keyit->second.keyvalue;
-      if ( ! keyit->second.keycomment.empty() ) message << " // " << keyit->second.keycomment;
-      message << " (" << keyit->second.keytype << ")";
-      logwrite(function, message.str());
-    }
-    return(NO_ERROR);
-  }
-  /** Common::FitsKeys::listkeys **********************************************/
-
-
-  /** Common::FitsKeys::addkey ************************************************/
-  /**
-   * @fn     addkey
-   * @brief  add FITS keyword to internal database
-   * @param  std::string arg
-   * @return ERROR for improper input arg, otherwise NO_ERROR
-   *
-   * Expected format of input arg is KEYWORD=VALUE//COMMENT
-   * where COMMENT is optional. KEYWORDs are automatically converted to uppercase.
-   *
-   * Internal database is Common::FitsKeys::keydb
-   * 
-   */
-  long FitsKeys::addkey(std::string arg) {
-    std::string function = "Common::FitsKeys::addkey";
-    std::stringstream message;
-    std::vector<std::string> tokens;
-    std::string keyword, keystring, keyvalue, keytype, keycomment;
-    std::string comment_separator = "//";
-
-    // There must be one equal '=' sign in the incoming string, so that will make two tokens here
-    //
-    Tokenize(arg, tokens, "=");
-    if (tokens.size() != 2) {
-      logwrite( function, "missing or too many '=': expected KEYWORD=VALUE//COMMENT (optional comment)" );
-      return(ERROR);
-    }
-
-    keyword   = tokens[0].substr(0,8);                                     // truncate keyword to 8 characters
-    keyword   = keyword.erase(keyword.find_last_not_of(" ")+1);            // remove trailing spaces from keyword
-    std::locale loc;
-    for (std::string::size_type ii=0; ii<keyword.length(); ++ii) {         // Convert keyword to upper case:
-      keyword[ii] = std::toupper(keyword[ii],loc);                         // prevents duplications in STL map
-    }
-    keystring = tokens[1];                                                 // tokenize the rest in a moment
-
-    size_t pos = keystring.find(comment_separator);                        // location of the comment separator
-    keyvalue = keystring.substr(0, pos);                                   // keyvalue is everything up to comment
-    keyvalue = keyvalue.erase(0, keyvalue.find_first_not_of(" "));         // remove leading spaces from keyvalue
-    keyvalue = keyvalue.erase(keyvalue.find_last_not_of(" ")+1);           // remove trailing spaces from keyvalue
-    if (pos != std::string::npos) {
-      keycomment = keystring.erase(0, pos + comment_separator.length());
-      keycomment = keycomment.erase(0, keycomment.find_first_not_of(" ")); // remove leading spaces from keycomment
-    }
-
-    // Delete the keydb entry for associated keyword if the keyvalue is a sole period '.'
-    //
-    if (keyvalue == ".") {
-      fits_key_t::iterator ii = this->keydb.find(keyword);
-      if (ii==this->keydb.end()) {
-        message.str(""); message << "keyword " << keyword << " not found";
-        logwrite(function, message.str());
-      }
-      else {
-        this->keydb.erase(ii);
-        message.str(""); message << "keyword " << keyword << " erased";
-        logwrite(function, message.str());
-      }
-      return(NO_ERROR);
-    }
-
-    // check for instances of the comment separator in keycomment
-    //
-    if (keycomment.find(comment_separator) != std::string::npos) {
-      message.str(""); message << "ERROR: FITS comment delimiter: found too many instancces of " << comment_separator << " in keycomment";
-      logwrite( function, message.str() );
-      return(NO_ERROR);
-    }
-
-    // insert new entry into the database
-    //
-    this->keydb[keyword].keyword    = keyword;
-    this->keydb[keyword].keytype    = this->get_keytype(keyvalue);
-    this->keydb[keyword].keyvalue   = keyvalue;
-    this->keydb[keyword].keycomment = keycomment;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] added key: " << keyword << "=" << keyvalue << " (" << this->keydb[keyword].keytype << ") // " << keycomment;
-    logwrite( function, message.str() );
-#endif
-
-    return(NO_ERROR);
-  }
-  /** Common::FitsKeys::addkey ************************************************/
-
-
-  /** Common::Common::datacube ************************************************/
+  /** Camera::Camera::datacube ************************************************/
   /**
    * @fn     datacube
    * @brief  set or get the datacube state
@@ -775,15 +610,15 @@ bool Common::get_abortstate() {
    * This function is overloaded.
    *
    */
-  void Common::datacube(bool state_in) {                                  // write-only boolean
+  void Camera::datacube(bool state_in) {                                  // write-only boolean
     std::string dontcare;
     this->datacube( (state_in ? "true" : "false"), dontcare );
   }
-  bool Common::datacube() {                                               // read-only boolean
+  bool Camera::datacube() {                                               // read-only boolean
     return ( this->is_datacube );
   }
-  long Common::datacube(std::string state_in, std::string &state_out) {   // read-write string, called from server
-    std::string function = "Common::Common::datacube";
+  long Camera::datacube(std::string state_in, std::string &state_out) {   // read-write string, called from server
+    std::string function = "Camera::Camera::datacube";
     std::stringstream message;
     int error = NO_ERROR;
 
@@ -813,17 +648,17 @@ bool Common::get_abortstate() {
     state_out = (this->is_datacube ? "true" : "false");
     logwrite( function, state_out );
     message.str(""); message << "NOTICE:datacube=" << state_out;
-    this->message.enqueue( message.str() );
+    this->async.enqueue( message.str() );
 
     // and this lets the server know if it was set or not
     //
     return( error );
   }
-  /** Common::Common::datacube ************************************************/
+  /** Camera::Camera::datacube ************************************************/
 
 
 
-  /** Common::Common::longerror ***********************************************/
+  /** Camera::Camera::longerror ***********************************************/
   /**
    * @fn     longerror
    * @brief  set or get the longerror state
@@ -835,15 +670,15 @@ bool Common::get_abortstate() {
    * This function is overloaded.
    *
    */
-  void Common::longerror(bool state_in) {                                 // write-only boolean
+  void Camera::longerror(bool state_in) {                                 // write-only boolean
     std::string dontcare;
     this->longerror( (state_in ? "true" : "false"), dontcare );
   }
-  bool Common::longerror() {                                              // read-only boolean
+  bool Camera::longerror() {                                              // read-only boolean
     return ( this->is_longerror );
   }
-  long Common::longerror(std::string state_in, std::string &state_out) {  // read-write string, called from server
-    std::string function = "Common::Common::longerror";
+  long Camera::longerror(std::string state_in, std::string &state_out) {  // read-write string, called from server
+    std::string function = "Camera::Camera::longerror";
     std::stringstream message;
     int error = NO_ERROR;
 
@@ -873,16 +708,16 @@ bool Common::get_abortstate() {
     state_out = (this->is_longerror ? "true" : "false");
     logwrite( function, state_out );
     message.str(""); message << "NOTICE:longerror=" << state_out;
-    this->message.enqueue( message.str() );
+    this->async.enqueue( message.str() );
 
     // and this lets the server know if it was set or not
     //
     return( error );
   }
-  /** Common::Common::longerror ***********************************************/
+  /** Camera::Camera::longerror ***********************************************/
 
 
-  /** Common::Common::cubeamps ************************************************/
+  /** Camera::Camera::cubeamps ************************************************/
   /**
    * @fn     cubeamps
    * @brief  set or get the cubeamps state
@@ -897,15 +732,15 @@ bool Common::get_abortstate() {
    * is needed after disabling cubeamps then it must be separately enabled.
    *
    */
-  void Common::cubeamps(bool state_in) {                                  // write-only boolean
+  void Camera::cubeamps(bool state_in) {                                  // write-only boolean
     std::string dontcare;
     this->cubeamps( (state_in ? "true" : "false"), dontcare );
   }
-  bool Common::cubeamps() {                                               // read-only boolean
+  bool Camera::cubeamps() {                                               // read-only boolean
     return ( this->is_cubeamps );
   }
-  long Common::cubeamps(std::string state_in, std::string &state_out) {   // read-write string, called from server
-    std::string function = "Common::Common::cubeamps";
+  long Camera::cubeamps(std::string state_in, std::string &state_out) {   // read-write string, called from server
+    std::string function = "Camera::Camera::cubeamps";
     std::stringstream message;
     int error = NO_ERROR;
 
@@ -941,55 +776,16 @@ bool Common::get_abortstate() {
     state_out = (this->is_cubeamps ? "true" : "false");
     logwrite( function, state_out );
     message.str(""); message << "NOTICE:cubeamps=" << state_out;
-    this->message.enqueue( message.str() );
+    this->async.enqueue( message.str() );
 
     // and this lets the server know if it was set or not
     //
     return( error );
   }
-  /** Common::Common::cubeamps ************************************************/
+  /** Camera::Camera::cubeamps ************************************************/
 
 
-  /** Common::Queue::enqueue **************************************************/
-  /**
-   * @fn     enqueue
-   * @brief  puts a message into the queue
-   * @param  std::string message
-   * @return none
-   *
-   */
-  void Queue::enqueue(std::string message) {
-    std::lock_guard<std::mutex> lock(queue_mutex);
-    message_queue.push(message);
-    notifier.notify_one();
-  }
-  /** Common::Queue::enqueue **************************************************/
-
-
-  /** Common::Queue::dequeue **************************************************/
-  /**
-   * @fn     dequeue
-   * @brief  pops the first message off the queue
-   * @param  none
-   * @return std::string message
-   *
-   * Get the "front"-element.
-   * If the queue is empty, wait untill an element is avaiable.
-   *
-   */
-  std::string Queue::dequeue(void) {
-    std::unique_lock<std::mutex> lock(queue_mutex);
-    while(message_queue.empty()) {
-      notifier.wait(lock);   // release lock as long as the wait and reaquire it afterwards.
-    }
-    std::string message = message_queue.front();
-    message_queue.pop();
-    return message;
-  }
-  /** Common::Queue::dequeue **************************************************/
-
-
-  /**************** Common::Information::pre_exposures ************************/
+  /**************** Camera::Information::pre_exposures ************************/
   /**
    * @fn     pre_exposures
    * @brief  set/get pre-exposures
@@ -999,11 +795,11 @@ bool Common::get_abortstate() {
    *
    * Get / set number of pre-exposures, which are exposures taken by the
    * controller but are not saved. This number is stored in the
-   * Common:Information class and will show up in the camera_info object.
+   * Camera:Information class and will show up in the camera_info object.
    *
    */
   long Information::pre_exposures( std::string num_in, std::string &num_out ) {
-    std::string function = "Common::Information::pre_exposures";
+    std::string function = "Camera::Information::pre_exposures";
     std::stringstream message;
 
     // If no string is passed then this is a request; return the current value.
@@ -1042,6 +838,6 @@ bool Common::get_abortstate() {
       }
     }
   }
-  /**************** Common::Information::pre_exposures ************************/
+  /**************** Camera::Information::pre_exposures ************************/
 
 }
