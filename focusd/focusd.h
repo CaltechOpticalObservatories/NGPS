@@ -35,8 +35,6 @@
 
 namespace Focus {
 
-  const std::string DAEMON_NAME = "focusd";       // when run as a daemon, this is my name
-
   class Server {
     private:
     public:
@@ -73,6 +71,7 @@ namespace Focus {
 
       Config config;
 
+      Interface interface;               //!< the interface class connects to the hardware
       std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
 
       /** Focus::Server::exit_cleanly **********************************************/

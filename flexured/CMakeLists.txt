@@ -20,6 +20,7 @@ add_executable(flexured
 
 target_link_libraries(flexured
         network
+        common
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}

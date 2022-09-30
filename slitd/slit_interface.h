@@ -22,6 +22,8 @@
 
 namespace Slit {
 
+  const std::string DAEMON_NAME = "slitd";       /// when run as a daemon, this is my name
+
   /** ControllerInfo **********************************************************/
   /**
    * @class  ControllerInfo
@@ -133,6 +135,8 @@ namespace Slit {
 
       Interface();
       ~Interface();
+
+      Common::Queue async;
 
       std::vector<Slit::ControllerInfo> controller_info;                            /// vector of all daisy-chain connected controllers
 

@@ -25,6 +25,8 @@ FILES="-f $DIR/calibd_$DATE.log \
        -f $DIR/tcsd_$DATE.log \
        -f $DIR/sequencerd_$DATE.log "
 
+touch $FILES
+
 # tail them all here
 # look for various key words to set various colors
 #

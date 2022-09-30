@@ -36,8 +36,6 @@
 
 namespace Power {
 
-  const std::string DAEMON_NAME = "powerd";      /// when run as a daemon, this is my name
-
   class Server {
     private:
     public:

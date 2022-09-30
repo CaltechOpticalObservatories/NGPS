@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef SLIT_INTERFACE_H
-#define SLIT_INTERFACE_H
+#ifndef TCS_INTERFACE_H
+#define TCS_INTERFACE_H
 
 #include "network.h"
 #include "logentry.h"
@@ -16,6 +16,8 @@
 #include <map>
 
 namespace TCS {
+
+  const std::string DAEMON_NAME = "tcsd";        /// when run as a daemon, this is my name
 
   /** Interface ***************************************************************/
   /**
@@ -43,6 +45,8 @@ namespace TCS {
       long send_command( std::string cmd, std::string &reply );
 
       bool isopen() { return this->tcs.isconnected(); }    /// is this interface connected to hardware?
+
+      Common::Queue async;
 
       Network::TcpSocket tcs;
   };

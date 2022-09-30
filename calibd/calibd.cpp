@@ -23,11 +23,14 @@ std::string logpath;
  */
 void signal_handler(int signo) {
   std::string function = "Calib::signal_handler";
+  std::stringstream message;
+
   switch (signo) {
     case SIGTERM:
     case SIGINT:
       logwrite(function, "received termination signal");
-//    calibd.common.message.enqueue("exit");     // shutdown the async_main thread if running
+      message << "NOTICE:" << Calib::DAEMON_NAME << " exit";
+      calibd.interface.async.enqueue( message.str() );
       calibd.exit_cleanly();                     // shutdown the daemon
       break;
     case SIGHUP:
@@ -38,8 +41,10 @@ void signal_handler(int signo) {
       logwrite(function, "caught SIGPIPE");
       break;
     default:
-      logwrite(function, "received unknown signal");
-//    calibd.common.message.enqueue("exit");     // shutdown the async_main thread if running
+      message << "received unknown signal " << strsignal(signo);
+      logwrite( function, message.str() );
+      message.str(""); message << "NOTICE:" << Calib::DAEMON_NAME << " exit";
+      calibd.interface.async.enqueue( message.str() );
       calibd.exit_cleanly();                     // shutdown the daemon
       break;
   }
@@ -299,9 +304,6 @@ void async_main(Network::UdpSocket sock) {
   std::string function = "Calib::async_main";
   int retval;
 
-  logwrite( function, "NOT IMPLEMENTED" );
-  return;
-
   retval = sock.Create();                                   // create the UDP socket
   if (retval < 0) {
     logwrite(function, "error creating UDP multicast socket for asynchronous messages");
@@ -311,9 +313,8 @@ void async_main(Network::UdpSocket sock) {
     logwrite(function, "asyncrhonous message port disabled by request");
   }
 
-/***
   while (1) {
-    std::string message = calibd.common.message.dequeue();  // get the latest message from the queue (blocks)
+    std::string message = calibd.interface.async.dequeue(); // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message
     if (retval < 0) {
       std::stringstream errstm;
@@ -325,7 +326,7 @@ void async_main(Network::UdpSocket sock) {
       return;
     }
   }
-***/
+
   return;
 }
 /** async_main ***************************************************************/
@@ -440,7 +441,6 @@ void doit(Network::TcpSocket sock) {
     // exit
     //
     if ( cmd.compare( "exit" )==0 ) {
-//                  calibd.common.message.enqueue("exit");     // shutdown the async message thread if running
                     calibd.exit_cleanly();                     // shutdown the daemon
     }
     else

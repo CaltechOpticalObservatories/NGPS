@@ -20,6 +20,7 @@ add_executable(focusd
 
 target_link_libraries(focusd
         network
+        common
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}

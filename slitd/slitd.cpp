@@ -23,24 +23,27 @@ std::string logpath;
  */
 void signal_handler(int signo) {
   std::string function = "Slit::signal_handler";
+  std::stringstream message;
+
   switch (signo) {
     case SIGTERM:
     case SIGINT:
       logwrite(function, "received termination signal");
-//    slitd.common.message.enqueue("exit");      // shutdown the async_main thread if running
+      message << "NOTICE:" << Slit::DAEMON_NAME << " exit";
+      slitd.interface.async.enqueue( message.str() );
       slitd.exit_cleanly();                      // shutdown the daemon
       break;
     case SIGHUP:
-      logwrite(function, "caught SIGHUP");
-      slitd.configure_slitd();                   // TODO can (/should) this be done while running?
+      logwrite(function, "ignored SIGHUP");
       break;
     case SIGPIPE:
-      logwrite(function, "caught SIGPIPE");
+      logwrite(function, "ignored SIGPIPE");
       break;
     default:
-      logwrite(function, "received unknown signal");
-//    slitd.common.message.enqueue("exit");      // shutdown the async_main thread if running
-      slitd.exit_cleanly();                      // shutdown the daemon
+      message << "received unknown signal " << strsignal(signo);
+      logwrite( function, message.str() );
+      message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " exit";
+      slitd.interface.async.enqueue( message.str() );
       break;
   }
   return;
@@ -316,9 +319,6 @@ void async_main(Network::UdpSocket sock) {
   std::string function = "Slit::async_main";
   int retval;
 
-  logwrite( function, "NOT IMPLEMENTED" );
-  return;
-
   retval = sock.Create();                                   // create the UDP socket
   if (retval < 0) {
     logwrite(function, "error creating UDP multicast socket for asynchronous messages");
@@ -328,9 +328,8 @@ void async_main(Network::UdpSocket sock) {
     logwrite(function, "asyncrhonous message port disabled by request");
   }
 
-/***
   while (1) {
-    std::string message = slitd.common.message.dequeue();   // get the latest message from the queue (blocks)
+    std::string message = slitd.interface.async.dequeue();  // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message
     if (retval < 0) {
       std::stringstream errstm;
@@ -342,7 +341,7 @@ void async_main(Network::UdpSocket sock) {
       return;
     }
   }
-***/
+
   return;
 }
 /** async_main ***************************************************************/
@@ -454,7 +453,6 @@ void doit(Network::TcpSocket sock) {
     std::string retstring="";
 
     if ( cmd.compare( "exit" ) == 0 ) {
-//                  slitd.common.message.enqueue("exit");      // shutdown the async message thread if running
                     slitd.exit_cleanly();                      // shutdown the daemon
     }
     else

@@ -11,6 +11,8 @@
 
 namespace Power {
 
+  const std::string DAEMON_NAME = "powerd";      /// when run as a daemon, this is my name
+
   /** NpsInfo *****************************************************************/
   /**
    * @class  NpsInfo
@@ -170,6 +172,8 @@ namespace Power {
     public:
       Interface();
       ~Interface();
+
+      Common::Queue async;
 
       std::map< int, Power::NpsInfo > nps_info;            /// STL map of NpsInfo objects indexed by NPS unit#
       std::map< int, WTI::NPS >       nps;                 /// STL map of WTI NPS objects indexed by NPS unit#

@@ -583,6 +583,9 @@ namespace Slit {
     s << width << " " << offs;
     retstring = s.str();
 
+    message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " " << retstring;
+    this->async.enqueue( message.str() );
+
     return( error );
   }
   /**************** Slit::Interface::get **************************************/

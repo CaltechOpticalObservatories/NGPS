@@ -1,6 +1,9 @@
 # ----------------------------------------------------------------------------
-# utils/CMakeLists.txt
+# @file    utils/CMakeLists.txt
+# @brief   input to the CMake build system for building utils
+# @author  David Hale <dhale@caltech.edu>
 # ----------------------------------------------------------------------------
+
 cmake_minimum_required(VERSION 3.12)
 
 set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/utils)

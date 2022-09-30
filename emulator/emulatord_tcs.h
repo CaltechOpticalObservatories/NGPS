@@ -120,8 +120,8 @@ namespace Emulator {
         for ( int entry=0; entry < this->config.n_entries; entry++ ) {
 
           try {
-            // EMULATOR_PORT
-            if ( config.param[entry].compare( 0, 13, "EMULATOR_PORT" ) == 0 ) {
+            // TCS_PORT
+            if ( config.param[entry].compare( 0, 8, "TCS_PORT" ) == 0 ) {
               this->port = std::stoi( config.arg[entry] );
               applied++;
             }

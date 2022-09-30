@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef SLITD_H
-#define SLITD_H
+#ifndef TCSD_H
+#define TCSD_H
 
 #include <fstream>
 #include <iostream>
@@ -34,8 +34,6 @@
 #define  CONN_TIMEOUT 3000  /// incoming (non-blocking) connection timeout in milliseconds
 
 namespace TCS {
-
-  const std::string DAEMON_NAME = "tcsd";        /// when run as a daemon, this is my name
 
   /** Server ******************************************************************/
   /**

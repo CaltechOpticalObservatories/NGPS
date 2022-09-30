@@ -11,6 +11,8 @@
 
 namespace Calib {
 
+  const std::string DAEMON_NAME = "calibd";      /// when run as a daemon, this is my name
+
   /** Interface ***************************************************************/
   /**
    * @class  Interface
@@ -31,6 +33,8 @@ namespace Calib {
       long initialize_class();
       bool isopen();
       long open();
+
+      Common::Queue async;
 
       Physik_Instrumente::ServoInterface pi;
 

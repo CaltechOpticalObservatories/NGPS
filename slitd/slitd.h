@@ -35,8 +35,6 @@
 
 namespace Slit {
 
-  const std::string DAEMON_NAME = "slitd";       /// when run as a daemon, this is my name
-
   /** Server ******************************************************************/
   /**
    * @class  Server
@@ -124,6 +122,10 @@ namespace Slit {
         std::stringstream message;
         int applied=0;
         long error;
+
+        // Clear the controller_info vector before loading new information from the config file
+        //
+        this->interface.controller_info.clear();
 
         // loop through the entries in the configuration file, stored in config class
         //
