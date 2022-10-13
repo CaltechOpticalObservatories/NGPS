@@ -9,12 +9,10 @@
 
 namespace Common {
 
-  /** Common::Queue::enqueue **************************************************/
+  /***** Common::Queue::enqueue ***********************************************/
   /**
-   * @fn     enqueue
-   * @brief  puts a message into the queue
-   * @param  std::string message
-   * @return none
+   * @brief      puts a message into the queue
+   * @param[in]  message  string to write
    *
    */
   void Queue::enqueue(std::string message) {
@@ -23,15 +21,13 @@ namespace Common {
     notifier.notify_one();
     return;
   }
-  /** Common::Queue::enqueue **************************************************/
+  /***** Common::Queue::enqueue ***********************************************/
 
 
-  /** Common::Queue::dequeue **************************************************/
+  /***** Common::Queue::dequeue ***********************************************/
   /**
-   * @fn     dequeue
-   * @brief  pops the first message off the queue
-   * @param  none
-   * @return std::string message
+   * @brief      pops the first message off the queue
+   * @return     message  string read from the queue
    *
    * Get the "front"-element.
    * If the queue is empty, wait untill an element is avaiable.
@@ -46,15 +42,14 @@ namespace Common {
     message_queue.pop();
     return message;
   }
-  /** Common::Queue::dequeue **************************************************/
+  /***** Common::Queue::dequeue ***********************************************/
 
 
-  /** Common::FitsKeys::get_keytype *******************************************/
+  /***** Common::FitsKeys::get_keytype ****************************************/
   /**
-   * @fn     get_keytype
-   * @brief  return the keyword type based on the keyvalue
-   * @param  std::string value
-   * @return std::string type: "BOOL", "STRING", "FLOAT", "INT"
+   * @brief      return the keyword type based on the keyvalue
+   * @param[in]  value   string to get the type
+   * @return     string  one of the following: "BOOL", "STRING", "FLOAT", "INT"
    *
    * This function looks at the contents of the value string to determine if it
    * contains an INT, FLOAT, BOOL or STRING, and returns a string identifying the type.
@@ -99,15 +94,13 @@ namespace Common {
     }
     else return std::string("STRING");                // lastly, must be a string
   }
-  /** Common::FitsKeys::get_keytype *******************************************/
+  /***** Common::FitsKeys::get_keytype ****************************************/
 
 
-  /** Common::FitsKeys::listkeys **********************************************/
+  /***** Common::FitsKeys::listkeys *******************************************/
   /**
-   * @fn     listkeys
-   * @brief  list FITS keywords in internal database
-   * @param  none
-   * @return NO_ERROR
+   * @brief      list FITS keywords in internal database
+   * @return     NO_ERROR
    *
    */
   long FitsKeys::listkeys() {
@@ -125,15 +118,14 @@ namespace Common {
     }
     return(NO_ERROR);
   }
-  /** Common::FitsKeys::listkeys **********************************************/
+  /***** Common::FitsKeys::listkeys *******************************************/
 
 
-  /** Common::FitsKeys::addkey ************************************************/
+  /***** Common::FitsKeys::addkey *********************************************/
   /**
-   * @fn     addkey
-   * @brief  add FITS keyword to internal database
-   * @param  std::string arg
-   * @return ERROR for improper input arg, otherwise NO_ERROR
+   * @brief      add FITS keyword to internal database
+   * @param[in]  arg  string formatted as "KEYWORD=VALUE//COMMENT"
+   * @return     ERROR for improper input arg, otherwise NO_ERROR
    *
    * Expected format of input arg is KEYWORD=VALUE//COMMENT
    * where COMMENT is optional. KEYWORDs are automatically converted to uppercase.
@@ -211,6 +203,6 @@ namespace Common {
 
     return(NO_ERROR);
   }
-  /** Common::FitsKeys::addkey ************************************************/
+  /***** Common::FitsKeys::addkey *********************************************/
 
 }

@@ -12,18 +12,17 @@
 
 #include "logentry.h"
 
-std::mutex loglock;
-std::ofstream filestream;      /// IO stream class
-unsigned int nextday = 86410;  /// number of seconds until a new day
+std::mutex loglock;            ///< mutex to protect from multiple access
+std::ofstream filestream;      ///< IO stream class
+unsigned int nextday = 86410;  ///< number of seconds until a new day
 
 
-/** init_log *****************************************************************/
+/***** init_log ***************************************************************/
 /**
- * @fn         init_log
  * @brief      initializes the logging
- * @param[in]  logpath string is the path for log file
- * @param[in]  name string is the name of the log file in logpath
- * @return     0 on success, 1 on error
+ * @param[in]  logpath  string is the path for log file
+ * @param[in]  name     string is the name of the log file in logpath
+ * @return     0=success, 1=error
  *
  * Opens an ofstream to the specified logfile, "logpath/name_YYYYMMDD.log"
  * where logpath and name are passed in as parameters.
@@ -67,15 +66,12 @@ long init_log( std::string logpath, std::string name ) {
 
   return 0;
 }
-/** init_log *****************************************************************/
+/***** init_log ***************************************************************/
 
 
-/** close_log ****************************************************************/
+/***** close_log **************************************************************/
 /**
- * @fn         close_log
  * @brief      closes the logfile stream
- * @param[in]  none
- * @return     none
  *
  * Call this from the main class deconstructor to clean up the log file.
  *
@@ -86,16 +82,14 @@ void close_log() {
     filestream.close();
   }
 }
-/** close_log ****************************************************************/
+/***** close_log **************************************************************/
 
 
-/** logwrite *****************************************************************/
+/***** logwrite ***************************************************************/
 /**
- * @fn         logwrite
  * @brief      create a log file entry
- * @param[in]  function
- * @param[in]  message
- * @return     none
+ * @param[in]  function  string containing the Namespace::Class::function
+ * @param[in]  message   string to log
  *
  * Create a time-stamped entry in the log file in the form of:
  * YYYY-MM-DDTHH:MM:SS.ssssss (function) message\n
@@ -118,5 +112,5 @@ void logwrite(std::string function, std::string message) {
   }
   std::cerr << logmsg.str();                     // send to standard error
 }
-/** logwrite *****************************************************************/
+/***** logwrite ***************************************************************/
 

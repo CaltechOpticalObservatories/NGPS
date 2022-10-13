@@ -446,9 +446,8 @@ void doit(Network::TcpSocket sock) {
       ret = -1;
     }
 
-    /**
-     * process commands here
-     */
+    // process commands here
+    //
     ret = NOTHING;
     std::string retstring="";
 

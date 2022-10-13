@@ -1,8 +1,8 @@
 /**
  * @file    camera.cpp
  * @brief   camera interface functions common to all camera interfaces
- * @details 
  * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
  *
  */
 #include <iostream>
@@ -13,8 +13,8 @@
 #include <vector>
 #include <thread>
 #include <fstream>
-#include <algorithm>  //!< vector iterators, find, count
-#include <functional> //!< pass by reference to threads
+#include <algorithm>  // vector iterators, find, count
+#include <functional> // pass by reference to threads
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -40,12 +40,9 @@ namespace Camera {
   }
 
 
-  /** Camera::Camera::abort ***************************************************/
+  /***** Camera::Camera::abort ************************************************/
   /**
-   * @fn     abort
-   * @brief  abort the current operation (exposure, readout, etc.)
-   * @param  none
-   * @return none
+   * @brief      abort the current operation (exposure, readout, etc.)
    *
    */
   void Camera::abort() {
@@ -55,7 +52,7 @@ namespace Camera {
     logwrite(function, "received abort");
     return;
   }
-  /** Camera::Camera::abort ***************************************************/
+  /***** Camera::Camera::abort ************************************************/
 
 void Camera::set_abortstate(bool state) {
   this->abort_mutex.lock();
@@ -73,13 +70,12 @@ bool Camera::get_abortstate() {
 }
 
 
-  /** Camera::Camera::log_error ***********************************************/
+  /***** Camera::Camera::log_error ********************************************/
   /**
-   * @fn     log_error
-   * @brief  logs the error and saves the message to be returned on the command port
-   * @param  std::string function name
-   * @param  std::string message (error)
-   * @return ERROR or NO_ERROR
+   * @brief      logs the error and saves the message to be returned on the command port
+   * @param[in]  function  string containing the name of the Namespace::Class::function
+   * @param[in]  message   string containing error message
+   * @return     ERROR or NO_ERROR
    *
    */
   void Camera::log_error( std::string function, std::string message ) {
@@ -97,15 +93,13 @@ bool Camera::get_abortstate() {
     logwrite( function, err.str() );
     this->async.enqueue( err.str() );
   }
-  /** Camera::Camera::log_error ***********************************************/
+  /***** Camera::Camera::log_error ********************************************/
 
 
-  /** Camera::Camera::get_longerror *******************************************/
+  /***** Camera::Camera::get_longerror ****************************************/
   /**
-   * @fn     get_longerror
-   * @brief  return the saved error message
-   * @param  none
-   * @return std::string message
+   * @brief      return the saved error message
+   * @return     string containing any error message
    *
    * If is_longerror is set (true) then return the last saved error message
    * in lasterrorstring, then erase that string.
@@ -118,16 +112,15 @@ bool Camera::get_abortstate() {
     this->lasterrorstring.str("");
     return ( err );
   }
-  /** Camera::Camera::get_longerror *******************************************/
+  /***** Camera::Camera::get_longerror ****************************************/
 
 
-  /** Camera::Camera::writekeys ***********************************************/
+  /***** Camera::Camera::writekeys ********************************************/
   /**
-   * @fn     writekeys
-   * @brief  set or get the writekeys_when value
-   * @param  std::string writekeys_in
-   * @param  std::string& writekeys_out
-   * @return ERROR or NO_ERROR
+   * @brief      set or get the writekeys_when value
+   * @param[in]  writekeys_in   string containing requested state "before|after" (or empty for query)
+   * @param[out] writekeys_out  reference to string contains return state
+   * @return     ERROR or NO_ERROR
    *
    */
   long Camera::writekeys(std::string writekeys_in, std::string &writekeys_out) {
@@ -155,16 +148,15 @@ bool Camera::get_abortstate() {
     writekeys_out = this->writekeys_when;
     return error;
   }
-  /** Camera::Camera::writekeys ***********************************************/
+  /***** Camera::Camera::writekeys ********************************************/
 
 
-  /** Camera::Camera::fitsnaming **********************************************/
+  /***** Camera::Camera::fitsnaming *******************************************/
   /**
-   * @fn     fitsnaming
-   * @brief  set or get the fits naming type
-   * @param  std::string naming_in
-   * @param  std::string& naming_out
-   * @return ERROR or NO_ERROR
+   * @brief      set or get the fits naming type
+   * @param[in]  naming_in   string containing requested type (time|number) or empty for query
+   * @param[out] naming_out  reference to string contains return value of current type
+   * @return     ERROR or NO_ERROR
    *
    */
   long Camera::fitsnaming(std::string naming_in, std::string& naming_out) {
@@ -191,16 +183,15 @@ bool Camera::get_abortstate() {
     naming_out = this->fits_naming;    // return the current value
     return error;
   }
-  /** Camera::Camera::fitsnaming **********************************************/
+  /***** Camera::Camera::fitsnaming *******************************************/
 
 
-  /** Camera::Camera::imnum ***************************************************/
+  /***** Camera::Camera::imnum ************************************************/
   /**
-   * @fn     imnum
-   * @brief  set or get the image_num member
-   * @param  std::string num_in
-   * @param  std::string& num_out
-   * @return ERROR or NO_ERROR
+   * @brief      set or get the image_num member
+   * @param[in]  num_in   string containing requested image number
+   * @param[out] num_out  reference to string contains return value of current imnum
+   * @return     ERROR or NO_ERROR
    *
    */
   long Camera::imnum(std::string num_in, std::string& num_out) {
@@ -241,16 +232,14 @@ bool Camera::get_abortstate() {
       }
     }
   }
-  /** Camera::Camera::imnum ***************************************************/
+  /***** Camera::Camera::imnum ************************************************/
 
 
-  /** Camera::Camera::basename ************************************************/
+  /***** Camera::Camera::basename *********************************************/
   /**
-   * @fn     basename
-   * @brief  set or get the base_name member
-   * @param  std::string name_in
-   * @param  std::string& name_out
-   * @return NO_ERROR
+   * @brief      set or get the base_name member
+   * @param[in]  name_in   requested basename
+   * @return     NO_ERROR
    *
    * This function is overloaded with a form that doesn't use a return value.
    * The only restriction on base name is that it can't contain a '/' character.
@@ -260,6 +249,20 @@ bool Camera::get_abortstate() {
     std::string dontcare;
     return( basename(name_in, dontcare) );
   }
+  /***** Camera::Camera::basename *********************************************/
+
+
+  /***** Camera::Camera::basename *********************************************/
+  /**
+   * @brief      set or get the base_name member
+   * @param[in]  name_in   requested basename or empty for query
+   * @param[out] name_out  reference to string contains return value of current basename
+   * @return     NO_ERROR
+   *
+   * This function is overloaded with a form that doesn't use a return value.
+   * The only restriction on base name is that it can't contain a '/' character.
+   *
+   */
   long Camera::basename(std::string name_in, std::string& name_out) {
     std::string function = "Camera::Camera::basename";
     std::stringstream message;
@@ -285,16 +288,14 @@ bool Camera::get_abortstate() {
 
     return(error);
   }
-  /** Camera::Camera::basename ************************************************/
+  /***** Camera::Camera::basename *********************************************/
 
 
-  /** Camera::Camera::imdir ***************************************************/
+  /***** Camera::Camera::imdir ************************************************/
   /**
-   * @fn     imdir
-   * @brief  set or get the image_dir base directory
-   * @param  std::string dir_in
-   * @param  std::string& dir_out (pass reference for return value)
-   * @return ERROR or NO_ERROR
+   * @brief      set or get the image_dir base directory
+   * @param[in]  dir_in   string containing requested image directory
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded with a form that doesn't use a return value reference.
    *
@@ -308,6 +309,24 @@ bool Camera::get_abortstate() {
     std::string dontcare;
     return( imdir(dir_in, dontcare) );
   }
+  /***** Camera::Camera::imdir ************************************************/
+
+
+  /***** Camera::Camera::imdir ************************************************/
+  /**
+   * @brief      set or get the image_dir base directory
+   * @param[in]  dir_in   string containing requested image directory
+   * @param[out] dir_out  reference to string contains return value of current image directory
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded with a form that doesn't use a return value reference.
+   *
+   * The base directory for images is this->image_dir. It is set (or read) here. It
+   * may contain any number of subdirectories. This function will try to create any
+   * needed subdirectories if they don't already exist.  If autodir is set then a 
+   * UTC date subdirectory is added later, in the get_fitsname() function.
+   *
+   */
   long Camera::imdir(std::string dir_in, std::string& dir_out) {
     std::string function = "Camera::Camera::imdir";
     std::stringstream message;
@@ -390,16 +409,15 @@ bool Camera::get_abortstate() {
     dir_out = this->image_dir;
     return( error );
   }
-  /** Camera::Camera::imdir ***************************************************/
+  /***** Camera::Camera::imdir ************************************************/
 
 
-  /** Camera::Camera::autodir *************************************************/
+  /***** Camera::Camera::autodir **********************************************/
   /**
-   * @fn     autodir
-   * @brief  set or get autodir_state used for creating UTC date subdirectory
-   * @param  std::string dir_in
-   * @param  std::string& dir_out (pass reference for return value)
-   * @return ERROR or NO_ERROR
+   * @brief      set or get autodir_state used for creating UTC date subdirectory
+   * @param[in]  dir_in   string containing "yes" or "no" or empty for query
+   * @param[out] dir_out  reference to string contains return value of current state
+   * @return     ERROR or NO_ERROR
    *
    * The base directory for images is this->image_dir. It is set (or read) here. It
    * is not created; it must already exist. The date subdirectory is added later, in
@@ -442,16 +460,13 @@ bool Camera::get_abortstate() {
     return error;
 
   }
-  /** Camera::Camera::autodir *************************************************/
+  /***** Camera::Camera::autodir **********************************************/
 
 
-
-  /** Camera::Camera:set_fitstime *********************************************/
+  /***** Camera::Camera:set_fitstime ******************************************/
   /**
-   * @fn     set_fitstime
-   * @brief  set the "fitstime" variable used for the filename
-   * @param  string formatted as "YYYY-MM-DDTHH:MM:SS.ssssss"
-   * @return std::string
+   * @brief      set the "fitstime" variable used for the filename
+   * @param[in]  time_in  string formatted as "YYYY-MM-DDTHH:MM:SS.ssssss"
    *
    * The Camera class has a public string variable "fitstime" which is
    * to be used for the FITS filename, when the time-format is selected.
@@ -480,16 +495,14 @@ bool Camera::get_abortstate() {
 
     return;
   }
-  /** Camera::Camera:set_fitstime *********************************************/
+  /***** Camera::Camera:set_fitstime ******************************************/
 
 
-  /** Camera::Camera:get_fitsname *********************************************/
+  /***** Camera::Camera:get_fitsname ******************************************/
   /**
-   * @fn     get_fitsname
-   * @brief  assemble the FITS filename
-   * @param  std::string controllerid (optional, due to overloading)
-   * @param  std::string &name_out reference for name
-   * @return ERROR or NO_ERROR
+   * @brief      assemble the FITS filename
+   * @param[out] name_out      reference to string containing the filename
+   * @return     ERROR or NO_ERROR
    *
    * This function assembles the fully qualified path to the output FITS filename
    * using the parts (dir, basename, time or number) stored in the Camera::Camera class.
@@ -502,6 +515,24 @@ bool Camera::get_abortstate() {
   long Camera::get_fitsname(std::string &name_out) {
     return ( this->get_fitsname("", name_out) );
   }
+  /***** Camera::Camera:get_fitsname ******************************************/
+
+
+  /***** Camera::Camera:get_fitsname ******************************************/
+  /**
+   * @brief      assemble the FITS filename
+   * @param[in]  controllerid  string containing controller id to put into filename
+   * @param[out] name_out      reference to string containing the filename
+   * @return     ERROR or NO_ERROR
+   *
+   * This function assembles the fully qualified path to the output FITS filename
+   * using the parts (dir, basename, time or number) stored in the Camera::Camera class.
+   * If the filename already exists then a -number is inserted, incrementing that
+   * number until a unique name is achieved.
+   *
+   * This function is overloaded, to allow passing a controller id to include in the filename.
+   *
+   */
   long Camera::get_fitsname(std::string controllerid, std::string &name_out) {
     std::string function = "Camera::Camera::get_fitsname";
     std::stringstream message;
@@ -595,17 +626,13 @@ bool Camera::get_abortstate() {
     name_out = fn.str();
     return(NO_ERROR);
   }
-  /** Camera::Camera:get_fitsname *********************************************/
+  /***** Camera::Camera:get_fitsname ******************************************/
 
 
-  /** Camera::Camera::datacube ************************************************/
+  /***** Camera::Camera::datacube *********************************************/
   /**
-   * @fn     datacube
-   * @brief  set or get the datacube state
-   * @param  std::string state_in
-   * @return true or false
-   *
-   * The state_in string should be "True" or "False", case-insensitive.
+   * @brief      set the datacube state
+   * @param[in]  state_in  boolean value to indicate whether to write a datacube(T) or not(F)
    *
    * This function is overloaded.
    *
@@ -614,10 +641,34 @@ bool Camera::get_abortstate() {
     std::string dontcare;
     this->datacube( (state_in ? "true" : "false"), dontcare );
   }
+  /***** Camera::Camera::datacube *********************************************/
+
+
+  /***** Camera::Camera::datacube *********************************************/
+  /**
+   * @brief      get the datacube state
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   */
   bool Camera::datacube() {                                               // read-only boolean
     return ( this->is_datacube );
   }
-  long Camera::datacube(std::string state_in, std::string &state_out) {   // read-write string, called from server
+  /***** Camera::Camera::datacube *********************************************/
+
+
+  /***** Camera::Camera::datacube *********************************************/
+  /**
+   * @brief      set or get the datacube state
+   * @param[in]  state_in   string containing requested state "true" or "false"
+   * @param[out] state_out  reference to string containing the current state "true" or "false"
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   */
+  long Camera::datacube(std::string state_in, std::string &state_out) {
     std::string function = "Camera::Camera::datacube";
     std::stringstream message;
     int error = NO_ERROR;
@@ -654,30 +705,49 @@ bool Camera::get_abortstate() {
     //
     return( error );
   }
-  /** Camera::Camera::datacube ************************************************/
+  /***** Camera::Camera::datacube *********************************************/
 
 
-
-  /** Camera::Camera::longerror ***********************************************/
+  /***** Camera::Camera::longerror ********************************************/
   /**
-   * @fn     longerror
-   * @brief  set or get the longerror state
-   * @param  std::string state_in
-   * @return true or false
-   *
-   * The state_in string should be "True" or "False", case-insensitive.
+   * @brief      set the longerror state
+   * @param[in]  state_in  boolean value to indicate whether to display long errors (T) or not (F)
    *
    * This function is overloaded.
    *
    */
-  void Camera::longerror(bool state_in) {                                 // write-only boolean
+  void Camera::longerror(bool state_in) {
     std::string dontcare;
     this->longerror( (state_in ? "true" : "false"), dontcare );
   }
-  bool Camera::longerror() {                                              // read-only boolean
+  /***** Camera::Camera::longerror ********************************************/
+
+
+  /***** Camera::Camera::longerror ********************************************/
+  /**
+   * @brief      get the longerror state
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   */
+  bool Camera::longerror() {
     return ( this->is_longerror );
   }
-  long Camera::longerror(std::string state_in, std::string &state_out) {  // read-write string, called from server
+  /***** Camera::Camera::longerror ********************************************/
+
+
+  /***** Camera::Camera::longerror ********************************************/
+  /**
+   * @brief      set or get the longerror state
+   * @param[in]  state_in   string containing requested state "true" or "false"
+   * @param[out] state_out  reference to string containing the current state "true" or "false"
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   */
+  long Camera::longerror(std::string state_in, std::string &state_out) {
     std::string function = "Camera::Camera::longerror";
     std::stringstream message;
     int error = NO_ERROR;
@@ -714,17 +784,13 @@ bool Camera::get_abortstate() {
     //
     return( error );
   }
-  /** Camera::Camera::longerror ***********************************************/
+  /***** Camera::Camera::longerror ********************************************/
 
 
-  /** Camera::Camera::cubeamps ************************************************/
+  /***** Camera::Camera::cubeamps *********************************************/
   /**
-   * @fn     cubeamps
-   * @brief  set or get the cubeamps state
-   * @param  std::string state_in
-   * @return true or false
-   *
-   * The state_in string should be "True" or "False", case-insensitive.
+   * @brief      set the cubeamps state
+   * @param[in]  state_in  boolean value to indicate whether to write datacubes (T) or not (F)
    *
    * This function is overloaded.
    *
@@ -732,14 +798,41 @@ bool Camera::get_abortstate() {
    * is needed after disabling cubeamps then it must be separately enabled.
    *
    */
-  void Camera::cubeamps(bool state_in) {                                  // write-only boolean
+  void Camera::cubeamps(bool state_in) {
     std::string dontcare;
     this->cubeamps( (state_in ? "true" : "false"), dontcare );
   }
-  bool Camera::cubeamps() {                                               // read-only boolean
+  /***** Camera::Camera::cubeamps *********************************************/
+
+
+  /***** Camera::Camera::cubeamps *********************************************/
+  /**
+   * @brief      get the cubeamps state
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   */
+  bool Camera::cubeamps() {
     return ( this->is_cubeamps );
   }
-  long Camera::cubeamps(std::string state_in, std::string &state_out) {   // read-write string, called from server
+  /***** Camera::Camera::cubeamps *********************************************/
+
+
+  /***** Camera::Camera::cubeamps *********************************************/
+  /**
+   * @brief      set or get the cubeamps state
+   * @param[in]  state_in   string containing requested state "true" or "false"
+   * @param[out] state_out  reference to string containing the current state "true" or "false"
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   * datacube also gets enabled/disabled along with cubeamps. If datacube
+   * is needed after disabling cubeamps then it must be separately enabled.
+   *
+   */
+  long Camera::cubeamps(std::string state_in, std::string &state_out) {
     std::string function = "Camera::Camera::cubeamps";
     std::stringstream message;
     int error = NO_ERROR;
@@ -782,16 +875,15 @@ bool Camera::get_abortstate() {
     //
     return( error );
   }
-  /** Camera::Camera::cubeamps ************************************************/
+  /***** Camera::Camera::cubeamps *********************************************/
 
 
-  /**************** Camera::Information::pre_exposures ************************/
+  /***** Camera::Information::pre_exposures ***********************************/
   /**
-   * @fn     pre_exposures
-   * @brief  set/get pre-exposures
-   * @param  string num_in   incoming value
-   * @param  string &num_out return value
-   * @return ERROR or NO_ERROR
+   * @brief      set/get pre-exposures
+   * @param[in]  num_in   string containing incoming value
+   * @param[out] num_out  referance to string for return value
+   * @return     ERROR or NO_ERROR
    *
    * Get / set number of pre-exposures, which are exposures taken by the
    * controller but are not saved. This number is stored in the
@@ -838,6 +930,6 @@ bool Camera::get_abortstate() {
       }
     }
   }
-  /**************** Camera::Information::pre_exposures ************************/
+  /***** Camera::Information::pre_exposures ***********************************/
 
 }

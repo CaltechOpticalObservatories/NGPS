@@ -1,3 +1,11 @@
+/**
+ * @file    sequencerd_commands.h
+ * @brief   defines the commands accepted by the sequencer daemon
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #ifndef SEQEUNCERD_COMMANDS_H
 #define SEQEUNCERD_COMMANDS_H
 const std::string SEQUENCERD_STARTUP = "startup";

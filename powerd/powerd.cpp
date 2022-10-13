@@ -13,7 +13,7 @@
 Power::Server powerd;
 std::string logpath; 
 
-/** signal_handler ***********************************************************/
+/***** signal_handler *********************************************************/
 /**
  * @fn         signal_handler
  * @brief      handles ctrl-C
@@ -50,18 +50,18 @@ void signal_handler(int signo) {
   }
   return;
 }
-/** signal_handler ***********************************************************/
+/***** signal_handler *********************************************************/
 
 
-int  main(int argc, char **argv);           // main thread (just gets things started)
-void new_log_day( );                        // create a new log each day
-void block_main(Network::TcpSocket sock);   // this thread handles requests on blocking port
-void thread_main(Network::TcpSocket sock);  // this thread handles requests on non-blocking port
-void async_main(Network::UdpSocket sock);   // this thread handles the asyncrhonous UDP message port
-void doit(Network::TcpSocket sock);         // the worker thread
+int  main(int argc, char **argv);           ///< main thread (just gets things started)
+void new_log_day( );                        ///< create a new log each day
+void block_main(Network::TcpSocket sock);   ///< this thread handles requests on blocking port
+void thread_main(Network::TcpSocket sock);  ///< this thread handles requests on non-blocking port
+void async_main(Network::UdpSocket sock);   ///< this thread handles the asyncrhonous UDP message port
+void doit(Network::TcpSocket sock);         ///< the worker thread
 
 
-/** main *********************************************************************/
+/***** main *******************************************************************/
 /**
  * @fn         main
  * @brief      the main function
@@ -208,10 +208,10 @@ int main(int argc, char **argv) {
   for (;;) pause();                                  // main thread suspends
   return 0;
 }
-/** main *********************************************************************/
+/***** main *******************************************************************/
 
 
-/** new_log_day **************************************************************/
+/***** new_log_day ************************************************************/
 /**
  * @fn         new_log_day
  * @brief      creates a new logbook each day
@@ -226,17 +226,17 @@ int main(int argc, char **argv) {
  * is set by init_log.
  *
  */
-void new_log_day( ) { 
+void new_log_day( ) {
   while (1) {
     std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
     close_log();
     init_log( logpath, Power::DAEMON_NAME );
   }
 }
-/** new_log_day **************************************************************/
+/***** new_log_day ************************************************************/
 
 
-/** block_main ***************************************************************/
+/***** block_main *************************************************************/
 /**
  * @fn         block_main
  * @brief      main function for blocking connection thread
@@ -257,10 +257,10 @@ void block_main(Network::TcpSocket sock) {
   }
   return;
 }
-/** block_main ***************************************************************/
+/***** block_main *************************************************************/
 
 
-/** thread_main **************************************************************/
+/***** thread_main ************************************************************/
 /**
  * @fn         thread_main
  * @brief      main function for all non-blocked threads
@@ -287,10 +287,10 @@ void thread_main(Network::TcpSocket sock) {
   }
   return;
 }
-/** thread_main **************************************************************/
+/***** thread_main ************************************************************/
 
 
-/** async_main ***************************************************************/
+/***** async_main *************************************************************/
 /**
  * @fn         async_main
  * @brief      asynchronous message sending thread
@@ -315,7 +315,7 @@ void async_main(Network::UdpSocket sock) {
   }
 
   while (1) {
-    std::string message = powerd.interface.async.dequeue();  // get the latest message from the queue (blocks)
+    std::string message = powerd.interface.async.dequeue(); // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message
     if (retval < 0) {
       std::stringstream errstm;
@@ -330,10 +330,10 @@ void async_main(Network::UdpSocket sock) {
 
   return;
 }
-/** async_main ***************************************************************/
+/***** async_main *************************************************************/
 
 
-/** doit *********************************************************************/
+/***** doit *******************************************************************/
 /**
  * @fn         doit
  * @brief      the workhorse of each thread connetion
@@ -498,5 +498,5 @@ void doit(Network::TcpSocket sock) {
   sock.Close();
   return;
 }
-/** doit *********************************************************************/
+/***** doit *******************************************************************/
 

@@ -1,3 +1,11 @@
+/**
+ * @file    slitd_commands.h
+ * @brief   defines the commands accepted by the slit daemon
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #ifndef SLITD_COMMANDS_H
 #define SLITD_COMMANDS_H
 const std::string SLITD_SET  = "set";

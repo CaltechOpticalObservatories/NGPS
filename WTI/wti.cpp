@@ -10,12 +10,9 @@
 
 namespace WTI {
 
-  /**************** WTI::Interface::Interface *********************************/
+  /***** WTI::Interface::Interface ********************************************/
   /**
-   * @fn         Interface
    * @brief      default Interface class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Interface::Interface( ) {
@@ -24,17 +21,15 @@ namespace WTI {
     this->host = "";
     this->initialized = false;
   }
-  /**************** WTI::Interface::Interface *********************************/
+  /***** WTI::Interface::Interface ********************************************/
 
 
-  /**************** WTI::Interface::Interface *********************************/
+  /***** WTI::Interface::Interface ********************************************/
   /**
-   * @fn         Interface
    * @brief      Interface class constructor
-   * @param[in]  name
-   * @param[in]  host
-   * @param[in]  port
-   * @return     none
+   * @param[in]  name  name of the device for info purposes only
+   * @param[in]  host  hostname of the device
+   * @param[in]  port  port number of the device
    *
    */
   Interface::Interface( std::string name, std::string host, int port ) {
@@ -43,27 +38,22 @@ namespace WTI {
     this->host = host;
     this->initialized = true;
   }
-  /**************** WTI::Interface::Interface *********************************/
+  /***** WTI::Interface::Interface ********************************************/
 
 
-  /**************** WTI::Interface::~Interface ********************************/
+  /***** WTI::Interface::~Interface *******************************************/
   /**
-   * @fn         ~Interface
    * @brief      Interface class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Interface::~Interface() {
   };
-  /**************** WTI::Interface::~Interface ********************************/
+  /***** WTI::Interface::~Interface *******************************************/
 
 
-  /**************** WTI::Interface::open **************************************/
+  /***** WTI::Interface::open *************************************************/
   /**
-   * @fn         open
    * @brief      open a connection to the WTI hardware
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
@@ -104,14 +94,12 @@ namespace WTI {
 
     return NO_ERROR;
   }
-  /**************** WTI::Interface::open **************************************/
+  /***** WTI::Interface::open *************************************************/
 
 
-  /**************** WTI::Interface::close *************************************/
+  /***** WTI::Interface::close ************************************************/
   /**
-   * @fn         close
    * @brief      close the connection to the WTI socket
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
@@ -138,14 +126,13 @@ namespace WTI {
 
     return( error );
   }
-  /**************** WTI::Interface::close *************************************/
+  /***** WTI::Interface::close ************************************************/
 
 
-  /**************** WTI::Interface::send_command ******************************/
+  /***** WTI::Interface::send_command *****************************************/
   /**
-   * @fn         send_command
    * @brief      send specified command to WTI socket interface, don't return reply
-   * @param[in]  cmd, string
+   * @param[in]  cmd  command to send
    * @return     ERROR or NO_ERROR
    *
    * This function writes the command an although it reads the reply it does not
@@ -217,15 +204,14 @@ namespace WTI {
 
     return( NO_ERROR );
   }
-  /**************** WTI::Interface::send_command ******************************/
+  /***** WTI::Interface::send_command *****************************************/
 
 
-  /**************** WTI::Interface::send_command ******************************/
+  /***** WTI::Interface::send_command *****************************************/
   /**
-   * @fn         send_command
    * @brief      send specified command to WTI socket interface and return reply
-   * @param[in]  cmd, string
-   * @param[out] retstring, reference to string
+   * @param[in]  cmd        command to send
+   * @param[out] retstring  reply read back from device
    * @return     ERROR or NO_ERROR
    *
    */
@@ -309,41 +295,34 @@ namespace WTI {
 
     return( error );
   }
-  /**************** WTI::Interface::send_command ******************************/
+  /***** WTI::Interface::send_command *****************************************/
 
 
-  /**************** WTI::NPS::NPS *********************************************/
+  /***** WTI::NPS::NPS ********************************************************/
   /**
-   * @fn         NPS
    * @brief      default NPS class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   NPS::NPS() {
   }
-  /**************** WTI::NPS::NPS *********************************************/
+  /***** WTI::NPS::NPS ********************************************************/
 
 
-  /**************** WTI::NPS::~NPS ********************************************/
+  /***** WTI::NPS::~NPS *******************************************************/
   /**
-   * @fn         ~NPS
    * @brief      default NPS class de-constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   NPS::~NPS() {
   }
-  /**************** WTI::NPS::~NPS ********************************************/
+  /***** WTI::NPS::~NPS *******************************************************/
 
 
-  /**************** WTI::NPS::set_switch **************************************/
+  /***** WTI::NPS::set_switch *************************************************/
   /**
-   * @fn         set_switch
    * @brief      turn the selected plug on|off
-   * @param[in]  plugnum
-   * @param[in]  action
+   * @param[in]  plugnum  plug number
+   * @param[in]  action   action to take, 0=OFF, 1=ON
    * @return     ERROR or NO_ERROR
    *
    */
@@ -373,15 +352,14 @@ namespace WTI {
 
     return( error );
   }
-  /**************** WTI::NPS::set_switch **************************************/
+  /***** WTI::NPS::set_switch *************************************************/
 
 
-  /**************** WTI::NPS::get_switch **************************************/
+  /***** WTI::NPS::get_switch *************************************************/
   /**
-   * @fn         get_switch
    * @brief      get the selected plug's on/off state
-   * @param[in]  plugnum
-   * @param[in]  state
+   * @param[in]  plugnum  plug number
+   * @param[in]  state    on/off state as read back from the NPS, 0=OFF, 1=ON
    * @return     ERROR or NO_ERROR
    *
    */
@@ -407,6 +385,6 @@ namespace WTI {
 
     return( error );
   }
-  /**************** WTI::NPS::get_switch **************************************/
+  /***** WTI::NPS::get_switch *************************************************/
 
 }

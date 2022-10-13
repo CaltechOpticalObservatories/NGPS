@@ -1,14 +1,8 @@
 /** ---------------------------------------------------------------------------
- * @file     include/build_date.h
- * @brief    build date for arcserv
+ * @file     build_date.h
+ * @brief    definitions for preprocessor build date and time
  * @author   David Hale <dhale@astro.caltech.edu>
- * @date     2019-06-10
- * @modified 2019-06-10, DH
- *
- * When arcserv is built the Makefile will touch this file.
- * arcserv's main() will Logf the modification date/time of this file,
- * thereby logging the build date of arcserv.
  *
  */
-#define BUILD_DATE __DATE__
-#define BUILD_TIME __TIME__
+#define BUILD_DATE __DATE__  ///< preprocessor build date
+#define BUILD_TIME __TIME__  ///< preprocessor build time

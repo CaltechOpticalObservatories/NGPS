@@ -1,3 +1,11 @@
+/**
+ * @file    power_interface.h
+ * @brief   
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #ifndef POWER_INTERFACE_H
 #define POWER_INTERFACE_H
 
@@ -9,11 +17,17 @@
 #include "common.h"
 #include <sys/stat.h>
 
+/***** Power ******************************************************************/
+/**
+ * @namespace Power
+ * @brief     namespace for power control
+ *
+ */
 namespace Power {
 
-  const std::string DAEMON_NAME = "powerd";      /// when run as a daemon, this is my name
+  const std::string DAEMON_NAME = "powerd";      ///< when run as a daemon, this is my name
 
-  /** NpsInfo *****************************************************************/
+  /***** Power::NpsInfo *******************************************************/
   /**
    * @class  NpsInfo
    * @brief  NPS information class
@@ -24,10 +38,10 @@ namespace Power {
   class NpsInfo {
     private:
     public:
-      int         npsnum;    /// an integer assigned to each NPS as an identifier
-      int         maxplugs;  /// the number of outlets on this NPS
-      std::string host;      /// host name/IP for this NPS
-      int         port;      /// port number for this NPS
+      int         npsnum;    ///< an integer assigned to each NPS as an identifier
+      int         maxplugs;  ///< the number of outlets on this NPS
+      std::string host;      ///< host name/IP for this NPS
+      int         port;      ///< port number for this NPS
 
       NpsInfo();
       ~NpsInfo();
@@ -152,10 +166,10 @@ namespace Power {
       /**************** Power::NpsInfo::load_plug_info ************************/
 
   };
-  /** NpsInfo *****************************************************************/
+  /***** Power::NpsInfo *******************************************************/
 
 
-  /** Interface ***************************************************************/
+  /***** Power::Interface *****************************************************/
   /**
    * @class  Interface
    * @brief  interface class for the network power switch(es)
@@ -167,33 +181,38 @@ namespace Power {
   class Interface {
     private:
       bool   class_initialized;
-      size_t numdev;                                       /// number of NPS devices, or "units"
+      size_t numdev;                                       ///< number of NPS devices, or "units"
 
     public:
       Interface();
       ~Interface();
 
-      Common::Queue async;
+      Common::Queue async;                                 ///< asynchronous message queue object
 
-      std::map< int, Power::NpsInfo > nps_info;            /// STL map of NpsInfo objects indexed by NPS unit#
-      std::map< int, WTI::NPS >       nps;                 /// STL map of WTI NPS objects indexed by NPS unit#
+      std::map< int, Power::NpsInfo > nps_info;            ///< STL map of NpsInfo objects indexed by NPS unit#
+      std::map< int, WTI::NPS >       nps;                 ///< STL map of WTI NPS objects indexed by NPS unit#
 
+      /**
+       * @struct plug_t
+       * @brief  structure to contain location of a plug, both nps and plug number
+       */
       typedef struct {
-        int npsnum;                                        /// nps number
-        int plugnum;                                       /// plug number
-      } plug_t;                                            /// structure to contain location of a plug, both nps and plug number
-      std::map< std::string, plug_t > plugmap;             /// STL map of plug number indexed by plug name,
-                                                           /// allows finding {npsnum,plugnum} by plugname
+        int npsnum;                                        ///< NPS number
+        int plugnum;                                       ///< plug number
+      } plug_t;
 
-      void configure_interface( Power::NpsInfo npsinfo );  /// configure the NPS interface vector with info from configuration file
-      long initialize_class();                             /// initialize class variables
-      long open();                                         /// open the NPS socket connection
-      long close();                                        /// close the NPS socket connection
-      bool isopen();                                       /// is the NPS socket connection open?
-      long command( std::string cmd, std::string &retstring );
+      std::map< std::string, plug_t > plugmap;             ///< STL map of plug number indexed by plug name, allows finding {npsnum,plugnum} by plugname
+
+      void configure_interface( Power::NpsInfo npsinfo );  ///< configure the NPS interface vector with info from configuration file
+      long initialize_class();                             ///< initialize class variables
+      long open();                                         ///< open the NPS socket connection
+      long close();                                        ///< close the NPS socket connection
+      bool isopen();                                       ///< is the NPS socket connection open?
+      long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
 
   };
-  /** Interface ***************************************************************/
+  /***** Power::Interface *****************************************************/
 
 }
+/***** Power ******************************************************************/
 #endif

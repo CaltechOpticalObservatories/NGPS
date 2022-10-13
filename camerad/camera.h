@@ -1,15 +1,15 @@
 /**
  * @file    camera.h
  * @brief   camera interface functions header file common to all camera interfaces (astrocam, archon)
- * @details 
  * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
  *
  */
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include <CCfits/CCfits>           /// needed here for types in set_axes()
-#include <dirent.h>                /// for imdir()
+#include <CCfits/CCfits>           // needed here for types in set_axes()
+#include <dirent.h>                // for imdir()
 #include <map>
 #include <vector>
 #include <mutex>
@@ -26,7 +26,7 @@
 
 namespace Camera {
 
-  /**************** Camera::Camera ********************************************/
+  /***** Camera::Camera *******************************************************/
   //
   class Camera {
     private:
@@ -84,7 +84,7 @@ namespace Camera {
       bool cubeamps();
       long cubeamps(std::string state_in, std::string &state_out);
   };
-  /**************** Camera::Camera ********************************************/
+  /***** Camera::Camera *******************************************************/
 
   typedef enum {
     FRAME_IMAGE,
@@ -97,7 +97,7 @@ namespace Camera {
     "RAW"
   };
 
-  /**************** Camera::Information ***************************************/
+  /***** Camera::Information **************************************************/
   //
   class Information {
     private:
@@ -217,7 +217,7 @@ namespace Camera {
         return (NO_ERROR);
       }
   };
-  /**************** Camera::Information ***************************************/
+  /***** Camera::Information **************************************************/
 
 }
 #endif

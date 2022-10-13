@@ -1,9 +1,8 @@
 /**
  * @file    astrocam.h
  * @brief   
- * @details 
  * @author  David Hale <dhale@astro.caltech.edu>
- *
+ * @details 
  * This is where you put things that are common to both ARC interfaces,
  * ARC-64 PCI and ARC-66 PCIe.
  *
@@ -11,11 +10,11 @@
 #ifndef ASTROCAM_H
 #define ASTROCAM_H
 
-#include <CCfits/CCfits>           //!< needed here for types in set_axes()
+#include <CCfits/CCfits>           // needed here for types in set_axes()
 #include <atomic>
 #include <chrono>
 #include <numeric>
-#include <functional>              //!< pass by reference to threads
+#include <functional>              // pass by reference to threads
 #include <thread>
 #include <iostream>
 #include <vector>
@@ -36,41 +35,61 @@
 #include "CArcBase.h"
 #include "CooExpIFace.h"
 
+
+/***** AstroCam ***************************************************************/
+/**
+ * @namespace AstroCam
+ * @brief     namespace for Astronomical Research Cameras (aka Leach) controller interface
+ *
+ */
 namespace AstroCam {
 
-  // ENUM list for each readout type
-  //
+  /**
+   * ENUM list for each readout type
+   */
   enum ReadoutType {
-    U1,
-    L1,
-    U2,
+    U1,                 ///< enum for amplifier U1
+    L1,                 ///< enum for amplifier L1
+    U2,                 ///< enum for amplifier U2
     L2,
     SPLIT1,
     SPLIT2,
     QUAD,
     FT12S2,
     FT21S1,
-//  HAWAII_1CH,           // TODO
-//  HAWAII_4CH,           // TODO
-//  HAWAII_16CH,          // TODO
-//  HAWAII_32CH,          // TODO
-//  HAWAII_32CH_LR,       // TODO
+//  HAWAII_1CH,         // TODO
+//  HAWAII_4CH,         // TODO
+//  HAWAII_16CH,        // TODO
+//  HAWAII_32CH,        // TODO
+//  HAWAII_32CH_LR,     // TODO
     NUM_READOUT_TYPES
     };
 
-  class Callback : public arc::gen3::CooExpIFace {  //!< Callback class inherited from the ARC API
+  /***** AstroCam::Callback ***************************************************/
+  /**
+   * @class Callback
+   * @brief Callback class inherited from the ARC API
+   */
+  class Callback : public arc::gen3::CooExpIFace {
     public:
       Callback(){}
-      void exposeCallback( int devnum, std::uint32_t uiElapsedTime );
-      void readCallback( int devnum, std::uint32_t uiPixelCount );
+      void exposeCallback( int devnum, std::uint32_t uiElapsedTime ); ///< called by CArcDevice::expose() during exposure
+      void readCallback( int devnum, std::uint32_t uiPixelCount );    ///< called by CArcDevice::expose() during readout
       void frameCallback( int devnum,
                           std::uint32_t uiFramesPerBuffer,
                           std::uint32_t uiFrameCount,
                           std::uint32_t uiRows,
                           std::uint32_t uiCols,
-                          void* pBuffer );
+                          void* pBuffer );                            ///< called by CArcDevice::expose() when a frame has been received
   };
+  /***** AstroCam::Callback ***************************************************/
 
+
+  /***** AstroCam::XeInterlace ************************************************/
+  /**
+   * @class XeInterface
+   * @brief deinterlacing class, experimental
+   */
   template <typename T>
   class XeInterlace {
     private:
@@ -82,6 +101,7 @@ namespace AstroCam {
         this->imbuf   = imbuf_in;
         this->workbuf = workbuf_in;
       }
+      ~XeInterlace() {};
 
       void split_parallel();
       void split_serial();
@@ -92,21 +112,25 @@ namespace AstroCam {
         return (ret.str());
       };
   };
+  /***** AstroCam::XeInterlace ************************************************/
 
 
-  /**************** AstroCam::DeInterlace *************************************/
+  /***** AstroCam::DeInterlace ************************************************/
   /**
-   * This is the DeInterlace class.
+   * @class  DeInterlace
+   * @brief  This is the DeInterlace class.
+   * @details The data it contains are pointers to the PCI image buffer and
+   *          the working buffer where the deinterlacing is to take place.
    *
-   * The data it contains are pointers to the PCI image buffer and
-   * the working buffer where the deinterlacing is to take place.
+   *          The functions it contains are the procedures for performing
+   *          the deinterlacing.
    *
-   * The functions it contains are the procedures for performing the deinterlacing.
+   *          This is a template class so that the buffers are created of
+   *          the proper type.
    *
-   * This is a template class so that the buffers are created of the proper type.
-   *
-   * For the deinterlacing algorithms below, it is assumed that the amplifiers
-   * are written to imbuf in the order (0,1,2...) and direction (-->) indicated.
+   *          For the deinterlacing algorithms below, it is assumed that the
+   *          amplifiers are written to imbuf in the order (0,1,2...) and 
+   *          direction (-->) indicated.
    *
    */
   template <typename T>
@@ -119,17 +143,24 @@ namespace AstroCam {
       int rows;
       int readout_type;
 
-      // quad ccd
-      //
-      // L2 +---------+---------+ U2
-      //    | <------ | ------> |
-      //    |    3    |    2    |
-      //    +---------+---------+
-      //    |    0    |    1    |
-      //    | <------ | ------> |
-      // L1 +---------+---------+ U1
-      //
-      //
+      /***** AstroCam::DeInterlace::quad_ccd **********************************/
+      /**
+       * @brief     quad ccd deinterlacing routine
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       * ~~~
+       * L2 +---------+---------+ U2
+       *    | <------ | ------> |   
+       *    |    3    |    2    |   
+       *    +---------+---------+   
+       *    |    0    |    1    |   
+       *    | <------ | ------> |   
+       * L1 +---------+---------+ U1
+       * ~~~
+       *
+       */
       void quad_ccd( int row_start, int row_stop, int index ) {
         std::stringstream message;
         for ( int r = row_start / 2; r < row_stop / 2; r++ ) {
@@ -151,16 +182,26 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::quad_ccd **********************************/
 
-      // split serial
-      //
-      //    +---------+---------+
-      //    |         |         |
-      //    |         |         |
-      //    |    0    |    1    |
-      //    | <------ | ------> |
-      // L1 +---------+---------+ U1
-      //
+
+      /***** AstroCam::DeInterlace::split_serial ******************************/
+      /**
+       * @brief     split serial deinterlacing routine
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       * ~~~
+       *    +---------+---------+
+       *    |         |         |
+       *    |         |         |
+       *    |    0    |    1    |
+       *    | <------ | ------> |
+       * L1 +---------+---------+ U1
+       * ~~~
+       *
+       */
       void split_serial( int row_start, int row_stop, int index ) {
         for ( int r = row_start; r < row_stop; r++ ) {
           int left  = r * this->cols;
@@ -171,16 +212,27 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::split_serial ******************************/
 
-      // split serial2
-      //
-      // L2 +---------+---------+ U2
-      //    | <------ | ------> |
-      //    |    0    |    1    |
-      //    |         |         |
-      //    |         |         |
-      //    +---------+---------+ 
-      //
+
+      /***** AstroCam::DeInterlace::split_serial2 *****************************/
+      /**
+       * @brief     split serial2 deinterlacing routine
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       *
+       * ~~~
+       * L2 +---------+---------+ U2
+       *    | <------ | ------> |
+       *    |    0    |    1    |
+       *    |         |         |
+       *    |         |         |
+       *    +---------+---------+ 
+       * ~~~
+       *
+       */
       void split_serial2( int row_start, int row_stop, int index ) {
         for ( int r = row_start; r < row_stop; r++ ) {
           int right = r * this->cols + this->cols/2 - 1;
@@ -191,16 +243,27 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::split_serial2 *****************************/
 
-      // Flip image buffer up/down
-      //
-      // L2 +-------------------+
-      //    | <---------------- |
-      //    |         0         |
-      //    |                   |
-      //    |                   |
-      //    +-------------------+
-      //
+
+      /***** AstroCam::DeInterlace::flip_ud ***********************************/
+      /**
+       * @brief     flip image buffer up/down
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       *
+       * ~~~
+       * L2 +-------------------+
+       *    | <---------------- |
+       *    |         0         |
+       *    |                   |
+       *    |                   |
+       *    +-------------------+
+       * ~~~
+       *
+       */
       void flip_ud(int row_start, int row_stop, int index) {
         for ( int r=row_start; r<row_stop; r++ ) {
           for ( int c=this->cols-1; c>=0; c-- ) {
@@ -209,16 +272,27 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::flip_ud ***********************************/
 
-      // Flip image buffer left/right
-      //
-      //    +-------------------+
-      //    |                   |
-      //    |                   |
-      //    |         0         |
-      //    | ----------------> |
-      //    +-------------------+ U1
-      //
+
+      /***** AstroCam::DeInterlace::flip_lr ***********************************/
+      /**
+       * @brief     flip image buffer left/right
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       *
+       * ~~~
+       *    +-------------------+
+       *    |                   |
+       *    |                   |
+       *    |         0         |
+       *    | ----------------> |
+       *    +-------------------+ U1
+       * ~~~
+       *
+       */
       void flip_lr(int row_start, int row_stop, int index) {
         for ( int r=row_start; r<row_stop; r++ ) {
           for ( int c=this->cols-1; c>=0; c-- ) {
@@ -227,16 +301,27 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::flip_lr ***********************************/
 
-      // Flip image buffer up/down and left/right
-      //
-      //    +-------------------+ U2
-      //    | ----------------> |
-      //    |         0         |
-      //    |                   |
-      //    |                   |
-      //    +-------------------+
-      //
+
+      /***** AstroCam::DeInterlace::flip_udlr *********************************/
+      /**
+       * @brief     flip image buffer up/down and left/right
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       *
+       * ~~~
+       *    +-------------------+ U2
+       *    | ----------------> |
+       *    |         0         |
+       *    |                   |
+       *    |                   |
+       *    +-------------------+
+       * ~~~
+       *
+       */
       void flip_udlr(int row_start, int row_stop, int index) {
         for ( int r=row_start; r<row_stop; r++ ) {
           for ( int c=0; c<this->cols; c++ ) {
@@ -245,16 +330,27 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::flip_udlr *********************************/
 
-      // No Deinterlacing -- copy imbuf to workbuf
-      //
-      //    +-------------------+
-      //    |                   |
-      //    |                   |
-      //    |         0         |
-      //    | <---------------- |
-      // L1 +-------------------+
-      //
+
+      /***** AstroCam::DeInterlace::flip_none *********************************/
+      /**
+       * @brief     no deinterlacing -- copy imbuf to workbuf
+       * @param[in] row_start
+       * @param[in] row_stop
+       * @param[in] index
+       * @details 
+       *
+       * ~~~
+       *    +-------------------+
+       *    |                   |
+       *    |                   |
+       *    |         0         |
+       *    | <---------------- |
+       * L1 +-------------------+
+       * ~~~
+       *
+       */
       void none( int row_start, int row_stop, int index ) {
         for ( int r=row_start; r<row_stop; r++ ) {
           for ( int c=0; c<this->cols; c++ ) {
@@ -263,12 +359,20 @@ namespace AstroCam {
           }
         }
       }
+      /***** AstroCam::DeInterlace::flip_none *********************************/
+
 
     public:
 
-      /************ AstroCam::DeInterlace::DeInterlace ************************/
+      /***** AstroCam::DeInterlace::DeInterlace *******************************/
       /**
-       * Class Constructor
+       * @brief     class constructor
+       * @param[in] buf1          
+       * @param[in] buf2          
+       * @param[in] bufsz         
+       * @param[in] cols          
+       * @param[in] rows          
+       * @param[in] readout_type  
        *
        */
       DeInterlace(T* buf1, T* buf2, long bufsz, int cols, int rows, int readout_type) {
@@ -279,12 +383,13 @@ namespace AstroCam {
         this->rows = rows;
         this->readout_type = readout_type;
       }
-      /************ AstroCam::DeInterlace::DeInterlace ************************/
+      /***** AstroCam::DeInterlace::DeInterlace *******************************/
 
 
-      /************ AstroCam::DeInterlace::info *******************************/
+      /***** AstroCam::DeInterlace::info **************************************/
       /**
-       * returns some info, just for debugging
+       * @brief     returns some info, just for debugging
+       * @return    string
        *
        */
       std::string info() {
@@ -294,11 +399,16 @@ namespace AstroCam {
             << " readout_type=" << this->readout_type;
         return ( ret.str() );
       }
-      /************ AstroCam::DeInterlace::info *******************************/
+      /***** AstroCam::DeInterlace::info **************************************/
 
 
-      /************ AstroCam::DeInterlace::do_deinterlace *********************/
+      /***** AstroCam::DeInterlace::do_deinterlace ****************************/
       /**
+       * @brief      calls the appropriate deinterlacing function for readout type
+       * @param[in]  row_start
+       * @param[in]  row_stop
+       * @param[in]  index_flip
+       *
        * This calls the appropriate deinterlacing function based on the readout
        * type, which is an enum that was given to the class constructor when
        * this DeInterlace object was constructed.
@@ -353,9 +463,17 @@ namespace AstroCam {
             logwrite( function, message.str() );
         }
       }
-      /************ AstroCam::DeInterlace::do_deinterlace *********************/
+      /***** AstroCam::DeInterlace::do_deinterlace ****************************/
 
 
+      /***** AstroCam::DeInterlace::do_bob_deinterlace ************************/
+      /**
+       * @brief      
+       * @param[in]  row_start
+       * @param[in]  row_stop
+       * @param[in]  index
+       *
+       */
       static void do_bob_deinterlace( int row_start, int row_stop, int index ) {
         std::string function = "AstroCam::DeInterlace::do_bob_deinterlace";
         std::stringstream message;
@@ -363,8 +481,14 @@ namespace AstroCam {
         logwrite( function, message.str() );
         sleep( 2 );
       }
+      /***** AstroCam::DeInterlace::do_bob_deinterlace ************************/
 
-      /************ AstroCam::DeInterlace::bob ********************************/
+
+      /***** AstroCam::DeInterlace::bob ***************************************/
+      /**
+       * @brief      
+       *
+       */
       long bob() {
         std::string function = "AstroCam::DeInterlace::bob";
         std::stringstream message;
@@ -405,12 +529,17 @@ namespace AstroCam {
 
         return NO_ERROR;
       }
-      /************ AstroCam::DeInterlace::bob ********************************/
+      /***** AstroCam::DeInterlace::bob ***************************************/
 
   };
-  /**************** AstroCam::DeInterlace *************************************/
+  /***** AstroCam::DeInterlace ************************************************/
 
 
+  /***** AstroCam::Interface **************************************************/
+  /**
+   * @class Interface
+   * @brief 
+   */
   class Interface {
     private:
 //    int rows; // REMOVE
@@ -579,16 +708,16 @@ namespace AstroCam {
 
       // Functions
       //
-      long test(std::string args, std::string &retstring);
-      long interface(std::string &iface);
-      long connect_controller(std::string devices_in);
-      long is_connected( std::string &retstring );
-      long disconnect_controller();
-      long configure_controller();
-      long access_useframes(std::string& useframes);
-      long access_nframes(std::string valstring);
-      int get_driversize();
-      long load_firmware(std::string &retstring);
+      long test(std::string args, std::string &retstring);                 ///< test routines
+      long interface(std::string &iface);                                  ///< returns the interface
+      long connect_controller(std::string devices_in);                     ///< opens a connection to the PCI/e device(s)
+      long is_connected( std::string &retstring );                         ///< are all selected controllers connected?
+      long disconnect_controller();                                        ///< closes the connection to the PCI/e device(s)
+      long configure_controller();                                         ///< perform initial configuration of controller from .cfg file
+      long access_useframes(std::string& useframes);                       ///< set or get the state of this->useframes
+      long access_nframes(std::string valstring);                          ///<
+      int get_driversize();                                                ///<
+      long load_firmware(std::string &retstring);                          ///< load firmware (.lod) into one or all controller timing boards
       long load_firmware(std::string timlodfile, std::string &retstring);
       long set_camera_mode(std::string mode);
       long exptime(std::string exptime_in, std::string &retstring);
@@ -629,7 +758,9 @@ namespace AstroCam {
 //    int get_image_cols() { return this->cols; }; // REMOVE
 
   };
+  /***** AstroCam::Interface **************************************************/
 
 }
+/***** AstroCam ***************************************************************/
 
 #endif

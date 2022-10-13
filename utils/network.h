@@ -13,14 +13,14 @@
 #ifndef NEWTCPLINUX_H
 #define NEWTCPLINUX_H
 
-#include <chrono>                      /// for timing timeouts
+#include <chrono>                      // for timing timeouts
 #include <cstdio>
 #include <string>
 #include <cstring>
 #include <iostream>
 
-#include <sys/ioctl.h>                 /// for ioctl, FIONREAD
-#include <poll.h>                      /// for pollfd
+#include <sys/ioctl.h>                 // for ioctl, FIONREAD
+#include <poll.h>                      // for pollfd
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -33,13 +33,19 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define POLLTIMEOUT 60000              /// default Poll timeout in msec
-#define LISTENQ 64                     /// listen(3n) backlog 
-#define UDPMSGLEN 256                  /// UDP message length
+#define POLLTIMEOUT 60000              ///< default Poll timeout in msec
+#define LISTENQ 64                     ///< listen(3n) backlog 
+#define UDPMSGLEN 256                  ///< UDP message length
 
+/***** Network ****************************************************************/
+/**
+ * @namespace Network
+ * @brief     the network namespace contains classes for TCP and UDP socket communications
+ *
+ */
 namespace Network {
 
-  /** TcpSocket ***************************************************************/
+  /***** TcpSocket ************************************************************/
   /**
    * @class  TcpSocket
    * @brief  TCP socket class
@@ -53,25 +59,25 @@ namespace Network {
     private:
       int port;
       bool blocking;
-      int totime;                      /// timeout time for poll
-      int fd;                          /// connected socket file descriptor
-      int listenfd;                    /// listening socket file descriptor
+      int totime;                      ///< timeout time for poll
+      int fd;                          ///< connected socket file descriptor
+      int listenfd;                    ///< listening socket file descriptor
       std::string host;
       bool connection_open;
 
-      struct sockaddr_in cliaddr;        /// socket address structure used for Accept
-      socklen_t clilen;                  /// size of the socket address structure
+      struct sockaddr_in cliaddr;        ///< socket address structure used for Accept
+      socklen_t clilen;                  ///< size of the socket address structure
 
     public:
-      TcpSocket();                       /// basic class constructor
-      TcpSocket(int port_in, bool block_in, int totime_in, int id_in);  /// useful constructor for a server
-      TcpSocket( std::string host, int port );                          /// client constructor
-      TcpSocket(const TcpSocket &obj);   /// copy constructor
-      ~TcpSocket();                      /// class destructor
+      TcpSocket();                       ///< basic class constructor
+      TcpSocket(int port_in, bool block_in, int totime_in, int id_in);  ///< useful constructor for a server
+      TcpSocket( std::string host, int port );                          ///< client constructor
+      TcpSocket(const TcpSocket &obj);   ///< copy constructor
+      ~TcpSocket();                      ///< class destructor
 
-      struct addrinfo *addrs;            /// dynamically allocated linked list returned by getaddrinfo()
+      struct addrinfo *addrs;            ///< dynamically allocated linked list returned by getaddrinfo()
 
-      int id;                            /// id may be useful for tracking multiple threads, no real requirement here
+      int id;                            ///< id may be useful for tracking multiple threads, no real requirement here
 
       int getfd() { return this->fd; };
       bool isblocking() { return this->blocking; };
@@ -82,22 +88,22 @@ namespace Network {
       void setport(int port_in) { this->port = port_in; };
       int getport() { return this->port; };
 
-      int Accept();                      /// creates a new connected socket for pending connection
-      int Listen();                      /// create a TCP listening socket
-      int Poll();                        /// polls a single file descriptor to wait for incoming data to read
-      int Poll( int timeout );           /// polls a single file descriptor with specified timeout
-      int Connect();                     /// connect to this->host on this->port
-      int Close();                       /// close a socket connection
-      int Read(void* buf, size_t count); /// read data from connected socket
-      int Read(std::string &retstring, char delim); /// read data from connected socket until delimiter found
+      int Accept();                      ///< creates a new connected socket for pending connection
+      int Listen();                      ///< create a TCP listening socket
+      int Poll();                        ///< polls a single file descriptor to wait for incoming data to read
+      int Poll( int timeout );           ///< polls a single file descriptor with specified timeout
+      int Connect();                     ///< connect to this->host on this->port
+      int Close();                       ///< close a socket connection
+      int Read(void* buf, size_t count); ///< read data from connected socket
+      int Read(std::string &retstring, char delim); ///< read data from connected socket until delimiter found
       int Read(std::string &retstring, std::string endstr);
-      int Bytes_ready();                 /// get the number of bytes available on the socket descriptor this->fd
-      void Flush();                      /// flush a socket by reading until it's empty
+      int Bytes_ready();                 ///< get the number of bytes available on the socket descriptor this->fd
+      void Flush();                      ///< flush a socket by reading until it's empty
 
-      int Write(std::string msg_in);     /// write data to a socket
+      int Write(std::string msg_in);     ///< write data to a socket
 
       template <class T>
-      int Write(T* buf, size_t count) {  /// write raw data to a socket
+      int Write(T* buf, size_t count) {  ///< write raw data to a socket
         size_t bytes_sent=0;
         int    this_write=0;
 
@@ -112,10 +118,10 @@ namespace Network {
         return bytes_sent;
       }
   };
-  /** TcpSocket ***************************************************************/
+  /***** TcpSocket ************************************************************/
 
 
-  /** UdpSocket ***************************************************************/
+  /***** UdpSocket ************************************************************/
   /**
    * @class  UdpSocket
    * @brief  UDP socket class
@@ -127,33 +133,34 @@ namespace Network {
   class UdpSocket {
 
     private:
-      int port;                                             /// port (for subscriber or broadcast)
-      std::string group;                                    /// group for multicast subscribers
-      int fd;                                               /// connected socket file descriptor
-      struct sockaddr_in addr;                              /// for UDP multicast
-      struct ip_mreq mreq;                                  /// multicast group addr stuct for UDP listener
-      bool service_running;                                 /// indicates UDP socket created and running
+      int port;                                             ///< port (for subscriber or broadcast)
+      std::string group;                                    ///< group for multicast subscribers
+      int fd;                                               ///< connected socket file descriptor
+      struct sockaddr_in addr;                              ///< for UDP multicast
+      struct ip_mreq mreq;                                  ///< multicast group addr stuct for UDP listener
+      bool service_running;                                 ///< indicates UDP socket created and running
 
     public:
-      UdpSocket();                                          /// basic class constructor
-      UdpSocket(int port_in, std::string group_in);         /// useful constructor for a server
-      UdpSocket(const UdpSocket &obj);                      /// copy constructor
-      ~UdpSocket();                                         /// class destructor
+      UdpSocket();                                          ///< basic class constructor
+      UdpSocket(int port_in, std::string group_in);         ///< useful constructor for a server
+      UdpSocket(const UdpSocket &obj);                      ///< copy constructor
+      ~UdpSocket();                                         ///< class destructor
 
-      void setport(int port_in) { this->port = port_in; };  /// use to set port when default constructor used
-      int getport() { return this->port; };                 /// use to get port
-      bool is_running() { return this->service_running; };  /// is the UDP service running?
+      void setport(int port_in) { this->port = port_in; };  ///< use to set port when default constructor used
+      int getport() { return this->port; };                 ///< use to get port
+      bool is_running() { return this->service_running; };  ///< is the UDP service running?
 
-      void setgroup(std::string group_in) { this->group = group_in; };   /// use to set group when default constructor used
-      std::string getgroup() { return this->group; };                    /// use to get group
+      void setgroup(std::string group_in) { this->group = group_in; };   ///< use to set group when default constructor used
+      std::string getgroup() { return this->group; };                    ///< use to get group
 
-      int Create();                                         /// create a UDP multi-cast socket
-      int Send(std::string message);                        /// transmit the message to the UDP socket
-      int Close();                                          /// close the UDP socket connection
-      int Listener();                                       /// creates a UDP listener, returns a file descriptor
-      int Receive( std::string &message );                  /// receive a UDP message from the Listener fd
+      int Create();                                         ///< create a UDP multi-cast socket
+      int Send(std::string message);                        ///< transmit the message to the UDP socket
+      int Close();                                          ///< close the UDP socket connection
+      int Listener();                                       ///< creates a UDP listener, returns a file descriptor
+      int Receive( std::string &message );                  ///< receive a UDP message from the Listener fd
   };
-  /** UdpSocket ***************************************************************/
+  /***** UdpSocket ************************************************************/
 
 }
+/***** Network ****************************************************************/
 #endif

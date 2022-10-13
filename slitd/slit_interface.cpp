@@ -12,12 +12,9 @@
 
 namespace Slit {
 
-  /**************** Slit::Interface::Interface ********************************/
+  /***** Slit::Interface::Interface *******************************************/
   /**
-   * @fn         Interface
    * @brief      class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Interface::Interface() {
@@ -25,30 +22,25 @@ namespace Slit {
     this->rightcon=-1;
     this->numdev=-1;
   }
-  /**************** Slit::Interface::Interface ********************************/
+  /***** Slit::Interface::Interface *******************************************/
 
 
-  /**************** Slit::Interface::~Interface *******************************/
+  /***** Slit::Interface::~Interface ******************************************/
   /**
-   * @fn         ~Interface
    * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Interface::~Interface() {
   }
-  /**************** Slit::Interface::~Interface *******************************/
+  /***** Slit::Interface::~Interface ******************************************/
 
 
-  /**************** Slit::Interface::initialize_class *************************/
+  /***** Slit::Interface::initialize_class ************************************/
   /**
-   * @fn         initialize_class
-   * @brief      initializes the class from configure_slit()
-   * @param[in]  none
+   * @brief      initializes the class from configure_slitd()
    * @return     ERROR or NO_ERROR
    *
-   * This is called by Slit::Server::configure_slit() after reading the
+   * This is called by Slit::Server::configure_slitd() after reading the
    * configuration file to apply the config file setting.
    *
    */
@@ -117,14 +109,12 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::initialize_class *************************/
+  /***** Slit::Interface::initialize_class ************************************/
 
 
-  /**************** Slit::Interface::open *************************************/
+  /***** Slit::Interface::open ************************************************/
   /**
-   * @fn         open
    * @brief      opens the PI socket connection
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
@@ -134,7 +124,7 @@ namespace Slit {
 
     // Should be impossible --
     // The initialization should have been called automatically at start up
-    // (called in Slit::Server::configure_slit).
+    // (called in Slit::Server::configure_slitd).
     //
     if ( !this->pi.is_initialized() ) {
       logwrite( function, "ERROR: pi interface not initialized" );
@@ -166,14 +156,12 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::open *************************************/
+  /***** Slit::Interface::open ************************************************/
 
 
-  /**************** Slit::Interface::close ************************************/
+  /***** Slit::Interface::close ***********************************************/
   /**
-   * @fn         close
    * @brief      closes the PI socket connection
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
@@ -188,7 +176,7 @@ namespace Slit {
 
     // Should be impossible --
     // The initialization should have been called automatically at start up
-    // (called in Slit::Server::configure_slit).
+    // (called in Slit::Server::configure_slitd).
     //
     if ( !this->pi.is_initialized() ) {
       logwrite( function, "ERROR: pi interface not initialized" );
@@ -197,14 +185,12 @@ namespace Slit {
 
     return( this->pi.close() );
   }
-  /**************** Slit::Interface::close ************************************/
+  /***** Slit::Interface::close ***********************************************/
 
 
-  /**************** Slit::Interface::home *************************************/
+  /***** Slit::Interface::home ************************************************/
   /**
-   * @fn         home
    * @brief      home all daisy-chained motors using the neg limit switch
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
@@ -282,15 +268,13 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::home *************************************/
+  /***** Slit::Interface::home ************************************************/
 
 
-  /**************** Slit::Interface::is_home **********************************/
+  /***** Slit::Interface::is_home *********************************************/
   /**
-   * @fn          is_home
    * @brief       return the home state of the motors
-   * @param[in]   none
-   * @param[out]  retstring contains the home state ("true" | "false")
+   * @param[out]  retstring  contains the home state "true" | "false"
    * @return      ERROR or NO_ERROR
    *
    * All motors must be homed for this to return "true".
@@ -337,16 +321,15 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::is_home **********************************/
+  /***** Slit::Interface::is_home *********************************************/
 
 
-  /**************** Slit::Interface::set **************************************/
+  /***** Slit::Interface::set *************************************************/
   /**
-   * @fn         set
    * @brief      set the slit width and offset
-   * @param[in]  iface, reference to main Slit::Interface object
-   * @param[in]  args, string containing width, or width and offset
-   * @param[out] retstring, string contains the width and offset after move
+   * @param[in]  iface      reference to main Slit::Interface object
+   * @param[in]  args       string containing width, or width and offset
+   * @param[out] retstring  string contains the width and offset after move
    * @return     ERROR or NO_ERROR
    *
    * This function moves the "left" and "right" motors to achieve the requested
@@ -515,15 +498,13 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::set **************************************/
+  /***** Slit::Interface::set *************************************************/
 
 
-  /**************** Slit::Interface::get **************************************/
+  /***** Slit::Interface::get *************************************************/
   /**
-   * @fn         get
    * @brief      get the current width and offset
-   * @param[in]  none
-   * @param[out] retstring, string contains the current width and offset
+   * @param[out] retstring  string contains the current width and offset
    * @return     ERROR or NO_ERROR
    *
    */
@@ -588,16 +569,14 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::get **************************************/
+  /***** Slit::Interface::get *************************************************/
 
 
-  /**************** Slit::Interface::dothread_move_abs ************************/
+  /***** Slit::Interface::dothread_move_abs ***********************************/
   /**
-   * @fn         dothread_move_abs
    * @brief      threaded move_abs function
-   * @param[in]  reference to interface object
-   * @param[in]  string to pass to move_abs
-   * @return     none
+   * @param[in]  iface   reference to interface object
+   * @param[in]  movstr  string to pass to move_abs
    *
    * This is the work function to call move_abs() in a thread, intended
    * to be spawned in a detached thread. Any errors returned by the move_abs()
@@ -629,14 +608,13 @@ namespace Slit {
 
     return;
   }
-  /**************** Slit::Interface::dothread_move_abs ************************/
+  /***** Slit::Interface::dothread_move_abs ***********************************/
 
 
-  /**************** Slit::Interface::move_abs *********************************/
+  /***** Slit::Interface::move_abs ********************************************/
   /**
-   * @fn         move_abs
    * @brief      send move-absolute command to specified controllers
-   * @param[in]  args, string containing addr and pos
+   * @param[in]  args  string containing addr and pos
    * @return     ERROR or NO_ERROR
    *
    * The single string parameter must contain two space-delimited tokens,
@@ -747,14 +725,13 @@ namespace Slit {
 
     return( error );
   }
-  /**************** Slit::Interface::move_abs *********************************/
+  /***** Slit::Interface::move_abs ********************************************/
 
 
-  /**************** Slit::Interface::move_rel *********************************/
+  /***** Slit::Interface::move_rel ********************************************/
   /**
-   * @fn         move_rel
    * @brief      send move-relative command to specified controllers
-   * @param[in]  args, string containing addr and offset
+   * @param[in]  args  string containing addr and offset
    * @return     ERROR or NO_ERROR
    *
    */
@@ -797,14 +774,12 @@ namespace Slit {
 
     return( this->pi.move_rel( addr, axis, pos ) );
   }
-  /**************** Slit::Interface::move_rel *********************************/
+  /***** Slit::Interface::move_rel ********************************************/
 
 
-  /**************** Slit::Interface::stop *************************************/
+  /***** Slit::Interface::stop ************************************************/
   /**
-   * @fn         stop
    * @brief      send the stop-all-motion command to all controllers
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
@@ -832,14 +807,13 @@ namespace Slit {
 
     return( NO_ERROR );
   }
-  /**************** Slit::Interface::stop *************************************/
+  /***** Slit::Interface::stop ************************************************/
 
 
-  /**************** Slit::Interface::send_command *****************************/
+  /***** Slit::Interface::send_command ****************************************/
   /**
-   * @fn         send_command
    * @brief      writes the raw command as received to the master controller
-   * @param[in]  string cmd
+   * @param[in]  cmd  command to send
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
@@ -857,14 +831,14 @@ namespace Slit {
 
     return( this->pi.send_command( cmd ) );
   }
-  /**************** Slit::Interface::send_command *****************************/
+  /***** Slit::Interface::send_command ****************************************/
 
 
-  /**************** Slit::Interface::send_command *****************************/
+  /***** Slit::Interface::send_command ****************************************/
   /**
-   * @fn         send_command
    * @brief      writes the raw command to the master controller, reads back reply
-   * @param[in]  string cmd
+   * @param[in]  cmd        command to send
+   * @param[out] retstring  reply received
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
@@ -884,6 +858,6 @@ namespace Slit {
     if ( cmd.find( "?" ) != std::string::npos ) return( this->pi.send_command( cmd, retstring ) );
     else return( this->pi.send_command( cmd ) );
   }
-  /**************** Slit::Interface::send_command *****************************/
+  /***** Slit::Interface::send_command ****************************************/
 
 }

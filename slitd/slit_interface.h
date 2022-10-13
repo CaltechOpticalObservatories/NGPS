@@ -18,13 +18,19 @@
 #include <condition_variable>
 #include <atomic>
 
-#define MOVE_TIMEOUT 20000
+#define MOVE_TIMEOUT 20000  ///< number of milliseconds before a move fails
 
+/***** Slit *******************************************************************/
+/**
+ * @namespace Slit
+ * @brief     namespace for the slit daemon
+ *
+ */
 namespace Slit {
 
-  const std::string DAEMON_NAME = "slitd";       /// when run as a daemon, this is my name
+  const std::string DAEMON_NAME = "slitd";       ///< when run as a daemon, this is my name
 
-  /** ControllerInfo **********************************************************/
+  /***** Slit::ControllerInfo *************************************************/
   /**
    * @class  ControllerInfo
    * @brief  slit motor controller information class
@@ -35,21 +41,25 @@ namespace Slit {
    */
   class ControllerInfo {
     public:
-      int addr;                   /// controller address
-      float pos;                  /// current position of this actuator
-      std::string name;           /// controller name
-      float min, max;             /// min,max travel range of motor connected to this controller
-      bool servo;                 /// servo state (true=on, false=off)
-      bool ishome;                /// is axis homed?
-      bool ontarget;              /// is axis on target?
+      int addr;                   ///< controller address
+      float pos;                  ///< current position of this actuator
+      std::string name;           ///< controller name
+      float min, max;             ///< min,max travel range of motor connected to this controller
+      bool servo;                 ///< servo state (true=on, false=off)
+      bool ishome;                ///< is axis homed?
+      bool ontarget;              ///< is axis on target?
 
+      /**
+       * ControllerInfo
+       * class constructor
+       */
       ControllerInfo() {
         this->servo=false;
         this->ishome=false;
         this->ontarget=false;
         }
 
-      /**************** Slit::ControllerInfo::load_info ***********************/
+      /***** Slit::ControllerInfo::load_info **********************************/
       /**
        * @fn         load_info
        * @brief      loads information from the configuration file into the class
@@ -106,12 +116,12 @@ namespace Slit {
 
         return( NO_ERROR );
       }
-      /**************** Slit::ControllerInfo::load_info ***********************/
+      /***** Slit::ControllerInfo::load_info **********************************/
   };
-  /** ControllerInfo **********************************************************/
+  /***** Slit::ControllerInfo *************************************************/
 
 
-  /** Interface ***************************************************************/
+  /***** Slit::Interface ******************************************************/
   /**
    * @class  Interface
    * @brief  interface class for a slit device
@@ -138,38 +148,39 @@ namespace Slit {
 
       Common::Queue async;
 
-      std::vector<Slit::ControllerInfo> controller_info;                            /// vector of all daisy-chain connected controllers
+      std::vector<Slit::ControllerInfo> controller_info;                            ///< vector of all daisy-chain connected controllers
 
-      bool isopen() { return this->pi.controller.isconnected(); }                   /// is this interface connected to hardware?
+      bool isopen() { return this->pi.controller.isconnected(); }                   ///< is this interface connected to hardware?
 
       long initialize_class();
-      long open();                               /// opens the PI socket connection
-      long close();                              /// closes the PI socket connection
-      long home();                               /// home all daisy-chained motors using the neg limit switch
-      long is_home( std::string &retstring );    /// return the home state of the motors
+      long open();                               ///< opens the PI socket connection
+      long close();                              ///< closes the PI socket connection
+      long home();                               ///< home all daisy-chained motors using the neg limit switch
+      long is_home( std::string &retstring );    ///< return the home state of the motors
 
-      long set( Slit::Interface &iface, std::string args, std::string &retstring ); /// set the slit width and offset
-      long get( std::string &retstring );                                           /// get the current width and offset
+      long set( Slit::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
+      long get( std::string &retstring );                                           ///< get the current width and offset
 
-      static void dothread_move_abs( Slit::Interface &iface, std::string movstr );  /// threaded move_abs function
+      static void dothread_move_abs( Slit::Interface &iface, std::string movstr );  ///< threaded move_abs function
 
-      long move_abs( std::string args );         /// send move-absolute command to specified controllers
-      long move_rel( std::string args );         /// send move-relative command to specified controllers
-      long stop();                               /// send the stop-all-motion command to all controllers
-      long send_command( std::string cmd );      /// writes the raw command as received to the master controller, no reply
-      long send_command( std::string cmd, std::string &retstring );                 /// writes command?, reads reply
+      long move_abs( std::string args );         ///< send move-absolute command to specified controllers
+      long move_rel( std::string args );         ///< send move-relative command to specified controllers
+      long stop();                               ///< send the stop-all-motion command to all controllers
+      long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
+      long send_command( std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
 
-      Physik_Instrumente::ServoInterface pi;     /// Object for communicating with the PI
+      Physik_Instrumente::ServoInterface pi;     ///< Object for communicating with the PI
 
-      std::mutex pi_mutex;                       /// mutex to protect multi-threaded access to PI controller
+      std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 
-      volatile std::atomic<int> motors_running;  /// number of motors that are running in threads
-      volatile std::atomic<long> thr_error;      /// error state of threads
-      std::mutex wait_mtx;                       /// mutex object for waiting for threads
-      std::condition_variable cv;                /// condition variable for waiting for threads
+      volatile std::atomic<int> motors_running;  ///< number of motors that are running in threads
+      volatile std::atomic<long> thr_error;      ///< error state of threads
+      std::mutex wait_mtx;                       ///< mutex object for waiting for threads
+      std::condition_variable cv;                ///< condition variable for waiting for threads
 
   };
-  /** Interface ***************************************************************/
+  /***** Slit::Interface ******************************************************/
 
 }
+/***** Slit *******************************************************************/
 #endif

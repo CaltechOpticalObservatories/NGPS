@@ -152,9 +152,8 @@ namespace Physik_Instrumente {
   /**************** Physik_Instrumente::ServoInterface::get_error *************/
   /**
    * @fn         get_error
-   * @brief      set the servo on|off
+   * @brief      read the error status
    * @param[in]  int addr, address of controller
-   * @param[in]  bool state (on=true, off=false)
    * @return     ERROR or NO_ERROR
    *
    */

@@ -1,23 +1,27 @@
-#include "astrocam.h"
+/**
+ * @file    astrocam.cpp
+ * @brief   contains the functions for the AstroCam interface
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ * The main server object is instantiated in src/server.cpp and
+ * defined extern here so that static functions can access it. The
+ * static functions are run in std::threads which means class objects
+ * are otherwise be unavailable to them. The interface class is
+ * accessible through this because Camera::Server server inherits
+ * AstroCam::Interface.
+ *
+ */
 
-// The main server object is instantiated in src/server.cpp and
-// defined extern here so that static functions can access it. The
-// static functions are run in std::threads which means class objects
-// are otherwise be unavailable to them. The interface class is accessible
-// through this because Camera::Server server inherits AstroCam::Interface.
-//
 #include "camerad.h"
 extern Camera::Server server;
 
 namespace AstroCam {
 
-  /** AstroCam::Callback::exposeCallback **************************************/
+  /***** AstroCam::Callback::exposeCallback ***********************************/
   /**
-   * @fn     exposeCallback
-   * @brief  called by CArcDevice::expose() during the exposure
-   * @param  devnum, device number passed to API on expose
-   * @param  uiElapsedTime, actually number of millisec remaining
-   * @return none
+   * @brief      called by CArcDevice::expose() during the exposure
+   * @param[in]  devnum         device number passed to API on expose
+   * @param[in]  uiElapsedTime  actually number of millisec remaining
    *
    * This is the callback function invoked by the ARC API,
    * arc::gen3::CArcDevice::expose() during the exposure.
@@ -34,16 +38,14 @@ namespace AstroCam {
     std::cerr << "elapsedtime: " << std::setw(10) << uiElapsedTime << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
 #endif
   }
-  /** AstroCam::Callback::exposeCallback **************************************/
+  /***** AstroCam::Callback::exposeCallback ***********************************/
 
 
-  /** AstroCam::Callback::readCallback ****************************************/
+  /***** AstroCam::Callback::readCallback *************************************/
   /**
-   * @fn     readCallback
-   * @brief  called by CArcDevice::expose() during readout
-   * @param  devnum, device number passed to API on expose
-   * @param  uiPixelCount, number of pixels read ( getPixelCount() )
-   * @return none
+   * @brief      called by CArcDevice::expose() during readout
+   * @param[in]  devnum        device number passed to API on expose
+   * @param[in]  uiPixelCount  number of pixels read ( getPixelCount() )
    *
    * This is the callback function invoked by the ARC API,
    * arc::gen3::CArcDevice::expose() when bInReadout is true.
@@ -57,20 +59,18 @@ namespace AstroCam {
     std::cerr << "pixelcount:  " << std::setw(10) << uiPixelCount << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
 #endif
   }
-  /** AstroCam::Callback::readCallback ****************************************/
+  /***** AstroCam::Callback::readCallback *************************************/
 
 
-  /** AstroCam::Callback::frameCallback ***************************************/
+  /***** AstroCam::Callback::frameCallback ************************************/
   /**
-   * @fn     frameCallback
-   * @brief  called by CArcDevice::expose() when a frame has been received
-   * @param  devnum, device number passed to API on expose
-   * @param  fpbcount, frames per buffer count ( uiFPBCount ) wraps to 0 at FPB
-   * @param  fcount, actual frame counter ( uiPCIFrameCount = getFrameCount() )
-   * @param  rows, image rows ( uiRows )
-   * @param  cols, image columns ( uiCols )
-   * @param  buffer, pointer to PCI image buffer
-   * @return none
+   * @brief      called by CArcDevice::expose() when a frame has been received
+   * @param[in]  devnum    device number passed to API on expose
+   * @param[in]  fpbcount  frames per buffer count ( uiFPBCount ) wraps to 0 at FPB
+   * @param[in]  fcount    actual frame counter ( uiPCIFrameCount = getFrameCount() )
+   * @param[in]  rows      image rows ( uiRows )
+   * @param[in]  cols      image columns ( uiCols )
+   * @param[in]  buffer    pointer to PCI image buffer
    *
    * This is the callback function invoked by the ARC API,
    * arc::gen3::CArcDevice::expose() when a new frame is received.
@@ -89,15 +89,12 @@ namespace AstroCam {
     std::cerr << "framecount:  " << std::setw(10) << fcount << "\n";
 #endif
   }
-  /** AstroCam::Callback::frameCallback ***************************************/
+  /***** AstroCam::Callback::frameCallback ************************************/
 
 
-  /** AstroCam::Interface::Interface ******************************************/
+  /***** AstroCam::Interface::Interface ***************************************/
   /**
-   * @fn     Interface
-   * @brief  class constructor
-   * @param  none
-   * @return none
+   * @brief      class constructor
    *
    */
   Interface::Interface() {
@@ -121,32 +118,28 @@ namespace AstroCam {
     this->readout_source.insert( { "QUAD",        { QUAD,           0x414c4c } } );  // "ALL"
     this->readout_source.insert( { "FT12S2",      { FT12S2,         0x313232 } } );  // "122" -- frame transfer from 1->2, read split2
     this->readout_source.insert( { "FT21S1",      { FT21S1,         0x323131 } } );  // "211" -- frame transfer from 2->1, read split1
-//  this->readout_source.insert( { "hawaii1",     { HAWAII_1CH,     0xffffff } } );  // TODO HxRG  1 channel
-//  this->readout_source.insert( { "hawaii32",    { HAWAII_32CH,    0xffffff } } );  // TODO HxRG 32 channel
-//  this->readout_source.insert( { "hawaii32lr",  { HAWAII_32CH_LR, 0xffffff } } );  // TODO HxRG 32 channel alternate left/right
+//  this->readout_source.insert( { "hawaii1",     { HAWAII_1CH,     0xffffff } } );  ///< TODO @todo implement HxRG  1 channel deinterlacing
+//  this->readout_source.insert( { "hawaii32",    { HAWAII_32CH,    0xffffff } } );  ///< TODO @todo implement HxRG 32 channel deinterlacing
+//  this->readout_source.insert( { "hawaii32lr",  { HAWAII_32CH_LR, 0xffffff } } );  ///< TODO @todo implement HxRG 32 channel alternate left/right deinterlacing
   }
-  /** AstroCam::Interface::Interface ******************************************/
+  /***** AstroCam::Interface::Interface ***************************************/
 
 
-  /** AstroCam::Interface::Interface ******************************************/
+  /***** AstroCam::Interface::Interface ***************************************/
   /**
-   * @fn     ~Interface
-   * @brief  class deconstructor
-   * @param  none
-   * @return none
+   * @brief      class deconstructor
    *
    */
   Interface::~Interface() {
   }
-  /** AstroCam::Interface::Interface ******************************************/
+  /***** AstroCam::Interface::Interface ***************************************/
 
 
-  /** AstroCam::Interface::interface ******************************************/
+  /***** AstroCam::Interface::interface ***************************************/
   /**
-   * @fn     interface
-   * @brief  returns the interface
-   * @param  reference to std::string iface, to return the interface as a string
-   * @return NO_ERROR
+   * @brief      returns the interface
+   * @param[out] iface  reference to string to return the interface type as a string
+   * @return     NO_ERROR
    *
    */
   long Interface::interface(std::string &iface) {
@@ -155,15 +148,14 @@ namespace AstroCam {
     logwrite(function, iface);
     return(NO_ERROR);
   }
-  /** AstroCam::Interface::interface ******************************************/
+  /***** AstroCam::Interface::interface ***************************************/
 
 
-  /** AstroCam::Interface::connect_controller *********************************/
+  /***** AstroCam::Interface::connect_controller ******************************/
   /**
-   * @fn     connect_controller
-   * @brief  opens a connection to the PCI/e device(s)
-   * @param  devices_in, optional string containing space-delimited list of devices
-   * @return ERROR or NO_ERROR
+   * @brief      opens a connection to the PCI/e device(s)
+   * @param[in]  devices_in  optional string containing space-delimited list of devices
+   * @return     ERROR or NO_ERROR
    *
    * Input parameter devices_in defaults to empty string which will attempt to
    * connect to all detected devices.
@@ -262,10 +254,10 @@ namespace AstroCam {
         //
         Controller con;                                    // create a Controller object
         this->controller.push_back( con );                 // push it into the vector
-        this->controller.at(dev).devnum = dev;             // TODO is this useful?
+        this->controller.at(dev).devnum = dev;             ///< TODO @todo is this useful?
 
         arc::gen3::CArcDevice* pArcDev = NULL;             // create a generic CArcDevice pointer
-        pArcDev = new arc::gen3::CArcPCI();                // point this at a new CArcPCI() object  //TODO implement PCIe option
+        pArcDev = new arc::gen3::CArcPCI();                // point this at a new CArcPCI() object  ///< TODO @todo implement PCIe option
         Callback* pCB = new Callback();                    // create a pointer to a Callback() class object
 
         this->controller.at(dev).pArcDev = pArcDev;        // set the pointer to this object in the public vector
@@ -395,15 +387,13 @@ namespace AstroCam {
     }
     else return( NO_ERROR );
   }
-  /** AstroCam::Interface::connect_controller *********************************/
+  /***** AstroCam::Interface::connect_controller ******************************/
 
 
-  /** AstroCam::Interface::disconnect_controller ******************************/
+  /***** AstroCam::Interface::disconnect_controller ***************************/
   /**
-   * @fn     disconnect_controller
-   * @brief  closes the connection to the PCI/e device(s)
-   * @param  none
-   * @return NO_ERROR
+   * @brief      closes the connection to the PCI/e device(s)
+   * @return     NO_ERROR
    *
    * no error handling
    *
@@ -428,14 +418,13 @@ namespace AstroCam {
     this->numdev = 0;        // no devices open
     return NO_ERROR;         // always succeeds
   }
-  /** AstroCam::Interface::disconnect_controller ******************************/
+  /***** AstroCam::Interface::disconnect_controller ***************************/
 
 
-  /** AstroCam::Interface::is_connected ***************************************/
+  /***** AstroCam::Interface::is_connected ************************************/
   /**
-   * @fn         is_connected
    * @brief      are all selected controllers connected?
-   * @param[out] retstring, reference to string to return true|false
+   * @param[out] retstring  reference to string to return "true|false"
    * @return     ERROR or NO_ERROR
    *
    */
@@ -478,15 +467,13 @@ namespace AstroCam {
 
     return( NO_ERROR );
   }
-  /** AstroCam::Interface::is_connected ***************************************/
+  /***** AstroCam::Interface::is_connected ************************************/
 
 
-  /** AstroCam::Interface::configure_controller *******************************/
+  /***** AstroCam::Interface::configure_controller ****************************/
   /**
-   * @fn     configure_controller
-   * @brief  perform initial configuration of controller from .cfg file
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @brief      perform initial configuration of controller from .cfg file
+   * @return     ERROR or NO_ERROR
    *
    * Called automatically by main() when the server starts up.
    *
@@ -545,15 +532,14 @@ namespace AstroCam {
     logwrite(function, message.str());
     return error;
   }
-  /** AstroCam::Interface::configure_controller *******************************/
+  /***** AstroCam::Interface::configure_controller ****************************/
 
 
-  /** AstroCam::Interface::native *********************************************/
+  /***** AstroCam::Interface::native ******************************************/
   /**
-   * @fn     native
-   * @brief  send a 3-letter command to the Leach controller
-   * @param  cmdstr, string containing command and arguments
-   * @return NO_ERROR on success, ERROR on error
+   * @brief      send a 3-letter command to the Leach controller
+   * @param[in]  cmdstr  string containing command and arguments
+   * @return     NO_ERROR on success, ERROR on error
    *
    */
   long Interface::native(std::string cmdstr) {
@@ -564,15 +550,49 @@ namespace AstroCam {
     }
     return this->native( selectdev, cmdstr, retstring );
   }
+  /***** AstroCam::Interface::native ******************************************/
+
+
+  /***** AstroCam::Interface::native ******************************************/
+  /**
+   * @brief      send a 3-letter command to the Leach controller
+   * @param[in]  selectdev  vector of devices to use
+   * @param[in]  cmdstr     string containing command and arguments
+   * @return     NO_ERROR on success, ERROR on error
+   *
+   */
   long Interface::native(std::vector<uint32_t> selectdev, std::string cmdstr) {
     std::string retstring;
     return this->native( selectdev, cmdstr, retstring );
   }
+  /***** AstroCam::Interface::native ******************************************/
+
+
+  /***** AstroCam::Interface::native ******************************************/
+  /**
+   * @brief      send a 3-letter command to the Leach controller
+   * @param[in]  dev        individual device to use
+   * @param[in]  cmdstr     string containing command and arguments
+   * @param[out] retstring  reference to string to contain reply
+   * @return     NO_ERROR on success, ERROR on error
+   *
+   */
   long Interface::native( int dev, std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
     selectdev.push_back( dev );
     return this->native( selectdev, cmdstr, retstring );
   }
+  /***** AstroCam::Interface::native ******************************************/
+
+
+  /***** AstroCam::Interface::native ******************************************/
+  /**
+   * @brief      send a 3-letter command to the Leach controller
+   * @param[in]  cmdstr     string containing command and arguments
+   * @param[out] retstring  reference to string to contain reply
+   * @return     NO_ERROR on success, ERROR on error
+   *
+   */
   long Interface::native( std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
     for ( auto dev : this->devlist ) {
@@ -580,6 +600,18 @@ namespace AstroCam {
     }
     return this->native( selectdev, cmdstr, retstring );
   }
+  /***** AstroCam::Interface::native ******************************************/
+
+
+  /***** AstroCam::Interface::native ******************************************/
+  /**
+   * @brief      send a 3-letter command to the Leach controller
+   * @param[in]  selectdev  vector of devices to use
+   * @param[in]  cmdstr     string containing command and arguments
+   * @param[out] retstring  reference to string to contain reply
+   * @return     NO_ERROR on success, ERROR on error
+   *
+   */
   long Interface::native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring ) {
     std::string function = "AstroCam::Interface::native";
     std::stringstream message;
@@ -755,7 +787,7 @@ namespace AstroCam {
     }
 
     // Log the return values
-    // TODO need a way to send these back to the calling function
+    ///< TODO @todo need a way to send these back to the calling function
     //
     for ( auto dev : selectdev ) {
       try {
@@ -774,16 +806,14 @@ namespace AstroCam {
     }
     return ( NO_ERROR );
   }
-  /** AstroCam::Interface::native *********************************************/
+  /***** AstroCam::Interface::native ******************************************/
 
 
-  /** AstroCam::Interface::retval_to_string ***********************************/
+  /***** AstroCam::Interface::retval_to_string ********************************/
   /**
-   * @fn     retval_to_string
-   * @brief  private function to convert ARC return values (long) to string
-   * @param  retval, input long int retval
-   * @param  retstring, reference to a string for return value
-   * @return none
+   * @brief      private function to convert ARC return values (long) to string
+   * @param[in]  retval     integer return value from controller
+   * @param[out] retstring  reference to a string for return value in ASCII
    *
    * In addition to converting longs to string, if the retval is a particular
    * commonly used code, then set the ASCII characters for those codes,
@@ -818,15 +848,13 @@ namespace AstroCam {
       retstring = rs.str();
     }
   }
-  /** AstroCam::Interface::retval_to_string ***********************************/
+  /***** AstroCam::Interface::retval_to_string ********************************/
 
 
-  /** AstroCam::Interface::dothread_expose ************************************/
+  /***** AstroCam::Interface::dothread_expose *********************************/
   /**
-   * @fn     dothread_expose
-   * @brief  run in a thread to actually send the command
-   * @param  _controller, reference to Controller class object
-   * @return none
+   * @brief      run in a thread to actually send the command
+   * @param[in]  _controller  reference to Controller class object
    *
    */
   void Interface::dothread_expose( Controller &_controller ) {
@@ -898,16 +926,14 @@ namespace AstroCam {
     _controller.error = NO_ERROR;
     return;
   }
-  /** AstroCam::Interface::dothread_expose ************************************/
+  /***** AstroCam::Interface::dothread_expose *********************************/
 
 
-  /** AstroCam::Interface::dothread_native ************************************/
+  /***** AstroCam::Interface::dothread_native *********************************/
   /**
-   * @fn     dothread_native
-   * @brief  run in a thread to actually send the command
-   * @param  controller, reference to Controller object
-   * @param  cmd, vector containing command and args
-   * @return none
+   * @brief      run in a thread to actually send the command
+   * @param[in]  controller  reference to Controller object
+   * @param[in]  cmd         vector containing command and args
    *
    */
   void Interface::dothread_native( Controller &controller, std::vector<uint32_t> cmd ) {
@@ -956,15 +982,14 @@ namespace AstroCam {
       return;
     }
   }
-  /** AstroCam::Interface::dothread_native ************************************/
+  /***** AstroCam::Interface::dothread_native *********************************/
 
 
-  /** AstroCam::Interface::access_useframes ***********************************/
+  /***** AstroCam::Interface::access_useframes ********************************/
   /**
-   * @fn     access_useframes
-   * @brief  set or get the state of this->useframes
-   * @param  useframes, reference to std::string
-   * @return ERROR or NO_ERROR
+   * @brief      set or get the state of this->useframes
+   * @param[in]  useframes  reference to string contains argument and return value
+   * @return     ERROR or NO_ERROR
    *
    * The argument is passed in by reference so that it can be used for the
    * return value of this->useframes, while the actual return value
@@ -1023,15 +1048,14 @@ namespace AstroCam {
     logwrite(function, message.str());
     return( NO_ERROR );
   }
-  /** AstroCam::Interface::access_useframes ***********************************/
+  /***** AstroCam::Interface::access_useframes ********************************/
 
 
-  /** AstroCam::Interface::nframes ********************************************/
+  /***** AstroCam::Interface::nframes *****************************************/
   /**
-   * @fn     nframes
-   * @brief  
-   * @param  
-   * @return 
+   * @brief      set the number of frames per sequence
+   * @param[in]  valstring  contains the number of frames
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::access_nframes(std::string valstring) {
@@ -1069,7 +1093,7 @@ namespace AstroCam {
 
         if ( this->native(fps.str()) != 0x444F4E ) return -1;
 
-//TODO
+///< TODO @todo set fitskey NFRAMES
 /**
         fitskeystr.str(""); fitskeystr << "NFRAMES=" << this->nframes << "//number of frames";
         this->fitskey.set_fitskey(fitskeystr.str()); // TODO
@@ -1122,15 +1146,14 @@ namespace AstroCam {
 
     return 0;
   }
-  /** AstroCam::Interface::nframes ********************************************/
+  /***** AstroCam::Interface::nframes *****************************************/
 
 
-  /** AstroCam::Interface::expose *********************************************/
+  /***** AstroCam::Interface::expose ******************************************/
   /**
-   * @fn     expose
-   * @brief  initiate an exposure
-   * @param  nseq_in string, if set becomes the number of sequences
-   * @return ERROR or NO_ERROR
+   * @brief      initiate an exposure
+   * @param[in]  nseq_in  if set becomes the number of sequences
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::expose(std::string nseq_in) {
@@ -1172,7 +1195,7 @@ namespace AstroCam {
         // need allocation for at least 2 frames if nframes is greater than 1
         //
         int bufsize = this->get_bufsize();
-        if ( bufsize < (int)( (this->nframes>1?2:1) * rows * cols * sizeof(unsigned short) ) ) {  // TODO type check bufsize: is it big enough?
+        if ( bufsize < (int)( (this->nframes>1?2:1) * rows * cols * sizeof(unsigned short) ) ) {  ///< TODO @todo type check bufsize: is it big enough?
           message.str(""); message << "error: insufficient buffer size (" << bufsize 
                                    << " bytes) for " << this->nframes << " frame" << (this->nframes==1?"":"s")
                                    << " of " << rows << " x " << cols << " pixels";
@@ -1290,7 +1313,7 @@ namespace AstroCam {
 
         // Copy the camera_info into each dev's info class object
         //
-//      this->camera.at(dev).info = this->camera_info;  // TODO I think this is obsolete now that I've included Camera::Information in the Controller class
+//      this->camera.at(dev).info = this->camera_info;  ///< TODO @todo I think this is obsolete now that I've included Camera::Information in the Controller class
 
         // Allocate workspace memory for deinterlacing (each dev has its own workbuf)
         //
@@ -1424,15 +1447,14 @@ namespace AstroCam {
 
     return( error );
   }
-  /** AstroCam::Interface::expose *********************************************/
+  /***** AstroCam::Interface::expose ******************************************/
 
 
-  /** AstroCam::Interface::load_firmware **************************************/
+  /***** AstroCam::Interface::load_firmware ***********************************/
   /**
-   * @fn     load_firmware
-   * @brief  load firmware (.lod) into one or all controller timing boards
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @brief      load firmware (.lod) into one or all controller timing boards
+   * @param[out] retstring  reference to string to contain return value
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded
    *
@@ -1475,15 +1497,15 @@ namespace AstroCam {
     }
     return(error);
   }
-  /** AstroCam::Interface::load_firmware **************************************/
+  /***** AstroCam::Interface::load_firmware ***********************************/
 
 
-  /** AstroCam::Interface::load_firmware **************************************/
+  /***** AstroCam::Interface::load_firmware ***********************************/
   /**
-   * @fn     load_firmware
-   * @brief  load firmware (.lod) into one or all controller timing boards
-   * @param  timlodfile, string may contain a controller number
-   * @return ERROR or NO_ERROR
+   * @brief      load firmware (.lod) into one or all controller timing boards
+   * @param[in]  timlodfile  string may contain a controller number
+   * @param[out] retstring   reference to string to contain return value
+   * @return     ERROR or NO_ERROR
    *
    * This function is overloaded
    *
@@ -1669,16 +1691,14 @@ namespace AstroCam {
 
     return( error );
   }
-  /** AstroCam::Interface::load_firmware **************************************/
+  /***** AstroCam::Interface::load_firmware ***********************************/
 
 
-  /** AstroCam::Interface::dothread_load **************************************/
+  /***** AstroCam::Interface::dothread_load ***********************************/
   /**
-   * @fn     dothread_load
-   * @brief  run in a thread to actually perform the load
-   * @param  contoller, reference to Controller object
-   * @param  timlodfile, string of lodfile name to load
-   * @return none
+   * @brief      run in a thread to actually perform the load
+   * @param[in]  contoller   reference to Controller object
+   * @param[in]  timlodfile  string of lodfile name to load
    *
    * loadControllerFile() doesn't return a value but throws std::runtime_error on error.
    *
@@ -1711,17 +1731,18 @@ namespace AstroCam {
     logwrite(function, message.str());
     controller.retval = DON;
     controller.firmwareloaded = true;
+
+    return;
   }
-  /** AstroCam::Interface::dothread_load **************************************/
+  /***** AstroCam::Interface::dothread_load ***********************************/
 
 
-  /** AstroCam::Interface::buffer *********************************************/
+  /***** AstroCam::Interface::buffer ******************************************/
   /**
-   * @fn     buffer
-   * @brief  set/get mapped image buffer
-   * @param  string size_in, string containing the buffer allocation info
-   * @param  string &retstring, reference to a string for return values
-   * @return ERROR or NO_ERROR
+   * @brief      set/get mapped image buffer
+   * @param[in]  size_in   string containing the buffer allocation info
+   * @param[out] retstring reference to a string for return values
+   * @return     ERROR or NO_ERROR
    *
    * This function uses the ARC API to allocate PCI/e buffer space for doing
    * the DMA transfers.
@@ -1796,16 +1817,15 @@ namespace AstroCam {
     retstring = std::to_string( this->bufsize );
     return(NO_ERROR);
   }
-  /** AstroCam::Interface::buffer *********************************************/
+  /***** AstroCam::Interface::buffer ******************************************/
 
 
-  /** AstroCam::Interface::readout ********************************************/
+  /***** AstroCam::Interface::readout *****************************************/
   /**
-   * @fn     readout
-   * @brief  
-   * @param  string readout_in, string containing the requested readout type
-   * @param  string &readout_out, reference to a string for return values
-   * @return ERROR or NO_ERROR
+   * @brief      set or get type of readout
+   * @param[in]  readout_in   string containing the requested readout type
+   * @param[out] readout_out  reference to a string for return values
+   * @return     ERROR or NO_ERROR
    *
    * This function sets (or gets) the type of readout. This will encompass
    * which amplifier(s) for a CCD (by name) or infrared (by number).
@@ -1904,7 +1924,7 @@ namespace AstroCam {
           //
           std::stringstream cmd;
           std::string retstr;
-          cmd.str(""); cmd << "SOS " << readout_arg;              // TODO should this 3-letter command be generalized, or configurable?
+          cmd.str(""); cmd << "SOS " << readout_arg;              ///< TODO @todo should this 3-letter command be generalized, or configurable?
           error = this->native( selectdev, cmd.str(), retstr );   // send the native command here
           if ( error != NO_ERROR || retstr == "ERR" ) {
             message.str(""); message << "ERROR setting output source 0x" << std::hex << std::uppercase << readout_arg << " for device " << dev;
@@ -1941,15 +1961,15 @@ namespace AstroCam {
 
     return( error );
   }
-  /** AstroCam::Interface::readout ********************************************/
+  /***** AstroCam::Interface::readout *****************************************/
 
 
-  /**************** AstroCam::Interface::set_camera_mode **********************/
+  /***** AstroCam::Interface::set_camera_mode *********************************/
   /**
-   * @fn     set_camera_mode
-   * @brief  
-   * @param  none
-   * @return 
+   * @brief      not yet implemented
+   * @param[in]  mode  a string to represent the mode name or number
+   * @return     ERROR
+   * @todo       camera mode not yet implemented
    *
    */
   long Interface::set_camera_mode(std::string mode) {
@@ -1958,16 +1978,15 @@ namespace AstroCam {
     logwrite(function, "ERROR: not implemented");
     return( ERROR );
   }
-  /**************** AstroCam::Interface::set_camera_mode **********************/
+  /***** AstroCam::Interface::set_camera_mode *********************************/
 
 
-  /**************** AstroCam::Interface::write_frame **************************/
+  /***** AstroCam::Interface::write_frame *************************************/
   /**
-   * @fn     write_frame
-   * @brief  writes the image_data buffer to disk
-   * @param  int devnum, device number
-   * @param  int fpbcount, frame number = also thread ID receiving the frame
-   * @return ERROR or NO_ERROR
+   * @brief      writes the image_data buffer to disk
+   * @param[in]  devnum    device number
+   * @param[in]  fpbcount  frame number = also thread ID receiving the frame
+   * @return     ERROR or NO_ERROR
    *
    * This function is called by the handle_frame thread.
    *
@@ -2044,15 +2063,15 @@ namespace AstroCam {
 #endif
     return( error );
   }
-  /**************** AstroCam::Interface::write_frame **************************/
+  /***** AstroCam::Interface::write_frame *************************************/
 
 
-  /**************** AstroCam::Interface::exptime ******************************/
+  /***** AstroCam::Interface::exptime *****************************************/
   /**
-   * @fn     exptime
-   * @brief  set/get the exposure time
-   * @param  string
-   * @return ERROR or NO_ERROR
+   * @brief      set/get the exposure time
+   * @param[in]  exptime_in  requested exposure time in msec
+   * @param[out] retstring   reference to string contains the exposure time
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::exptime(std::string exptime_in, std::string &retstring) {
@@ -2149,16 +2168,15 @@ namespace AstroCam {
     logwrite(function, message.str());
     return( error );
   }
-  /**************** AstroCam::Interface::exptime ******************************/
+  /***** AstroCam::Interface::exptime *****************************************/
 
 
-  /** AstroCam::Interface::shutter ********************************************/
+  /***** AstroCam::Interface::shutter *****************************************/
   /**
-   * @fn     shutter
-   * @brief  set or get the shutter enable state
-   * @param  std::string shutter_in
-   * @param  std::string& shutter_out
-   * @return ERROR or NO_ERROR
+   * @brief      set or get the shutter enable state
+   * @param[in]  shutter_in   requested shutter state
+   * @param[out] shutter_out  reference to string for return status
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::shutter(std::string shutter_in, std::string& shutter_out) {
@@ -2186,7 +2204,7 @@ namespace AstroCam {
     }
 
     // Set shutterenable the same for all devices
-    // TODO enable setting differently for each device
+    ///< TODO @todo enable setting differently for each device
     //
     for ( auto dev : this->devlist ) {
       this->controller.at(dev).info.shutterenable = shutten;
@@ -2206,16 +2224,15 @@ namespace AstroCam {
 
     return error;
   }
-  /** AstroCam::Interface::shutter ********************************************/
+  /***** AstroCam::Interface::shutter *****************************************/
 
 
-  /**************** AstroCam::Interface::geometry *****************************/
+  /***** AstroCam::Interface::geometry ****************************************/
   /**
-   * @fn     geometry
-   * @brief  set/get geometry
-   * @param  args contains: X Y (i.e. cols rows)
-   * @param  &retstring, reference to string for return value
-   * @return ERROR or NO_ERROR
+   * @brief      set/get geometry
+   * @param[in]  args       contains: X Y (i.e. cols rows)
+   * @param[out] retstring  reference to string for return value
+   * @return     ERROR or NO_ERROR
    *
    * args string can optionally contain a comma-separated list of devices,
    * separated from args by a colon, E.G.
@@ -2343,15 +2360,18 @@ namespace AstroCam {
 
     return( error );
   }
-  /**************** AstroCam::Interface::geometry *****************************/
+  /***** AstroCam::Interface::geometry ****************************************/
 
 
-  /**************** AstroCam::Interface::bias *********************************/
+  /***** AstroCam::Interface::bias ********************************************/
   /**
-   * @fn     bias
-   * @brief  set a bias
-   * @param  args contains: module, channel, bias
-   * @return ERROR or NO_ERROR
+   * @brief      set a bias
+   * @param[in]  args       contains: module, channel, bias
+   * @param[out] retstring  reference to string for return value
+   * @return     ERROR or NO_ERROR
+   * @todo       bias not yet implemented
+   *
+   * TODO
    *
    */
   long Interface::bias(std::string args, std::string &retstring) {
@@ -2360,21 +2380,31 @@ namespace AstroCam {
     logwrite(function, "ERROR: not implemented");
     return( ERROR );
   }
-  /**************** AstroCam::Interface::bias *********************************/
+  /***** AstroCam::Interface::bias ********************************************/
 
 
+  /***** AstroCam::Interface::handle_queue ************************************/
+  /**
+   * @brief      inserts a message into the asynchronous message queue
+   * @param[in]  message  string to insert into the async message queue
+   *
+   * This should be spawned in a thread. This is how threads get messages
+   * into the async message queue.
+   *
+   */
   void Interface::handle_queue(std::string message) {
     server.camera.async.enqueue( message );
   }
+  /***** AstroCam::Interface::handle_queue ************************************/
 
-  /**************** AstroCam::Interface::handle_frame *************************/
+
+  /***** AstroCam::Interface::handle_frame ************************************/
   /**
-   * @fn     handle_frame
-   * @brief  process each frame received by frameCallback for any device
-   * @param  fpbcount, frames per buffer count, returned from the ARC API
-   * @param  fcount, number of frames read, returned from the ARC API
-   * @param  *buffer, pointer to the PCI/e buffer, returned from the ARC API
-   * @return none
+   * @brief      process each frame received by frameCallback for any device
+   * @param[in]  devnum    controller device number
+   * @param[in]  fpbcount  frames per buffer count, returned from the ARC API
+   * @param[in]  fcount    number of frames read, returned from the ARC API
+   * @param[in]  buffer    pointer to the PCI/e buffer, returned from the ARC API
    *
    * This function is static, spawned in a thread created by frameCallback()
    * which is the callback fired by the ARC API when a frame has been received.
@@ -2445,7 +2475,7 @@ namespace AstroCam {
         double time_now = get_clock_time();
         if (time_now - start_time >= 1.0) {        // update progress every 1 sec so the user knows what's going on
           start_time = time_now;
-          logwrite(function, "waiting for frames");//TODO presumably update GUI or set a global that the CLI can access
+          logwrite(function, "waiting for frames");///< TODO @todo presumably update GUI or set a global that the CLI can access
 #ifdef LOGLEVEL_DEBUG
           message.str(""); message << "[DEBUG] this_frame=" << this_frame << " next_frame=" << next_frame;
           logwrite(function, message.str());
@@ -2496,15 +2526,12 @@ namespace AstroCam {
 
     return;
   }
-  /**************** AstroCam::Interface::handle_frame *************************/
+  /***** AstroCam::Interface::handle_frame ************************************/
 
 
-  /**************** AstroCam::Interface::add_framethread **********************/
+  /***** AstroCam::Interface::add_framethread *********************************/
   /**
-   * @fn     add_framethread
-   * @brief  call on thread creation to increment framethreadcount
-   * @param  none
-   * @return none
+   * @brief      call on thread creation to increment framethreadcount
    *
    */
   inline void Interface::add_framethread() {
@@ -2512,15 +2539,12 @@ namespace AstroCam {
     this->framethreadcount++;
     this->framethreadcount_mutex.unlock();
   }
-  /**************** AstroCam::Interface::add_framethread **********************/
+  /***** AstroCam::Interface::add_framethread *********************************/
 
 
-  /**************** AstroCam::Interface::remove_framethread *******************/
+  /***** AstroCam::Interface::remove_framethread ******************************/
   /**
-   * @fn     remove_framethread
-   * @brief  call on thread destruction to decrement framethreadcount
-   * @param  none
-   * @return none
+   * @brief      call on thread destruction to decrement framethreadcount
    *
    */
   inline void Interface::remove_framethread() {
@@ -2528,15 +2552,13 @@ namespace AstroCam {
     this->framethreadcount--;
     this->framethreadcount_mutex.unlock();
   }
-  /**************** AstroCam::Interface::remove_framethread *******************/
+  /***** AstroCam::Interface::remove_framethread ******************************/
 
 
-  /**************** AstroCam::Interface::get_framethread **********************/
+  /***** AstroCam::Interface::get_framethread *********************************/
   /**
-   * @fn     get_framethread
-   * @brief  return the number of active threads spawned for handling frames
-   * @param  none
-   * @return int, number of threads
+   * @brief      return the number of active threads spawned for handling frames
+   * @return     number of threads
    *
    */
   inline int Interface::get_framethread_count() {
@@ -2546,15 +2568,12 @@ namespace AstroCam {
     this->framethreadcount_mutex.unlock();
     return( count );
   }
-  /**************** AstroCam::Interface::get_framethread **********************/
+  /***** AstroCam::Interface::get_framethread *********************************/
 
 
-  /**************** AstroCam::Interface::init_framethread_count ***************/
+  /***** AstroCam::Interface::init_framethread_count **************************/
   /**
-   * @fn     init_framethread_count
-   * @brief  initialize framethreadcount = 0
-   * @param  none
-   * @return none
+   * @brief      initialize framethreadcount = 0
    *
    */
   inline void Interface::init_framethread_count() {
@@ -2562,15 +2581,12 @@ namespace AstroCam {
     this->framethreadcount = 0;
     this->framethreadcount_mutex.unlock();
   }
-  /**************** AstroCam::Interface::init_framethread_count ***************/
+  /***** AstroCam::Interface::init_framethread_count **************************/
 
 
-  /** AstroCam::Interface::Controller::Controller *****************************/
+  /***** AstroCam::Interface::Controller::Controller **************************/
   /**
-   * @fn     Controller
-   * @brief  class constructor
-   * @param  none
-   * @return none
+   * @brief      class constructor
    *
    */
   Interface::Controller::Controller() {
@@ -2583,15 +2599,14 @@ namespace AstroCam {
     this->connected = false;
     this->firmwareloaded = false;
   }
-  /** AstroCam::Interface::Controller::Controller *****************************/
+  /***** AstroCam::Interface::Controller::Controller **************************/
 
 
-  /**************** AstroCam::Interface::Controller::open_file ****************/
+  /***** AstroCam::Interface::Controller::open_file ***************************/
   /**
-   * @fn     open_file
-   * @brief  wrapper to open the current fits file object
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @brief      wrapper to open the current fits file object
+   * @param[in]  writekeys_in  string containing "before|after" for when to write fits keys relative to exposure
+   * @return     ERROR or NO_ERROR
    *
    */
   long Interface::Controller::open_file( std::string writekeys_in ) {
@@ -2608,15 +2623,13 @@ namespace AstroCam {
     long error = this->pFits->open_file( writekeys, this->info );
     return( error );
   }
-  /**************** AstroCam::Interface::Controller::open_file ****************/
+  /***** AstroCam::Interface::Controller::open_file ***************************/
 
 
-  /**************** AstroCam::Interface::Controller::close_file ***************/
+  /***** AstroCam::Interface::Controller::close_file **************************/
   /**
-   * @fn     close_file
-   * @brief  wrapper to close the current fits file object
-   * @param  none
-   * @return none
+   * @brief      wrapper to close the current fits file object
+   * @param[in]  writekeys_in  string containing "before|after" for when to write fits keys relative to exposure
    *
    */
   void Interface::Controller::close_file( std::string writekeys_in ) {
@@ -2636,15 +2649,12 @@ namespace AstroCam {
     catch(...) { logwrite(function, "unknown error closing FITS file(s)"); }
     return;
   }
-  /**************** AstroCam::Interface::Controller::close_file ***************/
+  /***** AstroCam::Interface::Controller::close_file **************************/
 
 
-  /** AstroCam::Interface::Controller::init_framecount ************************/
+  /***** AstroCam::Interface::Controller::init_framecount *********************/
   /**
-   * @fn     init_framecount 
-   * @brief  initialize this->framecount=0, protected by mutex
-   * @param  none
-   * @return none
+   * @brief      initialize this->framecount=0, protected by mutex
    *
    */
   inline void Interface::Controller::init_framecount() {
@@ -2652,15 +2662,13 @@ namespace AstroCam {
     this->framecount = 0;
     server.framecount_mutex.unlock();
   }
-  /** AstroCam::Interface::Controller::init_framecount ************************/
+  /***** AstroCam::Interface::Controller::init_framecount *********************/
 
 
-  /** AstroCam::Interface::Controller::get_framecount *************************/
+  /***** AstroCam::Interface::Controller::get_framecount **********************/
   /**
-   * @fn     get_framecount 
-   * @brief  returns this->framecount, protected by mutex
-   * @param  none
-   * @return int framecount
+   * @brief      returns this->framecount, protected by mutex
+   * @return     int framecount
    *
    */
   inline int Interface::Controller::get_framecount() {
@@ -2670,15 +2678,12 @@ namespace AstroCam {
     server.framecount_mutex.unlock();
     return( count );
   }
-  /** AstroCam::Interface::Controller::get_framecount *************************/
+  /***** AstroCam::Interface::Controller::get_framecount **********************/
 
 
-  /** AstroCam::Interface::Controller::increment_framecount *******************/
+  /***** AstroCam::Interface::Controller::increment_framecount ****************/
   /**
-   * @fn     increment_framecount 
-   * @brief  increments this->framecount, protected by mutex
-   * @param  none
-   * @return none
+   * @brief      increments this->framecount, protected by mutex
    *
    */
   inline void Interface::Controller::increment_framecount() {
@@ -2686,15 +2691,14 @@ namespace AstroCam {
     this->framecount++;
     server.framecount_mutex.unlock();
   }
-  /** AstroCam::Interface::Controller::increment_framecount *******************/
+  /***** AstroCam::Interface::Controller::increment_framecount ****************/
 
 
-  /**************** AstroCam::Interface::deinterlace **************************/
+  /***** AstroCam::Interface::deinterlace *************************************/
   /**
-   * @fn     deinterlace
-   * @brief  spawns the deinterlacing threads
-   * @param  args contains: module, channel, bias
-   * @return pointer to workbuf
+   * @brief      spawns the deinterlacing threads
+   * @param[in]  imbuf  pointer to the image buffer containing data to deinterlace
+   * @return     pointer to workbuf
    *
    * This function spawns threads to perform the actual deinterlacing in order
    * to get it done as quickly as possible.
@@ -2708,7 +2712,7 @@ namespace AstroCam {
     std::stringstream message;
 
     int nthreads = cores_available();
-nthreads=2;  // TODO *** come back to this !!! ***
+nthreads=2;  ///< TODO @todo need to optimize this for number of cores
 logwrite( function, "NOTICE:override nthreads=2 !!!" );
 server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
 
@@ -2778,19 +2782,17 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
 
     return( (T*)this->workbuf );
   }
-  /**************** AstroCam::Interface::deinterlace **************************/
+  /***** AstroCam::Interface::deinterlace *************************************/
 
 
-  /**************** AstroCam::Interface::dothread_deinterlace *****************/
+  /***** AstroCam::Interface::dothread_deinterlace ****************************/
   /**
-   * @fn     dothread_deinterlace
-   * @brief  run in a thread to perform the actual deinterlacing
-   * @param  T &deinterlace, reference to DeInterlace class object
-   * @param  int cols
-   * @param  int rows
-   * @param  int section, the section of the buffer this thread is working on
-   * @param  int nthreads, the number of threads being used for deinterlacing
-   * @return none
+   * @brief      run in a thread to perform the actual deinterlacing
+   * @param[in]  deinterlace  reference to DeInterlace class object
+   * @param[in]  cols         number of columns
+   * @param[in]  rows         number of rows
+   * @param[in]  section      the section of the buffer this thread is working on
+   * @param[in]  nthreads     the number of threads being used for deinterlacing
    *
    * This thread calls the deinterlacer. The actual deinterlacing is performed
    * within the DeInterlace object.
@@ -2819,16 +2821,15 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
     deinterlace.do_deinterlace( row_start, row_stop, index, index_flip );
 
   }
-  /**************** AstroCam::Interface::dothread_deinterlace *****************/
+  /***** AstroCam::Interface::dothread_deinterlace ****************************/
 
 
-  /**************** AstroCam::Interface::test *********************************/
+  /**** AstroCam::Interface::test *********************************************/
   /**
-   * @fn     test
-   * @brief  test routines
-   * @param  string args contains test name and arguments
-   * @param  reference to retstring for any return values
-   * @return ERROR or NO_ERROR
+   * @brief      test routines
+   * @param[in]  args       contains test name and arguments
+   * @param[in]  retstring  reference to string for any return values
+   * @return     ERROR or NO_ERROR
    *
    * This is the place to put various debugging and system testing tools.
    * It is placed here, rather than in camera, to allow for controller-
@@ -2931,15 +2932,13 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
 
     return error;
   }
-  /**************** AstroCam::Interface::test *********************************/
+  /**** AstroCam::Interface::test *********************************************/
 
 
-  /**************** AstroCam::Interface::Controller::write ********************/
+  /**** AstroCam::Interface::Controller::write ********************************/
   /**
-   * @fn     write
-   * @brief  wrapper to write a fits file
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @brief      wrapper to write a fits file
+   * @return     ERROR or NO_ERROR
    *
    * called by Interface::write_frame( ) which is called by the handle_frame thread
    *
@@ -2994,15 +2993,13 @@ if ( server.camera.get_abortstate() ) {
     }
     return( retval );
   }
-  /**************** AstroCam::Interface::Controller::write ********************/
+  /**** AstroCam::Interface::Controller::write ********************************/
 
 
-  /**************** AstroCam::Interface::Controller::alloc_workbuf ************/
+  /***** AstroCam::Interface::Controller::alloc_workbuf ***********************/
   /**
-   * @fn     alloc_workbuf
-   * @brief  allocate workspace memory for deinterlacing
-   * @param  none
-   * @return ERROR or NO_ERROR
+   * @brief      allocate workspace memory for deinterlacing
+   * @return     ERROR or NO_ERROR
    *
    * This function calls an overloaded template class version with 
    * a generic pointer cast to the correct type.
@@ -3039,15 +3036,14 @@ message.str(""); message << "datatype=" << this->info.datatype; logwrite( functi
     }
     return( retval );
   }
-  /**************** AstroCam::Interface::Controller::alloc_workbuf ************/
+  /***** AstroCam::Interface::Controller::alloc_workbuf ***********************/
 
 
-  /**************** AstroCam::Interface::Controller::alloc_workbuf ************/
+  /***** AstroCam::Interface::Controller::alloc_workbuf ***********************/
   /**
-   * @fn     alloc_workbuf
-   * @brief  allocate workspace memory for deinterlacing
-   * @param  buf, pointer to template type T
-   * @return pointer to the allocated space
+   * @brief      allocate workspace memory for deinterlacing
+   * @param[in]  buf  pointer to template type T
+   * @return     pointer to the allocated space
    *
    * The actual allocation occurs in here, based on the template class pointer type.
    *
@@ -3075,15 +3071,13 @@ message.str(""); message << "datatype=" << this->info.datatype; logwrite( functi
     logwrite(function, message.str());
     return( (void*)this->workbuf );
   }
-  /**************** AstroCam::Interface::Controller::alloc_workbuf ************/
+  /***** AstroCam::Interface::Controller::alloc_workbuf ***********************/
 
 
-  /**************** AstroCam::Interface::Controller::free_workbuf *************/
+  /***** AstroCam::Interface::Controller::free_workbuf ************************/
   /**
-   * @fn     free_workbuf
-   * @brief  free (delete) memory allocated by alloc_workbuf
-   * @param  buf, pointer to template type T
-   * @return none
+   * @brief      free (delete) memory allocated by alloc_workbuf
+   * @param[in]  buf  pointer to template type T
    *
    * Must pass a pointer of the correct type because delete doesn't work on void.
    *
@@ -3100,6 +3094,6 @@ message.str(""); message << "datatype=" << this->info.datatype; logwrite( functi
       logwrite(function, message.str());
     }
   }
-  /**************** AstroCam::Interface::Controller::alloc_workbuf ************/
+  /***** AstroCam::Interface::Controller::free_workbuf ************************/
 
 }

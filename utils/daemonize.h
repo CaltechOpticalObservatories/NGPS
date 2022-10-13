@@ -22,8 +22,25 @@
 #include <syslog.h>   // syslog(3), openlog(3), closelog(3)
 
 
+/***** Daemon *****************************************************************/
+/**
+ * @namespace Daemon
+ * @brief     the daemon namespace contains a function for daemon-izing a process
+ *
+ */
 namespace Daemon {
 
+  /***** Daemon::daemonize ****************************************************/
+  /**
+   * @brief      this function will daemonize a process
+   * @param[in]  name     the name for this daemon
+   * @param[in]  path     directory to chdir to when running daemon
+   * @param[in]  outfile  where to direct stdout, /dev/null by default
+   * @param[in]  errfile  where to direct stderr, /dev/null by default
+   * @param[in]  infile   stdin, /dev/null by default
+   * @return     0
+   *
+   */
   int daemonize( std::string name, std::string path, std::string outfile, std::string errfile, std::string infile ) {
     if ( path.empty() )    { path = "/tmp"; }
     if ( name.empty() )    { name = "mydaemon"; }
@@ -80,6 +97,7 @@ namespace Daemon {
     openlog( name.c_str(), LOG_PID, LOG_DAEMON );
     return( 0 );
   }
+  /***** Daemon::daemonize ****************************************************/
 
 }
 #endif

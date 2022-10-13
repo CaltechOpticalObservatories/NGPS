@@ -1,3 +1,11 @@
+/**
+ * @file    tcs_constants.h
+ * @brief   
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #ifndef TCS_CONSTANTS_H
 #define TCS_CONSTANTS_H
 const int TCS_SUCCESS              =  0;

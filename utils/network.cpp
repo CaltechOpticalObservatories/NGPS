@@ -26,13 +26,11 @@
 namespace Network {
 
 
-  /**************** Network::UdpSocket::UdpSocket *****************************/
+  /***** Network::UdpSocket::UdpSocket ****************************************/
   /**
-   * @fn         UdpSocket
    * @brief      UdpSocket class constructor
-   * @param[in]  port_in, port on which server will multicast datagrams
-   * @param[in]  group_in, 
-   * @return     none
+   * @param[in]  port_in   port on which server will multicast datagrams
+   * @param[in]  group_in  multicast group
    *
    * Use this to construct a UDP multi-cast datagram server object
    *
@@ -43,15 +41,12 @@ namespace Network {
     this->group = group_in;
     this->service_running = false;
   }
-  /**************** Network::UdpSocket::UdpSocket *****************************/
+  /***** Network::UdpSocket::UdpSocket ****************************************/
 
 
-  /**************** Network::UdpSocket::UdpSocket *****************************/
+  /***** Network::UdpSocket::UdpSocket ****************************************/
   /**
-   * @fn         UdpSocket
    * @brief      default UdpSocket class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   UdpSocket::UdpSocket() {
@@ -60,15 +55,13 @@ namespace Network {
     this->group = "";
     this->service_running = false;
   }
-  /**************** Network::UdpSocket::UdpSocket *****************************/
+  /***** Network::UdpSocket::UdpSocket ****************************************/
 
 
-  /**************** Network::UdpSocket::UdpSocket *****************************/
+  /***** Network::UdpSocket::UdpSocket ****************************************/
   /**
-   * @fn         UdpSocket
    * @brief      UdpSocket class copy constructor
-   * @param[in]  obj reference to class object
-   * @return     none
+   * @param[in]  obj  reference to class object
    *
    */
   UdpSocket::UdpSocket(const UdpSocket &obj) {
@@ -77,28 +70,23 @@ namespace Network {
     group = obj.group;
     service_running = obj.service_running;
   }
-  /**************** Network::UdpSocket::UdpSocket *****************************/
+  /***** Network::UdpSocket::UdpSocket ****************************************/
 
 
-  /**************** Network::UdpSocket::~UdpSocket ****************************/
+  /***** Network::UdpSocket::~UdpSocket ***************************************/
   /**
-   * @fn         ~UdpSocket
    * @brief      UdpSocket class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   UdpSocket::~UdpSocket() {
     this->Close();
   };
-  /**************** Network::UdpSocket::~UdpSocket ****************************/
+  /***** Network::UdpSocket::~UdpSocket ***************************************/
 
 
-  /**************** Network::UdpSocket::Create ********************************/
+  /***** Network::UdpSocket::Create *******************************************/
   /**
-   * @fn         Create
    * @brief      create a UDP multi-cast socket
-   * @param[in]  none
    * @return     0 on success, -1 on error, 1 to indicate user-requested disable
    *
    * If the .cfg file contains ASYNCGROUP=none (any case) then do not create
@@ -175,14 +163,12 @@ namespace Network {
 
     return 0;
   }
-  /**************** Network::UdpSocket::Create ********************************/
+  /***** Network::UdpSocket::Create *******************************************/
 
 
-  /**************** Network::UdpSocket::Send **********************************/
+  /***** Network::UdpSocket::Send *********************************************/
   /**
-   * @fn         Send
    * @brief      transmit the message to the UDP socket
-   * @param[in]  none
    * @return     0 on success, -1 on error
    *
    */
@@ -202,14 +188,12 @@ namespace Network {
 
     return 0;
   }
-  /**************** Network::UdpSocket::Send **********************************/
+  /***** Network::UdpSocket::Send *********************************************/
 
 
-  /**************** Network::UdpSocket::Listener ******************************/
+  /***** Network::UdpSocket::Listener *****************************************/
   /**
-   * @fn         Listener
    * @brief      creates a UDP listener, returns a file descriptor
-   * @param[in]  none
    * @return     fd on success, -1 on error
    *
    */
@@ -301,14 +285,13 @@ namespace Network {
 
     return( this->fd );
   }
-  /**************** Network::UdpSocket::Listener ******************************/
+  /***** Network::UdpSocket::Listener *****************************************/
 
 
-  /**************** Network::UdpSocket::Receive *******************************/
+  /***** Network::UdpSocket::Receive ******************************************/
   /**
-   * @fn         Receive
    * @brief      receive a UDP message from the Listener fd
-   * @param[out] reference to string, to contain the message read
+   * @param[out] message  reference to string to contain the message read
    * @return     number of bytes received
    *
    */
@@ -329,14 +312,12 @@ namespace Network {
 
     return nbytes;
   }
-  /**************** Network::UdpSocket::Receive *******************************/
+  /***** Network::UdpSocket::Receive ******************************************/
 
 
-  /**************** Network::UdpSocket::Close *********************************/
+  /***** Network::UdpSocket::Close ********************************************/
   /**
-   * @fn         Close
    * @brief      close the UDP socket connection
-   * @param[in]  none
    * @return     0 on success, -1 on error
    *
    */
@@ -358,18 +339,16 @@ namespace Network {
     this->service_running = false;     // clear the service_running flag
     return (error);
   }
-  /**************** Network::UdpSocket::Close *********************************/
+  /***** Network::UdpSocket::Close ********************************************/
 
 
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
   /**
-   * @fn         TcpSocket
    * @brief      TcpSocket class constructor
-   * @param[in]  port_in, port which server will listen on
-   * @param[in]  block_in, true|false -- will the connection be blocking?
-   * @param[in]  totime_in, timeout time for poll, in msec
-   * @param[in]  id_in, ID number (for keeping track of threads)
-   * @return     none
+   * @param[in]  port_in    port which server will listen on
+   * @param[in]  block_in   true|false -- will the connection be blocking?
+   * @param[in]  totime_in  timeout time for poll, in msec
+   * @param[in]  id_in      ID number (for keeping track of threads)
    *
    * Use this to construct a server's listening socket object
    *
@@ -385,16 +364,14 @@ namespace Network {
     this->addrs = NULL;
     this->connection_open = false;
   };
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
 
 
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
   /**
-   * @fn         TcpSocket
    * @brief      TcpSocket class constructor
-   * @param[in]  host, hostname to which client will connect
-   * @param[in]  port_in, port to which client will connect
-   * @return     none
+   * @param[in]  host  hostname to which client will connect
+   * @param[in]  port  port to which client will connect
    *
    * Use this to construct a client object
    *
@@ -407,15 +384,12 @@ namespace Network {
     this->addrs = NULL;
     this->connection_open = false;
   }
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
 
 
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
   /**
-   * @fn         TcpSocket
    * @brief      default TcpSocket class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   TcpSocket::TcpSocket() {
@@ -429,15 +403,13 @@ namespace Network {
     this->addrs = NULL;
     this->connection_open = false;
   };
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
 
 
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
   /**
-   * @fn         TcpSocket
    * @brief      TcpSocket class copy constructor
-   * @param[in]  obj reference to class object
-   * @return     none
+   * @param[in]  obj  reference to class object
    *
    */
   TcpSocket::TcpSocket(const TcpSocket &obj) {
@@ -451,29 +423,24 @@ namespace Network {
     addrs = obj.addrs;
     connection_open = obj.connection_open;
   };
-  /**************** Network::TcpSocket::TcpSocket *****************************/
+  /***** Network::TcpSocket::TcpSocket ****************************************/
 
 
-  /**************** Network::TcpSocket::~TcpSocket ****************************/
+  /***** Network::TcpSocket::~TcpSocket ***************************************/
   /**
-   * @fn         ~TcpSocket
    * @brief      TcpSocket class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   TcpSocket::~TcpSocket() {
     this->Close();
   };
-  /**************** Network::TcpSocket::~TcpSocket ****************************/
+  /***** Network::TcpSocket::~TcpSocket ***************************************/
 
 
-  /**************** Network::TcpSocket::Accept ********************************/
+  /***** Network::TcpSocket::Accept *******************************************/
   /**
-   * @fn         Accept
    * @brief      creates a new connected socket for pending connection
-   * @param[in]  none
-   * @return     fd (new connected socket file descriptor) or -1 on error
+   * @return     fd  file descriptor of new connected socket file descriptor, or -1 on error
    *
    * Create new listening socket for pending connection on this->listenfd
    * and returns a new connected socket this->fd
@@ -485,15 +452,13 @@ namespace Network {
     if (this->fd < 0) { perror("(Network::TcpSocket::Accept) error calling accept"); return -1; }
     return (this->fd);
   }
-  /**************** Network::TcpSocket::Accept ********************************/
+  /***** Network::TcpSocket::Accept *******************************************/
 
 
-  /**************** Network::TcpSocket::Listen ********************************/
+  /***** Network::TcpSocket::Listen *******************************************/
   /**
-   * @fn         Listen
    * @brief      create a TCP listening socket
-   * @param[in]  none
-   * @return     listenfd (listening file descriptor), or -1 on error
+   * @return     listenfd  listening file descriptor, or -1 on error
    *
    * This creates a TCP listening socket that will be used to accept
    * incomming connections.
@@ -548,14 +513,12 @@ namespace Network {
 
     return(this->listenfd);
   }
-  /**************** Network::TcpSocket::Listen ********************************/
+  /***** Network::TcpSocket::Listen *******************************************/
 
 
-  /**************** Network::TcpSocket::Poll **********************************/
+  /***** Network::TcpSocket::Poll *********************************************/
   /**
-   * @fn         Poll
    * @brief      polls a single file descriptor to wait for incoming data to read
-   * @param[in]  none
    * @return     0 on timeout, -1 on error, a non-negative value on success
    *
    * This function is overloaded. One version accepts a timeout to be passed in,
@@ -566,14 +529,13 @@ namespace Network {
   int TcpSocket::Poll() {                /// uses default timeout
     return( this->Poll( this->totime ) );
   }
-  /**************** Network::TcpSocket::Poll **********************************/
+  /***** Network::TcpSocket::Poll *********************************************/
 
 
-  /**************** Network::TcpSocket::Poll **********************************/
+  /***** Network::TcpSocket::Poll *********************************************/
   /**
-   * @fn         Poll
    * @brief      polls a single file descriptor to wait for incoming data to read
-   * @param[in]  timeout
+   * @param[in]  timeout  number of milliseconds that poll() should block waiting for a file descriptor to become ready
    * @return     0 on timeout, -1 on error, a non-negative value on success
    *
    * This function is overloaded. One version accepts a timeout to be passed in,
@@ -581,7 +543,7 @@ namespace Network {
    * was set for the class object.
    *
    */
-  int TcpSocket::Poll( int timeout ) {   // uses timeout arg
+  int TcpSocket::Poll( int timeout ) {
     std::string function = "Network::TcpSocket::Poll";
     std::stringstream message;
     struct pollfd poll_struct;
@@ -602,14 +564,12 @@ namespace Network {
 
     return( ret );
   }
-  /**************** Network::TcpSocket::Poll **********************************/
+  /***** Network::TcpSocket::Poll *********************************************/
 
 
-  /**************** Network::TcpSocket::Connect *******************************/
+  /***** Network::TcpSocket::Connect ******************************************/
   /**
-   * @fn         Connect
    * @brief      connect to this->host on this->port
-   * @param[in]  none
    * @return     0 on success, -1 on error
    *
    * this->host and this->port need to be specified prior to calling Connect()
@@ -680,14 +640,12 @@ namespace Network {
 
     return (this->fd >= 0 ? 0 : -1);
   }
-  /**************** Network::TcpSocket::Connect *******************************/
+  /***** Network::TcpSocket::Connect ******************************************/
 
 
-  /**************** Network::TcpSocket::Close *********************************/
+  /***** Network::TcpSocket::Close ********************************************/
   /**
-   * @fn         Close
    * @brief      close a socket connection and free memory allocated by getaddrinfo()
-   * @param[in]  none
    * @return     0 on success, -1 on error
    *
    */
@@ -725,14 +683,13 @@ namespace Network {
 
     return (error);
   }
-  /**************** Network::TcpSocket::Close *********************************/
+  /***** Network::TcpSocket::Close ********************************************/
 
 
-  /**************** Network::TcpSocket::Write *********************************/
+  /***** Network::TcpSocket::Write ********************************************/
   /**
-   * @fn         Write
    * @brief      write data to a socket
-   * @param[in]  msg_in
+   * @param[in]  msg_in  string to write
    * @return     number of bytes written
    *
    */
@@ -752,15 +709,14 @@ namespace Network {
     }
     return bytes_sent;
   }
-  /**************** Network::TcpSocket::Write *********************************/
+  /***** Network::TcpSocket::Write ********************************************/
 
 
-  /**************** Network::TcpSocket::Read **********************************/
+  /***** Network::TcpSocket::Read *********************************************/
   /**
-   * @fn         Read
    * @brief      read data from connected socket
-   * @param[in]  buf, pointer to buffer
-   * @param[in]  count, number of bytes to read
+   * @param[in]  buf    pointer to buffer
+   * @param[in]  count  number of bytes to read
    * @return     number of bytes read or -1 on error
    *
    * If data not immediately available then wait for up to POLLTIMEOUT
@@ -799,15 +755,14 @@ namespace Network {
     }
     return( nread );
   }
-  /**************** Network::TcpSocket::Read **********************************/
+  /***** Network::TcpSocket::Read *********************************************/
 
 
-  /**************** Network::TcpSocket::Read **********************************/
+  /***** Network::TcpSocket::Read *********************************************/
   /**
-   * @fn         Read
    * @brief      read data from connected socket until delimeter char
-   * @param[out] std::string retstring
-   * @param[in]  char delimiter
+   * @param[out] retstring  reference to string to read in to
+   * @param[in]  delim      read until this delimiting char is found
    * @return     number of bytes read or -1 on error
    *
    * If data not immediately available then wait for up to POLLTIMEOUT
@@ -864,15 +819,14 @@ namespace Network {
     if ( nread <= 0 ) return( nread );   // return error
     else return( bytesread );            // or bytes read
   }
-  /**************** Network::TcpSocket::Read **********************************/
+  /***** Network::TcpSocket::Read *********************************************/
 
 
-  /**************** Network::TcpSocket::Read **********************************/
+  /***** Network::TcpSocket::Read *********************************************/
   /**
-   * @fn         Read
    * @brief      read data from connected socket until an end string
-   * @param[out] std::string retstring
-   * @param[in]  std::string endstr
+   * @param[out] retstring  reference to string to read in to
+   * @param[in]  endstr     read until this string is found
    * @return     number of bytes read or -1 on error
    *
    * If data not immediately available then wait for up to POLLTIMEOUT
@@ -932,14 +886,12 @@ namespace Network {
     if ( nread <= 0 ) return( nread );   // return error
     else return( bytesread );            // or bytes read
   }
-  /**************** Network::TcpSocket::Read **********************************/
+  /***** Network::TcpSocket::Read *********************************************/
 
 
-  /**************** Network::TcpSocket::Bytes_ready ***************************/
+  /***** Network::TcpSocket::Bytes_ready **************************************/
   /**
-   * @fn         Bytes_ready
    * @brief      get the number of bytes available on the socket file descriptor this->fd
-   * @param[in]  none
    * @return     number of bytes read
    *
    */
@@ -950,15 +902,12 @@ namespace Network {
     }
     return(bytesready);
   }
-  /**************** Network::TcpSocket::Bytes_ready ***************************/
+  /***** Network::TcpSocket::Bytes_ready **************************************/
 
 
-  /**************** Network::TcpSocket::Flush *********************************/
+  /***** Network::TcpSocket::Flush ********************************************/
   /**
-   * @fn         Flush
    * @brief      flush a socket by reading until it's empty
-   * @param[in]  none
-   * @return     none
    *
    */
   void TcpSocket::Flush() {
@@ -975,6 +924,6 @@ namespace Network {
     }
     return;
   }
-  /**************** Network::TcpSocket::Flush *********************************/
+  /***** Network::TcpSocket::Flush ********************************************/
 
 }

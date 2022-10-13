@@ -2,8 +2,7 @@
  * @file     powerd.h
  * @brief    power daemon include file
  * @author   David Hale <dhale@astro.caltech.edu>
- * @date     
- * @modified 
+ * @details 
  *
  */
 
@@ -30,15 +29,32 @@
 #include "power_interface.h"
 #include "powerd_commands.h"
 
-#define  N_THREADS    10    /// total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
-#define  BUFSIZE      1024  /// size of the input command buffer
-#define  CONN_TIMEOUT 3000  /// incoming (non-blocking) connection timeout in milliseconds
+#define  N_THREADS    10    ///< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
+#define  BUFSIZE      1024  ///< size of the input command buffer
+#define  CONN_TIMEOUT 3000  ///< incoming (non-blocking) connection timeout in milliseconds
 
+
+/***** Power ******************************************************************/
+/**
+ * @namespace Power
+ * @brief     namespace for power control
+ *
+ */
 namespace Power {
 
+  /***** Power::Server ********************************************************/
+  /**
+   * @class Server
+   * @brief power server class contains what's needed to run a server
+   *
+   */
   class Server {
     private:
     public:
+      /**
+       * Server class default constructor
+       *
+       */
       Server() {
         this->nbport=-1;
         this->blkport=-1;
@@ -46,7 +62,7 @@ namespace Power {
         this->cmd_num=0;
       }
 
-      /** Power::~Server ***********************************************************/
+      /***** Power::~Server ***************************************************/
       /**
        * @fn         ~Server
        * @brief      class deconstructor cleans up on exit
@@ -58,12 +74,12 @@ namespace Power {
         close(this->blocking_socket);
         close_log();  // close the logfile, if open
       }
-      /** Power::~Server ***********************************************************/
+      /***** Power::~Server ***************************************************/
 
-      int nbport;                        /// non-blocking port
-      int blkport;                       /// blocking port
-      int asyncport;                     /// asynchronous message port
-      std::string asyncgroup;            /// asynchronous multicast group
+      int nbport;                        ///< non-blocking port
+      int blkport;                       ///< blocking port
+      int asyncport;                     ///< asynchronous message port
+      std::string asyncgroup;            ///< asynchronous multicast group
 
       int nonblocking_socket;
       int blocking_socket;
@@ -72,13 +88,13 @@ namespace Power {
 
       Config config;
 
-      Interface interface;               /// the Interface class connects to the hardware
+      Interface interface;               ///< the Interface class connects to the hardware
 
       std::vector<int> nps_units;
 
-      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;             ///< mutex to protect against simultaneous access to Accept()
 
-      /** Power::Server::exit_cleanly **********************************************/
+      /***** Power::Server::exit_cleanly **************************************/
       /**
        * @fn         signal_handler
        * @brief      handles ctrl-C and exits
@@ -92,10 +108,10 @@ namespace Power {
 
         exit(EXIT_SUCCESS);
       }
-      /** Power::Server::exit_cleanly **********************************************/
+      /***** Power::Server::exit_cleanly **************************************/
 
 
-      /** Power::Server::configure_powerd ******************************************/
+      /***** Power::Server::configure_powerd **********************************/
       /**
        * @fn         configure_powerd
        * @brief      parse and apply the configuration file
@@ -260,9 +276,11 @@ namespace Power {
 
         return error;
       }
-      /** Power::Server::configure_powerd ******************************************/
+      /***** Power::Server::configure_powerd **********************************/
 
-  };  // end class Server
+  };
+  /***** Power::Server ********************************************************/
 
-} // end namespace Power
+}
+/***** Power ******************************************************************/
 #endif

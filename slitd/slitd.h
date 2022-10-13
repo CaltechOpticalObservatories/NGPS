@@ -29,13 +29,19 @@
 #include "slit_interface.h"
 #include "slitd_commands.h"
 
-#define  N_THREADS    10    /// total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
-#define  BUFSIZE      1024  /// size of the input command buffer
-#define  CONN_TIMEOUT 3000  /// incoming (non-blocking) connection timeout in milliseconds
+#define  N_THREADS    10    ///< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
+#define  BUFSIZE      1024  ///< size of the input command buffer
+#define  CONN_TIMEOUT 3000  ///< incoming (non-blocking) connection timeout in milliseconds
 
+/***** Slit *******************************************************************/
+/**
+ * @namespace Slit
+ * @brief     namespace for the slit daemon
+ *
+ */
 namespace Slit {
 
-  /** Server ******************************************************************/
+  /***** Server ***************************************************************/
   /**
    * @class  Server
    * @brief  server class for slit daemon
@@ -47,12 +53,9 @@ namespace Slit {
     private:
     public:
 
-      /** Slit::Server ********************************************************/
+      /***** Slit::Server *****************************************************/
       /**
-       * @fn         Server
        * @brief      class constructor
-       * @param[in]  none
-       * @return     none
        *
        */
       Server() {
@@ -61,43 +64,38 @@ namespace Slit {
         this->asyncport=-1;
         this->cmd_num=0;
       }
-      /** Slit::Server ********************************************************/
+      /***** Slit::Server *****************************************************/
 
 
-      /** Slit::~Server *******************************************************/
+      /***** Slit::~Server ****************************************************/
       /**
-       * @fn         ~Server
        * @brief      class deconstructor cleans up on exit
-       * @param[in]  none
-       * @return     none
        *
        */
       ~Server() {
         close_log();  // close the logfile, if open
       }
-      /** Slit::~Server *******************************************************/
+      /***** Slit::~Server ****************************************************/
 
 
-      int nbport;                        /// non-blocking port
-      int blkport;                       /// blocking port
-      int asyncport;                     /// asynchronous message port
-      std::string asyncgroup;            /// asynchronous multicast group
+      int nbport;                        ///< non-blocking port
+      int blkport;                       ///< blocking port
+      int asyncport;                     ///< asynchronous message port
+      std::string asyncgroup;            ///< asynchronous multicast group
 
-      std::atomic<int> cmd_num;          /// keep a running tally of number of commands received by slitd
+      std::atomic<int> cmd_num;          ///< keep a running tally of number of commands received by slitd
 
-      Config config;                     /// create a Config object for reading the configuration file
+      Config config;                     ///< create a Config object for reading the configuration file
 
-      Interface interface;               /// create an Interface object for the slit hardware
+      Interface interface;               ///< create an Interface object for the slit hardware
 
-      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;             ///< mutex to protect against simultaneous access to Accept()
 
 
-      /** Slit::Server::exit_cleanly ******************************************/
+      /***** Slit::Server::exit_cleanly ***************************************/
       /**
-       * @fn         signal_handler
        * @brief      handles ctrl-C and exits
-       * @param[in]  int signo
-       * @return     nothing
+       * @param[in]  signo
        *
        */
       void exit_cleanly(void) {
@@ -106,14 +104,12 @@ namespace Slit {
 
         exit(EXIT_SUCCESS);
       }
-      /** Slit::Server::exit_cleanly ******************************************/
+      /***** Slit::Server::exit_cleanly ***************************************/
 
 
-      /** Slit::Server::configure_slit ****************************************/
+      /***** Slit::Server::configure_slitd ************************************/
       /**
-       * @fn         configure_slitd
        * @brief      read and apply the configuration file for the slit daemon
-       * @param[in]  none
        * @return     ERROR or NO_ERROR
        *
        */
@@ -257,10 +253,11 @@ namespace Slit {
 
         return error;
       }
-      /** Slit::Server::configure_slit ****************************************/
+      /***** Slit::Server::configure_slitd ************************************/
 
   };
-  /** Server ******************************************************************/
+  /***** Server ***************************************************************/
 
-} // end namespace Slit
+}
+/***** Slit *******************************************************************/
 #endif

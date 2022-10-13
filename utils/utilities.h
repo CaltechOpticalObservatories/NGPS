@@ -1,5 +1,5 @@
 /**
- * @file    utilties.h
+ * @file    utilities.h
  * @brief   some handy utilities to use anywhere
  * @details 
  * @author  David Hale <dhale@astro.caltech.edu>

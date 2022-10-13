@@ -23,6 +23,12 @@ const long ERROR = 1;
 const long BUSY = 2;
 const long TIMEOUT = 3;
 
+/***** Common *****************************************************************/
+/**
+ * @namespace Common
+ * @brief     common namespace provides classes that might be used by various modules
+ *
+ */
 namespace Common {
 
   /**************** Common::FitsKeys ******************************************/
@@ -37,20 +43,23 @@ namespace Common {
       FitsKeys() {}
       ~FitsKeys() {}
 
-      std::string get_keytype(std::string keyvalue);         /// return type of keyword based on value
-      long listkeys();                                       /// list FITS keys in the internal database
-      long addkey(std::string arg);                          /// add FITS key to the internal database
+      std::string get_keytype(std::string keyvalue);         ///< return type of keyword based on value
+      long listkeys();                                       ///< list FITS keys in the internal database
+      long addkey(std::string arg);                          ///< add FITS key to the internal database
 
-      typedef struct {                                       /// structure of FITS keyword internal database
+      /**
+       * @typedef structure of FITS keyword internal database
+       */
+      typedef struct {
         std::string keyword;
         std::string keytype;
         std::string keyvalue;
         std::string keycomment;
       } user_key_t;
 
-      typedef std::map<std::string, user_key_t> fits_key_t;  /// STL map for the actual keyword database
+      typedef std::map<std::string, user_key_t> fits_key_t;  ///< STL map for the actual keyword database
 
-      fits_key_t keydb;                                      /// keyword database
+      fits_key_t keydb;                                      ///< keyword database
 
       // Find all entries in the keyword database which start with the search_for string,
       // return a vector of iterators.
@@ -110,13 +119,14 @@ namespace Common {
       Queue(void) : message_queue() , queue_mutex() , notifier() { this->is_running = false; };
       ~Queue(void) {}
 
-      void service_running(bool state) { this->is_running = state; };  /// set service running
-      bool service_running() { return this->is_running; };             /// is the service running?
+      void service_running(bool state) { this->is_running = state; };  ///< set service running
+      bool service_running() { return this->is_running; };             ///< is the service running?
 
-      void enqueue(std::string message);                               /// push an element into the queue.
-      std::string dequeue(void);                                       /// pop an element from the queue
+      void enqueue(std::string message);                               ///< push an element into the queue.
+      std::string dequeue(void);                                       ///< pop an element from the queue
   };
   /**************** Common::Queue *********************************************/
 
 }
+/***** Common *****************************************************************/
 #endif

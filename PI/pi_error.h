@@ -1,8 +1,27 @@
+/**
+ * @file    pi_error.h
+ * @brief   defines PI errors
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #ifndef PHYSIK_INSTRUMENTE_ERROR_H
 #define PHYSIK_INSTRUMENTE_ERROR_H
 
+/***** Physik_Instrumente *****************************************************/
+/**
+ * @namespace Physik_Instrumente
+ * @brief     namespace for Physik Instrumente hardware
+ *
+ */
 namespace Physik_Instrumente {
 
+  /***** Physik_Instrumente::PIError ******************************************/
+  /**
+   * @class PIError
+   * @brief 
+   */
   class PIError {
     const int PI_CNTR_NO_ERROR=0;
     const int PI_CNTR_PARAM_SYNTAX=1;
@@ -36,5 +55,7 @@ namespace Physik_Instrumente {
     const int PI_CNTR_NO_JUMP=29;
     const int PI_CNTR_INVALID_JUMP=30;
   };
+  /***** Physik_Instrumente::PIError ******************************************/
 }
+/***** Physik_Instrumente *****************************************************/
 #endif

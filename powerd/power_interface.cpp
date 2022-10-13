@@ -1,3 +1,11 @@
+/**
+ * @file    power_interface.cpp
+ * @brief   
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #include "power_interface.h"
 
 namespace Power {

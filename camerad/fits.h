@@ -1,19 +1,20 @@
-#ifndef CAMERA_FITS_H
-#define CAMERA_FITS_H
 /**
  * @file    fits.h
  * @brief   fits interface functions to CCFits
- * @details template class for FITS I/O operations using CCFits
  * @author  David Hale <dhale@astro.caltech.edu>
- *
+ * @details 
+ * template class for FITS I/O operations using CCFits.
  * This file includes the complete template class for FITS operations
  * using the CCFits library. If you're looking for the FITS keyword
  * database you're in the wrong place -- that's in common. This is just
  * FITS file operations.
  *
  */
+#ifndef CAMERA_FITS_H
+#define CAMERA_FITS_H
+
 #include <CCfits/CCfits>
-#include <fstream>         /// for ofstream
+#include <fstream>         // for ofstream
 #include <thread>
 #include <atomic>
 #include <string>
@@ -22,24 +23,30 @@
 #include "utilities.h"
 #include "logentry.h"
 
-const int FITS_WRITE_WAIT = 5000;                   /// approx time (in msec) to wait for a frame to be written
+const int FITS_WRITE_WAIT = 5000;                   ///< approx time (in msec) to wait for a frame to be written
 
+/***** FITS_file **************************************************************/
+/**
+ * @class FITS_file
+ * @brief template class for FITS I/O operations using CCFits
+ *
+ */
 class FITS_file {
   private:
-    std::mutex fits_mutex;                          /// used to block writing_file semaphore in multiple threads
-    std::unique_ptr<CCfits::FITS> pFits;            /// pointer to FITS data container
-    std::atomic<bool> writing_file;                 /// semaphore indicates file is being written
-    std::atomic<bool> error;                        /// indicates an error occured in a file writing thread
-    std::atomic<bool> file_open;                    /// semaphore indicates file is open
-    std::atomic<int> threadcount;                   /// keep track of number of write_image_thread threads
-    std::atomic<int> framen;                        /// internal frame counter for data cubes
-    CCfits::ExtHDU* imageExt;                       /// image extension header unit
+    std::mutex fits_mutex;                          ///< used to block writing_file semaphore in multiple threads
+    std::unique_ptr<CCfits::FITS> pFits;            ///< pointer to FITS data container
+    std::atomic<bool> writing_file;                 ///< semaphore indicates file is being written
+    std::atomic<bool> error;                        ///< indicates an error occured in a file writing thread
+    std::atomic<bool> file_open;                    ///< semaphore indicates file is open
+    std::atomic<int> threadcount;                   ///< keep track of number of write_image_thread threads
+    std::atomic<int> framen;                        ///< internal frame counter for data cubes
+    CCfits::ExtHDU* imageExt;                       ///< image extension header unit
     std::string fits_name;
 
   public:
-    bool iserror() { return this->error; };         /// allows outsiders access to errors that occurred in a fits writing thread
-    bool isopen()  { return this->file_open; };     /// allows outsiders access file open status
-    FITS_file() {                                   /// constructor
+    bool iserror() { return this->error; };         ///< allows outsiders access to errors that occurred in a fits writing thread
+    bool isopen()  { return this->file_open; };     ///< allows outsiders access file open status
+    FITS_file() {                                   ///< constructor
       this->threadcount = 0;
       this->framen = 0;
       this->writing_file = false;
@@ -47,15 +54,15 @@ class FITS_file {
       this->file_open = false;
     };
 
-    ~FITS_file() {                                  /// deconstructor
+    ~FITS_file() {                                  ///< deconstructor
     };
 
 
-    /**************** FITS_file::open_file ************************************/
+    /***** FITS_file::open_file ***********************************************/
     /**
-     * @fn         open_file
      * @brief      opens a FITS file
-     * @param[in]  Information& info, reference to camera_info class
+     * @param[in]  writekeys  true to write keywords before exposure
+     * @param[in]  info       reference to camera_info class
      * @return     ERROR or NO_ERROR
      *
      * This uses CCFits to create a FITS container, opens the file and writes
@@ -161,15 +168,14 @@ class FITS_file {
 
       return (0);
     }
-    /**************** FITS_file::open_file ************************************/
+    /***** FITS_file::open_file ***********************************************/
 
 
-    /**************** FITS_file::close_file ***********************************/
+    /***** FITS_file::close_file **********************************************/
     /**
-     * @fn         close_file
      * @brief      closes fits file
-     * @param[in]  none
-     * @return     none
+     * @param[in]  writekeys  true to write keywords after exposure
+     * @param[in]  info       reference to camera_info class
      *
      * Before closing the file, DATE and CHECKSUM keywords are added.
      * Nothing called returns anything so this doesn't return anything.
@@ -227,15 +233,14 @@ class FITS_file {
       logwrite(function, message.str());
       this->fits_name="";
     }
-    /**************** FITS_file::close_file ***********************************/
+    /***** FITS_file::close_file **********************************************/
 
 
-    /**************** FITS_file::write_image **********************************/
+    /***** FITS_file::write_image *********************************************/
     /**
-     * @fn         write_image
      * @brief      spawn threads to write image data to FITS file on disk
-     * @param[in]  T* data, pointer to the data using template type T
-     * @param[in]  Information& into, reference to the fits_info class
+     * @param[in]  data  pointer to the data using template type T
+     * @param[in]  into  reference to the fits_info class
      * @return     ERROR or NO_ERROR
      *
      * This function spawns a thread to write the image data to disk
@@ -332,17 +337,15 @@ class FITS_file {
 
       return ( this->error ? ERROR : NO_ERROR );
     }
-    /**************** FITS_file::write_image **********************************/
+    /***** FITS_file::write_image *********************************************/
 
 
-    /**************** FITS_file::write_image_thread ***************************/
+    /***** FITS_file::write_image_thread **************************************/
     /**
-     * @fn         write_image_thread
      * @brief      This is where the data are actually written for flat fits files
-     * @param[in]  T &data, reference to the data
-     * @param[in]  Camera::Information &info, reference to the info structure
-     * @param[in]  FITS_file *self, pointer to this-> object
-     * @return     nothing
+     * @param[in]  data  reference to the data
+     * @param[in]  info  reference to the camera info structure
+     * @param[in]  self  pointer to this-> FITS_file object
      *
      * This is the worker thread, to write the data using CCFits,
      * and must be spawned by write_image.
@@ -395,17 +398,15 @@ class FITS_file {
 
       self->writing_file = false;
     }
-    /**************** FITS_file::write_image_thread ***************************/
+    /***** FITS_file::write_image_thread **************************************/
 
 
-    /**************** FITS_file::write_cube_thread ****************************/
+    /***** FITS_file::write_cube_thread ***************************************/
     /**
-     * @fn         write_cube_thread
      * @brief      This is where the data are actually written for datacubes
-     * @param[in]  T &data, reference to the data
-     * @param[in]  Camera::Information &info, reference to the info structure
-     * @param[in]  FITS_file *self, pointer to this-> object
-     * @return     nothing
+     * @param[in]  data  reference to the data
+     * @param[in]  info  reference to the camera info structure
+     * @param[in]  self  pointer to this-> FITS_file object
      *
      * This is the worker thread, to write the data using CCFits,
      * and must be spawned by write_image.
@@ -523,15 +524,14 @@ class FITS_file {
       this->framen++;
       self->writing_file = false;
     }
-    /**************** FITS_file::write_cube_thread ****************************/
+    /***** FITS_file::write_cube_thread ***************************************/
 
 
-    /**************** FITS_file::make_camera_header ***************************/
+    /***** FITS_file::make_camera_header **************************************/
     /**
-     * @fn         make_camera_header
      * @brief      this writes header info from the camera_info class
-     * @param[in]  Information& info, reference to the camera_info class
-     * @return     none
+     * @param[in]  info  reference to the camera_info class
+     * @todo       is this function obsolete?
      *
      * Uses CCFits
      *
@@ -551,18 +551,16 @@ class FITS_file {
         logwrite(function, message.str());
       }
     }
-    /**************** FITS_file::make_camera_header ***************************/
+    /***** FITS_file::make_camera_header **************************************/
 
 
-    /**************** FITS_file::add_key **************************************/
+    /***** FITS_file::add_key *************************************************/
     /**
-     * @fn         add_key
      * @brief      wrapper to write keywords to the FITS file header
-     * @param[in]  std::string keyword
-     * @param[in]  std::string type
-     * @param[in]  std::string value
-     * @param[in]  std::string comment
-     * @return     nothing
+     * @param[in]  keyword
+     * @param[in]  type
+     * @param[in]  value
+     * @param[in]  comment
      *
      * Uses CCFits
      */
@@ -603,7 +601,8 @@ class FITS_file {
         logwrite(function, message.str());
       }
     }
-    /**************** FITS_file::add_key **************************************/
+    /***** FITS_file::add_key *************************************************/
 
 };
+/***** FITS_file **************************************************************/
 #endif
