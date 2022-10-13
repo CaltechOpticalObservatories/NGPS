@@ -1,8 +1,16 @@
+/**
+ * @file    calib_interface.cpp
+ * @brief   defines the Calib namespace Interface class functions
+ * @author  David Hale <dhale@astro.caltech.edu>
+ *
+ */
+
 #include "calib_interface.h"
 
 namespace Calib {
 
-  /**************** Calib::Interface::Interface *******************************/
+
+  /***** Calib::Interface::Interface ******************************************/
   /**
    * @fn         Interface
    * @brief      class constructor
@@ -12,10 +20,10 @@ namespace Calib {
    */
   Interface::Interface() {
   }
-  /**************** Calib::Interface::Interface *******************************/
+  /***** Calib::Interface::Interface ******************************************/
 
 
-  /**************** Calib::Interface::~Interface ******************************/
+  /***** Calib::Interface::~Interface *****************************************/
   /**
    * @fn         ~Interface
    * @brief      class deconstructor
@@ -25,13 +33,13 @@ namespace Calib {
    */
   Interface::~Interface() {
   }
-  /**************** Calib::Interface::~Interface ******************************/
+  /***** Calib::Interface::~Interface *****************************************/
 
 
-  /**************** Calib::Interface::initialize_class ************************/
+  /***** Calib::Interface::initialize_class ***********************************/
   /**
    * @fn         initialize
-   * @brief      
+   * @brief      not yet implemented
    * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
@@ -42,13 +50,13 @@ namespace Calib {
     logwrite( function, "not yet implemented" );
     return( NO_ERROR );
   }
-  /**************** Calib::Interface::initialize_class ************************/
+  /***** Calib::Interface::initialize_class ***********************************/
 
 
-  /**************** Calib::Interface::open ************************************/
+  /***** Calib::Interface::open ***********************************************/
   /**
    * @fn         open
-   * @brief      
+   * @brief      not yet implemented
    * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
@@ -59,10 +67,10 @@ namespace Calib {
     logwrite( function, "not yet implemented" );
     return( NO_ERROR );
   }
-  /**************** Calib::Interface::open ************************************/
+  /***** Calib::Interface::open ***********************************************/
 
 
-  /**************** Calib::Interface::isopen **********************************/
+  /***** Calib::Interface::isopen *********************************************/
   /**
    * @fn         isopen
    * @brief      
@@ -76,6 +84,6 @@ namespace Calib {
     logwrite( function, "not yet implemented" );
     return( true );
   }
-  /**************** Calib::Interface::isopen **********************************/
+  /***** Calib::Interface::isopen *********************************************/
 
 }

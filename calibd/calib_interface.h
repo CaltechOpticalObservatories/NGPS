@@ -1,3 +1,10 @@
+/**
+ * @file    calib_interface.h
+ * @brief   contains the Calib::Interface class functions
+ * @author  David Hale <dhale@astro.caltech.edu>
+ *
+ */
+
 #ifndef CALIB_INTERFACE_H
 #define CALIB_INTERFACE_H
 
@@ -9,11 +16,16 @@
 #include "common.h"
 #include <sys/stat.h>
 
+/***** Calib ******************************************************************/
+/**
+ * @namespace Calib
+ * @brief     namespace for the calibrator
+ *
+ */
 namespace Calib {
 
-  const std::string DAEMON_NAME = "calibd";      /// when run as a daemon, this is my name
 
-  /** Interface ***************************************************************/
+  /***** Calib::Interface *****************************************************/
   /**
    * @class  Interface
    * @brief  interface class for the calib hardware
@@ -34,11 +46,13 @@ namespace Calib {
       bool isopen();
       long open();
 
-      Common::Queue async;
+      Common::Queue async;                    ///< asynchronous message queue object
 
-      Physik_Instrumente::ServoInterface pi;
+      Physik_Instrumente::ServoInterface pi;  ///< object for communicating with the PI
 
-    };
+  };
+  /***** Calib::Interface *****************************************************/
 
 }
+/***** Calib ******************************************************************/
 #endif

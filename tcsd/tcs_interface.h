@@ -15,11 +15,16 @@
 #include <sys/stat.h>
 #include <map>
 
+/***** TCS ********************************************************************/
+/**
+ * @namespace TCS
+ * @brief     namespace for the TCS daemon
+ *
+ */
 namespace TCS {
 
-  const std::string DAEMON_NAME = "tcsd";        /// when run as a daemon, this is my name
 
-  /** Interface ***************************************************************/
+  /***** TCS::Interface *******************************************************/
   /**
    * @class  Interface
    * @brief  interface class for a tcs device
@@ -32,7 +37,6 @@ namespace TCS {
     private:
       bool class_initialized;
     public:
-      const int BUFSZ = 2048;
       std::string host;
       int port;
 
@@ -44,13 +48,14 @@ namespace TCS {
       long close();
       long send_command( std::string cmd, std::string &reply );
 
-      bool isopen() { return this->tcs.isconnected(); }    /// is this interface connected to hardware?
+      bool isopen() { return this->tcs.isconnected(); }    ///< is this interface connected to hardware?
 
-      Common::Queue async;
+      Common::Queue async;                                 ///< asynchronous message queue object
 
-      Network::TcpSocket tcs;
+      Network::TcpSocket tcs;                              ///< socket object connects to the real TCS
   };
-  /** Interface ***************************************************************/
+  /***** TCS::Interface *******************************************************/
 
 }
+/***** TCS ********************************************************************/
 #endif

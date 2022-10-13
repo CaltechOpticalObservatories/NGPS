@@ -1,38 +1,40 @@
+/**
+ * @file    tcs_interface.cpp
+ * @brief   this contains the tcs interface code
+ * @author  David Hale <dhale@astro.caltech.edu>
+ *
+ * This file contains the code for the Interface class in the TCS namespace,
+ * and is how the tcs daemon interfaces to the actual TCS hardware.
+ *
+ */
+
 #include "tcs_interface.h"
 
 namespace TCS {
 
-  /**************** TCS::Interface::Interface *********************************/
+  /***** TCS::Interface::Interface ********************************************/
   /**
-   * @fn         Interface
    * @brief      class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Interface::Interface() {
   }
-  /**************** TCS::Interface::Interface *********************************/
+  /***** TCS::Interface::Interface ********************************************/
 
 
-  /**************** TCS::Interface::~Interface ********************************/
+  /***** TCS::Interface::~Interface *******************************************/
   /**
-   * @fn         ~Interface
    * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Interface::~Interface() {
   }
-  /**************** TCS::Interface::~Interface ********************************/
+  /***** TCS::Interface::~Interface *******************************************/
 
 
-  /**************** TCS::Interface::initialize_class **************************/
+  /***** TCS::Interface::initialize_class *************************************/
   /**
-   * @fn         initialize
-   * @brief      
-   * @param[in]  none
+   * @brief      initialize class variables
    * @return     ERROR or NO_ERROR
    *
    */
@@ -52,14 +54,12 @@ namespace TCS {
     logwrite( function, "interface initialized ok" );
     return( NO_ERROR );
   }
-  /**************** TCS::Interface::initialize_class **************************/
+  /***** TCS::Interface::initialize_class *************************************/
 
 
-  /**************** TCS::Interface::open **************************************/
+  /***** TCS::Interface::open *************************************************/
   /**
-   * @fn         open
-   * @brief      opens the PI socket connection
-   * @param[in]  none
+   * @brief      opens the TCS socket connection
    * @return     ERROR or NO_ERROR
    *
    */
@@ -89,14 +89,12 @@ namespace TCS {
 
     return( NO_ERROR );
   }
-  /**************** TCS::Interface::open **************************************/
+  /***** TCS::Interface::open *************************************************/
 
 
-  /**************** TCS::Interface::close *************************************/
+  /***** TCS::Interface::close ************************************************/
   /**
-   * @fn         close
-   * @brief      closes the PI socket connection
-   * @param[in]  none
+   * @brief      closes the TCS socket connection
    * @return     ERROR or NO_ERROR
    *
    */
@@ -119,14 +117,14 @@ namespace TCS {
     }
     return( error );
   }
-  /**************** TCS::Interface::close *************************************/
+  /***** TCS::Interface::close ************************************************/
 
 
-  /**************** TCS::Interface::send_command ******************************/
+  /***** TCS::Interface::send_command *****************************************/
   /**
-   * @fn         send_command
    * @brief      writes the raw command, as received, to the TCS
-   * @param[in]  string cmd
+   * @param[in]  cmd    string to send to TCS
+   * @param[out] reply  reference to string to contain reply
    * @return     ERROR or NO_ERROR
    *
    */
@@ -200,6 +198,6 @@ namespace TCS {
 
     return( error );
   }
-  /**************** TCS::Interface::send_command ******************************/
+  /***** TCS::Interface::send_command *****************************************/
 
 }

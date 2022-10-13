@@ -1,14 +1,17 @@
+/**
+ * @file     sequencer_interface.cpp
+ * @brief    these are the functions for the classes that the sequencer uses to interface to other subsystems
+ * @author   David Hale <dhale@astro.caltech.edu>
+ *
+ */
+
 #include "sequencer_interface.h"
-#define BUFSIZE 1024
 
 namespace Sequencer {
 
-  /** Sequencer::TargetInfo::TargetInfo ***************************************/
+  /***** Sequencer::TargetInfo::TargetInfo ************************************/
   /**
-   * @fn     TargetInfo
    * @brief  class constructor
-   * @param  none
-   * @return none
    *
    * This constructor initializes the database configuration variables as empty,
    * requiring them to be properly configured from the .cfg file.
@@ -49,27 +52,23 @@ namespace Sequencer {
                          "CASANGLE"
                        };                /// initialize the target list fields for accessing the active target table
   }
-  /** Sequencer::TargetInfo::TargetInfo ***************************************/
+  /***** Sequencer::TargetInfo::TargetInfo ************************************/
 
 
-  /** Sequencer::TargetInfo::~TargetInfo **************************************/
+  /***** Sequencer::TargetInfo::~TargetInfo ***********************************/
   /**
-   * @fn     ~TargetInfo
    * @brief  class deconstructor
-   * @param  
-   * @return 
    *
    */
   TargetInfo::~TargetInfo() {
   }
-  /** Sequencer::TargetInfo::~TargetInfo **************************************/
+  /***** Sequencer::TargetInfo::~TargetInfo ***********************************/
 
 
-  /** Sequencer::TargetInfo::colnum *******************************************/
+  /***** Sequencer::TargetInfo::colnum ****************************************/
   /**
-   * @fn         colnum
    * @brief      get column number of requested field from this->targetlist
-   * @param[in]  field, string to search for
+   * @param[in]  field  string to search for
    * @return     integer, -1 on error
    *
    * This function is used to return the location of the field name in the targetlist
@@ -92,15 +91,12 @@ namespace Sequencer {
       return -1;
     }
   }
-  /** Sequencer::TargetInfo::colnum *******************************************/
+  /***** Sequencer::TargetInfo::colnum ****************************************/
 
 
-  /** Sequencer::TargetInfo::init_record **************************************/
+  /***** Sequencer::TargetInfo::init_record ***********************************/
   /**
-   * @fn         init_record
    * @brief      initialize current target record variables
-   * @param[in]  none
-   * @return     none
    *
    */
   void TargetInfo::init_record() {
@@ -123,15 +119,14 @@ namespace Sequencer {
     this->binspat=-1;
 
   }
-  /** Sequencer::TargetInfo::init_record **************************************/
+  /***** Sequencer::TargetInfo::init_record ***********************************/
 
 
-  /** Sequencer::TargetInfo::configure_db *************************************/
+  /***** Sequencer::TargetInfo::configure_db **********************************/
   /**
-   * @fn         configure_db
    * @brief      configure database connection parameters
-   * @param[in]  param, name of parameter
-   * @param[in]  value, value of parameter
+   * @param[in]  param  name of parameter
+   * @param[in]  value  value of parameter
    * @return     ERROR or NO_ERROR
    *
    */
@@ -210,19 +205,16 @@ namespace Sequencer {
 
     return( error );
   }
-  /** Sequencer::TargetInfo::configure_db *************************************/
+  /***** Sequencer::TargetInfo::configure_db **********************************/
 
 
-
-  /** Sequencer::TargetInfo::add_row ******************************************/
+  /***** Sequencer::TargetInfo::add_row ***************************************/
   /**
-   * @fn         add_row
    * @brief      adds a row to the database (non-production)
-   * @param[in]  number, int used for both OBSERVATION_ID and OBS_ORDER
-   * @param[in]  name, string target name
-   * @param[in]  ra, string RA
-   * @param[in]  dec, string DECL
-   * @return     none
+   * @param[in]  number  int used for both OBSERVATION_ID and OBS_ORDER
+   * @param[in]  name    string target name
+   * @param[in]  ra      string RA
+   * @param[in]  dec     string DECL
    *
    * This is for testing purposes. Adds a row to the database using the passed-in
    * parameters which set the ID, ORDER, NAME, RA, DECL. Everything else is fixed.
@@ -308,14 +300,12 @@ namespace Sequencer {
 
     return( NO_ERROR );
   }
-  /** Sequencer::TargetInfo::add_row ******************************************/
+  /***** Sequencer::TargetInfo::add_row ***************************************/
 
 
-  /** Sequencer::TargetInfo::get_next *****************************************/
+  /***** Sequencer::TargetInfo::get_next **************************************/
   /**
-   * @fn         get_next
    * @brief      get next target from DB whose state is Sequencer::TARGET_PENDING
-   * @param[in]  none
    * @return     ERROR, NO_ERROR, TARGET_FOUND, TARGET_NOT_FOUND
    *
    * This function is overloaded.
@@ -329,14 +319,13 @@ namespace Sequencer {
   TargetInfo::TargetState TargetInfo::get_next() {
     return( this->get_next( Sequencer::TARGET_PENDING ) );
   }
-  /** Sequencer::TargetInfo::get_next *****************************************/
+  /***** Sequencer::TargetInfo::get_next **************************************/
 
 
-  /** Sequencer::TargetInfo::get_next *****************************************/
+  /***** Sequencer::TargetInfo::get_next **************************************/
   /**
-   * @fn         get_next
    * @brief      get next target from DB whose state is state_in
-   * @param[in]  state_in, the state to search for
+   * @param[in]  state_in  the state to search for
    * @return     ERROR, NO_ERROR, TARGET_FOUND, TARGET_NOT_FOUND
    *
    * This function is overloaded.
@@ -434,7 +423,7 @@ namespace Sequencer {
       col = this->colnum( "BINSPAT" );         this->binspat     = row.get( col );
 
 // TODO
-// TEMPORARY OVERRIDE OF EXPTIME
+///< @todo TEMPORARY OVERRIDE OF EXPTIME
 this->exptime=20;
     }
     catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
@@ -470,14 +459,13 @@ this->exptime=20;
 
     return TARGET_FOUND;
   }
-  /** Sequencer::TargetInfo::get_next *****************************************/
+  /***** Sequencer::TargetInfo::get_next **************************************/
 
 
-  /** Sequencer::TargetInfo::update_state *************************************/
+  /***** Sequencer::TargetInfo::update_state **********************************/
   /**
-   * @fn         update_state
    * @brief      update the target state in the database DB_ACTIVE table
-   * @param[in]  newstate, string to update the STATE column
+   * @param[in]  newstate  string to update the STATE column
    * @return     ERROR or NO_ERROR
    *
    */
@@ -560,15 +548,12 @@ this->exptime=20;
 
     return NO_ERROR;
   }
-  /** Sequencer::TargetInfo::update_state *************************************/
+  /***** Sequencer::TargetInfo::update_state **********************************/
 
 
-  /** Sequencer::TargetInfo::insert_completed *********************************/
+  /***** Sequencer::TargetInfo::insert_completed ******************************/
   /**
-   * @fn         insert_completed
    * @brief      insert current target record into completed observations table
-   * @param[in]  none
-   * @return     none
    *
    */
   long TargetInfo::insert_completed() {
@@ -652,15 +637,12 @@ this->exptime=20;
 
     return( NO_ERROR );
   }
-  /** Sequencer::TargetInfo::insert_completed *********************************/
+  /***** Sequencer::TargetInfo::insert_completed ******************************/
 
 
-  /** Sequencer::TargetInfo::get_table_names **********************************/
+  /***** Sequencer::TargetInfo::get_table_names *******************************/
   /**
-   * @fn         get_table_names
    * @brief      utility to print all of the table names from the database
-   * @param[in]  none
-   * @return     none
    *
    */
   long TargetInfo::get_table_names() {
@@ -709,15 +691,12 @@ this->exptime=20;
 
     return( NO_ERROR );
   }
-  /** Sequencer::TargetInfo::get_table_names **********************************/
+  /***** Sequencer::TargetInfo::get_table_names *******************************/
 
 
-  /** Sequencer::Daemon::Daemon ***********************************************/
+  /***** Sequencer::Daemon::Daemon ********************************************/
   /**
-   * @fn         Daemon
    * @brief      class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Daemon::Daemon() {
@@ -725,46 +704,41 @@ this->exptime=20;
     this->socket.sethost( "localhost" );
     this->port = -1;    /// port comes from config file, in Sequencer::Server::configure_sequencer()
   }
-  /** Sequencer::Daemon::Daemon ***********************************************/
+  /***** Sequencer::Daemon::Daemon ********************************************/
 
 
-  /** Sequencer::Daemon::~Daemon **********************************************/
+  /***** Sequencer::Daemon::~Daemon *******************************************/
   /**
-   * @fn         ~Daemon
    * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   Daemon::~Daemon( ) {
   }
-  /** Sequencer::Daemon::~Daemon **********************************************/
+  /***** Sequencer::Daemon::~Daemon *******************************************/
 
 
-  /** Sequencer::Daemon::configure ********************************************/
+///***** Sequencer::Daemon::configure *****************************************/
+///**
+// * @brief      configure the (private) variables for daemon communication
+// * @param[in]  port  port of daemon (int)
+// *
+// */
+//void Daemon::configure( int port ) {
+//  std::string function = "Sequencer::Daemon::configure";
+//  std::stringstream message;
+//  this->port = port;
+//  message << this->name << " configured with port " << this->port;
+//  logwrite( function, message.str() );
+//  return;
+//}
+///***** Sequencer::Daemon::configure *****************************************/
+
+
+  /***** Sequencer::Daemon::send **********************************************/
   /**
-   * @fn         configure
-   * @brief      configure the (private) variables for daemon communication
-   * @param[in]  port of daemon (int)
-   * @return     none
-   *
-  void Daemon::configure( int port ) {
-    std::string function = "Sequencer::Daemon::configure";
-    std::stringstream message;
-    this->port = port;
-    message << this->name << " configured with port " << this->port;
-    logwrite( function, message.str() );
-    return;
-  }
-   */
-  /** Sequencer::Daemon::configure ********************************************/
-
-
-  /** Sequencer::Daemon::send *************************************************/
-  /**
-   * @fn     send
    * @brief  
-   * @param  
+   * @param[in]  command  string command
+   * @param[out] reply    reference to string to contain reply
    * @return 
    *
    */
@@ -830,14 +804,13 @@ this->exptime=20;
     }
     else return( NO_ERROR );
   }
-  /** Sequencer::Daemon::send *************************************************/
+  /***** Sequencer::Daemon::send **********************************************/
 
 
-  /** Sequencer::Daemon::command **********************************************/
+  /***** Sequencer::Daemon::command *******************************************/
   /**
-   * @fn     command
    * @brief  
-   * @param[in]  args, string to send
+   * @param[in]  args  string to send
    * @return 
    *
    */
@@ -859,6 +832,17 @@ this->exptime=20;
 #endif
     return( retval );
   }
+  /***** Sequencer::Daemon::command *******************************************/
+
+
+  /***** Sequencer::Daemon::command *******************************************/
+  /**
+   * @brief  
+   * @param[in]  args       string to send
+   * @param[out] retstring  reference to string to hold reply
+   * @return 
+   *
+   */
   long Daemon::command( std::string args, std::string &retstring ) {
     std::string function = "Sequencer::Daemon::command";
     std::stringstream message;
@@ -933,14 +917,12 @@ this->exptime=20;
 
     return( error );
   }
-  /** Sequencer::Daemon::command **********************************************/
+  /***** Sequencer::Daemon::command *******************************************/
 
 
-  /** Sequencer::Daemon::connect **********************************************/
+  /***** Sequencer::Daemon::connect *******************************************/
   /**
-   * @fn         connect
    * @brief      initialize socket connection to the daemon
-   * @param[in]  none  
    * @return     ERROR or NO_ERROR
    *
    * This function establishes a socket connection to the daemon
@@ -986,14 +968,13 @@ this->exptime=20;
 
     return( error );
   }
-  /** Sequencer::Daemon::connect **********************************************/
+  /***** Sequencer::Daemon::connect *******************************************/
 
 
-  /** Sequencer::Daemon::is_connected *****************************************/
+  /***** Sequencer::Daemon::is_connected **************************************/
   /**
-   * @fn         is_connected
    * @brief      return the connected state of a socket connection to the daemon
-   * @param[out] reply, string = "true" | "false"
+   * @param[out] reply  reference to string = "true" | "false"
    * @return     ERROR or NO_ERROR
    *
    * This function establishes a socket connection to the daemon
@@ -1011,40 +992,33 @@ this->exptime=20;
 
     return( NO_ERROR );
   }
-  /** Sequencer::Daemon::is_connected *****************************************/
+  /***** Sequencer::Daemon::is_connected **************************************/
 
 
-  /** Sequencer::PowerSwitch::PowerSwitch *************************************/
+  /***** Sequencer::PowerSwitch::PowerSwitch **********************************/
   /**
-   * @fn         PowerSwitch
    * @brief      class constructor
-   * @param[in]  none
-   * @return     none
    *
    */
   PowerSwitch::PowerSwitch() {
   }
-  /** Sequencer::PowerSwitch::PowerSwitch *************************************/
+  /***** Sequencer::PowerSwitch::PowerSwitch **********************************/
 
 
-  /** Sequencer::PowerSwitch::~PowerSwitch ************************************/
+  /***** Sequencer::PowerSwitch::~PowerSwitch *********************************/
   /**
-   * @fn         ~PowerSwitch
    * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
    *
    */
   PowerSwitch::~PowerSwitch( ) {
   }
-  /** Sequencer::PowerSwitch::~PowerSwitch ************************************/
+  /***** Sequencer::PowerSwitch::~PowerSwitch *********************************/
 
 
-  /** Sequencer::PowerSwitch::configure ***************************************/
+  /***** Sequencer::PowerSwitch::configure ************************************/
   /**
-   * @fn         configure
    * @brief      
-   * @param[in]  
+   * @param[in]  arglist
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1061,5 +1035,6 @@ this->exptime=20;
 
     return( size < 1 ? ERROR : NO_ERROR );
   }
-  /** Sequencer::PowerSwitch::configure ***************************************/
+  /***** Sequencer::PowerSwitch::configure ************************************/
+
 }
