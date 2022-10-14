@@ -13,12 +13,10 @@
 Camera::Server server;
 std::string logpath; 
 
-/** signal_handler ***********************************************************/
+/***** signal_handler *********************************************************/
 /**
- * @fn     signal_handler
- * @brief  handles ctrl-C
- * @param  int signo
- * @return nothing
+ * @brief      handles ctrl-C
+ * @param[in]  signo
  *
  */
 void signal_handler(int signo) {
@@ -45,7 +43,7 @@ void signal_handler(int signo) {
   }
   return;
 }
-/** signal_handler ***********************************************************/
+/***** signal_handler *********************************************************/
 
 
 int  main(int argc, char **argv);           // main thread (just gets things started)
@@ -56,12 +54,12 @@ void async_main(Network::UdpSocket sock);   // this thread handles the asyncrhon
 void doit(Network::TcpSocket sock);         // the worker thread
 
 
-/** main *********************************************************************/
+/***** main *******************************************************************/
 /**
- * @fn     main
- * @brief  the main function
- * @param  int argc, char** argv
- * @return 0
+ * @brief      the main function
+ * @param[in]  argc  argument count
+ * @param[in]  argv  character array that holds all arguments passed to the “main()” function through the command line
+ * @return     0
  *
  */
 int main(int argc, char **argv) {
@@ -218,14 +216,12 @@ int main(int argc, char **argv) {
   for (;;) pause();                                  // main thread suspends
   return 0;
 }
-/** main *********************************************************************/
+/***** main *******************************************************************/
 
 
-/** new_log_day **************************************************************/
+/***** new_log_day ************************************************************/
 /**
- * @fn     new_log_day
  * @brief  creates a new logbook each day
- * @return nothing
  *
  * This thread is started by main and never terminates.
  * It sleeps for the number of seconds that logentry determines
@@ -242,15 +238,13 @@ void new_log_day( ) {
     init_log( logpath, Camera::DAEMON_NAME );
   }
 }
-/** new_log_day **************************************************************/
+/***** new_log_day ************************************************************/
 
 
-/** block_main ***************************************************************/
+/***** block_main *************************************************************/
 /**
- * @fn     block_main
- * @brief  main function for blocking connection thread
- * @param  Network::TcpSocket sock, socket object
- * @return nothing
+ * @brief      main function for blocking connection thread
+ * @param[in]  sock  Network::TcpSocket socket object
  *
  * accepts a socket connection and processes the request by
  * calling function doit()
@@ -266,15 +260,14 @@ void block_main(Network::TcpSocket sock) {
   }
   return;
 }
-/** block_main ***************************************************************/
+/***** block_main *************************************************************/
 
 
-/** thread_main **************************************************************/
+/***** Server::thread_main ****************************************************/
 /**
- * @fn     thread_main
- * @brief  main function for all non-blocked threads
- * @param  Network::TcpSocket sock, socket object
- * @return nothing
+ * @brief      main function for all non-blocked threads
+ * @param[in]  seq   reference to Sequencer::Server object
+ * @param[in]  sock  Network::TcpSocket socket object
  *
  * accepts a socket connection and processes the request by
  * calling function doit()
@@ -296,16 +289,13 @@ void thread_main(Network::TcpSocket sock) {
   }
   return;
 }
-/** thread_main **************************************************************/
+/***** Server::thread_main ****************************************************/
 
 
-/** async_main ***************************************************************/
+/***** Server::async_main ***************************************************/
 /**
- * @fn     async_main
- * @brief  asynchronous message sending thread
- * @param  Network::UdpSocket sock, socket object
- * @return nothing
- *
+ * @brief      asynchronous message sending thread
+ * @param[in]  sock  Network::udpSocket socket object
  * Loops forever, when a message arrives in the status message queue it is
  * sent out via multi-cast UDP datagram.
  *
@@ -338,20 +328,18 @@ void async_main(Network::UdpSocket sock) {
   }
   return;
 }
-/** async_main ***************************************************************/
+/***** Server::async_main ***************************************************/
 
 
-/** doit *********************************************************************/
+/***** Server::doit *********************************************************/
 /**
- * @fn     doit
- * @brief  the workhorse of each thread connetion
- * @param  int thr
- * @return nothin
+ * @brief      the workhorse of each thread connetion
+ * @param[in]  sock  Network::UdpSocket socket object
  *
  * stays open until closed by client
  *
  * commands come in the form: 
- * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
+ *   "<device> [all|<app>] [_BLOCK_] <command> [<arg>]"
  *
  */
 void doit(Network::TcpSocket sock) {
@@ -749,5 +737,5 @@ void doit(Network::TcpSocket sock) {
   sock.Close();
   return;
 }
-/** doit *********************************************************************/
+/***** Server::doit *********************************************************/
 

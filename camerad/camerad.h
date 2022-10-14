@@ -2,13 +2,11 @@
  * @file     camerad.h
  * @brief    
  * @author   David Hale <dhale@astro.caltech.edu>
- * @date     
- * @modified 
  *
  */
 
-#ifndef SERVER_H
-#define SERVER_H
+#ifndef CAMERAD_H
+#define CAMERAD_H
 
 #include <fstream>
 #include <iostream>
@@ -35,12 +33,25 @@
 #define  BUFSIZE      1024  //!< size of the input command buffer
 #define  CONN_TIMEOUT 3000  //<! incoming (non-blocking) connection timeout in milliseconds
 
+/***** Camera *****************************************************************/
+/**
+ * @namespace Camera
+ * @brief     namespace for the camera
+ *
+ */
 namespace Camera {
 
   const std::string DAEMON_NAME = "camerad";     /// when run as a daemon, this is my name
 
-// Camera::Server class must inherit appropriate interface class
-//
+  /***** Camera::Server *******************************************************/
+  /**
+   * @class Server
+   * @brief server class for the camera daemon
+   *
+   * This class defines what is needed by the camera daemon server.
+   * Right not it inherits the appropriate interface, AstroCam::Interface or Archon::Interface
+   *
+   */
 #ifdef ASTROCAM
   class Server : public AstroCam::Interface {
 #elif STA_ARCHON
@@ -48,15 +59,20 @@ namespace Camera {
 #endif
     private:
     public:
+      /***** Camera::Server ***************************************************/
+      /**
+       * @brief  class constructor
+       */
       Server() {
         this->nbport=-1;
         this->blkport=-1;
         this->asyncport=-1;
       }
+      /***** Camera::Server ***************************************************/
 
-      /** Camera::~Server **********************************************************/
+
+      /***** Camera::~Server **************************************************/
       /**
-       * @fn     ~Server
        * @brief  class deconstructor cleans up on exit
        */
       ~Server() {
@@ -64,7 +80,7 @@ namespace Camera {
         close(this->blocking_socket);
         close_log();  // close the logfile, if open
       }
-      /** Camera::~Server **********************************************************/
+      /***** Camera::~Server **************************************************/
 
       int nbport;                        //!< non-blocking port
       int blkport;                       //!< blocking port
@@ -78,12 +94,10 @@ namespace Camera {
 
       std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
 
-      /** Camera::Server::exit_cleanly *********************************************/
+      /***** Camera::Server::exit_cleanly *************************************/
       /**
-       * @fn     signal_handler
-       * @brief  handles ctrl-C and exits
-       * @param  int signo
-       * @return nothing
+       * @brief      handles ctrl-C and exits
+       * @param[in]  signo
        *
        */
       void exit_cleanly(void) {
@@ -92,14 +106,13 @@ namespace Camera {
         logwrite(function, "server exiting");
         exit(EXIT_SUCCESS);
       }
-      /** Camera::Server::exit_cleanly *********************************************/
+      /***** Camera::Server::exit_cleanly *************************************/
 
-      /** Camera::Server::configure_server *****************************************/
+
+      /***** Camera::Server::configure_server *********************************/
       /**
-       * @fn     configure_server
        * @brief  
-       * @param  none
-       * @return ERROR or NO_ERROR
+       * @return     ERROR or NO_ERROR
        *
        */
       long configure_server() {
@@ -196,9 +209,11 @@ namespace Camera {
         error==NO_ERROR ? logwrite(function, message.str()) : this->camera.log_error( function, message.str() );
         return error;
       }
-      /** Camera::Server::configure_server *****************************************/
+      /***** Camera::Server::configure_server *********************************/
 
-  };  // end class Server
+  };
+  /***** Camera::Server *******************************************************/
 
-} // end namespace Camera
+}
+/***** Camera *****************************************************************/
 #endif

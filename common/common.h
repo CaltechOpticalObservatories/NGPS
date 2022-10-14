@@ -48,7 +48,8 @@ namespace Common {
       long addkey(std::string arg);                          ///< add FITS key to the internal database
 
       /**
-       * @typedef structure of FITS keyword internal database
+       * @typedef user_key_t
+       * @brief   structure of FITS keyword internal database
        */
       typedef struct {
         std::string keyword;
@@ -57,7 +58,11 @@ namespace Common {
         std::string keycomment;
       } user_key_t;
 
-      typedef std::map<std::string, user_key_t> fits_key_t;  ///< STL map for the actual keyword database
+      /**
+       * @typedef fits_key_t
+       * @brief   STL map for the actual keyword database
+       */
+      typedef std::map<std::string, user_key_t> fits_key_t;
 
       fits_key_t keydb;                                      ///< keyword database
 

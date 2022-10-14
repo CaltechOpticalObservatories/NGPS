@@ -24,10 +24,19 @@
 // handy snprintf shortcut
 #define SNPRINTF(VAR, ...) { snprintf(VAR, sizeof(VAR), __VA_ARGS__); }
 
+/***** Camera *****************************************************************/
+/**
+ * @namespace Camera
+ *
+ */
 namespace Camera {
 
   /***** Camera::Camera *******************************************************/
-  //
+  /**
+   * @class  Camera
+   * @brief  
+   *
+   */
   class Camera {
     private:
       std::string image_dir;
@@ -86,6 +95,10 @@ namespace Camera {
   };
   /***** Camera::Camera *******************************************************/
 
+  /**
+   * @typedef frame_type_t
+   * @brief   ENUM list of frame types
+   */
   typedef enum {
     FRAME_IMAGE,
     FRAME_RAW,
@@ -98,7 +111,11 @@ namespace Camera {
   };
 
   /***** Camera::Information **************************************************/
-  //
+  /**
+   * @class  Information
+   * @brief  
+   *
+   */
   class Information {
     private:
     public:
@@ -136,8 +153,8 @@ namespace Camera {
 
       std::vector< std::vector<long> > amp_section;
 
-      Common::FitsKeys userkeys;     /// create a FitsKeys object for FITS keys specified by the user
-      Common::FitsKeys systemkeys;   /// create a FitsKeys object for FITS keys imposed by the software
+      Common::FitsKeys userkeys;     ///< create a FitsKeys object for FITS keys specified by the user
+      Common::FitsKeys systemkeys;   ///< create a FitsKeys object for FITS keys imposed by the software
 
 
   Information() {
@@ -153,12 +170,12 @@ namespace Camera {
         this->image_center[1] = 1;
         this->iscube = false;
         this->datatype = -1;
-        this->type_set = false;              //!< set true when datatype has been defined
-        this->exposure_time = -1;            //!< default exposure time is undefined
-        this->exposure_unit = "";            //!< default exposure unit is undefined
-        this->exposure_factor = -1;          //!< default factor is undefined
+        this->type_set = false;              // default is datatype undefined
+        this->exposure_time = -1;            // default is exposure time undefined
+        this->exposure_unit = "";            // default is exposure unit undefined
+        this->exposure_factor = -1;          // default is factor undefined
         this->shutteractivate = "";
-        this->num_pre_exposures = 0;         //!< default is no pre-exposures
+        this->num_pre_exposures = 0;         // default is no pre-exposures
       }
 
       long pre_exposures( std::string num_in, std::string &num_out );
@@ -220,4 +237,5 @@ namespace Camera {
   /***** Camera::Information **************************************************/
 
 }
+/***** Camera *****************************************************************/
 #endif
