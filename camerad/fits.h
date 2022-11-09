@@ -477,7 +477,7 @@ class FITS_file {
 
         // Add the extension here
         //
-        this->imageExt = self->pFits->addImage(extname, info.bitpix, axes);
+        this->imageExt = self->pFits->addImage(extname, info.datatype, axes);
 
         // Add extension-only keys now
         //
