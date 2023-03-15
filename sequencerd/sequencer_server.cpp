@@ -1,0 +1,1236 @@
+/**
+ * @file    sequencer_server.cpp
+ * @brief   these are the main functions used by the Sequencer::Server
+ * @author  David Hale <dhale@astro.caltech.edu>
+ *
+ * This file defines the functions used by the Server class in the Sequencer namespace.
+ *
+ */
+
+#include "sequencer_server.h"
+
+namespace Sequencer {
+
+
+  /***** Sequencer::Server::exit_cleanly **************************************/
+  /**
+   * @brief      shutdown nicely
+   *
+   */
+  void Server::exit_cleanly(void) {
+    std::string function = "Sequencer::Server::exit_cleanly";
+    logwrite( function, "exiting" );
+
+    exit(EXIT_SUCCESS);
+  }
+  /***** Sequencer::Server::exit_cleanly **************************************/
+
+
+  /***** Sequencer::Server::configure_sequencer *******************************/
+  /**
+   * @brief      read and apply the configuration file
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Server::configure_sequencer() {
+    std::string function = "Sequencer::Server::configure_sequencer";
+    std::stringstream message;
+    int applied=0;
+    long error;
+
+    // loop through the entries in the configuration file, stored in config class
+    //
+    for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      std::string configkey;          // the current configuration key read from file
+      std::string configval;          // the current configuration value read from file
+
+      try {
+        configkey = config.param.at(entry);
+        configval = config.arg.at(entry);
+      }
+      catch (std::out_of_range &) {   // should be impossible
+        message.str(""); message << "ERROR: entry " << entry
+                                 << " out of range in config parameters (" << this->config.n_entries << ")";
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        return(ERROR);
+      }
+
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] configkey " << configkey << "=" << configval;
+      logwrite( function, message.str() );
+#endif
+
+      // NBPORT
+      if ( configkey.compare(0, 6, "NBPORT")==0 ) {
+        int port;
+        try {
+          port = std::stoi( configval );
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad NBPORT: unable to convert " << configval << " to integer";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: NBPORT number out of integer range" );
+          return(ERROR);
+        }
+        this->nbport = port;
+        applied++;
+      }
+
+      // BLKPORT
+      if (config.param[entry].compare(0, 7, "BLKPORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad BLKPORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: BLKPORT number out of integer range" );
+          return(ERROR);
+        }
+        this->blkport = port;
+        applied++;
+      }
+
+      // ASYNCPORT
+      if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ASYNCPORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: ASYNCPORT number out of integer range" );
+          return(ERROR);
+        }
+        this->asyncport = port;
+        applied++;
+      }
+
+      // MESSAGEPORT
+      if (config.param[entry].compare(0, 11, "MESSAGEPORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad MESSAGEPORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: MESSAGEPORT number out of integer range" );
+          return(ERROR);
+        }
+        this->messageport = port;
+        applied++;
+      }
+
+      // MESSAGEGROUP
+      if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
+        this->messagegroup = config.arg[entry];
+        applied++;
+      }
+
+      // ACAMD_PORT
+      if (config.param[entry].compare(0, 10, "ACAMD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACAMD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACAMD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.acamd.port =  port;
+        applied++;
+      }
+
+      // CAMERAD_PORT
+      if (config.param[entry].compare(0, 12, "CAMERAD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad CAMERAD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: CAMERAD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.camerad.port =  port;
+        applied++;
+      }
+
+      // CAMERAD_NBPORT
+      if (config.param[entry].compare(0, 14, "CAMERAD_NBPORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad CAMERAD_NBPORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: CAMERAD_NBPORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.camerad.nbport =  port;
+        applied++;
+      }
+
+      // FLEXURED_PORT
+      if (config.param[entry].compare(0, 13, "FLEXURED_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad FLEXURED_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: FLEXURED_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.flexured.port =  port;
+        applied++;
+      }
+
+      // POWERD_PORT
+      if (config.param[entry].compare(0, 11, "POWERD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad POWERD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: POWERD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.powerd.port =  port;
+        applied++;
+      }
+
+      // SLITD_PORT
+      if (config.param[entry].compare(0, 10, "SLITD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad SLITD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: SLITD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.slitd.port =  port;
+        applied++;
+      }
+
+      // TCSD_PORT
+      if (config.param[entry].compare(0, 9, "TCSD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad TCSD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCSD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.tcsd.port =  port;
+        applied++;
+      }
+
+      // CALIBD_PORT
+      if (config.param[entry].compare(0, 11, "CALIBD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad CALIBD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: CALIBD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.calibd.port =  port;
+        applied++;
+      }
+
+      // FILTERD_PORT
+      if (config.param[entry].compare(0, 12, "FILTERD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad FILTERD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: FILTERD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.filterd.port =  port;
+        applied++;
+      }
+
+      // FOCUSD_PORT
+      if (config.param[entry].compare(0, 11, "FOCUSD_PORT")==0) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad FOCUSD_PORT: unable to convert to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: FOCUSD_PORT number out of integer range" );
+          return(ERROR);
+        }
+        this->sequence.focusd.port =  port;
+        applied++;
+      }
+
+      // ACAM_ACQUIRE_TIMEOUT
+      if (config.param[entry].compare(0, 20, "ACAM_ACQUIRE_TIMEOUT")==0) {
+        double to=0;
+        try {
+          to = std::stod( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad ACAM_ACQUIRE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACAM_ACQUIRE_TIMEOUT number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.acquisition_timeout = to;
+        applied++;
+      }
+
+      // ACAM_ACQUIRE_RETRYS
+      if (config.param[entry].compare(0, 19, "ACAM_ACQUIRE_RETRYS")==0) {
+        int rt=-1;
+        try {
+          rt = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ACAM_ACQUIRE_RETRYS: unable to convert " << config.arg[entry] << " to integer. retry limit disabled.";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          this->sequence.acquisition_max_retrys = -1;
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ACAM_ACQUIRE_RETRYS number out of integer range. retry limit disabled." );
+          this->sequence.acquisition_max_retrys = -1;
+        }
+        this->sequence.acquisition_max_retrys = rt;
+        applied++;
+      }
+
+      // TCS_SETTLE_TIMEOUT
+      if (config.param[entry].compare(0, 18, "TCS_SETTLE_TIMEOUT")==0) {
+        double to;
+        try {
+          to = std::stod( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad TCS_SETTLE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_SETTLE_TIMEOUT number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.tcs_settle_timeout = to;
+        applied++;
+      }
+
+      // TCS_PREAUTH_TIME
+      if (config.param[entry].compare(0, 16, "TCS_PREAUTH_TIME")==0) {
+        double to;
+        try {
+          to = std::stod( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad TCS_PREAUTH_TIME: unable to convert to double" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_PREAUTH_TIME number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.tcs_preauth_time = to;
+        applied++;
+      }
+
+      // ACQUIRE_MIN_RA_OFF
+      if (config.param[entry].compare( 0, ACQUIRE_MIN_RA_OFF.length(), ACQUIRE_MIN_RA_OFF )==0) {
+        float ra_off;
+        try {
+          ra_off = std::stof( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_MIN_RA_OFF: unable to convert to float" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_MIN_RA_OFF number out of float range" );
+          return(ERROR);
+        }
+        this->sequence.target.min_ra_off = ra_off;
+        applied++;
+      }
+
+      // ACQUIRE_MIN_DEC_OFF
+      if (config.param[entry].compare( 0, ACQUIRE_MIN_DEC_OFF.length(), ACQUIRE_MIN_DEC_OFF )==0) {
+        float dec_off;
+        try {
+          dec_off = std::stof( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_MIN_DEC_OFF: unable to convert to float" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_MIN_DEC_OFF number out of float range" );
+          return(ERROR);
+        }
+        this->sequence.target.min_dec_off = dec_off;
+        applied++;
+      }
+
+      //
+      // To configure the database parameters, call configure_db( param, value ) with the
+      // parameter name and the value. This function will parse and perform error checking and
+      // assign to the correct private variable.  If this returns NO_ERROR then increment applied.
+      //
+
+      // DB_HOST
+      if (config.param[entry].compare( 0, DB_HOST.length(), DB_HOST )==0) {
+        if ( this->sequence.target.configure_db( DB_HOST, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_PORT
+      if (config.param[entry].compare( 0, DB_PORT.length(), DB_PORT )==0) {
+        if ( this->sequence.target.configure_db( DB_PORT, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_USER
+      if (config.param[entry].compare( 0, DB_USER.length(), DB_USER )==0) {
+        if ( this->sequence.target.configure_db( DB_USER, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_PASS
+      if (config.param[entry].compare( 0, DB_PASS.length(), DB_PASS )==0) {
+        if ( this->sequence.target.configure_db( DB_PASS, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_SCHEMA
+      if (config.param[entry].compare( 0, DB_SCHEMA.length(), DB_SCHEMA )==0) {
+        if ( this->sequence.target.configure_db( DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_ACTIVE
+      if (config.param[entry].compare( 0, DB_ACTIVE.length(), DB_ACTIVE )==0) {
+        if ( this->sequence.target.configure_db( DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_COMPLETED
+      if (config.param[entry].compare( 0, DB_COMPLETED.length(), DB_COMPLETED )==0) {
+        if ( this->sequence.target.configure_db( DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // DB_SETS
+      if (config.param[entry].compare( 0, DB_SETS.length(), DB_SETS )==0) {
+        if ( this->sequence.target.configure_db( DB_SETS, config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      //
+      // configure the power switch parameters
+      //
+
+      // POWER_SLIT
+      if (config.param[entry].compare( 0, POWER_SLIT.length(), POWER_SLIT )==0) {
+        if ( this->sequence.power_switch[POWER_SLIT].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_CAMERA
+      if (config.param[entry].compare( 0, POWER_CAMERA.length(), POWER_CAMERA )==0) {
+        if ( this->sequence.power_switch[POWER_CAMERA].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_CALIB
+      if (config.param[entry].compare( 0, POWER_CALIB.length(), POWER_CALIB )==0) {
+        if ( this->sequence.power_switch[POWER_CALIB].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_FLEXURE
+      if (config.param[entry].compare( 0, POWER_FLEXURE.length(), POWER_FLEXURE )==0) {
+        if ( this->sequence.power_switch[POWER_FLEXURE].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_FILTER
+      if (config.param[entry].compare( 0, POWER_FILTER.length(), POWER_FILTER )==0) {
+        if ( this->sequence.power_switch[POWER_FILTER].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_FOCUS
+      if (config.param[entry].compare( 0, POWER_FOCUS.length(), POWER_FOCUS )==0) {
+        if ( this->sequence.power_switch[POWER_FOCUS].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_TELEM
+      if (config.param[entry].compare( 0, POWER_TELEM.length(), POWER_TELEM )==0) {
+        if ( this->sequence.power_switch[POWER_TELEM].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_THERMAL
+      if (config.param[entry].compare( 0, POWER_THERMAL.length(), POWER_THERMAL )==0) {
+        if ( this->sequence.power_switch[POWER_THERMAL].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+      // POWER_ACAM
+      if (config.param[entry].compare( 0, POWER_ACAM.length(), POWER_ACAM )==0) {
+        if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+      }
+
+    } // end loop through the entries in the configuration file
+
+    message.str("");
+    if (applied==0) {
+      message << "ERROR: ";
+      error = ERROR;
+    }
+    else {
+      error = NO_ERROR;
+    }
+    message << "applied " << applied << " configuration lines to sequencer";
+    logwrite(function, message.str());
+
+    return error;
+  }
+  /***** Sequencer::Server::configure_sequencer *******************************/
+
+
+  /***** Sequencer::Server::new_log_day ***************************************/
+  /**
+   * @brief      creates a new logbook each day
+   * @param[in]  logpath  path for the log file, read from config file
+   *
+   * This thread is started by main and never terminates.
+   * It sleeps for the number of seconds that logentry determines
+   * are remaining in the day, then closes and re-inits a new log file.
+   *
+   * The number of seconds until the next day "nextday" is a global which
+   * is set by init_log.
+   *
+   */
+  void Server::new_log_day( std::string logpath ) { 
+    while (1) {
+      std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
+      close_log();
+      init_log( logpath, Sequencer::DAEMON_NAME );
+    }
+  }
+  /***** Sequencer::Server::new_log_day ***************************************/
+
+
+  /***** Server::block_main ***************************************************/
+  /**
+   * @brief      main function for blocking connection thread
+   * @param[in]  seq   reference to Sequencer::Server object
+   * @param[in]  sock  Network::TcpSocket socket object
+   *
+   * accepts a socket connection and processes the request by
+   * calling function doit()
+   *
+   * This thread never terminates.
+   *
+   */
+  void Server::block_main( Sequencer::Server &seq, Network::TcpSocket sock ) {
+    while(1) {
+      sock.Accept();
+      sock.Write("CONNECTED\n");
+      seq.doit(seq, sock);          // call function to do the work
+      sock.Close();
+    }
+    return;
+  }
+  /***** Server::block_main ***************************************************/
+
+
+  /**** Server::thread_main ***************************************************/
+  /**
+   * @brief      main function for all non-blocked threads
+   * @param[in]  seq   reference to Sequencer::Server object
+   * @param[in]  sock  Network::TcpSocket socket object
+   *
+   * accepts a socket connection and processes the request by
+   * calling function doit()
+   *
+   * There are N_THREADS-1 of these, one for each non-blocking connection.
+   * These threads never terminate.
+   *
+   * This function differs from block_main only in that the call to Accept
+   * is mutex-protected.
+   *
+   */
+  void Server::thread_main( Sequencer::Server &seq, Network::TcpSocket &sock ) {
+    while (1) {
+      seq.conn_mutex.lock();
+      sock.Accept();
+      seq.conn_mutex.unlock();
+#ifdef LOGLEVEL_DEBUG
+      std::stringstream message;
+      message.str(""); message << "[DEBUG] thread " << sock.id << " spawning doit to handle connection on fd " << sock.getfd();
+      logwrite( "Server::thread_main", message.str() );
+#endif
+      std::thread( doit, std::ref(seq), std::ref(sock) ).detach();  // spawn a thread to handle this connection
+    }
+    return;
+  }
+  /**** Server::thread_main ***************************************************/
+
+
+  /**** Server::gui_main ******************************************************/
+  /**
+   * @brief      main function for gui thread
+   * @param[in]  seq   reference to Sequencer::Server object
+   * @param[in]  sock  Network::TcpSocket socket object
+   *
+   * accepts a socket connection and processes the request by
+   * calling function doit()
+   *
+   * There is one of these, and it never terminates.
+   *
+   * This function differs from block_main only in that doit is spawned in its own thread.
+   *
+   */
+  void Server::gui_main( Sequencer::Server &seq, Network::TcpSocket &sock ) {
+    while (1) {
+      sock.Accept();
+      sock.Write("CONNECTED\n");
+      std::thread( doit, std::ref(seq), std::ref(sock) ).detach();  // spawn a thread to handle this connection
+    }
+    return;
+  }
+  /**** Server::gui_main ******************************************************/
+
+
+  /***** Server::async_main ***************************************************/
+  /**
+   * @brief      asynchronous message sending thread
+   * @param[in]  seq   reference to Sequencer::Server object
+   * @param[in]  sock  Network::udpSocket socket object
+   *
+   * Loops forever, when a message arrives in the status message queue it is
+   * sent out via multi-cast UDP datagram.
+   *
+   */
+  void Server::async_main( Sequencer::Server &seq, Network::UdpSocket sock ) {
+    std::string function = "Sequencer::Server::async_main";
+    std::stringstream message;
+    int retval;
+
+    retval = sock.Create();                                   // create the UDP socket
+    if (retval < 0) {
+      logwrite(function, "error creating UDP multicast socket for asynchronous messages");
+      seq.exit_cleanly();                                     // do not continue on error
+    }
+    if (retval==1) {                                          // exit this thread but continue with daemon
+      logwrite(function, "asyncrhonous message port disabled by request");
+    }
+
+    while (1) {
+      std::string message = seq.sequence.async.dequeue();     // get the latest message from the queue (blocks)
+      retval = sock.Send(message);                            // transmit the message
+      if (retval < 0) {
+        std::stringstream errstm;
+        errstm << "error sending UDP message: " << message;
+        logwrite(function, errstm.str());
+      }
+      if (message=="exit") {                                  // terminate this thread
+        sock.Close();
+        return;
+      }
+    }
+    
+    return;
+  }
+  /***** Server::async_main ***************************************************/
+
+
+  /***** Server::doit *********************************************************/
+  /**
+   * @brief      the workhorse of each thread connetion
+   * @param[in]  sock  Network::UdpSocket socket object
+   *
+   * stays open until closed by client
+   *
+   * commands come in the form: 
+   *   "<device> [all|<app>] [_BLOCK_] <command> [<arg>]"
+   *
+   */
+  void Server::doit( Sequencer::Server &seq, Network::TcpSocket &sock ) {
+    std::string function = "Sequencer::Server::doit";
+    long  ret;
+    std::stringstream message;
+    std::string cmd, args;        // arg string is everything after command
+    std::vector<std::string> tokens;
+
+    bool connection_open=true;
+
+    message.str(""); message << "thread " << sock.id << " accepted "
+                             << (sock.isasync() ? "ASYNC " : "" )
+                             << (sock.isblocking() ? "BLOCKING " : "NON-BLOCKING " )
+                             << "connection on fd " << sock.getfd()
+                             << " port " << sock.getport();
+    logwrite( function, message.str() );
+
+    while ( connection_open ) {
+
+      // Wait (poll) connected socket for incoming data...
+      //
+      int pollret;
+      if ( ( pollret=sock.Poll() ) <= 0 ) {
+        if (pollret==0) {
+          message.str(""); message << "ERROR: Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
+          seq.sequence.async.enqueue_and_log( function, message.str() );
+        }
+        if (pollret <0) {
+          message.str(""); message << "ERROR: Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
+          seq.sequence.async.enqueue_and_log( function, message.str() );
+        }
+        break;                      // this will close the connection
+      }
+
+      // Data available, now read from connected socket...
+      //
+      std::string buf;
+      char delim='\n';
+      if ( ( ret=sock.Read( buf, delim ) ) <= 0 ) {
+        if (ret<0) {                // could be an actual read error
+          message.str(""); message << "ERROR: Read error on fd " << sock.getfd() << ": " << strerror(errno);
+          seq.sequence.async.enqueue_and_log( function, message.str() );
+        }
+        if (ret==0) {               // or a timeout
+          message.str(""); message << "ERROR: timeout reading from fd " << sock.getfd();
+          seq.sequence.async.enqueue_and_log( function, message.str() );
+        }
+        break;                      // Breaking out of the while loop will close the connection.
+                                    // This probably means that the client has terminated abruptly, 
+                                    // having sent FIN but not stuck around long enough
+                                    // to accept CLOSE and give the LAST_ACK.
+      }
+
+      // convert the input buffer into a string and remove any trailing linefeed
+      // and carriage return
+      //
+      buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
+      buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
+
+      if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
+
+      try {
+        std::size_t cmd_sep = buf.find_first_of(" ");  // find the first space, which separates command from argument list
+
+        cmd = buf.substr(0, cmd_sep);                  // cmd is everything up until that space
+
+        if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
+
+        if (cmd_sep == std::string::npos) {            // If no space was found,
+          args="";                                     // then the arg list is empty,
+        }
+        else {
+          args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
+        }
+
+        sock.id = ++seq.cmd_num;
+        if ( seq.cmd_num == INT_MAX ) seq.cmd_num = 0;
+
+        message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
+        logwrite(function, message.str());
+      }
+      catch ( std::runtime_error &e ) {
+        std::stringstream errstream; errstream << e.what();
+        message.str(""); message << "ERROR: parsing arguments: " << errstream.str();
+        seq.sequence.async.enqueue_and_log( function, message.str() );
+        ret = -1;
+      }
+      catch ( ... ) {
+        message.str(""); message << "ERROR: unknown error parsing arguments: " << args;
+        seq.sequence.async.enqueue_and_log( function, message.str() );
+        ret = -1;
+      }
+
+      /**
+       * process commands here
+       */
+      ret = NOTHING;
+      std::string retstring="";
+
+      if ( cmd.compare( SEQUENCERD_EXIT )==0 ) {
+                      seq.exit_cleanly();                        // shutdown the sequencer
+      }
+      else
+
+      // These commands go to acamd
+      //
+      if ( cmd.compare( SEQUENCERD_ACAM )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.acamd ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.acamd.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "acamd reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // These commands go to calibd
+      //
+      if ( cmd.compare( SEQUENCERD_CALIB )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.calibd ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.calibd.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "calibd reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // These commands go to camerad
+      //
+      if ( cmd.compare( SEQUENCERD_CAMERA )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.camerad ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.camerad.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "camerad reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // These commands go to filterd
+      //
+      if ( cmd.compare( SEQUENCERD_FILTER )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.filterd ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.filterd.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "filterd reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // These commands go to powerd
+      //
+      if ( cmd.compare( SEQUENCERD_POWER )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.powerd ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.powerd.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "powerd reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // These commands go to slitd
+      //
+      if ( cmd.compare( SEQUENCERD_SLIT )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.slitd ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.slitd.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "slitd reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // These commands go to tcsd
+      //
+      if ( cmd.compare( SEQUENCERD_TCS )==0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.tcsd ), args ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.tcsd.command( args, retstring );
+                        if ( !retstring.empty() ) {
+                          message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
+                          logwrite( function, message.str() );
+                          retstring.append( " " );
+                        }
+                      }
+      }
+      else
+
+      // system startup (nightly)
+      // This is needed before any sequences can be run.
+      //
+      if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_startup ), std::ref( seq.sequence ) ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.startup( seq.sequence );
+                      }
+      }
+      else
+
+      // system shutdown
+      // This shuts down the instrument.
+      //
+      if ( cmd.compare( SEQUENCERD_SHUTDOWN ) == 0 ) {
+                      if ( sock.isasync() ) {
+                        std::thread( std::ref( Sequencer::Sequence::dothread_shutdown ), std::ref( seq.sequence ) ).detach();
+                      }
+                      else {
+                        ret = seq.sequence.shutdown( seq.sequence );
+                      }
+      }
+      else
+
+      // Sequence "start"
+      //
+      if ( cmd.compare( SEQUENCERD_START )==0 ) {
+
+                      // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
+                      //
+                      if ( seq.sequence.seqstate.load() != Sequencer::SEQ_READY ) {
+                        // log applicable causes
+                        //
+                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+                          seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer already running" );
+                        }
+                        else
+                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ||
+                             seq.sequence.is_seqstate_set( Sequencer::SEQ_STOPREQ  ) ) {
+                          seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer waiting for stop" );
+                        }
+                        else
+                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_OFFLINE ) ) {
+                          seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer is offline. run startup" );
+                        }
+                        else {
+                          seq.sequence.async.enqueue_and_log( function, "ERROR: unable to start sequencer" );
+                        }
+                        ret = ERROR;
+                      }
+
+                      // seqstate is SEQ_READY so change both it and reqstate to SEQ_RUNNING,
+                      // then spawn a thread to start
+                      //
+                      else {
+                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
+                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_RUNNING );
+                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_READY );
+
+                        std::thread( std::ref( Sequencer::Sequence::dothread_sequence_start ),
+                                     std::ref( seq.sequence) ).detach();
+                        ret = NO_ERROR;
+                      }
+      }
+      else
+
+      // Stop an Exposure
+      //
+      if ( cmd.compare( SEQUENCERD_STOP ) == 0 ) {
+                      // Can only stop during an active or paused exposure
+                      //
+                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) &&
+                           not seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: can only stop during an active or paused exposure" );
+                        ret = ERROR;
+                      }
+
+                      // To request a stop, set the STOPREQ bit in both seqstate and reqstate.
+                      //
+                      else {
+                        logwrite( function, "stop requested" );
+
+                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
+                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
+                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_STOPREQ, (Sequencer::SEQ_RUNNING|Sequencer::SEQ_WAIT_EXPOSE) );  // set STOPREQ, clear RUNNING|EXPOSE
+
+                        // If exposing then modify the exposure time to end immediately (-1)
+                        //
+                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                          seq.sequence.dothread_modify_exptime( std::ref( seq.sequence ), -1 );
+                        }
+
+                        // If paused then send the RESUME command to the camera daemon.
+                        //
+                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
+                          seq.sequence.camerad.async( CAMERAD_RESUME );                // tell the camera to resume exposure
+                          seq.sequence.clr_seqstate_bit( Sequencer::SEQ_PAUSE );       // clear the PAUSE bit
+                        }
+
+                        // If not already running then spawn a thread to wait for this state,
+                        // which will send out any needed notifications.
+                        //
+                        if ( not seq.sequence.waiting_for_state.load() ) {
+                          std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
+                        }
+                        ret = NO_ERROR;
+                      }
+      }
+      else
+
+      // Abort can abort nearly every operation (exposure, slew, etc.).
+      // Only "stopping", "starting", and "aborting" cannot be aborted.
+      //
+      if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
+                      // don't request an abort if the SEQ_RUNNING bit isn't set
+                      //
+                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer not running" );
+                        ret = ERROR;
+                      }
+
+                      // To abort, set the ABORTREQ bit in both seqstate and reqstate.
+                      //
+                      else {
+                        logwrite( function, "abort requested" );
+
+                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTREQ );
+                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
+                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_ABORTREQ, (Sequencer::SEQ_RUNNING|Sequencer::SEQ_WAIT_EXPOSE) );  // set ABORTREQ, clear RUNNING|EXPOSE
+
+                        // Set the do-type to single-step
+                        //
+                        seq.sequence.dotype( "ONE" );
+
+                        // If exposing then asynchronously send the ABORT command to the camera daemon
+                        //
+                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                          seq.sequence.camerad.async( CAMERAD_ABORT );                       // tell camera to abort exposure
+                          seq.sequence.clr_seqstate_bit( Sequencer::SEQ_WAIT_EXPOSE );       // clear the EXPOSE bit
+                        }
+
+                        // If not already running then spawn a thread to wait for this state,
+                        // which will send out any needed notifications.
+                        //
+                        if ( not seq.sequence.waiting_for_state.load() ) {
+#ifdef LOGLEVEL_DEBUG
+                          logwrite( function, "[DEBUG] spawning waiting_for_state thread" );
+#endif
+                          std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
+                        }
+                        ret = NO_ERROR;
+                      }
+      }
+      else
+
+      // Set the "Do-Type"
+      // which can be single-step (do one) or continuous (do all).
+      //
+      if ( cmd.compare( SEQUENCERD_DOTYPE ) == 0) {
+                      ret = seq.sequence.dotype( args, retstring );
+                      retstring.append( " " );
+      }
+      else
+
+      // Report the Sequencer State,
+      // which will be returned, logged, and written to the async message port.
+      //
+      if ( cmd.compare( SEQUENCERD_STATE ) == 0) {
+                      retstring = seq.sequence.report_seqstate();
+                      retstring.append( "\n" );
+                      if ( not sock.isasync() ) sock.Write( retstring );
+      }
+      else
+
+      // Set/Get the Target Set ID
+      //
+      if ( cmd.compare( SEQUENCERD_TARGETSET ) == 0) {
+                      ret= seq.sequence.target.targetset( args, retstring );
+                      message.str(""); message << "TARGETSET: " << retstring;
+                      seq.sequence.async.enqueue( message.str() );
+                      retstring.append( " " );
+      }
+      else
+
+      // Pause an Exposure
+      //
+      if ( cmd.compare( SEQUENCERD_PAUSE ) == 0) {
+                      // Can only pause during an exposure
+                      //
+                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
+                        ret = ERROR;
+                      }
+                      else
+                      // Can't already be paused
+                      //
+                      if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: already paused" );
+                        ret = ERROR;
+                      }
+                      else {
+                        seq.sequence.camerad.async( CAMERAD_PAUSE );
+                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+                        ret = NO_ERROR;
+                      }
+      }
+      else
+
+      // Resume a Paused exposure
+      //
+      if ( cmd.compare( SEQUENCERD_RESUME ) == 0) {
+                      // Can only resume when paused
+                      //
+                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
+                        ret = ERROR;
+                      }
+                      else {
+                        seq.sequence.camerad.async( CAMERAD_RESUME );
+                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
+                        ret = NO_ERROR;
+                      }
+      }
+      else
+
+      // Call Test Routines,
+      // routine specified by args.
+      //
+      if ( cmd.compare( SEQUENCERD_TEST ) == 0 ) {
+                      ret = seq.sequence.test( args, retstring );
+                      if ( not retstring.empty() ) retstring.append( " " );
+      }
+      else
+
+      // Modify Exptime needs a single argument, the new exptime
+      //
+      if ( cmd.compare( SEQUENCERD_MODEXPTIME ) == 0 ) {
+                      Tokenize( args, tokens, " " );
+                      if ( tokens.size() != 1 ) {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: expected MODEXPTIME <exptime>" );
+                        ret = ERROR;
+                      }
+                      else {
+                        // convert the single argument from string to double
+                        //
+                        double exptime_req=0;
+                        try { exptime_req = std::stod( tokens.at(0) ); }
+                        catch( std::out_of_range &e ) {
+                          message.str(""); message << "ERROR: out of range parsing args " << args << ": " << e.what();
+                          seq.sequence.async.enqueue_and_log( function, message.str() );
+                          ret = ERROR;
+                        }
+                        catch( std::invalid_argument &e ) {
+                          message.str(""); message << "ERROR: invalid argument parsing args " << args << ": " << e.what();
+                          seq.sequence.async.enqueue_and_log( function, message.str() );
+                          ret = ERROR;
+                        }
+
+                        // spawn a thread to modify the exposure time
+                        //
+                        std::thread( std::ref( Sequencer::Sequence::dothread_modify_exptime ),
+                                     std::ref( seq.sequence), exptime_req ).detach();
+                        ret = NO_ERROR;
+                      }
+      }
+
+      // Unknown commands generate an error
+      //
+      else {
+        message.str(""); message << "ERROR: unknown command: " << cmd;
+        seq.sequence.async.enqueue_and_log( function, message.str() );
+        ret = ERROR;
+      }
+
+      // If this came in the asynchronous command port then write the ACK
+      //
+      if ( sock.isasync() ) {
+        sock.Write( ret==ERROR ? Sequencer::ERR : Sequencer::ACK );
+        ret = NOTHING;
+      }
+
+      if (ret != NOTHING) {
+        // If the retstring doesn't already have a DONE or ERROR in it,
+        // then append that to the retstring.
+        //
+        if ( ( retstring.find( "DONE" )  == std::string::npos ) &&
+             ( retstring.find( "ERROR" ) == std::string::npos ) ) {
+          std::string term=(ret==0?"DONE\n":"ERROR\n");
+          retstring.append( term );
+        }
+        else retstring.append( "\n" );
+        if ( sock.Write( retstring ) < 0 ) connection_open=false;
+      }
+
+      if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
+                                           // Keep blocking connection open for interactive session.
+    }
+
+    connection_open = false;
+    sock.Close();
+    logwrite( function, "connection closed" );
+
+    return;
+  }
+  /***** Server::doit *********************************************************/
+
+}

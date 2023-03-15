@@ -1,0 +1,27 @@
+# configuration file for acam daemon
+# @ACAMD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/
+BLKPORT=@ACAMD_BLK_PORT@          # server blocking port
+NBPORT=@ACAMD_NB_PORT@            # server non-blocking port
+DAEMON=no                         # is this run as a daemon?
+
+# host:port for the external camera server
+#
+CAMERASERVER_HOST=localhost
+CAMERASERVER_PORT=@ANDOR_CAMERA_SERVER_PORT@
+
+# there is a single host:port for the "master" PI controller
+# at the front of the daisy-chain
+#
+PI_NAME=acam
+PI_HOST=localhost
+PI_PORT=@ACAMD_PI_PORT@
+# for each PI actuator's controller specify: address name min max
+#
+MOTOR_CONTROLLER="1 foo 0 10"
+MOTOR_CONTROLLER="2 bar 0 10"
+
+
+MESSAGEPORT=@MESSAGEPORT@
+MESSAGEGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging

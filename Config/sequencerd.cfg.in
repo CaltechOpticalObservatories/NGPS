@@ -1,0 +1,67 @@
+# configuration file for observation sequencer
+# @SEQUENCERD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/
+ASYNCPORT=@SEQUENCERD_ASYNC_PORT@ # server GUI port
+BLKPORT=@SEQUENCERD_BLK_PORT@     # server blocking port
+NBPORT=@SEQUENCERD_NB_PORT@        # server non-blocking port
+DAEMON=no
+
+MESSAGEPORT=@MESSAGEPORT@
+MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
+
+# daemon ports
+#
+ACAMD_PORT=@ACAMD_BLK_PORT@
+CALIBD_PORT=@CALIBD_BLK_PORT@
+CAMERAD_PORT=@CAMERAD_BLK_PORT@
+CAMERAD_NBPORT=@CAMERAD_NB_PORT@
+FLEXURED_PORT=@FLEXURED_BLK_PORT@
+FOCUSD_PORT=@FOCUSD_BLK_PORT@
+POWERD_PORT=@POWERD_BLK_PORT@
+SLITD_PORT=@SLITD_BLK_PORT@
+TCSD_PORT=@TCSD_BLK_PORT@
+FITERD_PORT=@FILTERD_BLK_PORT@
+
+# NPS power switches
+#
+# These are the names of NPS switches used by the Sequencer.
+# If a subsystem spans multiple plugs then list each one in a
+# space-separated vector in parentheses, (NAME1 NAME2 NAME3 ...)
+#
+# The names used here must have a matching NPS_PLUG name defined in power.cfg
+#
+POWER_SLIT=SLIT_MOTORS
+POWER_CAMERA=(LEACH_U LEACH_G LEACH_R LEACH_I)
+POWER_CALIB=(CALIB_MOTORS CALIB_LAMPS)
+POWER_FLEXURE=FLEXURE_MOTORS
+POWER_FILTER=FILTER_MOTORS
+POWER_FOCUS=FOCUS_MOTORS
+POWER_TELEM=DATA_LOGGER
+POWER_THERMAL=(LAKESHORE_1 LAKESHORE_2)
+POWER_ACAM=(AG_CAMERA SLICE_CAMERA_1 SLICE_CAMERA_2)
+
+# database configuration
+#
+DB_HOST=localhost
+DB_PORT=@DB_PORT@
+DB_USER=ngps
+DB_PASS=Write1Spec2.!
+DB_SCHEMA=ngps
+DB_ACTIVE=targets                    # active target table
+DB_COMPLETED=completed_observations  # completed observations table
+DB_SETS=target_sets                  # table of target sets
+
+# miscellaneous
+#
+TCS_SETTLE_TIMEOUT=15                # seconds to wait for telescope to settle (for "TRACKING_STABLY")
+TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify TCS of next target's coords (0 to disable)
+UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
+
+# Target acquisition offsets
+# Both offsets must be below these thresholds before target is considered acquired
+# Units are in decimal degrees
+#
+ACAM_ACQUIRE_TIMEOUT=30              # seconds before ACAM acquisition sequence aborts on failure to acquire
+ACQUIRE_MIN_RA_OFF=0                 # minimum RA offset before target is acquired
+ACQUIRE_MIN_DEC_OFF=0                # minimum DEC offset before target is acquired

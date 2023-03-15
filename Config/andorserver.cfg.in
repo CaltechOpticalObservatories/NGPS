@@ -1,0 +1,15 @@
+# configuration file for the andor camera server
+#
+# The andor camera server is part of the GUI and doesn't actually
+# use this file, but this file is here as a future placeholder,
+# and is used by the andorserver emulator.
+#
+# @ANDORSERVER_CFG_COMMENT@
+#
+DAEMON=no
+
+# host:port for the external camera server
+#
+CAMERASERVER_HOST=localhost
+CAMERASERVER_PORT=@ANDOR_CAMERA_SERVER_PORT@
+

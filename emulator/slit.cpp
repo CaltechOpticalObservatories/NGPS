@@ -1,8 +1,16 @@
+/**
+ * @file    slit.cpp
+ * @brief   
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #include "slit.h"
 
-namespace Slit {
+namespace SlitEmulator {
 
-  /**************** Slit::ControllerInfo::ControllerInfo **********************/
+  /***** SlitEmulator::ControllerInfo::ControllerInfo *************************/
   /**
    * @fn         ControllerInfo
    * @brief      class constructor
@@ -16,10 +24,10 @@ namespace Slit {
     this->ontarget = false;
     this->pos      = -1;
   }
-  /**************** Slit::ControllerInfo::ControllerInfo **********************/
+  /***** SlitEmulator::ControllerInfo::ControllerInfo *************************/
 
 
-  /**************** Slit::ControllerInfo::~ControllerInfo *********************/
+  /***** SlitEmulator::ControllerInfo::~ControllerInfo ************************/
   /**
    * @fn         ~ControllerInfo
    * @brief      class deconstructor
@@ -29,10 +37,10 @@ namespace Slit {
    */
   ControllerInfo::~ControllerInfo() {
   }
-  /**************** Slit::ControllerInfo::~ControllerInfo *********************/
+  /***** SlitEmulator::ControllerInfo::~ControllerInfo ************************/
 
 
-  /**************** Slit::Interface::Interface ********************************/
+  /***** SlitEmulator::Interface::Interface ***********************************/
   /**
    * @fn         Interface
    * @brief      class constructor
@@ -42,10 +50,10 @@ namespace Slit {
    */
   Interface::Interface() {
   }
-  /**************** Slit::Interface::Interface ********************************/
+  /***** SlitEmulator::Interface::Interface ***********************************/
 
 
-  /**************** Slit::Interface::~Interface *******************************/
+  /***** SlitEmulator::Interface::~Interface **********************************/
   /**
    * @fn         ~Interface
    * @brief      class deconstructor
@@ -55,27 +63,27 @@ namespace Slit {
    */
   Interface::~Interface() {
   }
-  /**************** Slit::Interface::~Interface *******************************/
+  /***** SlitEmulator::Interface::~Interface **********************************/
 
 
   long Interface::test() {
-    std::string function = "  (Slit::Interface::test) ";
+    std::string function = "  (SlitEmulator::Interface::test) ";
     std::cerr << get_timestamp() << function << "controller_info.size() = " << this->controller_info.size() << "\n";
     return( NO_ERROR );
   }
 
 
-  /**************** Slit::Interface::do_home **********************************/
+  /***** SlitEmulator::Interface::do_home *************************************/
   /**
    * @fn         do_home
    * @brief      thread to emulate homing (just sleeps)
-   * @param[in]  reference to Slit::ControllerInfo object
+   * @param[in]  reference to SlitEmulator::ControllerInfo object
    * @param[in]  reference to mutex
    * @return     ERROR or NO_ERROR
    *
    */
-  void Interface::do_home( Slit::ControllerInfo &info, std::mutex &mlock ) {
-    std::string function = "  (Slit::Interface::do_home) ";
+  void Interface::do_home( SlitEmulator::ControllerInfo &info, std::mutex &mlock ) {
+    std::string function = "  (SlitEmulator::Interface::do_home) ";
 
     // sleep here
     //
@@ -94,22 +102,22 @@ namespace Slit {
 
     std::cerr << get_timestamp() << function << "home " << info.name << " complete!\n";
   }
-  /**************** Slit::Interface::do_home **********************************/
+  /***** SlitEmulator::Interface::do_home *************************************/
 
 
-  /**************** Slit::Interface::do_move **********************************/
+  /***** SlitEmulator::Interface::do_move *************************************/
   /**
    * @fn         do_move
    * @brief      thread to emulate moving (just sleeps)
-   * @param[in]  reference to Slit::ControllerInfo object
+   * @param[in]  reference to SlitEmulator::ControllerInfo object
    * @param[in]  reference to mutex
    * @param[in]  int distance to move
    * @param[in]  float final position
    * @return     ERROR or NO_ERROR
    *
    */
-  void Interface::do_move( Slit::ControllerInfo &info, std::mutex &mlock, int distance, float pos ) {
-    std::string function = "  (Slit::Interface::do_move) ";
+  void Interface::do_move( SlitEmulator::ControllerInfo &info, std::mutex &mlock, int distance, float pos ) {
+    std::string function = "  (SlitEmulator::Interface::do_move) ";
 
     // sleep here
     //
@@ -127,10 +135,10 @@ namespace Slit {
 
     std::cerr << get_timestamp() << function << "move " << info.name << " complete!\n";
   }
-  /**************** Slit::Interface::do_move **********************************/
+  /***** SlitEmulator::Interface::do_move *************************************/
 
 
-  /**************** Slit::Interface::parse_command ****************************/
+  /***** SlitEmulator::Interface::parse_command *******************************/
   /**
    * @fn         parse_command
    * @brief      parse incomming command
@@ -140,7 +148,7 @@ namespace Slit {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = "  (Slit::Interface::parse_command) ";
+    std::string function = "  (SlitEmulator::Interface::parse_command) ";
     int myaddr=-1;
     int mydev=-1;
     int myaxis=1;
@@ -214,7 +222,7 @@ namespace Slit {
 
       std::cerr << get_timestamp() << function << "spawning do_home thread for " << this->controller_info.at( mydev).name << "\n";
 
-      std::thread( std::ref(Slit::Interface::do_home), 
+      std::thread( std::ref(SlitEmulator::Interface::do_home), 
                    std::ref(this->controller_info.at( mydev )),
                    std::ref(this->pos_mutex) ).detach();
 
@@ -256,7 +264,7 @@ namespace Slit {
 
       std::cerr << get_timestamp() << function << "spawning do_move thread for " << this->controller_info.at( mydev).name << "\n";
 
-      std::thread( std::ref(Slit::Interface::do_move),
+      std::thread( std::ref(SlitEmulator::Interface::do_move),
                    std::ref(this->controller_info.at( mydev )),
                    std::ref(this->pos_mutex),
                    distance,
@@ -296,6 +304,6 @@ namespace Slit {
 
     return ( NO_ERROR );
   }
-  /**************** Slit::Interface::parse_command ****************************/
+  /***** SlitEmulator::Interface::parse_command *******************************/
 
 }

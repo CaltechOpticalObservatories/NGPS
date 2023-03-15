@@ -73,8 +73,8 @@ namespace AstroCam {
   class Callback : public arc::gen3::CooExpIFace {
     public:
       Callback(){}
-      void exposeCallback( int devnum, std::uint32_t uiElapsedTime ); ///< called by CArcDevice::expose() during exposure
-      void readCallback( int devnum, std::uint32_t uiPixelCount );    ///< called by CArcDevice::expose() during readout
+      void exposeCallback( int devnum, std::uint32_t uiElapsedTime, std::uint32_t uiExposureTime ); ///< called by CArcDevice::expose() during exposure
+      void readCallback( int devnum, std::uint32_t uiPixelCount, std::uint32_t uiFrameSize );       ///< called by CArcDevice::expose() during readout
       void frameCallback( int devnum,
                           std::uint32_t uiFramesPerBuffer,
                           std::uint32_t uiFrameCount,
@@ -710,31 +710,43 @@ namespace AstroCam {
       //
       long test(std::string args, std::string &retstring);                 ///< test routines
       long interface(std::string &iface);                                  ///< returns the interface
-      long connect_controller(std::string devices_in);                     ///< opens a connection to the PCI/e device(s)
+      long do_connect_controller(std::string devices_in);                  ///< opens a connection to the PCI/e device(s)
+      long connect_controller(std::string devices_in);                     ///< wrapper for do_connect_controller
       long is_connected( std::string &retstring );                         ///< are all selected controllers connected?
-      long disconnect_controller();                                        ///< closes the connection to the PCI/e device(s)
-      long configure_controller();                                         ///< perform initial configuration of controller from .cfg file
+      long do_disconnect_controller();                                     ///< closes the connection to the PCI/e device(s)
+      long disconnect_controller();                                        ///< wrapper for do_disconnect_controller
+      long do_configure_controller();                                      ///< perform initial configuration of controller from .cfg file
+      long configure_controller();                                         ///< wrapper for do_configure_controller
       long access_useframes(std::string& useframes);                       ///< set or get the state of this->useframes
       long access_nframes(std::string valstring);                          ///<
       int get_driversize();                                                ///<
-      long load_firmware(std::string &retstring);                          ///< load firmware (.lod) into one or all controller timing boards
-      long load_firmware(std::string timlodfile, std::string &retstring);
+      long do_load_firmware(std::string &retstring);                       ///< load firmware (.lod) into one or all controller timing boards
+      long do_load_firmware(std::string timlodfile, std::string &retstring);
+      long load_firmware(std::string &retstring);                          ///< wrapper for load_firmware
+      long load_firmware(std::string timlodfile, std::string &retstring);  ///< wrapper for load_firmware
       long set_camera_mode(std::string mode);
       long exptime(std::string exptime_in, std::string &retstring);
+      long do_exptime(std::string exptime_in, std::string &retstring);
+      long modify_exptime(std::string exptime_in, std::string &retstring);
       long shutter(std::string shutter_in, std::string& shutter_out);
       long geometry(std::string args, std::string &retstring);
+      long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);
       long buffer(std::string size_in, std::string &retstring);
       long readout(std::string readout_in, std::string &readout_out);
+      long do_readout(std::string readout_in, std::string &readout_out);
 
       void set_imagesize(int rowsin, int colsin, int* status);
 
       long expose(std::string nseq_in);
+      long do_expose(std::string nseq_in);
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);
-      long native(std::vector<uint32_t> selectdev, std::string cmdstr);
-      long native( int dev, std::string cmdstr, std::string &retstring );
-      long native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring );
+      long do_native(std::string cmdstr);
+      long do_native(std::string cmdstr, std::string &retstring);
+      long do_native(std::vector<uint32_t> selectdev, std::string cmdstr);
+      long do_native( int dev, std::string cmdstr, std::string &retstring );
+      long do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring );
       long write_frame(int devnum, int fpbcount);
       static void dothread_load( Controller &controller, std::string timlodfile );
       static void dothread_expose( Controller &controller );

@@ -29,10 +29,11 @@ namespace AstroCam {
    * using the RET command.
    *
    */
-  void Callback::exposeCallback( int devnum, std::uint32_t uiElapsedTime ) {
+  void Callback::exposeCallback( int devnum, std::uint32_t uiElapsedTime, std::uint32_t uiExposureTime ) {
     std::string function = "AstroCam::Callback::exposeCallback";
     std::stringstream message;
     message << "ELAPSEDTIME_" << devnum << ":" << uiElapsedTime;
+    if ( uiExposureTime != 0x1BAD1BAD ) message<< " EXPTIME:" << uiExposureTime;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
 #ifdef LOGLEVEL_DEBUG
     std::cerr << "elapsedtime: " << std::setw(10) << uiElapsedTime << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
@@ -51,9 +52,9 @@ namespace AstroCam {
    * arc::gen3::CArcDevice::expose() when bInReadout is true.
    *
    */
-  void Callback::readCallback( int devnum, std::uint32_t uiPixelCount ) {
+  void Callback::readCallback( int devnum, std::uint32_t uiPixelCount, std::uint32_t uiImageSize ) {
     std::stringstream message;
-    message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount;
+    message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE: " << uiImageSize;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
 #ifdef LOGLEVEL_DEBUG
     std::cerr << "pixelcount:  " << std::setw(10) << uiPixelCount << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
@@ -151,7 +152,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::interface ***************************************/
 
 
-  /***** AstroCam::Interface::connect_controller ******************************/
+  /***** AstroCam::Interface::do_connect_controller ***************************/
   /**
    * @brief      opens a connection to the PCI/e device(s)
    * @param[in]  devices_in  optional string containing space-delimited list of devices
@@ -171,8 +172,8 @@ namespace AstroCam {
    * call with the specific device(s). In other words, it's all (requested) or nothing.
    *
    */
-  long Interface::connect_controller(std::string devices_in="") {
-    std::string function = "AstroCam::Interface::connect_controller";
+  long Interface::do_connect_controller(std::string devices_in="") {
+    std::string function = "AstroCam::Interface::do_connect_controller";
     std::stringstream message;
 
     // Don't allow another open command --
@@ -282,10 +283,10 @@ namespace AstroCam {
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: creating controller object for device number " << dev << ": out of range";
         logwrite(function, message.str());
-        this->disconnect_controller();
+        this->do_disconnect_controller();
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error creating controller object"); this->disconnect_controller(); return(ERROR); }
+      catch(...) { logwrite(function, "unknown error creating controller object"); this->do_disconnect_controller(); return(ERROR); }
     }
 
     // The size of devlist at this point is the number of devices that will
@@ -321,19 +322,19 @@ namespace AstroCam {
         for (auto devcheck : this->devlist) message << devcheck << " ";
         message << "}";
         logwrite(function, message.str());
-        this->disconnect_controller();
+        this->do_disconnect_controller();
         return(ERROR);
       }
       catch(const std::exception &e) {
         message.str(""); message << "ERROR: " << this->controller.at(dev).devname << ": " << e.what();
         logwrite(function, message.str());
-        this->disconnect_controller();
+        this->do_disconnect_controller();
         return (ERROR);
       }
       catch(...) {
         message.str(""); message << "unknown error connecting to " << this->controller.at(dev).devname;
         logwrite(function, message.str());
-        this->disconnect_controller();
+        this->do_disconnect_controller();
         return (ERROR);
       }
     }
@@ -351,10 +352,10 @@ namespace AstroCam {
         for (auto devcheck : this->devlist) message << devcheck << " ";
         message << "}";
         logwrite(function, message.str());
-        this->disconnect_controller();
+        this->do_disconnect_controller();
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error updaing device list"); this->disconnect_controller(); return(ERROR); }
+      catch(...) { logwrite(function, "unknown error updaing device list"); this->do_disconnect_controller(); return(ERROR); }
     }
 
     // Now remove the marked devices (those not connected) 
@@ -381,13 +382,13 @@ namespace AstroCam {
       // must call again, requesting only what is available. It is an
       // error if the interface cannot deliver what was requested.
       //
-      this->disconnect_controller();
+      this->do_disconnect_controller();
 
       return( ERROR );
     }
     else return( NO_ERROR );
   }
-  /***** AstroCam::Interface::connect_controller ******************************/
+  /***** AstroCam::Interface::do_connect_controller ***************************/
 
 
   /***** AstroCam::Interface::disconnect_controller ***************************/
@@ -398,8 +399,8 @@ namespace AstroCam {
    * no error handling
    *
    */
-  long Interface::disconnect_controller() {
-    std::string function = "AstroCam::Interface::disconnect_controller";
+  long Interface::do_disconnect_controller() {
+    std::string function = "AstroCam::Interface::do_disconnect_controller";
     std::stringstream message;
 
     // close all of the PCI devices
@@ -470,7 +471,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::is_connected ************************************/
 
 
-  /***** AstroCam::Interface::configure_controller ****************************/
+  /***** AstroCam::Interface::do_configure_controller *************************/
   /**
    * @brief      perform initial configuration of controller from .cfg file
    * @return     ERROR or NO_ERROR
@@ -478,8 +479,8 @@ namespace AstroCam {
    * Called automatically by main() when the server starts up.
    *
    */
-  long Interface::configure_controller() {
-    std::string function = "AstroCam::Interface::configure_controller";
+  long Interface::do_configure_controller() {
+    std::string function = "AstroCam::Interface::do_configure_controller";
     std::stringstream message;
     int applied=0;
     long error = NO_ERROR;
@@ -532,28 +533,28 @@ namespace AstroCam {
     logwrite(function, message.str());
     return error;
   }
-  /***** AstroCam::Interface::configure_controller ****************************/
+  /***** AstroCam::Interface::do_configure_controller *************************/
 
 
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
   /**
    * @brief      send a 3-letter command to the Leach controller
    * @param[in]  cmdstr  string containing command and arguments
    * @return     NO_ERROR on success, ERROR on error
    *
    */
-  long Interface::native(std::string cmdstr) {
+  long Interface::do_native( std::string cmdstr ) {
     std::string retstring;
     std::vector<uint32_t> selectdev;
     for ( auto dev : this->devlist ) {
       selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
     }
-    return this->native( selectdev, cmdstr, retstring );
+    return this->do_native( selectdev, cmdstr, retstring );
   }
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
 
 
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
   /**
    * @brief      send a 3-letter command to the Leach controller
    * @param[in]  selectdev  vector of devices to use
@@ -561,14 +562,14 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
-  long Interface::native(std::vector<uint32_t> selectdev, std::string cmdstr) {
+  long Interface::do_native(std::vector<uint32_t> selectdev, std::string cmdstr) {
     std::string retstring;
-    return this->native( selectdev, cmdstr, retstring );
+    return this->do_native( selectdev, cmdstr, retstring );
   }
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
 
 
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
   /**
    * @brief      send a 3-letter command to the Leach controller
    * @param[in]  dev        individual device to use
@@ -577,15 +578,15 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
-  long Interface::native( int dev, std::string cmdstr, std::string &retstring ) {
+  long Interface::do_native( int dev, std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
     selectdev.push_back( dev );
-    return this->native( selectdev, cmdstr, retstring );
+    return this->do_native( selectdev, cmdstr, retstring );
   }
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
 
 
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
   /**
    * @brief      send a 3-letter command to the Leach controller
    * @param[in]  cmdstr     string containing command and arguments
@@ -593,17 +594,17 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
-  long Interface::native( std::string cmdstr, std::string &retstring ) {
+  long Interface::do_native( std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
     for ( auto dev : this->devlist ) {
       selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
     }
-    return this->native( selectdev, cmdstr, retstring );
+    return this->do_native( selectdev, cmdstr, retstring );
   }
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
 
 
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
   /**
    * @brief      send a 3-letter command to the Leach controller
    * @param[in]  selectdev  vector of devices to use
@@ -612,8 +613,8 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
-  long Interface::native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring ) {
-    std::string function = "AstroCam::Interface::native";
+  long Interface::do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring ) {
+    std::string function = "AstroCam::Interface::do_native";
     std::stringstream message;
     std::vector<std::string> tokens;
 
@@ -735,7 +736,7 @@ namespace AstroCam {
     //
     std::uint32_t check_retval;
     try {
-      check_retval = this->controller.at(0).retval;    // save the first one in the controller vector
+      check_retval = this->controller.at(selectdev.at(0)).retval;    // save the first one in the controller vector
     }
     catch(std::out_of_range &) {
       logwrite(function, "ERROR: no device found. Is the controller connected?");
@@ -806,7 +807,7 @@ namespace AstroCam {
     }
     return ( NO_ERROR );
   }
-  /***** AstroCam::Interface::native ******************************************/
+  /***** AstroCam::Interface::do_native ***************************************/
 
 
   /***** AstroCam::Interface::retval_to_string ********************************/
@@ -882,7 +883,7 @@ namespace AstroCam {
       // The devnum is passed in so that the Callback functions know which device they belong to.
       //
       _controller.pArcDev->expose(_controller.devnum, 
-                                  _controller.info.exposure_time, 
+                                  _controller.info.exposure_time,
                                   _controller.info.detector_pixels[0], 
                                   _controller.info.detector_pixels[1], 
                                   server.camera.abortstate, 
@@ -1083,7 +1084,7 @@ namespace AstroCam {
         message.str(""); message << "sending " << snf.str();
         logwrite(function, message.str());
 
-        if ( this->native(snf.str()) != 0x444F4E ) return -1;
+        if ( this->do_native(snf.str()) != 0x444F4E ) return -1;
 
         std::stringstream fps;
         fps << "FPS " << nfpseq;            // FPS sets number of frames per sequence (Y:<N_SEQUENCES) on timing board
@@ -1091,7 +1092,7 @@ namespace AstroCam {
         message.str(""); message << "sending " << fps.str();
         logwrite(function, message.str());
 
-        if ( this->native(fps.str()) != 0x444F4E ) return -1;
+        if ( this->do_native(fps.str()) != 0x444F4E ) return -1;
 
 ///< TODO @todo set fitskey NFRAMES
 /**
@@ -1132,7 +1133,7 @@ namespace AstroCam {
         message.str(""); message << "sending " << fpb.str();
         logwrite(function, message.str());
 
-        if ( this->native(fpb.str()) == 0x444F4E ) return 0; else return -1;
+        if ( this->do_native(fpb.str()) == 0x444F4E ) return 0; else return -1;
       }
       catch( std::out_of_range & ) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
@@ -1156,7 +1157,7 @@ namespace AstroCam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::expose(std::string nseq_in) {
+  long Interface::do_expose(std::string nseq_in) {
     std::string function = "AstroCam::Interface::expose";
     std::stringstream message;
     std::string nseqstr;
@@ -1423,7 +1424,14 @@ namespace AstroCam {
       logwrite(function, "all frames written");
     }
     else {
-      logwrite(function, "ERROR: writing image");
+      logwrite( function, "ERROR one or more devices failed to start an exposure" );
+//    if ( this->camera.get_abortstate() ) {
+//      logwrite( function, "ABORTED" );
+//      error = NO_ERROR;
+//    }
+//    else {
+//      logwrite(function, "ERROR: writing image");
+//    }
     }
 
     // close the FITS file
@@ -1450,7 +1458,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::expose ******************************************/
 
 
-  /***** AstroCam::Interface::load_firmware ***********************************/
+  /***** AstroCam::Interface::do_load_firmware ********************************/
   /**
    * @brief      load firmware (.lod) into one or all controller timing boards
    * @param[out] retstring  reference to string to contain return value
@@ -1460,11 +1468,11 @@ namespace AstroCam {
    *
    * This version is when no parameter is specified, in which case try to
    * load the default lodfiles specified in the config file. To do that,
-   * a string is built and the other load_firmware(std::string) is called.
+   * a string is built and the other do_load_firmware(std::string) is called.
    *
    */
-  long Interface::load_firmware(std::string &retstring) {
-    std::string function = "AstroCam::Interface::load_firmware";
+  long Interface::do_load_firmware(std::string &retstring) {
+    std::string function = "AstroCam::Interface::do_load_firmware";
 
     // If no connected devices then nothing to do here
     //
@@ -1480,7 +1488,7 @@ namespace AstroCam {
     //   fw->first is the devnumber, and
     //   fw->second is the firmware filename.
     // Use these to build a string of the form "<dev> <filename>" to pass to the
-    // load_firmware() function to load each controller with the specified file.
+    // do_load_firmware() function to load each controller with the specified file.
     //
     for (auto fw = this->camera.firmware.begin(); fw != this->camera.firmware.end(); ++fw) {
       std::stringstream lodfilestream;
@@ -1489,18 +1497,18 @@ namespace AstroCam {
       if ( std::find( this->devlist.begin(), this->devlist.end(), fw->first ) != this->devlist.end() ) {
         lodfilestream << fw->first << " " << fw->second;
 
-        // Call load_firmware with the built up string.
+        // Call do_load_firmware with the built up string.
         // If it returns an error then set error flag to return to the caller.
         //
-        if (this->load_firmware(lodfilestream.str(), retstring) == ERROR) error = ERROR;
+        if (this->do_load_firmware(lodfilestream.str(), retstring) == ERROR) error = ERROR;
       }
     }
     return(error);
   }
-  /***** AstroCam::Interface::load_firmware ***********************************/
+  /***** AstroCam::Interface::do_load_firmware ********************************/
 
 
-  /***** AstroCam::Interface::load_firmware ***********************************/
+  /***** AstroCam::Interface::do_load_firmware ********************************/
   /**
    * @brief      load firmware (.lod) into one or all controller timing boards
    * @param[in]  timlodfile  string may contain a controller number
@@ -1517,8 +1525,8 @@ namespace AstroCam {
    * "1 3 filename" -> load filename into devices 1 and 3
    *
    */
-  long Interface::load_firmware(std::string timlodfile, std::string &retstring) {
-    std::string function = "AstroCam::Interface::load_firmware";
+  long Interface::do_load_firmware(std::string timlodfile, std::string &retstring) {
+    std::string function = "AstroCam::Interface::do_load_firmware";
     std::stringstream message;
     std::vector<std::string> tokens;
     std::vector<uint32_t> selectdev;
@@ -1691,7 +1699,7 @@ namespace AstroCam {
 
     return( error );
   }
-  /***** AstroCam::Interface::load_firmware ***********************************/
+  /***** AstroCam::Interface::do_load_firmware ********************************/
 
 
   /***** AstroCam::Interface::dothread_load ***********************************/
@@ -1820,7 +1828,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::buffer ******************************************/
 
 
-  /***** AstroCam::Interface::readout *****************************************/
+  /***** AstroCam::Interface::do_readout **************************************/
   /**
    * @brief      set or get type of readout
    * @param[in]  readout_in   string containing the requested readout type
@@ -1833,8 +1841,8 @@ namespace AstroCam {
    * scheme to be used.
    *
    */
-  long Interface::readout(std::string readout_in, std::string &readout_out) {
-    std::string function = "AstroCam::Interface::readout";
+  long Interface::do_readout(std::string readout_in, std::string &readout_out) {
+    std::string function = "AstroCam::Interface::do_readout";
     std::stringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;
@@ -1924,8 +1932,8 @@ namespace AstroCam {
           //
           std::stringstream cmd;
           std::string retstr;
-          cmd.str(""); cmd << "SOS " << readout_arg;              ///< TODO @todo should this 3-letter command be generalized, or configurable?
-          error = this->native( selectdev, cmd.str(), retstr );   // send the native command here
+          cmd.str(""); cmd << "SOS " << readout_arg;                ///< TODO @todo should this 3-letter command be generalized, or configurable?
+          error = this->do_native( selectdev, cmd.str(), retstr );  // send the native command here
           if ( error != NO_ERROR || retstr == "ERR" ) {
             message.str(""); message << "ERROR setting output source 0x" << std::hex << std::uppercase << readout_arg << " for device " << dev;
             logwrite( function, message.str() );
@@ -1961,7 +1969,7 @@ namespace AstroCam {
 
     return( error );
   }
-  /***** AstroCam::Interface::readout *****************************************/
+  /***** AstroCam::Interface::do_readout **************************************/
 
 
   /***** AstroCam::Interface::set_camera_mode *********************************/
@@ -2066,7 +2074,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::write_frame *************************************/
 
 
-  /***** AstroCam::Interface::exptime *****************************************/
+  /***** AstroCam::Interface::do_exptime **************************************/
   /**
    * @brief      set/get the exposure time
    * @param[in]  exptime_in  requested exposure time in msec
@@ -2074,11 +2082,16 @@ namespace AstroCam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::exptime(std::string exptime_in, std::string &retstring) {
-    std::string function = "AstroCam::Interface::exptime";
+  long Interface::do_exptime(std::string exptime_in, std::string &retstring) {
+    std::string function = "AstroCam::Interface::do_exptime";
     std::stringstream message;
     long error = NO_ERROR;
     int exptime_try=0;
+
+    if (this->controller.size() < 1) {
+      logwrite(function, "ERROR: controller not configured");
+      return(ERROR);
+    }
 
     // If an exposure time was passed in then
     // try to convert it (string) to an integer
@@ -2104,7 +2117,7 @@ namespace AstroCam {
           //
           std::stringstream cmd;
           cmd << "SET " << exptime_try;
-          error = this->native( cmd.str() );
+          error = this->do_native( cmd.str() );
 
           // Set the class variable if SET was successful
           //
@@ -2126,7 +2139,7 @@ namespace AstroCam {
     bool allsame = true;
     for ( auto dev : this->devlist ) {
       try {
-        if ( this->controller.at(dev).info.exposure_time != this->controller.front().info.exposure_time ) {
+        if ( this->controller.at(dev).info.exposure_time != this->controller.at(this->devlist.at(0)).info.exposure_time ) {
           allsame = false;
         }
       }
@@ -2142,7 +2155,14 @@ namespace AstroCam {
     // If they're all the same then the return value is just the first
     //
     if ( allsame ) {
-      retstring = std::to_string( this->controller.front().info.exposure_time );
+      try { retstring = std::to_string( this->controller.at( this->devlist.at(0) ).info.exposure_time ); }
+      catch ( std::out_of_range & ) {
+        message.str(""); message << "ERROR: unable to find device 0 in list: { ";
+        for ( auto check : this->devlist ) message << check << " ";
+        message << "}";
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
     }
 
     // otherwise the return value is a list of all of them
@@ -2168,7 +2188,159 @@ namespace AstroCam {
     logwrite(function, message.str());
     return( error );
   }
-  /***** AstroCam::Interface::exptime *****************************************/
+  /***** AstroCam::Interface::do_exptime **************************************/
+
+
+  /***** AstroCam::Interface::modify_exptime **********************************/
+  /**
+   * @brief      modify the exposure time while an exposure is running
+   * @param[in]  exptime_in  requested exposure time in msec
+   * @param[out] retstring   reference to string contains the exposure time
+   * @return     ERROR or NO_ERROR
+   *
+   * This function assumes that all connected devices are using the same exposure time.
+   *
+   * Set exptime_in = -1 to end immediately.
+   *
+   */
+  long Interface::modify_exptime(std::string exptime_in, std::string &retstring) {
+    std::string function = "AstroCam::Interface::modify_exptime";
+    std::stringstream message;
+    long error = NO_ERROR;
+    long elapsed_time=0;
+    long updated_exptime=0;
+    long requested_exptime=0;
+
+    // A requested exposure time must be specified
+    //
+    if ( exptime_in.empty() ) {
+      logwrite( function, "ERROR: requested exposure time cannot be empty" );
+      return( ERROR );
+    }
+
+    // Convert the requested exptime from string to long
+    //
+    try {
+      requested_exptime = std::stol( exptime_in );
+    }
+    catch ( std::invalid_argument & ) {
+      message.str(""); message << "ERROR: unable to convert exposure time: " << exptime_in << " to long";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::out_of_range & ) {
+      message.str(""); message << "ERROR: exposure time " << exptime_in << " outside long range";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Send command to connected devices to get remaining exposure time.
+    //
+    std::string reply;
+    error = this->do_native( "RET", reply );
+
+    // The reply can contain space-delimited responses from any number
+    // of connected cameras, in the form of:
+    //   "dev:value dev:value ... dev:value"
+    //
+    // where dev is the camera device number and value is a hex value, such as:
+    //   "0:0x#### 1:0x#### ... 3:0x####"
+    //
+    // or if all cameras have the same value (unlikely here!) then the reply will be:
+    //   "value"
+    //
+    // So first tokenize on the space character to get a single camera's response,
+    //
+    std::vector<std::string> tokens;
+    Tokenize( reply, tokens, " " );
+    if ( error==NO_ERROR && tokens.size() < 1 ) {
+      message.str(""); message << "ERROR reply \"" << reply << "\": has not enough tokens";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // Must have gotten at least one token from the reply
+    //
+    if ( (error==NO_ERROR) && (tokens.size() > 0) ) {
+      reply = tokens.at(0);                            // set the reply to the first token,
+
+      std::string::size_type pos = reply.find( ":" );  // then extract the value after the colon.
+
+      // If there is only one token then the response was just "value" so convert that value from hex to uint msec
+      //
+      if ( tokens.size() == 1 ) {
+        elapsed_time = parse_val( reply );
+      }
+      else
+
+      // If there are 2 or more tokens then the response is expected to be of the form "dev:value dev:value ... dev:value"
+      // If a colon was found then convert the portion of reply after the colon from a hex string to uint msec
+      //
+      if ( tokens.size() >= 2 && pos!=std::string::npos ) {
+        elapsed_time = parse_val( reply.substr( pos + 1 ) );
+      }
+
+      // Otherwise something is wrong.
+      //
+      else {
+        message.str(""); message << "ERROR malformed reply \"" << reply << "\". expected dev:value";
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+    }
+
+    // block changes within the last 2 seconds of exposure
+    //
+    if ( (error==NO_ERROR) && ( (this->controller.at(this->devlist.at(0)).info.exposure_time - elapsed_time) < 2000 ) ) {
+      message.str(""); message << "ERROR cannot change exposure time with less than 2000 msec exptime remaining";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // check if requested exptime has already elapsed
+    //
+    if ( (error==NO_ERROR) && (requested_exptime >= 0) && (requested_exptime < elapsed_time) ) {
+      message.str(""); message << "ERROR elapsed time " << elapsed_time << " already exceeds requested exposure time " << requested_exptime;
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // Negative value requested exptime means to stop now (round up to the nearest whole sec plus one)
+    //
+    if ( (error==NO_ERROR) && (requested_exptime < 0 ) ) {
+      updated_exptime = (long)( 1000 * std::ceil( 1.0 + (elapsed_time/1000.) ) );
+    }
+
+    // otherwise, just use the requested exposure time
+    //
+    if ( (error==NO_ERROR) && (requested_exptime > 0) ) {
+      updated_exptime = requested_exptime;
+    }
+
+    // then send the command.
+    //
+    if ( error==NO_ERROR ) error = this->exptime( std::to_string( updated_exptime ), retstring );
+
+    if ( error != NO_ERROR ) logwrite( function, "ERROR modifying exptime" );
+
+    // If there is more than one space-delimited reply in retstring then not all cameras are the same
+    // and that is a problem.
+    //
+    Tokenize( retstring, tokens, " " );
+    if ( tokens.size() > 1 ) {
+      message.str(""); message << "ERROR not all cameras returned the same value: " << retstring;
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    if ( error==NO_ERROR ) {
+      message.str(""); message << "successfully modified exptime to " << updated_exptime << " msec";
+      logwrite( function, message.str() );
+    }
+
+    return( error );
+  }
+  /***** AstroCam::Interface::modify_exptime **********************************/
 
 
   /***** AstroCam::Interface::shutter *****************************************/
@@ -2227,7 +2399,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::shutter *****************************************/
 
 
-  /***** AstroCam::Interface::geometry ****************************************/
+  /***** AstroCam::Interface::do_geometry *************************************/
   /**
    * @brief      set/get geometry
    * @param[in]  args       contains: X Y (i.e. cols rows)
@@ -2244,8 +2416,8 @@ namespace AstroCam {
    * to read-only from dev or dev list
    *
    */
-  long Interface::geometry(std::string args, std::string &retstring) {
-    std::string function = "AstroCam::Interface::geometry";
+  long Interface::do_geometry(std::string args, std::string &retstring) {
+    std::string function = "AstroCam::Interface::do_geometry";
     std::stringstream message;
     int _rows=-1;
     int _cols=-1;
@@ -2309,10 +2481,10 @@ namespace AstroCam {
       std::stringstream cmd;
 
       cmd.str(""); cmd << "WRM 0x400001 " << _cols;
-      if ( error == NO_ERROR && this->native( selectdev, cmd.str() ) == ERROR ) error = ERROR;
+      if ( error == NO_ERROR && this->do_native( selectdev, cmd.str() ) == ERROR ) error = ERROR;
 
       cmd.str(""); cmd << "WRM 0x400002 " << _rows;
-      if ( error == NO_ERROR && this->native( selectdev, cmd.str() ) == ERROR ) error = ERROR;
+      if ( error == NO_ERROR && this->do_native( selectdev, cmd.str() ) == ERROR ) error = ERROR;
 
       if (error == ERROR) logwrite(function, "ERROR: writing geometry to controller");
     }
@@ -2331,15 +2503,15 @@ namespace AstroCam {
       std::string col_s, row_s;
 
       try {
-        // Return value from this->native() is of the form "dev:0xVALUE"
+        // Return value from this->do_native() is of the form "dev:0xVALUE"
         // so must parse the hex value after the colon.
         //
         cmd.str(""); cmd << "RDM 0x400001 ";
-        if ( error == NO_ERROR && this->native( dev, cmd.str(), col_s ) == ERROR ) error = ERROR;
+        if ( error == NO_ERROR && this->do_native( dev, cmd.str(), col_s ) == ERROR ) error = ERROR;
         if ( error == NO_ERROR ) this->controller.at(dev).cols = (uint32_t)parse_val( col_s.substr( col_s.find(":")+1 ) );
 
         cmd.str(""); cmd << "RDM 0x400002 ";
-        if ( error == NO_ERROR && this->native( dev, cmd.str(), row_s ) == ERROR ) error = ERROR;
+        if ( error == NO_ERROR && this->do_native( dev, cmd.str(), row_s ) == ERROR ) error = ERROR;
         if ( error == NO_ERROR ) this->controller.at(dev).rows = (uint32_t)parse_val( row_s.substr( row_s.find(":")+1 ) );
 
         rs << dev << ":" << this->controller.at(dev).cols << " " << this->controller.at(dev).rows << " ";
@@ -2360,7 +2532,7 @@ namespace AstroCam {
 
     return( error );
   }
-  /***** AstroCam::Interface::geometry ****************************************/
+  /***** AstroCam::Interface::do_geometry *************************************/
 
 
   /***** AstroCam::Interface::bias ********************************************/

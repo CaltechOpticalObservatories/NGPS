@@ -25,12 +25,20 @@
 #include "logentry.h"
 #include "network.h"
 
-namespace Slit {
+/***** SlitEmulator ***********************************************************/
+/**
+ * @namespace SlitEmulator
+ * @brief     this namespace contains everything for the slit emulator
+ *
+ */
+namespace SlitEmulator {
 
-  /** ControllerInfo **********************************************************/
+  /***** SlitEmulator::ControllerInfo *****************************************/
   /**
    * @class  ControllerInfo
-   * @brief  
+   * @brief  emulated motor controller info class
+   *
+   * This class contains the info for the emulated motor controllers
    *
    */
   class ControllerInfo {
@@ -49,7 +57,7 @@ namespace Slit {
       float pos;
 
       long load_info( std::string &input ) {
-        std::string function = "  (Slit::ControllerInfo::load_info) ";
+        std::string function = "  (SlitEmulator::ControllerInfo::load_info) ";
         std::vector<std::string> tokens;
 
         Tokenize( input, tokens, " \"" );
@@ -76,13 +84,15 @@ namespace Slit {
       }
 
   };
-  /** ControllerInfo **********************************************************/
+  /***** SlitEmulator::ControllerInfo *****************************************/
 
 
-  /** Interface ***************************************************************/
+  /***** SlitEmulator::Interface **********************************************/
   /**
    * @class  Interface
-   * @brief  
+   * @brief  interface class for the slit emulator
+   *
+   * This class interfaces the daemon to the emulated controller.
    *
    */
   class Interface {
@@ -95,16 +105,16 @@ namespace Slit {
 
       // This is a vector of all daisy-chain connected controllers
       //
-      std::vector<Slit::ControllerInfo> controller_info;
+      std::vector<SlitEmulator::ControllerInfo> controller_info;
 
       long parse_command( std::string cmd, std::string &retstring );
       long test();
-      static void do_home( Slit::ControllerInfo &info, std::mutex &mlock );
-      static void do_move( Slit::ControllerInfo &info, std::mutex &mlock, int distance, float pos );
+      static void do_home( SlitEmulator::ControllerInfo &info, std::mutex &mlock );
+      static void do_move( SlitEmulator::ControllerInfo &info, std::mutex &mlock, int distance, float pos );
 
-    };
-  /** Interface ***************************************************************/
-
+  };
+  /***** SlitEmulator::Interface **********************************************/
 
 }
+/***** SlitEmulator ***********************************************************/
 #endif

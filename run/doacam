@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+#
+# @file     doacam
+# @brief    provides a scripting interface for acamd
+# @details  add your commands to the bottom
+#
+
+source $HOME/Software/Config/acamd.cfg
+
+function cam {
+        command=""
+        output=""
+        while [ $# -gt 0 ]
+        do
+                command="$command $1"
+                shift 1
+        done
+        output=$(sock $NBPORT $command)
+        if echo $output | grep ERROR; then
+                echo "stopping due to an error"
+                exit
+        fi
+}
+
+cam open
+cam prepare 10 20 3
+cam acquire
+cam solve
+cam acquire
+cam solve
+cam close

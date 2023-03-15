@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# @file     acam
+# @brief    provides a command line interface for acamd
+#
+
+source $HOME/Software/Config/acamd.cfg
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command

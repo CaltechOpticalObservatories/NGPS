@@ -49,8 +49,9 @@ namespace Slit {
     std::stringstream message;
     long error = ERROR;
 
-    if ( this->port < 0 || host.empty() ) {
-      logwrite( function, "ERROR: host or port invalid" );
+    if ( this->port < 0 || this->host.empty() ) {
+      message.str(""); message << "ERROR: host (" << this->host << ") or port (" << this->port << ") invalid";
+      logwrite( function, message.str() );
       return( ERROR );
     }
 

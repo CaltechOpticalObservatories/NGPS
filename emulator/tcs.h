@@ -25,19 +25,26 @@
 #include "logentry.h"
 #include "network.h"
 
-namespace Tcs {
+/***** TcsEmulator ************************************************************/
+/**
+ * @namespace TcsEmulator
+ * @brief     this namespace contains everything for the TCS emulator
+ *
+ */
+namespace TcsEmulator {
 
-  const int MOTION_STOPPED         =  0;
-  const int MOTION_SLEWING         =  1;
-  const int MOTION_OFFSETTING      =  2;
-  const int MOTION_TRACKING_STABLY =  3;
-  const int MOTION_SETTLING        = -1;
-  const int MOTION_UNKNOWN         = -2;
+  const int MOTION_STOPPED         =  0;  ///< the real TCS reports this when stopped
+  const int MOTION_SLEWING         =  1;  ///< the real TCS reports this when slewing
+  const int MOTION_OFFSETTING      =  2;  ///< the real TCS reports this when offsetting
+  const int MOTION_TRACKING_STABLY =  3;  ///< the real TCS reports this when tracking stable
+  const int MOTION_SETTLING        = -1;  ///< the real TCS reports this when settling
+  const int MOTION_UNKNOWN         = -2;  ///< the real TCS reports this when motion unknown
 
-  /** Telescope ***************************************************************/
+  /***** TcsEmulator::Telescope ***********************************************/
   /**
    * @class  Telescope
-   * @brief  
+   * @brief  The telescope class contains all the information for the fake telescope,
+   *         where it's pointed and how to "move" it.
    *
    */
   class Telescope {
@@ -48,16 +55,16 @@ namespace Tcs {
       Telescope();
       ~Telescope();
 
-      volatile std::atomic<bool> coords_running;
+      volatile std::atomic<bool> coords_running;  ///< set true during the fake slew, prevents another thread from moving the telescope
 
       // default slew and settling times set in constructor but can be overridden by configuration file
       //
-      double slewrate_ra;        /// slewrate in s for RA
-      double slewrate_dec;       /// slewrate in s for DEC
-      double slewrate_casangle;  /// slewrate in s for CASANGLE
-      double settle_ra;          /// settling time in s for RA
-      double settle_dec;         /// settling time in s for DEC
-      double settle_casangle;    /// settling time in s for CASANGLE
+      double slewrate_ra;        ///< slewrate in s for RA
+      double slewrate_dec;       ///< slewrate in s for DEC
+      double slewrate_casangle;  ///< slewrate in s for CASANGLE
+      double settle_ra;          ///< settling time in s for RA
+      double settle_dec;         ///< settling time in s for DEC
+      double settle_casangle;    ///< settling time in s for CASANGLE
 
       double focus;
       double tubelength;
@@ -74,17 +81,19 @@ namespace Tcs {
       double azimuth;
       double zangle;
 
-      volatile std::atomic<int> motionstate;      /// telescope motion state
+      volatile std::atomic<int> motionstate;      ///< telescope motion state
 
-      static void do_coords( Tcs::Telescope &telescope, std::string args );
+      static void do_coords( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the COORDS command work, which "moves" the telescope
   };
-  /** Telescope ***************************************************************/
+  /***** TcsEmulator::Telescope ***********************************************/
 
 
-  /** Interface ***************************************************************/
+  /***** TcsEmulator::Interface ***********************************************/
   /**
    * @class  Interface
-   * @brief  
+   * @brief  TCS emulator interface class
+   *
+   * Interfaces the tcs emulator daemon to the emulated tcs
    *
    */
   class Interface {
@@ -95,11 +104,11 @@ namespace Tcs {
 
       Telescope telescope;
 
-      long parse_command( std::string cmd, std::string &retstring );
+      long parse_command( std::string cmd, std::string &retstring );  ///< parse commands for the TCS
 
-    };
-  /** Interface ***************************************************************/
-
+  };
+  /***** TcsEmulator::Interface ***********************************************/
 
 }
+/***** TcsEmulator ************************************************************/
 #endif

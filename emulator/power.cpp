@@ -1,8 +1,16 @@
+/**
+ * @file    power.cpp
+ * @brief   these are the main functions for the power emulator
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #include "power.h"
 
-namespace Power {
+namespace PowerEmulator {
 
-  /**************** Power::NpsInfo::NpsInfo ********8**************************/
+  /***** PowerEmulator::NpsInfo::NpsInfo **************************************/
   /**
    * @fn         NpsInfo
    * @brief      class constructor
@@ -16,10 +24,10 @@ namespace Power {
     this->host="";
     this->port=-1;
   }
-  /**************** Power::NpsInfo::NpsInfo ********8**************************/
+  /***** PowerEmulator::NpsInfo::NpsInfo **************************************/
 
 
-  /**************** Power::NpsInfo::~NpsInfo *******8**************************/
+  /***** PowerEmulator::NpsInfo::~NpsInfo *************************************/
   /**
    * @fn         ~NpsInfo
    * @brief      class de-constructor
@@ -29,10 +37,128 @@ namespace Power {
    */
   NpsInfo::~NpsInfo() {
   }
-  /**************** Power::NpsInfo::~NpsInfo *******8**************************/
+  /***** PowerEmulator::NpsInfo::~NpsInfo *************************************/
 
 
-  /**************** Power::Interface::Interface *******************************/
+  /***** PowerEmulator::NpsInfo::load_nps_info ********************************/
+  /**
+   * @fn         load_nps_info
+   * @brief      loads NPS information from the configuration file into the class
+   * @param[in]  input
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is called whenever the NPS_UNIT key is found in the
+   * configuration file, to parse and load all of the information assigned
+   * by that key into the appropriate NpsInfo class variables.
+   *
+   * The input string specifies: "<nps#> <maxplugs> <host> <port>"
+   *
+   */
+  long NpsInfo::load_nps_info( std::string &input, int &npsnum ) {
+    std::string function = "PowerEmulator::NpsInfo::load_nps_info";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    Tokenize( input, tokens, " \"" );
+
+    if ( tokens.size() != 4 ) {
+      message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 4";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    try {
+      npsnum         = std::stoi( tokens.at(0) );
+      this->maxplugs = std::stoi( tokens.at(1) );
+      this->host     = tokens.at(2);
+      this->port     = std::stoi( tokens.at(3) );
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+    }
+
+    if ( npsnum < 0 ) {
+      message.str(""); message << "ERROR bad NPS unit number " << npsnum << ": must be >= 0";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    else this->npsnum = npsnum;
+
+    return( NO_ERROR );
+  }
+  /***** PowerEmulator::NpsInfo::load_nps_info ********************************/
+
+
+  /***** PowerEmulator::NpsInfo::load_plug_info ***************************/
+  /**
+   * @fn         load_plug_info
+   * @brief      loads plug information from the configuration file into the class
+   * @param[in]  input
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is called whenever the NPS_PLUG key is found in the
+   * configuration file, to parse and load all of the information assigned
+   * by that key into the appropriate NpsInfo class variables.
+   *
+   * The input string specifies: "<nps#> <plug#> <plugname>"
+   *
+   */
+  long NpsInfo::load_plug_info( std::string &input, int &npsnum, int &plugnum, std::string &plugname ) {
+    std::string function = "PowerEmulator::NpsInfo::load_plug_info";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    Tokenize( input, tokens, " \"" );
+
+    if ( tokens.size() != 3 ) {
+      message.str(""); message << "ERROR bad number of tokens in \"" << input << "\": expected 3 but received " << tokens.size();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    try {
+      npsnum      = std::stoi( tokens.at(0) );
+      plugnum     = std::stoi( tokens.at(1) );
+      plugname    = tokens.at(2);
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+    }
+
+    if ( npsnum < 0 ) {
+      message.str(""); message << "ERROR bad NPS unit number " << npsnum << ": must be >= 0";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    if ( plugnum < 0 ) {
+      message.str(""); message << "ERROR bad plug number " << plugnum << ": must be >= 0";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    if ( plugname.empty() ) {
+      logwrite( function, "ERROR plug name cannot be empty" );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /***** PowerEmulator::NpsInfo::load_plug_info ***************************/
+
+  /***** PowerEmulator::Interface::Interface **********************************/
   /**
    * @fn         Interface
    * @brief      class constructor
@@ -42,10 +168,10 @@ namespace Power {
    */
   Interface::Interface() {
   }
-  /**************** Power::Interface::Interface *******************************/
+  /***** PowerEmulator::Interface::Interface **********************************/
 
 
-  /**************** Power::Interface::~Interface ******************************/
+  /***** PowerEmulator::Interface::~Interface *********************************/
   /**
    * @fn         ~Interface
    * @brief      class deconstructor
@@ -55,10 +181,10 @@ namespace Power {
    */
   Interface::~Interface() {
   }
-  /**************** Power::Interface::~Interface ******************************/
+  /***** PowerEmulator::Interface::~Interface *********************************/
 
 
-  /**************** Power::Interface::parse_command ***************************/
+  /***** PowerEmulator::Interface::parse_command ******************************/
   /**
    * @fn         parse_command
    * @brief      parse commands for the NPS, spawn a thread if necessary
@@ -72,7 +198,7 @@ namespace Power {
    *
    */
   long Interface::parse_command( int npsnum, std::string cmd, std::string &retstring ) {
-    std::string function = "  (Power::Interface::parse_command) ";
+    std::string function = "  (PowerEmulator::Interface::parse_command) ";
     std::stringstream retstream;
 
     retstream << cmd << "\r\n";
@@ -180,6 +306,6 @@ namespace Power {
 
     return ( NO_ERROR );
   }
-  /**************** Power::Interface::parse_command ***************************/
+  /***** PowerEmulator::Interface::parse_command ******************************/
 
 }

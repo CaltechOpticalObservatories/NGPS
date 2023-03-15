@@ -9,9 +9,9 @@
 #include "emulatord_tcs.h"
 #include "daemonize.h"
 
-Emulator::Server emulator;
+TcsEmulator::Server emulator;
 
-/** signal_handler ***********************************************************/
+/***** signal_handler *********************************************************/
 /**
  * @fn         signal_handler
  * @brief      handles ctrl-C
@@ -20,7 +20,7 @@ Emulator::Server emulator;
  *
  */
 void signal_handler( int signo ) {
-  std::string function = "  (Emulator::signal_handler) ";
+  std::string function = "  (TcsEmulator::signal_handler) ";
   switch ( signo ) {
     case SIGTERM:
     case SIGINT:
@@ -41,7 +41,7 @@ void signal_handler( int signo ) {
   }
   return;
 }
-/** signal_handler ***********************************************************/
+/***** signal_handler *********************************************************/
 
 
 int  main( int argc, char **argv );                 // main thread (just gets things started)
@@ -49,7 +49,7 @@ void block_main( Network::TcpSocket sock );         // this thread handles reque
 void doit( Network::TcpSocket sock );               // the worker thread
 
 
-/** main *********************************************************************/
+/***** main *******************************************************************/
 /**
  * @fn         main
  * @brief      the main function
@@ -58,7 +58,7 @@ void doit( Network::TcpSocket sock );               // the worker thread
  *
  */
 int main( int argc, char **argv ) {
-  std::string function = "  (Emulator::main) ";
+  std::string function = "  (TcsEmulator::main) ";
   std::stringstream message;
   long ret=NO_ERROR;
   std::string daemon_in;     // daemon setting read from config file
@@ -94,7 +94,7 @@ int main( int argc, char **argv ) {
 
   if ( emulator.config.read_config(emulator.config) != NO_ERROR) {    // read configuration file specified on command line
     std::cerr << get_timestamp() << function << emulator.subsystem
-              << "ERROR: unable to configure system\n";
+              << " ERROR: unable to configure system\n";
     emulator.exit_cleanly();
   }
 
@@ -160,10 +160,10 @@ int main( int argc, char **argv ) {
   for (;;) pause();                                                // main thread suspends
   return 0;
 }
-/** main *********************************************************************/
+/***** main *******************************************************************/
 
 
-/** block_main ***************************************************************/
+/***** block_main *************************************************************/
 /**
  * @fn         block_main
  * @brief      main function for blocking connection thread
@@ -179,16 +179,16 @@ int main( int argc, char **argv ) {
 void block_main( Network::TcpSocket sock ) {
   while(1) {
     int fd = sock.Accept();
-    std::cerr << get_timestamp() << "  (Emulator::block_main) Accept returns connection on fd = " << fd << "\n";
+    std::cerr << get_timestamp() << "  (TcsEmulator::block_main) Accept returns connection on fd = " << fd << "\n";
     doit( sock );                  // call function to do the work
     sock.Close();
   }
   return;
 }
-/** block_main ***************************************************************/
+/***** block_main *************************************************************/
 
 
-/** doit *********************************************************************/
+/***** doit *******************************************************************/
 /**
  * @fn         doit
  * @brief      the workhorse of each thread connetion
@@ -202,7 +202,7 @@ void block_main( Network::TcpSocket sock ) {
  *
  */
 void doit( Network::TcpSocket sock ) {
-  std::string function = "  (Emulator::doit) ";
+  std::string function = "  (TcsEmulator::doit) ";
   long  ret;
   std::stringstream message;
   std::string cmd, args;        // arg string is everything after command
@@ -283,9 +283,8 @@ void doit( Network::TcpSocket sock ) {
       ret = -1;
     }
 
-    /**
-     * process commands here
-     */
+    // process commands here
+    //
     ret = NOTHING;
     std::string retstring="";   // string for the return value
 
@@ -326,5 +325,5 @@ void doit( Network::TcpSocket sock ) {
   std::cerr << get_timestamp() << function << "connection closed\n";
   return;
 }
-/** doit *********************************************************************/
+/***** doit *******************************************************************/
 

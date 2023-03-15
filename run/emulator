@@ -55,7 +55,7 @@ start_proc( ) {
 
 # Get the fully qualified paths for each process and their config files here
 #
-source ~/Software/run/ngps-config
+source ~/Software/run/emulator-config
 
 # Force daemon mode by default by adding " -d" to the command line
 #

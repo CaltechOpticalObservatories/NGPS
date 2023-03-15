@@ -33,7 +33,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define POLLTIMEOUT 60000              ///< default Poll timeout in msec
+#define POLLTIMEOUT 30000              ///< default Poll timeout in msec
 #define LISTENQ 64                     ///< listen(3n) backlog 
 #define UDPMSGLEN 256                  ///< UDP message length
 
@@ -59,6 +59,7 @@ namespace Network {
     private:
       int port;
       bool blocking;
+      bool asyncflag;
       int totime;                      ///< timeout time for poll
       int fd;                          ///< connected socket file descriptor
       int listenfd;                    ///< listening socket file descriptor
@@ -71,6 +72,7 @@ namespace Network {
     public:
       TcpSocket();                       ///< basic class constructor
       TcpSocket(int port_in, bool block_in, int totime_in, int id_in);  ///< useful constructor for a server
+      TcpSocket(int port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
       TcpSocket( std::string host, int port );                          ///< client constructor
       TcpSocket(const TcpSocket &obj);   ///< copy constructor
       ~TcpSocket();                      ///< class destructor
@@ -79,8 +81,10 @@ namespace Network {
 
       int id;                            ///< id may be useful for tracking multiple threads, no real requirement here
 
+      void set_totime( int time_in ) { this->totime = time_in; };
       int getfd() { return this->fd; };
       bool isblocking() { return this->blocking; };
+      bool isasync() { return this->asyncflag; };
       bool isconnected() { return this->connection_open; };
       int polltimeout() { return this->totime; };
       void sethost(std::string host_in) { this->host = host_in; };

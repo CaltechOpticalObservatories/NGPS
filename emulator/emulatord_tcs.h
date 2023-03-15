@@ -29,15 +29,21 @@
 #include "tcs.h"
 #include "tcsd_commands.h"
 
-#define  BUFSIZE      1024  /// size of the input command buffer
+#define  BUFSIZE      1024  ///< size of the input command buffer
 
-namespace Emulator {
+/***** TcsEmulator ************************************************************/
+/**
+ * @namespace TcsEmulator
+ * @brief     this namespace contains everything for the TCS emulator
+ *
+ */
+namespace TcsEmulator {
 
 
-  /** Server ******************************************************************/
+  /***** TcsEmulator::Server **************************************************/
   /**
    * @class  Server
-   * @brief  emulator server class
+   * @brief  TCS emulator server class
    *
    * This class contains everything needed to run the emulator server,
    * the server which responds as the TCS.
@@ -47,14 +53,14 @@ namespace Emulator {
     private:
     public:
       int port;
-      std::string subsystem;             /// subsystem name
+      std::string subsystem;             ///< subsystem name
       std::atomic<int> cmd_num;
       Config config;
-      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;             ///< mutex to protect against simultaneous access to Accept()
 
-      Tcs::Interface interface;
+      TcsEmulator::Interface interface;  ///< create an emulater interface
 
-      /** Emulator::Server ****************************************************/
+      /***** TcsEmulator::Server **********************************************/
       /**
        * @fn         Server
        * @brief      class constructor
@@ -66,10 +72,10 @@ namespace Emulator {
         this->subsystem="tcs";
         this->cmd_num=0;
       }
-      /** Emulator::Server ****************************************************/
+      /***** TcsEmulator::Server **********************************************/
 
 
-      /** Emulator::~Server ***************************************************/
+      /***** TcsEmulator::~Server *********************************************/
       /**
        * @fn         ~Server
        * @brief      class deconstructor cleans up on exit
@@ -78,10 +84,10 @@ namespace Emulator {
        */
       ~Server() {
       }
-      /** Emulator::~Server ***************************************************/
+      /***** TcsEmulator::~Server *********************************************/
 
 
-      /** Emulator::Server::exit_cleanly **************************************/
+      /***** TcsEmulator::Server::exit_cleanly ********************************/
       /**
        * @fn         exit_cleanly
        * @brief      closes things nicely and exits
@@ -90,7 +96,7 @@ namespace Emulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = "  (Emulator::Server::exit_cleanly) ";
+        std::string function = "  (TcsEmulator::Server::exit_cleanly) ";
         std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connection
@@ -98,10 +104,10 @@ namespace Emulator {
         if ( this->port > 0 ) close( this->port );
         exit( EXIT_SUCCESS );
       }
-      /** Emulator::Server::exit_cleanly **************************************/
+      /***** TcsEmulator::Server::exit_cleanly ********************************/
 
 
-      /** Emulator::Server::configure_emulator ********************************/
+      /***** TcsEmulator::Server::configure_emulator **************************/
       /**
        * @fn         configure_emulator
        * @brief      
@@ -110,7 +116,7 @@ namespace Emulator {
        *
        */
       long configure_emulator() {
-        std::string function = "  (Emulator::Server::configure_emulator) ";
+        std::string function = "  (TcsEmulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;
@@ -182,10 +188,11 @@ namespace Emulator {
 
         return error;
       }
-      /** Emulator::Server::configure_emulator ********************************/
+      /***** TcsEmulator::Server::configure_emulator **************************/
 
   };
-  /** Server ******************************************************************/
+  /***** TcsEmulator::Server **************************************************/
 
-} // end namespace Emulator
+}
+/***** TcsEmulator ************************************************************/
 #endif

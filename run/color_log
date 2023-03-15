@@ -16,7 +16,8 @@ fi
 
 # these are all of the log files
 #
-FILES="-f $DIR/calibd_$DATE.log \
+FILES="-f $DIR/acamd_$DATE.log \
+       -f $DIR/calibd_$DATE.log \
        -f $DIR/camerad_$DATE.log \
        -f $DIR/flexured_$DATE.log \
        -f $DIR/focusd_$DATE.log \

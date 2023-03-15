@@ -10,6 +10,7 @@
 
 #include <map>
 #include <string>
+#include "cpython.h"
 
 #include "network.h"
 #include "logentry.h"
@@ -20,6 +21,9 @@
 #include <mysqlx/xdevapi.h>
 
 #define ERROR_TARGETLIST_BAD_HEADER 1001  ///< TODO change this
+#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
+#define PYTHON_FPOFFSETS_MODULE "FPoffsets"
+#define PYTHON_FPOFFSETS_FUNCTION "compute_offset"
 
 /***** Sequencer **************************************************************/
 /**
@@ -40,6 +44,7 @@ namespace Sequencer {
   const std::string DB_SCHEMA="DB_SCHEMA";        ///< name of the database schema configuration parameter used in .cfg file and elsewhere
   const std::string DB_ACTIVE="DB_ACTIVE";        ///< name of the active target table configuration parameter
   const std::string DB_COMPLETED="DB_COMPLETED";  ///< name of the completed observations table configuration parameter
+  const std::string DB_SETS="DB_SETS";            ///< name of the completed target sets table configuration parameter
 
   const std::string POWER_SLIT="POWER_SLIT";         ///< parameter name which defines NPS_PLUG names required for slit hardware
   const std::string POWER_CAMERA="POWER_CAMERA";     ///< parameter name which defines NPS_PLUG names required for camera hardware
@@ -49,15 +54,18 @@ namespace Sequencer {
   const std::string POWER_FOCUS="POWER_FOCUS";       ///< parameter name which defines NPS_PLUG names required for focus hardware
   const std::string POWER_TELEM="POWER_TELEM";       ///< parameter name which defines NPS_PLUG names required for telem hardware
   const std::string POWER_THERMAL="POWER_THERMAL";   ///< parameter name which defines NPS_PLUG names required for thermal hardware
-  const std::string POWER_AG="POWER_AG";             ///< parameter name which defines NPS_PLUG names required for A&G hardware
+  const std::string POWER_ACAM="POWER_ACAM";         ///< parameter name which defines NPS_PLUG names required for ACAM (A&G) hardware
+
+  const std::string ACQUIRE_MIN_RA_OFF="ACQUIRE_MIN_RA_OFF";    ///< minimum RA offset before target is acquired
+  const std::string ACQUIRE_MIN_DEC_OFF="ACQUIRE_MIN_DEC_OFF";  ///< minimum DEC offset before target is acquired
 
   // These are the possible target states
   //
   const std::string TARGET_PENDING="pending";        ///< target status pending
+  const std::string TARGET_ACTIVE="active";          ///< target status active (slew and acquire)
   const std::string TARGET_EXPOSING="exposing";      ///< target status exposing
-  const std::string TARGET_COMPLETE="complete";      ///< target status complete
-  const std::string TARGET_UNASSIGNED="unassigned";  ///< target status unassigned
-
+  const std::string TARGET_COMPLETE="completed";     ///< target status complete
+  const std::string TARGET_UNASSIGNED="inactive";    ///< target status unassigned
 
   /***** Sequencer::Daemon ****************************************************/
   /**
@@ -68,21 +76,30 @@ namespace Sequencer {
   class Daemon {
     private:
       bool isopen;                  ///< is a connection to the daemon open?
+      bool timedout;
 
     public:
       Daemon();
+      Daemon( std::string name );   ///< preferred constructor with name to identify daemon
       ~Daemon();
 
       std::string name;             ///< name of the daemon
       std::string host;             ///< host where the daemon is running
-      int port;                     ///< port that the daemon is listening on
+      int port;                     ///< blocking port that the daemon is listening on
+      int nbport;                   ///< non-blocking port that the daemon is listening on
 
       Network::TcpSocket socket;    ///< socket object for communications with daemon
 
+      long async( std::string args );                              ///< async (non-blocking) commands to daemon that don't need a reply
+      long async( std::string args, std::string &retstring );      ///< async (non-blocking) commands to daemon that need a reply
+
+      static void foo( );
+      static void dothread_command( Sequencer::Daemon &daemon, std::string args );
       long command( std::string args );                            ///< commands to daemon
       long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
       long send( std::string command, std::string &reply );        ///< for internal use only
       long connect();                                              ///< initialize socket connection to daemon
+      long disconnect();                                           ///< close socket connection to daemon
       void set_name( std::string name_in ) { this->name=name_in; } ///< name this daemon
       void set_port( int port );                                   ///< set the port number
 
@@ -128,6 +145,69 @@ namespace Sequencer {
   /***** Sequencer::PowerSwitch ***********************************************/
 
 
+  /***** Sequencer::FPOffsets *************************************************/
+  /**
+   * @class   FPOffsets
+   * @brief   class for calling FPOffsets python functions
+   * @details makes use of CPython::CPytInstance defined in cpython.h
+   *
+   */
+  class FPOffsets {
+    private:
+      char* restore_path;       /// if the PYTHONPATH env variable is changed then remember the original
+      bool python_initialized;  /// set true when the Python interpreter has been initialized
+
+    public:
+      FPOffsets();
+      ~FPOffsets();
+
+      inline bool is_initialized() { return this->python_initialized; };
+
+      // store the in/out coordinates in the class
+      //
+      typedef struct {
+        double ra;
+        double dec;
+        double angle;
+      } coords_t;
+
+      coords_t coords_in { 0, 0, 0 };
+      coords_t coords_out { 0, 0, 0 };
+
+      CPython::CPyInstance py_instance { PYTHON_PATH };  /// initialize the Python interpreter
+      PyObject* pModuleName;
+      PyObject* pModule;
+
+      inline void set_inputs( double dec, double ra, double angle ) {
+        this->coords_in.ra=ra;
+        this->coords_in.dec=dec;
+        this->coords_in.angle=angle;
+        return;
+      }
+
+      inline void get_outputs( double &dec, double &ra, double &angle ) {
+	dec=this->coords_out.dec;
+	ra=this->coords_out.ra;
+	angle=this->coords_out.angle;
+        return;
+      }
+
+      // compute_offset() is overloaded
+      //
+      // It can be called with no coordinates (using the class variables for input/output).
+      // It can be called with inputs only (usng the class variables for output).
+      // It can be called with both inputs and a reference to output variables so that outputs are returned directly.
+      // In all cases, the class variables will be updated with the results.
+      //
+      long compute_offset( std::string from, std::string to );
+      long compute_offset( std::string from, std::string to, double ra_in, double dec_in, double angle_in );
+      long compute_offset( std::string from, std::string to, 
+                           double ra_in, double dec_in, double angle_in,
+                           double &ra_out, double &dec_out, double &angle_out );
+  };
+  /***** Sequencer::FPOffsets *************************************************/
+
+
   /***** Sequencer::TargetInfo ************************************************/
   /**
    * @class  TargetInfo
@@ -143,11 +223,14 @@ namespace Sequencer {
       std::string db_schema;              ///< database schema
       std::string db_active;              ///< database active observations table
       std::string db_completed;           ///< database completed observations table
+      std::string db_sets;                ///< database table of target sets
       bool        db_configured;          ///< have the database params been set?
 
     public:
       TargetInfo();
       ~TargetInfo();
+
+      FPOffsets fpoffsets;
 
       /**
        * TargetState enums are the possible return values from the TargetInfo::TargetState get_next() function
@@ -160,19 +243,23 @@ namespace Sequencer {
 
       bool is_db_configured() { return this->db_configured; };   ///< get the private db_configured state
 
-      const float RA_MIN = 0;             ///< minimum target right ascension
-      const float RA_MAX = 24;            ///< maximum target right ascension
-      const float DEC_MIN = -90;          ///< minimum target declination
-      const float DEC_MAX = 90;           ///< maximum target declination
-      const float SLIT_MIN = 0;           ///< minimum slit width
-      const float SLIT_MAX = 10;          ///< maximum slit width
+      const double RA_MIN = 0;            ///< minimum target right ascension
+      const double RA_MAX = 24;           ///< maximum target right ascension
+      const double DEC_MIN = -90;         ///< minimum target declination
+      const double DEC_MAX = 90;          ///< maximum target declination
+      const double SLIT_MIN = 0;          ///< minimum slit width
+      const double SLIT_MAX = 10;         ///< maximum slit width
       const long  EXPTIME_MIN = 0;        ///< minimum value for exptime
       const long  EXPTIME_MAX = 1 << 24;  ///< maximum value for exptime
 
-      std::vector<std::string> targetlist;///< target list fields, used for accessing the target table, which accepts a variadic param
+      std::vector<std::string> targetlist_cols;  ///< target list fields, used for accessing the target table, which accepts a variadic param
+      std::vector<std::string> targetset_cols;   ///< target set fields, used for accessing the table of target sets
 
+      int            setid;               ///< ID of the set to get from the targets table
+      mysqlx::string setname;             ///< set name associated with setid
       int            obsid;               ///< current target observation ID (DB internal, used for record-checking)
       int            obsorder;            ///< observation order (DB internal)
+      mysqlx::string state;               ///< current target state
       mysqlx::string name;                ///< current target name
       mysqlx::string ra;                  ///< current target right ascension
       mysqlx::string dec;                 ///< current target declination
@@ -188,7 +275,10 @@ namespace Sequencer {
       int            binspect;            ///< binning in spectral direction for this target
       int            binspat;             ///< binning in spatial direction for this target
 
-      int  colnum( std::string field );   ///< get column number of requested field from this->targetlist
+      double         min_ra_off;          ///< minimum RA offset before target is acquired (from .cfg)
+      double         min_dec_off;         ///< minimum DEC offset before target is acquired (from .cfg)
+
+      int  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
       TargetInfo::TargetState get_next(); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in);    ///< get the next target from the database with state=state_in
       long add_row( int number, std::string name, std::string ra, std::string dec );   ///< add a row to the database
@@ -198,6 +288,7 @@ namespace Sequencer {
       void init_record();
 
       long configure_db( std::string param, std::string value );  ///< configure the database connection parameters (host, user, etc.)
+      long targetset( std::string args, std::string &retstring ); ///< set or get the target set to read from the targets table
 
   };
   /***** Sequencer::TargetInfo ************************************************/

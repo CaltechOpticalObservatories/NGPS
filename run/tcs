@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# @file     tcs
+# @brief    provides a command line interface for tcsd
+#
+
+source $HOME/Software/Config/tcsd.cfg
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command

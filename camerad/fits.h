@@ -194,6 +194,23 @@ class FITS_file {
         return;
       }
 
+      // If aborted then close and remove the file
+      //
+      if ( info.abortexposure ) {
+        try { this->pFits->destroy(); }
+        catch ( CCfits::FitsError& error ) {
+          message.str(""); message << "ERROR closing aborted file: " << error.message();
+          logwrite( function, message.str() );
+          this->file_open = false;   // must set this false on exception
+          return;
+        }
+        this->file_open = false;
+        std::remove( info.fits_name.c_str() );
+        logwrite( function, "removed aborted file" );
+        this->fits_name="";
+        return;
+      }
+
       // Write the user keys on close, if specified
       //
       if ( writekeys ) {

@@ -1,0 +1,28 @@
+# configuration file for camera-server
+# @CAMERAD_CFG_COMMENT@
+#
+#DEFAULT_FIRMWARE=(0 /home/developer/Software/dsp/SWIFT/sg2_48khz.waveforms.reverse.down.quad.lod)
+#DEFAULT_FIRMWARE=(0 /home/developer/Software/dsp/SWIFT/ngps-sg2-48khz-led.lod)
+DEFAULT_FIRMWARE=(0 /tmp/foo.lod)
+#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/engg_48khz.reverse.updated.bias.up.lod)
+#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/ngps-engg-48khz-led.lod)
+#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/ngps-engg-48khz.frame.lod)
+#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/testthis.lod)
+DEFAULT_FIRMWARE=(1 /tmp/foo.lod)
+#DEFAULT_FIRMWARE=(2 /home/developer/ss/DSP/SWIFT/sg2_48khz.lod)
+DEFAULT_FIRMWARE=(2 /tmp/foo.lod)
+#DEFAULT_FIRMWARE=(2 /home/developer/Software/dsp/SWIFT/sg2_48khz-led.lod)
+#DEFAULT_FIRMWARE=(3 /home/developer/ss/DSP/SWIFT/sg2_48khz.lod)
+DEFAULT_FIRMWARE=(3 /tmp/foo.lod)
+#DEFAULT_FIRMWARE=(3 /home/developer/Software/dsp/SWIFT/sg2_48khz-led.lod)
+IMDIR=/home/developer/data
+BASENAME=swift
+BLKPORT=@CAMERAD_BLK_PORT@        # server blocking port
+NBPORT=@CAMERAD_NB_PORT@          # server non-blocking port
+LOGPATH=/home/logs/               # fully qualified path to save log files
+ASYNCPORT=@MESSAGEPORT@
+ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
+DAEMON=no
+
+# The following are for simulated ARC controllers
+ARCSIM_NUMDEV=4

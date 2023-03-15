@@ -1,0 +1,24 @@
+# configuration file for slitd
+# @SLITD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/               # where to write logs
+BLKPORT=@SLITD_BLK_PORT@          # slitd server blocking port
+NBPORT=@SLITD_NB_PORT@            # slitd server non-blocking port
+DAEMON=no                         # run as daemon?
+ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
+ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+
+# there is a single host:port for the "master" controller
+# at the front of the daisy-chain
+#
+PI_NAME=slit                      # the name of this PI controller
+#PI_HOST=131.215.193.64           # terminal server
+#PI_PORT=10002                    # terminal server port
+PI_HOST=localhost                 # emulator host
+PI_PORT=@SLITD_PI_PORT@           # emulator service port
+
+# for each actuator's controller specify: address name min max
+# one must be named "left" and the other must be named "right"
+#
+MOTOR_CONTROLLER="1 left 0 10"
+MOTOR_CONTROLLER="2 right 0 10"

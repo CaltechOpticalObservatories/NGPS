@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+# name:   sock
+# brief:  shell script to send commands to a server
+# author: David Hale
+#
+# This script uses the sendsockcmd program to write commands to host:port
+ 
+# The command is the first argument, then shift the next arg into first position
+port=$1
+shift 1
+command=$1
+shift 1
+
+# build up string to send by adding each arg into command
+while [ $# -gt 0 ]
+do
+	command="$command $1"
+	shift 1
+done
+
+# send the command string
+$HOME/bin/sendsockcmd -h localhost -p $port "$command" -t 5000
+

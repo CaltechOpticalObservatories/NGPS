@@ -1,0 +1,22 @@
+# configuration file for tcsd
+# @TCSD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/               # where to write logs
+BLKPORT=@TCSD_BLK_PORT@           # tcsd server blocking port
+NBPORT=@TCSD_NB_PORT@             # tcsd server non-blocking port
+DAEMON=no                         # run as daemon?
+ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
+ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+
+TCS_HOST=localhost                # set this to localhost for emulator
+TCS_PORT=@TCS_PORT@               # port number for the TCS service
+
+# emulator-only configuration
+#
+EMULATOR_SLEWRATE_RA=0.75        # emulator slew rate in deg/s for RA
+EMULATOR_SLEWRATE_DEC=0.75       # emulator slew rate in deg/s for DEC
+EMULATOR_SLEWRATE_CASANGLE=2     # emulator slew rate in deg/s for CASANGLE
+EMULATOR_SETTLE_RA=12            # emulator settling time in s for RA
+EMULATOR_SETTLE_DEC=12           # emulator settling time in s for DEC
+EMULATOR_SETTLE_CASANLGE=0.5     # emulator settling time in s for CASANGLE
+

@@ -1,0 +1,26 @@
+# configuration file for filterd
+# @FILTERD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/               # where to write logs
+BLKPORT=@FILTERD_BLK_PORT@        # slitd server blocking port
+NBPORT=@FILTERD_NB_PORT@          # slitd server non-blocking port
+DAEMON=no                         # run as daemon?
+ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
+ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+
+# there is a single host:port for the "master" controller
+# at the front of the daisy-chain
+#
+PI_NAME=filter
+PI_HOST=localhost
+PI_PORT=@FILTERD_PI_PORT@
+
+# for each actuator's controller specify: address name min max
+# one must be named "left" and the other must be named "right"
+#
+MOTOR_CONTROLLER="1 left 0 10"
+MOTOR_CONTROLLER="2 right 0 10"
+
+# this is the port number that the emulator listens to
+#
+EMULATOR=@FILTERD_PI_PORT@

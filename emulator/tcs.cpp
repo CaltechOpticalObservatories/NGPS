@@ -1,8 +1,16 @@
+/**
+ * @file    tcs.cpp
+ * @brief   these are the main functions for the TCS emulator
+ * @author  David Hale <dhale@astro.caltech.edu>
+ * @details 
+ *
+ */
+
 #include "tcs.h"
 
-namespace Tcs {
+namespace TcsEmulator {
 
-  /**************** Tcs::Interface::Interface *********************************/
+  /***** TcsEmulator::Interface::Interface ************************************/
   /**
    * @fn         Interface
    * @brief      class constructor
@@ -12,10 +20,10 @@ namespace Tcs {
    */
   Interface::Interface() {
   }
-  /**************** Tcs::Interface::Interface *********************************/
+  /***** TcsEmulator::Interface::Interface ************************************/
 
 
-  /**************** Tcs::Interface::~Interface ********************************/
+  /***** TcsEmulator::Interface::~Interface ***********************************/
   /**
    * @fn         ~Interface
    * @brief      class deconstructor
@@ -25,10 +33,10 @@ namespace Tcs {
    */
   Interface::~Interface() {
   }
-  /**************** Tcs::Interface::~Interface ********************************/
+  /***** TcsEmulator::Interface::~Interface ***********************************/
 
 
-  /**************** Tcs::Telescope::Telescope *********************************/
+  /***** TcsEmulator::Telescope::Telescope ************************************/
   /**
    * @fn         Telescope
    * @brief      class constructor
@@ -36,19 +44,20 @@ namespace Tcs {
    * @return     none
    *
    * sets some default values
+   * some of these can be overridden by the configuration file
    *
    */
   Telescope::Telescope() {
-    this->motionstate.store( MOTION_STOPPED );  /// telescope is stopped by default
+    this->motionstate.store( MOTION_STOPPED );  //! telescope is stopped by default
 
     // default slew and settling times set here can be overridden by configuration file
     //
-    this->slewrate_ra = 0.75;     /// default slew rate in s for RA, override with EMULATOR_SLEWRATE_RA
-    this->slewrate_dec = 0.75;    /// default slew rate in s for DEC override with EMULATOR_SLEWRATE_DEC
-    this->slewrate_casangle = 2;  /// default slew rate in s for CASANGLE override with EMULATOR_SLEWRATE_CASNGLE
-    this->settle_ra = 12;         /// default settling time in s for RA override with EMULATOR_SETTLE_RA
-    this->settle_dec = 12;        /// default settling time in s for DEC override with EMULATOR_SETTLE_DEC
-    this->settle_casangle = 0.5;  /// default settling time in s for CASANGLE override with EMULATOR_SETTLE__CASNGLE
+    this->slewrate_ra = 0.75;     //! default slew rate is 0.75/s for RA, override with EMULATOR_SLEWRATE_RA
+    this->slewrate_dec = 0.75;    //! default slew rate is 0.75/s for DEC override with EMULATOR_SLEWRATE_DEC
+    this->slewrate_casangle = 2;  //! default slew rate is 2/s for CASANGLE override with EMULATOR_SLEWRATE_CASNGLE
+    this->settle_ra = 12;         //! default settling time is 12s for RA override with EMULATOR_SETTLE_RA
+    this->settle_dec = 12;        //! default settling time is 12s for DEC override with EMULATOR_SETTLE_DEC
+    this->settle_casangle = 0.5;  //! default settling time is 0.5s for CASANGLE override with EMULATOR_SETTLE__CASNGLE
 
     this->telid = 200;
     this->focus = 36.71;
@@ -66,10 +75,10 @@ namespace Tcs {
     this->azimuth = 0;
     this->zangle = 0;
   }
-  /**************** Tcs::Telescope::Telescope *********************************/
+  /***** TcsEmulator::Telescope::Telescope ************************************/
 
 
-  /**************** Tcs::Telescope::~Telescope ********************************/
+  /***** TcsEmulator::Telescope::~Telescope ***********************************/
   /**
    * @fn         ~Telescope
    * @brief      class deconstructor
@@ -79,10 +88,10 @@ namespace Tcs {
    */
   Telescope::~Telescope() {
   }
-  /**************** Tcs::Telescope::~Telescope ********************************/
+  /***** TcsEmulator::Telescope::~Telescope ***********************************/
 
 
-  /**************** Tcs::Telescope::do_coords *********************************/
+  /***** TcsEmulator::Telescope::do_coords ************************************/
   /**
    * @fn         do_coords
    * @brief      perform the COORDS command work, which "moves" the telescope
@@ -91,8 +100,8 @@ namespace Tcs {
    * @return     none
    *
    */
-  void Telescope::do_coords( Tcs::Telescope &telescope, std::string args ) {
-    std::string function = "  (Tcs::Telescope::do_coords) ";
+  void Telescope::do_coords( TcsEmulator::Telescope &telescope, std::string args ) {
+    std::string function = "  (TcsEmulator::Telescope::do_coords) ";
 
     double newra, newdec;
 
@@ -199,10 +208,10 @@ namespace Tcs {
 
     return;
   }
-  /**************** Tcs::Telescope::do_coords *********************************/
+  /***** TcsEmulator::Telescope::do_coords ************************************/
 
 
-  /**************** Tcs::Interface::parse_command *****************************/
+  /***** TcsEmulator::Interface::parse_command ********************************/
   /**
    * @fn         parse_command
    * @brief      parse commands for the TCS, spawn a thread if necessary
@@ -218,7 +227,7 @@ namespace Tcs {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = "  (Tcs::Interface::parse_command) ";
+    std::string function = "  (TcsEmulator::Interface::parse_command) ";
 
     // The real TCS allows an empty command but I don't,
     // only because I don't forsee anyone using it.
@@ -231,6 +240,7 @@ namespace Tcs {
     Tokenize( cmd, tokens, " " );
 
     std::string mycmd;                 // command is the 1st token
+    std::stringstream myargs;
     size_t nargs;                      // number of args (after command)
 
     if ( tokens.size() < 1 ) {         // should be impossible since already checked for cmd.empty()
@@ -241,6 +251,7 @@ namespace Tcs {
 
     try {
       mycmd = tokens.at(0);            // command is the 1st token
+      for ( auto tok : tokens ) myargs << tok << " ";
       tokens.erase( tokens.begin() );  // remove the commmand from the vector
       nargs = tokens.size();           // number of args after removing command
     }
@@ -262,7 +273,7 @@ namespace Tcs {
      */
 
     if ( mycmd == "?MOTION" ) {
-      retstring = std::to_string( this->telescope.motionstate.load() );
+      retstring = std::to_string( this->telescope.motionstate.load() );  // return the current motion state
     }
     else
 
@@ -279,13 +290,27 @@ namespace Tcs {
         retstring = "-2";              // invalid parameters
       }
       else {
-        std::stringstream myargs;
-        for ( auto tok : tokens ) myargs << tok << " ";
-        std::thread( std::ref( Tcs::Telescope::do_coords ), 
+        std::thread( std::ref( TcsEmulator::Telescope::do_coords ), 
                      std::ref( this->telescope ),
                      myargs.str() ).detach();
         retstring = "0";               // successful completion
       }
+    }
+    else
+    if ( mycmd == "N" ) {
+      retstring = "0";                 // successful completion
+    }
+    else
+    if ( mycmd == "S" ) {
+      retstring = "0";                 // successful completion
+    }
+    else
+    if ( mycmd == "E" ) {
+      retstring = "0";                 // successful completion
+    }
+    else
+    if ( mycmd == "W" ) {
+      retstring = "0";                 // successful completion
     }
     else {
       std::cerr << get_timestamp() << function << "ERROR: unknown command " << cmd << "\n";
@@ -296,6 +321,6 @@ namespace Tcs {
 
     return ( NO_ERROR );
   }
-  /**************** Tcs::Interface::parse_command *****************************/
+  /***** TcsEmulator::Interface::parse_command ********************************/
 
 }

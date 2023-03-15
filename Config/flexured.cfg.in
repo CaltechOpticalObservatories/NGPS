@@ -1,0 +1,14 @@
+# configuration file for flexured
+# @FLEXURED_CFG_COMMENT@
+#
+LOGPATH=/home/logs/               # where to write logs
+BLKPORT=@FLEXURED_BLK_PORT@       # slitd server blocking port
+NBPORT=@FLEXURED_NB_PORT@         # slitd server non-blocking port
+DAEMON=no                         # run as daemon?
+ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
+ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+
+# this is the port number that the emulator listens to
+#
+EMULATOR_PORT=@FLEXURED_EMULATOR@
+

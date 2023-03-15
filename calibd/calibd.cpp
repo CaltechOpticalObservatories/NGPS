@@ -1,77 +1,25 @@
 /**
  * @file    calibd.cpp
- * @brief   this is the main calib daemon
- * @details 
+ * @brief   this is the main calib daemon for communicating with the calibrator system
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
 
-#include "build_date.h"
 #include "calibd.h"
-#include "daemonize.h"
 
-Calib::Server calibd;
-std::string logpath; 
 
-/** signal_handler ***********************************************************/
+/***** main *******************************************************************/
 /**
- * @fn     signal_handler
- * @brief  handles ctrl-C
- * @param  int signo
- * @return nothing
- *
- */
-void signal_handler(int signo) {
-  std::string function = "Calib::signal_handler";
-  std::stringstream message;
-
-  switch (signo) {
-    case SIGTERM:
-    case SIGINT:
-      logwrite(function, "received termination signal");
-      message << "NOTICE:" << Calib::DAEMON_NAME << " exit";
-      calibd.interface.async.enqueue( message.str() );
-      calibd.exit_cleanly();                     // shutdown the daemon
-      break;
-    case SIGHUP:
-      logwrite(function, "caught SIGHUP");
-      calibd.configure_calibd();                 // TODO can (/should) this be done while running?
-      break;
-    case SIGPIPE:
-      logwrite(function, "caught SIGPIPE");
-      break;
-    default:
-      message << "received unknown signal " << strsignal(signo);
-      logwrite( function, message.str() );
-      message.str(""); message << "NOTICE:" << Calib::DAEMON_NAME << " exit";
-      calibd.interface.async.enqueue( message.str() );
-      calibd.exit_cleanly();                     // shutdown the daemon
-      break;
-  }
-  return;
-}
-/** signal_handler ***********************************************************/
-
-
-int  main(int argc, char **argv);           // main thread (just gets things started)
-void new_log_day( );                        // create a new log each day
-void block_main(Network::TcpSocket sock);   // this thread handles requests on blocking port
-void thread_main(Network::TcpSocket sock);  // this thread handles requests on non-blocking port
-void async_main(Network::UdpSocket sock);   // this thread handles the asyncrhonous UDP message port
-void doit(Network::TcpSocket sock);         // the worker thread
-
-
-/** main *********************************************************************/
-/**
- * @fn     main
- * @brief  the main function
- * @param  int argc, char** argv
- * @return 0
+ * @brief      the main function
+ * @param[in]  argc  argument count
+ * @param[in]  argv  character array that holds all arguments passed to the “main()” function through the command line
+ * @return     0
  *
  */
 int main(int argc, char **argv) {
   std::string function = "Calib::main";
   std::stringstream message;
+  std::string logpath;
   long ret=NO_ERROR;
   std::string daemon_in;     // daemon setting read from config file
   bool start_daemon = false; // don't start as daemon unless specifically requested
@@ -177,7 +125,9 @@ int main(int argc, char **argv) {
   Network::TcpSocket s(calibd.blkport, true, -1, 0); // instantiate TcpSocket object with blocking port
   s.Listen();                                        // create a listening socket
   socklist.push_back(s);                             // add it to the socklist vector
-  std::thread(block_main, socklist[0]).detach();     // spawn a thread to handle requests on this socket
+  std::thread( std::ref(Calib::Server::block_main),
+               std::ref(calibd),
+               std::ref(socklist[0]) ).detach();     // spawn a thread to handle requests on this socket
 
   // pre-thread N_THREADS-1 detached threads to handle requests on the non-blocking port
   // thread #0 is reserved for the blocking port (above)
@@ -193,287 +143,60 @@ int main(int argc, char **argv) {
       s.id = i;
       socklist.push_back(s);
     }
-    std::thread(thread_main, socklist[i]).detach();  // spawn a thread to handle each non-blocking socket request
+    std::thread( std::ref(Calib::Server::thread_main),
+                 std::ref(calibd),
+                 std::ref(socklist[i]) ).detach();  // spawn a thread to handle each non-blocking socket request
   }
 
   // Instantiate a multicast UDP object and spawn a thread to send asynchronous messages
   //
   Network::UdpSocket async(calibd.asyncport, calibd.asyncgroup);
-  std::thread(async_main, async).detach();
+  std::thread( std::ref(Calib::Server::async_main),
+               std::ref(calibd),
+               async ).detach();
 
   // thread to start a new logbook each day
   //
-  std::thread( new_log_day ).detach();
+  std::thread( std::ref(Calib::Server::new_log_day), logpath ).detach();
 
   for (;;) pause();                                  // main thread suspends
   return 0;
 }
-/** main *********************************************************************/
+/***** main *******************************************************************/
 
 
-/** new_log_day **************************************************************/
+/***** signal_handler *********************************************************/
 /**
- * @fn     new_log_day
- * @brief  creates a new logbook each day
- * @return nothing
- *
- * This thread is started by main and never terminates.
- * It sleeps for the number of seconds that logentry determines
- * are remaining in the day, then closes and re-inits a new log file.
- *
- * The number of seconds until the next day "nextday" is a global which
- * is set by init_log.
+ * @brief      handles ctrl-C
+ * @param[in]  signo
  *
  */
-void new_log_day( ) { 
-  while (1) {
-    std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
-    close_log();
-    init_log( logpath, Calib::DAEMON_NAME );
-  }
-}
-/** new_log_day **************************************************************/
-
-
-/** block_main ***************************************************************/
-/**
- * @fn     block_main
- * @brief  main function for blocking connection thread
- * @param  Network::TcpSocket sock, socket object
- * @return nothing
- *
- * accepts a socket connection and processes the request by
- * calling function doit()
- *
- * This thread never terminates.
- *
- */
-void block_main(Network::TcpSocket sock) {
-  while(1) {
-    sock.Accept();
-    doit(sock);                   // call function to do the work
-    sock.Close();
-  }
-  return;
-}
-/** block_main ***************************************************************/
-
-
-/** thread_main **************************************************************/
-/**
- * @fn     thread_main
- * @brief  main function for all non-blocked threads
- * @param  Network::TcpSocket sock, socket object
- * @return nothing
- *
- * accepts a socket connection and processes the request by
- * calling function doit()
- *
- * There are N_THREADS-1 of these, one for each non-blocking connection.
- * These threads never terminate.
- *
- * This function differs from block_main only in that the call to Accept
- * is mutex-protected.
- *
- */
-void thread_main(Network::TcpSocket sock) {
-  while (1) {
-    calibd.conn_mutex.lock();
-    sock.Accept();
-    calibd.conn_mutex.unlock();
-    doit(sock);                // call function to do the work
-    sock.Close();
-  }
-  return;
-}
-/** thread_main **************************************************************/
-
-
-/** async_main ***************************************************************/
-/**
- * @fn     async_main
- * @brief  asynchronous message sending thread
- * @param  Network::UdpSocket sock, socket object
- * @return nothing
- *
- * Loops forever, when a message arrives in the status message queue it is
- * sent out via multi-cast UDP datagram.
- *
- */
-void async_main(Network::UdpSocket sock) {
-  std::string function = "Calib::async_main";
-  int retval;
-
-  retval = sock.Create();                                   // create the UDP socket
-  if (retval < 0) {
-    logwrite(function, "error creating UDP multicast socket for asynchronous messages");
-    calibd.exit_cleanly();                                  // do not continue on error
-  }
-  if (retval==1) {                                          // exit this thread but continue with daemon
-    logwrite(function, "asyncrhonous message port disabled by request");
-  }
-
-  while (1) {
-    std::string message = calibd.interface.async.dequeue(); // get the latest message from the queue (blocks)
-    retval = sock.Send(message);                            // transmit the message
-    if (retval < 0) {
-      std::stringstream errstm;
-      errstm << "error sending UDP message: " << message;
-      logwrite(function, errstm.str());
-    }
-    if (message=="exit") {                                  // terminate this thread
-      sock.Close();
-      return;
-    }
-  }
-
-  return;
-}
-/** async_main ***************************************************************/
-
-
-/** doit *********************************************************************/
-/**
- * @fn     doit
- * @brief  the workhorse of each thread connetion
- * @param  int thr
- * @return nothin
- *
- * stays open until closed by client
- *
- * commands come in the form: 
- * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
- *
- */
-void doit(Network::TcpSocket sock) {
-  std::string function = "Calib::doit";
-  char  buf[BUFSIZE+1];
-  long  ret;
+void signal_handler(int signo) {
+  std::string function = "Calib::signal_handler";
   std::stringstream message;
-  std::string cmd, args;        // arg string is everything after command
-  std::vector<std::string> tokens;
 
-  bool connection_open=true;
-
-  while (connection_open) {
-    memset(buf,  '\0', BUFSIZE);  // init buffers
-
-    // Wait (poll) connected socket for incoming data...
-    //
-    int pollret;
-    if ( ( pollret=sock.Poll() ) <= 0 ) {
-      if (pollret==0) {
-        message.str(""); message << "Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
-        logwrite(function, message.str());
-      }
-      if (pollret <0) {
-        message.str(""); message << "Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
-        logwrite(function, message.str());
-      }
-      break;                      // this will close the connection
-    }
-
-    // Data available, now read from connected socket...
-    //
-    std::string sbuf = buf;
-    char delim='\n';
-    if ( ( ret=sock.Read( sbuf, delim ) ) <= 0 ) {
-      if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
-        logwrite(function, message.str());
-      }
-      if ( ret==0 ) {
-        message.str(""); message << "timeout reading from fd " << sock.getfd();
-        logwrite( function, message.str() );
-      }
-      break;                      // Breaking out of the while loop will close the connection.
-                                  // This probably means that the client has terminated abruptly, 
-                                  // having sent FIN but not stuck around long enough
-                                  // to accept CLOSE and give the LAST_ACK.
-    }
-
-    // convert the input buffer into a string and remove any trailing linefeed
-    // and carriage return
-    //
-    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
-    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
-
-    if (sbuf.empty()) {sock.Write("\n"); continue;}  // acknowledge empty command so client doesn't time out
-
-    try {
-      std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
-
-      cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
-
-      if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
-
-      if (cmd_sep == std::string::npos) {            // If no space was found,
-        args="";                                     // then the arg list is empty,
-      }
-      else {
-        args= sbuf.substr(cmd_sep+1);                // otherwise args is everything after that space.
-      }
-
-      sock.id = ++calibd.cmd_num;
-      if ( calibd.cmd_num == INT_MAX ) calibd.cmd_num = 0;
-
-      message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
-      logwrite(function, message.str());
-    }
-    catch ( std::runtime_error &e ) {
-      std::stringstream errstream; errstream << e.what();
-      message.str(""); message << "error parsing arguments: " << errstream.str();
-      logwrite(function, message.str());
-      ret = -1;
-    }
-    catch ( ... ) {
-      message.str(""); message << "unknown error parsing arguments: " << args;
-      logwrite(function, message.str());
-      ret = -1;
-    }
-
-    /**
-     * process commands here
-     */
-    ret = NOTHING;
-    std::string retstring="";
-
-    // exit
-    //
-    if ( cmd.compare( "exit" )==0 ) {
-                    calibd.exit_cleanly();                     // shutdown the daemon
-    }
-    else
-
-    // isopen
-    //
-    if ( cmd.compare( CALIBD_ISOPEN ) == 0 ) {
-                    bool isopen = calibd.interface.isopen( );
-                    if ( isopen ) retstring = "true"; else retstring = "false";
-                    ret = NO_ERROR;
-    }
-
-    // Unknown commands generate an error
-    //
-    else {
-      message.str(""); message << "ERROR: unknown command: " << cmd;
+  switch (signo) {
+    case SIGTERM:
+    case SIGINT:
+      logwrite(function, "received termination signal");
+      message << "NOTICE:" << Calib::DAEMON_NAME << " exit";
+      calibd.interface.async.enqueue( message.str() );
+      calibd.exit_cleanly();                     // shutdown the daemon
+      break;
+    case SIGHUP:
+      logwrite(function, "caught SIGHUP");
+      break;
+    case SIGPIPE:
+      logwrite(function, "caught SIGPIPE");
+      break;
+    default:
+      message << "received unknown signal " << strsignal(signo);
       logwrite( function, message.str() );
-      ret = ERROR;
-    }
-
-    if (ret != NOTHING) {
-      if ( not retstring.empty() ) retstring.append( " " );
-      std::string term=(ret==0?"DONE\n":"ERROR\n");
-      retstring.append( term );
-      if ( sock.Write( retstring ) < 0 ) connection_open=false;
-    }
-
-    if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
-                                         // Keep blocking connection open for interactive session.
+      message.str(""); message << "NOTICE:" << Calib::DAEMON_NAME << " exit";
+      calibd.interface.async.enqueue( message.str() );
+      calibd.exit_cleanly();                     // shutdown the daemon
+      break;
   }
-
-  sock.Close();
   return;
 }
-/** doit *********************************************************************/
-
+/***** signal_handler *********************************************************/

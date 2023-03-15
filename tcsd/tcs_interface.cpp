@@ -142,9 +142,9 @@ namespace TCS {
       return( ERROR );
     }
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] sending to TCS on fd " << this->tcs.getfd() << ": " << cmd;
-    logwrite( function, message.str() );
+#ifdef LOGLEVEL_DEBUG  // this can be a little much when polling
+//  message.str(""); message << "[DEBUG] sending to TCS on fd " << this->tcs.getfd() << ": " << cmd;
+//  logwrite( function, message.str() );
 #endif
 
     cmd.append( term );        // add terminator before sending command to the TCS
@@ -191,9 +191,9 @@ namespace TCS {
 
     reply = sbuf;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] received from TCS on fd " << this->tcs.getfd() << ": " << reply;
-    logwrite( function, message.str() );
+#ifdef LOGLEVEL_DEBUG  // this can be a little much when polling
+//  message.str(""); message << "[DEBUG] received from TCS on fd " << this->tcs.getfd() << ": " << reply;
+//  logwrite( function, message.str() );
 #endif
 
     return( error );

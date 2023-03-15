@@ -2,8 +2,6 @@
  * @file     emulatord_power.h
  * @brief    
  * @author   David Hale <dhale@astro.caltech.edu>
- * @date     
- * @modified 
  *
  */
 
@@ -30,12 +28,18 @@
 #include "power.h"
 #include "powerd_commands.h"
 
-#define  BUFSIZE      1024  /// size of the input command buffer
+#define  BUFSIZE      1024  ///< size of the input command buffer
 
-namespace Emulator {
+/***** PowerEmulator **********************************************************/
+/**
+ * @namespace PowerEmulator
+ * @brief     this namespace contains everything for the power emulator
+ *
+ */
+namespace PowerEmulator {
 
 
-  /** Server ******************************************************************/
+  /***** PowerEmulator::Server ************************************************/
   /**
    * @class  Server
    * @brief  emulator server class
@@ -48,14 +52,14 @@ namespace Emulator {
     private:
     public:
       int port;
-      std::string subsystem;             /// subsystem name
+      std::string subsystem;                ///< subsystem name
       std::atomic<int> cmd_num;
       Config config;
-      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;                ///< mutex to protect against simultaneous access to Accept()
 
-      Power::Interface interface;        /// create an emulated interface
+      PowerEmulator::Interface interface;   ///< create an emulated interface
 
-      /** Emulator::Server ****************************************************/
+      /***** PowerEmulator::Server::Server ************************************/
       /**
        * @fn         Server
        * @brief      class constructor
@@ -67,10 +71,10 @@ namespace Emulator {
         this->subsystem="power";
         this->cmd_num=0;
       }
-      /** Emulator::Server ****************************************************/
+      /***** PowerEmulator::Server::Server ************************************/
 
 
-      /** Emulator::~Server ***************************************************/
+      /***** PowerEmulator::Server::~Server ***********************************/
       /**
        * @fn         ~Server
        * @brief      class deconstructor cleans up on exit
@@ -79,10 +83,10 @@ namespace Emulator {
        */
       ~Server() {
       }
-      /** Emulator::~Server ***************************************************/
+      /***** PowerEmulator::Server::~Server ***********************************/
 
 
-      /** Emulator::Server::exit_cleanly **************************************/
+      /***** PowerEmulator::Server::exit_cleanly ******************************/
       /**
        * @fn         exit_cleanly
        * @brief      closes things nicely and exits
@@ -91,7 +95,7 @@ namespace Emulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = "  (Emulator::Server::exit_cleanly) ";
+        std::string function = "  (PowerEmulator::Server::exit_cleanly) ";
         std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connection
@@ -99,10 +103,10 @@ namespace Emulator {
         if ( this->port > 0 ) close( this->port );
         exit( EXIT_SUCCESS );
       }
-      /** Emulator::Server::exit_cleanly **************************************/
+      /***** PowerEmulator::Server::exit_cleanly ******************************/
 
 
-      /** Emulator::Server::configure_emulator ********************************/
+      /***** PowerEmulator::Server::configure_emulator ************************/
       /**
        * @fn         configure_emulator
        * @brief      
@@ -111,7 +115,7 @@ namespace Emulator {
        *
        */
       long configure_emulator() {
-        std::string function = "  (Emulator::Server::configure_emulator) ";
+        std::string function = "  (PowerEmulator::Server::configure_emulator) ";
         int applied=0;
         long error = NO_ERROR;
 
@@ -123,7 +127,7 @@ namespace Emulator {
           if ( config.param[entry].compare( 0, 8, "NPS_UNIT" ) == 0 ) {
             // Create a local NpsInfo object for checking the config file input.
             //
-            Power::NpsInfo npsinfo;
+            PowerEmulator::NpsInfo npsinfo;
 
             // The nps_info map is indexed by nps number.
             // Pass this variable by reference to the load_nps_info() function, which will
@@ -141,7 +145,7 @@ namespace Emulator {
           if (config.param[entry].compare(0, 8, "NPS_PLUG")==0) {
             // Create a local NpsInfo object for checking the config file input.
             //
-            Power::NpsInfo npsinfo;
+            PowerEmulator::NpsInfo npsinfo;
 
             // The following variables (plugname, npsnum, plugnum) are extracted from this config file
             // by the load_plug_info() function.
@@ -200,10 +204,11 @@ namespace Emulator {
 
         return error;
       }
-      /** Emulator::Server::configure_emulator ********************************/
+      /***** PowerEmulator::Server::configure_emulator ************************/
 
   };
-  /** Server ******************************************************************/
+  /***** PowerEmulator::Server ************************************************/
 
-} // end namespace Emulator
+}
+/***** PowerEmulator **********************************************************/
 #endif

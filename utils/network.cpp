@@ -356,6 +356,34 @@ namespace Network {
   TcpSocket::TcpSocket(int port_in, bool block_in, int totime_in, int id_in) {
     this->port = port_in;
     this->blocking = block_in;
+    this->asyncflag = false;
+    this->totime = totime_in;
+    this->id = id_in;
+    this->fd = -1;
+    this->listenfd = -1;
+    this->host = "";
+    this->addrs = NULL;
+    this->connection_open = false;
+  };
+  /***** Network::TcpSocket::TcpSocket ****************************************/
+
+
+  /***** Network::TcpSocket::TcpSocket ****************************************/
+  /**
+   * @brief      TcpSocket class constructor
+   * @param[in]  port_in    port which server will listen on
+   * @param[in]  block_in   true|false -- will the connection be blocking?
+   * @param[in]  async_in   true|false -- will the connection be asynchronous?
+   * @param[in]  totime_in  timeout time for poll, in msec
+   * @param[in]  id_in      ID number (for keeping track of threads)
+   *
+   * Use this to construct a server's listening socket object
+   *
+   */
+  TcpSocket::TcpSocket(int port_in, bool block_in, bool async_in, int totime_in, int id_in) {
+    this->port = port_in;
+    this->blocking = block_in;
+    this->asyncflag = async_in;
     this->totime = totime_in;
     this->id = id_in;
     this->fd = -1;
@@ -395,6 +423,7 @@ namespace Network {
   TcpSocket::TcpSocket() {
     this->port = -1;
     this->blocking = false;
+    this->asyncflag = false;
     this->totime = POLLTIMEOUT;    /// default Poll timeout in msec
     this->id = -1;
     this->fd = -1;
@@ -415,6 +444,7 @@ namespace Network {
   TcpSocket::TcpSocket(const TcpSocket &obj) {
     port = obj.port;
     blocking = obj.blocking;
+    asyncflag = obj.asyncflag;
     totime = obj.totime;
     id = obj.id;
     fd = obj.fd;

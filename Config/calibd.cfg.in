@@ -1,0 +1,14 @@
+# configuration file for calibd
+# @CALIBD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/               # where to write logs
+BLKPORT=@CALIBD_BLK_PORT@         # slitd server blocking port
+NBPORT=@CALIBD_NB_PORT@           # slitd server non-blocking port
+DAEMON=no                         # run as daemon?
+ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
+ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+
+# this is the port number that the emulator listens to
+#
+EMULATOR=@CALIBD_EMULATOR@
+

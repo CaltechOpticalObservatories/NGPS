@@ -29,8 +29,8 @@
 
 #include "flexure.h"
 
-#define  N_THREADS    10    //!< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
-#define  BUFSIZE      1024  //!< size of the input command buffer
+#define  N_THREADS    10    /// total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
+#define  BUFSIZE      1024  /// size of the input command buffer
 #define  CONN_TIMEOUT 3000  //<! incoming (non-blocking) connection timeout in milliseconds
 
 namespace Emulator {
@@ -46,34 +46,36 @@ namespace Emulator {
 
       /** Emulator::~Server ********************************************************/
       /**
-       * @fn     ~Server
-       * @brief  class deconstructor cleans up on exit
+       * @fn         ~Server
+       * @brief      class deconstructor cleans up on exit
+       * @param[in]  none
+       * @return     none
        */
       ~Server() {
         close( this->emulatorport );
       }
       /** Emulator::~Server ********************************************************/
 
-      int emulatorport;                  //!< emulator port
-      std::string subsystem;             //!< subsystem name
+      int emulatorport;                  /// emulator port
+      std::string subsystem;             //. subsystem name
 
       std::atomic<int> cmd_num;
 
       Config config;
 
-      std::mutex conn_mutex;             //!< mutex to protect against simultaneous access to Accept()
+      std::mutex conn_mutex;             /// mutex to protect against simultaneous access to Accept()
 
 
       /** Emulator::Server::exit_cleanly *******************************************/
       /**
-       * @fn     exit_cleanly
-       * @brief  closes things nicely and exits
-       * @param  none
-       * @return none
+       * @fn         exit_cleanly
+       * @brief      closes things nicely and exits
+       * @param[in]  none
+       * @return     none
        *
        */
       void exit_cleanly(void) {
-        std::string function = " (Emulator::Server::exit_cleanly) ";
+        std::string function = "  (Emulator::Server::exit_cleanly) ";
         std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connections to daemons
@@ -86,14 +88,14 @@ namespace Emulator {
 
       /** Emulator::Server::configure_emulator *************************************/
       /**
-       * @fn     configure_emulator
-       * @brief  
-       * @param  none
-       * @return ERROR or NO_ERROR
+       * @fn         configure_emulator
+       * @brief      
+       * @param[in]  none
+       * @return     ERROR or NO_ERROR
        *
        */
       long configure_emulator() {
-        std::string function = " (Emulator::Server::configure_emulator) ";
+        std::string function = "  (Emulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;

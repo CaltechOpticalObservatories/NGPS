@@ -40,6 +40,20 @@ namespace Camera {
   }
 
 
+  /***** Camera::Camera::pause ************************************************/
+  /**
+   * @brief      pause the current operation (exposure, readout, etc.)
+   *
+   */
+//void Camera::pause() {
+//  std::string function = "Camera::Camera::pause";
+//  std::stringstream message;
+//  logwrite(function, "received pause");
+//  return;
+//}
+  /***** Camera::Camera::pause ************************************************/
+
+
   /***** Camera::Camera::abort ************************************************/
   /**
    * @brief      abort the current operation (exposure, readout, etc.)
@@ -53,6 +67,7 @@ namespace Camera {
     return;
   }
   /***** Camera::Camera::abort ************************************************/
+
 
 void Camera::set_abortstate(bool state) {
   this->abort_mutex.lock();

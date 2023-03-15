@@ -1,0 +1,46 @@
+# ----------------------------------------------------------------------------
+# @file    portdefs
+# @brief   port definitions for all NGPS software
+# @author  David Hale <dhale@caltech.edu>
+# @details These will be used by CMake to create the individual .cfg files
+#          Listing is in numerical order by port# to help avoid any conflicts
+# ----------------------------------------------------------------------------
+
+set( MESSAGEPORT               1300 )
+
+set( SEQUENCERD_ASYNC_PORT     8000 )
+
+set( SEQUENCERD_BLK_PORT       9000 )
+set( CALIBD_BLK_PORT           9001 )
+set( CAMERAD_BLK_PORT          9002 )
+set( FLEXURED_BLK_PORT         9003 )
+set( FOCUSD_BLK_PORT           9004 )
+set( POWERD_BLK_PORT           9005 )
+set( SLITD_BLK_PORT            9006 )
+set( TCSD_BLK_PORT             9007 )
+set( FILTERD_BLK_PORT          9008 )
+set( ACAMD_BLK_PORT            9009 )
+
+set( SEQUENCERD_NB_PORT        9100 )
+set( CALIBD_NB_PORT            9101 )
+set( CAMERAD_NB_PORT           9102 )
+set( FLEXURED_NB_PORT          9103 )
+set( FOCUSD_NB_PORT            9104 )
+set( POWERD_NB_PORT            9105 )
+set( SLITD_NB_PORT             9106 )
+set( TCSD_NB_PORT              9107 )
+set( FILTERD_NB_PORT           9108 )
+set( ACAMD_NB_PORT             9109 )
+
+set( CALIBD_EMULATOR          30001 )
+set( CAMERAD_EMULATOR         30002 )
+set( FLEXURED_EMULATOR        30003 )
+set( FOCUSD_EMULATOR          30004 )
+set( SLITD_PI_PORT            30006 )
+set( FILTERD_PI_PORT          30008 )
+set( ACAMD_PI_PORT            30009 )
+
+set( ANDOR_CAMERA_SERVER_PORT 31000 )
+set( DB_PORT                  33060 )
+
+set( TCS_PORT                 49200 )

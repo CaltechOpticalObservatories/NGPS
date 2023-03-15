@@ -1,0 +1,62 @@
+# ngps-config
+# 
+# This file defines the fully qualified path to each
+# software component and its associated configuration file.
+
+# acam PI (one of the acamd components)
+#
+ACAM_PI_EMULATOR="/home/developer/Software/bin/emulatord.acam_pi"
+ACAM_PI_CONFIG="/home/developer/Software/Config/acamd.cfg"
+
+# andor server
+# This is Jennifer's GUI, not a daemon, but is here as a placeholder
+# and to keep the arrays aligned so that the ANDORSERVER EMULATOR works.
+#
+ANDORSERVER_EMULATOR="/home/developer/Software/bin/emulatord.andorserver"
+ANDORSERVER_CONFIG="/home/developer/Software/Config/acamd.cfg"
+
+# calib
+#
+CALIB_EMULATOR="/home/developer/Software/bin/emulatord.calib"
+CALIBD_CONFIG="/home/developer/Software/Config/calibd.cfg"
+
+## camera
+##
+#CAMERA_EMULATOR="/home/developer/Software/bin/emulatord.camera"
+#CAMERAD_CONFIG="/home/developer/Software/Config/camerad.cfg"
+
+# flexure
+#
+FLEXURE_EMULATOR="/home/developer/Software/bin/emulatord.flexure"
+FLEXURED_CONFIG="/home/developer/Software/Config/flexured.cfg"
+
+# focus
+#
+FOCUS_EMULATOR="/home/developer/Software/bin/emulatord.focus"
+FOCUSD_CONFIG="/home/developer/Software/Config/focusd.cfg"
+
+# power
+#
+POWER_EMULATOR="/home/developer/Software/bin/emulatord.power"
+POWERD_CONFIG="/home/developer/Software/Config/powerd.cfg"
+
+# slit
+#
+SLIT_EMULATOR="/home/developer/Software/bin/emulatord.slit"
+SLITD_CONFIG="/home/developer/Software/Config/slitd.cfg"
+
+# tcs
+#
+#TCS_EMULATOR="/home/developer/Software/java/TCS-SIM-1_00_00/bin/tcs-sim"
+TCS_EMULATOR="/home/developer/Software/bin/emulatord.tcs"
+TCSD_CONFIG="/home/developer/Software/Config/tcsd.cfg"
+
+
+# Arrays of all the above processes, their associated names, and their associated config files
+# These three arrays must be aligned!
+#
+EMULATORS=("$ACAM_PI_EMULATOR" "$ANDORSERVER_EMULATOR" "$CALIB_EMULATOR" "$FLEXURE_EMULATOR" \
+           "$FOCUS_EMULATOR" "$POWER_EMULATOR" "$SLIT_EMULATOR" "$TCS_EMULATOR")
+EMUNAMES=("acampi" "andorserver" "calib" "flexure" "focus" "power" "slit" "tcs")
+CONFIGS=("$ACAM_PI_CONFIG" "$ANDORSERVER_CONFIG" "$CALIBD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" \
+         "$POWERD_CONFIG" "$SLITD_CONFIG" "$TCSD_CONFIG")
