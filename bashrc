@@ -35,8 +35,8 @@ PATH="/usr/pgsql-15/bin:$PATH"  # pg_config should be used from here, not anacon
 export PATH
 
 PYTHONPATH="$HOME/Software/Python"
-PYTHONPATH="$PYTHONPATH:/home/developer/anaconda3/lib/python3.9"
-PYTHONPATH="$PYTHONPATH:/home/developer/anaconda3/lib/python3.9/site-packages"
+#PYTHONPATH="$PYTHONPATH:/home/developer/anaconda3/lib/python3.9"  # this breaks dnf
+#PYTHONPATH="$PYTHONPATH:/home/developer/anaconda3/lib/python3.9/site-packages"  # this breaks dnf
 export PYTHONPATH
 
 # Uncomment the following line if you don't like systemctl's auto-paging feature:
