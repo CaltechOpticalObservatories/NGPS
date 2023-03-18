@@ -9,7 +9,7 @@
 # cd /home/developer/Software/
 # git add bashrc
 # git commit -m "<Description of change>"
-# git push # backs up changes on GitHub
+# git push # OPTIONAL ; backs up changes on GitHub
 # cd -  # as you were
 # \--------------------------------------------------------------------------/
 
