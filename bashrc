@@ -3,8 +3,8 @@
 # /--------------------------------------------------------------------------\
 # This file is a symbolic link to /home/developer/Software/bashrc
 #
-# By editing this file, you agree, under penalty of shame, to commit changes
-# to the Git repo in /home/developer/Software/
+# BY EDITING THIS FILE, YOU AGREE, UNDER PENALTY OF SHAME, TO COMMIT CHANGES
+# TO THE GIT REPO IN /home/developer/Software/
 #
 # cd /home/developer/Software/
 # git add bashrc
