@@ -34,15 +34,19 @@ PATH="/usr/pgsql-15/bin:$PATH"  # pg_config should be used from here, not anacon
 
 export PATH
 
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/anaconda3/lib  # breaks psql
+
 PYTHONPATH="$HOME/Software/Python"
-#PYTHONPATH="$PYTHONPATH:/home/developer/anaconda3/lib/python3.9"  # this breaks dnf
-#PYTHONPATH="$PYTHONPATH:/home/developer/anaconda3/lib/python3.9/site-packages"  # this breaks dnf
+PYTHONPATH="$PYTHONPATH:$HOME/Software/Python/kapteyn-import"
 export PYTHONPATH
 
 # Uncomment the following line if you don't like systemctl's auto-paging feature:
 # export SYSTEMD_PAGER=
 
 # User specific aliases and functions
+
+alias python="/usr/bin/python3.9"
+alias pip="/usr/bin/pip3.9"
 
 alias vi="vim"
 alias ls="ls -h --color=auto"
@@ -51,16 +55,16 @@ alias sourcemacro="source ~/.bashrc"
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/home/developer/anaconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/home/developer/anaconda3/etc/profile.d/conda.sh" ]; then
-        . "/home/developer/anaconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/home/developer/anaconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
+#__conda_setup="$('/home/developer/anaconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+#if [ $? -eq 0 ]; then
+#    eval "$__conda_setup"
+#else
+#    if [ -f "/home/developer/anaconda3/etc/profile.d/conda.sh" ]; then
+#        . "/home/developer/anaconda3/etc/profile.d/conda.sh"
+#    else
+#        export PATH="/home/developer/anaconda3/bin:$PATH"
+#    fi
+#fi
+#unset __conda_setup
 # <<< conda initialize <<<
 
