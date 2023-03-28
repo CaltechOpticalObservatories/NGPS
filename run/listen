@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+#
+# @file     listen
+# @brief    provides a command line interface for sequencerd
+#
+
+source $HOME/Software/Config/sequencerd.cfg
+
+listener $MESSAGEGROUP $MESSAGEPORT

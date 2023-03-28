@@ -18,12 +18,15 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <map>
+#include <cmath>
 
 #include "utilities.h"
 #include "common.h"
 #include "config.h"
 #include "logentry.h"
 #include "network.h"
+#include "tcs_constants.h"
 
 /***** TcsEmulator ************************************************************/
 /**
@@ -32,13 +35,6 @@
  *
  */
 namespace TcsEmulator {
-
-  const int MOTION_STOPPED         =  0;  ///< the real TCS reports this when stopped
-  const int MOTION_SLEWING         =  1;  ///< the real TCS reports this when slewing
-  const int MOTION_OFFSETTING      =  2;  ///< the real TCS reports this when offsetting
-  const int MOTION_TRACKING_STABLY =  3;  ///< the real TCS reports this when tracking stable
-  const int MOTION_SETTLING        = -1;  ///< the real TCS reports this when settling
-  const int MOTION_UNKNOWN         = -2;  ///< the real TCS reports this when motion unknown
 
   /***** TcsEmulator::Telescope ***********************************************/
   /**
@@ -55,7 +51,7 @@ namespace TcsEmulator {
       Telescope();
       ~Telescope();
 
-      volatile std::atomic<bool> coords_running;  ///< set true during the fake slew, prevents another thread from moving the telescope
+      volatile std::atomic<bool> moving;  ///< set true during fake moves, prevents another thread from moving the telescope
 
       // default slew and settling times set in constructor but can be overridden by configuration file
       //
@@ -65,6 +61,8 @@ namespace TcsEmulator {
       double settle_ra;          ///< settling time in s for RA
       double settle_dec;         ///< settling time in s for DEC
       double settle_casangle;    ///< settling time in s for CASANGLE
+      double offsetrate_ra;      ///< offset rate RA in arcsec/sec
+      double offsetrate_dec;     ///< offset rate DEC in arcsec/sec
 
       double focus;
       double tubelength;
@@ -84,6 +82,10 @@ namespace TcsEmulator {
       volatile std::atomic<int> motionstate;      ///< telescope motion state
 
       static void do_coords( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the COORDS command work, which "moves" the telescope
+      static void do_pt( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the PT command work, which "offsets" the telescope
+      void weather( std::string &retstring );
+      void reqpos( std::string &retstring );
+      void mrates( std::string args, std::string &retstring );
   };
   /***** TcsEmulator::Telescope ***********************************************/
 
@@ -103,6 +105,9 @@ namespace TcsEmulator {
       ~Interface();
 
       Telescope telescope;
+
+      std::map<int, std::string> map_returnval;
+      std::map<int, std::string> map_motionval;
 
       long parse_command( std::string cmd, std::string &retstring );  ///< parse commands for the TCS
 

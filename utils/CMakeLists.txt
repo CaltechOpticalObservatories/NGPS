@@ -19,3 +19,11 @@ add_library(logentry STATIC
 add_library(network STATIC
         ${PROJECT_UTILS_DIR}/network.cpp
         )
+
+add_executable(socksend
+        ${PROJECT_UTILS_DIR}/sendcmd.c
+        )
+
+add_executable(listener
+        ${PROJECT_UTILS_DIR}/listener.c
+        )

@@ -393,8 +393,11 @@ namespace TCS {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "exit" ) == 0 ) {
-//                    this->common.message.enqueue("exit");     // shutdown the async message thread if running
+      if ( cmd.compare( "help" ) == 0 ) {
+                      for ( auto s : TCSD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+      }
+      else
+      if ( cmd.compare( TCSD_EXIT ) == 0 ) {
                       this->exit_cleanly();                     // shutdown the daemon
       }
       else
@@ -419,6 +422,16 @@ namespace TCS {
                       bool isopen = this->interface.isopen( );
                       if ( isopen ) retstring = "true"; else retstring = "false";
                       ret = NO_ERROR;
+      }
+      else
+
+      if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
+                      ret = this->interface.get_coords( retstring );
+      }
+      else
+
+      if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
+                      ret = this->interface.get_weather_coords( retstring );
       }
 
       // all other commands go straight to the TCS interface

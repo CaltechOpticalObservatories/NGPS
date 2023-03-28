@@ -2,7 +2,6 @@
  * @file    sequencerd_commands.h
  * @brief   defines the commands accepted by the sequencer daemon
  * @author  David Hale <dhale@astro.caltech.edu>
- * @details 
  *
  */
 
@@ -29,4 +28,40 @@ const std::string SEQUENCERD_FILTER     = "filter";
 const std::string SEQUENCERD_POWER      = "power";
 const std::string SEQUENCERD_SLIT       = "slit";
 const std::string SEQUENCERD_TCS        = "tcs";
+const std::vector<std::string> SEQUENCERD_SYNTAX = {
+                                                     SEQUENCERD_ACAM+" ...",
+                                                     SEQUENCERD_CALIB+" ...",
+                                                     SEQUENCERD_CAMERA+" ...",
+                                                     SEQUENCERD_FILTER+" ...",
+                                                     SEQUENCERD_POWER+" ...",
+                                                     SEQUENCERD_SLIT+" ...",
+                                                     SEQUENCERD_TCS+" ...",
+                                                     "",
+                                                     SEQUENCERD_ABORT,
+                                                     SEQUENCERD_DOTYPE+" [ one | all ]",
+                                                     SEQUENCERD_EXIT,
+                                                     SEQUENCERD_MODEXPTIME+" <exptime>",
+                                                     SEQUENCERD_PAUSE,
+                                                     SEQUENCERD_RESUME,
+                                                     SEQUENCERD_SHUTDOWN,
+                                                     SEQUENCERD_START,
+                                                     SEQUENCERD_STARTUP,
+                                                     SEQUENCERD_STATE,
+                                                     SEQUENCERD_STOP,
+                                                     SEQUENCERD_TARGETSET+" [ <targetid> | <targetname> ]",
+                                                     SEQUENCERD_TEST+" <testname> ...",
+                                                     "   addrow <num> <name> <ra> <dec>",
+                                                     "   async [ <message> ]",
+                                                     "   completed",
+                                                     "   fpoffset <from> <to>",
+                                                     "   getnext",
+                                                     "   moveto",
+                                                     "   notify",
+                                                     "   pause",
+                                                     "   radec",
+                                                     "   resume",
+                                                     "   states",
+                                                     "   tablenames",
+                                                     "   update { pending | complete | unassigned }",
+                                                   };
 #endif

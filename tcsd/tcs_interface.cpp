@@ -120,6 +120,179 @@ namespace TCS {
   /***** TCS::Interface::close ************************************************/
 
 
+  /***** TCS::Interface::get_weather_coords ***********************************/
+  /**
+   * @brief      get the current simulator coords
+   * @details    uses the ?WEATHER command, pulls out just the RA and DEC
+   * @param[out] retstring  contains space-delimited ra dec
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_weather_coords( std::string &retstring ) {
+    std::string function = "TCS::Interface::get_weather_coords";
+    std::stringstream message;
+    std::string weather;
+
+    // Send the WEATHER command to the TCS. This returns a string of key=val pairs
+    // with each pair separated by a newline character. The first two pairs are 
+    // RA and DEC, which is all that is needed here.
+    //
+    if ( this->send_command( "?WEATHER", weather ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting coords from TCS" );
+      return ERROR;
+    }
+
+    std::vector<std::string> pairs;
+    Tokenize( weather, pairs, "\n" );  // tokenize on the newline to break into key=val pairs
+
+    // If someone ever changes the TCS message then this will have to be changed.
+    //
+    if ( pairs.size() != 13 ) {
+      message.str(""); message << "ERROR expected 13 values from the TCS but received " << pairs.size();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // Tokenize the first two key=val pairs on the "=" to get the ra, dec values
+    //
+    try {
+      std::vector<std::string> ra_tokens, dec_tokens;
+
+      Tokenize( pairs.at(0), ra_tokens, "=" );
+      Tokenize( pairs.at(1), dec_tokens, "=" );
+
+      message.str(""); message << ra_tokens.at(1) << " " << dec_tokens.at(1);
+    }
+    catch( std::out_of_range &e ) {
+      logwrite( function, "ERROR out of range parsing ra,dec from ?WEATHER command" );
+      return ERROR;
+    }
+
+    logwrite( function, message.str() );
+
+    retstring = message.str();
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_weather_coords ***********************************/
+
+
+  /***** TCS::Interface::get_coords *******************************************/
+  /**
+   * @brief      get the current coords
+   * @details    uses the REQPOS command, pulls out just the RA and DEC,
+   *             returns them as "hh:mm:ss.ss dd:mm:ss.ss"
+   * @param[out] retstring  contains space-delimited ra dec
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_coords( std::string &retstring ) {
+    std::string function = "TCS::Interface::get_coords";
+    std::stringstream message;
+/*****
+    std::string weather;
+
+    // Send the WEATHER command to the TCS. This returns a string of key=val pairs
+    // with each pair separated by a newline character. The first two pairs are 
+    // RA and DEC, which is all that is needed here.
+    //
+    if ( this->send_command( "?WEATHER", weather ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting coords from TCS" );
+      return ERROR;
+    }
+
+    std::vector<std::string> pairs;
+    Tokenize( weather, pairs, "\n" );  // tokenize on the newline to break into key=val pairs
+
+    // If someone ever changes the TCS message then this will have to be changed.
+    //
+    if ( pairs.size() != 13 ) {
+      message.str(""); message << "ERROR expected 13 values from the TCS but received " << pairs.size();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // Tokenize the first two key=val pairs on the "=" to get the ra, dec values
+    //
+    try {
+      std::vector<std::string> ra_tokens, dec_tokens;
+
+      Tokenize( pairs.at(0), ra_tokens, "=" );
+      Tokenize( pairs.at(1), dec_tokens, "=" );
+
+      message.str(""); message << ra_tokens.at(1) << " " << dec_tokens.at(1);
+    }
+    catch( std::out_of_range &e ) {
+      logwrite( function, "ERROR out of range parsing ra,dec from ?WEATHER command" );
+      return ERROR;
+    }
+
+*****/
+
+    // Send the REQPOS command to the TCS. This returns a string that looks like:
+    //
+    // posstr = "UTC = ddd hh:mm:ss, LST = hh:mm:ss\n
+    //           RA = hh:mm:ss.ss, DEC = dd:mm:ss.s, HA=hh:mm:ss.s\n
+    //           air mass = aa.aaa"
+    //
+    std::string posstr;
+    if ( this->send_command( "REQPOS", posstr ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting coords from TCS" );
+      return ERROR;
+    }
+
+    // First tokenize on newline
+    //
+    std::vector<std::string> lines;
+    Tokenize( posstr, lines, "\n" );
+
+    if ( lines.size() != 3 ) {
+      message.str(""); message << "ERROR expected 3 lines from REQPOS string but received " << lines.size();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Then the 2nd token, lines[1], contains the RA,DEC so try to
+    // tokenize that on the comma.
+    //
+    try {
+      std::vector<std::string> radec;
+      Tokenize( lines.at(1), radec, "," );  // lines[1] = "RA = hh:mm:ss.ss, DEC = dd:mm:ss.s, HA=hh:mm:ss.s\n"
+
+      if ( radec.size() != 3 ) {
+        message.str(""); message << "ERROR expected 3 tokens for ra, dec, ha but received " << radec.size();
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+
+      // Now try to tokenize the first two tokens of line1 on the equal sign to extract RA and DEC values
+      //
+      std::vector<std::string> ra, dec;
+      Tokenize( radec.at(0), ra,  "=" );
+      Tokenize( radec.at(1), dec, "=" );
+
+      if ( ra.size() != 2 && dec.size() != 2 ) {
+        message.str(""); message << "ERROR extracting ra,dec from " << lines.at(1);
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+
+      message.str(""); message << ra.at(1) << " " << dec.at(1);
+    }
+    catch( std::out_of_range &e ) {
+      logwrite( function, "ERROR out of range parsing ra,dec from ?WEATHER command" );
+      return ERROR;
+    }
+
+    logwrite( function, message.str() );
+
+    retstring = message.str();
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_coords *******************************************/
+
+
   /***** TCS::Interface::send_command *****************************************/
   /**
    * @brief      writes the raw command, as received, to the TCS
@@ -187,7 +360,7 @@ namespace TCS {
     // remove any trailing linefeed and carriage return
     //
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
-    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+//  sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end()); // can't strip newline since TCS embeds this
 
     reply = sbuf;
 

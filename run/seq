@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# @file     seq
+# @brief    provides a command line interface for sequencerd
+#
+
+source $HOME/Software/Config/sequencerd.cfg
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command

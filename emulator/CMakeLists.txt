@@ -14,6 +14,8 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+
 # ----------------------------------------------------------------------------
 # andorserver
 # ----------------------------------------------------------------------------
@@ -138,9 +140,12 @@ target_link_libraries(emulatord.slit
 # tcs
 # ----------------------------------------------------------------------------
 
+find_path( TCS_CONSTANTS "tcs_constants.h" PATHS ${PROJECT_BASE_DIR}/common )
+
 add_executable(emulatord.tcs
         ${EMULATOR_DIR}/emulatord_tcs.cpp 
         ${EMULATOR_DIR}/tcs.cpp 
+        ${TCS_CONSTANTS}
         )
 target_link_libraries(emulatord.tcs
         network

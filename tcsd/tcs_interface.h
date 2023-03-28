@@ -46,6 +46,8 @@ namespace TCS {
       long initialize_class();
       long open();
       long close();
+      long get_weather_coords( std::string &retstring );
+      long get_coords( std::string &retstring );
       long send_command( std::string cmd, std::string &reply );
 
       bool isopen() { return this->tcs.isconnected(); }    ///< is this interface connected to hardware?
