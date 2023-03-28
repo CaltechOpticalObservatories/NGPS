@@ -24,6 +24,8 @@ int main(int argc, char **argv) {
   std::string logpath; 
   long ret=NO_ERROR;
   std::string daemon_in;     // daemon setting read from config file
+  std::string daemon_stdout; // where daemon sends stdout
+  std::string daemon_stderr; // where daemon sends stderr
   bool start_daemon = false; // don't start as daemon unless specifically requested
 
   // capture these signals
@@ -77,6 +79,8 @@ int main(int argc, char **argv) {
     if ( configkey == "LOGPATH") logpath = configval;
     if ( configkey == "TM_ZONE") zone = configval;
     if ( configkey == "DAEMON")  daemon_in = configval;
+    if ( configkey == "STDOUT")  daemon_stdout = configval;
+    if ( configkey == "STDERR")  daemon_stderr = configval;
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
@@ -101,7 +105,7 @@ int main(int argc, char **argv) {
 
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
-    Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", "", "", "" );
+    Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "" );
   }
 
   if ( ( init_log( logpath, Acam::DAEMON_NAME ) != 0 ) ) {           // initialize the logging system
@@ -116,6 +120,8 @@ int main(int argc, char **argv) {
   logwrite(function, message.str());
 
   if (ret==NO_ERROR) ret=acamd.configure_acamd();          // get needed values out of read-in configuration file for the daemon
+
+  if (ret==NO_ERROR) ret=acamd.interface.configure_interface( acamd.config );
 
   if (ret != NO_ERROR) {
     logwrite(function, "ERROR: unable to configure system");
@@ -201,7 +207,7 @@ void signal_handler(int signo) {
       acamd.exit_cleanly();                      // shutdown the daemon
       break;
     case SIGHUP:
-      logwrite(function, "ignored SIGHUP");
+      acamd.interface.configure_interface( acamd.config );
       break;
     case SIGPIPE:
       logwrite(function, "ignored SIGPIPE");

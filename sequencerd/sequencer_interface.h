@@ -10,6 +10,7 @@
 
 #include <map>
 #include <string>
+#include <atomic>
 #include "cpython.h"
 
 #include "network.h"
@@ -56,8 +57,9 @@ namespace Sequencer {
   const std::string POWER_THERMAL="POWER_THERMAL";   ///< parameter name which defines NPS_PLUG names required for thermal hardware
   const std::string POWER_ACAM="POWER_ACAM";         ///< parameter name which defines NPS_PLUG names required for ACAM (A&G) hardware
 
-  const std::string ACQUIRE_MIN_RA_OFF="ACQUIRE_MIN_RA_OFF";    ///< minimum RA offset before target is acquired
-  const std::string ACQUIRE_MIN_DEC_OFF="ACQUIRE_MIN_DEC_OFF";  ///< minimum DEC offset before target is acquired
+  const std::string ACQUIRE_OFFSET_THRESHOLD="ACQUIRE_OFFSET_THRESHOLD";    ///< below this in arcsec defines successful acquisition
+  const std::string ACQUIRE_MIN_REPEAT="ACQUIRE_MIN_REPEAT";    ///< minimum number of successful sequential acquires
+  const std::string ACQUIRE_TCS_MAX_OFFSET="ACQUIRE_TCS_MAX_OFFSET";    ///< max allowable TCS offset
 
   // These are the possible target states
   //
@@ -261,10 +263,11 @@ namespace Sequencer {
       int            obsorder;            ///< observation order (DB internal)
       mysqlx::string state;               ///< current target state
       mysqlx::string name;                ///< current target name
-      mysqlx::string ra;                  ///< current target right ascension
-      mysqlx::string dec;                 ///< current target declination
+      mysqlx::string ra_hms;              ///< current target right ascension in units hh:mm:ss
+      mysqlx::string dec_dms;             ///< current target declination in units dd:mm:ss
       mysqlx::string epoch;               ///< current target coordinates epoch
       double         casangle;            ///< current target cass angle
+      double         slitangle;           ///< current slit angle
       double         slitwidth;           ///< slit width for this target
       double         slitoffset;          ///< slit offset for this target
       double         exptime;             ///< exposure time in seconds for this target
@@ -275,13 +278,15 @@ namespace Sequencer {
       int            binspect;            ///< binning in spectral direction for this target
       int            binspat;             ///< binning in spatial direction for this target
 
-      double         min_ra_off;          ///< minimum RA offset before target is acquired (from .cfg)
-      double         min_dec_off;         ///< minimum DEC offset before target is acquired (from .cfg)
+      double         offset_threshold;    ///< computed offset below this threshold (in arcsec) defines successful acquisition
+      double         max_tcs_offset;      ///< max allowable TCS offset
+      int            min_repeat;          ///< minimum number of sequentiall successful acquires
+      std::atomic<bool> acquired;         ///< true on successful acquisition and while guiding
 
       int  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
       TargetInfo::TargetState get_next(); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in);    ///< get the next target from the database with state=state_in
-      long add_row( int number, std::string name, std::string ra, std::string dec );   ///< add a row to the database
+      long add_row( int number, std::string name, std::string ra_hms, std::string dec_dms );   ///< add a row to the database
       long update_state( std::string newstate );  ///< update the target status in the database DB_ACTIVE table
       long insert_completed();            ///< insert target record into completed observations table
       long get_table_names();             ///< utility to print all database table names

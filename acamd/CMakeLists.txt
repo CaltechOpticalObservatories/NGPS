@@ -16,11 +16,24 @@ add_definitions(-DACAM_ANDOR_SOURCE_SERVER)
 #
 #add_definitions(-DANDORSIM)
 
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+#add_definitions( -I/home/developer/anaconda3/include/python3.9 -I/home/developer/anaconda3/include/python3.9  -Wno-unused-result -Wsign-compare -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O3 -ffunction-sections -pipe -isystem /home/developer/anaconda3/include -fdebug-prefix-map=/opt/conda/conda-bld/python-split_1661469458365/work=/usr/local/src/conda/python-3.9.13 -fdebug-prefix-map=/home/developer/anaconda3=/usr/local/src/conda-prefix -I/home/developer/anaconda3/include -DNDEBUG  -O3 -Wall )
+add_definitions( -I/usr/include/python3.9 -I/usr/include/python3.9  -Wno-unused-result -Wsign-compare  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv  -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv )
+
+
 set( ACAMD_DIR ${PROJECT_BASE_DIR}/acamd )
 
+# C-Python API Development libraries and headers
+#
+#find_path( PYTHON_DEV "Python.h" PATHS /home/developer/anaconda3/include/python3.9 )
+#find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /home/developer/anaconda3/lib )
+#add_link_options( -L/home/developer/anaconda3/lib/python3.9/config-3.9-x86_64-linux-gnu -L/home/developer/anaconda3/lib -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm)
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
+add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
+
+# CFITSIO, CCfits
+#
 find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib )
 find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib )
 
@@ -29,7 +42,6 @@ include_directories( ${PROJECT_BASE_DIR}/PI )
 include_directories( ${PROJECT_BASE_DIR}/Andor )
 include_directories( ${PROJECT_BASE_DIR}/emulator )
 include_directories( ${PROJECT_BASE_DIR}/common )
-include_directories( ${PYTHON_HLP} )
 include_directories( ${PYTHON_DEV} )
 
 set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
@@ -46,7 +58,6 @@ add_executable(acamd
         ${ACAMD_DIR}/acam_interface.cpp 
         ${ACAMD_DIR}/motion_interface.cpp 
         ${PYTHON_DEV}
-        ${PYTHON_HLP}
         )
 
 target_link_libraries(acamd
@@ -66,7 +77,6 @@ target_link_libraries(acamd
 add_executable( newpytest
         ${ACAMD_DIR}/newpytest.cpp 
         ${PYTHON_DEV}
-        ${PYTHON_HLP}
         )
 
 target_link_libraries( newpytest
@@ -77,7 +87,6 @@ target_link_libraries( newpytest
 add_executable( pytest
         ${ACAMD_DIR}/pytest.cpp 
         ${PYTHON_DEV}
-        ${PYTHON_HLP}
         )
 
 target_link_libraries( pytest
@@ -88,7 +97,6 @@ target_link_libraries( pytest
 add_executable( simpletest
         ${ACAMD_DIR}/simpletest.cpp 
         ${PYTHON_DEV}
-        ${PYTHON_HLP}
         )
 
 target_link_libraries( simpletest

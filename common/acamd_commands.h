@@ -12,6 +12,7 @@
 const std::string ACAMD_EXIT     = "exit";      ///< 
 const std::string ACAMD_ECHO     = "echo";      ///< 
 const std::string ACAMD_FILTER   = "filter";    ///< filter [ name ] to set or get the filter
+const std::string ACAMD_CONFIG   = "config";    ///< reload configuration, apply what can be applied
 const std::string ACAMD_COVER    = "cover";     ///< cover [ open|close ] to set or get the dust over
 const std::string ACAMD_HOME     = "home";      ///< home all motors
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?
@@ -29,6 +30,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_EXIT,
                                                 ACAMD_ECHO,
                                                 ACAMD_FILTER,
+                                                ACAMD_CONFIG,
                                                 ACAMD_COVER,
                                                 ACAMD_HOME,
                                                 ACAMD_ISHOME,

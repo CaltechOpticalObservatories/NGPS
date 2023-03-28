@@ -11,7 +11,7 @@
 #define SEQUENCE_H
 
 #include <atomic>
-#include <math.h>
+#include <cmath>
 #include <mysqlx/xdevapi.h>
 
 #include "sequencer_interface.h"  // this defines the classes used to interface with various subsystems
@@ -27,6 +27,8 @@
 
 #include "tcs_constants.h"
 
+#define TO_DEGREES ( 360. / 24. )
+#define TO_HOURS   ( 24. / 360. )
 
 /***** Sequencer **************************************************************/
 /**
@@ -173,6 +175,8 @@ namespace Sequencer {
 
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
+      double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
+      double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
       double tcs_settle_timeout;  ///< timeout for telescope to settle (in sec) set by configuration parameter TCS_SETTLE_TIMEOUT
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
       std::mutex start_mtx;       ///< mutex to protect the start sequence from multiple instances
@@ -201,8 +205,6 @@ namespace Sequencer {
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
       Common::Queue async;            ///< asynchronous message queue
-
-      std::string last_target_name;   ///< remember the last target observed to prevent uneccessary slews
 
       // Here are all the daemon objects that the Sequencer connects to.
       // The Sequencer::Daemon class is defined in sequencer_interface.h
@@ -255,7 +257,11 @@ namespace Sequencer {
       std::string thrstate_string( uint32_t state );                           ///< returns string form of thread states
       long dotype( std::string args );                                         ///< set do type (one/all)
       long dotype( std::string args, std::string &retstring );                 ///< set or get do type (one/all)
-      long offset_tcs( double ra, double dec );                                ///< send ra,dec offsets to the TCS
+      long get_tcs_coords_type( std::string cmd, double &ra_h, double &dec_d );///< read the current TCS ra,dec in decimal hr,deg
+      long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
+      long get_tcs_coords( double &ra_h, double &dec_d );                      ///< read the current TCS ra,dec in decimal hr,deg
+      double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
+      long offset_tcs( double ra_off, double dec_off );                        ///< send ra,dec offsets to the TCS
 
       // These are various jobs that are done in their own threads
       //

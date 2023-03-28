@@ -9,6 +9,8 @@
 #ifndef ACAM_INTERFACE_H
 #define ACAM_INTERFACE_H
 
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
 #include "motion_interface.h"
 #include "network.h"
 #include "logentry.h"
@@ -17,13 +19,21 @@
 #include "atmcdLXd.h"
 #include <cstdlib>
 #include <iostream>
-#include <Python.h>
 #include "camera.h"
 #include "fits.h"
+#include "config.h"
 
-#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
+//#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
+//#define PYTHON_ASTROMETRY_MODULE "astrometry"
+//#define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
+
+//#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo:/home/developer/Software/Python/kapteyn-import"
+#define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
 #define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
+
+#define PYTHON_TEST_MODULE "test_py39"
+#define PYTHON_TEST_FUNCTION "testfunc3"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
@@ -58,6 +68,82 @@ namespace Acam {
       }
       ~CPyInstance() { Py_Finalize(); setenv( "PYTHONPATH", this->restore_path, 1 ); initialized=false;}
       inline bool is_initialized() { return this->initialized; }
+
+      /***** Acam::CPyInstance::pyobj_from_string *****************************/
+      /**
+       * @brief      create a PyObject of the correct type from a std::string
+       * @param[in]  str_in  the input string
+       * @param[out] obj     pointer to PyObject pointer (must be created outside this function)
+       *
+       */
+      void pyobj_from_string( std::string str_in, PyObject** obj ) {
+        std::size_t pos(0);
+
+        // If the entire string is either exactly {true,false,True,False} then it's boolean
+        //
+        if ( str_in=="true"  || str_in=="True"  ) { *obj = Py_True;  return; }
+        if ( str_in=="false" || str_in=="False" ) { *obj = Py_False; return; }
+
+        // skip whitespaces
+        //
+        pos = str_in.find_first_not_of(' ');
+
+        // check the significand, skip the sign if it exists
+        //
+        if ( str_in[pos] == '+' || str_in[pos] == '-' ) ++pos;
+
+        // count the number of digits and number of decimal points
+        //
+        int n_nm, n_pt;
+        for ( n_nm = 0, n_pt = 0; std::isdigit(str_in[pos]) || str_in[pos] == '.'; ++pos ) {
+          str_in[pos] == '.' ? ++n_pt : ++n_nm;
+        }
+        if (n_pt>1 || n_nm<1 || pos<str_in.size()){   // no more than one point, no numbers, or a non-digit character
+          const char* cstr = str_in.c_str();
+          *obj = PyUnicode_FromString( cstr );
+          return;
+        }
+
+        // skip the trailing whitespaces
+        while (str_in[pos] == ' ') {
+          ++pos;
+        }
+
+        try {
+          if (pos == str_in.size()) {
+            if (str_in.find(".") == std::string::npos) {  // all numbers and no decimals, it's an integer
+              long num = std::stol( str_in );
+              *obj = PyLong_FromLong( num );
+              return;
+            }
+            else {                                        // otherwise numbers with a decimal, it's a float
+              double num = std::stod( str_in );
+              *obj = PyFloat_FromDouble( num );
+              return;
+            }
+          }
+          else {                                          // lastly, must be a string
+            const char* cstr = str_in.c_str();
+            *obj = PyUnicode_FromString( cstr );
+            return;
+          }
+        }
+        catch ( std::invalid_argument & ) {
+          *obj = PyUnicode_FromString( "ERROR" );
+          return;
+        }
+        catch ( std::out_of_range & ) {
+          *obj = PyUnicode_FromString( "ERROR" );
+          return;
+        }
+
+
+        // if not caught above then it's an error
+        //
+        *obj = PyUnicode_FromString( "ERROR" );
+        return;
+      }
+      /***** Acam::CPyInstance::pyobj_from_string *****************************/
   };
 
 /***
@@ -115,7 +201,7 @@ namespace Acam {
 
       Andor::Interface andor;     ///< create an Andor::Interface object for interfacing with the camera
 
-      long open();
+      long open( std::string args );
       long close();
       long start_acquisition();
       long get_frame();
@@ -178,7 +264,6 @@ namespace Acam {
       std::string result;
       double ra, dec, pa;
       bool python_initialized;
-      std::string solver_arglist;  /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
 
     public:
       Astrometry();
@@ -186,17 +271,22 @@ namespace Acam {
 
       bool isacquire;
       inline bool is_initialized() { return this->python_initialized; };
+      std::vector<std::string> solver_args;  /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
 
-//    CPyInstance py_instance { PYTHON_PATH };
+      CPyInstance py_instance { PYTHON_PATH };
       PyObject* pModuleName;
       PyObject* pModule;
 
+      PyObject* pTestModuleName;
+      PyObject* pTestModule;
+
       inline std::string get_result() {
         std::stringstream result_str;
-        result_str << result << " " << ra << " " << dec << " " << pa; 
+        result_str << result << " " << std::fixed << std::setprecision(6) << ra << " " << dec << " " << pa; 
         return result_str.str();
       }
       long solve( std::string imagename_in );
+      long pytest( std::string imagename_in );
       long solverargs( std::string argsin, std::string &argsout );
       long compute_offset( std::string from, std::string to );
       long pytest();
@@ -251,14 +341,16 @@ namespace Acam {
 
       long initialize_class();                 /// initialize the Interface class
       long test_image();                       ///
-      long open();                             /// wrapper to open all acam-related hardware components
+      long open( std::string args );           /// wrapper to open all acam-related hardware components
       bool isopen();                           /// wrapper for all acam-related hardware components
       long close();                            /// wrapper to open all acam-related hardware components
       long acquire();                          /// wrapper to acquire an Andor image
-      long solve( std::string imagename_in, std::string &retstring );  /// wrapper for Astrometry::solve
+      long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long exptime( std::string exptime_in, std::string &retstring );  /// wrapper to set exposure time
 
       inline void acquire_init() { imagename=""; wcsname=""; return; }
+
+      long configure_interface( Config &config );
   };
   /***** Acam::Interface ******************************************************/
 

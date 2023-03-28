@@ -47,6 +47,7 @@ namespace Sequencer {
                               "TARGET_NUMBER",
                               "SEQUENCE_NUMBER",
                               "OTMslit",
+                              "OTMslitangle",
                               "SLITOFFSET",
                               "BINSPECT",
                               "BINSPAT",
@@ -61,8 +62,8 @@ namespace Sequencer {
 
     // These wiil be read from the .cfg file
     //
-    this->min_ra_off  = 0;
-    this->min_dec_off = 0;
+    this->offset_threshold = 0;
+    this->max_tcs_offset = 0;
   }
   /***** Sequencer::TargetInfo::TargetInfo ************************************/
 
@@ -119,9 +120,10 @@ namespace Sequencer {
     this->obsid=-1;
     this->obsorder=-1;
     this->name="";
-    this->ra="";
-    this->dec="";
+    this->ra_hms="";
+    this->dec_dms="";
     this->epoch="";
+    this->slitangle=-1;
     this->casangle=-1;
     this->slitwidth=-1;
     this->slitoffset=-1;
@@ -131,6 +133,7 @@ namespace Sequencer {
     this->obsplan="";
     this->binspect=-1;
     this->binspat=-1;
+    this->acquired=false;
 
   }
   /***** Sequencer::TargetInfo::init_record ***********************************/
@@ -600,10 +603,11 @@ namespace Sequencer {
       col = this->colnum( "OBS_ORDER", this->targetlist_cols );       this->obsorder    = row.get( col );
       col = this->colnum( "NAME", this->targetlist_cols );            this->name        = row.get( col );
       col = this->colnum( "STATE", this->targetlist_cols );           this->state       = row.get( col );
-      col = this->colnum( "RA", this->targetlist_cols );              this->ra          = row.get( col );
-      col = this->colnum( "DECL", this->targetlist_cols );            this->dec         = row.get( col );
+      col = this->colnum( "RA", this->targetlist_cols );              this->ra_hms      = row.get( col );
+      col = this->colnum( "DECL", this->targetlist_cols );            this->dec_dms     = row.get( col );
       col = this->colnum( "EPOCH", this->targetlist_cols );           this->epoch       = row.get( col );
       col = this->colnum( "OTMcass", this->targetlist_cols );         this->casangle    = row.get( col );
+      col = this->colnum( "OTMslitangle", this->targetlist_cols );    this->slitangle   = row.get( col );
       col = this->colnum( "OTMslit", this->targetlist_cols );         this->slitwidth   = row.get( col );
       col = this->colnum( "SLITOFFSET", this->targetlist_cols );      this->slitoffset  = row.get( col );
       col = this->colnum( "OTMexpt", this->targetlist_cols );         this->exptime     = row.get( col );
@@ -795,8 +799,8 @@ namespace Sequencer {
                 .values( this->obsid,
 //                       Sequencer::TARGET_COMPLETE,
                          this->name,
-                         this->ra,
-                         this->dec,
+                         this->ra_hms,
+                         this->dec_dms,
                          this->epoch,
                          this->exptime,
                          this->targetnum,
@@ -1478,6 +1482,7 @@ namespace Sequencer {
    *
    * This function is overloaded.
    * This version is passed in all outputs. Outputs are stored in the class.
+   * All units are in degrees.
    *
    */
   long FPOffsets::compute_offset( std::string from, std::string to, double ra_in, double dec_in, double angle_in ) {
@@ -1504,6 +1509,7 @@ namespace Sequencer {
    *
    * This function is overloaded.
    * This version is passed all inputs and returns all outputs by reference.
+   * All units are in degrees.
    *
    */
   long FPOffsets::compute_offset( std::string from, std::string to, 
@@ -1540,13 +1546,13 @@ namespace Sequencer {
     std::string function = "FPOffsets::compute_offset";
     std::stringstream message;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] from=" << from << " to=" << to
+//#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[ACQUIRE] from=" << from << " to=" << to
                              << " coords_in.ra=" << this->coords_in.ra
                              << " .dec=" << this->coords_in.dec
-                             << " .angle=" << this->coords_in.angle;
+                             << " .angle=" << this->coords_in.angle << " deg";
     logwrite( function, message.str() );
-#endif
+//#endif
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -1615,12 +1621,12 @@ namespace Sequencer {
       return( ERROR );
     }
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] coords_out.ra=" << this->coords_out.ra
+//#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[ACQUIRE] coords_out.ra=" << this->coords_out.ra
                              << " .dec=" << this->coords_out.dec
-                             << " .angle=" << this->coords_out.angle;
+                             << " .angle=" << this->coords_out.angle << " deg";
     logwrite( function, message.str() );
-#endif
+//#endif
 
     return NO_ERROR;
   }

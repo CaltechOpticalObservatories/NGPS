@@ -436,14 +436,23 @@ namespace Acam {
       }
       else
 
+      if ( cmd.compare( "pytest" ) == 0 ) {
+                      ret = this->interface.astrometry.pytest( args );
+      }
+      else
+
       // commands for the Andor camera direct
       //
       if ( cmd.compare( "cameraopen" ) == 0 ) {
-                      ret = this->interface.camera.open( );
+                      ret = this->interface.camera.open( args );
       }
       else
       if ( cmd.compare( "cameraclose" ) == 0 ) {
                       ret = this->interface.camera.close( );
+      }
+      else
+      if ( cmd.compare( "cameraexptime" ) == 0 ) {
+                      ret = this->interface.camera.andor.exptime( args, retstring );
       }
       else
       if ( cmd.compare( "cameraacquire" ) == 0 ) {
@@ -462,6 +471,19 @@ namespace Acam {
                       ret = this->interface.camera.get_frame( );
       }
       else
+      if ( cmd.compare( "cameratest" ) == 0 ) {
+                      ret = this->interface.camera.andor.test( );
+      }
+      else
+      if ( cmd.compare( "testacquire" ) == 0 ) {
+                      ret = this->interface.camera.andor.acquire_one();
+      }
+      else
+      if ( cmd.compare( "testsave" ) == 0 ) {
+                      ret = this->interface.camera.andor.save_acquired( args, retstring );
+
+      }
+      else
 
       // commands for the external camera server
       //
@@ -478,7 +500,7 @@ namespace Acam {
       }
       else
       if ( cmd.compare( ACAMD_CAMERASERVER_COORDS ) == 0 ) {
-                      this->interface.acquire_init( );
+//                    this->interface.acquire_init( );
                       ret = this->interface.camera_server.coords( args );
       }
       else
@@ -486,7 +508,7 @@ namespace Acam {
       // open
       //
       if ( cmd.compare( ACAMD_OPEN ) == 0 ) {
-                      ret = this->interface.open( );
+                      ret = this->interface.open( args );
       }
       else
 
@@ -505,21 +527,15 @@ namespace Acam {
                       ret = this->interface.close();
       }
       else
+      if ( cmd.compare( ACAMD_CONFIG ) == 0 ) {
+                      ret = this->interface.configure_interface( config );
+      }
+      else
 
       // commands for the Python functions
       //
       if ( cmd.compare( ACAMD_SOLVE ) == 0 ) {
                       ret = this->interface.solve( args, retstring );
-      }
-      else
-
-      if ( cmd.compare( "pytest" ) == 0 ) {
-                      ret = this->interface.astrometry.pytest();
-      }
-      else
-
-      if ( cmd.compare( "cpytest" ) == 0 ) {
-                      ret = this->interface.astrometry.cpytest();
       }
       else
 
@@ -537,12 +553,11 @@ namespace Acam {
       else
       if ( cmd.compare( ACAMD_INIT ) == 0 ) {
                       this->interface.acquire_init( );
-                      ret=NO_ERROR;
+                      ret = NO_ERROR;  // acquire_init() returns void, never fails
       }
       else
       if ( cmd.compare( "exptime" ) == 0 ) {
-                      this->interface.exptime( args, retstring );
-                      ret=NO_ERROR;
+                      ret = this->interface.exptime( args, retstring );
       }
       else
 

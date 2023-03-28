@@ -39,7 +39,7 @@ namespace Acam {
    * @return     ERROR or NO_ERROR
    * 
    */
-  long Camera::open() {
+  long Camera::open( std::string args ) {
     std::string function = "Acam::Camera::open";
     std::stringstream message;
     long error=NO_ERROR;
@@ -48,7 +48,7 @@ namespace Acam {
       logwrite( function, "already initialized" );
     }
     else {
-      error = this->andor.open();
+      error = this->andor.open( args );
     }
     return error;
   }
@@ -277,7 +277,7 @@ namespace Acam {
     // Nothing to do if not connected
     //
     if ( !this->server.isconnected() ) {
-      logwrite( function, "ERROR: no connection to the camera server" );
+      logwrite( function, "ERROR: no connection open to the acam camera server" );
       return( ERROR );
     }
 
@@ -311,7 +311,7 @@ namespace Acam {
     // Nothing to do if not connected
     //
     if ( !this->server.isconnected() ) {
-      logwrite( function, "ERROR: no connection to the camera server" );
+      logwrite( function, "ERROR: no connection open to the acam camera server" );
       return( ERROR );
     }
 
@@ -445,8 +445,17 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     }
     else this->python_initialized = true;
 
+    this->pTestModuleName = PyUnicode_FromString( PYTHON_TEST_MODULE );
+    this->pTestModule     = PyImport_Import( this->pTestModuleName );
+
+    if ( this->pTestModule == NULL ) {
+      PyErr_Print();
+      this->python_initialized = false;
+      return;
+    }
+    else this->python_initialized = true;
+
     this->isacquire=true;
-    this->solver_arglist="";
 
     logwrite( "Astrometry::Astrometry", "initialized Python astrometry module" );
     return;
@@ -503,45 +512,44 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     PyObject* pKeywords = PyDict_New();
     PyDict_SetItemString( pKeywords, "acquire", this->isacquire ? Py_True : Py_False );
 
-    // Build up a list of key=val arguments to send to the solver from a
-    // space-delimted string, which is disected here.
-    //
-#ifdef NOT_YET_IMPLEMENTED
-    if ( !this->solver_arglist.empty() ) {  // only do this if the arglist is not empty
-
-      // Tokenize on space " " to get the pairs "key=val"
-      //
-      std::vector<std::string> argpair;
-      Tokenize( this->solver_arglist, argpair, " " );
+    if ( !this->solver_args.empty() ) {  // only do this if the arglist is not empty
 
       // Loop through each "key=val" pair
       //
       try {
-        for ( int pairn=0; pairn < argpair.size(); pairn++ ) {
+        for ( size_t pairn=0; pairn < this->solver_args.size(); pairn++ ) {
 
           // Tokenize each argpair on "=" to separate the key and value
           //
           std::vector<std::string> keyval;
-          Tokenize( argpair.at(pairn), keyval, "=" );
+          Tokenize( this->solver_args.at(pairn), keyval, "=" );
 
           // Add the arg pair to the keywords list
+          // The key object is created from a const char pointer, and
+          // the value must be a PyObject so that takes a little more work,
+          // which is done in pyobj_from_string().
           //
-          const char* keyname = keyval.at(0);
-          PyDict_SetItemString( pKeywords, keyname, this->isacquire ? Py_True : Py_False );
+          const char* pkeyname = keyval.at(0).c_str();
+          PyObject* pvalue;
+          this->py_instance.pyobj_from_string( keyval.at(1), &pvalue );
+
+//#ifdef LOGLEVEL_DEBUG
+          message.str(""); message << "[DEBUG] add solver arg keyword=" << keyval.at(0) << " value=" << keyval.at(1);
+          logwrite( function, message.str() );
+//#endif
+
+          PyDict_SetItemString( pKeywords, pkeyname, pvalue );
         }
       }
       catch( std::out_of_range const& ) {
-        message.str(""); message << "ERROR: out of range parsing key=value pair from arglist \"" << this->solver_arglist << "\"";
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR: out of range parsing key=value pair from arglist" );
         return ERROR;
       }
       catch( ... ) {
-        message.str(""); message << "ERROR unknown exception parsing key=value pair from arglist \"" << this->solver_arglist << "\"";
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR unknown exception parsing key=value pair from arglist" );
         return ERROR;
       }
     }
-#endif
 
     double t0=0, t1=0;
 
@@ -626,6 +634,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     }
 
     message.str(""); message << "result=" << this->result
+                             << std::fixed << std::setprecision(6)
                              << " RA="    << this->ra
                              << " DEC="   << this->dec
                              << " PA="    << this->pa
@@ -635,6 +644,83 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     return( NO_ERROR );
   }
   /***** Acam::Astrometry::solve **********************************************/
+
+
+  /***** Acam::Astrometry::pytest *********************************************/
+  /**
+   * @brief      call the Python test function
+   * @param[in]  imagename_in  fits filename to give to the test function
+   *
+   */
+  long Astrometry::pytest( std::string imagename_in ) {
+    std::string function = "Acam::Astrometry::pytest";
+    std::stringstream message;
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return( ERROR );
+    }
+
+    if ( this->pTestModule==NULL ) {
+      logwrite( function, "ERROR: Python test module not imported" );
+      return( ERROR );
+    }
+
+    // Can't proceed unless there is an imagename
+    //
+    if ( imagename_in.empty() ) {
+      logwrite( function, "ERROR: imagename cannot be empty" );
+      return ERROR;
+    }
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pTestModule, PYTHON_TEST_FUNCTION );
+
+    const char* imagename = imagename_in.c_str();
+
+    PyObject* pArgList = Py_BuildValue( "(s)", imagename );
+
+    // There is always at minimum acquire={true|false}
+    // and other optional key=val pairs can be added to a space-delimited string.
+    //
+    PyObject* pKeywords = PyDict_New();
+    PyDict_SetItemString( pKeywords, "acquire", this->isacquire ? Py_True : Py_False );
+
+    // Call the Python test function here
+    //
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      logwrite( function, "ERROR: Python test function not callable" );
+      return( ERROR );
+    }
+
+    message.str(""); message << "[DEBUG] calling Python function: " << PYTHON_TEST_FUNCTION;
+    logwrite( function, message.str() );
+
+    PyObject* pReturn = PyObject_Call( pFunction, pArgList, pKeywords );
+
+    // Check the return values from Python here
+    //
+    if ( ! pReturn ) {
+      logwrite( function, "ERROR calling Python test solver" );
+      PyErr_Print();
+      return( ERROR );
+    }
+
+    if ( PyUnicode_Check( pReturn ) ) {
+      int len = PyUnicode_GetLength( pReturn );
+      int kind = PyUnicode_KIND( pReturn );
+      void* data = PyUnicode_DATA( pReturn );
+      PyUnicode_READ( kind, data, len );
+      message.str(""); message << "returned: " << (char*)data;
+      logwrite( function, message.str() );
+    }
+    else {
+      logwrite( function, "ERROR: did not get expected string return" );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /***** Acam::Astrometry::pytest *********************************************/
 
 
   /***** Acam::Interface::Interface *******************************************/
@@ -696,13 +782,63 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   /***** Acam::Interface::initialize_class ************************************/
 
 
-  /***** Acam::Interface::open ************************************************/
+  /***** Acam::Interface::configure_interface *********************************/
   /**
-   * @brief      wrapper to open all acam hardware components
+   * @brief      configure the interface from the .cfg file
+   * @details    this function can be called at any time, e.g. from HUP or a command
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::open( ) {
+  long Interface::configure_interface( Config &config ) {
+    std::string function = "Acam::Interface::configure_interface";
+    std::stringstream message;
+    int applied=0;
+    long error = NO_ERROR;
+
+    this->astrometry.solver_args.clear();
+
+    // loop through the entries in the configuration file, stored in config class
+    //
+    for (int entry=0; entry < config.n_entries; entry++) {
+
+      if (config.param[entry].compare(0, 11, "SOLVER_ARGS")==0) {
+        // tokenize each solverargs entry to check that it is of the format key=value
+        //
+        std::vector<std::string> tokens;
+        int size = Tokenize( config.arg[entry], tokens, "=" );
+        if (size==0) continue; else  // allows an empty entry but if anything is there then it has to be right
+        if (size != 2) {
+          message.str(""); message << "ERROR: bad entry for SOLVER_ARGS: " << config.arg[entry] << ": expected (key=value)";
+          logwrite(function, message.str());
+          error = ERROR;
+          continue;
+        }
+        else {
+          try {
+            this->astrometry.solver_args.push_back( config.arg.at(entry) );
+            applied++;
+          }
+          catch(std::out_of_range &) {  // should be impossible but here for safety
+            logwrite(function, "ERROR configuring SOLVER_ARGS: requested tokens out of range");
+            error = ERROR;
+          }
+        }
+      }
+    }
+    message << "applied " << applied << " configuration lines to the acam interface";
+    logwrite(function, message.str());
+    return error;
+  }
+  /***** Acam::Interface::configure_interface *********************************/
+
+
+  /***** Acam::Interface::open ************************************************/
+  /**
+   * @brief      wrapper to open all acam external components
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::open( std::string args ) {
     std::string function = "Acam::Interface::open";
     std::stringstream message;
     long error = NO_ERROR;
@@ -714,7 +850,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
 #endif
 
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
-    error |= this->camera.open();         // get images from Andor directly
+    error |= this->camera.open( args );   // get images from Andor directly
 #endif
 
     if ( error != NO_ERROR ) logwrite( function, "ERROR: one or more components failed to open" );
@@ -743,7 +879,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
 
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
 //  _is_open &= this->camera.isopen();
-    _is_open &= this->andor.is_initialized();
+    _is_open &= this->camera.andor.is_initialized();
 #endif
     return( _is_open );
   }
@@ -787,14 +923,17 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     std::string function = "Acam::Interface::acquire";
     std::stringstream message;
     long error = NO_ERROR;
-
-#ifdef ACAM_ANDOR_SOURCE_SERVER
     std::string _imagename = this->imagename;
+
+message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, message.str() );
+#ifdef ACAM_ANDOR_SOURCE_SERVER
     this->camera_server.acquire( this->wcsname, _imagename );
     this->imagename = _imagename;
 #endif
 
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
+    this->camera.andor.acquire_one();
+    this->camera.andor.save_acquired( this->wcsname, _imagename );
 #endif
 
     message.str(""); message << "[DEBUG] this->wcsname=" << this->wcsname << " this->imagename=" << this->imagename;
@@ -820,7 +959,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
 #endif
 
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
-    return this->andor.exptime( exptime_in, retstring );
+    return this->camera.andor.exptime( exptime_in, retstring );
 #endif
   }
   /***** Acam::Interface::exptime *********************************************/
@@ -829,10 +968,18 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   /***** Acam::Interface::solve ***********************************************/
   /**
    * @brief      wrapper for Astrometry::solve()
+   * @details    The input args string can be empty, contain an image name,
+   *             and/or one or more key=val pairs to be passed to the solver.
+   *             Additional solver args can come from the class, which are set
+   *             in the configuration file.
+   * @param[in]  args       input args string (see details)
+   * @param[out] retstring  contains the return string from the solver
    * @return     ERROR or NO_ERROR
    *
+   * The return string is of the form "<RESULT> <RA> <DEC> <ANGLE>"
+   *
    */
-  long Interface::solve( std::string imagename_in, std::string &retstring ) {
+  long Interface::solve( std::string args, std::string &retstring ) {
     std::string function = "Acam::Interface::solve";
     std::stringstream message;
     long error = NO_ERROR;
@@ -842,9 +989,39 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     message.str(""); message << "[DEBUG] this->wcsname=" << this->wcsname << " this->imagename=" << this->imagename;
     logwrite( function, message.str() );
 
-    // If no image name was provided to this function then get it from the class
+    // This is the local vector that will be ultimately be used to create the arglist
+    // sent to the python solver function. It will be built from any args that might
+    // have been defined in the class, and any input args passed in here will be added
+    // to this. The class solver args set by the config file are persistent, while any 
+    // solver args passed in are one-time-use-only; they are not saved to the class.
     //
-    _imagename = ( imagename_in.empty() ? this->get_imagename() : imagename_in );
+    std::vector<std::string> _solver_args = this->astrometry.solver_args;  // Make a copy of the class solver_args,
+
+    this->astrometry.solver_args.clear();                                  // then erase it,
+
+    // The input args can be a filename and/or include any number of key=value pairs.
+    // Tokenize on the space " " to separate any filename from key=value pairs.
+    //
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    for ( size_t tok = 0; tok < tokens.size(); tok++ ) {
+      if ( tokens.at(tok).find(".fits") != std::string::npos ) {
+        _imagename = tokens.at(tok);
+      }
+
+      if ( tokens.at(tok).find("=") != std::string::npos ) {
+        this->astrometry.solver_args.push_back( tokens.at(tok) );
+        _solver_args.push_back( tokens.at(tok) );                          // add any solver args passed in,
+      }
+    }
+
+    this->astrometry.solver_args = _solver_args;                           // then put the aggregate back into the class.
+
+    // If no .fits file was found then _imagename will be empty,
+    // so get it from the class.
+    //
+    if ( _imagename.empty() ) _imagename = this->get_imagename();
 
     // They can't both be empty, need an image name from somewhere
     //

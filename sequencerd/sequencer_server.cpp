@@ -320,41 +320,89 @@ namespace Sequencer {
         applied++;
       }
 
-      // ACAM_ACQUIRE_TIMEOUT
-      if (config.param[entry].compare(0, 20, "ACAM_ACQUIRE_TIMEOUT")==0) {
+      // ACQUIRE_TIMEOUT
+      if (config.param[entry].compare(0, 15, "ACQUIRE_TIMEOUT")==0) {
         double to=0;
         try {
           to = std::stod( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          message.str(""); message << "ERROR: bad ACAM_ACQUIRE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
+          message.str(""); message << "ERROR: bad ACQUIRE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
           this->sequence.async.enqueue_and_log( function, message.str() );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACAM_ACQUIRE_TIMEOUT number out of double range" );
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_TIMEOUT number out of double range" );
           return(ERROR);
         }
         this->sequence.acquisition_timeout = to;
         applied++;
       }
 
-      // ACAM_ACQUIRE_RETRYS
-      if (config.param[entry].compare(0, 19, "ACAM_ACQUIRE_RETRYS")==0) {
+      // ACQUIRE_RETRYS
+      if (config.param[entry].compare(0, 14, "ACQUIRE_RETRYS")==0) {
         int rt=-1;
         try {
           rt = std::stoi( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          message.str(""); message << "ACAM_ACQUIRE_RETRYS: unable to convert " << config.arg[entry] << " to integer. retry limit disabled.";
+          message.str(""); message << "ACQUIRE_RETRYS: unable to convert " << config.arg[entry] << " to integer. retry limit disabled.";
           this->sequence.async.enqueue_and_log( function, message.str() );
           this->sequence.acquisition_max_retrys = -1;
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ACAM_ACQUIRE_RETRYS number out of integer range. retry limit disabled." );
+          this->sequence.async.enqueue_and_log( function, "ACQUIRE_RETRYS number out of integer range. retry limit disabled." );
           this->sequence.acquisition_max_retrys = -1;
         }
         this->sequence.acquisition_max_retrys = rt;
+        applied++;
+      }
+
+      // TCS_OFFSET_RATE_RA
+      if (config.param[entry].compare(0, 18, "TCS_OFFSET_RATE_RA")==0) {
+        double mrate;
+        try {
+          mrate = std::stod( config.arg[entry] );
+          if ( mrate < 0 || mrate > 60 ) {
+            message.str(""); message << "ERROR: TCS_OFFSET_RATE_RA " << mrate << " out of range {0:60}";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return( ERROR );
+          }
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad TCS_OFFSET_RATE_RA: unable to convert " << config.arg[entry] << " to double";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_OFFSET_RATE_RA number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.tcs_offsetrate_ra = mrate;
+        applied++;
+      }
+
+      // TCS_OFFSET_RATE_DEC
+      if (config.param[entry].compare(0, 18, "TCS_OFFSET_RATE_DEC")==0) {
+        double mrate;
+        try {
+          mrate = std::stod( config.arg[entry] );
+          if ( mrate < 0 || mrate > 60 ) {
+            message.str(""); message << "ERROR: TCS_OFFSET_RATE_DEC " << mrate << " out of range {0:60}";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return( ERROR );
+          }
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad TCS_OFFSET_RATE_DEC: unable to convert " << config.arg[entry] << " to double";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_OFFSET_RATE_DEC number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.tcs_offsetrate_dec = mrate;
         applied++;
       }
 
@@ -395,39 +443,57 @@ namespace Sequencer {
         applied++;
       }
 
-      // ACQUIRE_MIN_RA_OFF
-      if (config.param[entry].compare( 0, ACQUIRE_MIN_RA_OFF.length(), ACQUIRE_MIN_RA_OFF )==0) {
-        float ra_off;
+      // ACQUIRE_OFFSET_THRESHOLD
+      if (config.param[entry].compare( 0, ACQUIRE_OFFSET_THRESHOLD.length(), ACQUIRE_OFFSET_THRESHOLD )==0) {
+        double offset;
         try {
-          ra_off = std::stof( config.arg[entry] );
+          offset = std::stod( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_MIN_RA_OFF: unable to convert to float" );
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_OFFSET_THRESHOLD: unable to convert to double" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_MIN_RA_OFF number out of float range" );
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_OFFSET_THRESHOLD number out of double range" );
           return(ERROR);
         }
-        this->sequence.target.min_ra_off = ra_off;
+        this->sequence.target.offset_threshold = offset;
         applied++;
       }
 
-      // ACQUIRE_MIN_DEC_OFF
-      if (config.param[entry].compare( 0, ACQUIRE_MIN_DEC_OFF.length(), ACQUIRE_MIN_DEC_OFF )==0) {
-        float dec_off;
+      // ACQUIRE_MIN_REPEAT
+      if (config.param[entry].compare( 0, ACQUIRE_MIN_REPEAT.length(), ACQUIRE_MIN_REPEAT )==0) {
+        int repeat;
         try {
-          dec_off = std::stof( config.arg[entry] );
+          repeat = std::stoi( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_MIN_DEC_OFF: unable to convert to float" );
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_MIN_REPEAT: unable to convert to int" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_MIN_DEC_OFF number out of float range" );
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_MIN_REPEAT number out of int range" );
           return(ERROR);
         }
-        this->sequence.target.min_dec_off = dec_off;
+        this->sequence.target.min_repeat = repeat;
+        applied++;
+      }
+
+      // ACQUIRE_TCS_MAX_OFFSET
+      if (config.param[entry].compare( 0, ACQUIRE_TCS_MAX_OFFSET.length(), ACQUIRE_TCS_MAX_OFFSET )==0) {
+        double offset;
+        try {
+          offset = std::stod( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_TCS_MAX_OFFSET: unable to convert to double" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_TCS_MAX_OFFSET number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.target.max_tcs_offset = offset;
         applied++;
       }
 
@@ -801,6 +867,10 @@ namespace Sequencer {
       ret = NOTHING;
       std::string retstring="";
 
+      if ( cmd.compare( "help" ) == 0 ) {
+                      for ( auto s : SEQUENCERD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+      }
+      else
       if ( cmd.compare( SEQUENCERD_EXIT )==0 ) {
                       seq.exit_cleanly();                        // shutdown the sequencer
       }
@@ -1041,6 +1111,7 @@ namespace Sequencer {
       // Only "stopping", "starting", and "aborting" cannot be aborted.
       //
       if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
+/***
                       // don't request an abort if the SEQ_RUNNING bit isn't set
                       //
                       if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
@@ -1051,6 +1122,7 @@ namespace Sequencer {
                       // To abort, set the ABORTREQ bit in both seqstate and reqstate.
                       //
                       else {
+****/                      {
                         logwrite( function, "abort requested" );
 
                         seq.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTREQ );

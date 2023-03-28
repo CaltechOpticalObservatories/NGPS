@@ -5,6 +5,8 @@ LOGPATH=/home/logs/
 BLKPORT=@ACAMD_BLK_PORT@          # server blocking port
 NBPORT=@ACAMD_NB_PORT@            # server non-blocking port
 DAEMON=no                         # is this run as a daemon?
+STDOUT=/tmp/acamd.stdout          # where to send stdout
+STDERR=/tmp/acamd.stderr          # where to send stderr
 
 # host:port for the external camera server
 #
@@ -22,6 +24,13 @@ PI_PORT=@ACAMD_PI_PORT@
 MOTOR_CONTROLLER="1 foo 0 10"
 MOTOR_CONTROLLER="2 bar 0 10"
 
-
 MESSAGEPORT=@MESSAGEPORT@
 MESSAGEGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
+
+# Optional key=value args to pass to the astrometry solver.
+# List one per line and place within parentheses (key=value)
+#
+SOLVER_ARGS=(lsq=true)
+SOLVER_ARGS=(Ncatalog_max=100)
+SOLVER_ARGS=(Ndetector_max=100)
+SOLVER_ARGS=

@@ -6,6 +6,12 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
+# Set this when using the Andor server to produce simulated star fields
+#
+add_definitions(-DSIMULATED_IMAGES)
+
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+
 set( SEQUENCER_DIR ${PROJECT_BASE_DIR}/sequencerd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
@@ -14,18 +20,15 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_path( PYTHON_HLP "pyhelper.h" PATHS ${PROJECT_BASE_DIR}/Python )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-include_directories( ${PYTHON_HLP} )
 include_directories( ${PYTHON_DEV} )
-
 
 # -- MySQL database ------------------------------------------------------------
 #
-set( MYSQL_DIR "/usr/local/mysql/connector-c++-8.0.29" )
+set( MYSQL_DIR "/usr/local/mysql/connector" )
 find_path( MYSQL_API "mysqlx/xdevapi.h" PATHS ${MYSQL_DIR}/include )
 set( MYSQL_INCLUDES "${MYSQL_API}" )
-find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64/debug )
+find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64 )
 include_directories( ${MYSQL_INCLUDES} )
 
 add_executable(sequencerd
@@ -35,7 +38,6 @@ add_executable(sequencerd
         ${SEQUENCER_DIR}/sequence.cpp 
         ${MYSQL_INCLUDES}
         ${PYTHON_DEV}
-        ${PYTHON_HLP}
         )
 
 target_link_libraries(sequencerd
