@@ -37,14 +37,47 @@ namespace Andor {
     public:
       int serial_number;
       int mode;
+      int temp;
+      std::string temp_status;
+      std::string modestr;
       int rows;
       int cols;
+      int axes[2];
+      int datatype;
       unsigned long npix;
+      unsigned long section_size;
       double exposure_time;      ///< exposure time in seconds
+      std::string fits_name;
 
       Information();
   };
   /***** Information **********************************************************/
+
+
+  /***** FITS_file ************************************************************/
+  /**
+   * @class   FITS_file
+   * @brief   class for FITS I/O using CCfits
+   *
+   */
+  class FITS_file {
+    private:
+      std::unique_ptr<CCfits::FITS> pFits;          ///< pointer to FITS data container
+      std::string fits_name;
+
+    public:
+      FITS_file();
+      FITS_file(Information info);
+      ~FITS_file();
+
+      Information info;
+
+      long open_file();
+      void close_file();
+      long copy_header( std::string wcs_in );
+      template <typename T> long write_image( T* data );
+  };
+  /***** FITS_file ************************************************************/
 
 
   /***** Interface ************************************************************/
@@ -67,16 +100,43 @@ namespace Andor {
 
       Andor::Information camera_info;
 
-      bool is_initialized() { return this->initialized; };
-      long open();
+      FITS_file fits_file;
+
+      uint16_t* image_data;
+
+      // The following functions wrap Andor SDK functions,
+      // indicated by "_" prefix. What the wrappers provide is a check
+      // of the return value. If not DRV_SUCCESS then the return value
+      // is logged (and the wrappper returns ERROR). On DRV_SUCCESS the
+      // wrapper returns NO_ERROR.
+      //
+      long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize );
+      long _GetAvailableCameras( int* number );
+      long _GetCameraHandle( int index, int* handle );
+      long _GetCameraSerialNumber( int* number );
+      long _GetDetector( int* xpix, int* ypix );
+      long _GetStatus( int* status );
+      long _GetStatus( int* status, std::stringstream &status_msg );
+      long _GetTemperature();
+      long _Initialize( );
+      long _SetAcquisitionMode( int mode );
+      long _SetCurrentCamera( int handle );
+      long _SetExposureTime( double exptime );
+      long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
+      long _SetReadMode( int mode );
+      long _SetShutter( int type, int mode, int closetime, int opentime );
+      long _StartAcquisition( );
+
+      inline bool is_initialized() { return this->initialized; };
+
+      long open( std::string args );
       long close();
       long test();
       long exptime( std::string exptime_in, std::string &retstring );
       long acquire_one();
+      long save_acquired( std::string wcs_in, std::string &imgname );
       unsigned int start_acquisition();
-      std::string status_string( int status );
-      long get_status( int &status );
-      unsigned int get_status();
+      long log_status();
 
       template <typename T>
       unsigned int get_last_frame( T* buf ) {
@@ -95,11 +155,9 @@ namespace Andor {
         }
         else
         if constexpr ( std::is_same_v<T, uint16_t*> ) {
-std::cerr << "ok\n";
           ret = GetAcquiredData16( buf, this->camera_info.npix );
         }
         else {
-std::cerr << "nope\n";
           ret = DRV_DATATYPE;
         }
         switch ( ret ) {
@@ -134,10 +192,6 @@ std::cerr << "nope\n";
         logwrite( function, message.str() );
         return ret;
       }
-
-
-
-
   };
   /***** Interface ************************************************************/
 
