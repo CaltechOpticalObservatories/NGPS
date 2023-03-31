@@ -24,16 +24,21 @@ namespace Sequencer {
     this->seqstate.store( Sequencer::SEQ_OFFLINE );
     this->reqstate.store( Sequencer::SEQ_OFFLINE );
     this->do_once.store( false );                    /// default to "do all"
+    this->tcs_nowait.store( false );                 /// default to wait
+    this->dome_nowait.store( false );                /// default to wait
     this->waiting_for_state.store( false );          /// not currently waiting for a state
     this->ready_to_start = false;                    /// the sequencer is not ready by default (needs nightly startup)
     this->notify_tcs_next_target = false;            /// default do not notify TCS of next target before end of exposure
     this->tcs_preauth_time = 0;                      /// default disable notifing TCS of next target's coords before exposure end
-    this->tcs_settle_timeout = 0;                    /// telescope settling timeout (set by config file)
+    this->tcs_settle_timeout = 10;                   /// telescope settling timeout (set by config file)
+    this->tcs_settle_stable = 1;                     /// telescope stable time (set by config file)
+    this->tcs_domeazi_ready = 1;                     /// max degrees azimuth that dome and telescope can differ before ready to observe
     this->tcs_offsetrate_ra = 45;                    /// TCS offset rate RA in arcsec per second
     this->tcs_offsetrate_dec = 45;                   /// TCS offset rate DEC in arcsec per second
     this->acquisition_timeout = 0;                   /// acquisition timeout (set by config file)
     this->acquisition_max_retrys = -1;               /// no retry limit by default (-1 disables) but can override in config file
     this->arm_readout_flag = false;                  /// disarm the readout flag to ignore async messages
+    this->last_target="";
 
     // Initializes the STL map of bit-number-to-string for the SequenceStateBits.
     // This map is used to obtain a human-friendly string of the bits which have been set in seqstate
@@ -560,7 +565,7 @@ namespace Sequencer {
       if ( te != THR_NONE ) {
         message.str(""); message << "ERROR the following thread(s) had an error: " << seq.thrstate_string( te );
         logwrite( function, message.str() );
-        seq.thr_error.store( THR_NONE );  // clear the thread error state
+//      seq.thr_error.store( THR_NONE );  // clear the thread error state // move this outside loop after break
         break;
       }
 
@@ -617,6 +622,13 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     } // end while the SEQ_RUNNING bit is set in seqstate
 logwrite( function, "[DEBUG] I'm out of the main SEQ_RUNNING loop now" );
+
+    if ( seq.thr_error.load() != THR_NONE ) {
+      seq.thr_error.store( THR_NONE );  // clear the thread error state
+      seq.do_once.store(true);
+      seq.set_seqstate_bit( Sequencer::SEQ_STOPREQ );
+      seq.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
+    }
 
     // The STOPREQ got us out of the while loop. Now that the loop has exited,
     // clear the STOPREQ and RUNNING bits and set the READY bits.
@@ -1444,11 +1456,16 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     double ra_delta  = std::abs( ra_h_now  - seq.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
     double dec_delta = std::abs( dec_d_now - seq.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
 
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] ra_delta=" << ra_delta << " dec_delta=" << dec_delta;
+    logwrite( function, message.str() );
+#endif
+
     // If the difference between the TCS coordinates and the target coordinates are within
     // the resolution of reading the TCS then assume we are already pointed. Otherwise,
     // disable guiding and point the telescope here.
     //
-    if ( ra_delta > 0.01 || dec_delta > 0.01 ) {
+    if ( seq.target.name != seq.last_target && ( ra_delta > 0.025 || dec_delta > 0.025 ) ) {
 
       // disable guiding
       //
@@ -1464,8 +1481,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       // convert them to decimal and to scope coordinates.
       // (fpoffsets.coords_* are always in degrees)
       //
-      std::stringstream coords;
-      std::string reply;
       seq.target.fpoffsets.coords_in.ra    = seq.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
       seq.target.fpoffsets.coords_in.dec   = seq.radec_to_decimal( seq.target.dec_dms );
       seq.target.fpoffsets.coords_in.angle = seq.target.slitangle;
@@ -1516,19 +1531,21 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
       // so convert that as it's being sent here.
       //
+      std::stringstream coords;
       coords << "COORDS " << ( seq.target.fpoffsets.coords_out.ra * TO_HOURS )  << " " 
                           <<   seq.target.fpoffsets.coords_out.dec << " 0 0 0 \"" << seq.target.name << "\"";
 
 message.str(""); message << "[ACQUIRE] sending " << coords.str();
 logwrite( function, message.str() );
 
-      error  = seq.tcsd.send( coords.str(), reply );                              // send to the TCS
+      std::string tcsreply;
+      error  = seq.tcsd.send( coords.str(), tcsreply );                              // send to the TCS
 
       int tcsvalue;
-      if ( error == NO_ERROR ) error = seq.extract_tcs_value( reply, tcsvalue );  // extract the value from the tcsd reply
-      if ( error == NO_ERROR ) error = seq.parse_tcs_generic( tcsvalue );         // parse the tcs reply
+      if ( error == NO_ERROR ) error = seq.extract_tcs_value( tcsreply, tcsvalue );  // extract the value from the tcsd reply
+      if ( error == NO_ERROR ) error = seq.parse_tcs_generic( tcsvalue );            // parse the tcs reply
       if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << reply;
+        message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << tcsreply;
         seq.async.enqueue_and_log( function, message.str() );
         seq.thr_error.fetch_or( THR_MOVE_TO_TARGET );                 
         seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS | Sequencer::SEQ_WAIT_TCSOP );
@@ -1553,7 +1570,7 @@ logwrite( function, message.str() );
       // from the last target.
       //
 
-      while ( error==NO_ERROR && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
+      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_nowait.load()==false ) {
 
         // If an abort has been requested then stop polling the TCS.
         // This doesn't actually stop the telescope, it just means we stop paying attention to it.
@@ -1564,14 +1581,18 @@ logwrite( function, message.str() );
           break;
         }
 
-        std::string reply;
-        int tcsvalue=TCS_UNDEFINED;
-        error = seq.tcsd.send( "poll ?MOTION", reply );  // "poll" prevents excessive logging in tcsd
-        if ( error == NO_ERROR) error = seq.extract_tcs_value( reply, tcsvalue );
+        std::string tcsmotion;
+        error = seq.poll_tcs_motion( tcsmotion );
 
-        if ( tcsvalue == TCS_MOTION_SLEWING ) {          // switch from TCSOP to SLEW
+        if ( tcsmotion == TCS_MOTION_SLEWING_STR ) {      // switch from TCSOP to SLEW
           seq.set_clr_seqstate_bit( Sequencer::SEQ_WAIT_SLEW, Sequencer::SEQ_WAIT_TCSOP );
           logwrite( function, "TCS slew started" );      ///< TODO @todo log telemetry!
+          break;
+        }
+
+        if ( seq.tcs_nowait.load() == true ) {
+          logwrite( function, "requested skip TCS slew" );
+          seq.set_clr_seqstate_bit( Sequencer::SEQ_WAIT_SLEW, Sequencer::SEQ_WAIT_TCSOP );
           break;
         }
 
@@ -1593,7 +1614,7 @@ logwrite( function, message.str() );
       // Poll the TCS at 10Hz to detect when slewing has stopped.
       // This has no timeout but can be cancelled by user command.
       //
-      while ( true ) { // error==NO_ERROR && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) 
+      while ( seq.tcs_nowait.load() != true ) { // error==NO_ERROR && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) 
 
         // If an abort has been requested then stop polling the TCS.
         // This doesn't actually stop the telescope, it just means we stop paying attention to it.
@@ -1604,12 +1625,10 @@ logwrite( function, message.str() );
           break;
         }
 
-        std::string reply;
-        int tcsvalue=TCS_UNDEFINED;
-        error = seq.tcsd.send( "poll ?MOTION", reply );  // "poll" prevents excessive logging in tcsd
-        if ( error == NO_ERROR) error = seq.extract_tcs_value( reply, tcsvalue );
+        std::string tcsmotion;
+        error = seq.poll_tcs_motion( tcsmotion );
 
-        if ( tcsvalue == TCS_MOTION_SETTLING ) break;
+        if ( tcsmotion == TCS_MOTION_SETTLING_STR ) break;
 
         usleep( 100000 );  // don't poll the TCS too fast
       }
@@ -1621,11 +1640,6 @@ logwrite( function, message.str() );
         logwrite( function, "TCS slew stopped" );               ///< TODO @todo log telemetry!
       }
 
-    }  // end if ( ra_delta > 0.01 || dec_delta > 0.01 ) 
-    else {
-      seq.async.enqueue_and_log( function, " NOTICE: telescope already pointed at target, no TCS move requested" );
-    }
-
     // If the slew finished naturally (not aborted) then
     // set TCS settle state bit and clear TCS slew state bit now that the telescope is settling.
     //
@@ -1634,60 +1648,108 @@ logwrite( function, message.str() );
       seq.set_clr_seqstate_bit( Sequencer::SEQ_WAIT_SETTLE, Sequencer::SEQ_WAIT_SLEW );
     }
 
-    // Before entering loop waiting for telescope to settle
-    // get the current time (in seconds) to be used for timeout.
-    //
-    bool   settled       = false;                               // settled gets set true only when TCS reports MOTION_TRACKING
-    double clock_now     = get_clock_time();
-    double clock_timeout = clock_now + seq.tcs_settle_timeout;  // must settle by this time
+      // Before entering loop waiting for telescope to settle
+      // get the current time (in seconds) to be used for timeout.
+      //
+      int    settlecount   = 0;                                   // number of tenths of a second that TCS has been TRACKING
+      bool   settled       = false;                               // settled gets set true only when TCS reports MOTION_TRACKING
+      double clock_now     = get_clock_time();
+      double clock_timeout = clock_now + seq.tcs_settle_timeout;  // must settle by this time
 
-    // Poll the TCS at 10Hz to detect when telescope has settled (MOTION_TRACKING).
-    // This wait can time out.
+      // Poll the TCS at 10Hz to detect when telescope has settled (MOTION_TRACKING).
+      // The TCS must be settled for TCS_SETTLE_STABLE seconds before declaring that it has settled.
+      // This is because it can bounce between SETTLING and TRACKING.
+      // This wait can time out.
+      //
+      while ( not settled ) { // error==NO_ERROR && not settled && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) )
+
+        // If an abort has been requested then stop polling the TCS.
+        // This doesn't actually stop the telescope, it just means we stop paying attention to it.
+        //
+        if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
+          seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_SETTLE );
+          logwrite( function, "abort requested. no longer waiting for TCS settle" );
+          break;
+        }
+
+        std::string tcsmotion;
+        error = seq.poll_tcs_motion( tcsmotion );
+
+        // Once the TCS reports TRACKING, then start a counter. Counter has to exceed the TCS_SETTLE_STABLE
+        // time before marking as settled. If it ever reports not tracking then the count starts over.
+        //
+        if ( tcsmotion == TCS_MOTION_TRACKING_STR ) settlecount++; else settlecount=0;
+
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] TCS motion is " << tcsmotion;
+        logwrite( function, message.str() );
+#endif
+
+        // This loop polls at 10Hz so counter must be >= 10 * TCS_SETTLE_STABLE
+        //
+        if ( settlecount >= 10*seq.tcs_settle_stable ) settled = true;
+
+        // before looping, check for a timeout
+        //
+        clock_now = get_clock_time();
+
+        if ( clock_now > clock_timeout ) {
+          error = ERROR;
+          seq.async.enqueue_and_log( function, "ERROR: timeout waiting for telescope to settle" );
+          seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_SETTLE );
+          break;
+        }
+        usleep( 100000 );  // sets the ~10Hz loop rate
+      }
+      logwrite( function, "TCS settled" );
+
+      seq.last_target = seq.target.name;  // remember the last target that was tracked on
+
+    }  // end if ( ra_delta > 0.01 || dec_delta > 0.01 ) 
+    else {
+      seq.async.enqueue_and_log( function, " NOTICE: telescope already pointed at target, no TCS move requested" );
+    }
+
+    // Make sure the dome is also in position by polling the TCS for the dome and telescope positions
+    // and checking that they agree within the limit defined by TCS_DOMEAZI_READY in the config file.
+    // This loops forever, until dome is in position or aborted by the user; it never times out.
     //
-    while ( not settled ) { // error==NO_ERROR && not settled && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) )
+    logwrite( function, "checking dome position" );
+    bool domeok = false;
+
+    while ( !domeok && seq.dome_nowait.load()==false) { 
 
       // If an abort has been requested then stop polling the TCS.
       // This doesn't actually stop the telescope, it just means we stop paying attention to it.
       //
       if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
         seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_SETTLE );
-        logwrite( function, "abort requested. no longer waiting for TCS settle" );
+        logwrite( function, "abort requested. no longer waiting for dome" );
         break;
       }
 
-      std::string reply;
-      int tcsvalue=TCS_UNDEFINED;
-      error = seq.tcsd.send( "poll ?MOTION", reply );  // "poll" prevents excessive logging in tcsd
-      if ( error == NO_ERROR) error = seq.extract_tcs_value( reply, tcsvalue );
+      double domeazi, telazi;
 
-      // once the TCS reports TRACKING, then the telescope has settled and it's time to get out
-      //
-      if ( tcsvalue == TCS_MOTION_TRACKING ) settled = true;
+      error = seq.poll_dome_position( domeazi, telazi );
 
-      // before looping, check for a timeout
-      //
-      clock_now = get_clock_time();
+      if ( std::abs( domeazi - telazi ) < seq.tcs_domeazi_ready ) { domeok = true; break; }
 
-      if ( clock_now > clock_timeout ) {
-        error = ERROR;
-        seq.async.enqueue_and_log( function, "ERROR: timeout waiting for telescope to settle" );
-        seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_SETTLE );
-        break;
-      }
-      usleep( 100000 );  // don't poll the TCS too fast
+      if ( error != NO_ERROR ) break;
     }
+    message.str(""); message << "dome is" << ( domeok ? " " : " not " ) << "in position";
+    logwrite( function, message.str() );
 
     // If not already acquired then start the acquisition sequence in a separate thread
     //
-    if ( settled && !seq.target.acquired ) {
+    if ( error==NO_ERROR && !seq.target.acquired ) {
 
-      logwrite( function, "TCS settled, starting acquisition thread" );  ///< TODO @todo log to telemetry!
+      logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE ); std::thread( dothread_acquisition, std::ref(seq) ).detach();
     }
     else
-    if ( settled && seq.target.acquired ) {
-      logwrite( function, "TCS settled, target already acquired" );  ///< TODO @todo log to telemetry!
+    if ( error==NO_ERROR && seq.target.acquired ) {
+      logwrite( function, "target already acquired, nothing to do" );  ///< TODO @todo log to telemetry!
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1699,16 +1761,14 @@ logwrite( function, message.str() );
 
     // clear all TCS wait bits
     //
-message.str(""); message << "[DEBUG] clearing all TCS bits. BEFORE: " << seq.seqstate.load();
-logwrite( function, message.str() );
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS    | 
                           Sequencer::SEQ_WAIT_TCSOP  | 
                           Sequencer::SEQ_WAIT_SLEW   | 
                           Sequencer::SEQ_WAIT_SETTLE );
-message.str(""); message << "[DEBUG] clearing all TCS bits. AFTER: " << seq.seqstate.load();
-logwrite( function, message.str() );
 
     seq.clr_thrstate_bit( THR_MOVE_TO_TARGET );
+    seq.dome_nowait.store( false );
+    seq.tcs_nowait.store( false );
     return;
   }
   /***** Sequencer::Sequence::dothread_move_to_target *************************/
@@ -1755,7 +1815,7 @@ logwrite( function, message.str() );
       //
       if ( error == NO_ERROR ) {
         std::stringstream coords;
-        std::string reply, ra_hms, dec_dms;
+        std::string tcsreply, ra_hms, dec_dms;
 
         // convert ra, dec to decimal
         // can't be NaN
@@ -1770,11 +1830,11 @@ logwrite( function, message.str() );
 
         coords << "NEXT " << ra_hms << " " << dec_dms << " 0 0 0 \"" << seq.target.name << "\"";
         ///< @todo TCS command "NEXT" not yet implemented
-//      error  = seq.tcsd.send( coords.str(), reply );
+//      error  = seq.tcsd.send( coords.str(), tcsreply );
         message.str(""); message << "[TODO] new command not implemented in TCS: " << coords.str();
         logwrite( function, message.str() );
         int tcsvalue;
-        if ( error == NO_ERROR ) error = seq.extract_tcs_value( reply, tcsvalue );
+        if ( error == NO_ERROR ) error = seq.extract_tcs_value( tcsreply, tcsvalue );
         if ( error == NO_ERROR ) error = seq.parse_tcs_generic( tcsvalue );
       }
 
@@ -2024,7 +2084,7 @@ logwrite( function, message.str() );
     double clock_timeout = clock_now + seq.acquisition_timeout;  // must acquire by this time
 
     int retrys=0;    // number of acquisition attempts
-    int acquired=0;  // number of sequential successful acquisitions, must meet ACQUIRE_MIN_REPEAT for success
+    int nacquired=0; // number of sequential successful acquisitions, must meet ACQUIRE_MIN_REPEAT for success
 
     // The goal for the camera is the result from the SLIT->ACAM calculation
     // that was performed in move_to_target() using the DB coords.
@@ -2052,7 +2112,7 @@ logwrite( function, message.str() );
     double acam_dec_latest = acam_dec_goal;
 #endif
 
-    while ( (error==NO_ERROR) && acquired < seq.target.min_repeat ) {
+    while ( (error==NO_ERROR) && nacquired < seq.target.min_repeat ) {
 
       // Acquire an image from the camera.
       // The reply contains a FITS filename that has to be passed to the astrometry solver.
@@ -2088,7 +2148,7 @@ logwrite( function, message.str() );
           match_found = false;
           message.str(""); message << "solve " << tokens.at(0) << ": no match found";
           logwrite( function, message.str() );
-          acquired=0;  // one bad match resets this counter which requires ACQUIRE_MIN_REPEAT sequential acquires
+          nacquired=0;  // one bad match resets this counter which requires ACQUIRE_MIN_REPEAT sequential acquires
         }
       }
       catch( std::out_of_range &e ) {
@@ -2107,12 +2167,20 @@ logwrite( function, message.str() );
         error = ERROR;
       }
 
+      // If no match found and exceeded number of retrys then give up and get out
+      //
       if ( !match_found && ( seq.acquisition_max_retrys > 0 ) && ( ++retrys >= seq.acquisition_max_retrys ) ) {
         seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within max number of attempts" );
         break;
       }
 
+      // But if just no match found (and haven't exceeded number of retrys) then keep trying
+      //
+      if ( !match_found ) continue;
+
       if ( error != NO_ERROR ) break;  // any errors at this point get out of the while !acquired loop now
+
+      // Continue only if there was a match and no errors
 
       // Calculate the offsets to send to the TCS.
       // These are in degrees.
@@ -2165,9 +2233,9 @@ logwrite( function, message.str() );
       // Increment a counter which must exceed the ACQUIRE_MIN_REPEAT before declaring success.
       //
       if ( error!=ERROR && offset < seq.target.offset_threshold ) {
-        acquired++;
+        nacquired++;
       }
-      else acquired=0;  // one bad match resets this counter which requires ACQUIRE_MIN_REPEAT sequential acquires
+      else nacquired=0;  // one bad match resets this counter which requires ACQUIRE_MIN_REPEAT sequential acquires
 
       {  // temporary logging
       double __ra, __dec;
@@ -2218,7 +2286,7 @@ logwrite( function, message.str() );
 
     }  // end while ( (error==NO_ERROR) && !acquired ) 
 
-    seq.target.acquired = ( acquired >= seq.target.min_repeat ? true : false );
+    seq.target.acquired = ( nacquired >= seq.target.min_repeat ? true : false );
 
     message.str(""); message << "target" << ( seq.target.acquired ? " " : " not " ) << "acquired";
     logwrite( function, message.str() );
@@ -2245,6 +2313,7 @@ logwrite( function, message.str() );
     seq.set_thrstate_bit( THR_GUIDE );
     std::string function = "Sequencer::Sequence::dothread_guide";
     std::stringstream message;
+    seq.clr_thrstate_bit( THR_GUIDE );
   }
   /***** Sequencer::Sequence::dothread_guide **********************************/
 
@@ -2683,7 +2752,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
 
     if ( tokens.size() != 3 ) {
-      message.str(""); message << "ERROR: expected 3 tokens but received " << tokens.size() << ": " << str_in;
+      message.str(""); message << "ERROR: expected 3 tokens but received " << tokens.size() << " from str_in \"" << str_in << "\"";
       logwrite( function, message.str() );
       return( NAN );
     }
@@ -2696,12 +2765,12 @@ logwrite( function, "[DEBUG] setting READY bit" );
       ss = std::stod( tokens.at(2) ) / 3600.0;
     }
     catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: out of range parsing input string " << str_in << ": " << e.what();
+      message.str(""); message << "ERROR: out of range parsing input string \"" << str_in << "\": " << e.what();
       logwrite( function, message.str() );
       return( NAN );
     }
     catch( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR: invalid argument parsing input string " << str_in << ": " << e.what();
+      message.str(""); message << "ERROR: invalid argument parsing input string \"" << str_in << "\": " << e.what();
       logwrite( function, message.str() );
       return( NAN );
     }
@@ -2968,6 +3037,110 @@ logwrite( function, "[DEBUG] setting READY bit" );
     return( error );
   }
   /***** Sequencer::Sequence::dotype ******************************************/
+
+
+  /***** Sequencer::Sequence::get_dome_position *******************************/
+  /**
+   * @brief      read the dome and telescope positions
+   * @param[out] domeazi
+   * @param[out] telazi
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Sequence::poll_dome_position( double &domeazi, double &telazi ) {
+    return this->get_dome_position( true, domeazi, telazi );
+  }
+  long Sequence::get_dome_position( double &domeazi, double &telazi ) {
+    return this->get_dome_position( false, domeazi, telazi );
+  }
+  long Sequence::get_dome_position( bool poll, double &domeazi, double &telazi ) {
+    std::string function = "Sequencer::Sequence::get_dome_position";
+    std::stringstream message;
+
+    std::string tcsreply;
+    std::stringstream tcscmd;
+    tcscmd << ( poll ? "poll " : "" ) << TCSD_GET_DOME;  // optional "poll" prevents excessive logging by tcsd
+    if ( this->tcsd.send( tcscmd.str(), tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting dome position from tcsd" );
+      return( ERROR );
+    }
+
+    std::vector<std::string> tcstokens;
+    Tokenize( tcsreply, tcstokens, " " );
+
+    // If there's one (or fewer) tokens then it's an error
+    //
+    if ( tcstokens.size() <= 1 || tcsreply == "ERROR" ) {
+      logwrite( function, "ERROR getting dome position from tcsd" );
+      return( ERROR );
+    }
+
+    // On success GET_DOME returns two numbers, the dome azimuth and the telescope azimuth, followed by DONE
+    //
+    if ( tcstokens.size() != 3 ) {
+      message.str(""); message << "ERROR malformed reply \"" << tcsreply << "\" getting dome position. expected <domeaz> <telaz>";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    try {
+      domeazi = std::stod( tcstokens.at(0) );
+      telazi  = std::stod( tcstokens.at(1) );
+    }
+    catch( std::out_of_range & ) {
+      logwrite( function, "ERROR out of range parsing dome position" );
+      return( ERROR );
+    }
+    catch( std::invalid_argument &e ) {
+      logwrite( function, "ERROR invalid argument parsing dome position" );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /***** Sequencer::Sequence::get_dome_position *******************************/
+
+
+  /***** Sequencer::Sequence::get_tcs_motion **********************************/
+  /**
+   * @brief      read the tcs motion state
+   * @param[out] state
+   * @param[out] telazi
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Sequence::poll_tcs_motion( std::string &state_out ) {
+    return this->get_tcs_motion( true, state_out );
+  }
+  long Sequence::get_tcs_motion( std::string &state_out ) {
+    return this->get_tcs_motion( false, state_out );
+  }
+  long Sequence::get_tcs_motion( bool poll, std::string &state_out ) {
+    std::string function = "Sequencer::Sequence::get_tcs_motion";
+    std::stringstream message;
+
+    std::string tcsreply;
+    std::stringstream tcscmd;
+    tcscmd << ( poll ? "poll " : "" ) << TCSD_GET_MOTION;  // optional "poll" prevents excessive logging by tcsd
+    if ( this->tcsd.send( tcscmd.str(), tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting motion state from tcsd" );
+      return( ERROR );
+    }
+
+    std::vector<std::string> tcstokens;
+    Tokenize( tcsreply, tcstokens, " " );
+
+    try {
+      state_out = tcstokens.at(0);
+    }
+    catch( std::out_of_range & ) {
+      logwrite( function, "ERROR out of range parsing motion state" );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /***** Sequencer::Sequence::get_tcs_motion **********************************/
 
 
   /***** Sequencer::Sequence::get_tcs_coords **********************************/
@@ -3362,6 +3535,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ---------------------------------------------------------
     //
     if ( testname == "moveto" ) {
+      this->tcs_nowait.store( false );
       logwrite( function, "spawning dothread_move_to_target..." );
       std::thread( dothread_move_to_target, std::ref(*this) ).detach();
     }

@@ -147,7 +147,7 @@ namespace TCS {
 
     // If someone ever changes the TCS message then this will have to be changed.
     //
-    if ( pairs.size() != 14 ) {
+    if ( pairs.size() != 15 ) {
       logwrite( function, "ERROR malformed reply" );
       return ERROR;
     }
@@ -281,7 +281,7 @@ namespace TCS {
 
     // If someone ever changes the TCS message then this will have to be changed.
     //
-    if ( pairs.size() != 14 ) {
+    if ( pairs.size() != 15 ) {
       logwrite( function, "ERROR malformed reply" );
       return ERROR;
     }
@@ -409,21 +409,19 @@ namespace TCS {
     //
     // wait for incoming data
     //
-    do {
-      // wait for incoming data
-      //
-      if ( ( ret = this->tcs.Poll() ) <= 0 ) {
-        if ( ret==0 ) { message.str(""); message << "TIMEOUT polling fd " << tcs.getfd()
-                                                 << " waiting for response from TCS"; error = TIMEOUT; }
-        if ( ret <0 ) { message.str(""); message << "ERROR polling fd "   << tcs.getfd()
-                                                 << " waiting for response from TCS"; error = ERROR; }
-        if ( error != NO_ERROR ) logwrite( function, message.str() );
-        break;
-      }
+    if ( ( ret = this->tcs.Poll() ) <= 0 ) {
+      if ( ret==0 ) { message.str(""); message << "TIMEOUT polling fd " << tcs.getfd() 
+                                               << " waiting for response from TCS"; error = TIMEOUT; }
+      if ( ret <0 ) { message.str(""); message << "ERROR polling fd "   << tcs.getfd() 
+                                               << " waiting for response from TCS"; error = ERROR; }
+      if ( error != NO_ERROR ) logwrite( function, message.str() );
+    }
 
-      // data available, read from socket
-      //
-      if ( ( ret = this->tcs.Read( sbuf, "\0" ) ) <= 0 ) {   // all TCS respoonses are terminated with NUL
+    // data available, read from socket
+    //
+    char buf[2];
+    do {
+      if ( ( ret = this->tcs.Read( buf, 1 ) ) <= 0 ) {
         if ( ret < 0 ) {
           message.str(""); message << "ERROR reading from TCS on fd " << tcs.getfd() << ": " << strerror(errno);
           logwrite( function, message.str() );
@@ -434,12 +432,14 @@ namespace TCS {
         }
         break;
       }
-    } while ( ret > 0 && sbuf.find( "\0" ) == std::string::npos );
-
+//    message.str(""); message << "[DEBUG] buf=0x" << std::hex << (int)buf[0]; logwrite( function, message.str() );
+      sbuf.append( buf, 1 );
+    } while ( buf[0] != 0 );
 
     // remove any trailing linefeed and carriage return
     //
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
+//  sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end()); // can't strip newline since TCS embeds this
 
     reply = sbuf;
 

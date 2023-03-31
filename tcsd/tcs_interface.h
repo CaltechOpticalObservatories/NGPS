@@ -12,6 +12,7 @@
 #include "network.h"
 #include "logentry.h"
 #include "common.h"
+#include "tcs_constants.h"
 #include <sys/stat.h>
 #include <map>
 
@@ -48,6 +49,8 @@ namespace TCS {
       long close();
       long get_weather_coords( std::string &retstring );
       long get_coords( std::string &retstring );
+      long get_dome( std::string &retstring );
+      long get_motion( std::string &retstring );
       long send_command( std::string cmd, std::string &reply );
 
       bool isopen() { return this->tcs.isconnected(); }    ///< is this interface connected to hardware?

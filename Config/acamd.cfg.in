@@ -30,7 +30,7 @@ MESSAGEGROUP=239.1.1.234            # or set to NONE if not using ASYNC messagin
 # Optional key=value args to pass to the astrometry solver.
 # List one per line and place within parentheses (key=value)
 #
-SOLVER_ARGS=(lsq=true)
-SOLVER_ARGS=(Ncatalog_max=100)
-SOLVER_ARGS=(Ndetector_max=100)
-SOLVER_ARGS=
+#SOLVER_ARGS=(lsq=true)
+#SOLVER_ARGS=(Ncatalog_max=100)
+#SOLVER_ARGS=(Ndetector_max=100)
+#SOLVER_ARGS=

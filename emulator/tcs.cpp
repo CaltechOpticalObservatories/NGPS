@@ -393,7 +393,8 @@ namespace TcsEmulator {
         << "Dome shutters="       << "0\n"
         << "Windscreen position=" << "0\n"
         << "InstPos="             << "0\n"
-        << "Pumps="               << "0";
+        << "Instrument=NGPS"      << "0\n"
+        << "Pumps="               << "0\n";
 
     retstring = ret.str();
 

@@ -445,6 +445,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     }
     else this->python_initialized = true;
 
+/**
     this->pTestModuleName = PyUnicode_FromString( PYTHON_TEST_MODULE );
     this->pTestModule     = PyImport_Import( this->pTestModuleName );
 
@@ -454,6 +455,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
       return;
     }
     else this->python_initialized = true;
+**/
 
     this->isacquire=true;
 
@@ -655,6 +657,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   long Astrometry::pytest( std::string imagename_in ) {
     std::string function = "Acam::Astrometry::pytest";
     std::stringstream message;
+/**
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -719,6 +722,8 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     }
 
     return( NO_ERROR );
+**/
+    return(ERROR);
   }
   /***** Acam::Astrometry::pytest *********************************************/
 

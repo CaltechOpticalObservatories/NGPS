@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# @file     power
+# @brief    provides a command line interface for powerd
+#
+
+source $HOME/Software/Config/powerd.cfg
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command

@@ -106,6 +106,8 @@ namespace Network {
 
       int Write(std::string msg_in);     ///< write data to a socket
 
+      inline ssize_t Write( const char* c ) { return write( this->fd, (void*)c, 1 ); }
+
       template <class T>
       int Write(T* buf, size_t count) {  ///< write raw data to a socket
         size_t bytes_sent=0;

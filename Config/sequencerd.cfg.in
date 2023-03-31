@@ -56,7 +56,9 @@ DB_SETS=target_sets                  # table of target sets
 #
 TCS_OFFSET_RATE_RA=45                # TCS offset rate for RA ("MRATE") in arcsec per second
 TCS_OFFSET_RATE_DEC=45               # TCS offset rate for DEC ("MRATE") in arcsec per second
-TCS_SETTLE_TIMEOUT=15                # seconds to wait for telescope to settle (for "TRACKING_STABLY")
+TCS_SETTLE_TIMEOUT=20                # seconds to wait for telescope to settle (for "TRACKING_STABLY")
+TCS_SETTLE_STABLE=1.5                # time in fractional seconds (to 0.1) that TCS must report TRACKING before it is really stable
+TCS_DOMEAZI_READY=10                 # max degrees azimuth that dome and telescope can differ before ready to observe
 TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify TCS of next target's coords (0 to disable)
 UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
 

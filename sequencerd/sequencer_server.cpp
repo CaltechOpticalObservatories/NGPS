@@ -425,6 +425,44 @@ namespace Sequencer {
         applied++;
       }
 
+      // TCS_SETTLE_STABLE
+      if (config.param[entry].compare(0, 17, "TCS_SETTLE_STABLE")==0) {
+        double stablet;
+        try {
+          stablet = std::stod( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad TCS_SETTLE_STABLE: unable to convert " << config.arg[entry] << " to double";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_SETTLE_STABLE number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.tcs_settle_stable = stablet;
+        applied++;
+      }
+
+      // TCS_DOMEAZI_READY
+      if (config.param[entry].compare(0, 17, "TCS_DOMEAZI_READY")==0) {
+        double domeazi;
+        try {
+          domeazi = std::stod( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: bad TCS_DOMEAZI_READY: unable to convert " << config.arg[entry] << " to double";
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_DOMEAZI_READY number out of double range" );
+          return(ERROR);
+        }
+        this->sequence.tcs_domeazi_ready = domeazi;
+        applied++;
+      }
+
       // TCS_PREAUTH_TIME
       if (config.param[entry].compare(0, 16, "TCS_PREAUTH_TIME")==0) {
         double to;
@@ -999,6 +1037,8 @@ namespace Sequencer {
       // This is needed before any sequences can be run.
       //
       if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
+                      seq.sequence.tcs_nowait.store( false );
+                      seq.sequence.dome_nowait.store( true );
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_startup ), std::ref( seq.sequence ) ).detach();
                       }
@@ -1024,7 +1064,8 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
-
+                      seq.sequence.tcs_nowait.store( false );
+                      seq.sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
                       //
                       if ( seq.sequence.seqstate.load() != Sequencer::SEQ_READY ) {
@@ -1151,6 +1192,22 @@ namespace Sequencer {
                         }
                         ret = NO_ERROR;
                       }
+      }
+      else
+
+      // skip slew
+      //
+      if ( cmd.compare( SEQUENCERD_TCSNOWAIT ) == 0) {
+                      seq.sequence.tcs_nowait.store( true );
+                      ret = NO_ERROR;
+      }
+      else
+
+      // skip dome
+      //
+      if ( cmd.compare( SEQUENCERD_DOMENOWAIT ) == 0) {
+                      seq.sequence.dome_nowait.store( true );
+                      ret = NO_ERROR;
       }
       else
 

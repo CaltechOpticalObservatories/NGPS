@@ -178,6 +178,8 @@ namespace Sequencer {
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
       double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
       double tcs_settle_timeout;  ///< timeout for telescope to settle (in sec) set by configuration parameter TCS_SETTLE_TIMEOUT
+      double tcs_settle_stable;   ///< time that TCS must report TRACKING before it is really tracking
+      double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
       std::mutex start_mtx;       ///< mutex to protect the start sequence from multiple instances
 
@@ -192,6 +194,8 @@ namespace Sequencer {
 
       volatile std::atomic<bool>          waiting_for_state;  ///< set if dothread_wait_for_state is running
       volatile std::atomic<bool>          do_once;            ///< set if "do one" selected, clear if "do all" selected
+      volatile std::atomic<bool>          tcs_nowait;         ///< set to skip waiting for TCS
+      volatile std::atomic<bool>          dome_nowait;        ///< set to skip waiting for dome
 
       volatile std::atomic<std::uint32_t> thrstate;           ///< word to indicate which threads are running
       volatile std::atomic<std::uint32_t> runstate;
@@ -203,6 +207,8 @@ namespace Sequencer {
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
+
+      std::string last_target;
 
       Common::Queue async;            ///< asynchronous message queue
 
@@ -257,6 +263,14 @@ namespace Sequencer {
       std::string thrstate_string( uint32_t state );                           ///< returns string form of thread states
       long dotype( std::string args );                                         ///< set do type (one/all)
       long dotype( std::string args, std::string &retstring );                 ///< set or get do type (one/all)
+      long poll_dome_position( double &domeazi, double &telazi );
+      long get_dome_position( double &domeazi, double &telazi );
+      long get_dome_position( bool poll, double &domeazi, double &telazi );
+
+      long poll_tcs_motion( std::string &state_out );
+      long get_tcs_motion( std::string &state_out );
+      long get_tcs_motion( bool poll, std::string &state_out );
+
       long get_tcs_coords_type( std::string cmd, double &ra_h, double &dec_d );///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_coords( double &ra_h, double &dec_d );                      ///< read the current TCS ra,dec in decimal hr,deg

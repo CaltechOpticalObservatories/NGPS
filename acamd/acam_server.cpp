@@ -463,6 +463,10 @@ namespace Acam {
                       ret = this->interface.camera.get_status( );
       }
       else
+      if ( cmd.compare( "camerashutter" ) == 0 ) {
+                      ret = this->interface.camera.andor.shutter( );
+      }
+      else
       if ( cmd.compare( "camerafits" ) == 0 ) {
                       ret = this->interface.test_image( );
       }

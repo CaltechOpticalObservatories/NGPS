@@ -430,8 +430,19 @@ namespace TCS {
       }
       else
 
+      if ( cmd.compare( TCSD_GET_DOME ) == 0 ) {
+                      ret = this->interface.get_dome( retstring );
+      }
+      else
+
       if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
                       ret = this->interface.get_weather_coords( retstring );
+      }
+
+      else
+
+      if ( cmd.compare( TCSD_GET_MOTION ) == 0 ) {
+                      ret = this->interface.get_motion( retstring );
       }
 
       // all other commands go straight to the TCS interface
@@ -445,6 +456,9 @@ namespace TCS {
           ret=ERROR;
         }
         ret = this->interface.send_command( buf, retstring );
+        // The TCS contains messages that have fields separated by newlines. Replace those with commas.
+        //
+        std::replace( retstring.begin(), retstring.end(), '\n', ',');
       }
 
 #ifdef LOGLEVEL_DEBUG  // this can be a little much when polling

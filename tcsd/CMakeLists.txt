@@ -6,6 +6,8 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+
 set( TCSD_DIR ${PROJECT_BASE_DIR}/tcsd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )

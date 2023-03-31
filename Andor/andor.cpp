@@ -665,6 +665,25 @@ namespace Andor {
   /***** Andor::Interface::start_acquisition **********************************/
 
 
+  /***** Andor::Interface::shutter ********************************************/
+  /**
+   * @brief      
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::shutter() {
+    std::string function = "Andor::Interface::shutter";
+    std::stringstream message;
+
+    long error = _SetShutter( 0, 2, 0, 0 );
+
+    logwrite( function, "shutter closed" );
+
+    return error;
+  }
+  /***** Andor::Interface::start_acquisition **********************************/
+
+
   /***** Andor::Interface::log_status *****************************************/
   /**
    * @brief      logs the current status of the Andor SDK

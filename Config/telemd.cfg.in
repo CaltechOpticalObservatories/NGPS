@@ -1,0 +1,10 @@
+# configuration file for telemetry daemon
+# @TELEMD_CFG_COMMENT@
+#
+LOGPATH=/home/logs/
+BLKPORT=@TELEMD_BLK_PORT@         # server blocking port
+NBPORT=@TELEMD_NB_PORT@           # server non-blocking port
+DAEMON=no                         # is this run as a daemon?
+
+MESSAGEPORT=@MESSAGEPORT@
+MESSAGEGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging

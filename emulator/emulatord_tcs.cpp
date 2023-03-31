@@ -208,7 +208,7 @@ void doit( Network::TcpSocket sock ) {
   std::string cmd, args;        // arg string is everything after command
   std::vector<std::string> tokens;
   char delim = '\r';           /// commands sent to me (the TCS) have been terminated with this
-  std::string term = "\r";     /// my replies (as the TCS) get terminated with this
+  char term = '\0';     /// my replies (as the TCS) get terminated with this
 
   bool connection_open=true;
 
@@ -312,8 +312,8 @@ void doit( Network::TcpSocket sock ) {
 #endif
 
     if ( ret != NOTHING && !retstring.empty() ) {
-      retstring.append( term );          // terminate my reply
       if ( sock.Write( retstring ) <0 ) connection_open=false;
+      sock.Write( &term );
     }
 
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.

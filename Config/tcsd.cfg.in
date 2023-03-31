@@ -8,7 +8,7 @@ DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
-TCS_HOST=localhost                # set this to localhost for emulator
+TCS_HOST=10.200.99.2              # TCS host address
 TCS_PORT=@TCS_PORT@               # port number for the TCS service
 
 # emulator-only configuration

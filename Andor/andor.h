@@ -132,6 +132,7 @@ namespace Andor {
       long open( std::string args );
       long close();
       long test();
+      long shutter();
       long exptime( std::string exptime_in, std::string &retstring );
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );

@@ -32,8 +32,8 @@
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
 #define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
 
-#define PYTHON_TEST_MODULE "test_py39"
-#define PYTHON_TEST_FUNCTION "testfunc3"
+//#define PYTHON_TEST_MODULE "test_py39"
+//#define PYTHON_TEST_FUNCTION "testfunc3"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
