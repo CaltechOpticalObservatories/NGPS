@@ -12,7 +12,7 @@ cmake_minimum_required( VERSION 3.12 )
 
 project( NGPS )
 
-set( PROJECT_BASE_DIR $ENV{HOME}/Software/ )
+set( PROJECT_BASE_DIR $ENV{PWD}/../ )
 
 set( PROJECT_SRC_DIR ${PROJECT_BASE_DIR}/src )
 set( PROJECT_INC_DIR ${PROJECT_BASE_DIR}/include )
