@@ -19,8 +19,7 @@ namespace Acam {
   void Server::exit_cleanly(void) {
     std::string function = "Acam::Server::exit_cleanly";
     logwrite( function, "exiting" );
-
-    exit(EXIT_SUCCESS);
+    _exit(EXIT_SUCCESS);
   }
   /***** Acam::Server::exit_cleanly *******************************************/
 
@@ -340,6 +339,8 @@ namespace Acam {
 
     bool connection_open=true;
 
+    PySCOPE();
+
     while (connection_open) {
 
       // Wait (poll) connected socket for incoming data...
@@ -433,11 +434,6 @@ namespace Acam {
       //
       if ( cmd.compare( "astrometry" ) == 0 ) {
                       ret = this->interface.astrometry.solve( args );
-      }
-      else
-
-      if ( cmd.compare( "pytest" ) == 0 ) {
-                      ret = this->interface.astrometry.pytest( args );
       }
       else
 

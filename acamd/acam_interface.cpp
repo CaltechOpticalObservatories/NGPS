@@ -445,18 +445,6 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     }
     else this->python_initialized = true;
 
-/**
-    this->pTestModuleName = PyUnicode_FromString( PYTHON_TEST_MODULE );
-    this->pTestModule     = PyImport_Import( this->pTestModuleName );
-
-    if ( this->pTestModule == NULL ) {
-      PyErr_Print();
-      this->python_initialized = false;
-      return;
-    }
-    else this->python_initialized = true;
-**/
-
     this->isacquire=true;
 
     logwrite( "Astrometry::Astrometry", "initialized Python astrometry module" );
@@ -484,6 +472,10 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   long Astrometry::solve( std::string imagename_in ) {
     std::string function = "Acam::Astrometry::solve";
     std::stringstream message;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] PyGILState_Check=" << PyGILState_Check(); logwrite( function, message.str() );
+#endif
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -533,7 +525,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
           //
           const char* pkeyname = keyval.at(0).c_str();
           PyObject* pvalue;
-          this->py_instance.pyobj_from_string( keyval.at(1), &pvalue );
+          this->pyobj_from_string( keyval.at(1), &pvalue );
 
 //#ifdef LOGLEVEL_DEBUG
           message.str(""); message << "[DEBUG] add solver arg keyword=" << keyval.at(0) << " value=" << keyval.at(1);
@@ -569,6 +561,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
 
     t0=get_clock_time();
     PyObject* pReturn = PyObject_Call( pFunction, pArgList, pKeywords );
+    Py_XDECREF( pFunction );
     t1=get_clock_time();
 
 #ifdef LOGLEVEL_DEBUG
@@ -648,84 +641,80 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   /***** Acam::Astrometry::solve **********************************************/
 
 
-  /***** Acam::Astrometry::pytest *********************************************/
+  /***** Acam::Astrometry::pyobj_from_string **********************************/
   /**
-   * @brief      call the Python test function
-   * @param[in]  imagename_in  fits filename to give to the test function
+   * @brief      create a PyObject of the correct type from a std::string
+   * @param[in]  str_in  the input string
+   * @param[out] obj     pointer to PyObject pointer (must be created outside this function)
    *
    */
-  long Astrometry::pytest( std::string imagename_in ) {
-    std::string function = "Acam::Astrometry::pytest";
-    std::stringstream message;
-/**
+  void Astrometry::pyobj_from_string( std::string str_in, PyObject** obj ) {
+    std::size_t pos(0);
 
-    if ( !this->python_initialized ) {
-      logwrite( function, "ERROR Python is not initialized" );
-      return( ERROR );
-    }
-
-    if ( this->pTestModule==NULL ) {
-      logwrite( function, "ERROR: Python test module not imported" );
-      return( ERROR );
-    }
-
-    // Can't proceed unless there is an imagename
+    // If the entire string is either exactly {true,false,True,False} then it's boolean
     //
-    if ( imagename_in.empty() ) {
-      logwrite( function, "ERROR: imagename cannot be empty" );
-      return ERROR;
-    }
+    if ( str_in=="true"  || str_in=="True"  ) { *obj = Py_True;  return; }
+    if ( str_in=="false" || str_in=="False" ) { *obj = Py_False; return; }
 
-    PyObject* pFunction = PyObject_GetAttrString( this->pTestModule, PYTHON_TEST_FUNCTION );
-
-    const char* imagename = imagename_in.c_str();
-
-    PyObject* pArgList = Py_BuildValue( "(s)", imagename );
-
-    // There is always at minimum acquire={true|false}
-    // and other optional key=val pairs can be added to a space-delimited string.
+    // skip whitespaces
     //
-    PyObject* pKeywords = PyDict_New();
-    PyDict_SetItemString( pKeywords, "acquire", this->isacquire ? Py_True : Py_False );
+    pos = str_in.find_first_not_of(' ');
 
-    // Call the Python test function here
+    // check the significand, skip the sign if it exists
     //
-    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
-      logwrite( function, "ERROR: Python test function not callable" );
-      return( ERROR );
-    }
+    if ( str_in[pos] == '+' || str_in[pos] == '-' ) ++pos;
 
-    message.str(""); message << "[DEBUG] calling Python function: " << PYTHON_TEST_FUNCTION;
-    logwrite( function, message.str() );
-
-    PyObject* pReturn = PyObject_Call( pFunction, pArgList, pKeywords );
-
-    // Check the return values from Python here
+    // count the number of digits and number of decimal points
     //
-    if ( ! pReturn ) {
-      logwrite( function, "ERROR calling Python test solver" );
-      PyErr_Print();
-      return( ERROR );
+    int n_nm, n_pt;
+    for ( n_nm = 0, n_pt = 0; std::isdigit(str_in[pos]) || str_in[pos] == '.'; ++pos ) {
+      str_in[pos] == '.' ? ++n_pt : ++n_nm;
+    }
+    if (n_pt>1 || n_nm<1 || pos<str_in.size()){   // no more than one point, no numbers, or a non-digit character
+      const char* cstr = str_in.c_str();
+      *obj = PyUnicode_FromString( cstr );
+      return;
     }
 
-    if ( PyUnicode_Check( pReturn ) ) {
-      int len = PyUnicode_GetLength( pReturn );
-      int kind = PyUnicode_KIND( pReturn );
-      void* data = PyUnicode_DATA( pReturn );
-      PyUnicode_READ( kind, data, len );
-      message.str(""); message << "returned: " << (char*)data;
-      logwrite( function, message.str() );
-    }
-    else {
-      logwrite( function, "ERROR: did not get expected string return" );
-      return( ERROR );
+    // skip the trailing whitespaces
+    while (str_in[pos] == ' ') {
+      ++pos;
     }
 
-    return( NO_ERROR );
-**/
-    return(ERROR);
+    try {
+      if (pos == str_in.size()) {
+        if (str_in.find(".") == std::string::npos) {  // all numbers and no decimals, it's an integer
+          long num = std::stol( str_in );
+          *obj = PyLong_FromLong( num );
+          return;
+        }
+        else {                                        // otherwise numbers with a decimal, it's a float
+          double num = std::stod( str_in );
+          *obj = PyFloat_FromDouble( num );
+          return;
+        }
+      }
+      else {                                          // lastly, must be a string
+        const char* cstr = str_in.c_str();
+        *obj = PyUnicode_FromString( cstr );
+        return;
+      }
+    }
+    catch ( std::invalid_argument & ) {
+      *obj = PyUnicode_FromString( "ERROR" );
+      return;
+    }
+    catch ( std::out_of_range & ) {
+      *obj = PyUnicode_FromString( "ERROR" );
+      return;
+    }
+
+    // if not caught above then it's an error
+    //
+    *obj = PyUnicode_FromString( "ERROR" );
+    return;
   }
-  /***** Acam::Astrometry::pytest *********************************************/
+  /***** Acam::Astrometry::pyobj_from_string **********************************/
 
 
   /***** Acam::Interface::Interface *******************************************/
@@ -991,8 +980,10 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     std::string _imagename;
     std::string _wcsname;
 
+#ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] this->wcsname=" << this->wcsname << " this->imagename=" << this->imagename;
     logwrite( function, message.str() );
+#endif
 
     // This is the local vector that will be ultimately be used to create the arglist
     // sent to the python solver function. It will be built from any args that might

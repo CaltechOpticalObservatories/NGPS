@@ -94,16 +94,6 @@ target_link_libraries( pytest
         ${PYTHON_LIB}
         )
 
-add_executable( simpletest
-        ${ACAMD_DIR}/simpletest.cpp 
-        ${PYTHON_DEV}
-        )
-
-target_link_libraries( simpletest
-        python3.9
-        ${PYTHON_LIB}
-        )
-
 # -- Port Definitions ----------------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and is used to generate the

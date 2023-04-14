@@ -9,8 +9,7 @@
 #ifndef ACAM_INTERFACE_H
 #define ACAM_INTERFACE_H
 
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
+#include <cpython.h>
 #include "motion_interface.h"
 #include "network.h"
 #include "logentry.h"
@@ -23,17 +22,9 @@
 #include "fits.h"
 #include "config.h"
 
-//#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
-//#define PYTHON_ASTROMETRY_MODULE "astrometry"
-//#define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
-
-//#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo:/home/developer/Software/Python/kapteyn-import"
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
 #define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
-
-//#define PYTHON_TEST_MODULE "test_py39"
-//#define PYTHON_TEST_FUNCTION "testfunc3"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
@@ -51,102 +42,6 @@ namespace Acam {
 
   const std::string DAEMON_NAME = "acamd";       ///< when run as a daemon, this is my name
 
-  class CPyInstance {
-    private:
-      char* restore_path;
-      bool initialized;
-    public:
-      CPyInstance() { 
-        Py_Initialize();
-        initialized = ( Py_IsInitialized() ? true : false );
-      }
-      CPyInstance( const char* pythonpath ) { 
-        this->restore_path = std::getenv( "PYTHONPATH" );
-        setenv( "PYTHONPATH", pythonpath, 1 );
-        Py_Initialize();
-        initialized = ( Py_IsInitialized() ? true : false );
-      }
-      ~CPyInstance() { Py_Finalize(); setenv( "PYTHONPATH", this->restore_path, 1 ); initialized=false;}
-      inline bool is_initialized() { return this->initialized; }
-
-      /***** Acam::CPyInstance::pyobj_from_string *****************************/
-      /**
-       * @brief      create a PyObject of the correct type from a std::string
-       * @param[in]  str_in  the input string
-       * @param[out] obj     pointer to PyObject pointer (must be created outside this function)
-       *
-       */
-      void pyobj_from_string( std::string str_in, PyObject** obj ) {
-        std::size_t pos(0);
-
-        // If the entire string is either exactly {true,false,True,False} then it's boolean
-        //
-        if ( str_in=="true"  || str_in=="True"  ) { *obj = Py_True;  return; }
-        if ( str_in=="false" || str_in=="False" ) { *obj = Py_False; return; }
-
-        // skip whitespaces
-        //
-        pos = str_in.find_first_not_of(' ');
-
-        // check the significand, skip the sign if it exists
-        //
-        if ( str_in[pos] == '+' || str_in[pos] == '-' ) ++pos;
-
-        // count the number of digits and number of decimal points
-        //
-        int n_nm, n_pt;
-        for ( n_nm = 0, n_pt = 0; std::isdigit(str_in[pos]) || str_in[pos] == '.'; ++pos ) {
-          str_in[pos] == '.' ? ++n_pt : ++n_nm;
-        }
-        if (n_pt>1 || n_nm<1 || pos<str_in.size()){   // no more than one point, no numbers, or a non-digit character
-          const char* cstr = str_in.c_str();
-          *obj = PyUnicode_FromString( cstr );
-          return;
-        }
-
-        // skip the trailing whitespaces
-        while (str_in[pos] == ' ') {
-          ++pos;
-        }
-
-        try {
-          if (pos == str_in.size()) {
-            if (str_in.find(".") == std::string::npos) {  // all numbers and no decimals, it's an integer
-              long num = std::stol( str_in );
-              *obj = PyLong_FromLong( num );
-              return;
-            }
-            else {                                        // otherwise numbers with a decimal, it's a float
-              double num = std::stod( str_in );
-              *obj = PyFloat_FromDouble( num );
-              return;
-            }
-          }
-          else {                                          // lastly, must be a string
-            const char* cstr = str_in.c_str();
-            *obj = PyUnicode_FromString( cstr );
-            return;
-          }
-        }
-        catch ( std::invalid_argument & ) {
-          *obj = PyUnicode_FromString( "ERROR" );
-          return;
-        }
-        catch ( std::out_of_range & ) {
-          *obj = PyUnicode_FromString( "ERROR" );
-          return;
-        }
-
-
-        // if not caught above then it's an error
-        //
-        *obj = PyUnicode_FromString( "ERROR" );
-        return;
-      }
-      /***** Acam::CPyInstance::pyobj_from_string *****************************/
-  };
-
-/***
   class CPyObject {
     private:
       PyObject *p;
@@ -163,9 +58,7 @@ namespace Acam {
       operator PyObject*() { return p; }
       PyObject* operator = (PyObject* pp) { p = pp; return p; }
       operator bool() { return p ? true : false; }
-
   };
-***/
 
 
   /***** Information **********************************************************/
@@ -273,24 +166,22 @@ namespace Acam {
       inline bool is_initialized() { return this->python_initialized; };
       std::vector<std::string> solver_args;  /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
 
-      CPyInstance py_instance { PYTHON_PATH };
+      CPython::CPyInstance py_instance { PYTHON_PATH };  /// initialize the Python interpreter
+
       PyObject* pModuleName;
       PyObject* pModule;
-
-      PyObject* pTestModuleName;
-      PyObject* pTestModule;
 
       inline std::string get_result() {
         std::stringstream result_str;
         result_str << result << " " << std::fixed << std::setprecision(6) << ra << " " << dec << " " << pa; 
         return result_str.str();
       }
+
+      void pyobj_from_string( std::string str_in, PyObject** obj );
+
       long solve( std::string imagename_in );
-      long pytest( std::string imagename_in );
       long solverargs( std::string argsin, std::string &argsout );
       long compute_offset( std::string from, std::string to );
-      long pytest();
-      long cpytest();
   };
   /***** Acam::Astrometry *****************************************************/
 

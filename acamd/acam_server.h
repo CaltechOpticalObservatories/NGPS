@@ -61,7 +61,7 @@ namespace Acam {
         this->nbport=-1;
         this->blkport=-1;
         this->asyncport=-1;
-        this->cmd_num=0;
+        this->cmd_num.store( 0 );
       }
       /***** Acam::Server::Server *********************************************/
 

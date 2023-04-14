@@ -28,6 +28,8 @@ int main(int argc, char **argv) {
   std::string daemon_stderr; // where daemon sends stderr
   bool start_daemon = false; // don't start as daemon unless specifically requested
 
+  Py_BEGIN_ALLOW_THREADS
+
   // capture these signals
   //
   signal(SIGINT, signal_handler);
@@ -183,6 +185,7 @@ int main(int argc, char **argv) {
   std::thread( std::ref(Acam::Server::new_log_day), logpath ).detach();
 
   for (;;) pause();                                  // main thread suspends
+  Py_END_ALLOW_THREADS
   return 0;
 }
 /***** main *******************************************************************/
