@@ -71,9 +71,10 @@ namespace TcsEmulator {
     this->settle_ra = 12;         //! default settling time is 12s for RA override with EMULATOR_SETTLE_RA
     this->settle_dec = 12;        //! default settling time is 12s for DEC override with EMULATOR_SETTLE_DEC
     this->settle_casangle = 0.5;  //! default settling time is 0.5s for CASANGLE override with EMULATOR_SETTLE__CASNGLE
-    this->offsetrate_ra = 9999; //45;     //! default offset RA rate in arcsec/sec
-    this->offsetrate_dec = 9999; //45;    //! default offset DEC rate in arcsec/sec
+    this->offsetrate_ra = 45;     //! default offset RA rate in arcsec/sec
+    this->offsetrate_dec = 45;    //! default offset DEC rate in arcsec/sec
 
+    this->name = " ";
     this->telid = 200;
     this->focus = 36.71;
     this->tubelength = 22.11;
@@ -86,7 +87,7 @@ namespace TcsEmulator {
     this->casangle = 0;
     this->ha = 0;
     this->lst = 0;
-    this->airmass = 1;
+    this->airmass = 1.0;
     this->azimuth = 0;
     this->zangle = 0;
   }
@@ -104,6 +105,43 @@ namespace TcsEmulator {
   Telescope::~Telescope() {
   }
   /***** TcsEmulator::Telescope::~Telescope ***********************************/
+
+
+  /***** TcsEmulator::Telescope::get_time *************************************/
+  /**
+   * @brief      get the current time
+   * @return     string containing the time formatted as ddd hh:mm:ss.s
+   *
+   */
+  std::string Telescope::get_time() {
+    time_t t;                        // Container for system time
+    struct timespec timenow;         // Time of day container
+    struct tm mytime;                // GMT time container
+    std::stringstream timestring;
+
+    // Get the system time, return a bad timestamp on error
+    //
+    if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return( timestring.str() );
+
+    t = timenow.tv_sec;
+    if ( gmtime_r( &t, &mytime ) == NULL ) return( timestring.str() );
+
+    timestring << std::fixed 
+               << std::setfill('0')
+               << std::setprecision(0)
+               << std::setw(3)
+               << mytime.tm_yday << " "
+               << std::setw(2)
+               << mytime.tm_hour << ":"
+               << mytime.tm_min  << ":"
+               << mytime.tm_sec  << "."
+               << std::setprecision(1)
+               << std::setw(1)
+               << (int)(timenow.tv_nsec/1000000000.0);
+
+    return( timestring.str() );
+  }
+  /***** TcsEmulator::Telescope::get_time *************************************/
 
 
   /***** TcsEmulator::Telescope::do_coords ************************************/
@@ -129,6 +167,10 @@ namespace TcsEmulator {
       //
       newra  = std::stof( tokens.at(0) );
       newdec = std::stof( tokens.at(1) );
+
+      // The name is optional
+      //
+      if ( tokens.size() > 5 ) telescope.name = tokens.at(5);
     }
     catch( std::invalid_argument &e ) {
       std::cerr << get_timestamp() << function << "unable to convert one or more values from \"" << args << "\": " << e.what() << "\n";
@@ -385,7 +427,7 @@ namespace TcsEmulator {
         << "DEC="                 << std::fixed << std::setprecision(8) << this->dec.load() << "\n"
         << "HA="                  << "0\n"
         << "LST="                 << "0\n"
-        << "Air mass="            << "0\n"
+        << "Air mass="            << std::fixed << std::setprecision(3) << this->airmass << "\n"
         << "Azimuth="             << "0\n"
         << "Zenith angle="        << "0\n"
         << "Focus Point="         << "0\n"
@@ -401,6 +443,41 @@ namespace TcsEmulator {
     return;
   }
   /***** TcsEmulator::Telescope::weather **************************************/
+
+
+  /***** TcsEmulator::Telescope::reqstat **************************************/
+  /**
+   * @brief      perform the REQSTAT command
+   * @param[out] retstring  reference to string contains the return string
+   *
+   * In UTC, ddd is UT day of year. RA and DEC are J2000. HA is apparent.
+   *
+   */
+  void Telescope::reqstat( std::string &retstring ) {
+    std::string function = "  (TcsEmulator::Telescope::reqstat) ";
+    std::stringstream ret;
+
+    ret << "UTC = " << this->get_time() << "\n"
+        << "telescope ID = " << this->telid << ", focus = " 
+        << std::fixed << std::setprecision(2) 
+        << this->focus << " mm, tube length = "
+        << std::fixed << std::setprecision(2) 
+        << this->tubelength << " mm\n"
+        << "offset RA = " 
+        << this->offsetrate_ra << " arcsec, DEC = "
+        << this->offsetrate_dec << " arcsec\n"
+        << "rate RA = "
+        << this->trackrate_ra << " arcsec/hr, DEC = "
+        << this->trackrate_dec << " arcsec/hr\n"
+        << "Cass ring angle = "
+        << std::fixed << std::setprecision(2)
+        << this->casangle;
+
+    retstring = ret.str();
+
+    return;
+  }
+  /***** TcsEmulator::Telescope::reqstat **************************************/
 
 
   /***** TcsEmulator::Telescope::reqpos ***************************************/
@@ -433,8 +510,8 @@ namespace TcsEmulator {
     double dec_ss  = (dec_mm - (int)dec_mm) * 60.;
     double dec_sss = (dec_ss - (int)dec_ss)*10.;
 
-    ret << "UTC = ddd hh:mm:ss, "
-        << "LST = hh:mm:ss\n"
+    ret << "UTC = " << this->get_time() << ", "
+        << "LST = 00:00:00\n"
         << "RA = " << std::fixed  << std::setfill('0') << std::setw(2) << (int)_ra     << ":"
                                   << std::setfill('0') << std::setw(2) << (int)ra_mm   << ":"
                                   << std::setfill('0') << std::setw(2) << (int)ra_ss   << "."
@@ -443,8 +520,8 @@ namespace TcsEmulator {
                                               << std::setfill('0') << std::setw(2) << (int)dec_mm  << ":"
                                               << std::setfill('0') << std::setw(2) << (int)dec_ss  << "."
                                               << std::setfill('0') << std::setw(1) << (int)std::round(dec_sss) << ", "
-        << "HA=Whh:mm:ss.s\n"
-        << "air mass = aa.aaa";
+        << "HA=W00:00:00.0\n"
+        << "air mass = " << std::fixed << std::setprecision(3) << this->airmass;
 
     retstring = ret.str();
 
@@ -583,6 +660,14 @@ namespace TcsEmulator {
     else
     if ( mycmd == "REQPOS" ) {
       this->telescope.reqpos( retstring );
+    }
+    else
+    if ( mycmd == "REQSTAT" ) {
+      this->telescope.reqstat( retstring );
+    }
+    else
+    if ( mycmd == "?NAME" ) {
+      retstring = this->telescope.name;
     }
     else
     if ( mycmd == "?WEATHER" ) {

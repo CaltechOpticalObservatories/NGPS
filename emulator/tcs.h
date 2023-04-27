@@ -55,6 +55,7 @@ namespace TcsEmulator {
 
       // default slew and settling times set in constructor but can be overridden by configuration file
       //
+      std::string name;          ///< optional target name
       double slewrate_ra;        ///< slewrate in s for RA
       double slewrate_dec;       ///< slewrate in s for DEC
       double slewrate_casangle;  ///< slewrate in s for CASANGLE
@@ -81,9 +82,12 @@ namespace TcsEmulator {
 
       volatile std::atomic<int> motionstate;      ///< telescope motion state
 
+      std::string get_time();
+
       static void do_coords( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the COORDS command work, which "moves" the telescope
       static void do_pt( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the PT command work, which "offsets" the telescope
       void weather( std::string &retstring );
+      void reqstat( std::string &retstring );
       void reqpos( std::string &retstring );
       void mrates( std::string args, std::string &retstring );
   };
