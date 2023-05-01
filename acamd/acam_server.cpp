@@ -437,7 +437,7 @@ namespace Acam {
       }
       else
 
-      // commands for the Andor camera direct
+      // undocumented commands for the Andor camera direct
       //
       if ( cmd.compare( "cameraopen" ) == 0 ) {
                       ret = this->interface.camera.open( args );
@@ -536,6 +536,11 @@ namespace Acam {
       //
       if ( cmd.compare( ACAMD_SOLVE ) == 0 ) {
                       ret = this->interface.solve( args, retstring );
+      }
+      else
+
+      if ( cmd.compare( ACAMD_TELEM ) == 0 ) {
+                      ret = this->interface.telemetry( args, retstring );
       }
       else
 

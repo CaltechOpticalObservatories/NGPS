@@ -209,6 +209,7 @@ namespace Power {
       long close();                                        ///< close the NPS socket connection
       bool isopen();                                       ///< is the NPS socket connection open?
       long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
+      void list( std::string &retstring );                 ///< list plug devices
 
   };
   /***** Power::Interface *****************************************************/

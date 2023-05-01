@@ -27,6 +27,8 @@ int main(int argc, char **argv) {
   std::string daemon_in;     // daemon setting read from config file
   bool start_daemon = false; // don't start as daemon unless specifically requested
 
+  Py_BEGIN_ALLOW_THREADS
+
   // capture these signals
   //
   signal(SIGINT, signal_handler);
@@ -189,6 +191,7 @@ int main(int argc, char **argv) {
   sequencerd.sequence.report_seqstate();
 
   for (;;) pause();                                  // main thread suspends
+  Py_END_ALLOW_THREADS
   return 0;
 }
 /***** main *******************************************************************/

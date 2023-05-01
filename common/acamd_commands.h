@@ -24,6 +24,7 @@ const std::string ACAMD_CAMCLOSE = "camclose";  ///< close connection to camera
 const std::string ACAMD_ACQUIRE  = "acquire";   ///< the main acquire wrapper
 const std::string ACAMD_INIT     = "init";      ///< 
 const std::string ACAMD_SOLVE    = "solve";     ///< call the Python astrometry solver
+const std::string ACAMD_TELEM    = "telem";     ///< call the Python telemetry function
 const std::string ACAMD_CAMERASERVER_COORDS = "prepare";  ///< send coordinates to external camera server
 const std::string ACAMD_CAMERASERVER_ACQUIRE = "cameraserveracquire";  ///< acquire an image from the acam camera server
 const std::vector<std::string> ACAMD_SYNTAX = { 
@@ -41,6 +42,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_ACQUIRE,
                                                 ACAMD_INIT,
                                                 ACAMD_SOLVE,
+                                                ACAMD_TELEM,
                                                 ACAMD_CAMERASERVER_COORDS,
                                                 ACAMD_CAMERASERVER_ACQUIRE
                                               };

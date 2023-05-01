@@ -435,10 +435,19 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
       return;
     }
 
-    this->pModuleName = PyUnicode_FromString( PYTHON_ASTROMETRY_MODULE );
-    this->pModule     = PyImport_Import( this->pModuleName );
+    CPyObject pModuleName;
 
-    if ( this->pModule == NULL ) {
+    pModuleName             = PyUnicode_FromString( PYTHON_ASTROMETRY_MODULE );
+    this->pAstrometryModule = PyImport_Import( pModuleName );
+
+    pModuleName.Release();
+
+    pModuleName             = PyUnicode_FromString( PYTHON_TELEMETRY_MODULE );
+    this->pTelemetryModule  = PyImport_Import( pModuleName );
+
+    pModuleName.Release();
+
+    if ( this->pAstrometryModule == NULL || this->pTelemetryModule == NULL ) {
       PyErr_Print();
       this->python_initialized = false;
       return;
@@ -463,6 +472,62 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   /***** Acam::Astrometry::~Astrometry ****************************************/
 
 
+  /***** Acam::Astrometry::telemetry ******************************************/
+  /**
+   * @brief      call the Python astrometry telemetry function
+   * @return
+   *
+   */
+  long Astrometry::telemetry( ) {
+    std::string function = "Acam::Astrometry::telemetry";
+    std::stringstream message;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] PyGILState_Check=" << PyGILState_Check(); logwrite( function, message.str() );
+#endif
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return( ERROR );
+    }
+
+    if ( this->pTelemetryModule==NULL ) {
+      logwrite( function, "ERROR: Python telemetry module not imported" );
+      return( ERROR );
+    }
+
+    // Call the Python telemetry function here
+    //
+    PyObject* pFunction = PyObject_GetAttrString( this->pTelemetryModule, PYTHON_TELEMETRY_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      logwrite( function, "ERROR: Python telemetry function not callable" );
+      return( ERROR );
+    }
+
+    PyObject* pReturn   = PyObject_CallNoArgs( pFunction );
+
+    // Check the return values from Python here
+    //
+    if ( ! pReturn ) {
+      logwrite( function, "ERROR calling Python astrometry solver" );
+      return( ERROR );
+    }
+
+    // Expected a Dictionary
+    //
+    if ( PyDict_Check( pReturn ) ) {
+    }
+    else {
+      logwrite( function, "ERROR Python telemetry function did not return expected dictionary" );
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /***** Acam::Astrometry::telemetry ******************************************/
+
+
   /***** Acam::Astrometry::solve **********************************************/
   /**
    * @brief      call the Python astrometry solver
@@ -482,7 +547,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
       return( ERROR );
     }
 
-    if ( this->pModule==NULL ) {
+    if ( this->pAstrometryModule==NULL ) {
       logwrite( function, "ERROR: Python astrometry module not imported" );
       return( ERROR );
     }
@@ -494,7 +559,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
       return ERROR;
     }
 
-    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_ASTROMETRY_FUNCTION );
+    PyObject* pFunction = PyObject_GetAttrString( this->pAstrometryModule, PYTHON_ASTROMETRY_FUNCTION );
 
     const char* imagename = imagename_in.c_str();
 
@@ -527,10 +592,10 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
           PyObject* pvalue;
           this->pyobj_from_string( keyval.at(1), &pvalue );
 
-//#ifdef LOGLEVEL_DEBUG
+#ifdef LOGLEVEL_DEBUG
           message.str(""); message << "[DEBUG] add solver arg keyword=" << keyval.at(0) << " value=" << keyval.at(1);
           logwrite( function, message.str() );
-//#endif
+#endif
 
           PyDict_SetItemString( pKeywords, pkeyname, pvalue );
         }
@@ -957,6 +1022,22 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
 #endif
   }
   /***** Acam::Interface::exptime *********************************************/
+
+
+  /***** Acam::Interface::telemetry *******************************************/
+  /**
+   * @brief      wrapper for Astrometry::telemetry()
+   * @param[in]  
+   * @param[out] 
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::telemetry( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::telemetry";
+    std::stringstream message;
+    return this->astrometry.telemetry( );
+  }
+  /***** Acam::Interface::telemetry *******************************************/
 
 
   /***** Acam::Interface::solve ***********************************************/

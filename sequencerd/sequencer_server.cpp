@@ -823,6 +823,8 @@ namespace Sequencer {
                              << " port " << sock.getport();
     logwrite( function, message.str() );
 
+    PySCOPE();
+
     while ( connection_open ) {
 
       // Wait (poll) connected socket for incoming data...

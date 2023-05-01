@@ -287,6 +287,27 @@ namespace Power {
   /**************** Power::Interface::isopen **********************************/
 
 
+  /***** Power::Interface::list ***********************************************/
+  /**
+   * @brief      list plug devices
+   * @param[out] retstring  reference to string to contain the list of plug devices
+   *
+   */
+  void Interface::list( std::string &retstring ) {
+    std::string function = "Power::Interface::list";
+    std::stringstream message;
+
+    for ( auto it = this->plugmap.begin(); it != this->plugmap.end(); ++it ) {
+      message << it->second.npsnum << " " << it->second.plugnum << " " << it->first << "\n";
+    }
+
+    retstring = message.str();
+
+    return;
+  }
+  /***** Power::Interface::list ***********************************************/
+
+
   /**************** Power::Interface::command *********************************/
   /**
    * @fn         command

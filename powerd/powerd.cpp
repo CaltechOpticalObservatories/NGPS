@@ -442,6 +442,11 @@ void doit(Network::TcpSocket sock) {
     ret = NOTHING;
     std::string retstring="";
 
+    if ( cmd.compare( "help" ) == 0 ) {
+                    for ( auto s : POWERD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+    }
+    else
+
     if ( cmd.compare( "exit" )==0 ) {
 //                  powerd.common.message.enqueue("exit");     // shutdown the async message thread if running
                     powerd.exit_cleanly();                     // shutdown the daemon
@@ -459,6 +464,15 @@ void doit(Network::TcpSocket sock) {
     //
     if ( cmd.compare( POWERD_CLOSE ) == 0 ) {
                     ret = powerd.interface.close( );
+    }
+    else
+
+    // list devices
+    //
+    if ( cmd.compare( POWERD_LIST ) == 0 ) {
+                    powerd.interface.list( retstring );
+                    retstring.append( " DONE\n" );
+                    if ( sock.Write( retstring ) < 0 ) connection_open=false;
     }
     else
 
@@ -484,8 +498,8 @@ void doit(Network::TcpSocket sock) {
     }
 
     if (ret != NOTHING) {
-      if ( not retstring.empty() ) { message.str(""); message << "reply=" << retstring; logwrite( function, message.str() ); }
-      if ( not retstring.empty() ) retstring.append( " " );
+      if ( ! retstring.empty() ) { message.str(""); message << "reply=" << retstring; logwrite( function, message.str() ); }
+      if ( ! retstring.empty() ) retstring.append( " " );
       std::string term=(ret==0?"DONE\n":"ERROR\n");
       retstring.append( term );
       if ( sock.Write( retstring ) < 0 ) connection_open=false;
