@@ -127,6 +127,9 @@ namespace Flexure {
               return(ERROR);
             }
             this->nbport = port;
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
@@ -145,6 +148,9 @@ namespace Flexure {
               return(ERROR);
             }
             this->blkport = port;
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
@@ -163,12 +169,18 @@ namespace Flexure {
               return(ERROR);
             }
             this->asyncport = port;
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
           // ASYNCGROUP
           if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
             this->asyncgroup = config.arg[entry];
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 

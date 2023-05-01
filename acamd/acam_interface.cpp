@@ -875,6 +875,9 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
         else {
           try {
             this->astrometry.solver_args.push_back( config.arg.at(entry) );
+            message.str(""); message << "CONFIG:" << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->async.enqueue( message.str() );
             applied++;
           }
           catch(std::out_of_range &) {  // should be impossible but here for safety

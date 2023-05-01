@@ -139,6 +139,9 @@ namespace AstroCam {
           error = ERROR;
         }
         this->numdev = num;
+        message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
         applied++;
       }
     }

@@ -503,6 +503,9 @@ namespace AstroCam {
         else {
           try {
             this->camera.firmware[ parse_val(tokens.at(0)) ] = tokens.at(1);
+            message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->camera.async.enqueue( message.str() );
             applied++;
           }
           catch(std::out_of_range &) {  // should be impossible but here for safety
@@ -514,11 +517,17 @@ namespace AstroCam {
 
       if (this->config.param[entry].compare(0, 5, "IMDIR")==0) {
         this->camera.imdir( config.arg[entry] );
+        message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
         applied++;
       }
 
       if (this->config.param[entry].compare(0, 6, "BASENAME")==0) {
         this->camera.basename( config.arg[entry] );
+        message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
         applied++;
       }
 

@@ -57,6 +57,8 @@ namespace Telemetry {
           return(ERROR);
         }
         this->nbport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -76,6 +78,8 @@ namespace Telemetry {
           return(ERROR);
         }
         this->blkport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -95,6 +99,8 @@ namespace Telemetry {
           return(ERROR);
         }
         this->asyncport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -102,6 +108,8 @@ namespace Telemetry {
       //
       if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
         this->asyncgroup = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 

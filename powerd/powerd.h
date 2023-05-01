@@ -144,6 +144,9 @@ namespace Power {
               return(ERROR);
             }
             this->nbport = port;
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
@@ -162,6 +165,9 @@ namespace Power {
               return(ERROR);
             }
             this->blkport = port;
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
@@ -180,12 +186,18 @@ namespace Power {
               return(ERROR);
             }
             this->asyncport = port;
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
           // ASYNCGROUP
           if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
             this->asyncgroup = config.arg[entry];
+            message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
             applied++;
           }
 
@@ -204,6 +216,9 @@ namespace Power {
             if ( npsinfo.load_nps_info( config.arg[entry], npsnum ) == NO_ERROR ) {
               this->interface.nps_info.insert( { npsnum, npsinfo } );  // insert this into the nps_info map
               this->interface.configure_interface( npsinfo );          // create an interface to the NPS described by this object
+              message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+              logwrite( function, message.str() );
+              this->interface.async.enqueue( message.str() );
               applied++;
             }
           }

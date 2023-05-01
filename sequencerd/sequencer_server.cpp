@@ -77,6 +77,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->nbport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -95,6 +97,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->blkport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -113,6 +117,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->asyncport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -131,12 +137,16 @@ namespace Sequencer {
           return(ERROR);
         }
         this->messageport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // MESSAGEGROUP
       if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
         this->messagegroup = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -155,6 +165,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.acamd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -173,6 +185,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.camerad.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -191,6 +205,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.camerad.nbport =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -209,6 +225,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.flexured.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -227,6 +245,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.powerd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -245,6 +265,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.slitd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -263,6 +285,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcsd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -281,6 +305,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.calibd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -299,6 +325,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.filterd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -317,6 +345,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.focusd.port =  port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -336,6 +366,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.acquisition_timeout = to;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -355,6 +387,8 @@ namespace Sequencer {
           this->sequence.acquisition_max_retrys = -1;
         }
         this->sequence.acquisition_max_retrys = rt;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -379,6 +413,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_offsetrate_ra = mrate;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -403,6 +439,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_offsetrate_dec = mrate;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -422,6 +460,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_settle_timeout = to;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -441,6 +481,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_settle_stable = stablet;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -460,6 +502,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_domeazi_ready = domeazi;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -478,6 +522,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_preauth_time = to;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -496,6 +542,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.target.offset_threshold = offset;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -514,6 +562,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.target.min_repeat = repeat;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -532,6 +582,8 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.target.max_tcs_offset = offset;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -543,42 +595,74 @@ namespace Sequencer {
 
       // DB_HOST
       if (config.param[entry].compare( 0, DB_HOST.length(), DB_HOST )==0) {
-        if ( this->sequence.target.configure_db( DB_HOST, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_HOST, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_PORT
       if (config.param[entry].compare( 0, DB_PORT.length(), DB_PORT )==0) {
-        if ( this->sequence.target.configure_db( DB_PORT, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_PORT, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_USER
       if (config.param[entry].compare( 0, DB_USER.length(), DB_USER )==0) {
-        if ( this->sequence.target.configure_db( DB_USER, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_USER, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_PASS
       if (config.param[entry].compare( 0, DB_PASS.length(), DB_PASS )==0) {
-        if ( this->sequence.target.configure_db( DB_PASS, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_PASS, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_SCHEMA
       if (config.param[entry].compare( 0, DB_SCHEMA.length(), DB_SCHEMA )==0) {
-        if ( this->sequence.target.configure_db( DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_ACTIVE
       if (config.param[entry].compare( 0, DB_ACTIVE.length(), DB_ACTIVE )==0) {
-        if ( this->sequence.target.configure_db( DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_COMPLETED
       if (config.param[entry].compare( 0, DB_COMPLETED.length(), DB_COMPLETED )==0) {
-        if ( this->sequence.target.configure_db( DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // DB_SETS
       if (config.param[entry].compare( 0, DB_SETS.length(), DB_SETS )==0) {
-        if ( this->sequence.target.configure_db( DB_SETS, config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.target.configure_db( DB_SETS, config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       //
@@ -587,47 +671,83 @@ namespace Sequencer {
 
       // POWER_SLIT
       if (config.param[entry].compare( 0, POWER_SLIT.length(), POWER_SLIT )==0) {
-        if ( this->sequence.power_switch[POWER_SLIT].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_SLIT].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_CAMERA
       if (config.param[entry].compare( 0, POWER_CAMERA.length(), POWER_CAMERA )==0) {
-        if ( this->sequence.power_switch[POWER_CAMERA].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_CAMERA].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_CALIB
       if (config.param[entry].compare( 0, POWER_CALIB.length(), POWER_CALIB )==0) {
-        if ( this->sequence.power_switch[POWER_CALIB].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_CALIB].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_FLEXURE
       if (config.param[entry].compare( 0, POWER_FLEXURE.length(), POWER_FLEXURE )==0) {
-        if ( this->sequence.power_switch[POWER_FLEXURE].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_FLEXURE].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_FILTER
       if (config.param[entry].compare( 0, POWER_FILTER.length(), POWER_FILTER )==0) {
-        if ( this->sequence.power_switch[POWER_FILTER].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_FILTER].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_FOCUS
       if (config.param[entry].compare( 0, POWER_FOCUS.length(), POWER_FOCUS )==0) {
-        if ( this->sequence.power_switch[POWER_FOCUS].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_FOCUS].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_TELEM
       if (config.param[entry].compare( 0, POWER_TELEM.length(), POWER_TELEM )==0) {
-        if ( this->sequence.power_switch[POWER_TELEM].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_TELEM].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_THERMAL
       if (config.param[entry].compare( 0, POWER_THERMAL.length(), POWER_THERMAL )==0) {
-        if ( this->sequence.power_switch[POWER_THERMAL].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_THERMAL].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
       // POWER_ACAM
       if (config.param[entry].compare( 0, POWER_ACAM.length(), POWER_ACAM )==0) {
-        if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) applied++;
+        if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
       }
 
     } // end loop through the entries in the configuration file

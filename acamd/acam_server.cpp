@@ -48,6 +48,9 @@ namespace Acam {
       //
       if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
         this->interface.motion.name = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -55,6 +58,9 @@ namespace Acam {
       //
       if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
         this->interface.motion.host = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -74,6 +80,9 @@ namespace Acam {
           return(ERROR);
         }
         this->interface.motion.port = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -81,6 +90,9 @@ namespace Acam {
       //
       if ( config.param[entry].compare( 0, 17, "CAMERASERVER_HOST" ) == 0 ) {
         this->interface.cameraserver_host = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -100,6 +112,9 @@ namespace Acam {
           return(ERROR);
         }
         this->interface.cameraserver_port = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -109,6 +124,9 @@ namespace Acam {
         Acam::MotionInfo mot;
         if ( mot.load_info( config.arg[entry] ) == NO_ERROR ) {
           this->interface.motion.motion_info.push_back( mot );
+          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          this->interface.async.enqueue( message.str() );
           applied++;
         }
       }
@@ -129,6 +147,9 @@ namespace Acam {
           return(ERROR);
         }
         this->nbport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -148,6 +169,9 @@ namespace Acam {
           return(ERROR);
         }
         this->blkport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -167,6 +191,9 @@ namespace Acam {
           return(ERROR);
         }
         this->asyncport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -174,6 +201,9 @@ namespace Acam {
       //
       if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
         this->asyncgroup = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
         applied++;
       }
 
@@ -217,7 +247,7 @@ namespace Acam {
     while (1) {
       std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
       close_log();
-      init_log( logpath, Acam::DAEMON_NAME );
+      init_log( logpath, DAEMON_NAME );
     }
   }
   /***** new_log_day **********************************************************/
@@ -437,7 +467,7 @@ namespace Acam {
       }
       else
 
-      // undocumented commands for the Andor camera direct
+      // commands for the Andor camera direct
       //
       if ( cmd.compare( "cameraopen" ) == 0 ) {
                       ret = this->interface.camera.open( args );

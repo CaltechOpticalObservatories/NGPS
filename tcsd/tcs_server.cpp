@@ -44,6 +44,8 @@ namespace TCS {
       //
       if ( config.param[entry].compare( 0, 8, "TCS_HOST" ) == 0 ) {
         this->interface.host = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -63,6 +65,8 @@ namespace TCS {
           return(ERROR);
         }
         this->interface.port = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -82,6 +86,8 @@ namespace TCS {
           return(ERROR);
         }
         this->nbport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -101,6 +107,8 @@ namespace TCS {
           return(ERROR);
         }
         this->blkport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -120,6 +128,8 @@ namespace TCS {
           return(ERROR);
         }
         this->asyncport = port;
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -127,6 +137,8 @@ namespace TCS {
       //
       if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
         this->asyncgroup = config.arg[entry];
+        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
