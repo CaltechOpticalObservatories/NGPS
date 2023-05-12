@@ -448,7 +448,11 @@ namespace Sequencer {
 
       // Get the next target from the database
       //
-      TargetInfo::TargetState targetstate = seq.target.get_next();
+      std::string targetstatus;
+      TargetInfo::TargetState targetstate = seq.target.get_next( targetstatus );
+
+      message.str(""); message << "STATUS:" << targetstatus;
+      seq.async.enqueue( message.str() );                                 // broadcast target status
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                    // target found, get the threads going
         error = seq.target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
@@ -1433,11 +1437,9 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     long error=NO_ERROR;
 
 //#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[ACQUIRE] this target.name=" << seq.target.name 
-                             << " RA=" << seq.target.ra_hms 
-                             << " DEC=" << seq.target.dec_dms 
-                             << " CASSANGLE=" << seq.target.casangle
-                             << " SLITANGLE=" << seq.target.slitangle;
+    message.str(""); message << "[ACQUIRE] SLIT COOORDS= " << seq.target.ra_hms << " "
+                                                           << seq.target.dec_dms 
+                                                           << seq.target.slitangle;
     logwrite( function, message.str() );
 //#endif
 
@@ -1452,9 +1454,9 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     // Before trying to move the telescope, ask where it is pointed
     //
     double ra_h_now, dec_d_now;
-    seq.get_tcs_coords( ra_h_now, dec_d_now );   // returns RA in decimal hours, DEC in decimal degrees
-    double ra_delta  = std::abs( ra_h_now  - seq.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
-    double dec_delta = std::abs( dec_d_now - seq.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
+    seq.get_tcs_coords( ra_h_now, dec_d_now );                                                     // returns RA in decimal hours, DEC in decimal degrees
+    double ra_delta  = std::abs( ra_h_now  - seq.target.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
+    double dec_delta = std::abs( dec_d_now - seq.target.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] ra_delta=" << ra_delta << " dec_delta=" << dec_delta;
@@ -1481,8 +1483,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       // convert them to decimal and to scope coordinates.
       // (fpoffsets.coords_* are always in degrees)
       //
-      seq.target.fpoffsets.coords_in.ra    = seq.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-      seq.target.fpoffsets.coords_in.dec   = seq.radec_to_decimal( seq.target.dec_dms );
+      seq.target.fpoffsets.coords_in.ra    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
+      seq.target.fpoffsets.coords_in.dec   = seq.target.radec_to_decimal( seq.target.dec_dms );
       seq.target.fpoffsets.coords_in.angle = seq.target.slitangle;
 
       // can't be NaN
@@ -1511,41 +1513,88 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
       error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM" );              // convert coords_in from SLIT to ACAM
 
-      acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)
+      acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)     // this is the so-called "prepare" command
                                         << " " << seq.target.fpoffsets.coords_out.ra
                                         << " " << seq.target.fpoffsets.coords_out.dec
                                         << " " << seq.target.fpoffsets.coords_out.angle;
 
+      {
       message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
+      std::string rastr, decstr;
+      double _ra = seq.target.fpoffsets.coords_out.ra * TO_HOURS;
+      seq.target.decimal_to_sexa( _ra, rastr );
+      seq.target.decimal_to_sexa( seq.target.fpoffsets.coords_out.dec, decstr );
+      message.str(""); message << "[ACQUIRE] ACAM COORDS= " << rastr << "  " << decstr << "  " << seq.target.fpoffsets.coords_out.angle;
+      logwrite( function, message.str() );
+      }
 
       if ( error == NO_ERROR ) seq.acamd.command( acam.str(), dontcare );         // send here, don't need the reply
-
-      // send casangle
-      //
-      logwrite( function, "[TODO] send casangle not yet implemented" ); ///< @todo put send cassangle into its own thread?
 
       // Before sending the target coords to the TCS, convert them from slit->scope...
       //
       error = seq.target.fpoffsets.compute_offset( "SLIT", "SCOPE" );             // convert coords_in from SLIT->SCOPE
 
-      // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
-      // so convert that as it's being sent here.
+      // For now, announce this error but don't stop the show
       //
-      std::stringstream coords;
-      coords << "COORDS " << ( seq.target.fpoffsets.coords_out.ra * TO_HOURS )  << " " 
-                          <<   seq.target.fpoffsets.coords_out.dec << " 0 0 0 \"" << seq.target.name << "\"";
+      double _solved_angle = ( seq.target.fpoffsets.coords_out.angle < 0 ? seq.target.fpoffsets.coords_out.angle + 360.0
+                                                                         : seq.target.fpoffsets.coords_out.angle         );
 
-message.str(""); message << "[ACQUIRE] sending " << coords.str();
-logwrite( function, message.str() );
+      if ( std::abs( _solved_angle - seq.target.casangle ) > 0.01 ) {
+        message.str(""); message << "STATUS:ERROR calculated angle " << seq.target.fpoffsets.coords_out.angle 
+                                 << " is not equivalent to casangle " << seq.target.casangle;
+        seq.async.enqueue_and_log( function, message.str() );
+      }
 
-      std::string tcsreply;
-      error  = seq.tcsd.send( coords.str(), tcsreply );                              // send to the TCS
-
-      int tcsvalue;
-      if ( error == NO_ERROR ) error = seq.extract_tcs_value( tcsreply, tcsvalue );  // extract the value from the tcsd reply
-      if ( error == NO_ERROR ) error = seq.parse_tcs_generic( tcsvalue );            // parse the tcs reply
+      // send casangle
+      //
+      std::stringstream ringgo_cmd;
+      std::string       ringgo_reply;
+      int               ringgo_reply_value;
+      ringgo_cmd << "RINGGO " << seq.target.fpoffsets.coords_out.angle;                            // this is the calculated cassegrain angle
+      error = seq.tcsd.send( ringgo_cmd.str(), ringgo_reply );
+      if ( error == NO_ERROR ) error = seq.extract_tcs_value( ringgo_reply, ringgo_reply_value );  // extract the value from the tcsd reply
+      if ( error == NO_ERROR ) error = seq.parse_tcs_generic( ringgo_reply_value );                // parse the tcs reply
       if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << tcsreply;
+        message.str(""); message << "ERROR: sending RINGGO command. TCS reply: " << ringgo_reply_value;
+        seq.async.enqueue_and_log( function, message.str() );
+        seq.thr_error.fetch_or( THR_MOVE_TO_TARGET );                 
+        seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS | Sequencer::SEQ_WAIT_TCSOP );
+        seq.clr_thrstate_bit( THR_MOVE_TO_TARGET );
+        return;
+      }
+
+      // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
+      // so convert that as it's being sent here. It also needs equinox so remove
+      // any alpha characters from our epoch and send as equinox.
+      //
+      std::string epoch   = seq.target.epoch;                                                                    // convert mysqlx::abi2::r0::string to std::string
+      std::size_t found   = epoch.find_first_not_of( "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ " );  // loc of 1st non-alpha char
+      std::string equinox = epoch.substr( found );                                                               // equinox from here to the end
+
+      std::stringstream coords_cmd;
+      std::string       coords_reply;
+      int               coords_reply_value;
+
+      coords_cmd << "COORDS " << ( seq.target.fpoffsets.coords_out.ra * TO_HOURS )  << " " 
+                              <<   seq.target.fpoffsets.coords_out.dec << " "
+                              <<   equinox
+                              <<   " 0 0 \"" << seq.target.name << "\"";
+
+      {
+      std::string rastr, decstr;
+      double _ra = seq.target.fpoffsets.coords_out.ra * TO_HOURS;
+      seq.target.decimal_to_sexa( _ra, rastr );
+      seq.target.decimal_to_sexa( seq.target.fpoffsets.coords_out.dec, decstr );
+      message.str(""); message << "[ACQUIRE] SCOPE COORDS= " << rastr << "  " << decstr << "  " << seq.target.fpoffsets.coords_out.angle;
+      logwrite( function, message.str() );
+      }
+
+      error  = seq.tcsd.send( coords_cmd.str(), coords_reply );                                    // send to the TCS
+
+      if ( error == NO_ERROR ) error = seq.extract_tcs_value( coords_reply, coords_reply_value );  // extract the value from the tcsd reply
+      if ( error == NO_ERROR ) error = seq.parse_tcs_generic( coords_reply_value );                // parse the tcs reply
+      if ( error != NO_ERROR ) {
+        message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << coords_reply;
         seq.async.enqueue_and_log( function, message.str() );
         seq.thr_error.fetch_or( THR_MOVE_TO_TARGET );                 
         seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS | Sequencer::SEQ_WAIT_TCSOP );
@@ -1707,7 +1756,7 @@ logwrite( function, message.str() );
 
     }  // end if ( ra_delta > 0.01 || dec_delta > 0.01 ) 
     else {
-      seq.async.enqueue_and_log( function, " NOTICE: telescope already pointed at target, no TCS move requested" );
+      seq.async.enqueue_and_log( function, "NOTICE: telescope already pointed at target, no TCS move requested" );
     }
 
     // Make sure the dome is also in position by polling the TCS for the dome and telescope positions
@@ -1788,16 +1837,15 @@ logwrite( function, message.str() );
     seq.set_thrstate_bit( THR_NOTIFY_TCS );
     std::string function = "Sequencer::Sequence::dothread_notify_tcs";
     std::stringstream message;
-    long error=NO_ERROR;
 
     // If this target is the same as the last then this section gets skipped;
     // no need to repoint the telescope and wait for a slew if it's already
     // on target.  Ask where it is pointed:
     //
     double ra_h_now, dec_d_now;
-    seq.get_tcs_coords( ra_h_now, dec_d_now );   // returns RA in decimal hours, DEC in decimal degrees
-    double ra_delta  = std::abs( ra_h_now  - seq.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
-    double dec_delta = std::abs( dec_d_now - seq.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
+    seq.get_tcs_coords( ra_h_now, dec_d_now );                                                     // returns RA in decimal hours, DEC in decimal degrees
+    double ra_delta  = std::abs( ra_h_now  - seq.target.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
+    double dec_delta = std::abs( dec_d_now - seq.target.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
 
     // If the difference between the TCS coordinates and the target coordinates are within
     // the resolution of reading the TCS then assume we are already pointed. Otherwise,
@@ -1805,14 +1853,16 @@ logwrite( function, message.str() );
     //
     if ( ra_delta > 0.01 || dec_delta > 0.01 ) {
 
-      message << "requesting early pre-auth for next target: " 
+      message << "[TODO] (disabled) requesting early pre-auth for next target: " 
               << seq.target.name << " " 
               << seq.target.ra_hms << " " 
               << seq.target.dec_dms;
       logwrite( function, message.str() );
 
+/*******************************************************************************
       // send coordinates to TCS
       //
+      long error=NO_ERROR;
       if ( error == NO_ERROR ) {
         std::stringstream coords;
         std::string tcsreply, ra_hms, dec_dms;
@@ -1820,8 +1870,8 @@ logwrite( function, message.str() );
         // convert ra, dec to decimal
         // can't be NaN
         //
-        if ( std::isnan( seq.radec_to_decimal( seq.target.ra_hms,  ra_hms  ) ) ||
-             std::isnan( seq.radec_to_decimal( seq.target.dec_dms, dec_dms ) ) ) {
+        if ( std::isnan( seq.target.radec_to_decimal( seq.target.ra_hms,  ra_hms  ) ) ||
+             std::isnan( seq.target.radec_to_decimal( seq.target.dec_dms, dec_dms ) ) ) {
           seq.async.enqueue_and_log( function, "ERROR: can't handle NaN value for RA, DEC" );
           seq.thr_error.fetch_or( THR_NOTIFY_TCS );
           seq.clr_thrstate_bit( THR_NOTIFY_TCS );
@@ -1830,7 +1880,7 @@ logwrite( function, message.str() );
 
         coords << "NEXT " << ra_hms << " " << dec_dms << " 0 0 0 \"" << seq.target.name << "\"";
         ///< @todo TCS command "NEXT" not yet implemented
-//      error  = seq.tcsd.send( coords.str(), tcsreply );
+        error  = seq.tcsd.send( coords.str(), tcsreply );
         message.str(""); message << "[TODO] new command not implemented in TCS: " << coords.str();
         logwrite( function, message.str() );
         int tcsvalue;
@@ -1841,6 +1891,7 @@ logwrite( function, message.str() );
       // send casangle
       //
       if ( error == NO_ERROR ) logwrite( function, "[TODO] send casangle not yet implemented" ); ///< TODO @todo put send cassangle into its own thread?
+*******************************************************************************/
     }
     seq.clr_thrstate_bit( THR_NOTIFY_TCS );
     return;
@@ -2086,25 +2137,6 @@ logwrite( function, message.str() );
     int retrys=0;    // number of acquisition attempts
     int nacquired=0; // number of sequential successful acquisitions, must meet ACQUIRE_MIN_REPEAT for success
 
-    // The goal for the camera is the result from the SLIT->ACAM calculation
-    // that was performed in move_to_target() using the DB coords.
-    //
-    seq.target.fpoffsets.coords_in.ra    = seq.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-    seq.target.fpoffsets.coords_in.dec   = seq.radec_to_decimal( seq.target.dec_dms );
-    seq.target.fpoffsets.coords_in.angle = seq.target.slitangle;
-
-    error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM" );              // convert coords_in from SLIT to ACAM
-
-    double acam_ra_goal    = seq.target.fpoffsets.coords_out.ra;
-    double acam_dec_goal   = seq.target.fpoffsets.coords_out.dec;
-    double acam_angle_goal = seq.target.fpoffsets.coords_out.angle;
-
-    message.str(""); message << "[ACQUIRE] set goals: ra=" << std::fixed << std::setprecision(6)
-                                                           << acam_ra_goal 
-                                                           << " dec=" << acam_dec_goal 
-                                                           << " ang=" << acam_angle_goal;
-    logwrite( function, message.str() );
-
 #ifdef SIMULATED_IMAGES
     // This section is only for cameraserver-generated images.
     // These will always be the latest ACAM coordinates.
@@ -2113,6 +2145,40 @@ logwrite( function, message.str() );
 #endif
 
     while ( (error==NO_ERROR) && nacquired < seq.target.min_repeat ) {
+
+      // The "goal" for the acam is the result from the SLIT->ACAM calculation
+      // that was performed in move_to_target() using the DB coords,
+      // except the angle is the current cass angle read from the TCS.
+      //
+      double dontcare=0, cass_now = NAN;
+      error = seq.get_tcs_cass( cass_now );
+
+      // This call is just to convert the current cass rotator angle to a slit position angle,
+      // so we don't care about the RA, DEC coordinates.
+      //
+      error = seq.target.fpoffsets.compute_offset( "SCOPE", "SLIT", dontcare, dontcare, cass_now );
+
+      // Now convert the slit coordinates to ACAM coordinates using the RA, DEC from the database
+      // and the slit position angle just obtained above (which is currently stored in coords_out.angle).
+      //
+      seq.target.fpoffsets.coords_in.ra    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
+      seq.target.fpoffsets.coords_in.dec   = seq.target.radec_to_decimal( seq.target.dec_dms );
+      seq.target.fpoffsets.coords_in.angle = seq.target.fpoffsets.coords_out.angle;
+
+      error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM" );              // convert coords_in from SLIT to ACAM
+
+      double acam_ra_goal    = seq.target.fpoffsets.coords_out.ra;                // units degrees
+      double acam_dec_goal   = seq.target.fpoffsets.coords_out.dec;
+      double acam_angle_goal = seq.target.fpoffsets.coords_out.angle;
+
+      {  // this local section is just for display purposes and its variables are not used elsewhere
+      std::string rastr, decstr;
+      seq.target.decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
+      seq.target.decimal_to_sexa( acam_dec_goal, decstr );
+      message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
+                                                         << std::fixed << std::setprecision(6) << acam_angle_goal;
+      logwrite( function, message.str() );
+      }
 
       // Acquire an image from the camera.
       // The reply contains a FITS filename that has to be passed to the astrometry solver.
@@ -2140,8 +2206,12 @@ logwrite( function, message.str() );
           acam_ra  = stod( tokens.at(1) );
           acam_dec = stod( tokens.at(2) );
           acam_pa  = stod( tokens.at(3) );
-          message.str(""); message << "solve " << tokens.at(0) << ": match found with ra="
-                                   << acam_ra << " dec=" << acam_dec << " pa=" << acam_pa;
+          std::string rastr, decstr;
+          double _ra = acam_ra * TO_HOURS;
+          seq.target.decimal_to_sexa( _ra, rastr );
+          seq.target.decimal_to_sexa( acam_dec, decstr );
+          message.str(""); message << "[ACQUIRE] solve " << tokens.at(0) << ": match found with coords="
+                                   << rastr << "  " << decstr << "  " << acam_pa;
           logwrite( function, message.str() );
         }
         else {
@@ -2193,13 +2263,13 @@ logwrite( function, message.str() );
       double ra_off  = acam_ra_goal  - acam_ra;
       double dec_off = acam_dec_goal - acam_dec;
 
-//#ifdef LOGLEVEL_DEBUG
+#ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[ACQUIRE] ra_off=" << std::fixed << std::setprecision(6)
                                                       << ra_off*3600. << " dec_off=" << dec_off*3600. << " (arcsec)";
       logwrite( function, message.str() );
-//#endif
+#endif
 
-      {  // temporary logging
+      {  // this local section is just for display purposes and its variables are not used elsewhere
       double __ra, __dec;
       seq.get_tcs_weather_coords( __ra, __dec );
       message.str(""); message << "[ACQUIRE] tcs coords before: " << __ra*TO_DEGREES << " " << __dec << " deg";
@@ -2220,6 +2290,13 @@ logwrite( function, message.str() );
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << seq.target.max_tcs_offset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
+
+        // Match found but failure to send an offset is also considered a "retry"
+        //
+        if ( ++retrys >= seq.acquisition_max_retrys ) {
+          seq.async.enqueue_and_log( function, "ERROR: failed to send a successful offset within max number of attempts" );
+          break;
+        }
       }
       // otherwise send the offsets to the TCS and keep looping.
       //
@@ -2687,103 +2764,6 @@ logwrite( function, "[DEBUG] setting READY bit" );
   /***** Sequencer::Sequence::parse_state *************************************/
 
 
-  /***** Sequencer::Sequence::radec_to_decimal ********************************/
-  /**
-   * @brief      convert string RA or DEC to decimal number
-   * @param[in]  str_in  input string to convert
-   * @return     double representation of string, or NaN on error
-   *
-   * Input string could be  HH:MM:SS.sss
-   *                        HH MM SS.sss
-   *                       ±DD:MM:SS.sss
-   *                       ±DD MM SS.sss
-   *                       ± D:MM:SS.sss
-   *                       ± D MM SS.sss
-   *
-   * Convert the input string into a decimal (double) number, HH.hhh or ±DD.dddd
-   *
-   * If the string is empty or otherwise cannot be converted then return NaN.
-   *
-   */
-  double Sequence::radec_to_decimal( std::string str_in ) {
-    std::string dontcare;
-    return( this->radec_to_decimal( str_in, dontcare ) );
-  }
-  /***** Sequencer::Sequence::radec_to_decimal ********************************/
-
-
-  /***** Sequencer::Sequence::radec_to_decimal ********************************/
-  /**
-   * @brief      convert string RA or DEC to decimal number
-   * @param[in]  str_in     input string to convert
-   * @param[out] retstring  reference to string representation of return value
-   * @return     double representation of string, or NaN on error
-   *
-   * This function is overloaded.
-   * This version accepts a reference to a return string, to return a string
-   * version of the decimal (double) return value.
-   *
-   */
-  double Sequence::radec_to_decimal( std::string str_in, std::string &retstring ) {
-    std::string function = "Sequencer::Sequence::radec_to_decimal";
-    std::stringstream message;
-    std::vector<std::string> tokens;
-    double sign=1.0;
-
-    // can't convert an empty string to a value other than NaN
-    //
-    if ( str_in.empty() ) {
-      logwrite( function, "ERROR: empty input string returns NaN" );
-      return( NAN );
-    }
-
-    // If there's a minus sign (-) in the input string then set the sign
-    // multiplier negative, then remove the sign.
-    //
-    // This is done because tokenizing on space or colon would result in three separate
-    // tokens (HH MM SS or DD MM SS) except for the case where the degree is a single 
-    // digit, then it's possible that tokenizing " + D MM SS.sss" it could result in four 
-    // tokens, "+", "D", "MM", "SS.sss" so determine the sign then get rid of it.
-    //
-    if ( str_in.find( '-' ) != std::string::npos ) sign = -1.0;
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
-
-    Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
-
-    if ( tokens.size() != 3 ) {
-      message.str(""); message << "ERROR: expected 3 tokens but received " << tokens.size() << " from str_in \"" << str_in << "\"";
-      logwrite( function, message.str() );
-      return( NAN );
-    }
-
-    double hh, mm, ss, dec;
-    std::stringstream ret;
-    try {
-      hh = std::stod( tokens.at(0) );
-      mm = std::stod( tokens.at(1) ) / 60.0;
-      ss = std::stod( tokens.at(2) ) / 3600.0;
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: out of range parsing input string \"" << str_in << "\": " << e.what();
-      logwrite( function, message.str() );
-      return( NAN );
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR: invalid argument parsing input string \"" << str_in << "\": " << e.what();
-      logwrite( function, message.str() );
-      return( NAN );
-    }
-
-    dec = sign * hh + mm + ss;
-    ret << std::fixed << std::setprecision(6) << dec;
-    retstring = ret.str();
-
-    return( dec );
-  }
-  /***** Sequencer::Sequence::radec_to_decimal ********************************/
-
-
   /***** Sequencer::Sequence::extract_tcs_value *******************************/
   /**
    * @brief      extract the value from a tcsd reply "<val>" DONE|ERROR
@@ -3161,27 +3141,39 @@ logwrite( function, "[DEBUG] setting READY bit" );
     std::string function = "Sequencer::Sequence::get_tcs_coords";
     std::stringstream message;
 
-    std::string radec;
+    std::string coordstring;
 
-    if ( this->tcsd.send( TCSD_GET_COORDS, radec ) != NO_ERROR ) {
+    if ( this->tcsd.send( cmd, coordstring ) != NO_ERROR ) {
       logwrite( function, "ERROR reading TCS coordinates" );
       return ERROR;
     }
 
     std::vector<std::string> tokens;
 
-    Tokenize( radec, tokens, " " );                    // comes back as space-delimited string "hh:mm:ss.ss dd:mm:ss.ss"
-    try {                                              // extract ra dec from radec string
-      ra_h  = this->radec_to_decimal( tokens.at(0) );  //decimal hours
-      dec_d = this->radec_to_decimal( tokens.at(1) );  // decimal degrees
+    Tokenize( coordstring, tokens, " " );                       // comes back as space-delimited string "hh:mm:ss.ss dd:mm:ss.ss"
+    try {                                                       // extract ra dec from coordstring
+      if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
+        ra_h  = this->target.radec_to_decimal( tokens.at(0) );  // RA decimal hours
+        dec_d = this->target.radec_to_decimal( tokens.at(1) );  // DEC decimal degrees
+      }
+      else
+      if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
+        ra_h  = std::stod( tokens.at(0) );                      // RA decimal hours
+        dec_d = std::stod( tokens.at(1) );                      // DEC decimal degrees
+      }
+      else {
+        message.str(""); message << "ERROR unrecognized command \"" << cmd << "\"";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
     }
     catch( std::out_of_range &e ) {
-      message << "ERROR out of range exception parsing \"" << radec << "\"";
+      message << "EXCEPTION: out of range exception parsing \"" << coordstring << "\": " << e.what();
       logwrite( function, message.str() );
       return ERROR;
     }
     catch( std::invalid_argument &e ) {
-      message << "ERROR invalid argument exception parsing \"" << radec << "\"";
+      message << "EXCEPTION: invalid argument exception parsing \"" << coordstring << "\": " << e.what();
       logwrite( function, message.str() );
       return ERROR;
     }
@@ -3189,6 +3181,58 @@ logwrite( function, "[DEBUG] setting READY bit" );
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::get_tcs_coords **********************************/
+
+
+  /***** Sequencer::Sequence::get_tcs_cass ************************************/
+  /**
+   * @brief      read the current TCS cass angle
+   * @param[out] cass  cass angle in degrees
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Sequence::get_tcs_cass( double &cass ) {
+    std::string function = "Sequencer::Sequencer::get_tcs_cass";
+    std::stringstream message;
+    std::string tcsreply;
+
+    if ( this->tcsd.send( TCSD_GET_CASS, tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR reading TCS cass angle" );
+      cass = NAN;
+      return ERROR;
+    }
+
+    // tcsreply will be " ddd.dd DONE" or "ERROR" so tokenize on space
+    // to get the angle
+    //
+    std::vector<std::string> tokens;
+    Tokenize( tcsreply, tokens, " " );              // comes back as space-delimited string "hh:mm:ss.ss dd:mm:ss.ss"
+
+    if ( tokens.size() != 2 ) {
+      message.str(""); message << "ERROR parsing angle from TCS reply \"" << tcsreply << "\"";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    try {                                              // extract ra dec from coordstring
+      cass = std::stod( tokens.at(0) );
+    }
+    catch( std::out_of_range &e ) {
+      message << "EXCEPTION: out of range exception parsing \"" << tcsreply << "\": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      message << "EXCEPTION: invalid argument exception parsing \"" << tcsreply << "\": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    message.str(""); message << "currrent cass ring angle = " << cass;
+    logwrite( function, message.str() );
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::get_tcs_cass ************************************/
 
 
   /***** Sequencer::Sequence::angular_separation ******************************/
@@ -3386,13 +3430,18 @@ logwrite( function, "[DEBUG] setting READY bit" );
     if ( testname == "getnext" ) {
       TargetInfo::TargetState ret;
       std::stringstream rts;
+      std::string targetstatus;
       if ( tokens.size() > 1 ) {
-        ret = this->target.get_next( tokens[1] );  // if a state was supplied then get the next target with the supplied state
+        ret = this->target.get_next( tokens[1], targetstatus );  // if a state was supplied then get the next target with the supplied state
       }
       else {
-        ret = this->target.get_next();             // otherwise use the default (which is "pending")
+        ret = this->target.get_next( targetstatus );             // otherwise use the default (which is "pending")
       }
       error = NO_ERROR;
+
+      message.str(""); message << "STATUS:" << targetstatus;
+      this->async.enqueue( message.str() );                      // broadcast target status
+
       if ( ret == TargetInfo::TargetState::TARGET_FOUND )     { rts << this->target.name  << " " 
                                                                     << this->target.obsid << " " 
                                                                     << this->target.obsorder << " "
@@ -3485,8 +3534,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
     //
     if ( testname == "radec" ) {
       double ra,dec;
-      ra  = this->radec_to_decimal( target.ra_hms );
-      dec = this->radec_to_decimal( target.dec_dms );
+      ra  = this->target.radec_to_decimal( target.ra_hms );
+      dec = this->target.radec_to_decimal( target.dec_dms );
       message.str(""); message << "ra " << target.ra_hms << " -> " 
                                << std::fixed << std::setprecision(6) 
                                << ra << "  dec " << target.dec_dms << " -> " << dec;
@@ -3543,24 +3592,41 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     // ---------------------------------------------------------
     // acquire -- spawn thread to start acquisition
+    //            this sends the "prepare" command to acamd, then
+    //            performs the acquisition sequence.
     // ---------------------------------------------------------
     //
     if ( testname == "acquire" ) {
+
+      // Read the current cass angle from the TCS
+      //
+      double cass_now = NAN;
+      error = this->get_tcs_cass( cass_now );
+
+      // This call is just to convert the current cass rotator angle to a slit position angle,
+      // so we don't care about the RA, DEC coordinates.
+      //
+      { double dontcare=0;
+        error = this->target.fpoffsets.compute_offset( "SCOPE", "SLIT", dontcare, dontcare, cass_now );
+      }
+
       // Before starting acquire thread, must first send coordinates to the acam cameraserver
       //
-      this->target.fpoffsets.coords_in.ra    = this->radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
-      this->target.fpoffsets.coords_in.dec   = this->radec_to_decimal( this->target.dec_dms );
-      this->target.fpoffsets.coords_in.angle = this->target.slitangle;
+      this->target.fpoffsets.coords_in.ra    = this->target.radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
+      this->target.fpoffsets.coords_in.dec   = this->target.radec_to_decimal( this->target.dec_dms );
+      this->target.fpoffsets.coords_in.angle = this->target.fpoffsets.coords_out.angle;
 
       // can't be NaN
       //
       bool ra_isnan  = std::isnan( this->target.fpoffsets.coords_in.ra  );
       bool dec_isnan = std::isnan( this->target.fpoffsets.coords_in.dec );
+      bool cas_isnan = std::isnan( this->target.fpoffsets.coords_in.angle );
 
-      if ( ra_isnan || dec_isnan ) {
+      if ( ra_isnan || dec_isnan || cas_isnan ) {
         message.str(""); message << "ERROR: converting";
         if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
         if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
+        if ( cas_isnan ) { message << " CASS=\"" << cass_now << "\""; }
         message << " to decimal";
         this->async.enqueue_and_log( function, message.str() );
         return ERROR;
@@ -3590,14 +3656,26 @@ logwrite( function, "[DEBUG] setting READY bit" );
     else
 
     // ---------------------------------------------------------
+    // clearlasttarget -- clear the last target name, allowing repointing
+    //                    to the same target (otherwise move_to_target won't
+    //                    repoint the telescope if the name is the same)
+    // ---------------------------------------------------------
+    //
+    if ( testname == "clearlasttarget" ) {
+      this->last_target="";
+      error=NO_ERROR;
+    }
+    else
+
+    // ---------------------------------------------------------
     // fpoffset -- 
     // ---------------------------------------------------------
     //
     if ( testname == "fpoffset" ) {
       std::string from, to;
       double ra,dec;
-      ra  = this->radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
-      dec = this->radec_to_decimal( target.dec_dms );
+      ra  = this->target.radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
+      dec = this->target.radec_to_decimal( target.dec_dms );
       try {
         from = tokens.at(1);
         to   = tokens.at(2);

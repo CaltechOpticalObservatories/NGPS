@@ -254,8 +254,6 @@ namespace Sequencer {
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
 
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
-      double radec_to_decimal( std::string str_in );                           ///< convert ra,dec from string to double
-      double radec_to_decimal( std::string str_in, std::string &retstring );   ///< convert ra,dec from string to double
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply
@@ -273,7 +271,8 @@ namespace Sequencer {
 
       long get_tcs_coords_type( std::string cmd, double &ra_h, double &dec_d );///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
-      long get_tcs_coords( double &ra_h, double &dec_d );                      ///< read the current TCS ra,dec in decimal hr,deg
+      long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
+      long get_tcs_cass( double &cass );
       double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
       long offset_tcs( double ra_off, double dec_off );                        ///< send ra,dec offsets to the TCS
 

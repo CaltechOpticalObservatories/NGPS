@@ -51,7 +51,8 @@ namespace TcsEmulator {
       Telescope();
       ~Telescope();
 
-      volatile std::atomic<bool> moving;  ///< set true during fake moves, prevents another thread from moving the telescope
+      volatile std::atomic<bool> telmoving;  ///< set true during fake telescope moves, prevents another thread from moving the telescope
+      volatile std::atomic<bool> casmoving;  ///< set true during fake cass rotator moves, prevents another thread from moving the cass ring
 
       // default slew and settling times set in constructor but can be overridden by configuration file
       //
@@ -84,6 +85,7 @@ namespace TcsEmulator {
 
       std::string get_time();
 
+      static void do_ringgo( TcsEmulator::Telescope &telescope, double newring );   ///< perform the RINGGO command work, which "moves" the cass rotator
       static void do_coords( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the COORDS command work, which "moves" the telescope
       static void do_pt( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the PT command work, which "offsets" the telescope
       void weather( std::string &retstring );

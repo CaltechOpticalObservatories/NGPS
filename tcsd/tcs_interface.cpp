@@ -191,12 +191,12 @@ namespace TCS {
 
     // Send the REQPOS command to the TCS. This returns a string that looks like:
     //
-    // posstr = "UTC = ddd hh:mm:ss, LST = hh:mm:ss\n
-    //           RA = hh:mm:ss.ss, DEC = dd:mm:ss.s, HA=hh:mm:ss.s\n
-    //           air mass = aa.aaa"
+    // tcsreply = "UTC = ddd hh:mm:ss, LST = hh:mm:ss\n
+    //             RA = hh:mm:ss.ss, DEC = dd:mm:ss.s, HA=hh:mm:ss.s\n
+    //             air mass = aa.aaa"
     //
-    std::string posstr;
-    if ( this->send_command( "REQPOS", posstr ) != NO_ERROR ) {
+    std::string tcsreply;
+    if ( this->send_command( "REQPOS", tcsreply ) != NO_ERROR ) {
       logwrite( function, "ERROR getting coords from TCS" );
       return ERROR;
     }
@@ -204,7 +204,7 @@ namespace TCS {
     // First tokenize on newline
     //
     std::vector<std::string> lines;
-    Tokenize( posstr, lines, "\n" );
+    Tokenize( tcsreply, lines, "\n" );
 
     if ( lines.size() != 3 ) {
       message.str(""); message << "ERROR expected 3 lines from REQPOS string but received " << lines.size();
@@ -240,7 +240,7 @@ namespace TCS {
       message.str(""); message << ra.at(1) << " " << dec.at(1);
     }
     catch( std::out_of_range &e ) {
-      logwrite( function, "ERROR out of range parsing ra,dec from ?WEATHER command" );
+      logwrite( function, "EXCEPTION: out of range parsing ra,dec from TCS reply string" );
       return ERROR;
     }
 
@@ -251,6 +251,84 @@ namespace TCS {
     return NO_ERROR;
   }
   /***** TCS::Interface::get_coords *******************************************/
+
+
+  /***** TCS::Interface::get_cass *********************************************/
+  /**
+   * @brief      get the current cass angle
+   * @details    uses the REQSTAT command, pulls out just the Cass ring angle,
+   *             returns as "ddd.dd"
+   * @param[out] retstring  contains cass ring angle
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_cass( std::string &retstring ) {
+    std::string function = "TCS::Interface::get_cass";
+    std::stringstream message;
+    std::stringstream reply;
+
+    // Send the REQSTAT command to the TCS. This returns a string that looks like:
+    //
+    // tcsreply = "UTC = 127 21:58:7.0\n
+    //             telescope ID = 200, focus = 36.71 mm, tube length = 22.11 mm\n
+    //             offset RA = 45.00 arcsec, DEC = 45.00 arcsec\n
+    //             rate RA = 0.00 arcsec/hr, DEC = 0.00 arcsec/hr\n
+    //             Cass ring angle = 18.00
+    //
+    std::string tcsreply;
+    if ( this->send_command( "REQSTAT", tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting status from TCS" );
+      return ERROR;
+    }
+
+    // First tokenize on comma
+    //
+    std::vector<std::string> lines;
+    Tokenize( tcsreply, lines, "\n" );
+
+    if ( lines.size() != 5 ) {
+      message.str(""); message << "ERROR expected 5 lines from REQSTAT string but received " << lines.size()
+                               << " in reply \"" << tcsreply << "\"";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Then the 5th token, lines[4], contains the "Cass ring angle = dd.dd"
+    // tokenize that on the equal to get the value.
+    //
+    try {
+      std::vector<std::string> tokens;
+      Tokenize( lines.at(4), tokens, "=" );  // lines[4] = "Cass ring angle = dd.dd"
+
+      if ( tokens.size() != 2 ) {
+        message.str(""); message << "ERROR expected 2 tokens for Cass ring angle = dd.dd but received " << tokens.size();
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+
+      // Try converting it to a double, not because it's needed as a double but this checks
+      // that it is indeed a double
+      //
+      double angle = std::stod( tokens.at(1) );
+
+      reply << std::fixed << std::setprecision(2) << angle;
+    }
+    catch( std::out_of_range &e ) {
+      logwrite( function, "EXCEPTION: out of range parsing Cass ring angle from TCS reply string" );
+      return ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      logwrite( function, "EXCEPTION converting Cass ring angle to double" );
+      return ERROR;
+    }
+
+    retstring = reply.str();
+
+    logwrite( function, retstring );
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_cass *********************************************/
 
 
   /***** TCS::Interface::get_dome *********************************************/
@@ -371,6 +449,63 @@ namespace TCS {
   /***** TCS::Interface::get_motion *******************************************/
 
 
+  /***** TCS::Interface::ringgo ***********************************************/
+  /**
+   * @brief      wrapper for the native RINGGO command
+   * @details    wraps the RINGGO command to ensure the value is within range
+   * @param[in]  args       requested angle string
+   * @param[out] retstring  reference to return string for the command sent to the TCS
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::ringgo( std::string args, std::string &retstring ) {
+    std::string function = "TCS::Interface::ringgo";
+    std::stringstream message;
+
+    double angle = NAN;
+
+    try {
+      angle = std::stod( args );
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "EXCEPTION: out of range parsing requested angle from \"" << args << "\": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      message.str(""); message << "EXCEPTION: converting requested angle from \"" << args << "\" to double: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    if ( std::isnan(angle) ) {
+      logwrite( function, "ERROR: requested angle is NaN" );
+      return ERROR;
+    }
+
+    if ( angle < 0.0 ) angle += 360.0;
+
+    if ( angle > 359.99 && angle <= 360.0 ) angle = 0;
+
+    if ( angle > 360.0 ) {
+      message.str(""); message << "ERROR: requested angle " << angle << " cannot exceed 360";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] requested cass angle " << angle;
+    logwrite( function, message.str() );
+#endif
+
+    std::stringstream cmd;
+    cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
+
+    return this->send_command( cmd.str(), retstring );
+  }
+  /***** TCS::Interface::ringgo ***********************************************/
+
+
   /***** TCS::Interface::send_command *****************************************/
   /**
    * @brief      writes the raw command, as received, to the TCS
@@ -423,7 +558,7 @@ namespace TCS {
 
       // data available, read from socket
       //
-      if ( ( ret = this->tcs.Read( sbuf, "\0" ) ) <= 0 ) {   // all TCS respoonses are terminated with NUL
+      if ( ( ret = this->tcs.Read( sbuf ) ) <= 0 ) {   // all TCS respoonses are terminated with NUL
         if ( ret < 0 ) {
           message.str(""); message << "ERROR reading from TCS on fd " << tcs.getfd() << ": " << strerror(errno);
           logwrite( function, message.str() );

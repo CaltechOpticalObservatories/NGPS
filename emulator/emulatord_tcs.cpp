@@ -9,6 +9,8 @@
 #include "emulatord_tcs.h"
 #include "daemonize.h"
 
+#define N_THREADS 10
+
 TcsEmulator::Server emulator;
 
 /***** signal_handler *********************************************************/
@@ -150,12 +152,27 @@ int main( int argc, char **argv ) {
     emulator.exit_cleanly();
   }
 
-  // create a thread for a single listening port
-  // The TcpSocket object is instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
+  // TcpSocket objects are instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
+  //
+  std::vector<Network::TcpSocket> socklist;          // create a vector container to hold N_THREADS TcpSocket objects
+  socklist.reserve(N_THREADS);
 
-  Network::TcpSocket s(emulator.port, true, -1, 0);    // instantiate TcpSocket object
-  s.Listen();                                                      // create listening socket
-  std::thread( block_main, s ).detach();                           // spawn thread to handle requests
+  // pre-thread N_THREADS detached threads to handle requests
+  //
+  for (int thrid=0; thrid<N_THREADS; thrid++) {      // create N_THREADS-1 non-blocking socket objects
+    if (thrid==0) {                                  // first one only
+      Network::TcpSocket s(emulator.port, true, -1, thrid); // instantiate TcpSocket object, blocking port, CONN_TIMEOUT timeout
+      s.Listen();                                    // create a listening socket
+      socklist.push_back(s);
+    }
+    else {                                           // subsequent socket objects are copies of the first
+      Network::TcpSocket s = socklist[0];            // copy the first one, which has a valid listening socket
+      s.id = thrid;
+      socklist.push_back(s);
+    }
+    std::thread( std::ref(block_main),
+                 std::ref(socklist[thrid]) ).detach();   // spawn a thread to handle each non-blocking socket request
+  }
 
   for (;;) pause();                                                // main thread suspends
   return 0;
@@ -177,11 +194,11 @@ int main( int argc, char **argv ) {
  *
  */
 void block_main( Network::TcpSocket sock ) {
-  while(1) {
-    int fd = sock.Accept();
-    std::cerr << get_timestamp() << "  (TcsEmulator::block_main) Accept returns connection on fd = " << fd << "\n";
-    doit( sock );                  // call function to do the work
-    sock.Close();
+  std::string function = "  (TcsEmulator::block_main) ";
+  while (1) {
+    sock.Accept();
+    std::cerr << get_timestamp() << function << " Accept returns connection on fd = " << sock.getfd() << "\n";
+    std::thread( doit, std::ref(sock) ).detach();  // spawn a thread to handle this connection
   }
   return;
 }
@@ -238,8 +255,8 @@ void doit( Network::TcpSocket sock ) {
         std::cerr << get_timestamp() << function << emulator.subsystem 
                   << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
       }
-      if (ret==0) std::cerr << get_timestamp() << function << emulator.subsystem << " timeout reading from fd " 
-                            << sock.getfd() << "\n";
+      if (ret==0 && sock.getfd() != -1) std::cerr << get_timestamp() << function << emulator.subsystem
+                                                  << " timeout reading from fd " << sock.getfd() << "\n";
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough
@@ -286,7 +303,9 @@ void doit( Network::TcpSocket sock ) {
     // process commands here
     //
     ret = NOTHING;
-    std::string retstring="";   // string for the return value
+    std::string retstring;      // string for the return value
+
+    retstring.clear();
 
     if ( cmd.compare( "exit" ) == 0 ) {
                     emulator.exit_cleanly();                                   // shutdown the daemon
@@ -312,8 +331,8 @@ void doit( Network::TcpSocket sock ) {
 #endif
 
     if ( ret != NOTHING && !retstring.empty() ) {
+      retstring.push_back( term );       // push_back is overloaded to accept a char which is needed here
       if ( sock.Write( retstring ) <0 ) connection_open=false;
-      sock.Write( &term );
     }
 
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.

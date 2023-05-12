@@ -23,7 +23,7 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3) {
+    if (argc < 3) {
        printf("Command line args should be multicast group and port\n");
        printf("(e.g. for SSDP, `listener 239.255.255.250 1900`)\n");
        return 1;
@@ -32,6 +32,9 @@ int main(int argc, char *argv[])
     char* group = argv[1]; // e.g. 239.255.255.250 for SSDP
     int port = atoi(argv[2]); // 0 if error, which is an invalid port
 
+    char *filterstr=NULL;
+
+    if ( argc==4 ) filterstr = argv[3];
 
     // create what looks like an ordinary UDP socket
     //
@@ -100,7 +103,10 @@ int main(int argc, char *argv[])
             return 1;
         }
         msgbuf[nbytes] = '\0';
-        puts(msgbuf);
+        if ( filterstr != NULL ) {
+          if ( strstr(msgbuf, filterstr) != NULL ) puts(msgbuf);
+        }
+        else puts(msgbuf);
      }
 
     return 0;

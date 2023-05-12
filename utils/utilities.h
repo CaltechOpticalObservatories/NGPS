@@ -59,4 +59,9 @@ static inline void rtrim(std::string &s) {          /// trim off trailing whites
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );
 }
 
+inline bool caseCompareChar( char a, char b ) { return ( std::toupper(a) == std::toupper(b) ); }
+
+inline bool caseCompareString( const std::string &s1, const std::string &s2 ) {
+  return( (s1.size()==s2.size() ) && std::equal( s1.begin(), s1.end(), s2.begin(), caseCompareChar) ); }
+
 #endif

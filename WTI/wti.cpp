@@ -62,11 +62,11 @@ namespace WTI {
     std::stringstream message;
 
     if ( this->sock.isconnected() ) {
-      message.str(""); message << "ERROR socket connection already open to "
+      message.str(""); message << "socket connection already open to "
                                << this->sock.gethost() << ":" << this->sock.getport()
                                << " on fd " << this->sock.getfd() << " for " << this->name;
       logwrite( function, message.str() );
-      return( ERROR );
+      return( NO_ERROR );
     }
 
     Network::TcpSocket s( this->host, this->port );

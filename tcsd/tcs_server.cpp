@@ -406,7 +406,8 @@ namespace TCS {
       std::string retstring="";
 
       if ( cmd.compare( "help" ) == 0 ) {
-                      for ( auto s : TCSD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                      for ( auto s : TCSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = NO_ERROR;
       }
       else
       if ( cmd.compare( TCSD_EXIT ) == 0 ) {
@@ -437,6 +438,11 @@ namespace TCS {
       }
       else
 
+      if ( cmd.compare( TCSD_GET_CASS ) == 0 ) {
+                      ret = this->interface.get_cass( retstring );
+      }
+      else
+
       if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
                       ret = this->interface.get_coords( retstring );
       }
@@ -450,11 +456,15 @@ namespace TCS {
       if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
                       ret = this->interface.get_weather_coords( retstring );
       }
-
       else
 
       if ( cmd.compare( TCSD_GET_MOTION ) == 0 ) {
                       ret = this->interface.get_motion( retstring );
+      }
+      else
+
+      if ( caseCompareString( cmd, TCSD_RINGGO ) ) {
+                      ret = this->interface.ringgo( args, retstring );
       }
 
       // all other commands go straight to the TCS interface

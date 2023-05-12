@@ -144,19 +144,41 @@ namespace TcsEmulator {
   /***** TcsEmulator::Telescope::get_time *************************************/
 
 
+  /***** TcsEmulator::Telescope::do_ringgo ************************************/
+  /**
+   * @brief      perform the RINGGO command work, which "moves" the cass rotator
+   * @param[in]  telescope
+   * @param[in]  args
+   *
+   */
+  void Telescope::do_ringgo( TcsEmulator::Telescope &telescope, double newring ) {
+    std::string function = "  (TcsEmulator::Telescope::do_ringgo) ";
+
+    telescope.casmoving.store( true );
+
+    // for now, the cass rotator moves instantaneously
+    //
+    telescope.casangle = newring;
+
+    telescope.casmoving.store( false );
+
+    return;
+  }
+  /***** TcsEmulator::Telescope::do_ringgo ************************************/
+
+
   /***** TcsEmulator::Telescope::do_coords ************************************/
   /**
    * @fn         do_coords
    * @brief      perform the COORDS command work, which "moves" the telescope
    * @param[in]  telescope
    * @param[in]  args
-   * @return     none
    *
    */
   void Telescope::do_coords( TcsEmulator::Telescope &telescope, std::string args ) {
     std::string function = "  (TcsEmulator::Telescope::do_coords) ";
 
-    double newra, newdec;
+    double req_ra, req_dec, delta_ra, delta_dec;
 
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
@@ -165,26 +187,38 @@ namespace TcsEmulator {
       // already checked that there are at least 5 tokens but all that matters
       // here is RA and DEC
       //
-      newra  = std::stof( tokens.at(0) );
-      newdec = std::stof( tokens.at(1) );
+      req_ra  = std::stof( tokens.at(0) );
+      req_dec = std::stof( tokens.at(1) );
 
       // The name is optional
       //
       if ( tokens.size() > 5 ) telescope.name = tokens.at(5);
     }
     catch( std::invalid_argument &e ) {
-      std::cerr << get_timestamp() << function << "unable to convert one or more values from \"" << args << "\": " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "EXCEPTION: unable to convert one or more values from \"" 
+                << args << "\": " << e.what() << "\n";
       return;
     }
     catch( std::out_of_range &e ) {
-      std::cerr << get_timestamp() << function << "one or more value from \"" << args << "\" is out of range: " << e.what() << "\n";
+      std::cerr << get_timestamp() << function << "EXCEPTION: one or more value from \"" 
+                << args << "\" is out of range: " << e.what() << "\n";
       return;
     }
 
+    // the current coordinates
+    //
+    double current_ra  = telescope.ra.load();
+    double current_dec = telescope.dec.load();
+
+    // direction to move to reach the requested coordinate from the current coordinate
+    //
+    double  ra_dir = ( req_ra  - current_ra  < 0 ? -1.0 : 1.0 );
+    double dec_dir = ( req_dec - current_dec < 0 ? -1.0 : 1.0 );
+
     // calculate the slew distance and the slew time for each of RA, DEC
     //
-    double slewdistance_ra  = std::abs( telescope.ra  - newra  );
-    double slewdistance_dec = std::abs( telescope.dec - newdec );
+    double slewdistance_ra  = std::abs( telescope.ra  - req_ra  );
+    double slewdistance_dec = std::abs( telescope.dec - req_dec );
 
     double slewtime_ra      = slewdistance_ra  / telescope.slewrate_ra;
     double slewtime_dec     = slewdistance_dec / telescope.slewrate_dec;
@@ -199,7 +233,7 @@ namespace TcsEmulator {
 
     // before starting the slew, set a flag to prevent another thread from also starting a slew
     //
-    telescope.moving.store( true );
+    telescope.telmoving.store( true );
 
     // begin the (virtual) slew
     // slew rates are specified per second -- divide that by 2 and loop every 1/2 second
@@ -210,16 +244,23 @@ namespace TcsEmulator {
 
       // read the current ra, dec
       //
-      double ra  = telescope.ra.load();
-      double dec = telescope.dec.load();
+      current_ra  = telescope.ra.load();
+      current_dec = telescope.dec.load();
 
-      std::cerr << get_timestamp() << function << "slewing...  ra " << ra << "  dec " << dec << "\n";
+      std::cerr << get_timestamp() << function << "slewing...  ra " << current_ra << "  dec " << current_dec << "\n";
 
       // add the slewrate to ra, dec
       // store it permanently as long as we don't overshoot
       //
-      if ( ( ra  += telescope.slewrate_ra/2.0 )  <= newra )  telescope.ra.store( ra  );
-      if ( ( dec += telescope.slewrate_dec/2.0 ) <= newdec ) telescope.dec.store( dec );
+      delta_ra  = std::abs( current_ra  -  req_ra );
+      delta_dec = std::abs( current_dec - req_dec );
+
+      if (  delta_ra >  telescope.slewrate_ra/2.0 ) {
+        telescope.ra.store( (  current_ra +  ra_dir *  telescope.slewrate_ra/2.0 ) );
+      }
+      if ( delta_dec > telescope.slewrate_dec/2.0 ) {
+        telescope.dec.store( ( current_dec + dec_dir * telescope.slewrate_dec/2.0 ) );
+      }
 
       usleep( 500000 );
       if ( get_clock_time() >= clock_end ) break;
@@ -235,16 +276,23 @@ namespace TcsEmulator {
       if ( get_clock_time() > clock_end ) break;
       // read the current ra, dec
       //
-      double ra  = telescope.ra.load();
-      double dec = telescope.dec.load();
+      current_ra  = telescope.ra.load();
+      current_dec = telescope.dec.load();
 
-      std::cerr << get_timestamp() << function << "settling...  ra " << ra << "  dec " << dec << "\n";
+      std::cerr << get_timestamp() << function << "settling...  ra " << current_ra << "  dec " << current_dec << "\n";
 
       // add the slewrate to ra, dec
       // store it permanently as long as we don't overshoot
       //
-      if ( ( ra  += telescope.slewrate_ra/telescope.settle_ra )   <= newra )  telescope.ra.store( ra  );
-      if ( ( dec += telescope.slewrate_dec/telescope.settle_dec ) <= newdec ) telescope.dec.store( dec );
+      delta_ra  = std::abs( current_ra  -  req_ra );
+      delta_dec = std::abs( current_dec - req_dec );
+
+      if (  delta_ra >  telescope.slewrate_ra/ telescope.settle_ra ) {
+        telescope.ra.store( (  current_ra +  ra_dir *  telescope.slewrate_ra/ telescope.settle_ra ) );
+      }
+      if ( delta_dec > telescope.slewrate_dec/telescope.settle_dec ) {
+        telescope.dec.store( ( current_dec + dec_dir * telescope.slewrate_dec/telescope.settle_dec ) );
+      }
 
       usleep( 1000000 );
       if ( get_clock_time() >= clock_end ) break;
@@ -252,12 +300,12 @@ namespace TcsEmulator {
 
     // after settlting, set the ra,dec to those requested
     //
-    telescope.ra.store( newra );
-    telescope.dec.store( newdec );
+    telescope.ra.store( req_ra );
+    telescope.dec.store( req_dec );
 
     // clear the moving flag now
     //
-    telescope.moving.store( false );
+    telescope.telmoving.store( false );
 
     // and set motion state to tracking
     //
@@ -291,7 +339,7 @@ namespace TcsEmulator {
 
     // before starting the slew, set a flag to prevent another thread from also starting a slew
     //
-    telescope.moving.store( true );
+    telescope.telmoving.store( true );
 
     telescope.motionstate.store( TCS_MOTION_OFFSETTING );
 
@@ -312,8 +360,10 @@ namespace TcsEmulator {
 
     std::cerr << get_timestamp() << function << "offsetting ra " << ra_off << " dec " << dec_off << "\n";
 
-    newra  = telescope.ra.load()  + ra_off;   // this is where we want to end up, after offset is complete
-    newdec = telescope.dec.load() + dec_off;
+    // new* is where we want to end up, after offset is complete
+    //
+    newra  = telescope.ra.load()  + (ra_off/15.);  // ra is in hours but ra_off is deg so divide by 15
+    newdec = telescope.dec.load() + dec_off;       // dec is always in degrees
 
     // calculate the offset distance and the offset time for each of RA, DEC
     //
@@ -359,7 +409,7 @@ namespace TcsEmulator {
 
     // clear the moving flag now
     //
-    telescope.moving.store( false );
+    telescope.telmoving.store( false );
 
     telescope.motionstate.store( TCS_MOTION_TRACKING );
 
@@ -496,8 +546,10 @@ namespace TcsEmulator {
     double _ra  = this->ra.load();   // decimal hours, e.g. 01.2345
     double _dec = this->dec.load();  // decimal degrees
 
+    std::string  ra_sign = (  _ra < 0 ? "-" : "+" );
     std::string dec_sign = ( _dec < 0 ? "-" : "+" );
 
+     _ra = std::abs( _ra);
     _dec = std::abs(_dec);
 
     int ra_hh     = (int)_ra;
@@ -512,10 +564,10 @@ namespace TcsEmulator {
 
     ret << "UTC = " << this->get_time() << ", "
         << "LST = 00:00:00\n"
-        << "RA = " << std::fixed  << std::setfill('0') << std::setw(2) << (int)_ra     << ":"
-                                  << std::setfill('0') << std::setw(2) << (int)ra_mm   << ":"
-                                  << std::setfill('0') << std::setw(2) << (int)ra_ss   << "."
-                                  << std::setfill('0') << std::setw(2) << (int)std::round(ra_sss)  << ", "
+        << "RA = " <<  ra_sign << std::fixed  << std::setfill('0') << std::setw(2) << (int)_ra     << ":"
+                                              << std::setfill('0') << std::setw(2) << (int)ra_mm   << ":"
+                                              << std::setfill('0') << std::setw(2) << (int)ra_ss   << "."
+                                              << std::setfill('0') << std::setw(2) << (int)std::round(ra_sss)  << ", "
         << "DEC = " << dec_sign << std::fixed << std::setfill('0') << std::setw(2) << (int)_dec    << ":"
                                               << std::setfill('0') << std::setw(2) << (int)dec_mm  << ":"
                                               << std::setfill('0') << std::setw(2) << (int)dec_ss  << "."
@@ -591,6 +643,8 @@ namespace TcsEmulator {
      *
      */
 
+    bool check_retval = true;  // check retval unless otherwise set false
+
     if ( mycmd == "?MOTION" ) {
       retstring = std::to_string( this->telescope.motionstate.load() );  // return the current motion state
       std::cerr << get_timestamp() << function << "reply from TCS emulator: " 
@@ -600,18 +654,19 @@ namespace TcsEmulator {
 
     if ( mycmd == "MRATES" ) {
       this->telescope.mrates( myargs.str(), retstring );
+      retstring = "0";                 // successful completion
     }
     else
     if ( mycmd == "COORDS" ) {
       // can only run one of these threads at a time
       //
-      if ( this->telescope.moving.load() ) {
-        std::cerr << get_timestamp() << function << "ERROR: move command already sent\n";
-        retstring = "-3";               // unable to execute at this time
+      if ( this->telescope.telmoving.load() ) {
+        std::cerr << get_timestamp() << function << "ERROR: telescope is already moving\n";
+        retstring = "-3";              // unable to execute at this time
       }
       else
       if ( nargs < 5 ) {
-        std::cerr << get_timestamp() << function << "ERROR: expected minimum 5 args but received " << nargs << "\n";
+        std::cerr << get_timestamp() << function << "ERROR: COORDS expected minimum 5 args but received " << nargs << "\n";
         retstring = "-2";              // invalid parameters
       }
       else {
@@ -622,12 +677,53 @@ namespace TcsEmulator {
       }
     }
     else
+    if ( mycmd == "RINGGO" ) {
+      // can only run one of these threads at a time
+      //
+      if ( this->telescope.casmoving.load() ) {
+        std::cerr << get_timestamp() << function << "ERROR: cass rotator is already moving\n";
+        retstring = "-3";              // unable to execute at this time
+      }
+      else
+      if ( nargs != 1 ) {
+        std::cerr << get_timestamp() << function << "ERROR: RINGGO expected 1 arg but received " << nargs << "\n";
+        retstring = "-2";              // invalid parameters
+      }
+      else {
+        double newring;
+        try { newring = std::stod( myargs.str() ); }
+        catch( std::invalid_argument &e ) {
+          std::cerr << get_timestamp() << function << "EXCEPTION: invalid argument parsing \"" 
+                    << myargs.str() << "\" : " << e.what() << "\n";
+          retstring = "-2";
+          newring = NAN;
+        }
+        catch( std::out_of_range &e ) {
+          std::cerr << get_timestamp() << function << "EXCEPTION: out of range parsing \"" 
+                    << myargs.str() << "\" : " << e.what() << "\n";
+          retstring = "-2";
+          newring = NAN;
+        }
+
+        if ( std::isnan(newring) || newring < 0 || newring > 359.99 ) {
+          std::cerr << get_timestamp() << function << "ERROR: requested ring angle " << newring << " not in range {0:359.99}\n";
+          retstring = "-2";
+        }
+        else {
+          std::thread( std::ref( TcsEmulator::Telescope::do_ringgo ), 
+                       std::ref( this->telescope ),
+                       newring ).detach();
+          retstring = "0";             // successful completion
+        }
+      }
+    }
+    else
     if ( mycmd == "PT" ) {
       // can only run one of these threads at a time
       //
-      if ( this->telescope.moving.load() ) {
-        std::cerr << get_timestamp() << function << "ERROR: move command already sent\n";
-        retstring = "-3";               // unable to execute at this time
+      if ( this->telescope.telmoving.load() ) {
+        std::cerr << get_timestamp() << function << "ERROR: telescope is already movin\n";
+        retstring = "-3";              // unable to execute at this time
       }
       else
       if ( nargs != 2 ) {
@@ -660,33 +756,39 @@ namespace TcsEmulator {
     else
     if ( mycmd == "REQPOS" ) {
       this->telescope.reqpos( retstring );
+      check_retval = false;
     }
     else
     if ( mycmd == "REQSTAT" ) {
       this->telescope.reqstat( retstring );
+      check_retval = false;
     }
     else
     if ( mycmd == "?NAME" ) {
       retstring = this->telescope.name;
+      check_retval = false;
     }
     else
     if ( mycmd == "?WEATHER" ) {
       this->telescope.weather( retstring );
+      check_retval = false;
     }
     else {
       std::cerr << get_timestamp() << function << "ERROR: unknown command " << cmd << "\n";
       retstring = "-1";                // unrecognized command
     }
 
-    try {
-      int retval=std::stoi( retstring );
-      std::cerr << get_timestamp() << function << "reply from TCS emulator: " << this->map_returnval[ retval ] << "\n";
-    }
-    catch( std::invalid_argument &e ) {
-      std::cerr << get_timestamp() << function << "reply from TCS emulator: " << retstring << "\n";
-    }
-    catch( std::out_of_range &e ) {
-      std::cerr << get_timestamp() << function << "reply from TCS emulator: " << retstring << "\n";
+    if ( check_retval ) {
+      try {
+        int retval=std::stoi( retstring );
+        std::cerr << get_timestamp() << function << "reply from TCS emulator: " << this->map_returnval[ retval ] << "\n";
+      }
+      catch( std::invalid_argument &e ) {
+        std::cerr << get_timestamp() << function << "EXCEPTION invalid argument parsing reply from TCS emulator \"" << retstring << "\" : " << e.what() << "\n";
+      }
+      catch( std::out_of_range &e ) {
+        std::cerr << get_timestamp() << function << "EXCEPTION out of range parsing reply from TCS emulator \"" << retstring << "\" : " << e.what() << "\n";
+      }
     }
 
     }

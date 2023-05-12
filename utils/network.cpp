@@ -790,6 +790,57 @@ namespace Network {
 
   /***** Network::TcpSocket::Read *********************************************/
   /**
+   * @brief      read data from connected socket
+   * @param[in]  buf    pointer to buffer
+   * @param[in]  count  number of bytes to read
+   * @return     number of bytes read or -1 on error
+   *
+   * If data not immediately available then wait for up to POLLTIMEOUT
+   *
+   * This function is overloaded; this version accepts a pointer to a
+   * buffer and the number of bytes to read.
+   *
+   */
+  int TcpSocket::Read( std::string &sbuf ) {
+    std::string function = "Network::TcpSocket::Read[sbuf]";
+    std::stringstream message;
+    int nread;
+    size_t count = 8192;
+    char* buf;
+    buf = new char[count+1];
+
+    // get the time now for timeout purposes
+    //
+    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    while ( ( nread = read( this->fd, buf, count ) ) < 0 ) {
+      if ( errno != EAGAIN ) {
+        message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
+        logwrite( function, message.str() );
+        break;
+      }
+
+      // get time now and check for timeout
+      //
+      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
+
+      if ( elapsed > POLLTIMEOUT ) {
+        message << "ERROR: timeout waiting for data on fd " << this->fd;
+        logwrite( function, message.str() );
+        break;
+      }
+    }
+    sbuf = buf;
+    delete [] buf;
+    return( nread );
+  }
+  /***** Network::TcpSocket::Read *********************************************/
+
+
+  /***** Network::TcpSocket::Read *********************************************/
+  /**
    * @brief      read data from connected socket until delimeter char
    * @param[out] retstring  reference to string to read in to
    * @param[in]  delim      read until this delimiting char is found

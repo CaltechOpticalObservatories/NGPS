@@ -175,7 +175,7 @@ namespace Power {
       // First make sure that the class object was initialized properly
       // (pretty much has to be)
       //
-      if ( not nps_it->second.interface.is_initialized() ) {
+      if ( ! nps_it->second.interface.is_initialized() ) {
         message.str(""); message << "ERROR: " << nps_it->second.interface.get_name() << " class was not initialized";
         logwrite( function, message.str() );
         error = ERROR;
@@ -227,7 +227,7 @@ namespace Power {
       // First make sure that the class object was initialized properly
       // (pretty much has to be)
       //
-      if ( not nps_it->second.interface.is_initialized() ) {
+      if ( ! nps_it->second.interface.is_initialized() ) {
         message.str(""); message << "ERROR: " << nps_it->second.interface.get_name() << " class was not initialized";
         logwrite( function, message.str() );
         error = ERROR;
@@ -236,7 +236,7 @@ namespace Power {
 
       // Is the connection even open?
       //
-      if ( not nps_it->second.isconnected() ) {
+      if ( ! nps_it->second.isconnected() ) {
         message.str(""); message << "ERROR: " << nps_it->second.interface.get_name() << " is not open";
         logwrite( function, message.str() );
         error = ERROR;
@@ -275,7 +275,7 @@ namespace Power {
     std::stringstream message;
 
     for ( auto it = this->nps.begin(); it != this->nps.end(); ++it ) {
-      if ( not it->second.isconnected() ) {
+      if ( ! it->second.isconnected() ) {
         message.str(""); message << it->second.interface.get_name() << " not open";
         logwrite( function, message.str() );
         return( false );
@@ -297,6 +297,8 @@ namespace Power {
     std::string function = "Power::Interface::list";
     std::stringstream message;
 
+    message << "u p plugname\n";
+
     for ( auto it = this->plugmap.begin(); it != this->plugmap.end(); ++it ) {
       message << it->second.npsnum << " " << it->second.plugnum << " " << it->first << "\n";
     }
@@ -308,9 +310,8 @@ namespace Power {
   /***** Power::Interface::list ***********************************************/
 
 
-  /**************** Power::Interface::command *********************************/
+  /***** Power::Interface::command ********************************************/
   /**
-   * @fn         command
    * @brief      parse and form a command to send to the NPS unit
    * @param[in]  cmd, string
    * @param[in]  retstring, string
@@ -385,12 +386,13 @@ namespace Power {
           plug = std::stoi( tokens.at(1) );
         }
         catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR converting " << cmd << " to integer";
+          message.str(""); message << "ERROR converting unit \"" << tokens.at(0) << "\" or plug \"" << tokens.at(1) 
+                                   << "\" to integer. Expected <unit#> <plug#>";
           logwrite( function, message.str() );
           return( ERROR );
         }
         catch( std::out_of_range & ) {
-          message.str(""); message << "ERROR out of range converting tokens in " << cmd;
+          message.str(""); message << "ERROR out of range converting tokens in \"" << cmd << "\"";
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -433,12 +435,13 @@ namespace Power {
         plug = std::stoi( tokens.at(1) );
       }
       catch ( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR converting " << cmd << " to integer";
+        message.str(""); message << "ERROR converting unit \"" << tokens.at(0) << "\" or plug \"" << tokens.at(1) 
+                                 << "\" to integer. Expected <unit#> <plug#> <on|off>";
         logwrite( function, message.str() );
         return( ERROR );
       }
       catch( std::out_of_range & ) {
-        message.str(""); message << "ERROR out of range converting tokens in " << cmd;
+        message.str(""); message << "ERROR out of range converting tokens in \"" << cmd << "\"";
         logwrite( function, message.str() );
         return( ERROR );
       }
@@ -487,7 +490,7 @@ namespace Power {
 
     // Must be connected to this NPS unit
     //
-    if ( not this->nps.at(unit).isconnected() ) {
+    if ( ! this->nps.at(unit).isconnected() ) {
       message.str(""); message << "ERROR not connected to nps" << unit;
       logwrite( function, message.str() );
       return( ERROR );
@@ -519,6 +522,6 @@ namespace Power {
 
     return( error );
   }
-  /**************** Power::Interface::command *********************************/
+  /***** Power::Interface::command ********************************************/
 
 }

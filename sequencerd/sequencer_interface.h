@@ -284,8 +284,9 @@ namespace Sequencer {
       std::atomic<bool> acquired;         ///< true on successful acquisition and while guiding
 
       int  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
-      TargetInfo::TargetState get_next(); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
-      TargetInfo::TargetState get_next( std::string state_in);    ///< get the next target from the database with state=state_in
+      TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
+      TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
+      long target_qc( std::string &status );                   ///< target info quality control
       long add_row( int number, std::string name, std::string ra_hms, std::string dec_dms );   ///< add a row to the database
       long update_state( std::string newstate );  ///< update the target status in the database DB_ACTIVE table
       long insert_completed();            ///< insert target record into completed observations table
@@ -294,6 +295,10 @@ namespace Sequencer {
 
       long configure_db( std::string param, std::string value );  ///< configure the database connection parameters (host, user, etc.)
       long targetset( std::string args, std::string &retstring ); ///< set or get the target set to read from the targets table
+
+      double radec_to_decimal( std::string str_in );                           ///< convert ra,dec from string to double
+      double radec_to_decimal( std::string str_in, std::string &retstring );   ///< convert ra,dec from string to double
+      void decimal_to_sexa( double dec_in, std::string &retstring );           ///< convert decimal to sexagesimal
 
   };
   /***** Sequencer::TargetInfo ************************************************/

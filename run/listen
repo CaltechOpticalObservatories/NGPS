@@ -6,4 +6,4 @@
 
 source $HOME/Software/Config/sequencerd.cfg
 
-listener $MESSAGEGROUP $MESSAGEPORT
+listener $MESSAGEGROUP $MESSAGEPORT $1

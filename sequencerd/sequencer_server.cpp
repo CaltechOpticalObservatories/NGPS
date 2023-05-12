@@ -943,7 +943,7 @@ namespace Sequencer {
                              << " port " << sock.getport();
     logwrite( function, message.str() );
 
-    PySCOPE();
+//  PySCOPE();
 
     while ( connection_open ) {
 
@@ -1039,6 +1039,12 @@ namespace Sequencer {
       // These commands go to acamd
       //
       if ( cmd.compare( SEQUENCERD_ACAM )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.acamd ), args ).detach();
                       }
@@ -1056,6 +1062,12 @@ namespace Sequencer {
       // These commands go to calibd
       //
       if ( cmd.compare( SEQUENCERD_CALIB )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.calibd ), args ).detach();
                       }
@@ -1073,6 +1085,12 @@ namespace Sequencer {
       // These commands go to camerad
       //
       if ( cmd.compare( SEQUENCERD_CAMERA )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.camerad ), args ).detach();
                       }
@@ -1090,6 +1108,12 @@ namespace Sequencer {
       // These commands go to filterd
       //
       if ( cmd.compare( SEQUENCERD_FILTER )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.filterd ), args ).detach();
                       }
@@ -1107,8 +1131,16 @@ namespace Sequencer {
       // These commands go to powerd
       //
       if ( cmd.compare( SEQUENCERD_POWER )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), POWERD_LIST.c_str(), POWERD_LIST.size() ) == 0 ) ||
+                           ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.powerd ), args ).detach();
+                        std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), 
+                                     std::ref( seq.sequence.powerd ), args ).detach();
                       }
                       else {
                         ret = seq.sequence.powerd.command( args, retstring );
@@ -1124,6 +1156,12 @@ namespace Sequencer {
       // These commands go to slitd
       //
       if ( cmd.compare( SEQUENCERD_SLIT )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.slitd ), args ).detach();
                       }
@@ -1141,6 +1179,12 @@ namespace Sequencer {
       // These commands go to tcsd
       //
       if ( cmd.compare( SEQUENCERD_TCS )==0 ) {
+                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) ) {
+                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                        logwrite( function, message.str() );
+                        ret = ERROR;
+                      }
+                      else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_daemon_command ), std::ref( seq.sequence.tcsd ), args ).detach();
                       }

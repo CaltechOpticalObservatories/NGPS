@@ -315,6 +315,15 @@ namespace Acam {
       return( ERROR );
     }
 
+    // Check coords_in string
+    //
+    std::vector<std::string> tokens;
+    Tokenize( coords_in, tokens, " " );
+    if ( tokens.size() != 3 ) {
+      logwrite( function, "ERROR expected 3 arguments: RA DEC PA" );
+      return( ERROR );
+    }
+
     // Otherwise send the command to the camera server
     //
     std::stringstream cmd;
@@ -510,7 +519,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     // Check the return values from Python here
     //
     if ( ! pReturn ) {
-      logwrite( function, "ERROR calling Python astrometry solver" );
+      logwrite( function, "ERROR calling Python astrometry telemetry" );
       return( ERROR );
     }
 
@@ -591,12 +600,10 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
           const char* pkeyname = keyval.at(0).c_str();
           PyObject* pvalue;
           this->pyobj_from_string( keyval.at(1), &pvalue );
-
 #ifdef LOGLEVEL_DEBUG
           message.str(""); message << "[DEBUG] add solver arg keyword=" << keyval.at(0) << " value=" << keyval.at(1);
           logwrite( function, message.str() );
 #endif
-
           PyDict_SetItemString( pKeywords, pkeyname, pvalue );
         }
       }

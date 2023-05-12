@@ -29,7 +29,7 @@ const std::string ACAMD_CAMERASERVER_COORDS = "prepare";  ///< send coordinates 
 const std::string ACAMD_CAMERASERVER_ACQUIRE = "cameraserveracquire";  ///< acquire an image from the acam camera server
 const std::vector<std::string> ACAMD_SYNTAX = { 
                                                 ACAMD_EXIT,
-                                                ACAMD_ECHO,
+                                                ACAMD_ECHO+" <string>",
                                                 ACAMD_FILTER,
                                                 ACAMD_CONFIG,
                                                 ACAMD_COVER,
@@ -41,9 +41,9 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_CAMCLOSE,
                                                 ACAMD_ACQUIRE,
                                                 ACAMD_INIT,
-                                                ACAMD_SOLVE,
+                                                ACAMD_SOLVE+" [filename]",
                                                 ACAMD_TELEM,
-                                                ACAMD_CAMERASERVER_COORDS,
+                                                ACAMD_CAMERASERVER_COORDS+" <ra> <dec> <pa>",
                                                 ACAMD_CAMERASERVER_ACQUIRE
                                               };
 #endif
