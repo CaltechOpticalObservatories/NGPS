@@ -265,7 +265,6 @@ namespace Sequencer {
       mysqlx::string name;                ///< current target name
       mysqlx::string ra_hms;              ///< current target right ascension in units hh:mm:ss
       mysqlx::string dec_dms;             ///< current target declination in units dd:mm:ss
-      mysqlx::string epoch;               ///< current target coordinates epoch
       double         casangle;            ///< current target cass angle
       double         slitangle;           ///< current slit angle
       double         slitwidth;           ///< slit width for this target
@@ -284,6 +283,7 @@ namespace Sequencer {
       std::atomic<bool> acquired;         ///< true on successful acquisition and while guiding
 
       int  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
+      TargetInfo::TargetState get_next( );                     ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
       long target_qc( std::string &status );                   ///< target info quality control

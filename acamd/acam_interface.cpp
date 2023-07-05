@@ -451,12 +451,12 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
 
     pModuleName.Release();
 
-    pModuleName             = PyUnicode_FromString( PYTHON_TELEMETRY_MODULE );
-    this->pTelemetryModule  = PyImport_Import( pModuleName );
+    pModuleName           = PyUnicode_FromString( PYTHON_IMAGEQUALITY_MODULE );
+    this->pQualityModule  = PyImport_Import( pModuleName );
 
     pModuleName.Release();
 
-    if ( this->pAstrometryModule == NULL || this->pTelemetryModule == NULL ) {
+    if ( this->pAstrometryModule == NULL || this->pQualityModule == NULL ) {
       PyErr_Print();
       this->python_initialized = false;
       return;
@@ -481,14 +481,17 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   /***** Acam::Astrometry::~Astrometry ****************************************/
 
 
-  /***** Acam::Astrometry::telemetry ******************************************/
+  /***** Acam::Astrometry::image_quality **************************************/
   /**
-   * @brief      call the Python astrometry telemetry function
-   * @return
+   * @brief      call the Python astrometry image_quality function
+   * @return     ERROR or NO_ERROR
+   *
+   * This should be called only after a solve() and needs to be called only once
+   * for each solve.
    *
    */
-  long Astrometry::telemetry( ) {
-    std::string function = "Acam::Astrometry::telemetry";
+  long Astrometry::image_quality( ) {
+    std::string function = "Acam::Astrometry::image_quality";
     std::stringstream message;
 
 #ifdef LOGLEVEL_DEBUG
@@ -500,41 +503,89 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
       return( ERROR );
     }
 
-    if ( this->pTelemetryModule==NULL ) {
-      logwrite( function, "ERROR: Python telemetry module not imported" );
+    if ( this->pQualityModule==NULL ) {
+      logwrite( function, "ERROR: Python image_quality module not imported" );
       return( ERROR );
     }
 
-    // Call the Python telemetry function here
+    // Call the Python image_quality function here
     //
-    PyObject* pFunction = PyObject_GetAttrString( this->pTelemetryModule, PYTHON_TELEMETRY_FUNCTION );
+    PyObject* pFunction = PyObject_GetAttrString( this->pQualityModule, PYTHON_IMAGEQUALITY_FUNCTION );
 
     if ( !pFunction || !PyCallable_Check( pFunction ) ) {
-      logwrite( function, "ERROR: Python telemetry function not callable" );
+      logwrite( function, "ERROR: Python image_quality function not callable" );
       return( ERROR );
     }
 
-    PyObject* pReturn   = PyObject_CallNoArgs( pFunction );
+    PyObject* pReturn = PyObject_CallNoArgs( pFunction );
+
+//  "airmass" can be passed as an keyword. So can "EXPOSURE_TIME" but as a rule, supply neither.
+//  Instead, these will both come from the FITS header.
+//
+//  PyObject *kwargs     = PyDict_New(); PyDict_SetItemString( kwargs, "airmass", PyLong_FromLong(1) );
+//  PyObject *pEmptyArgs = PyTuple_New(0);
+//  PyObject *pReturn    = PyObject_Call( pFunction, pEmptyArgs, kwargs );
 
     // Check the return values from Python here
     //
     if ( ! pReturn ) {
-      logwrite( function, "ERROR calling Python astrometry telemetry" );
+      logwrite( function, "ERROR calling Python image_quality" );
       return( ERROR );
     }
 
     // Expected a Dictionary
     //
-    if ( PyDict_Check( pReturn ) ) {
-    }
-    else {
-      logwrite( function, "ERROR Python telemetry function did not return expected dictionary" );
+    if ( ! PyDict_Check( pReturn ) ) {
+      logwrite( function, "ERROR: Python image_quality function did not return expected dictionary" );
       return( ERROR );
     }
 
+    // Get the error from the returned dictionary keyword
+    //
+    PyObject *_error          = PyDict_GetItemString( pReturn, "ERROR" );
+    const char *err           = PyUnicode_AsUTF8( _error );
+    std::string errstr(err);
+
+    // If there is any error then report it and do not proceed
+    //
+    if ( ! errstr.empty() ) {
+      this->seeing            = -1;
+      this->seeing_zenith     = -1;
+      this->extinction        = -1;
+      this->background_med    = -1;
+      this->background_std    = -1;
+      message.str(""); message << "ERROR from Python image_quality: " << errstr;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Get the values out of the returned dictionary
+    //
+    PyObject *_seeing         = PyDict_GetItemString( pReturn, "seeing" );
+    PyObject *_seeing_zenith  = PyDict_GetItemString( pReturn, "seeing_zenith" );
+    PyObject *_extinction     = PyDict_GetItemString( pReturn, "extinction" );
+    PyObject *_background_med = PyDict_GetItemString( pReturn, "background_med" );
+    PyObject *_background_std = PyDict_GetItemString( pReturn, "background_std" );
+
+    // Store them in the class
+    //
+    this->seeing              = PyFloat_AsDouble( _seeing );
+    this->seeing_zenith       = PyFloat_AsDouble( _seeing_zenith );
+    this->extinction          = PyFloat_AsDouble( _extinction );
+    this->background_med      = PyFloat_AsDouble( _background_med );
+    this->background_std      = PyFloat_AsDouble( _background_std );
+
+    message.str("");
+    message << "seeing=" << this->seeing
+            << " seeing_zenith=" << this->seeing_zenith
+            << " extinction=" << this->extinction
+            << " background_med=" << this->background_med
+            << " background_std=" << this->background_std;
+    logwrite( function, message.str() );
+
     return( NO_ERROR );
   }
-  /***** Acam::Astrometry::telemetry ******************************************/
+  /***** Acam::Astrometry::image_quality **************************************/
 
 
   /***** Acam::Astrometry::solve **********************************************/
@@ -994,6 +1045,10 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     long error = NO_ERROR;
     std::string _imagename = this->imagename;
 
+    // Set this true for acquisition (false for guiding)
+    //
+    this->astrometry.isacquire=true;
+
 message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, message.str() );
 #ifdef ACAM_ANDOR_SOURCE_SERVER
     this->camera_server.acquire( this->wcsname, _imagename );
@@ -1034,20 +1089,22 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
   /***** Acam::Interface::exptime *********************************************/
 
 
-  /***** Acam::Interface::telemetry *******************************************/
+  /***** Acam::Interface::image_quality ***************************************/
   /**
-   * @brief      wrapper for Astrometry::telemetry()
+   * @brief      wrapper for Astrometry::image_quality()
    * @param[in]  
    * @param[out] 
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::telemetry( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::telemetry";
+  long Interface::image_quality( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::image_quality";
     std::stringstream message;
-    return this->astrometry.telemetry( );
+    long error = this->astrometry.image_quality( );
+    if ( error != NO_ERROR) this->async.enqueue( "ERROR: calling image_quality" );
+    return( error );
   }
-  /***** Acam::Interface::telemetry *******************************************/
+  /***** Acam::Interface::image_quality ***************************************/
 
 
   /***** Acam::Interface::solve ***********************************************/
@@ -1121,6 +1178,8 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     //
     error = this->astrometry.solve( _imagename );
 
+    if ( error != NO_ERROR) this->async.enqueue( "ERROR: calling astrometry solver" );
+
     // Put the results into the return string
     //
     retstring = this->astrometry.get_result();
@@ -1139,12 +1198,12 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     }
     catch( std::out_of_range const& ) {
       message.str(""); message << "ERROR: malformed filename? Could not find \".fits\" in imagename \"" << _imagename << "\"";
-      logwrite( function, message.str() );
+      this->async.enqueue_and_log( function, message.str() );
       return ERROR;
     }
     catch( ... ) {
       message.str(""); message << "ERROR unknown exception inserting suffix into \"" << _wcsname << "\"";
-      logwrite( function, message.str() );
+      this->async.enqueue_and_log( function, message.str() );
       return ERROR;
     }
 

@@ -56,7 +56,7 @@ namespace Calib {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -78,7 +78,7 @@ namespace Calib {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -100,7 +100,7 @@ namespace Calib {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -110,7 +110,7 @@ namespace Calib {
       //
       if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -310,7 +310,7 @@ namespace Calib {
           message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
           logwrite(function, message.str());
         }
-        if (ret==0) {
+        if (ret==-2) {
           message.str(""); message << "timeout reading from fd " << sock.getfd();
           logwrite( function, message.str() );
          }

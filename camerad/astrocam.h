@@ -727,7 +727,8 @@ namespace AstroCam {
       long set_camera_mode(std::string mode);
       long exptime(std::string exptime_in, std::string &retstring);
       long do_exptime(std::string exptime_in, std::string &retstring);
-      long modify_exptime(std::string exptime_in, std::string &retstring);
+      long modify_exptime( std::string exptime_in, std::string &retstring );
+      long do_modify_exptime( std::string exptime_in, std::string &retstring );
       long shutter(std::string shutter_in, std::string& shutter_out);
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);

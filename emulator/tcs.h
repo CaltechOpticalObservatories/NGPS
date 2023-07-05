@@ -51,12 +51,14 @@ namespace TcsEmulator {
       Telescope();
       ~Telescope();
 
+      volatile std::atomic<bool> focussing;  ///< set true during fake focus moves, prevents another thread from focussing the telescope
       volatile std::atomic<bool> telmoving;  ///< set true during fake telescope moves, prevents another thread from moving the telescope
       volatile std::atomic<bool> casmoving;  ///< set true during fake cass rotator moves, prevents another thread from moving the cass ring
 
       // default slew and settling times set in constructor but can be overridden by configuration file
       //
       std::string name;          ///< optional target name
+      double focusrate;          ///< focusrate in mm/s
       double slewrate_ra;        ///< slewrate in s for RA
       double slewrate_dec;       ///< slewrate in s for DEC
       double slewrate_casangle;  ///< slewrate in s for CASANGLE
@@ -66,7 +68,7 @@ namespace TcsEmulator {
       double offsetrate_ra;      ///< offset rate RA in arcsec/sec
       double offsetrate_dec;     ///< offset rate DEC in arcsec/sec
 
-      double focus;
+      volatile std::atomic<double> focus;
       double tubelength;
       volatile std::atomic<double> ra;
       volatile std::atomic<double> dec;
@@ -85,6 +87,7 @@ namespace TcsEmulator {
 
       std::string get_time();
 
+      static void do_focus( TcsEmulator::Telescope &telescope, double focusval, int movetype );   ///< perform the FOCUSGO command work, which "moves" the focus
       static void do_ringgo( TcsEmulator::Telescope &telescope, double newring );   ///< perform the RINGGO command work, which "moves" the cass rotator
       static void do_coords( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the COORDS command work, which "moves" the telescope
       static void do_pt( TcsEmulator::Telescope &telescope, std::string args ); ///< perform the PT command work, which "offsets" the telescope

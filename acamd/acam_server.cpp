@@ -48,7 +48,7 @@ namespace Acam {
       //
       if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
         this->interface.motion.name = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -58,7 +58,7 @@ namespace Acam {
       //
       if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
         this->interface.motion.host = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -80,7 +80,7 @@ namespace Acam {
           return(ERROR);
         }
         this->interface.motion.port = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -90,7 +90,7 @@ namespace Acam {
       //
       if ( config.param[entry].compare( 0, 17, "CAMERASERVER_HOST" ) == 0 ) {
         this->interface.cameraserver_host = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -112,7 +112,7 @@ namespace Acam {
           return(ERROR);
         }
         this->interface.cameraserver_port = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -124,7 +124,7 @@ namespace Acam {
         Acam::MotionInfo mot;
         if ( mot.load_info( config.arg[entry] ) == NO_ERROR ) {
           this->interface.motion.motion_info.push_back( mot );
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
           logwrite( function, message.str() );
           this->interface.async.enqueue( message.str() );
           applied++;
@@ -147,7 +147,7 @@ namespace Acam {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -169,7 +169,7 @@ namespace Acam {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -191,7 +191,7 @@ namespace Acam {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -201,7 +201,7 @@ namespace Acam {
       //
       if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
@@ -396,7 +396,7 @@ namespace Acam {
         if (ret<0) {                // could be an actual read error
           message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
         }
-        if (ret==0) {               // or a timeout
+        if (ret==-2) {              // or a timeout
           message.str(""); message << "timeout reading from fd " << sock.getfd();
           logwrite( function, message.str() );
         }
@@ -569,8 +569,8 @@ namespace Acam {
       }
       else
 
-      if ( cmd.compare( ACAMD_TELEM ) == 0 ) {
-                      ret = this->interface.telemetry( args, retstring );
+      if ( cmd.compare( ACAMD_QUALITY ) == 0 ) {
+                      ret = this->interface.image_quality( args, retstring );
       }
       else
 

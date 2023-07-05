@@ -107,6 +107,71 @@ namespace TcsEmulator {
       /***** TcsEmulator::Server::exit_cleanly ********************************/
 
 
+      /***** TcsEmulator::Server::load_tcs_info *******************************/
+      /**
+       * @brief      load tcs host info from config file into the class
+       * @param[in]  input  input string expected to contain "name host port"
+       * @return     -1 or port number
+       *
+       * This is a copy/paste from TCS::Server::load_tcs_info
+       * but the only thing that is needed for the emulator is the port
+       * number for the TCS named "sim" so this returns either the sim
+       * port number or -1.
+       *
+       */
+      long load_tcs_info( std::string input ) {
+        std::string function = "  (TcsEmulator::Server::load_tcs_info) ";
+        std::stringstream message;
+        std::vector<std::string> tokens;
+        std::string _name, _host;
+        int _port=-1;
+
+        // Extract the name, host and port from the input string
+        //
+        Tokenize( input, tokens, " \"" );
+
+        if ( tokens.size() != 3 ) {
+          std::cerr << get_timestamp() << function << "ERROR bad number of parameters in \"" << input 
+                                                   << "\": expected 3 but received " << tokens.size() << "\n";
+          return( -1 );
+        }
+
+        try {
+          _name = tokens.at(0);
+          _host = tokens.at(1);
+          _port = std::stoi( tokens.at(2) );
+        }
+        catch ( std::invalid_argument &e ) {
+          std::cerr << get_timestamp() << function << "ERROR loading tokens from input: " << input << ": " << e.what() << "\n";
+          return( -1 );
+        }
+        catch ( std::out_of_range &e ) {
+          std::cerr << get_timestamp() << function << "ERROR loading tokens from input: " << input << ": " << e.what() << "\n";
+          return( -1 );
+        }
+
+        // Check that (potentially) valid values have been extracted
+        //
+        if ( _port < 1 ) {
+          std::cerr << get_timestamp() << function << "ERROR port " << _port << " must be greater than 0\n";
+          return( -1 );
+        }
+        if ( _name.empty() ) {
+          std::cerr << get_timestamp() << function << "ERROR name cannot be empty\n";
+          return( -1 );
+        }
+        if ( _host.empty() ) {
+          std::cerr << get_timestamp() << function << "ERROR host cannot be empty\n";
+          return( -1 );
+        }
+
+        // Return the port number if the name is sim
+        //
+        if ( _name.compare( "sim" ) == 0 ) return _port; else return -1;
+      }
+      /***** TcsEmulator::Server::load_tcs_info *******************************/
+
+
       /***** TcsEmulator::Server::configure_emulator **************************/
       /**
        * @fn         configure_emulator
@@ -126,9 +191,16 @@ namespace TcsEmulator {
         for ( int entry=0; entry < this->config.n_entries; entry++ ) {
 
           try {
-            // TCS_PORT
-            if ( config.param[entry].compare( 0, 8, "TCS_PORT" ) == 0 ) {
-              this->port = std::stoi( config.arg[entry] );
+            // TCS_HOST
+            if ( config.param[entry].compare( 0, 8, "TCS_HOST" ) == 0 ) {
+              int _port = this->load_tcs_info( config.arg[entry] );
+              if ( _port > 0 ) this->port = _port;
+              applied++;
+            }
+
+            // EMULATOR_FOCUSRATE
+            if ( config.param[entry].compare( 0, 18, "EMULATOR_FOCUSRATE" ) == 0 ) {
+              this->interface.telescope.focusrate = std::stof( config.arg[entry] );
               applied++;
             }
 

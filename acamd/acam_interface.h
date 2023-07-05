@@ -25,8 +25,8 @@
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
 #define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
-#define PYTHON_TELEMETRY_MODULE "telemetry"
-#define PYTHON_TELEMETRY_FUNCTION "telemetry_cwrap"
+#define PYTHON_IMAGEQUALITY_MODULE "image_quality"
+#define PYTHON_IMAGEQUALITY_FUNCTION "image_quality_cwrap"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
@@ -158,6 +158,7 @@ namespace Acam {
       char* restorePythonPath;
       std::string result;
       double ra, dec, pa;
+      double seeing, seeing_zenith, extinction, background_med, background_std;
       bool python_initialized;
 
     public:
@@ -166,12 +167,12 @@ namespace Acam {
 
       bool isacquire;
       inline bool is_initialized() { return this->python_initialized; };
-      std::vector<std::string> solver_args;  /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
+      std::vector<std::string> solver_args;              /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
 
       CPython::CPyInstance py_instance { PYTHON_PATH };  /// initialize the Python interpreter
 
-      PyObject* pAstrometryModule;
-      PyObject* pTelemetryModule;
+      PyObject* pAstrometryModule;                       /// astrometry
+      PyObject* pQualityModule;                          /// image quality
 
       inline std::string get_result() {
         std::stringstream result_str;
@@ -181,12 +182,26 @@ namespace Acam {
 
       void pyobj_from_string( std::string str_in, PyObject** obj );
 
-      long telemetry( );
+      long image_quality( );
       long solve( std::string imagename_in );
       long solverargs( std::string argsin, std::string &argsout );
       long compute_offset( std::string from, std::string to );
   };
   /***** Acam::Astrometry *****************************************************/
+
+
+  /***** Acam::Telemetry ******************************************************/
+  /**
+   * @class  Telemetry
+   * @brief  interface class for acam
+   *
+   * This class defines the interface for the acam system and
+   * contains the functions used to communicate with it.
+   *
+   */
+  class Telemetry {
+  };
+  /***** Acam::Telemetry ******************************************************/
 
 
   /***** Acam::Interface ******************************************************/
@@ -221,6 +236,8 @@ namespace Acam {
 
       Information info;
 
+      Telemetry telemetry;                     /// for collecting and writing telemetry data files
+
       Common::Queue async;                     /// asynchronous message queue
 
       Camera camera;                           /// provides a direct interface to the Andor A&G camera
@@ -239,7 +256,7 @@ namespace Acam {
       bool isopen();                           /// wrapper for all acam-related hardware components
       long close();                            /// wrapper to open all acam-related hardware components
       long acquire();                          /// wrapper to acquire an Andor image
-      long telemetry( std::string args, std::string &retstring );  /// wrapper for Astrometry::telemetry
+      long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long exptime( std::string exptime_in, std::string &retstring );  /// wrapper to set exposure time
 

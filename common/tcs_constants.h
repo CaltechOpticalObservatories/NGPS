@@ -22,7 +22,7 @@ const int TCS_UNDEFINED            = 9999;
 inline static const char TCS_SUCCESS_STR[] = "success";
 inline static const char TCS_UNRECOGNIZED_COMMAND_STR[] = "unrecognized";
 inline static const char TCS_INVALID_PARAMETER_STR[] = "bad param";
-inline static const char TCS_UNABLE_TO_EXECUTE_STR[] = "can't exectute";
+inline static const char TCS_UNABLE_TO_EXECUTE_STR[] = "cannot exectute";
 inline static const char TCS_HOST_UNAVAILABLE_STR[] = "unavailable";
 inline static const char TCS_UNDEFINED_STR[] = "undefined";
 

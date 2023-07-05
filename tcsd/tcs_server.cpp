@@ -24,6 +24,71 @@ namespace TCS {
   /***** TCS::Server::exit_cleanly ********************************************/
 
 
+  /***** TCS::Server::load_tcs_info *******************************************/
+  /**
+   * @brief      load tcs host info from config file into the class
+   * @param[in]  input  input string expected to contain "name host port"
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Server::load_tcs_info( std::string input ) {
+    std::string function = "TCS::Server::load_tcs_info";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    std::string _name, _host;
+    int _port=-1;
+
+    // Extract the name, host and port from the input string
+    //
+    Tokenize( input, tokens, " \"" );
+
+    if ( tokens.size() != 3 ) {
+      message.str(""); message << "ERROR bad number of parameters in \"" << input << "\": expected 3 but received " << tokens.size();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    try {
+      _name = tokens.at(0);
+      _host = tokens.at(1);
+      _port = std::stoi( tokens.at(2) );
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Check that (potentially) valid values have been extracted
+    //
+    if ( _port < 1 ) {
+      message.str(""); message << "ERROR port " << _port << " must be greater than 0";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    if ( _name.empty() ) {
+      logwrite( function, "ERROR name cannot be empty" );
+      return( ERROR );
+    }
+    if ( _host.empty() ) {
+      logwrite( function, "ERROR host cannot be empty" );
+      return( ERROR );
+    }
+
+    // Add them to the class
+    //
+    this->interface.tcsmap.insert( { _name, { _host, _port } } );
+
+    return( NO_ERROR );
+  }
+  /***** TCS::Server::load_tcs_info *******************************************/
+
+
   /***** TCS::Server::configure_tcsd ******************************************/
   /**
    * @brief      read and apply the configuration file for the tcs daemon
@@ -40,33 +105,12 @@ namespace TCS {
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
 
-      // TCS_HOST -- hostname for the TCS
+      // TCS_HOST -- contains "name host port" for the TCS
       //
       if ( config.param[entry].compare( 0, 8, "TCS_HOST" ) == 0 ) {
-        this->interface.host = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // TCS_PORT -- port number on TCS_HOST for the TCS
-      //
-      if ( config.param[entry].compare( 0, 8, "TCS_PORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad TCS_PORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "TCS_PORT number out of integer range");
-          return(ERROR);
-        }
-        this->interface.port = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->load_tcs_info( config.arg[entry] );
         applied++;
       }
 
@@ -86,7 +130,7 @@ namespace TCS {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -107,7 +151,7 @@ namespace TCS {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -128,7 +172,7 @@ namespace TCS {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -137,7 +181,7 @@ namespace TCS {
       //
       if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -154,8 +198,6 @@ namespace TCS {
     }
     message << "applied " << applied << " configuration lines to tcsd";
     logwrite(function, message.str());
-
-    if ( error == NO_ERROR ) error = this->interface.initialize_class();
 
     return error;
   }
@@ -335,7 +377,7 @@ namespace TCS {
           message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
           logwrite(function, message.str());
         }
-        if (ret==0) {
+        if (ret==-2) {
           message.str(""); message << "timeout reading from fd " << sock.getfd();
           logwrite( function, message.str() );
          }
@@ -418,7 +460,7 @@ namespace TCS {
       // open
       //
       if ( cmd.compare( TCSD_OPEN ) == 0 ) {
-                      ret = this->interface.open( );
+                      ret = this->interface.open( args, retstring );
       }
       else
 
@@ -429,12 +471,26 @@ namespace TCS {
       }
       else
 
+      // list
+      //
+      if ( cmd.compare( TCSD_LIST ) == 0 ) {
+                      this->interface.list( retstring );
+                      ret = NO_ERROR;
+      }
+      else
+
+      // llist
+      //
+      if ( cmd.compare( TCSD_LLIST ) == 0 ) {
+                      this->interface.llist( retstring );
+                      ret = NO_ERROR;
+      }
+      else
+
       // isopen
       //
       if ( cmd.compare( TCSD_ISOPEN ) == 0 ) {
-                      bool isopen = this->interface.isopen( );
-                      if ( isopen ) retstring = "true"; else retstring = "false";
-                      ret = NO_ERROR;
+                      ret = this->interface.isopen( retstring );
       }
       else
 
@@ -453,6 +509,11 @@ namespace TCS {
       }
       else
 
+      if ( cmd.compare( TCSD_GET_FOCUS ) == 0 ) {
+                      ret = this->interface.get_focus( retstring );
+      }
+      else
+
       if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
                       ret = this->interface.get_weather_coords( retstring );
       }
@@ -465,6 +526,11 @@ namespace TCS {
 
       if ( caseCompareString( cmd, TCSD_RINGGO ) ) {
                       ret = this->interface.ringgo( args, retstring );
+      }
+      else
+
+      if ( caseCompareString( cmd, TCSD_COORDS ) ) {
+                      ret = this->interface.coords( args, retstring );
       }
 
       // all other commands go straight to the TCS interface

@@ -47,7 +47,7 @@ namespace Camera {
       bool is_datacube;
       bool is_longerror;                     //!< set to return error message on command port
       bool is_cubeamps;                      //!< should amplifiers be written as multi-extension data cubes?
-      std::atomic<bool> _abortstate;;
+      std::atomic<bool> _abortstate;
       std::mutex abort_mutex;
       std::stringstream lasterrorstring;     //!< a place to preserve an error message
 
@@ -143,6 +143,8 @@ namespace Camera {
       int           extension;               //!< extension number for data cubes
       bool          shutterenable;           //!< set true to allow the controller to open the shutter on expose, false to disable it
       std::string   shutteractivate;         //!< shutter activation state
+      std::int32_t  sim_et;                  //!< arc simulator elapsed time
+      std::int32_t  sim_modet;               //!< arc simulator requested modify exposure time
       int32_t       exposure_time;           //!< exposure time in exposure_unit
       std::string   exposure_unit;           //!< exposure time unit
       int           exposure_factor;         //!< multiplier for exposure_unit relative to 1 sec (=1 for sec, =1000 for msec, etc.)
@@ -171,6 +173,8 @@ namespace Camera {
         this->iscube = false;
         this->datatype = -1;
         this->type_set = false;              // default is datatype undefined
+        this->sim_et = 0;
+        this->sim_modet = -1;
         this->exposure_time = -1;            // default is exposure time undefined
         this->exposure_unit = "";            // default is exposure unit undefined
         this->exposure_factor = -1;          // default is factor undefined

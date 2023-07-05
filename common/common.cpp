@@ -27,12 +27,33 @@ namespace Common {
   /***** Common::Queue::enqueue_and_log ***************************************/
   /**
    * @brief      puts a message into the queue and writes it to the log
-   * @param[in]  message  string to write
+   * @param[in]  function  name of function for logging purposes
+   * @param[in]  message   string to write
    *
    */
   void Queue::enqueue_and_log(std::string function, std::string message) {
     std::lock_guard<std::mutex> lock(queue_mutex);
     message_queue.push(message);
+    notifier.notify_one();
+    logwrite( function, message );
+    return;
+  }
+  /***** Common::Queue::enqueue_and_log ***************************************/
+
+
+  /***** Common::Queue::enqueue_and_log ***************************************/
+  /**
+   * @brief      puts a message into the queue and writes it to the log
+   * @param[in]  tag       tag for broadcast message
+   * @param[in]  function  name of function for logging purposes
+   * @param[in]  message   string to write
+   *
+   */
+  void Queue::enqueue_and_log( std::string tag, std::string function, std::string message ) {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    std::stringstream qmessage;
+    qmessage << tag << ":" << message;
+    message_queue.push(qmessage.str());
     notifier.notify_one();
     logwrite( function, message );
     return;

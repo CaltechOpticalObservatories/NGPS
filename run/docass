@@ -1,0 +1,262 @@
+#!/usr/bin/bash
+#
+# @file     docass
+# @brief    script for taking images at different cass angles
+#
+# This script will change the cass rotator and record one or more images
+# from both the acam and slitcam at each cass postion.
+#
+# usage: docass <name> <num> <start> <stop> <step> [nexp]
+#
+# where <name>   is the image basename
+#       <num>    is a number appended to the basename
+#       <start>  is the starting cass angle
+#       <stop>   is the ending cass angle
+#       <step>   is the step between cass positions
+#       [nexp]   is an optional number of exposures at each cass position
+#
+# start/stop can be in any order (i.e. it can step up or down)
+# sign of step is not required
+# integral number of steps need not fit in range of start/stop
+#
+# Output fill be written to file $imagepath/$cassout
+# which are specified below.
+#
+# You must have already started the ngps-acam GUI, initialized the camera
+# and clicked "GO" so that it starts acquiring images.
+# You must have initialzed the tcsdaemon.
+#
+
+acampath="/data/acam/"$(date -u +%Y%m%d)
+slitcampath="/data/slitcam/"$(date -u +%Y%m%d)
+acamout=$acampath/cassout.txt
+slitcamout=$slitcampath/cassout.txt
+
+SLITCAM=6666
+ACAM=31000
+
+slitcamfocus=45.4
+acamfocus=45.4
+
+# @fn     usage
+# @brief  display usage
+#
+function usage {
+        echo "usage:"
+        echo "  docass <name> <num> <start> <stop> <step> [nexp]"
+}
+
+# @fn     sendto
+# @brief  send command to a daemon
+# @param  $1  name of daemon
+# @param  $2  command
+# @param  $3  arg
+# @param  $n  arg
+#
+function sendto {
+        daemon=$1
+        shift 1
+        command=""
+        output=""
+        while [ $# -gt 0 ]
+        do
+                command="$command $1"
+                shift 1
+        done
+        output=$($daemon $command)
+        echo $output
+        if echo $output | grep ERROR; then
+                echo "stopping due to an error"
+                exit
+        fi
+}
+
+function send_tcs_cmd {
+        while : ; do
+            output=$(sendto tcs $1 $2)
+            if echo $output | grep success; then
+                echo "output="$output
+                break
+            else
+                echo "output="$output
+                tcs close
+                tcs open real
+            fi
+        done
+}
+
+function setfocus {
+        focus_goal=$1
+        output=$(sendto tcs focusgo $focus_goal)
+        send_tcs_cmd focusgo $focus_goal
+
+        # wait until we get there
+        #
+        focusreply=$(sendto tcs getfocus)
+        focusnow=$(echo $focusreply| cut -d' ' -f 1)
+
+        while [ 1 -eq "$(echo "$focusnow != $focus_goal" | bc -l )" ]
+        do
+            echo "current focus="$focusnow" ... waiting for "$focus_goal
+            focusreply=$(sendto tcs getfocus)
+            focusnow=$(echo $focusreply| cut -d' ' -f 1)
+            sleep 1
+        done
+
+        sleep 2  # settling
+
+        echo "current focus="$focusnow
+}
+
+# check number of arguments
+#
+if [ $# -lt 5 ]; then
+  echo 1>&2 "not enough arguments"
+  usage
+  exit 2
+elif [ $# -gt 6 ]; then
+  echo 1>&2 "too many arguments"
+  usage
+  exit 2
+fi
+
+# assign positional arguments
+#
+imname=$1
+imnum=$2
+cass_start=$3
+cass_stop=$4
+cass_step=$5
+
+# optional 6th arg. If not included then nexp=1
+#
+if [ -z "$6" ]; then nexp=1; else nexp=$6; fi
+
+echo "nexp="$nexp
+
+# check that args needing numbers are numbers
+#
+re='^[+-]?[0-9]+([.][0-9]+)?$'
+if ! [[ $imnum =~ $re ]]       ; then echo "image num \""$imnum"\" is not a number"; exit; fi
+if ! [[ $cass_start =~ $re ]] ; then echo "cass start \""$cass_start"\" is not a number"; exit; fi
+if ! [[ $cass_stop =~ $re ]]  ; then echo "cass stop \""$cass_stop"\" is not a number"  ; exit; fi
+if ! [[ $cass_step =~ $re ]]  ; then echo "cass step \""$cass_step"\" is not a number"  ; exit; fi
+
+# which direction is cass going, up or down?
+#
+if [ 1 -eq "$(echo "$cass_start > $cass_stop" | bc -l )" ]; then
+    down=true
+    if [ 1 -eq "$(echo "$cass_step > 0" | bc -l )" ]; then
+        cass_step=$(echo "-1 * $cass_step" | bc -l )
+    fi
+elif [ 1 -eq "$(echo "$cass_start < $cass_stop" | bc -l )" ]; then
+    up=true
+else
+    echo "ERROR! check start and stop (maybe the same?)"
+    exit
+fi
+
+# create data directories if needed
+if [ ! -d $acampath ] ; then mkdir $acampath; fi
+if [ ! -d $slitcampath ] ; then mkdir $slitcampath; fi
+
+# send some prep commands to the camera
+#
+echo "setting up acam ..."
+output=$(sock $ACAM PATH $acampath)
+output=$(sock $ACAM IMAGENAME $imname)
+output=$(sock $ACAM IMAGENUMBER $imnum)
+output=$(sock $ACAM FITSKEY PIXSCALE 6.5)
+
+echo "setting up slitcam ..."
+output=$(sock $SLITCAM PATH $slitcampath)
+output=$(sock $SLITCAM IMAGENAME $imname)
+output=$(sock $SLITCAM IMAGENUMBER $imnum)
+output=$(sock $SLITCAM FITSKEY PIXSCALE 6.5)
+
+# go to the starting cass position
+#
+echo "moving to cass start "$cass_start
+output=$(sock $ACAM FITSKEY CASSANG $cass_start)
+output=$(sock $SLITCAM FITSKEY CASSANG $cass_start)
+output=$(sendto tcs ringgo $cass_start)
+if ! echo $output | grep success; then
+    tcs close
+    tcs open real
+fi
+
+cass_goal=$cass_start
+
+echo "cass, file" >> $acamout
+echo "cass, file" >> $slitcamout
+
+# loop forever until stop is reached
+#
+while : ; do
+
+    # wait until we get there
+    #
+    cassreply=$(sendto tcs getcass)
+    cassnow=$(echo $cassreply| cut -d' ' -f 1)
+    if [ 1 -eq "$(echo "$cassnow < 0" | bc -l )" ]; then cassnow=$(echo "$cassnow + 360" | bc -l ); fi
+    cassdiff=$(echo "$cassnow - $cass_goal" | bc -l )
+    cassdiff=${cassdiff#-}
+    while [ 1 -eq "$(echo "$cassdiff > 0.02" | bc -l )" ]
+    do
+        echo "current cass="$cassnow" ... waiting for "$cass_goal
+        cassreply=$(sendto tcs getcass)
+        cassnow=$(echo $cassreply| cut -d' ' -f 1)
+        if [ 1 -eq "$(echo "$cassnow < 0" | bc -l )" ]; then cassnow=$(echo "$cassnow + 360" | bc -l ); fi
+        cassdiff=$(echo "$cassnow - $cass_goal" | bc -l )
+        cassdiff=${cassdiff#-}
+        sleep 1
+    done
+
+    echo "current cass="$cassnow
+
+    sleep 2  # settling
+
+    # take "nexp" exposures at this cass
+    #
+    exposure=1
+    while : ; do
+        echo "exposing acam "
+        output=$(sock $ACAM EXPOSE)
+        echo $cassnow", "$output
+        echo $cassnow", "$output >> $acamout
+
+        echo "exposing slitcam "
+        output=$(sock $SLITCAM EXPOSE)
+        echo $cassnow", "$output
+        echo $cassnow", "$output >> $slitcamout
+
+        exposure=$((exposure+1))
+
+        [[ $exposure > $nexp ]] && break
+    done
+
+    # set new cass goal
+    # cass_step is signed appropriately so always use addition here
+    #
+    cass_goal=$(echo "$cass_goal + $cass_step" | bc -l )
+
+    # break while loop when goal reached
+    #
+    if [ "$up" == true ]; then
+        if [ 1 -eq "$(echo "$cass_goal > $cass_stop" | bc -l )" ]; then break; fi
+    fi
+
+    if [ "$down" == true ]; then
+        if [ 1 -eq "$(echo "$cass_goal < $cass_stop" | bc -l )" ]; then break; fi
+    fi
+
+    # if we didn't break then go to the next position and keep looping
+    #
+    echo "moving to next cass position "$cass_goal" ..."
+    output=$(sock $ACAM FITSKEY CASSANG $cass_goal)
+    output=$(sock $SLITCAM FITSKEY CASSANG $cass_goal)
+    send_tcs_cmd ringgo $cass_goal
+
+done
+
+echo "done!"

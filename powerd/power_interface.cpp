@@ -234,15 +234,6 @@ namespace Power {
         continue;
       }
 
-      // Is the connection even open?
-      //
-      if ( ! nps_it->second.isconnected() ) {
-        message.str(""); message << "ERROR: " << nps_it->second.interface.get_name() << " is not open";
-        logwrite( function, message.str() );
-        error = ERROR;
-        continue;
-      }
-
       // Try to close the nps hardware interface
       //
       if ( nps_it->second.interface.close() != NO_ERROR ) {

@@ -102,6 +102,7 @@ namespace Sequencer {
     TRIGEXPO_BIT,
     WAITFORSTATE_BIT,
     SEQSTART_BIT,
+    MONITORREADY_BIT,
     CALIBSET_BIT,
     CAMERASET_BIT,
     SLITSET_BIT,
@@ -120,6 +121,7 @@ namespace Sequencer {
     POWERINIT_BIT,
     ACAMSTOP_BIT,
     CALIBSTOP_BIT,
+    TCSSTOP_BIT,
     POWERSTOP_BIT,
     MODEXPTIME_BIT,
     ACQUISITION_BIT,
@@ -134,6 +136,7 @@ namespace Sequencer {
   const std::uint32_t THR_TRIGGER_EXPOSURE         = 1 << TRIGEXPO_BIT;       ///< set when dothread_trigger_exposure running
   const std::uint32_t THR_WAIT_FOR_STATE           = 1 << WAITFORSTATE_BIT;   ///< set when dothread_wait_for_state running
   const std::uint32_t THR_SEQUENCE_START           = 1 << SEQSTART_BIT;       ///< set when dothread_sequencer_start running
+  const std::uint32_t THR_MONITOR_READY_STATE      = 1 << MONITORREADY_BIT;
   const std::uint32_t THR_CALIB_SET                = 1 << CALIBSET_BIT;
   const std::uint32_t THR_CAMERA_SET               = 1 << CAMERASET_BIT;
   const std::uint32_t THR_SLIT_SET                 = 1 << SLITSET_BIT;
@@ -152,6 +155,7 @@ namespace Sequencer {
   const std::uint32_t THR_POWER_INIT               = 1 << POWERINIT_BIT;
   const std::uint32_t THR_ACAM_SHUTDOWN            = 1 << ACAMSTOP_BIT;
   const std::uint32_t THR_CALIB_SHUTDOWN           = 1 << CALIBSTOP_BIT;
+  const std::uint32_t THR_TCS_SHUTDOWN             = 1 << TCSSTOP_BIT;
   const std::uint32_t THR_POWER_SHUTDOWN           = 1 << POWERSTOP_BIT;
   const std::uint32_t THR_MODIFY_EXPTIME           = 1 << MODEXPTIME_BIT;
   const std::uint32_t THR_ACQUISITION              = 1 << ACQUISITION_BIT;
@@ -185,6 +189,7 @@ namespace Sequencer {
 
       std::mutex wait_mtx;
       std::condition_variable cv;
+      std::mutex monitor_mtx;
 
       std::map<int, std::string> sequence_states;
       std::vector<int> sequence_state_bits;
@@ -194,6 +199,7 @@ namespace Sequencer {
 
       volatile std::atomic<bool>          waiting_for_state;  ///< set if dothread_wait_for_state is running
       volatile std::atomic<bool>          do_once;            ///< set if "do one" selected, clear if "do all" selected
+      volatile std::atomic<bool>          tcs_ontarget;       ///< remotely set by the TCS operator to indicate that the target is ready
       volatile std::atomic<bool>          tcs_nowait;         ///< set to skip waiting for TCS
       volatile std::atomic<bool>          dome_nowait;        ///< set to skip waiting for dome
 
@@ -201,6 +207,7 @@ namespace Sequencer {
       volatile std::atomic<std::uint32_t> runstate;
       volatile std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
       volatile std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
+      volatile std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
 
       volatile std::atomic<std::uint32_t> thr_error;          ///< error state of threads
       volatile std::atomic<std::uint32_t> thr_which_err;      ///< word to define which thread caused an error
@@ -228,6 +235,7 @@ namespace Sequencer {
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
       inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
+      inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
 
       void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
       void clr_seqstate_bit( uint32_t mb );     ///< clear the specified masked bit in the seqstate word
@@ -241,6 +249,8 @@ namespace Sequencer {
 
       inline void set_thrstate_bit( uint32_t mb ) { this->thrstate.fetch_or( mb ); }
       inline void clr_thrstate_bit( uint32_t mb ) { this->thrstate.fetch_and( ~mb ); }
+
+      static void dothread_monitor_ready_state( Sequencer::Sequence &seq );
 
       static void dothread_sequencer_async_listener( Sequencer::Sequence &seq,
                                                      Network::UdpSocket udp ); ///< UDP ASYNC message listening thread
@@ -275,6 +285,7 @@ namespace Sequencer {
       long get_tcs_cass( double &cass );
       double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
       long offset_tcs( double ra_off, double dec_off );                        ///< send ra,dec offsets to the TCS
+      long tcs_init( std::string which );
 
       // These are various jobs that are done in their own threads
       //
@@ -297,13 +308,14 @@ namespace Sequencer {
 
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
       static void dothread_calib_init( Sequencer::Sequence &seq );             ///< initializes connection to calibd
-      static void dothread_tcs_init( Sequencer::Sequence &seq );               ///< initializes connection to tcsd
+      static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
       static void dothread_slit_init( Sequencer::Sequence &seq );              ///< initializes connection to slitd
       static void dothread_camera_init( Sequencer::Sequence &seq );            ///< initializes connection to camerad
       static void dothread_flexure_init( Sequencer::Sequence &seq );           ///< initializes connection to flexured
       static void dothread_focus_init( Sequencer::Sequence &seq );             ///< initializes connection to focusd
       static void dothread_power_init( Sequencer::Sequence &seq );             ///< initializes connection to powerd
 
+      static void dothread_tcs_shutdown( Sequencer::Sequence &seq );           ///< shutdown the TCS
       static void dothread_calib_shutdown( Sequencer::Sequence &seq );         ///< shutdown the calibrator
       static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam
       static void dothread_power_shutdown( Sequencer::Sequence &seq );         ///< shutdown the power system

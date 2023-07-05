@@ -245,9 +245,9 @@ void doit( Network::TcpSocket sock ) {
                   << " nps" << sock.id << ": Read error on port " << sock.getport() << " fd " 
                   << sock.getfd() << ": " << strerror(errno) << "\n";
       }
-      if (ret==0) { std::cerr << get_timestamp() << function << emulator.subsystem 
-                              << " nps" << sock.id << ": timeout reading from port " << sock.getport() 
-                              << " fd " << sock.getfd() << "\n"; }
+      if (ret==-2) { std::cerr << get_timestamp() << function << emulator.subsystem 
+                               << " nps" << sock.id << ": timeout reading from port " << sock.getport() 
+                               << " fd " << sock.getfd() << "\n"; }
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough

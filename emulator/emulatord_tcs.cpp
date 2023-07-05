@@ -146,6 +146,10 @@ int main( int argc, char **argv ) {
             << emulator.config.n_entries << " lines read from " << emulator.config.filename << "\n";
 
   ret = emulator.configure_emulator();    // get needed values out of read-in configuration file for the daemon
+  if ( emulator.port < 1 ) {
+    std::cerr << get_timestamp() << function << "ERROR: no port configured\n";
+    emulator.exit_cleanly();
+  }
 
   if (ret != NO_ERROR) {
     std::cerr << get_timestamp() << function << "ERROR: unable to configure emulator for " << emulator.subsystem << "\n";
@@ -255,8 +259,8 @@ void doit( Network::TcpSocket sock ) {
         std::cerr << get_timestamp() << function << emulator.subsystem 
                   << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
       }
-      if (ret==0 && sock.getfd() != -1) std::cerr << get_timestamp() << function << emulator.subsystem
-                                                  << " timeout reading from fd " << sock.getfd() << "\n";
+      if (ret==-2 && sock.getfd() != -1) std::cerr << get_timestamp() << function << emulator.subsystem
+                                                   << " timeout reading from fd " << sock.getfd() << "\n";
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough

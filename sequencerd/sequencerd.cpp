@@ -184,6 +184,10 @@ int main(int argc, char **argv) {
                msg
              ).detach();
 
+//std::thread( std::ref( Sequencer::Sequence::dothread_monitor_ready_state ), 
+//             std::ref( sequencerd.sequence)
+//           ).detach();
+
   // thread to start a new logbook each day
   //
   std::thread( std::ref(Sequencer::Server::new_log_day), logpath ).detach();

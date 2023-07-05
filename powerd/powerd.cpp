@@ -386,7 +386,7 @@ void doit(Network::TcpSocket sock) {
         message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
         logwrite(function, message.str());
       }
-      if (ret==0) {               // or a timeout
+      if (ret==-2) {              // or a timeout
         message.str(""); message << "timeout reading from fd " << sock.getfd();
         logwrite( function, message.str() );
        }

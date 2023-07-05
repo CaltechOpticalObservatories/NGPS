@@ -77,7 +77,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -97,7 +97,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -117,7 +117,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -137,7 +137,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->messageport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -145,7 +145,7 @@ namespace Sequencer {
       // MESSAGEGROUP
       if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
         this->messagegroup = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -165,7 +165,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.acamd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -185,7 +185,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.camerad.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -205,7 +205,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.camerad.nbport =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -225,7 +225,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.flexured.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -245,7 +245,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.powerd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -265,7 +265,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.slitd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -285,7 +285,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcsd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -305,7 +305,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.calibd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -325,7 +325,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.filterd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -345,7 +345,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.focusd.port =  port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -366,7 +366,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.acquisition_timeout = to;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -387,7 +387,7 @@ namespace Sequencer {
           this->sequence.acquisition_max_retrys = -1;
         }
         this->sequence.acquisition_max_retrys = rt;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -413,7 +413,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_offsetrate_ra = mrate;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -439,7 +439,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_offsetrate_dec = mrate;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -460,7 +460,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_settle_timeout = to;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -481,7 +481,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_settle_stable = stablet;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -502,7 +502,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_domeazi_ready = domeazi;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -522,7 +522,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.tcs_preauth_time = to;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -542,7 +542,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.target.offset_threshold = offset;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -562,7 +562,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.target.min_repeat = repeat;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -582,7 +582,7 @@ namespace Sequencer {
           return(ERROR);
         }
         this->sequence.target.max_tcs_offset = offset;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -597,7 +597,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_HOST.length(), DB_HOST )==0) {
         if ( this->sequence.target.configure_db( DB_HOST, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -606,7 +606,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_PORT.length(), DB_PORT )==0) {
         if ( this->sequence.target.configure_db( DB_PORT, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -615,7 +615,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_USER.length(), DB_USER )==0) {
         if ( this->sequence.target.configure_db( DB_USER, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -624,7 +624,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_PASS.length(), DB_PASS )==0) {
         if ( this->sequence.target.configure_db( DB_PASS, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -633,7 +633,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_SCHEMA.length(), DB_SCHEMA )==0) {
         if ( this->sequence.target.configure_db( DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -642,7 +642,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_ACTIVE.length(), DB_ACTIVE )==0) {
         if ( this->sequence.target.configure_db( DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -651,7 +651,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_COMPLETED.length(), DB_COMPLETED )==0) {
         if ( this->sequence.target.configure_db( DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -660,7 +660,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, DB_SETS.length(), DB_SETS )==0) {
         if ( this->sequence.target.configure_db( DB_SETS, config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -673,7 +673,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_SLIT.length(), POWER_SLIT )==0) {
         if ( this->sequence.power_switch[POWER_SLIT].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -682,7 +682,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_CAMERA.length(), POWER_CAMERA )==0) {
         if ( this->sequence.power_switch[POWER_CAMERA].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -691,7 +691,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_CALIB.length(), POWER_CALIB )==0) {
         if ( this->sequence.power_switch[POWER_CALIB].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -700,7 +700,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_FLEXURE.length(), POWER_FLEXURE )==0) {
         if ( this->sequence.power_switch[POWER_FLEXURE].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -709,7 +709,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_FILTER.length(), POWER_FILTER )==0) {
         if ( this->sequence.power_switch[POWER_FILTER].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -718,7 +718,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_FOCUS.length(), POWER_FOCUS )==0) {
         if ( this->sequence.power_switch[POWER_FOCUS].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -727,7 +727,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_TELEM.length(), POWER_TELEM )==0) {
         if ( this->sequence.power_switch[POWER_TELEM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -736,7 +736,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_THERMAL.length(), POWER_THERMAL )==0) {
         if ( this->sequence.power_switch[POWER_THERMAL].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -745,7 +745,7 @@ namespace Sequencer {
       if (config.param[entry].compare( 0, POWER_ACAM.length(), POWER_ACAM )==0) {
         if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );
         }
       }
@@ -971,7 +971,7 @@ namespace Sequencer {
           message.str(""); message << "ERROR: Read error on fd " << sock.getfd() << ": " << strerror(errno);
           seq.sequence.async.enqueue_and_log( function, message.str() );
         }
-        if (ret==0) {               // or a timeout
+        if (ret==-2) {              // or a timeout
           message.str(""); message << "ERROR: timeout reading from fd " << sock.getfd();
           seq.sequence.async.enqueue_and_log( function, message.str() );
         }
@@ -1006,7 +1006,7 @@ namespace Sequencer {
         sock.id = ++seq.cmd_num;
         if ( seq.cmd_num == INT_MAX ) seq.cmd_num = 0;
 
-        message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
+        message.str(""); message << "received command (" << sock.id << ") on fd " << sock.getfd() << ": " << cmd << " " << args;
         logwrite(function, message.str());
       }
       catch ( std::runtime_error &e ) {
@@ -1203,6 +1203,7 @@ namespace Sequencer {
       // This is needed before any sequences can be run.
       //
       if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
+                      seq.sequence.tcs_ontarget.store( false );
                       seq.sequence.tcs_nowait.store( false );
                       seq.sequence.dome_nowait.store( true );
                       if ( sock.isasync() ) {
@@ -1230,6 +1231,7 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
+                      seq.sequence.tcs_ontarget.store( false );
                       seq.sequence.tcs_nowait.store( false );
                       seq.sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
@@ -1316,29 +1318,15 @@ namespace Sequencer {
 
       // Abort can abort nearly every operation (exposure, slew, etc.).
       // Only "stopping", "starting", and "aborting" cannot be aborted.
+      // To abort, set the ABORTREQ bit in both seqstate and reqstate.
       //
       if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
-/***
-                      // don't request an abort if the SEQ_RUNNING bit isn't set
+                      // don't allow an abort unless SEQ_RUNNING or SEQ_PAUSED bit is set
                       //
-                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer not running" );
-                        ret = ERROR;
-                      }
+                      if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) || 
+                           seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
 
-                      // To abort, set the ABORTREQ bit in both seqstate and reqstate.
-                      //
-                      else {
-****/                      {
                         logwrite( function, "abort requested" );
-
-                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTREQ );
-                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
-                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_ABORTREQ, (Sequencer::SEQ_RUNNING|Sequencer::SEQ_WAIT_EXPOSE) );  // set ABORTREQ, clear RUNNING|EXPOSE
-
-                        // Set the do-type to single-step
-                        //
-                        seq.sequence.dotype( "ONE" );
 
                         // If exposing then asynchronously send the ABORT command to the camera daemon
                         //
@@ -1347,17 +1335,47 @@ namespace Sequencer {
                           seq.sequence.clr_seqstate_bit( Sequencer::SEQ_WAIT_EXPOSE );       // clear the EXPOSE bit
                         }
 
-                        // If not already running then spawn a thread to wait for this state,
+                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTREQ );
+                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
+                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_ABORTREQ,                                // set ABORTREQ
+                                                           (Sequencer::SEQ_RUNNING|Sequencer::SEQ_WAIT_EXPOSE) );  // clear RUNNING|EXPOSE
+
+                        // Set the do-type to single-step
+                        //
+                        seq.sequence.dotype( "ONE" );
+
+                        // Update the target state to unassigned
+                        //
+                        ret = seq.sequence.target.update_state( Sequencer::TARGET_UNASSIGNED );
+                        message.str(""); message << ( ret==NO_ERROR ? "" : "ERROR " ) << "marking target " << seq.sequence.target.name
+                                                 << " id " << seq.sequence.target.obsid << " order " << seq.sequence.target.obsorder
+                                                 << " as " << Sequencer::TARGET_UNASSIGNED;
+                        logwrite( function, message.str() );
+
+                        // If this thread is not already running then spawn a thread to wait for this state,
                         // which will send out any needed notifications.
                         //
-                        if ( not seq.sequence.waiting_for_state.load() ) {
+                        if ( ! seq.sequence.waiting_for_state.load() ) {
 #ifdef LOGLEVEL_DEBUG
                           logwrite( function, "[DEBUG] spawning waiting_for_state thread" );
 #endif
                           std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
                         }
-                        ret = NO_ERROR;
+                        ret |= NO_ERROR;
                       }
+                      else {
+                        seq.sequence.async.enqueue_and_log( function, "ERROR: cannot abort unless sequencer is running or paused" );
+                        ret = ERROR;
+                      }
+      }
+      else
+
+      // The TCS operator tells the Sequencer when the target is ready to observe
+      // because there is currently no remote command that provides this information.
+      //
+      if ( cmd.compare( SEQUENCERD_ONTARGET ) == 0) {
+                      seq.sequence.tcs_ontarget.store( true );
+                      ret = NO_ERROR;
       }
       else
 
@@ -1444,6 +1462,14 @@ namespace Sequencer {
                         seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
                         ret = NO_ERROR;
                       }
+      }
+      else
+
+      // Call TCS Initialization
+      //
+      if ( cmd.compare( SEQUENCERD_TCSINIT ) == 0 ) {
+                      ret = seq.sequence.tcs_init( args );
+                      if ( ! retstring.empty() ) retstring.append( " " );
       }
       else
 

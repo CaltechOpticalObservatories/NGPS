@@ -57,7 +57,7 @@ namespace Telemetry {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TELEMD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -78,7 +78,7 @@ namespace Telemetry {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TELEMD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -99,7 +99,7 @@ namespace Telemetry {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TELEMD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -108,7 +108,7 @@ namespace Telemetry {
       //
       if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "TELEMD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -295,7 +295,7 @@ namespace Telemetry {
         if (ret<0) {                // could be an actual read error
           message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
         }
-        if (ret==0) {               // or a timeout
+        if (ret==-2) {              // or a timeout
           message.str(""); message << "timeout reading from fd " << sock.getfd();
           logwrite( function, message.str() );
         }

@@ -98,6 +98,7 @@ namespace TCS {
       static void async_main( TCS::Server &tcs, Network::UdpSocket sock );   ///< asynchronous message sending thread
 
       void exit_cleanly(void);              ///< exit
+      long load_tcs_info( std::string input );
       long configure_tcsd();                ///< read and apply the configuration file
       void doit(Network::TcpSocket sock);   ///< the workhorse of each thread connetion
 

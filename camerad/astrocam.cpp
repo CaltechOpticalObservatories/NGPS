@@ -503,7 +503,7 @@ namespace AstroCam {
         else {
           try {
             this->camera.firmware[ parse_val(tokens.at(0)) ] = tokens.at(1);
-            message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+            message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
             logwrite( function, message.str() );
             this->camera.async.enqueue( message.str() );
             applied++;
@@ -517,7 +517,7 @@ namespace AstroCam {
 
       if (this->config.param[entry].compare(0, 5, "IMDIR")==0) {
         this->camera.imdir( config.arg[entry] );
-        message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->camera.async.enqueue( message.str() );
         applied++;
@@ -525,7 +525,7 @@ namespace AstroCam {
 
       if (this->config.param[entry].compare(0, 6, "BASENAME")==0) {
         this->camera.basename( config.arg[entry] );
-        message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->camera.async.enqueue( message.str() );
         applied++;
@@ -1180,7 +1180,8 @@ namespace AstroCam {
         // check exposure_time
         //
         if ( this->controller.at( dev ).info.exposure_time < 0 ) {
-          logwrite( function, "ERROR: exposure time is undefined" );
+          message.str(""); message << "ERROR: exposure time is undefined";
+          this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
           return( ERROR );
         }
 
@@ -1189,15 +1190,16 @@ namespace AstroCam {
         int rows = this->controller.at(dev).rows;
         int cols = this->controller.at(dev).cols;
         if (rows < 1 || cols < 1) {
-          message.str(""); message << "error: image size must be non-zero: rows=" << rows << " cols=" << cols;
-          logwrite(function, message.str());
+          message.str(""); message << "ERROR: image size must be non-zero: rows=" << rows << " cols=" << cols;
+          this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
           return(ERROR);
         }
 
         // check readout type
         //
         if ( this->controller.at( dev ).info.readout_name.empty() ) {
-          logwrite( function, "ERROR: readout undefined" );
+          message.str(""); message << "ERROR: readout undefined";
+          this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
           return( ERROR );
         }
 
@@ -1206,12 +1208,12 @@ namespace AstroCam {
         //
         int bufsize = this->get_bufsize();
         if ( bufsize < (int)( (this->nframes>1?2:1) * rows * cols * sizeof(unsigned short) ) ) {  ///< TODO @todo type check bufsize: is it big enough?
-          message.str(""); message << "error: insufficient buffer size (" << bufsize 
+          message.str(""); message << "ERROR: insufficient buffer size (" << bufsize 
                                    << " bytes) for " << this->nframes << " frame" << (this->nframes==1?"":"s")
                                    << " of " << rows << " x " << cols << " pixels";
           logwrite(function, message.str());
           message.str(""); message << "minimum buffer size is " << (this->nframes>1?2:1) * rows * cols * sizeof(unsigned short) << " bytes";
-          logwrite(function, message.str());
+          this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
           return(ERROR);
         }
 
@@ -1234,7 +1236,7 @@ namespace AstroCam {
         this->controller.at(dev).info.frame_type = Camera::FRAME_RAW;
         if ( this->controller.at(dev).info.set_axes() != NO_ERROR ) {
           message.str(""); message << "ERROR setting axes for device " << dev;
-          logwrite( function, message.str() );
+          this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
           return( ERROR );
         }
 
@@ -1245,10 +1247,14 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for ( auto check : this->devlist ) message << check << " ";
         message << "}";
-        logwrite( function, message.str() );
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return( ERROR );
       }
-      catch(...) { logwrite(function, "unknown error creating fitsname for controller"); return(ERROR); }
+      catch(...) {
+        message.str(""); message << "ERROR: unknown exception creating fitsname for controller";
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        return(ERROR);
+      }
     }
 
     // If nseq_in is not supplied then set nseq to 1
@@ -1264,12 +1270,12 @@ namespace AstroCam {
       }
       catch ( std::invalid_argument & ) {
         message.str(""); message << "ERROR: unable to convert sequences: " << nseq_in << " to integer";
-        logwrite( function, message.str() );
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return( ERROR );
       }
       catch ( std::out_of_range & ) {
         message.str(""); message << "ERROR: sequences " << nseq_in << " outside integer range";
-        logwrite(function, message.str());
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
       }
       // Set the extension = 0 for each controller
@@ -1280,7 +1286,7 @@ namespace AstroCam {
         }
         catch ( std::out_of_range & ) {
           message.str(""); message << "ERROR: no active controller for device number " << dev;
-          logwrite( function, message.str() );
+          this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
           return( ERROR );
         }
       }
@@ -1327,7 +1333,10 @@ namespace AstroCam {
 
         // Allocate workspace memory for deinterlacing (each dev has its own workbuf)
         //
-        if ( ( error = this->controller.at(dev).alloc_workbuf() ) != NO_ERROR ) return( error );
+        if ( ( error = this->controller.at(dev).alloc_workbuf() ) != NO_ERROR ) {
+          this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: allocating memory for deinterlacing" );
+          return( error );
+        }
 
         // then set the filename for this specific dev
         // Assemble the FITS filename.
@@ -1341,7 +1350,10 @@ namespace AstroCam {
         else {
           devstr = "";
         }
-        if ( ( error = this->camera.get_fitsname( devstr, this->controller.at(dev).info.fits_name ) ) != NO_ERROR ) return( error );
+        if ( ( error = this->camera.get_fitsname( devstr, this->controller.at(dev).info.fits_name ) ) != NO_ERROR ) {
+          this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
+          return( error );
+        }
 
 #ifdef LOGLEVEL_DEBUG
         message.str("");
@@ -1356,10 +1368,14 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for (auto check : this->devlist) message << check << " ";
         message << "}";
-        logwrite(function, message.str());
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error creating fitsname for controller"); return(ERROR); }
+      catch(...) {
+        message.str(""); message << "ERROR: unknown exception creating fitsname for controller";
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        return(ERROR);
+      }
     }
 
     // Spawn separate threads to call ARC_API's expose() on each connected device, in parallel
@@ -1381,15 +1397,19 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for (auto check : this->devlist) message << check << " ";
         message << "}";
-        logwrite(function, message.str());
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
       }
       catch(const std::exception &e) {
         message.str(""); message << "ERROR creating expose thread: " << e.what();
-        logwrite(function, message.str());
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error creating expose thread for controller"); return(ERROR); }
+      catch(...) {
+        message.str(""); message << "ERROR: unknown exception creating expose thread for controller";
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        return(ERROR);
+      }
     }
 
     // Join the dothread_expose threads to this thread (not to each other)
@@ -1402,10 +1422,14 @@ namespace AstroCam {
     }
     catch(const std::exception &e) {
       message.str(""); message << "ERROR joining expose threads: " << e.what();
-      logwrite(function, message.str());
+      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
       return(ERROR);
     }
-    catch(...) { logwrite(function, "unknown error joining expose threads"); return(ERROR); }
+    catch(...) {
+      message.str(""); message << "ERROR:unknown exception joining expose threads";
+      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      return(ERROR);
+    }
 
     threads.clear();                        // deconstruct the threads vector
     }  // end local scope
@@ -2200,7 +2224,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::do_exptime **************************************/
 
 
-  /***** AstroCam::Interface::modify_exptime **********************************/
+  /***** AstroCam::Interface::do_modify_exptime *******************************/
   /**
    * @brief      modify the exposure time while an exposure is running
    * @param[in]  exptime_in  requested exposure time in msec
@@ -2212,8 +2236,8 @@ namespace AstroCam {
    * Set exptime_in = -1 to end immediately.
    *
    */
-  long Interface::modify_exptime(std::string exptime_in, std::string &retstring) {
-    std::string function = "AstroCam::Interface::modify_exptime";
+  long Interface::do_modify_exptime( std::string exptime_in, std::string &retstring ) {
+    std::string function = "AstroCam::Interface::do_modify_exptime";
     std::stringstream message;
     long error = NO_ERROR;
     long elapsed_time=0;
@@ -2233,12 +2257,12 @@ namespace AstroCam {
       requested_exptime = std::stol( exptime_in );
     }
     catch ( std::invalid_argument & ) {
-      message.str(""); message << "ERROR: unable to convert exposure time: " << exptime_in << " to long";
+      message.str(""); message << "ERROR: exception converting exposure time: " << exptime_in << " to long";
       logwrite( function, message.str() );
       return( ERROR );
     }
     catch ( std::out_of_range & ) {
-      message.str(""); message << "ERROR: exposure time " << exptime_in << " outside long range";
+      message.str(""); message << "ERROR: exception exposure time " << exptime_in << " outside long range";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -2349,7 +2373,7 @@ namespace AstroCam {
 
     return( error );
   }
-  /***** AstroCam::Interface::modify_exptime **********************************/
+  /***** AstroCam::Interface::do_modify_exptime *******************************/
 
 
   /***** AstroCam::Interface::shutter *****************************************/

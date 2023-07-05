@@ -844,7 +844,7 @@ namespace Network {
    * @brief      read data from connected socket until delimeter char
    * @param[out] retstring  reference to string to read in to
    * @param[in]  delim      read until this delimiting char is found
-   * @return     number of bytes read or -1 on error
+   * @return     number of bytes read or -1 on error or -2 on timeout
    *
    * If data not immediately available then wait for up to POLLTIMEOUT
    *
@@ -889,6 +889,7 @@ namespace Network {
       if ( elapsed > POLLTIMEOUT ) {
         message << "ERROR: timeout waiting for data on fd " << this->fd;
         logwrite( function, message.str() );
+        nread = -2;                      // indicates timeout
         break;
       }
 

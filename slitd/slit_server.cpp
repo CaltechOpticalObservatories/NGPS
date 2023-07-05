@@ -60,7 +60,7 @@ namespace Slit {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -81,7 +81,7 @@ namespace Slit {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -102,7 +102,7 @@ namespace Slit {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -111,7 +111,7 @@ namespace Slit {
       //
       if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -120,7 +120,7 @@ namespace Slit {
       //
       if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
         this->interface.name = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -129,7 +129,7 @@ namespace Slit {
       //
       if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
         this->interface.host = config.arg[entry];
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -150,7 +150,7 @@ namespace Slit {
           return(ERROR);
         }
         this->interface.port = port;
-        message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
@@ -161,7 +161,7 @@ namespace Slit {
         Slit::ControllerInfo s;
         if ( s.load_info( config.arg[entry] ) == NO_ERROR ) {
           this->interface.controller_info.push_back( s );
-          message.str(""); message << "CONFIG:[" << DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+          message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
         }
@@ -361,7 +361,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
           message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno);
           logwrite(function, message.str());
         }
-        if (ret==0) {
+        if (ret==-2) {
           message.str(""); message << "timeout reading from fd " << sock.getfd();
           logwrite( function, message.str() );
          }

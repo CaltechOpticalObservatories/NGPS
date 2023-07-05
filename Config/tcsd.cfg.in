@@ -8,11 +8,18 @@ DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
-TCS_HOST=10.200.99.2              # TCS host address
-TCS_PORT=@TCS_PORT@               # port number for the TCS service
+# Any number TCS_HOSTs are listed and they are specified by
+# "name address port"
+# It is expected that there will be (at least) two of these,
+# one for real and a second for the simulator, named "real" and "sim",
+# respectively.
+#
+TCS_HOST="real 10.200.99.2 @TCS_PORT@"       # real TCS: name address port
+TCS_HOST="sim localhost @TCS_PORT@"          # simulated TCS: name address port
 
 # emulator-only configuration
 #
+EMULATOR_FOCUSRATE=0.15          # emulator focus rate in mm/s
 EMULATOR_SLEWRATE_RA=0.75        # emulator slew rate in deg/s for RA
 EMULATOR_SLEWRATE_DEC=0.75       # emulator slew rate in deg/s for DEC
 EMULATOR_SLEWRATE_CASANGLE=2     # emulator slew rate in deg/s for CASANGLE

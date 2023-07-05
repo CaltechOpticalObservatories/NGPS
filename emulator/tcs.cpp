@@ -8,6 +8,9 @@
 
 #include "tcs.h"
 
+#define MOVETYPE_FOCUS_GO  0
+#define MOVETYPE_FOCUS_INC 1
+
 namespace TcsEmulator {
 
   /***** TcsEmulator::Interface::Interface ************************************/
@@ -65,6 +68,7 @@ namespace TcsEmulator {
 
     // default slew and settling times set here can be overridden by configuration file
     //
+    this->focusrate = 5;          //! default slew rate is 5mm/s, override with EMULATOR_FOCUSRATE
     this->slewrate_ra = 0.75;     //! default slew rate is 0.75/s for RA, override with EMULATOR_SLEWRATE_RA
     this->slewrate_dec = 0.75;    //! default slew rate is 0.75/s for DEC override with EMULATOR_SLEWRATE_DEC
     this->slewrate_casangle = 2;  //! default slew rate is 2/s for CASANGLE override with EMULATOR_SLEWRATE_CASNGLE
@@ -76,8 +80,8 @@ namespace TcsEmulator {
 
     this->name = " ";
     this->telid = 200;
-    this->focus = 36.71;
     this->tubelength = 22.11;
+    this->focus.store(36.71);
     this->ra.store(0);
     this->dec.store(0);
     this->offset_ra = 0;
@@ -147,8 +151,8 @@ namespace TcsEmulator {
   /***** TcsEmulator::Telescope::do_ringgo ************************************/
   /**
    * @brief      perform the RINGGO command work, which "moves" the cass rotator
-   * @param[in]  telescope
-   * @param[in]  args
+   * @param[in]  telescope  reference to TcsEmulator::Telescope object
+   * @param[in]  newring    new ring position
    *
    */
   void Telescope::do_ringgo( TcsEmulator::Telescope &telescope, double newring ) {
@@ -165,6 +169,70 @@ namespace TcsEmulator {
     return;
   }
   /***** TcsEmulator::Telescope::do_ringgo ************************************/
+
+
+  /***** TcsEmulator::Telescope::do_focus *************************************/
+  /**
+   * @brief      perform the FOCUSGO command work, which "moves" the focus
+   * @param[in]  telescope  reference to TcsEmulator::Telescope object
+   * @param[in]  focusval   new focus position
+   * @param[in]  movetype   type of move, for FOCUSGO or FOCUSINC
+   *
+   */
+  void Telescope::do_focus( TcsEmulator::Telescope &telescope, double focusval, int movetype ) {
+    std::string function = "  (TcsEmulator::Telescope::do_focus) ";
+
+    double newfocus=0;
+    double current_focus = telescope.focus.load();                     // the current focus
+
+    switch ( movetype ) {
+      case MOVETYPE_FOCUS_GO:
+        newfocus = focusval;
+        break;
+      case MOVETYPE_FOCUS_INC:
+        newfocus = current_focus + focusval;
+        break;
+      default:
+        std::cerr << get_timestamp() << function << "invalid move type " << movetype << "\n";
+        return;
+    }
+
+    if ( newfocus < 1.00 || newfocus > 74.00 ) {
+      std::cerr << get_timestamp() << function << "invalid focus position " << newfocus << "\n";
+      return;
+    }
+
+    double focus_dir = ( newfocus - current_focus < 0 ? -1.0 : 1.0 );  // direction to move to reach requested focus from current focus
+    double focusdistance = std::abs( telescope.focus - newfocus );     // calculate focus distance
+    double focustime = focusdistance  / telescope.focusrate;           // calculate focus time
+    double focus_end_time = get_clock_time() + focustime;              // get the end time for the focus move
+
+    telescope.focussing.store( true );                                 // prevent another thread from also focussing
+
+    while ( true ) {
+
+      current_focus  = telescope.focus.load();                         // read the current focus
+
+      std::cerr << get_timestamp() << function << "moving focus...  " << current_focus << "\n";
+
+      double delta_focus  = std::abs( current_focus - newfocus );      // add the slewrate to focus
+
+      if ( delta_focus > telescope.focusrate/2.0 ) {                   // move half the rate/s since loop freq is 0.5Hz
+        // store it permanently as long as we don't overshoot
+        telescope.focus.store( ( current_focus + focus_dir * telescope.focusrate/2.0 ) );
+      }
+
+      usleep( 500000 );
+      if ( get_clock_time() >= focus_end_time ) break;
+    }
+    telescope.focus.store( newfocus );
+    std::cerr << get_timestamp() << function << "moving focus...  " << newfocus << "\n";
+
+    telescope.focussing.store( false );                                // release thread
+
+    return;
+  }
+  /***** TcsEmulator::Telescope::do_focus *************************************/
 
 
   /***** TcsEmulator::Telescope::do_coords ************************************/
@@ -480,7 +548,7 @@ namespace TcsEmulator {
         << "Air mass="            << std::fixed << std::setprecision(3) << this->airmass << "\n"
         << "Azimuth="             << "0\n"
         << "Zenith angle="        << "0\n"
-        << "Focus Point="         << "0\n"
+        << "Focus Point="         << this->focus.load() << "\n"
         << "Dome Azimuth="        << "0\n"
         << "Dome shutters="       << "0\n"
         << "Windscreen position=" << "0\n"
@@ -510,7 +578,7 @@ namespace TcsEmulator {
     ret << "UTC = " << this->get_time() << "\n"
         << "telescope ID = " << this->telid << ", focus = " 
         << std::fixed << std::setprecision(2) 
-        << this->focus << " mm, tube length = "
+        << this->focus.load() << " mm, tube length = "
         << std::fixed << std::setprecision(2) 
         << this->tubelength << " mm\n"
         << "offset RA = " 
@@ -713,6 +781,93 @@ namespace TcsEmulator {
           std::thread( std::ref( TcsEmulator::Telescope::do_ringgo ), 
                        std::ref( this->telescope ),
                        newring ).detach();
+          retstring = "0";             // successful completion
+        }
+      }
+    }
+    else
+    if ( mycmd == "FOCUSGO" ) {
+      // can only run one of these threads at a time
+      //
+      if ( this->telescope.focussing.load() ) {
+        std::cerr << get_timestamp() << function << "ERROR: focus is already moving\n";
+        retstring = "-3";              // unable to execute at this time
+      }
+      else
+      if ( nargs != 1 ) {
+        std::cerr << get_timestamp() << function << "ERROR: FOCUSGO expected 1 arg but received " << nargs << "\n";
+        retstring = "-2";              // invalid parameters
+      }
+      else {
+        double newfocus;
+        try { newfocus = std::stod( myargs.str() ); }
+        catch( std::invalid_argument &e ) {
+          std::cerr << get_timestamp() << function << "EXCEPTION: invalid argument parsing \"" 
+                    << myargs.str() << "\" : " << e.what() << "\n";
+          retstring = "-2";
+          newfocus = NAN;
+        }
+        catch( std::out_of_range &e ) {
+          std::cerr << get_timestamp() << function << "EXCEPTION: out of range parsing \"" 
+                    << myargs.str() << "\" : " << e.what() << "\n";
+          retstring = "-2";
+          newfocus = NAN;
+        }
+
+        if ( std::isnan(newfocus) || newfocus < 1.00 || newfocus > 74.00 ) {
+          std::cerr << get_timestamp() << function << "ERROR: requested focus " << newfocus << " not in range {1:74}\n";
+          retstring = "-2";
+        }
+        else {
+          std::thread( std::ref( TcsEmulator::Telescope::do_focus ), 
+                       std::ref( this->telescope ),
+                       newfocus,
+                       MOVETYPE_FOCUS_GO ).detach();
+          retstring = "0";             // successful completion
+        }
+      }
+    }
+    else
+    if ( mycmd == "FOCUSINC" ) {
+      // can only run one of these threads at a time
+      //
+      if ( this->telescope.focussing.load() ) {
+        std::cerr << get_timestamp() << function << "ERROR: focus is already moving\n";
+        retstring = "-3";              // unable to execute at this time
+      }
+      else
+      if ( nargs != 1 ) {
+        std::cerr << get_timestamp() << function << "ERROR: FOCUSINC expected 1 arg but received " << nargs << "\n";
+        retstring = "-2";              // invalid parameters
+      }
+      else {
+        double focusinc;
+        try { focusinc = std::stod( myargs.str() ); }
+        catch( std::invalid_argument &e ) {
+          std::cerr << get_timestamp() << function << "EXCEPTION: invalid argument parsing \"" 
+                    << myargs.str() << "\" : " << e.what() << "\n";
+          retstring = "-2";
+          focusinc = NAN;
+        }
+        catch( std::out_of_range &e ) {
+          std::cerr << get_timestamp() << function << "EXCEPTION: out of range parsing \"" 
+                    << myargs.str() << "\" : " << e.what() << "\n";
+          retstring = "-2";
+          focusinc = NAN;
+        }
+
+        double current_focus = telescope.focus.load();                 // read the current focus
+        double newfocus = current_focus + focusinc;
+        if ( std::isnan(newfocus) || newfocus < 1.00 || newfocus > 74.00 ) {
+          std::cerr << get_timestamp() << function << "ERROR: requested focus inc " << focusinc 
+                                                   << " would result in " << newfocus << " out of range {1:74}\n";
+          retstring = "-2";
+        }
+        else {
+          std::thread( std::ref( TcsEmulator::Telescope::do_focus ), 
+                       std::ref( this->telescope ),
+                       focusinc,
+                       MOVETYPE_FOCUS_INC ).detach();
           retstring = "0";             // successful completion
         }
       }

@@ -11,7 +11,7 @@ STDERR=/tmp/acamd.stderr          # where to send stderr
 # host:port for the external camera server
 #
 CAMERASERVER_HOST=localhost
-CAMERASERVER_PORT=@ANDOR_CAMERA_SERVER_PORT@
+CAMERASERVER_PORT=@ACAM_CAMERA_SERVER_PORT@
 
 # there is a single host:port for the "master" PI controller
 # at the front of the daisy-chain

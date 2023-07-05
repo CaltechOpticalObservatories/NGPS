@@ -39,24 +39,37 @@ namespace TCS {
     private:
       bool class_initialized;
     public:
-      std::string host;
-      int port;
+      std::string name;    ///< the name of this tcs is specified in the config file, expected to be {real|sim}
+
+      /**
+       * @struct tcshost_t
+       * @brief  structure to contain tcs host name and port number
+       */
+      typedef struct {
+        std::string host;                         ///< host name
+        int port;                                 ///< port number
+      } tcshost_t;
+
+      std::map< std::string, tcshost_t > tcsmap;  ///< STL map of tcs host/port indexed by name
 
       Interface();
       ~Interface();
 
-      long initialize_class();
-      long open();
+      void list( std::string &retstring );
+      void llist( std::string &retstring );
+      long open( std::string args, std::string &retstring );
+      long isopen( std::string &retstring );
       long close();
       long get_weather_coords( std::string &retstring );
       long get_coords( std::string &retstring );
       long get_cass( std::string &retstring );
       long get_dome( std::string &retstring );
+      long get_focus( std::string &retstring );
       long get_motion( std::string &retstring );
       long ringgo( std::string args, std::string &retstring );
+      long coords( std::string args, std::string &retstring );
       long send_command( std::string cmd, std::string &reply );
-
-      bool isopen() { return this->tcs.isconnected(); }    ///< is this interface connected to hardware?
+      void parse_reply_code( std::string codein, std::string &reply );
 
       Common::Queue async;                                 ///< asynchronous message queue object
 

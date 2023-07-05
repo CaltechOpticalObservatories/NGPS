@@ -42,7 +42,6 @@ namespace Sequencer {
                               "NAME",
                               "RA",
                               "DECL",
-                              "EPOCH",
                               "OTMexpt",
                               "TARGET_NUMBER",
                               "SEQUENCE_NUMBER",
@@ -122,7 +121,6 @@ namespace Sequencer {
     this->name="";
     this->ra_hms="";
     this->dec_dms="";
-    this->epoch="";
     this->slitangle=-1;
     this->casangle=-1;
     this->slitwidth=-1;
@@ -438,7 +436,6 @@ namespace Sequencer {
                          "NAME",
                          "RA",
                          "DECL",
-                         "EPOCH",
                          "EXPTIME",
                          "TARGET_NUMBER",
                          "SEQUENCE_NUMBER",
@@ -485,6 +482,24 @@ namespace Sequencer {
     return( NO_ERROR );
   }
   /***** Sequencer::TargetInfo::add_row ***************************************/
+
+
+  /***** Sequencer::TargetInfo::get_next **************************************/
+  /**
+   * @brief      get next target from DB whose state is Sequencer::TARGET_PENDING
+   * @return     ERROR, NO_ERROR, TARGET_FOUND, TARGET_NOT_FOUND
+   *
+   * This function is overloaded.
+   *
+   * This version has no parameters so it does not return the status message
+   * but only returns the TargetState.
+   *
+   */
+  TargetInfo::TargetState TargetInfo::get_next() {
+    std::string dontcare;
+    return( this->get_next( Sequencer::TARGET_PENDING, dontcare ) );
+  }
+  /***** Sequencer::TargetInfo::get_next **************************************/
 
 
   /***** Sequencer::TargetInfo::get_next **************************************/
@@ -615,7 +630,6 @@ namespace Sequencer {
       col = this->colnum( "STATE", this->targetlist_cols );           this->state       = row.get( col );
       col = this->colnum( "RA", this->targetlist_cols );              this->ra_hms      = row.get( col );
       col = this->colnum( "DECL", this->targetlist_cols );            this->dec_dms     = row.get( col );
-      col = this->colnum( "EPOCH", this->targetlist_cols );           this->epoch       = row.get( col );
       col = this->colnum( "OTMcass", this->targetlist_cols );         this->casangle    = row.get( col );
       col = this->colnum( "OTMslitangle", this->targetlist_cols );    this->slitangle   = row.get( col );
       col = this->colnum( "OTMslit", this->targetlist_cols );         this->slitwidth   = row.get( col );
@@ -856,7 +870,6 @@ namespace Sequencer {
                           "NAME",
                           "RA",
                           "DECL",
-                          "EPOCH",
                           "EXPTIME",
                           "TARGET_NUMBER",
                           "SEQUENCE_NUMBER",
@@ -871,7 +884,6 @@ namespace Sequencer {
                          this->name,
                          this->ra_hms,
                          this->dec_dms,
-                         this->epoch,
                          this->exptime,
                          this->targetnum,
                          this->sequencenum,
@@ -1292,6 +1304,20 @@ namespace Sequencer {
     std::string function = "Sequencer::Daemon::send";
     std::stringstream message;
     long ret;
+
+    if ( ! this->socket.isconnected() ) {
+      message.str(""); message << "ERROR:cannot send \"" << command << "\" to " << this->name
+                               << " because daemon is not connected";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    if ( this->socket.getfd() < 1 ) {
+      message.str(""); message << "ERROR:cannot send \"" << command << "\" to " << this->name 
+                               << " because fd " << this->socket.getfd() << " is invalid";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
 
 //#ifdef LOGLEVEL_DEBUG
     if ( command.find( std::string( "poll" ) ) == std::string::npos ) {

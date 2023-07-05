@@ -243,7 +243,7 @@ void doit(Network::TcpSocket sock) {
         std::cerr << get_timestamp() << function << emulator.subsystem
                   << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
       }
-      if (ret==0) {
+      if (ret==-2) {
         std::cerr << get_timestamp() << function << emulator.subsystem
                   << " timeout reading from fd " << sock.getfd() << "\n";
       }

@@ -103,6 +103,19 @@ namespace AstroCam {
   /***** AstroCam::Interface::exptime ***************8*************************/
 
 
+  /***** AstroCam::Interface::modify_exptime ********8*************************/
+  /**
+   * @brief      wrapper for do_modify_exptime
+   * @details    modify the exposure time
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::modify_exptime( std::string exptime_in, std::string &retstring ) {
+    return this->do_modify_exptime( exptime_in, retstring );
+  }
+  /***** AstroCam::Interface::modify_exptime ********8*************************/
+
+
   /***** AstroCam::Interface::geometry **************8*************************/
   /**
    * @brief      wrapper for do_geometry

@@ -40,9 +40,9 @@ start_proc( ) {
 	cmd="$2 $3"$DAEMON
 	output=$(eval "$cmd")
 
-	# wait 1 sec and check if the process is running
+	# wait 0.5 sec and check if the process is running
 	#
-	sleep 1
+	sleep 0.5
 	running=$(eval "pgrep -c -f $2")
 	if [ $running -lt 1 ]; then
 		echo "error starting $1"

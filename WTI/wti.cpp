@@ -107,10 +107,10 @@ namespace WTI {
     std::string function = "WTI::Interface::close";
     std::stringstream message;
 
-    if ( not this->sock.isconnected() ) {
-      message.str(""); message << "ERROR socket connection already closed for " << this->name;
+    if ( ! this->sock.isconnected() ) {
+      message.str(""); message << "socket connection already closed for " << this->name;
       logwrite( function, message.str() );
-      return( ERROR );
+      return( NO_ERROR );
     }
 
     long error = this->sock.Close();

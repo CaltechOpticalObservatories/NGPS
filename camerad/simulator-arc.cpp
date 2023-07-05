@@ -7,6 +7,7 @@
  */
 
 #include "camerad.h"
+#include "simulator-arc.h"
 
 namespace AstroCam {
 
@@ -139,7 +140,7 @@ namespace AstroCam {
           error = ERROR;
         }
         this->numdev = num;
-        message.str(""); message << "CONFIG:[" << Camera::DAEMON_NAME << "] " << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->camera.async.enqueue( message.str() );
         applied++;
@@ -187,6 +188,15 @@ namespace AstroCam {
   long Interface::expose( std::string nseq_in ) {
     std::string function = "AstroCam::Interface::expose";
     std::stringstream message;
+
+    if ( this->camera_info.exposure_time < 0 ) {
+      logwrite( function, "ERROR: exposure time is undefined" );
+      return ERROR;
+    }
+
+    this->camera_info.sim_modet = -1;  // initialize modify exposure time, set only by modexptime command
+
+    std::thread( std::ref( AstroCam::Simulator::dothread_expose ), std::ref(this->camera_info) ).detach();
     return( NO_ERROR );
   }
   /***** AstroCam::Interface::expose ******************************************/
@@ -201,9 +211,117 @@ namespace AstroCam {
   long Interface::exptime( std::string exptime_in, std::string &retstring ) {
     std::string function = "AstroCam::Interface::exptime";
     std::stringstream message;
+    int exptime_try=0;
+
+    // If an exposure time was passed in then
+    // try to convert it (string) to an integer
+    //
+    if ( ! exptime_in.empty() ) {
+      try {
+        exptime_try = std::stoi( exptime_in );
+      }
+      catch ( std::invalid_argument & ) {
+        message.str(""); message << "ERROR: EXCEPTION converting exposure time: " << exptime_in << " to integer";
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+      catch ( std::out_of_range & ) {
+        message.str(""); message << "ERROR: EXCEPTION exposure time " << exptime_in << " outside integer range";
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+
+      if ( exptime_try < 0 ) {
+        logwrite( function, "ERROR:exposure time must be >= 0" );
+        return ERROR;
+      }
+      else this->camera_info.exposure_time = exptime_try;
+
+    }
+
+
+
     return( NO_ERROR );
   }
   /***** AstroCam::Interface::exptime *****************************************/
+
+
+  /***** AstroCam::Interface::modify_exptime **********************************/
+  /**
+   * @brief      modify the exposure time while an exposure is running
+   * @param[in]  exptime_in  requested exposure time in msec
+   * @param[out] retstring   reference to string contains the exposure time
+   * @return     ERROR or NO_ERROR
+   *
+   * Set exptime_in = -1 to end immediately.
+   *
+   */
+  long Interface::modify_exptime( std::string exptime_in, std::string &retstring ) {
+    std::string function = "AstroCam::Interface::modify_exptime";
+    std::stringstream message;
+    long requested_exptime=0;
+    long updated_exptime=0;
+    long error = NO_ERROR;
+
+    // A requested exposure time must be specified
+    //
+    if ( exptime_in.empty() ) {
+      logwrite( function, "ERROR: requested exposure time cannot be empty" );
+      return( ERROR );
+    }
+
+    // Convert the requested exptime from string to long
+    //
+    try {
+      requested_exptime = std::stol( exptime_in );
+    }
+    catch ( std::invalid_argument & ) {
+      message.str(""); message << "ERROR: exception converting exposure time: " << exptime_in << " to long";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::out_of_range & ) {
+      message.str(""); message << "ERROR: exception exposure time " << exptime_in << " outside long range";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // block changes within the last 2 seconds of exposure
+    //
+    if ( (error==NO_ERROR) && ( (this->camera_info.exposure_time - this->camera_info.sim_et) < 2000 ) ) {
+      message.str(""); message << "ERROR cannot change exposure time with less than 2000 msec exptime remaining";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // check if requested exptime has already elapsed
+    //
+    if ( (error==NO_ERROR) && (requested_exptime >= 0) && (requested_exptime < this->camera_info.sim_et) ) {
+      message.str(""); message << "ERROR elapsed time " << this->camera_info.sim_et 
+                               << " already exceeds requested exposure time " << requested_exptime;
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // Negative value requested exptime means to stop now (round up to the nearest whole sec plus one)
+    //
+    if ( (error==NO_ERROR) && (requested_exptime < 0 ) ) {
+      updated_exptime = (long)( 1000 * std::ceil( 1.0 + (this->camera_info.sim_et/1000.) ) );
+    }
+
+    // otherwise, just use the requested exposure time
+    //
+    if ( (error==NO_ERROR) && (requested_exptime > 0) ) {
+      updated_exptime = requested_exptime;
+    }
+
+    // setting this class variable, the dothread_expose() thread will update the exposure time
+    //
+    this->camera_info.sim_modet = updated_exptime;
+
+  return ERROR;
+  }
+  /***** AstroCam::Interface::modify_exptime **********************************/
 
 
   /***** AstroCam::Interface::native ******************************************/
@@ -234,5 +352,51 @@ namespace AstroCam {
   }
   /***** AstroCam::Interface::native ******************************************/
 
+
+  /***** AstroCam::Simulator::dothread_expose *********************************/
+  /**
+   * @brief      
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  void Simulator::dothread_expose( Camera::Information &info ) {
+    std::string function = "AstroCam::Simulator::dothread_expose";
+    std::stringstream message;
+    unsigned int imagesize = 4096;
+
+    // send the ELAPSEDTIME message
+    //
+    for ( info.sim_et = 0; info.sim_et <= info.exposure_time; info.sim_et+=100 ) {
+      if ( info.sim_modet >= 0 ) info.exposure_time = info.sim_modet;
+      message.str(""); message << "ELAPSEDTIME_" << 0 << ":" << info.sim_et << " EXPTIME:" << info.exposure_time;
+      std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+#ifdef LOGLEVEL_DEBUG
+      std::cerr << "elapsedtime: " << std::setw(10) << info.sim_et << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
+#endif
+      usleep(100000);
+    }
+    message.str(""); message << "ELAPSEDTIME_" << 0 << ":" << info.sim_et << " EXPTIME:" << info.exposure_time;
+    std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+
+    // send the PIXELCOUNT message
+    //
+    for ( unsigned int pc = 0; pc <= 4096; pc+=128 ) {
+      std::stringstream message;
+      message.str(""); message << "PIXELCOUNT_" << 0 << ":" << pc << " IMAGESIZE: " << imagesize;
+      std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+#ifdef LOGLEVEL_DEBUG
+      std::cerr << "pixelcount:  " << std::setw(10) << pc << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
+#endif
+      usleep(100000);
+    }
+
+    // send the FRAMECOUNT message
+    //
+    message.str(""); message << "FRAMECOUNT_" << 0 << ":" << 1 << " rows=" << 1024 << " cols=" << 1024;
+    std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+
+    return;
+  }
+  /***** AstroCam::Simulator::dothread_expose *********************************/
 
 }

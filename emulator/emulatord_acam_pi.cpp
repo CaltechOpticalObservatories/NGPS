@@ -233,7 +233,7 @@ void doit( Network::TcpSocket sock ) {
         std::cerr << function << emulator.subsystem 
                   << " Read error: " << strerror(errno) << "\n";
       }
-      if (ret==0) std::cerr << function << emulator.subsystem << " timeout reading from socket\n";
+      if (ret==-2) std::cerr << function << emulator.subsystem << " timeout reading from socket\n";
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough

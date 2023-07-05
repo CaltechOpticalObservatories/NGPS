@@ -1,0 +1,206 @@
+#!/usr/bin/bash
+#
+# @file     dofocus
+# @brief    script for taking focus images
+#
+# This script will change the telescope focus and record one or more images
+# from the acam at each focus postion.
+#
+# usage: dofocus <name> <num> <start> <stop> <step> [nexp]
+#
+# where <name>   is the image basename
+#       <num>    is a number appended to the basename
+#       <cam>    is which camera slitcam|acam
+#       <start>  is the starting focus position
+#       <stop>   is the ending focus position
+#       <step>   is the step between focus positions
+#       [nexp]   is an optional number of exposures at each focus position
+#
+# start/stop can be in any order (i.e. it can step up or down)
+# sign of step is not required
+# integral number of steps need not fit in range of start/stop
+#
+# Output fill be written to file $imagepath/$focusout
+# which are specified below.
+#
+# You must have already started the ngps-acam GUI, initialized the camera
+# and clicked "GO" so that it starts acquiring images.
+# You must have initialzed the tcsdaemon.
+#
+
+acampath="/data/acam/"$(date -u +%Y%m%d)
+slitcampath="/data/slitcam/"$(date -u +%Y%m%d)
+
+SLITCAM=6666
+ACAM=31000
+
+# @fn     usage
+# @brief  display usage
+#
+function usage {
+        echo "usage:"
+        echo "  dofocus <name> <num> slitcam|acam <start> <stop> <step> [nexp]"
+}
+
+# @fn     sendto
+# @brief  send command to a daemon
+# @param  $1  name of daemon
+# @param  $2  command
+# @param  $3  arg
+# @param  $n  arg
+#
+function sendto {
+        daemon=$1
+        shift 1
+        command=""
+        output=""
+        while [ $# -gt 0 ]
+        do
+                command="$command $1"
+                shift 1
+        done
+        output=$($daemon $command)
+        echo $output
+        if echo $output | grep ERROR; then
+                echo "stopping due to an error"
+                exit
+        fi
+}
+
+# check number of arguments
+#
+if [ $# -lt 6 ]; then
+  echo 1>&2 "not enough arguments"
+  usage
+  exit 2
+elif [ $# -gt 7 ]; then
+  echo 1>&2 "too many arguments"
+  usage
+  exit 2
+fi
+
+# assign positional arguments
+#
+imname=$1
+imnum=$2
+cam=$3
+focus_start=$4
+focus_stop=$5
+focus_step=$6
+
+if [ $cam == "slitcam" ]; then
+    whichcam=$SLITCAM
+    imagepath=$slitcampath
+elif [ $cam == "acam" ]; then
+    whichcam=$ACAM
+    imagepath=$acampath
+else
+    echo "unrecognized camera \""$cam"\". expected slitcam|acam"
+    exit
+fi
+
+focusout=$imagepath/focusout.txt
+
+# optional 7th arg. If not included then nexp=1
+#
+if [ -z "$7" ]; then nexp=1; else nexp=$7; fi
+
+echo "nexp="$nexp
+
+# check that args needing numbers are numbers
+#
+re='^[+-]?[0-9]+([.][0-9]+)?$'
+if ! [[ $imnum =~ $re ]]       ; then echo "image num \""$imnum"\" is not a number"; exit; fi
+if ! [[ $focus_start =~ $re ]] ; then echo "focus start \""$focus_start"\" is not a number"; exit; fi
+if ! [[ $focus_stop =~ $re ]]  ; then echo "focus stop \""$focus_stop"\" is not a number"  ; exit; fi
+if ! [[ $focus_step =~ $re ]]  ; then echo "focus step \""$focus_step"\" is not a number"  ; exit; fi
+
+# which direction is focus going, up or down?
+#
+if [ 1 -eq "$(echo "$focus_start > $focus_stop" | bc -l )" ]; then
+    down=true
+    if [ 1 -eq "$(echo "$focus_step > 0" | bc -l )" ]; then
+        focus_step=$(echo "-1 * $focus_step" | bc -l )
+    fi
+elif [ 1 -eq "$(echo "$focus_start < $focus_stop" | bc -l )" ]; then
+    up=true
+else
+    echo "ERROR! check start and stop (maybe the same?)"
+    exit
+fi
+
+if [ ! -d $imagepath ] ; then mkdir $imagepath; fi
+
+# send some prep commands to the camera
+#
+echo "setting up camera ..."
+output=$(sock $whichcam PATH $imagepath)
+output=$(sock $whichcam IMAGENAME $imname)
+output=$(sock $whichcam IMAGENUMBER $imnum)
+output=$(sock $whichcam FITSKEY PIXSCALE 6.5)
+
+# go to the starting focus position
+#
+echo "moving to focus start "$focus_start
+output=$(sendto tcs focusgo $focus_start)
+focus_goal=$focus_start
+
+echo "focus, file" >> $focusout
+
+# loop forever until stop is reached
+#
+while : ; do
+
+    # wait until we get there
+    #
+    focusreply=$(sendto tcs getfocus)
+    focusnow=$(echo $focusreply| cut -d' ' -f 1)
+
+    while [ 1 -eq "$(echo "$focusnow != $focus_goal" | bc -l )" ]
+    do
+        echo "current focus="$focusnow" ... waiting for "$focus_goal
+        focusreply=$(sendto tcs getfocus)
+        focusnow=$(echo $focusreply| cut -d' ' -f 1)
+        sleep 1
+    done
+
+    echo "current focus="$focusnow
+
+    sleep 2  # settling
+
+    output=$(sock $whichcam FITSKEY OPTICAL $focusnow)
+
+    # take "nexp" exposures at this focus
+    #
+    exposure=1
+    while : ; do
+        echo "exposing "$exposure"/"$nexp
+        output=$(sock $whichcam EXPOSE)
+        echo $focusnow", "$output >> $focusout
+        exposure=$((exposure+1))
+        [[ $exposure > $nexp ]] && break
+    done
+
+    # set new focus goal
+    # focus_step is signed appropriately so always use addition here
+    #
+    focus_goal=$(echo "$focus_goal + $focus_step" | bc -l )
+
+    # break while loop when goal reached
+    #
+    if [ "$up" == true ]; then
+        if [ 1 -eq "$(echo "$focus_goal > $focus_stop" | bc -l )" ]; then break; fi
+    fi
+
+    if [ "$down" == true ]; then
+        if [ 1 -eq "$(echo "$focus_goal < $focus_stop" | bc -l )" ]; then break; fi
+    fi
+
+    # if we didn't break then go to the next position and keep looping
+    #
+    echo "moving to next focus position "$focus_goal" ..."
+    output=$(sendto tcs focusgo $focus_goal)
+
+done
+
+echo "done!"
