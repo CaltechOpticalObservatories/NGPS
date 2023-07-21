@@ -56,6 +56,7 @@ namespace Sequencer {
     CALIB_BIT,
     CAMERA_BIT,
     EXPOSE_BIT,
+    GUIDE_BIT,
     READOUT_BIT,
     FILTER_BIT,
     FLEXURE_BIT,
@@ -82,6 +83,7 @@ namespace Sequencer {
   const std::uint32_t SEQ_WAIT_CALIB   = 1 << CALIB_BIT;     ///< set when waiting for calib
   const std::uint32_t SEQ_WAIT_CAMERA  = 1 << CAMERA_BIT;    ///< set when waiting for camera
   const std::uint32_t SEQ_WAIT_EXPOSE  = 1 << EXPOSE_BIT;    ///< set when waiting for camera exposure
+  const std::uint32_t SEQ_GUIDE        = 1 << GUIDE_BIT;     ///< set/clear to enable/disable guide thread
   const std::uint32_t SEQ_WAIT_READOUT = 1 << READOUT_BIT;   ///< set when waiting for camera readout
   const std::uint32_t SEQ_WAIT_FILTER  = 1 << FILTER_BIT;    ///< set when waiting for filter
   const std::uint32_t SEQ_WAIT_FLEXURE = 1 << FLEXURE_BIT;   ///< set when waiting for flexure
@@ -125,7 +127,7 @@ namespace Sequencer {
     POWERSTOP_BIT,
     MODEXPTIME_BIT,
     ACQUISITION_BIT,
-    GUIDE_BIT,
+    GUIDING_BIT,
     STARTUP_BIT,
     SHUTDOWN_BIT,
     NUM_THREAD_STATE_BITS
@@ -159,7 +161,7 @@ namespace Sequencer {
   const std::uint32_t THR_POWER_SHUTDOWN           = 1 << POWERSTOP_BIT;
   const std::uint32_t THR_MODIFY_EXPTIME           = 1 << MODEXPTIME_BIT;
   const std::uint32_t THR_ACQUISITION              = 1 << ACQUISITION_BIT;
-  const std::uint32_t THR_GUIDE                    = 1 << GUIDE_BIT;
+  const std::uint32_t THR_GUIDING                  = 1 << GUIDING_BIT;
   const std::uint32_t THR_STARTUP                  = 1 << STARTUP_BIT;
   const std::uint32_t THR_SHUTDOWN                 = 1 << SHUTDOWN_BIT;
 
@@ -216,6 +218,8 @@ namespace Sequencer {
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
       std::string last_target;
+
+      std::string test_solver_args;   ///< optional solver args that can be passed in with a test command
 
       Common::Queue async;            ///< asynchronous message queue
 
@@ -286,6 +290,8 @@ namespace Sequencer {
       double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
       long offset_tcs( double ra_off, double dec_off );                        ///< send ra,dec offsets to the TCS
       long tcs_init( std::string which );
+
+      long acquire_target( Sequencer::Sequence &seq, bool &belowthreshold, long &attempts );
 
       // These are various jobs that are done in their own threads
       //

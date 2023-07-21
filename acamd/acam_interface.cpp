@@ -422,7 +422,10 @@ namespace Acam {
 
     }
 
-message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( function, message.str() );
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( function, message.str() );
+#endif
+
     retstring = reply;
 
     return( error );
@@ -591,10 +594,28 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
   /***** Acam::Astrometry::solve **********************************************/
   /**
    * @brief      call the Python astrometry solver
-   * @param[in]  imagename_in  fits filename to give to the solver
+   * @details    This function is overloaded.
+   *             This version accepts no command-line solver args.
+   * @param[in]  imagename_in   fits filename to give to the solver
    *
    */
   long Astrometry::solve( std::string imagename_in ) {
+    std::vector<std::string> no_solverargs;
+    return this->solve( imagename_in, no_solverargs );
+  }
+  /***** Acam::Astrometry::solve **********************************************/
+
+
+  /***** Acam::Astrometry::solve **********************************************/
+  /**
+   * @brief      call the Python astrometry solver
+   * @details    This function is overloaded.
+   *             This version accepts an optional vector of solver args.
+   * @param[in]  imagename_in   fits filename to give to the solver
+   * @param[in]  solverargs_in  optional command-line solver args
+   *
+   */
+  long Astrometry::solve( std::string imagename_in, std::vector<std::string> solverargs_in ) {
     std::string function = "Acam::Astrometry::solve";
     std::stringstream message;
 
@@ -631,17 +652,27 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     PyObject* pKeywords = PyDict_New();
     PyDict_SetItemString( pKeywords, "acquire", this->isacquire ? Py_True : Py_False );
 
-    if ( !this->solver_args.empty() ) {  // only do this if the arglist is not empty
+    // The class solver args set by the config file are persistent, while
+    // any solver args passed in are one-time-use-only; they are not saved
+    // to the class. Before calling the solver, concatenate these two vectors
+    // of solver args.
+    //
+    std::vector<std::string> _solver_args;
+    _solver_args.reserve( this->solver_args.size() + solverargs_in.size() );
+    _solver_args.insert( _solver_args.end(), this->solver_args.begin(), this->solver_args.end() );
+    _solver_args.insert( _solver_args.end(), solverargs_in.begin(), solverargs_in.end() );
+
+    if ( !_solver_args.empty() ) {       // only do this if the arglist is not empty
 
       // Loop through each "key=val" pair
       //
       try {
-        for ( size_t pairn=0; pairn < this->solver_args.size(); pairn++ ) {
+        for ( size_t pairn=0; pairn < _solver_args.size(); pairn++ ) {
 
           // Tokenize each argpair on "=" to separate the key and value
           //
           std::vector<std::string> keyval;
-          Tokenize( this->solver_args.at(pairn), keyval, "=" );
+          Tokenize( _solver_args.at(pairn), keyval, "=" );
 
           // Add the arg pair to the keywords list
           // The key object is created from a const char pointer, and
@@ -912,6 +943,11 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
     int applied=0;
     long error = NO_ERROR;
 
+    if ( config.read_config(config) != NO_ERROR) {          // read configuration file specified on command line
+      logwrite(function, "ERROR: unable to read config file");
+      return ERROR;
+    }
+
     this->astrometry.solver_args.clear();
 
     // loop through the entries in the configuration file, stored in config class
@@ -945,7 +981,7 @@ message.str(""); message << "[DEBUG] got back reply=" << reply; logwrite( functi
         }
       }
     }
-    message << "applied " << applied << " configuration lines to the acam interface";
+    message.str(""); message << "applied " << applied << " configuration lines to the acam interface";
     logwrite(function, message.str());
     return error;
   }
@@ -1129,19 +1165,15 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     std::string _wcsname;
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] this->wcsname=" << this->wcsname << " this->imagename=" << this->imagename;
+    message.str(""); message << "[DEBUG] args=" << args << " wcsname=" << this->wcsname << " imagename=" << this->imagename;
     logwrite( function, message.str() );
 #endif
 
-    // This is the local vector that will be ultimately be used to create the arglist
-    // sent to the python solver function. It will be built from any args that might
-    // have been defined in the class, and any input args passed in here will be added
-    // to this. The class solver args set by the config file are persistent, while any 
-    // solver args passed in are one-time-use-only; they are not saved to the class.
+    // This is the local vector of solver args that are passed with
+    // the ACAMD_SOLVE command. This vector is passed to the astrometry
+    // solver.
     //
-    std::vector<std::string> _solver_args = this->astrometry.solver_args;  // Make a copy of the class solver_args,
-
-    this->astrometry.solver_args.clear();                                  // then erase it,
+    std::vector<std::string> _solverargs;
 
     // The input args can be a filename and/or include any number of key=value pairs.
     // Tokenize on the space " " to separate any filename from key=value pairs.
@@ -1150,17 +1182,18 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     Tokenize( args, tokens, " " );
 
     for ( size_t tok = 0; tok < tokens.size(); tok++ ) {
+      // This extracts the image name, anything with a ".fits" on it
+      //
       if ( tokens.at(tok).find(".fits") != std::string::npos ) {
         _imagename = tokens.at(tok);
       }
 
+      // This extracts any key=value pairs, anything with a "=" in it
+      //
       if ( tokens.at(tok).find("=") != std::string::npos ) {
-        this->astrometry.solver_args.push_back( tokens.at(tok) );
-        _solver_args.push_back( tokens.at(tok) );                          // add any solver args passed in,
+        _solverargs.push_back( tokens.at(tok) );                           // add any solver args passed in,
       }
-    }
-
-    this->astrometry.solver_args = _solver_args;                           // then put the aggregate back into the class.
+    }  // end for
 
     // If no .fits file was found then _imagename will be empty,
     // so get it from the class.
@@ -1176,7 +1209,7 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
 
     // Call the astrometry solver
     //
-    error = this->astrometry.solve( _imagename );
+    error = this->astrometry.solve( _imagename, _solverargs );
 
     if ( error != NO_ERROR) this->async.enqueue( "ERROR: calling astrometry solver" );
 

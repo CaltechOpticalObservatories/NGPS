@@ -184,6 +184,7 @@ namespace Acam {
 
       long image_quality( );
       long solve( std::string imagename_in );
+      long solve( std::string imagename_in, std::vector<std::string> solverargs_in );
       long solverargs( std::string argsin, std::string &argsout );
       long compute_offset( std::string from, std::string to );
   };

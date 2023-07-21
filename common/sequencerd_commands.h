@@ -8,9 +8,11 @@
 #ifndef SEQEUNCERD_COMMANDS_H
 #define SEQEUNCERD_COMMANDS_H
 const std::string SEQUENCERD_ABORT      = "abort";
+const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";
 const std::string SEQUENCERD_DOMENOWAIT = "domenowait";
 const std::string SEQUENCERD_EXIT       = "exit";
+const std::string SEQUENCERD_GUIDE      = "guide";
 const std::string SEQUENCERD_MODEXPTIME = "modexptime";
 const std::string SEQUENCERD_ONTARGET   = "ontarget";
 const std::string SEQUENCERD_PAUSE      = "pause";
@@ -42,9 +44,11 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_TCS+" ...",
                                                      "",
                                                      SEQUENCERD_ABORT,
+                                                     SEQUENCERD_CONFIG,
                                                      SEQUENCERD_DOMENOWAIT,
                                                      SEQUENCERD_DOTYPE+" [ one | all ]",
                                                      SEQUENCERD_EXIT,
+                                                     SEQUENCERD_GUIDE,
                                                      SEQUENCERD_MODEXPTIME+" <exptime>",
                                                      SEQUENCERD_PAUSE,
                                                      SEQUENCERD_RESUME,
@@ -57,7 +61,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_TCSINIT+" [real|sim|shutdown]",
                                                      SEQUENCERD_TCSNOWAIT,
                                                      SEQUENCERD_TEST+" <testname> ...",
-                                                     "   addrow <num> <name> <ra> <dec>",
+                                                     "   addrow <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>",
                                                      "   async [ <message> ]",
                                                      "   acquire",
                                                      "   cameraset",
@@ -67,11 +71,12 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      "   fpoffset <from> <to>",
                                                      "   getnext",
                                                      "   isready",
-                                                     "   moveto",
+                                                     "   moveto [ <solverargs> ]",
                                                      "   notify",
                                                      "   pause",
                                                      "   radec",
                                                      "   resume",
+                                                     "   single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>",
                                                      "   states",
                                                      "   tablenames",
                                                      "   update { pending | complete | unassigned }",

@@ -40,6 +40,7 @@ namespace Sequencer {
     this->acquisition_max_retrys = -1;               /// no retry limit by default (-1 disables) but can override in config file
     this->arm_readout_flag = false;                  /// disarm the readout flag to ignore async messages
     this->last_target="";
+    this->test_solver_args="";
 
     this->system_not_ready.store( 0 );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_ACAM );
@@ -69,6 +70,7 @@ namespace Sequencer {
     this->sequence_state_bits.push_back( FILTER_BIT );  this->sequence_states[ FILTER_BIT   ] = "FILTER";
     this->sequence_state_bits.push_back( FLEXURE_BIT ); this->sequence_states[ FLEXURE_BIT  ] = "FLEXURE";
     this->sequence_state_bits.push_back( FOCUS_BIT );   this->sequence_states[ FOCUS_BIT    ] = "FOCUS";
+    this->sequence_state_bits.push_back( GUIDE_BIT );   this->sequence_states[ GUIDE_BIT    ] = "GUIDE";
     this->sequence_state_bits.push_back( POWER_BIT );   this->sequence_states[ POWER_BIT    ] = "POWER";
     this->sequence_state_bits.push_back( SLIT_BIT );    this->sequence_states[ SLIT_BIT     ] = "SLIT";
     this->sequence_state_bits.push_back( TCS_BIT );     this->sequence_states[ TCS_BIT      ] = "TCS";
@@ -106,7 +108,7 @@ namespace Sequencer {
     this->thread_state_bits.push_back( POWERSTOP_BIT );     this->thread_states[ POWERSTOP_BIT ]     = "power_shutdown";
     this->thread_state_bits.push_back( MODEXPTIME_BIT );    this->thread_states[ MODEXPTIME_BIT ]    = "modify_exptime";
     this->thread_state_bits.push_back( ACQUISITION_BIT );   this->thread_states[ ACQUISITION_BIT ]   = "acquisition";
-    this->thread_state_bits.push_back( GUIDE_BIT );         this->thread_states[ GUIDE_BIT ]         = "guide";
+    this->thread_state_bits.push_back( GUIDING_BIT );       this->thread_states[ GUIDING_BIT ]       = "guiding";
     this->thread_state_bits.push_back( STARTUP_BIT );       this->thread_states[ STARTUP_BIT ]       = "startup";
     this->thread_state_bits.push_back( SHUTDOWN_BIT );      this->thread_states[ SHUTDOWN_BIT ]      = "shutdown";
   }
@@ -1723,9 +1725,24 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 //  if ( seq.target.name != seq.last_target && ( ra_delta > 0.025 || dec_delta > 0.025 ) ) {
     {
 
-      // disable guiding
+      // disable guiding (if running)
       //
-      logwrite( function, "[TODO] disable guiding not yet implemented" ); ///< @todo disable guiding not yet implemented
+      if ( seq.is_seqstate_set( Sequencer::SEQ_GUIDE ) ) {
+
+        if ( ! seq.waiting_for_state.load() ) {
+          std::thread( seq.dothread_wait_for_state, std::ref(seq) ).detach();
+        }
+
+        seq.clr_reqstate_bit( Sequencer::SEQ_GUIDE );
+
+        std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );                       // create a mutex object for waiting
+        while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
+          message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+          logwrite( function, message.str() );
+          seq.cv.wait( wait_lock );
+        }
+        logwrite( function, "DONE WAITING" );
+      }
 
       // clear target acquired flag
       //
@@ -2367,9 +2384,78 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
   /***** Sequencer::Sequence::dothread_modify_exptime *************************/
 
 
+  /***** Sequencer::Sequence::dothread_guide **********************************/
+  /**
+   * @brief      performs the guiding sequence until stopped
+   * @details    target must first have been acquired
+   * @param[in]  seq  reference to Sequencer::Sequence object
+   *
+   * This function is spawned in a thread.
+   *
+   */
+  void Sequence::dothread_guide( Sequencer::Sequence &seq ) {
+    seq.set_thrstate_bit( THR_GUIDING );
+    std::string function = "Sequencer::Sequence::dothread_guide";
+    std::stringstream message;
+    bool belowthreshold=false;
+    long attempts;
+    long error=NO_ERROR;
+
+    // Do not allow guiding until a target has been acquired.
+    // target.acquired is set true by dothread_acquisition() after a successful acquisition.
+    //
+    if ( !seq.target.acquired ) {
+      message.str(""); message << "ERROR: cannot enable guiding when target is not acquired";
+      seq.async.enqueue_and_log( function, message.str() );
+      error = ERROR;
+    }
+    else {
+      seq.set_seqstate_bit( Sequencer::SEQ_GUIDE );                  // clear GUIDE bit to signify we're guiding
+      seq.async.enqueue_and_log( function, "NOTICE: guiding enabled" );
+    }
+
+    // Guiding loops "forever", as long as there's no error,
+    // and until requested to stop.
+    //
+    while ( error==NO_ERROR ) {
+
+      if ( !seq.is_reqstate_set( Sequencer::SEQ_GUIDE ) ) break;     // if requested GUIDE bit clear then stop guiding
+
+      error = seq.acquire_target( seq, belowthreshold, attempts );   // call acquire_target() here
+
+      if ( !belowthreshold ) {                                       // acquisition offsets above minimum threshold for success
+        if ( attempts > seq.acquisition_max_retrys ) {               // exceeding ACQUIRE_RETRYS ends guiding (intentionally using ">" and not ">=" here)
+          message.str(""); message << "ERROR: guider has lost target and exceeded max retrys";
+          seq.async.enqueue_and_log( function, message.str() );
+          break;
+        }
+        else {                                                       // allow retry up to ACQUIRE_RETRYS
+          message.str(""); message << "NOTICE: guider has lost target but will try again";
+          seq.async.enqueue_and_log( function, message.str() );
+        }
+      }
+      else attempts=0;                                               // reset cumulative attempts counter on each success
+
+    }  // end while error==NO_ERROR
+
+    if (error!=NO_ERROR) {
+      seq.thr_error.fetch_or( THR_GUIDING );                         // report any error
+      seq.async.enqueue_and_log( function, "ERROR: guiding disabled" );
+    }
+    else {
+      seq.async.enqueue_and_log( function, "NOTICE: guiding disabled" );
+    }
+
+    seq.clr_seqstate_bit( SEQ_GUIDE );
+    seq.clr_reqstate_bit( SEQ_GUIDE );
+    seq.clr_thrstate_bit( THR_GUIDING );
+  }
+  /***** Sequencer::Sequence::dothread_guide **********************************/
+
+
   /***** Sequencer::Sequence::dothread_acquisition ****************************/
   /**
-   * @brief      performs the acqusition sequence when signaled
+   * @brief      performs the acqusition sequence
    * @details    this gets called by the move_to_target thread
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
@@ -2387,7 +2473,90 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Initialize the ACAM for acquisition.
     // Need one of these calls for each new target.
     //
-    error  = seq.acamd.command( ACAMD_INIT, reply );
+    error = seq.acamd.command( ACAMD_INIT, reply );
+
+    int nacquired=0;            // number of sequential successful acquisitions, must meet ACQUIRE_MIN_REPEAT for success
+    long attempts=0;            // total cumulative number of attempts
+    int sequential_failures=0;  // keep track of number of sequential failures (i.e. acquisitions above threshold)
+    bool belowthreshold=false;  // is the acquisition below or above ACQUIRE_OFFSET_THRESHOLD
+
+    seq.target.acquired=false;  // initialize state: target is not acquired
+
+    double clock_timeout = get_clock_time() + seq.acquisition_timeout;  // must acquire by this time
+
+    // Call acquire_target() until we have acquired the min number of times
+    // (or error)
+    //
+    while ( (error==NO_ERROR) && (nacquired < seq.target.min_repeat) ) {
+
+      // before looping, check for a timeout
+      //
+      if ( get_clock_time() > clock_timeout ) {
+        error = ERROR;
+        seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within timeout" );
+        break;
+      }
+
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] calling acquire_target() with nacquired=" << nacquired 
+                               << " attempts=" << attempts << " sequential_failures=" << sequential_failures;
+      logwrite( function, message.str() );
+#endif
+
+      error = seq.acquire_target( seq, belowthreshold, attempts );
+
+      if ( error == NO_ERROR && belowthreshold ) {
+        nacquired++;
+        message.str(""); message << "acquired " << nacquired << " of " << seq.target.min_repeat;
+        logwrite( function, message.str() );
+      }
+      else nacquired=0;  // if an acquire is not below threshold then reset the counter
+
+      // If not acquired and ACQUIRE_RETRYS is specified in the config file,
+      // then increment sequential_failures counter, which cannot exceed ACQUIRE_RETRYS
+      //
+      if ( nacquired==0 && seq.acquisition_max_retrys > 0 ) {
+        if ( ++sequential_failures >= seq.acquisition_max_retrys ) error=ERROR;
+      }
+      else sequential_failures = 0;  // any acquisition below threshold will reset the sequential_failures counter
+
+    }  // end while error==NO_ERROR && nacquired < min_repeat
+
+    if (error!=NO_ERROR) {
+      seq.thr_error.fetch_or( THR_ACQUISITION );                     // report any error
+      message.str(""); message << "ERROR: acquisition failed after " << attempts << " attempts";
+    }
+    else {
+      message.str(""); message << "NOTICE: target acquired after " << attempts << " attempts";
+      seq.target.acquired = true;
+    }
+
+    seq.async.enqueue_and_log( function, message.str() );
+
+    seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE );             // clear ACQUIRE bit
+    seq.clr_thrstate_bit( THR_ACQUISITION );
+  }
+  /***** Sequencer::Sequence::dothread_acquisition ****************************/
+
+
+  /***** Sequencer::Sequence::acquire_target **********************************/
+  /**
+   * @brief      performs a single acquisition
+   * @details    this gets called by the dothread_acquisition and the 
+   *             dothread_guide threads. It is up to those threads to determine
+   *             what to do with a successful acquisition.
+   * @param[in]  seq             reference to Sequencer::Sequence object
+   * @param[out] belowthreshold  reference to bool to indicate if the acquisition is below ACQUIRE_OFFSET_THRESHOLD
+   * @param[out] attempts        reference to cumulative attempts counter
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Sequence::acquire_target( Sequencer::Sequence &seq, bool &belowthreshold, long &attempts ) {
+    std::string function = "Sequencer::Sequence::acquire_target";
+    std::stringstream message;
+    std::stringstream cmd;
+    std::string reply, dontcare;
+    long error = NO_ERROR;
 
     // Begin looping, acquiring images, solving for astrometry, calculating offsets,
     // moving the telescope ... until acquired, timeout, or error.
@@ -2396,28 +2565,34 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     double clock_timeout = clock_now + seq.acquisition_timeout;  // must acquire by this time
 
     int retrys=0;    // number of acquisition attempts
-    int nacquired=0; // number of sequential successful acquisitions, must meet ACQUIRE_MIN_REPEAT for success
 
-#ifdef SIMULATED_IMAGES
-    // This section is only for cameraserver-generated images.
-    // These will always be the latest ACAM coordinates.
-    double acam_ra_latest  = acam_ra_goal;
-    double acam_dec_latest = acam_dec_goal;
-#endif
+    while ( error == NO_ERROR ) {
 
-    while ( (error==NO_ERROR) && nacquired < seq.target.min_repeat ) {
+      attempts++;  // increment cumulative attempts counter
+
+      // before looping, check for a timeout
+      //
+      clock_now = get_clock_time();
+
+      if ( clock_now > clock_timeout ) {
+        error = ERROR;
+        seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within timeout" );
+        break;
+      }
 
       // The "goal" for the acam is the result from the SLIT->ACAM calculation
       // that was performed in move_to_target() using the DB coords,
       // except the angle is the current cass angle read from the TCS.
       //
-      double dontcare=0, cass_now = NAN;
+      double cass_now = NAN;
       error = seq.get_tcs_cass( cass_now );
 
       // This call is just to convert the current cass rotator angle to a slit position angle,
-      // so we don't care about the RA, DEC coordinates.
+      // so we don't care about the RA, DEC coordinates, which are passed in as zero.
       //
-      error = seq.target.fpoffsets.compute_offset( "SCOPE", "SLIT", dontcare, dontcare, cass_now );
+      logwrite( function, 
+              "[ACQUIRE] the following FPOffset call is for computing slit angle from cass angle and don't care about RA,DEC coords" );
+      error = seq.target.fpoffsets.compute_offset( "SCOPE", "SLIT", 0, 0, cass_now );
 
       // Now convert the slit coordinates to ACAM coordinates using the RA, DEC from the database
       // and the slit position angle just obtained above (which is currently stored in coords_out.angle).
@@ -2447,10 +2622,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       error  = seq.acamd.command( ACAMD_ACQUIRE, reply );
 
       // Perform the astrometry calculations on the acquired image (and calculate image quality).
+      // Optional solver args can be included here, which currently only come from the test commands.
       //
-      cmd.str(""); cmd << ACAMD_SOLVE << " " << reply;
-      if ( error == NO_ERROR ) error = seq.acamd.command( ACAMD_SOLVE, reply );
-//    if ( error == NO_ERROR ) error = seq.acamd.command( ACAMD_QUALITY, reply );
+//    cmd.str(""); cmd << ACAMD_SOLVE << " " << reply;
+//    if ( error == NO_ERROR ) error = seq.acamd.command( ACAMD_SOLVE, reply );
+      cmd.str(""); cmd << ACAMD_SOLVE << " " << seq.test_solver_args;
+      if ( error == NO_ERROR ) error = seq.acamd.command( cmd.str(), reply );
+
+      if ( error == NO_ERROR ) error = seq.acamd.command( ACAMD_QUALITY, dontcare );
 
       // Tokenize the reply from the solver.
       // The solver gives us ACAM coordinates.
@@ -2480,8 +2659,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
           match_found = false;
           message.str(""); message << "solve " << tokens.at(0) << ": no match found";
           logwrite( function, message.str() );
-          break;        // get out, don't keep trying
-          nacquired=0;  // one bad match resets this counter which requires ACQUIRE_MIN_REPEAT sequential acquires
         }
       }
       catch( std::out_of_range &e ) {
@@ -2524,8 +2701,11 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // from the DB and are where the ACAM needs to be pointed.
       // Goals never change.
       //
-      double ra_off  = acam_ra_goal  - acam_ra;
-      double dec_off = acam_dec_goal - acam_dec;
+      double ra_off, dec_off;
+
+      error = seq.target.fpoffsets.solve_offset( acam_ra, acam_dec,
+                                                 acam_ra_goal, acam_dec_goal,
+                                                 ra_off, dec_off );
 
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[ACQUIRE] ra_off=" << std::fixed << std::setprecision(6)
@@ -2554,29 +2734,31 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << seq.target.max_tcs_offset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] retrys=" << retrys;
+        logwrite( function, message.str() );
+#endif
 
         // Match found but failure to send an offset is also considered a "retry"
         //
         if ( ++retrys >= seq.acquisition_max_retrys ) {
-          seq.async.enqueue_and_log( function, "ERROR: failed to send a successful offset within max number of attempts" );
+          message.str(""); message << "ERROR: failed to find offset below " << seq.target.max_tcs_offset << " within max number of attempts";
+          seq.async.enqueue_and_log( function, message.str() );
+          error = ERROR;
           break;
         }
       }
       // otherwise send the offsets to the TCS and keep looping.
       //
       else
-      if (error==NO_ERROR) error = seq.offset_tcs( 0.8375*ra_off, dec_off );  // send offset to TCS here
+      if (error==NO_ERROR) {
+        error = seq.offset_tcs( ra_off, dec_off );  // send offset to TCS here
+        retrys = 0;                                 // reset retry counter if match found and offset < max and no errors
+      }
       else {
-        logwrite( function, "ERROR computing offsets" );
+        seq.async.enqueue_and_log( function, "ERROR solving offsets" );
+        break;
       }
-
-      // If offset below the threshold then the target is acquired.
-      // Increment a counter which must exceed the ACQUIRE_MIN_REPEAT before declaring success.
-      //
-      if ( error!=ERROR && offset < seq.target.offset_threshold ) {
-        nacquired++;
-      }
-      else nacquired=0;  // one bad match resets this counter which requires ACQUIRE_MIN_REPEAT sequential acquires
 
       {  // temporary logging
       double __ra, __dec;
@@ -2586,77 +2768,25 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       logwrite( function, message.str() );
       }
 
-      // before looping, check for a timeout
+      // Is the offset below ACQUIRE_OFFSET_THRESHOLD ?
       //
-      clock_now = get_clock_time();
-
-      if ( clock_now > clock_timeout ) {
-        error = ERROR;
-        seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within timeout" );
+      if ( error!=ERROR && offset < seq.target.offset_threshold ) {
+        logwrite( function, "offset below threshold" );
+        belowthreshold=true;
+        break;
+      }
+      else {
+        logwrite( function, "offset above threshold" );
+        belowthreshold=false;
         break;
       }
 
-#ifdef SIMULATED_IMAGES
-      // This section is only for cameraserver-generated images which
-      // produces simulated star fields. To generate a simulated image
-      // you have to select something in the GUI, send ACAMD_CAMERASERVER_COORDS,
-      // wait 1 second, then send ACAMD_ACQUIRE.
+    }  // end while ( error == NO_ERROR )
 
-      // These will be the latest ACAM coordinates.
-      //
-      acam_ra_latest  += ra_off;
-      acam_dec_latest += dec_off;
-
-      // then send these to the Andor camera server.
-      //
-      std::stringstream acam;
-      std::string dontcare;
-
-      acam.str(""); acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)
-                                                      << " " << acam_ra_latest
-                                                      << " " << acam_dec_latest
-                                                      << " " << acam_angle_goal;
-
-      message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
-
-      if ( error == NO_ERROR ) seq.acamd.command( acam.str(), dontcare );  // send to external camera server here
-
-      usleep(1000000);  // delay because cameraserver returns before it's finished
-                        // and there's no feedback to know when an image is ready
-#endif
-
-    }  // end while ( (error==NO_ERROR) && !acquired ) 
-
-    seq.target.acquired = ( nacquired >= seq.target.min_repeat ? true : false );
-
-    message.str(""); message << "target" << ( seq.target.acquired ? " " : " not " ) << "acquired";
-    logwrite( function, message.str() );
-
-    if (error!=NO_ERROR) seq.thr_error.fetch_or( THR_ACQUISITION );  // report any error
-
-    seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE );             // clear ACQUIRE bit
-    seq.clr_thrstate_bit( THR_ACQUISITION );
-
-    return;
+    if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: acquiring target" );
+    return error;
   }
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
-
-
-  /***** Sequencer::Sequence::dothread_guide **********************************/
-  /**
-   * @brief      performs the guiding sequence when signaled
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   *
-   * This function is spawned in a thread. It 
-   *
-   */
-  void Sequence::dothread_guide( Sequencer::Sequence &seq ) {
-    seq.set_thrstate_bit( THR_GUIDE );
-    std::string function = "Sequencer::Sequence::dothread_guide";
-    std::stringstream message;
-    seq.clr_thrstate_bit( THR_GUIDE );
-  }
-  /***** Sequencer::Sequence::dothread_guide **********************************/
+  /***** Sequencer::Sequence::acquire_target **********************************/
 
 
   /***** Sequencer::Sequence::dothread_wait_for_state *************************/
@@ -2793,10 +2923,10 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       return( ERROR );
     }
 
-    // Start threads for acquisition and guiding.
-    // Nothing is waiting on them, but rather they will be waiting on signals.
-    //
-    std::thread( dothread_guide, std::ref(seq) ).detach();
+//  // Start threads for acquisition and guiding.
+//  // Nothing is waiting on them, but rather they will be waiting on signals.
+//  //
+//  std::thread( dothread_guide, std::ref(seq) ).detach();
 
     // The following can be done in parallel.
     // Set the state bit before starting each thread, then
@@ -3616,20 +3746,47 @@ logwrite( function, "[DEBUG] setting READY bit" );
       return ERROR;
     }
 
-    // Now we wait.
+    // Now we wait for how long it should take to offset, ...
     //
     double ratime     = ra_off  / this->tcs_offsetrate_ra;         // time to offset in RA
     double dectime    = dec_off / this->tcs_offsetrate_dec;        // time to offset in DEC
     double offsettime = ( ratime > dectime ? ratime  : dectime );  // only need to wait for the longest one
 
-    offsettime += offsettime*0.25;                                 // add 25% for margin
-
     long sleeptime = (long) ( ceil(offsettime) * 1000000 );        // round up to next whole usec
 
-    usleep( sleeptime );
+    usleep( sleeptime );                                           // expected offset time
 
-//logwrite( function, "[NOTICE] sleeping an extra 10s" );
-//usleep( 10000000 );
+    // ...then poll the TCS at 10Hz to detect when telescope has settled (MOTION_TRACKING).
+    // The TCS must be settled for TCS_SETTLE_STABLE seconds before declaring that it has settled.
+    // This is because it can bounce between SETTLING and TRACKING.
+    // This wait can time out.
+    //
+    bool stable=false;
+    int settlecount=0;
+    double clock_timeout = get_clock_time() + this->tcs_settle_timeout;  // must settle by this time
+
+    while ( error!=ERROR && !stable ) {
+
+      if ( get_clock_time() > clock_timeout ) {                          // check for timeout
+        this->async.enqueue_and_log( function, "ERROR: timeout waiting for telescope to settle" );
+        error = ERROR;
+        break;
+      }
+
+      std::string tcsmotion;
+      error = this->poll_tcs_motion( tcsmotion );                        // poll TCS ?MOTION status
+
+      // Once the TCS reports TRACKING, then start a counter. Counter has to exceed the TCS_SETTLE_STABLE
+      // time before marking as settled. If it ever reports not tracking then the count starts over.
+      //
+      if ( tcsmotion == TCS_MOTION_TRACKING_STR ) settlecount++; else settlecount=0;
+
+      // This loop polls at 10Hz so counter must be >= 10 * TCS_SETTLE_STABLE
+      //
+      if ( settlecount >= 10*this->tcs_settle_stable ) stable = true;
+
+      usleep(100000);                                                    // sets the 10Hz loop rate
+    }
 
     return error;
   }
@@ -3811,6 +3968,68 @@ logwrite( function, "[DEBUG] setting READY bit" );
     else
 
     // ----------------------------------------------------
+    // single -- get command line info for a single observation w/o the database
+    //           must specify in CSV order:
+    //           RA, DECL, SLITANGLE, SLITWIDTH, EXPTIME, BINSPECT, BINSPAT, POINTMODE
+    // ----------------------------------------------------
+    //
+    if ( testname == "single" ) {
+      std::string::size_type pos = args.find( "single " );         // note space at end of test name!
+      std::string arglist = args.substr( pos+strlen("single ") );  // arglist is the rest of the args string after "single "
+
+      // args does not contain "single " (note space! no space means no args)
+      //
+      if ( pos == std::string::npos ) {
+        logwrite( function, "ERROR: expected single <RA>, <DEC>, <slitangle>, <slitwidth>, <exptime>, <binspect>, <binspat>, <pointmode>" );
+        return( ERROR );
+      }
+
+      // Tokenize arglist on the comma.
+      // Expecting 8 tokens: RA, DECL, SLITANGLE, SLITWIDTH, EXPTIME, BINSPECT, BINSPAT, POINTMODE
+      //
+      Tokenize( arglist, tokens, "," );
+      if ( tokens.size() != 8 ) {
+        logwrite( function, "ERROR: expected single <RA>, <DEC>, <slitangle>, <slitwidth>, <exptime>, <binspect>, <binspat>, <pointmode>" );
+        return( ERROR );
+      }
+
+      try {
+        // The following items are read from the database with the "get_next()" function,
+        // and those marked with an asterick is what is set here. Everything else
+        // we don't really need.
+        //
+        this->target.obsid       = 0;                          //  OBSERVATION_ID
+        this->target.obsorder    = 0;                          //  OBS_ORDER
+        this->target.name        = "TEST";                     //  NAME
+        this->target.state       = Sequencer::TARGET_PENDING;  //  STATE
+        this->target.ra_hms      = tokens.at(0);               // *RA
+        this->target.dec_dms     = tokens.at(1);               // *DECL
+        this->target.casangle    = 0.;                         //  OTMcass
+        this->target.slitangle   = std::stod( tokens.at(2) );  // *OTMslitangle
+        this->target.slitwidth   = std::stod( tokens.at(3) );  // *OTMslit
+        this->target.slitoffset  = 0.;                         //  SLITOFFSET
+        this->target.exptime     = std::stod( tokens.at(4) );  // *OTMexpt
+        this->target.targetnum   = 0;                          //  TARGET_NUMBER
+        this->target.sequencenum = 0;                          //  SEQUENCE_NUMBER
+        this->target.binspect    = std::stoi( tokens.at(5) );  // *BINSPECT
+        this->target.binspat     = std::stoi( tokens.at(6) );  // *BINSPAT
+        this->target.pointmode   = tokens.at(7);               // *POINTMODE
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "out of range parsing args " << args << ": " << e.what();
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+      catch( std::invalid_argument &e ) {
+        message.str(""); message << "invalid argument parsing args " << args << ": " << e.what();
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+      error = NO_ERROR;
+    }
+    else
+
+    // ----------------------------------------------------
     // getnext -- get the next pending target from the database
     // ----------------------------------------------------
     //
@@ -3851,11 +4070,10 @@ logwrite( function, "[DEBUG] setting READY bit" );
     //
     if ( testname == "addrow" ) {
       int number=0;
-      std::string name="";
-      std::string ra="";
-      std::string dec="";
-      if ( tokens.size() != 5 ) {
-        logwrite( function, "ERROR: expected <number> <name> <RA> <DEC>" );
+      std::string name="", ra="", dec="";
+      double etime=0., slitw=1., slita=18.;
+      if ( tokens.size() != 8 ) {
+        logwrite( function, "ERROR: expected \"addrow <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\"" );
         return( ERROR );
       }
       try {
@@ -3863,16 +4081,21 @@ logwrite( function, "[DEBUG] setting READY bit" );
         name   = tokens.at(2);
         ra     = tokens.at(3);
         dec    = tokens.at(4);
+        slita  = std::stod( tokens.at(5) );
+        slitw  = std::stod( tokens.at(6) );
+        etime  = std::stod( tokens.at(7) );
       }
       catch( std::out_of_range &e ) {
         message.str(""); message << "out of range parsing args " << args << ": " << e.what();
         logwrite( function, message.str() );
+        return ERROR;
       }
       catch( std::invalid_argument &e ) {
         message.str(""); message << "invalid argument parsing args " << args << ": " << e.what();
         logwrite( function, message.str() );
+        return ERROR;
       }
-      error = this->target.add_row( number, name, ra, dec );
+      error = this->target.add_row( number, name, ra, dec, slita, slitw, etime );
     }
     else
 
@@ -3971,6 +4194,20 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ---------------------------------------------------------
     //
     if ( testname == "moveto" ) {
+
+      // any and all args are taken to be optional solver args
+      //
+      if ( tokens.size() > 1 ) {
+        std::string::size_type pos = args.find( "moveto " );            // note space at end of test name!
+        this->test_solver_args = args.substr( pos+strlen("moveto ") );  // test_solver_args is the rest of the args string after "moveto "
+      }
+      else this->test_solver_args="";                                   // delete previous optional solver args if not specified
+
+      if ( !this->test_solver_args.empty() ) {
+        message.str(""); message << "NOTICE: test solver args: " << this->test_solver_args;
+      }
+      this->async.enqueue_and_log( function, message.str() );
+
       this->tcs_ontarget.store( false );
       this->tcs_nowait.store( false );
       logwrite( function, "spawning dothread_move_to_target..." );

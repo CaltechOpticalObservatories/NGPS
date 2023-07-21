@@ -25,6 +25,7 @@
 #define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_FPOFFSETS_MODULE "FPoffsets"
 #define PYTHON_FPOFFSETS_FUNCTION "compute_offset"
+#define PYTHON_SOLVEOFFSETDEG_FUNCTION "solve_offset_deg"
 
 /***** Sequencer **************************************************************/
 /**
@@ -206,6 +207,11 @@ namespace Sequencer {
       long compute_offset( std::string from, std::string to, 
                            double ra_in, double dec_in, double angle_in,
                            double &ra_out, double &dec_out, double &angle_out );
+
+      long solve_offset( double ra_acam, double dec_acam,
+                         double ra_goal, double dec_goal,
+                         double &ra_off, double &dec_off );
+
   };
   /***** Sequencer::FPOffsets *************************************************/
 
@@ -276,6 +282,7 @@ namespace Sequencer {
       mysqlx::string obsplan;             ///< TBD
       int            binspect;            ///< binning in spectral direction for this target
       int            binspat;             ///< binning in spatial direction for this target
+      mysqlx::string pointmode;           ///< pointing mode contains slit|acam with optional space-delimited filter
 
       double         offset_threshold;    ///< computed offset below this threshold (in arcsec) defines successful acquisition
       double         max_tcs_offset;      ///< max allowable TCS offset
@@ -287,7 +294,7 @@ namespace Sequencer {
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
       long target_qc( std::string &status );                   ///< target info quality control
-      long add_row( int number, std::string name, std::string ra_hms, std::string dec_dms );   ///< add a row to the database
+      long add_row( int number, std::string name, std::string ra_hms, std::string dec_dms, double slita, double slitw, double etime );   ///< add a row to the database
       long update_state( std::string newstate );  ///< update the target status in the database DB_ACTIVE table
       long insert_completed();            ///< insert target record into completed observations table
       long get_table_names();             ///< utility to print all database table names

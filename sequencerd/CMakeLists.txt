@@ -6,10 +6,6 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
-# Set this when using the Andor server to produce simulated star fields
-#
-#add_definitions(-DSIMULATED_IMAGES)
-
 add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
 
 set( SEQUENCER_DIR ${PROJECT_BASE_DIR}/sequencerd )

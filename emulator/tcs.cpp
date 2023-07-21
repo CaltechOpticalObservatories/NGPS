@@ -401,6 +401,8 @@ namespace TcsEmulator {
 
     double ra_off, dec_off;  // offsets read in
     double newra, newdec;    // these will be the new RA, DEC after offsetting
+    double ra_now  = telescope.ra.load();
+    double dec_now = telescope.dec.load();
 
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
@@ -428,10 +430,14 @@ namespace TcsEmulator {
 
     std::cerr << get_timestamp() << function << "offsetting ra " << ra_off << " dec " << dec_off << "\n";
 
+    // Call FPOffsets::apply_offset_deg() to calculate the new RA, DEC coordinates
+    // after applying the offsets.
     // new* is where we want to end up, after offset is complete
     //
-    newra  = telescope.ra.load()  + (ra_off/15.);  // ra is in hours but ra_off is deg so divide by 15
-    newdec = telescope.dec.load() + dec_off;       // dec is always in degrees
+    std::cerr << get_timestamp() << function << "[DEBUG] before apply_offset call ra_now=" << ra_now << " dec_now=" << dec_now << "\n";
+    telescope.fpoffsets.apply_offset( ra_now * 15.0, dec_now, ra_off, dec_off, newra, newdec );
+    newra /= 15.0;                                 // apply_offset returns deg, tcs uses hr so convert from deg to hours
+    std::cerr << get_timestamp() << function << "[DEBUG] after apply_offset call newra=" << newra << " newdec=" << newdec << "\n";
 
     // calculate the offset distance and the offset time for each of RA, DEC
     //
@@ -472,6 +478,7 @@ namespace TcsEmulator {
 
     // then set the ra,dec to those requested (because the granularity above is not perfect)
     //
+    std::cerr << get_timestamp() << function << "[DEBUG] store in telescope class: newra=" << newra << " newdec=" << newdec << "\n";
     telescope.ra.store( newra );
     telescope.dec.store( newdec );
 
@@ -951,5 +958,118 @@ namespace TcsEmulator {
     return ( NO_ERROR );
   }
   /***** TcsEmulator::Interface::parse_command ********************************/
+
+
+  /***** TcsEmulator::FPOffsets::FPOffsets ************************************/
+  /**
+   * @brief      class constructor
+   *
+   */
+  FPOffsets::FPOffsets() {
+    std::string function = "  (TcsEmulator::FPOffsets::FPOffsets) ";
+    std::stringstream message;
+
+    if ( !this->py_instance.is_initialized() ) {
+      std::cerr << get_timestamp() << function << "ERROR could not initialize Python\n";
+      this->python_initialized = false;
+      return;
+    }
+
+    this->pModuleName = PyUnicode_FromString( PYTHON_FPOFFSETS_MODULE );
+    this->pModule     = PyImport_Import( this->pModuleName );
+    this->python_initialized = true;
+  }
+  /***** TcsEmulator::FPOffsets::FPOffsets ************************************/
+
+
+  /***** TcsEmulator::FPOffsets::~FPOffsets ***********************************/
+  /**
+   * @brief      class deconstructor
+   *
+   */
+  FPOffsets::~FPOffsets() {
+  }
+  /***** TcsEmulator::FPOffsets::~FPOffsets ***********************************/
+
+
+  /***** TcsEmulator::FPOffsets::apply_offset *********************************/
+  /**
+   * @brief      calculate offsets to apply to the telescope
+   * @param[in]  ra_in    current RA in deg
+   * @param[in]  dec_in   current DEC in deg
+   * @param[in]  ra_off   RA offset in deg
+   * @param[in]  dec_off  DEC offset in deg
+   * @param[in]  ra_out   reference to new telescope RA
+   * @param[in]  dec_out  reference to new telescope DEC
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long FPOffsets::apply_offset( double ra_in, double dec_in, double ra_off, double dec_off,
+                                double &ra_out, double &dec_out ) {
+    std::string function = "  (TcsEmulator::FPOffsets::apply_offset) ";
+    std::stringstream message;
+
+    std::cerr << get_timestamp() << function << "ra_in=" << ra_in << " dec_in=" << dec_in << " ra_off=" << ra_off << " dec_off=" << dec_off << "\n";
+
+    if ( !this->python_initialized ) {
+      std::cerr << get_timestamp() << function << "ERROR Python is not initialized\n";
+      return( ERROR );
+    }
+
+    if ( this->pModule==NULL ) {
+      std::cerr << get_timestamp() << function << "ERROR: Python module not imported\n";
+      return( ERROR );
+    }
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_APPLYOFFSETDEG_FUNCTION );
+
+    // Build up the PyObject argument list that will be passed to the function
+    //
+    PyObject* pArgList = Py_BuildValue( "(dddd)", ra_in, dec_in, ra_off, dec_off );
+
+    // Call the Python function here
+    //
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      std::cerr << get_timestamp() << function << "ERROR: Python function not callable\n";
+      return( ERROR );
+    }
+
+    PyObject* pReturn = PyObject_CallObject( pFunction, pArgList );
+
+    // Expected back a tuple
+    //
+    if ( !PyTuple_Check( pReturn ) ) {
+      std::cerr << get_timestamp() << function << "ERROR: did not receive a tuple\n";
+      return( ERROR );
+    }
+
+    int tuple_size = PyTuple_Size( pReturn );
+
+    // Put each tuple item in its place
+    //
+    for ( int tuplen = 0; tuplen < tuple_size; tuplen++ ) {
+      PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
+      if ( PyFloat_Check( pItem ) ) {
+        switch ( tuplen ) {
+          case 0: ra_out    = PyFloat_AsDouble( pItem ); break;
+          case 1: dec_out   = PyFloat_AsDouble( pItem ); break;
+          default:
+            std::cerr << get_timestamp() << function << "ERROR unexpected tuple item " << tuplen << ": expected {0,1}\n";
+            return( ERROR );
+            break;
+        }
+      }
+    }
+
+    // Checking after extracting, because it may allow for partial extraction
+    //
+    if ( tuple_size != 2 ) {
+      std::cerr << get_timestamp() << function << "ERROR expected 2 tuple items but received " << tuple_size << "\n";
+      return( ERROR );
+    }
+
+    return NO_ERROR;
+  }
+  /***** TcsEmulator::FPOffsets::apply_offset *********************************/
 
 }

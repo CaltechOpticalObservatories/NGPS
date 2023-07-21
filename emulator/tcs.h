@@ -27,6 +27,11 @@
 #include "logentry.h"
 #include "network.h"
 #include "tcs_constants.h"
+#include "cpython.h"
+
+#define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
+#define PYTHON_FPOFFSETS_MODULE "FPoffsets"
+#define PYTHON_APPLYOFFSETDEG_FUNCTION "apply_offset_deg"
 
 /***** TcsEmulator ************************************************************/
 /**
@@ -35,6 +40,35 @@
  *
  */
 namespace TcsEmulator {
+
+  /***** TcsEmulator::FPOffsets ***********************************************/
+  /**
+   * @class   FPOffsets
+   * @brief   class for calling FPOffsets python functions
+   * @details makes use of CPython::CPytInstance defined in cpython.h
+   *
+   */
+  class FPOffsets {
+    private:
+      char* restore_path;       /// if the PYTHONPATH env variable is changed then remember the original
+      bool python_initialized;  /// set true when the Python interpreter has been initialized
+
+    public:
+      FPOffsets();
+      ~FPOffsets();
+
+      inline bool is_initialized() { return this->python_initialized; };
+
+      CPython::CPyInstance py_instance { PYTHON_PATH };  /// initialize the Python interpreter
+      PyObject* pModuleName;
+      PyObject* pModule;
+
+      long apply_offset( double ra_in,   double dec_in,
+                         double ra_off,  double dec_off,
+                         double &ra_out, double &dec_out );
+  };
+  /***** TcsEmulator::FPOffsets ***********************************************/
+
 
   /***** TcsEmulator::Telescope ***********************************************/
   /**
@@ -50,6 +84,8 @@ namespace TcsEmulator {
     public:
       Telescope();
       ~Telescope();
+
+      FPOffsets fpoffsets;                   ///< instantiate an FPOffsets object needed for calculating offsets
 
       volatile std::atomic<bool> focussing;  ///< set true during fake focus moves, prevents another thread from focussing the telescope
       volatile std::atomic<bool> telmoving;  ///< set true during fake telescope moves, prevents another thread from moving the telescope

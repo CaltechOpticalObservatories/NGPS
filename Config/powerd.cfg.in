@@ -12,7 +12,7 @@ ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 # set as follows: NPS_UNIT="NPS# MAXOUTLETS HOST PORT"
 
 #NPS_UNIT="1 8 131.215.200.84 3001"
-NPS_UNIT="1 8 10.200.129.161 3001"      # emulator
+NPS_UNIT="1 8 10.0.0.5 3001"      # emulator
 NPS_UNIT="2 8 localhost 10002"      # emulator
 NPS_UNIT="3 8 localhost 10003"      # emulator
 NPS_UNIT="4 8 localhost 10004"      # DC power switch

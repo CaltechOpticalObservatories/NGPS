@@ -397,17 +397,26 @@ namespace Sequencer {
    * @param[in]  name    string target name
    * @param[in]  ra      string RA
    * @param[in]  dec     string DECL
+   * @param[in]  slita   double slit angle
+   * @param[in]  slitw   double slit width
+   * @param[in]  etime   double exposure time
    *
    * This is for testing purposes. Adds a row to the database using the passed-in
    * parameters which set the ID, ORDER, NAME, RA, DECL. Everything else is fixed.
    *
    */
-  long TargetInfo::add_row( int number, std::string name, std::string ra, std::string dec ) {
+  long TargetInfo::add_row( int number, std::string name, std::string ra, std::string dec,
+                            double slita, double slitw, double etime ) {
     std::string function = "Sequencer::TargetInfo::add_row";
     std::stringstream message;
 
     if ( !is_db_configured() ) {
       logwrite( function, "ERROR: database not configured (check .cfg file)" );
+      return( ERROR );
+    }
+
+    if ( this->setid < 0 ) {
+      logwrite( function, "ERROR: targetset has not been provided" );
       return( ERROR );
     }
 
@@ -430,37 +439,47 @@ namespace Sequencer {
       // add the row
       //
       targettable.insert( "OBSERVATION_ID",
-                         "SET_ID",
-                         "OBS_ORDER",
-                         "STATE",
-                         "NAME",
-                         "RA",
-                         "DECL",
-                         "EXPTIME",
-                         "TARGET_NUMBER",
-                         "SEQUENCE_NUMBER",
-                         "SLITWIDTH",
-                         "SLITOFFSET",
-                         "BINSPECT",
-                         "BINSPAT",
-                         "CASANGLE"
+                          "OBS_ORDER",
+                          "SET_ID",
+                          "STATE",
+                          "NAME",
+                          "RA",
+                          "DECL",
+                          "EPOCH",
+                          "EXPTIME",
+                          "OTMexpt",
+                          "TARGET_NUMBER",
+                          "SEQUENCE_NUMBER",
+                          "CASANGLE",
+                          "OTMcass",
+                          "OTMslitangle",
+                          "OTMslit",
+                          "SLITWIDTH",
+                          "SLITOFFSET",
+                          "BINSPECT",
+                          "BINSPAT"
                         )
-                .values( number,
-                         1,
-                         number,
-                         Sequencer::TARGET_PENDING,
-                         name,
-                         ra,
-                         dec,
-                         "J2000",
-                         15,
-                         1,
-                         1,
-                         1.0,
-                         0,
-                         1,
-                         1,
-                         0 )
+                .values( number,                     /* OBSERVATION_ID  */
+                         number,                     /* OBS_ORDER       */
+                         this->setid,                /* SET_ID          */
+                         Sequencer::TARGET_PENDING,  /* STATE           */
+                         name,                       /* NAME            */
+                         ra,                         /* RA              */
+                         dec,                        /* DECL            */
+                         "J2000",                    /* EPOCH           */
+                         etime,                      /* EXPTIME         */
+                         etime,                      /* OTMexpt         */
+                         1,                          /* TARGET_NUMBER   */
+                         1,                          /* SEQUENCE_NUMBER */
+                         0.,                         /* CASANGLE        */
+                         0.,                         /* OTMcass         */
+                         slita,                      /* OTMslitangle    */
+                         slitw,                      /* OTMslit         */
+                         slitw,                      /* SLITWIDTH       */
+                         1,                          /* SLITOFFSET      */
+                         1,                          /* BINSPECT        */
+                         1                           /* BINSPAT         */
+                       )
                 .execute();
     }
     catch ( const mysqlx::Error &err ) {
@@ -1864,5 +1883,101 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /***** Sequencer::FPOffsets::compute_offset *********************************/
+
+
+  /***** Sequencer::FPOffsets::solve_offset ***********************************/
+  /**
+   * @brief      calculate offsets between ACAM and goal
+   * @param[in]  ra_acam   current solution for ACAM RA
+   * @param[in]  dec_acam  current solution for ACAM DEC
+   * @param[in]  ra_goal   RA goal
+   * @param[in]  dec_goal  DEC goal
+   * @param[in]  ra_off    reference to computed offset in RA to reach goal
+   * @param[in]  dec_off   reference to computed offset in DEC to reach goal
+   * @return     ERROR or NO_ERROR
+   *
+   * @details    The TCS "PT" command moves the telescope along a great circle.
+   *             Given a current position and a goal, this calls a Python
+   *             function which computes the offsets needed to move the ACAM
+   *             to the goal via the PT command.
+   *
+   */
+  long FPOffsets::solve_offset( double ra_acam, double dec_acam, double ra_goal, double dec_goal,
+                                double &ra_off, double &dec_off ) {
+    std::string function = "Sequencer::FPOffsets::solve_offset";
+    std::stringstream message;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] ra_acam=" << ra_acam << " dec_acam=" << dec_acam << " ra_goal=" << ra_goal << " dec_goal=" << dec_goal;
+    logwrite( function, message.str() );
+#endif
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return( ERROR );
+    }
+
+    if ( this->pModule==NULL ) {
+      logwrite( function, "ERROR: Python module not imported" );
+      return( ERROR );
+    }
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_SOLVEOFFSETDEG_FUNCTION );
+
+    // Build up the PyObject argument list that will be passed to the function
+    //
+    PyObject* pArgList = Py_BuildValue( "(dddd)", ra_acam, dec_acam, ra_goal, dec_goal );
+
+    // Call the Python function here
+    //
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      logwrite( function, "ERROR: Python function not callable" );
+      return( ERROR );
+    }
+
+    PyObject* pReturn = PyObject_CallObject( pFunction, pArgList );
+
+    // Expected back a tuple
+    //
+    if ( !PyTuple_Check( pReturn ) ) {
+      logwrite( function, "ERROR: did not receive a tuple" );
+      return( ERROR );
+    }
+
+    int tuple_size = PyTuple_Size( pReturn );
+
+    // Put each tuple item in its place
+    //
+    for ( int tuplen = 0; tuplen < tuple_size; tuplen++ ) {
+      PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
+      if ( PyFloat_Check( pItem ) ) {
+        switch ( tuplen ) {
+          case 0: ra_off  = PyFloat_AsDouble( pItem ); break;
+          case 1: dec_off = PyFloat_AsDouble( pItem ); break;
+          default:
+            message.str(""); message << "ERROR unexpected tuple item " << tuplen << ": expected {0,1}";
+            logwrite( function, message.str() );
+            return( ERROR );
+            break;
+        }
+      }
+    }
+
+    // Checking after extracting, because it may allow for partial extraction
+    //
+    if ( tuple_size != 2 ) {
+      message.str(""); message << "ERROR expected 2 tuple items but received " << tuple_size;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] ra_off=" << ra_off << " dec_off=" << dec_off;
+    logwrite( function, message.str() );
+#endif
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::FPOffsets::solve_offset ***********************************/
 
 }

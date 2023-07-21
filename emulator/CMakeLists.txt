@@ -14,6 +14,10 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
+find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
+include_directories( ${PYTHON_DEV} )
+
 add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
 
 # ----------------------------------------------------------------------------
@@ -146,12 +150,14 @@ add_executable(emulatord.tcs
         ${EMULATOR_DIR}/emulatord_tcs.cpp 
         ${EMULATOR_DIR}/tcs.cpp 
         ${TCS_CONSTANTS}
+        ${PYTHON_DEV}
         )
 target_link_libraries(emulatord.tcs
         network
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
+        ${PYTHON_LIB}
         )
 
 # -- Port Definitions ----------------------------------------------------------
