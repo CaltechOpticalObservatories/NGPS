@@ -1,0 +1,65 @@
+# configuration file for thermald
+# @THERMALD_CFG_COMMENT@
+#
+LOGPATH=/data/logs/               # where to write logs
+BLKPORT=@THERMALD_BLK_PORT@       # thermald server blocking port
+NBPORT=@THERMALD_NB_PORT@         # thermald server non-blocking port
+DAEMON=yes                        # run as daemon?
+ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
+ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+
+# Each Lakeshore is assigned a unit number, host, and port
+# set as follows: LKS_UNIT="LKS# MODEL HOST PORT"
+# where MODEL is the model number, e.g. "218, 325, 340, 336"
+# LKS# is an arbitrary number.
+# An LKS_UNIT must be defined before any LKS_CHAN(s).
+
+LKS_UNIT="1 325 131.215.200.115 3004"      # Lakeshore 325 controller
+LKS_UNIT="2 218 131.215.200.115 3003"      # Lakeshore 218 monitor
+
+# Each Lakeshore channel is assigned using a Lakeshore Channel Key (LKS_CHAN)
+# set as follows: LKS_CHAN="LKS# CHAN# LABEL"
+#
+# The LKS# here must have a corresponding LKS# set in an LKS_UNIT above,
+# and the LKS_UNIT must be defined first, before the LKS channels are
+# assigned below.
+#
+# CHAN# is a standard Lakeshore channel name (A, B, C1, 1, 2, 3, etc.)
+# and should be preceeded by an "H" to designate a heater (H1, H2, etc.).
+#
+# LABEL is a text string label for that channel. It can be any alphanumeric
+# string except it must not contain spaces.
+
+# Lakeshore unit 1
+#
+LKS_CHAN="1 A T1"
+LKS_CHAN="1 B T2"
+LKS_CHAN="1 H1 H1"
+LKS_CHAN="1 H2 H2"
+
+# Lakeshore unit 2
+#
+LKS_CHAN="2 1 mon1"
+LKS_CHAN="2 2 mon2"
+LKS_CHAN="2 3 mon3"
+LKS_CHAN="2 4 mon4"
+
+# Each Campbell unit is assigned a unit number, host, and port
+# set as follows: CAMP_UNIT="CAMP# MODEL HOST PORT"
+# where MODEL is the model number, e.g. "218, 325, 340, 336"
+
+CAMP_UNIT="1 1000 localhost 9999"      # Campbell CR1000
+
+# Each Campbell channel is assigned using a Campbell Channel Key (CAMP_CHAN)
+# set as follows: CAMP_CHAN="CAMP# CHAN# NAME CALTYPE CAL_COEF..."
+#
+# The CAMP# here must have a corresponding CAMP# set in an CAMP_UNIT above,
+# and the CAMP_UNIT must be defined first, before the Campebell channels are
+# assigned below.
+#
+# CHAN# can be a letter (A, B, C1, etc.) or number (1, 2, 3, etc.)
+# and should be preceeded by an "H" to designate a heater (H1, H2, etc.).
+
+# Campbell unit 1
+#
+CAMP_CHAN="1 temp1 TEMP LIN 0.0 1.0"

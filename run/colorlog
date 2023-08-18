@@ -2,7 +2,7 @@
 
 # log files are located in this directory
 #
-DIR="/home/logs"
+DIR="/data/logs"
 
 # if supplied with an argument then that argument is the date
 #
@@ -24,6 +24,7 @@ FILES="-f $DIR/acamd_$DATE.log \
        -f $DIR/powerd_$DATE.log \
        -f $DIR/slitd_$DATE.log \
        -f $DIR/tcsd_$DATE.log \
+       -f $DIR/thermald_$DATE.log \
        -f $DIR/sequencerd_$DATE.log "
 
 touch $FILES

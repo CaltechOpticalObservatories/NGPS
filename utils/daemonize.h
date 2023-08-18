@@ -80,7 +80,10 @@ namespace Daemon {
 
     umask( 0 );              // new file permissions
 
-    chdir( path.c_str() );   // change to path directory
+    if ( chdir( path.c_str() ) < 0 ) {   // change to path directory
+      fprintf( stderr, "error: failed chdir: %s\n", strerror(errno) );
+      exit( EXIT_FAILURE );
+    }
 
     // Close all open file descriptors
     //

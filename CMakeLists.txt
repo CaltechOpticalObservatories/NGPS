@@ -4,7 +4,7 @@
 # @author  David Hale <dhale@caltech.edu>
 # ----------------------------------------------------------------------------
 
-#add_definitions(-DLOGLEVEL_DEBUG)
+add_definitions(-DLOGLEVEL_DEBUG)
 
 #add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
 
@@ -37,8 +37,10 @@ add_subdirectory( ${PROJECT_BASE_DIR}/slitd )
 add_subdirectory( ${PROJECT_BASE_DIR}/focusd )
 add_subdirectory( ${PROJECT_BASE_DIR}/powerd )
 add_subdirectory( ${PROJECT_BASE_DIR}/telemd )
+add_subdirectory( ${PROJECT_BASE_DIR}/thermald )
 add_subdirectory( ${PROJECT_BASE_DIR}/emulator )
 add_subdirectory( ${PROJECT_BASE_DIR}/tcsd )
 add_subdirectory( ${PROJECT_BASE_DIR}/PI )
 add_subdirectory( ${PROJECT_BASE_DIR}/WTI )
+add_subdirectory( ${PROJECT_BASE_DIR}/LKS )
 #add_subdirectory( ${PROJECT_BASE_DIR}/ARC )

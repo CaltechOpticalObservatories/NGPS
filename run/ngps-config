@@ -53,13 +53,18 @@ TCSD_CONFIG="/home/developer/Software/Config/tcsd.cfg"
 TELEMD="/home/developer/Software/bin/telemd"
 TELEMD_CONFIG="/home/developer/Software/Config/telemd.cfg"
 
+# thermal daemon
+#
+THERMALD="/home/developer/Software/bin/thermald"
+THERMALD_CONFIG="/home/developer/Software/Config/thermald.cfg"
+
 
 # Arrays of all the above processes, their associated names, and their associated config files
 # These three arrays must be aligned!
 #
 # sequencer must be last!
 #
-PROCS=("$TELEMD" "$ACAMD" "$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$POWERD" "$SLITD" "$TCSD" "$SEQUENCERD")
-PROCNAMES=("telemd" "acamd" "calibd" "camerad" "flexured" "focusd" "powerd" "slitd" "tcsd" "sequencerd")
+PROCS=("$TELEMD" "$ACAMD" "$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$THERMALD" "$POWERD" "$SLITD" "$TCSD" "$SEQUENCERD")
+PROCNAMES=("telemd" "acamd" "calibd" "camerad" "flexured" "focusd" "thermald" "powerd" "slitd" "tcsd" "sequencerd")
 CONFIGS=("$TELEMD_CONFIG" "$ACAMD_CONFIG" "$CALIBD_CONFIG" "$CAMERAD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" \
-         "$POWERD_CONFIG" "$SLITD_CONFIG" "$TCSD_CONFIG" "$SEQUENCERD_CONFIG")
+         "$THERMALD_CONFIG" "$POWERD_CONFIG" "$SLITD_CONFIG" "$TCSD_CONFIG" "$SEQUENCERD_CONFIG")

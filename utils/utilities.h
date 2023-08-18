@@ -64,4 +64,24 @@ inline bool caseCompareChar( char a, char b ) { return ( std::toupper(a) == std:
 inline bool caseCompareString( const std::string &s1, const std::string &s2 ) {
   return( (s1.size()==s2.size() ) && std::equal( s1.begin(), s1.end(), s2.begin(), caseCompareChar) ); }
 
+/***** to_string_prec *******************************************************/
+/**
+ * @brief      convert a numeric value to a string with specified precision
+ * @details    Since std::to_string doesn't allow changing the precision,
+ *             I wrote my own equivalent. Probably don't want to use this
+ *             in a tight loop.
+ * @param[in]  value_in  numeric value in of type <T>
+ * @param[in]  prec      desired precision, default=6
+ * @return     string
+ *
+ */
+template <typename T>
+std::string to_string_prec( const T value_in, const int prec = 6 ) {
+  std::ostringstream out;
+  out.precision(prec);
+  out << std::fixed << value_in;
+  return std::move(out).str();
+}
+/***** to_string_prec *******************************************************/
+
 #endif
