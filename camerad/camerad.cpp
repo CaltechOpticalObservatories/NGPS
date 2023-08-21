@@ -102,9 +102,9 @@ int main(int argc, char **argv) {
   }
 
   for (int entry=0; entry < server.config.n_entries; entry++) {
-    if (server.config.param[entry] == "LOGPATH") logpath = server.config.arg[entry];
-    if (server.config.param[entry] == "TM_ZONE") zone = server.config.arg[entry];
-    if (server.config.param[entry] == "DAEMON")  daemon_in = server.config.arg[entry];
+    if (server.config.param[entry] == "LOGPATH") logpath = server.config.arg[entry];    // where to write log files
+    if (server.config.param[entry] == "TM_ZONE") zone = server.config.arg[entry];       // time zone for time stamps
+    if (server.config.param[entry] == "DAEMON")  daemon_in = server.config.arg[entry];  // am I starting as a daemon or not?
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
 
 /***** new_log_day ************************************************************/
 /**
- * @brief  creates a new logbook each day
+ * @brief      creates a new logbook each day
  *
  * This thread is started by main and never terminates.
  * It sleeps for the number of seconds that logentry determines
@@ -439,87 +439,100 @@ void doit(Network::TcpSocket &sock) {
     ret = NOTHING;
     std::string retstring="";                               // string for return the value (where needed)
 
+    if ( cmd.compare( "help" ) == 0 ) {
+                    for ( auto s : CAMERAD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+    }
+    else
     if (cmd.compare("exit")==0) {
                     server.camera.async.enqueue("exit");    // shutdown the async message thread if running
                     server.exit_cleanly();                  // shutdown the server
                     }
     else
-    if (cmd.compare("open")==0) {
+    if (cmd.compare( CAMERAD_CONFIG ) == 0 ) {              // report the config file used for camerad
+                    std::stringstream cfg;
+                    cfg << "CONFIG:" << server.config.filename;
+                    server.camera.async.enqueue( cfg.str() );
+                    sock.Write( server.config.filename );
+                    sock.Write( " " );
+                    ret = NO_ERROR;
+                    }
+    else
+    if (cmd.compare( CAMERAD_OPEN )==0) {
                     ret = server.connect_controller(args);
                     }
     else
-    if (cmd.compare("close")==0) {
+    if (cmd.compare( CAMERAD_CLOSE )==0) {
                     ret = server.disconnect_controller();
                     }
     else
-    if (cmd.compare("load")==0) {
+    if (cmd.compare( CAMERAD_LOAD )==0) {
                     if (args.empty()) ret = server.load_firmware(retstring);
                     else              ret = server.load_firmware(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("basename")==0) {
+    if (cmd.compare( CAMERAD_BASENAME )==0) {
                     ret = server.camera.basename(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("imnum")==0) {
+    if (cmd.compare( CAMERAD_IMNUM )==0) {
                     ret = server.camera.imnum(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("imdir")==0) {
+    if (cmd.compare( CAMERAD_IMDIR )==0) {
                     ret = server.camera.imdir(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("autodir")==0) {
+    if (cmd.compare( CAMERAD_AUTODIR )==0) {
                     ret = server.camera.autodir(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("datacube")==0) {
+    if (cmd.compare( CAMERAD_DATACUBE )==0) {
                     ret = server.camera.datacube(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("longerror")==0) {
+    if (cmd.compare( CAMERAD_LONGERROR )==0) {
                     ret = server.camera.longerror(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("preexposures")==0) {
+    if (cmd.compare( CAMERAD_PREEXPOSURES )==0) {
                     ret = server.camera_info.pre_exposures( args, retstring );
                     sock.Write( retstring );
                     sock.Write( " " );
                     }
     else
-    if (cmd.compare("cubeamps")==0) {
+    if (cmd.compare( CAMERAD_CUBEAMPS )==0) {
                     ret = server.camera.cubeamps(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("fitsnaming")==0) {
+    if (cmd.compare( CAMERAD_FITSNAMING )==0) {
                     ret = server.camera.fitsnaming(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("shutter")==0) {
+    if (cmd.compare( CAMERAD_SHUTTER )==0) {
                     ret = server.shutter(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("writekeys")==0) {
+    if (cmd.compare( CAMERAD_WRITEKEYS )==0) {
                     ret = server.camera.writekeys(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("key")==0) {
+    if (cmd.compare( CAMERAD_KEY )==0) {
                     if (args.compare(0, 4, "list")==0) {
                       logwrite( function, "systemkeys:" ); ret = server.systemkeys.listkeys();
                       logwrite( function, "userkeys:" );   ret = server.userkeys.listkeys();
@@ -528,6 +541,11 @@ void doit(Network::TcpSocket &sock) {
                       ret = server.userkeys.addkey(args);
                       if ( ret != NO_ERROR ) server.camera.log_error( function, "bad syntax" );
                     }
+                    }
+    else
+    if (cmd.compare( CAMERAD_NATIVE )==0) {
+                    ret = server.native(args, retstring);  // @todo make this work with Archon
+                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
 #ifdef ASTROCAM
     else
@@ -550,28 +568,28 @@ void doit(Network::TcpSocket &sock) {
                     ret = 0;
                     }
     else
-    if (cmd.compare("isopen")==0) {
+    if (cmd.compare( CAMERAD_ISOPEN )==0) {
                     ret = server.is_connected( retstring );
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("useframes")==0) {
+    if (cmd.compare( CAMERAD_USEFRAMES )==0) {
                     ret = server.access_useframes(args);
                     if (!args.empty()) { sock.Write(args); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("geometry")==0) {
+    if (cmd.compare( CAMERAD_GEOMETRY )==0) {
                     ret = server.geometry(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("buffer")==0) {
+    if (cmd.compare( CAMERAD_BUFFER )==0) {
                     ret = server.buffer(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("readout")==0) {
+    if (cmd.compare( CAMERAD_READOUT )==0) {
                     ret = server.readout(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
@@ -663,11 +681,11 @@ void doit(Network::TcpSocket &sock) {
                     }
 #endif
     else
-    if (cmd.compare("expose")==0) {
+    if (cmd.compare( CAMERAD_EXPOSE )==0) {
                     ret = server.expose(args);
                     }
     else
-    if (cmd.compare("exptime")==0) {
+    if (cmd.compare( CAMERAD_EXPTIME )==0) {
                     // Neither controller allows fractional exposure times
                     // so catch that here.
                     //
@@ -683,41 +701,32 @@ void doit(Network::TcpSocket &sock) {
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("bias")==0) {
+    if (cmd.compare( CAMERAD_BIAS )==0) {
                     ret = server.bias(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("echo")==0) {
+    if (cmd.compare( CAMERAD_ECHO )==0) {
                     sock.Write(args);
                     sock.Write("\n");
                     }
     else
-    if (cmd.compare("interface")==0) {
+    if (cmd.compare( CAMERAD_INTERFACE )==0) {
                     ret = server.interface(retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare("test")==0) {
+    if (cmd.compare( CAMERAD_TEST )==0) {
                     ret = server.test(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
-    else {  // if no matching command found then assume it's a native command and send it straight to the controller
-      try {
-        std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );    // make uppercase
-      }
-      catch (...) {
-        logwrite(function, "error converting command to uppercase");
-        ret=ERROR;
-      }
-#ifdef ASTROCAM
-      ret = server.native(sbuf, retstring);
-      if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
-#endif
-#ifdef STA_ARCHON
-      ret = server.native(sbuf);
-#endif
+    // Unknown commands generate an error
+    //
+    else {
+      message.str(""); message << "ERROR: unknown command: " << cmd;
+      server.camera.async.enqueue_and_log( function, message.str() );
+      ret = ERROR;
     }
 
     if (ret != NOTHING) {

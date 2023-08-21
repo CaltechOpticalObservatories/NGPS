@@ -617,11 +617,16 @@ namespace AstroCam {
       inline void init_framethread_count();
 
 
-      // The Controller class is a sub-class of Interface and is here to contain
-      // the Camera::Information class and FITS_file class objects.
-      // There will be a vector of Controller class objects which matches the
-      // vector of controller objects.
-      //
+      /***** AstroCam::Controller *********************************************/
+      /**
+       * @class    Controller
+       * @brief    contains information for each controller
+       * @details  The Controller class is a sub-class of Interface and is
+       *           here to contain the Camera::Information class and FITS_file
+       *           class objects.  There will be a vector of Controller class
+       *           objects which matches the vector of controller objects.
+       *
+       */
       class Controller {
         private:
           int bufsize;
@@ -645,6 +650,7 @@ namespace AstroCam {
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
           bool connected;                  //!< true if controller connected (requires successful TDL command)
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
+          std::string firmware;            //!< name of firmware (.lod) file
           int devnum;                      //!< this controller's devnum
           std::string devname;             //!< comes from arc::gen3::CArcPCI::getDeviceStringList()
           std::uint32_t retval;            //!< convenient place to hold return values for threaded commands to this controller
@@ -684,6 +690,8 @@ namespace AstroCam {
           long open_file( std::string writekeys );    //!< wrapper for this->pFits->open_file()
           void close_file( std::string writekeys );   //!< wrapper for this->pFits->close_file()
       };
+      /***** AstroCam::Controller *********************************************/
+
 
       // Vector of Controller objects, created by Interface::connect_controller()
       //

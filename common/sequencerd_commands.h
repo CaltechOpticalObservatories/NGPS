@@ -74,6 +74,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      "   moveto [ <solverargs> ]",
                                                      "   notify",
                                                      "   pause",
+                                                     "   preamble",
                                                      "   radec",
                                                      "   resume",
                                                      "   single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>",

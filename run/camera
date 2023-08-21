@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# @file     cam
+# @brief    provides a command line interface for camerad
+#
+
+source $HOME/Software/Config/camerad.cfg
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command

@@ -32,6 +32,8 @@ namespace AstroCam {
       return(ERROR);
     }
 
+    this->camera_info.arcsim = true;  // the ARC device is simulated
+
     return NO_ERROR;
   }
   /***** AstroCam::Interface::connect_controller ******************************/

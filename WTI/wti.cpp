@@ -132,93 +132,71 @@ namespace WTI {
   /***** WTI::Interface::send_command *****************************************/
   /**
    * @brief      send specified command to WTI socket interface, don't return reply
+   * @details    This function doesn't care about the response.
    * @param[in]  cmd  command to send
    * @return     ERROR or NO_ERROR
-   *
-   * This function writes the command an although it reads the reply it does not
-   * return the reply. The reply is read only as confirmation that the command
-   * was sent successfully.
    *
    */
   long Interface::send_command( std::string cmd ) {
     std::string function = "WTI::Interface::send_command";
     std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    long retval=0;
-
-#ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] to " << this->name << " on socket " << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
-    logwrite( function, message.str() );
-#endif
-
-    cmd.append( "\r" );                            // add the CR character
-    int written = this->sock.Write( cmd );         // write the command
-    if ( written <= 0 ) {                          // return error if error writing to socket
-      message.str(""); message << "ERROR sending " << cmd << " to " << this->name;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    // read the reply
-    //
-    while ( error == NO_ERROR && retval >= 0 ) {
-
-      if ( ( retval=this->sock.Poll() ) <= 0 ) {
-        message.str("");
-        if ( retval==0 ) { message << "TIMEOUT on " << this->name << " polling socket " << this->sock.gethost()
-                                   << "/" << this->sock.getport() << " on fd " << this->sock.getfd() << ": " << strerror(errno);
-                           error = TIMEOUT; }
-        if ( retval <0 ) { message << "ERROR on " << this->name << " polling socket " << this->sock.gethost()
-                                   << "/" << this->sock.getport() << " on fd " << this->sock.getfd() << ": " << strerror(errno);
-                           error = ERROR; }
-        if ( error != NO_ERROR ) logwrite( function, message.str() );
-        break;
-      }
-
-      if ( ( retval = this->sock.Read( reply, "NPS>" ) ) < 0 ) {
-        message.str(""); message << "error reading from socket " << this->sock.gethost() << "/" << this->sock.getport()
-                                 << " for " << this->name << ": " << strerror( errno );
-        logwrite( function, message.str() );
-        break;
-      }
-
-      // Check that the reply contains the command, which is acknowledgement of receipt
-      //
-      if ( reply.find( cmd ) == std::string::npos ) {
-        message.str(""); message << "ERROR did not receive command ack: " << reply;
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
-      else {
-#ifdef LOGLEVEL_DEBUG
-        std::string debug_reply = reply;
-        debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
-        debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
-        message.str(""); message << "[DEBUG] " << this->name << " reply: " << debug_reply;
-        logwrite( function, message.str() );
-#endif
-        break;
-      }
-    }
-
-    return( NO_ERROR );
+    std::string retstring;
+    return do_send_command( cmd, retstring );
   }
   /***** WTI::Interface::send_command *****************************************/
 
 
   /***** WTI::Interface::send_command *****************************************/
   /**
-   * @brief      send specified command to WTI socket interface and return reply
-   * @param[in]  cmd        command to send
-   * @param[out] retstring  reply read back from device
+   * @brief      send specified command to WTI socket interface and return response
+   * @details    This function returns only the response portion of the device's raw-reply,
+   *             which otherwise contains also the original command.
+   * @param[in]  cmd    command to send
+   * @param[out] reply  reply read back from device
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::send_command( std::string cmd, std::string &retstring ) {
+  long Interface::send_command( std::string cmd, std::string &reply ) {
     std::string function = "WTI::Interface::send_command";
     std::stringstream message;
-    std::string reply;
+    std::string retstring;  // raw return string from device
+
+    long error = do_send_command( cmd, retstring );
+
+    if ( error != NO_ERROR ) return error;
+
+    // Tokenize retstring on CR and LF
+    // Reply should contain 3 tokens: <cmd> <response> "NPS>"
+    //
+    std::vector<std::string> tokens;
+    Tokenize( retstring, tokens, "\r\n" );
+    if ( tokens.size() == 3 ) {
+      reply = tokens[1];  // the reply we want is this token from retstring
+    }
+    else {
+      message.str(""); message << "ERROR malformed response: " << retstring << ": expected <cmd> <response> \"NPS>\"";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    return error;
+  }
+  /***** WTI::Interface::send_command *****************************************/
+
+
+  /***** WTI::Interface::do_send_command **************************************/
+  /**
+   * @brief      send specified command to WTI socket interface and return raw reply
+   * @details    This function returns the complete raw response from the device,
+   *             which contains also the command.
+   * @param[in]  cmd        command to send
+   * @param[out] retstring  raw string read back from device
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::do_send_command( std::string cmd, std::string &retstring ) {
+    std::string function = "WTI::Interface::do_send_command";
+    std::stringstream message;
     long error=NO_ERROR;
     long retval=0;
 
@@ -253,7 +231,7 @@ namespace WTI {
         break;
       }
 
-      if ( ( retval = this->sock.Read( reply, "NPS>" ) ) < 0 ) {
+      if ( ( retval = this->sock.Read( retstring, "NPS>" ) ) < 0 ) {
         message.str(""); message << "error reading from socket " << this->sock.gethost() << "/" << this->sock.getport()
                                  << " for " << this->name << ": " << strerror( errno );
         logwrite( function, message.str() );
@@ -262,14 +240,14 @@ namespace WTI {
 
       // Check that the reply contains the command, which is acknowledgement of receipt
       //
-      if ( reply.find( cmd ) == std::string::npos ) {
-        message.str(""); message << "ERROR did not receive command ack: " << reply;
+      if ( retstring.find( cmd ) == std::string::npos ) {
+        message.str(""); message << "ERROR did not receive command ack: " << retstring;
         logwrite( function, message.str() );
         return( ERROR );
       }
       else {
 #ifdef LOGLEVEL_DEBUG
-        std::string debug_reply = reply;
+        std::string debug_reply = retstring;
         debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
         debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
         message.str(""); message << "[DEBUG] " << this->name << " reply: " << debug_reply;
@@ -279,23 +257,9 @@ namespace WTI {
       }
     }
 
-    // Tokenize reply on CR and LF
-    // Reply should contain 3 tokens: <cmd> <response> "NPS>"
-    //
-    std::vector<std::string> tokens;
-    Tokenize( reply, tokens, "\r\n" );
-    if ( tokens.size() == 3 ) {
-      retstring = tokens[1];
-    }
-    else {
-      message.str(""); message << "ERROR malformed response: " << reply << ": expected <cmd> <response> \"NPS>\"";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
     return( error );
   }
-  /***** WTI::Interface::send_command *****************************************/
+  /***** WTI::Interface::do_send_command **************************************/
 
 
   /***** WTI::NPS::NPS ********************************************************/

@@ -238,6 +238,8 @@ namespace Sequencer {
 
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
+      std::vector<std::string> camera_preamble;  ///< commands to send to camera on initialization, read from cfg file
+
       inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
       inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
 

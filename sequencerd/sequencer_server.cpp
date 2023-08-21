@@ -665,6 +665,14 @@ namespace Sequencer {
         }
       }
 
+      // CAMERA_PREAMBLE
+      if (config.param[entry].compare( 0, CAMERA_PREAMBLE.length(), CAMERA_PREAMBLE )==0) {
+        this->sequence.camera_preamble.push_back( this->config.arg[entry] );
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
       //
       // configure the power switch parameters
       //

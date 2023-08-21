@@ -48,6 +48,8 @@ namespace Sequencer {
   const std::string DB_COMPLETED="DB_COMPLETED";  ///< name of the completed observations table configuration parameter
   const std::string DB_SETS="DB_SETS";            ///< name of the completed target sets table configuration parameter
 
+  const std::string CAMERA_PREAMBLE="CAMERA_PREAMBLE";  ///< parameter name which defines CAMERA_PREAMBLE commands
+
   const std::string POWER_SLIT="POWER_SLIT";         ///< parameter name which defines NPS_PLUG names required for slit hardware
   const std::string POWER_CAMERA="POWER_CAMERA";     ///< parameter name which defines NPS_PLUG names required for camera hardware
   const std::string POWER_CALIB="POWER_CALIB";       ///< parameter name which defines NPS_PLUG names required for calib hardware

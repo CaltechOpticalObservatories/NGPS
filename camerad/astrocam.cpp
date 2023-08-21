@@ -267,6 +267,7 @@ namespace AstroCam {
         this->controller.at(dev).devname = pdevList[dev];  // device name
         this->controller.at(dev).connected = false;        // not yet connected
         this->controller.at(dev).firmwareloaded = false;   // no firmware loaded
+        this->controller.at(dev).firmware = "";            // no firmware loaded
 
         FITS_file* pFits = new FITS_file();                // create a pointer to a FITS_file class object
         this->controller.at(dev).pFits = pFits;            // set the pointer to this object in the public vector
@@ -523,6 +524,24 @@ namespace AstroCam {
         applied++;
       }
 
+      if (config.param[entry].compare(0, 7, "DIRMODE")==0) {
+        try {
+          if ( !config.arg[entry].empty() ) {
+            mode_t mode = (mode_t)std::stoi( config.arg[entry] );
+            this->camera.set_dirmode( mode );
+          }
+        }
+        catch (std::invalid_argument &) {
+          this->camera.log_error( function, "unable to convert DIRMODE to integer" );
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          this->camera.log_error( function, "DIRMODE out of integer range" );
+          return(ERROR);
+        }
+        applied++;
+      }
+
       if (this->config.param[entry].compare(0, 6, "BASENAME")==0) {
         this->camera.basename( config.arg[entry] );
         message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -638,6 +657,16 @@ namespace AstroCam {
     //
     if ( cmdstr.empty() ) {
       logwrite(function, "ERROR: missing command");
+      return( ERROR );
+    }
+
+    // Ensure command and args are uppercase
+    //
+    try {
+      std::transform( cmdstr.begin(), cmdstr.end(), cmdstr.begin(), ::toupper );
+    }
+    catch (...) {
+      logwrite(function, "ERROR: converting command to uppercase");
       return( ERROR );
     }
 
@@ -905,8 +934,12 @@ namespace AstroCam {
 
       // The system writes a few things in the header
       //
+      _controller.pFits->add_key("FIRMWARE", "STRING",  _controller.firmware , "controller firmware");
       _controller.pFits->add_key("EXPSTART", "STRING", _controller.info.start_time, "exposure start time");
       _controller.pFits->add_key("READOUT", "STRING",  _controller.info.readout_name, "readout amplifier");
+
+      _controller.pFits->add_key("DEVNUM", "INT",  std::to_string(_controller.devnum), "PCI device number");
+      _controller.pFits->add_key("EXPTIME", "INT", std::to_string(_controller.info.exposure_time), "exposure time in msec");
     }
     catch (const std::exception &e) {
       // arc::gen3::CArcDevice::expose() will throw an exception for an abort.
@@ -927,7 +960,7 @@ namespace AstroCam {
       return;
     }
     catch(...) {
-      message.str(""); message << "unknown error calling pArcDev->expose() on " << _controller.devname << ". forcing abort.";
+      message.str(""); message << "ERROR: unknown exception calling pArcDev->expose() on " << _controller.devname << ". forcing abort.";
       logwrite(function, message.str() );
       server.camera.set_abortstate( true );
       _controller.error = ERROR;
@@ -1772,6 +1805,7 @@ namespace AstroCam {
     logwrite(function, message.str());
     controller.retval = DON;
     controller.firmwareloaded = true;
+    controller.firmware = timlodfile;
 
     return;
   }
@@ -2379,6 +2413,8 @@ namespace AstroCam {
   /***** AstroCam::Interface::shutter *****************************************/
   /**
    * @brief      set or get the shutter enable state
+   * @details    shutterenable will be passed to pArcDev->expose() which tells
+   *             the ARC API whether or not to open the shutter on expose.
    * @param[in]  shutter_in   requested shutter state
    * @param[out] shutter_out  reference to string for return status
    * @return     ERROR or NO_ERROR
@@ -2388,8 +2424,11 @@ namespace AstroCam {
     std::string function = "AstroCam::Interface::shutter";
     std::stringstream message;
     long error = NO_ERROR;
-    bool shutten = false;
+    bool shutten;
+    shutter_out = "undefined";  // undefined until set below
 
+    // Process an input argument to set the shutter enable/disable state
+    //
     if ( !shutter_in.empty() ) {
       try {
         std::transform( shutter_in.begin(), shutter_in.end(), shutter_in.begin(), ::tolower );  // make lowercase
@@ -2403,23 +2442,28 @@ namespace AstroCam {
         }
       }
       catch (...) {
-        logwrite( function, "error converting shutter_in to lowercase" );
+        logwrite( function, "ERROR: program exception converting shutter_in to lowercase" );
         return( ERROR );
+      }
+
+      // Set shutterenable the same for all devices
+      //
+      if ( error == NO_ERROR ) for ( auto dev : this->devlist ) {
+        this->controller.at(dev).info.shutterenable = shutten;
       }
     }
 
-    // Set shutterenable the same for all devices
-    ///< TODO @todo enable setting differently for each device
+    // Get shutterenable state from the controller class
     //
     for ( auto dev : this->devlist ) {
-      this->controller.at(dev).info.shutterenable = shutten;
+      this->camera_info.shutterenable = this->controller.at(dev).info.shutterenable;
+      shutter_out = this->camera_info.shutterenable ? "enabled" : "disabled";
+      break;  // just need one since they're all the same
     }
 
     // set the return value and report the state now, either setting or getting
     //
-    shutter_out = shutten ? "enabled" : "disabled";
-    message.str("");
-    message << "shutter is " << shutter_out;
+    message.str(""); message << "shutter is " << shutter_out;
     logwrite( function, message.str() );
 
     // Add the shutter enable keyword to the system keys db
@@ -2803,6 +2847,7 @@ namespace AstroCam {
     this->pCallback = NULL;
     this->connected = false;
     this->firmwareloaded = false;
+    this->firmware = "";
   }
   /***** AstroCam::Interface::Controller::Controller **************************/
 

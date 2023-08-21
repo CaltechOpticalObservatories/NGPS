@@ -1,7 +1,7 @@
 # configuration file for observation sequencer
 # @SEQUENCERD_CFG_COMMENT@
 #
-LOGPATH=/home/logs/
+LOGPATH=/data/logs/
 ASYNCPORT=@SEQUENCERD_ASYNC_PORT@ # server GUI port
 BLKPORT=@SEQUENCERD_BLK_PORT@     # server blocking port
 NBPORT=@SEQUENCERD_NB_PORT@        # server non-blocking port
@@ -22,6 +22,28 @@ POWERD_PORT=@POWERD_BLK_PORT@
 SLITD_PORT=@SLITD_BLK_PORT@
 TCSD_PORT=@TCSD_BLK_PORT@
 FITERD_PORT=@FILTERD_BLK_PORT@
+
+# Camera preamble
+#
+# These commands are sent to the camera daemon on startup.
+# There can be multiple commands, use one line for each command.
+# Commands with space-delimted arguments should be enclosed in parentheses.
+# Commands will be sent in the order as they appear here.
+# To send a command to a specific camera, include the PCI device number(s)
+# or camera ID(s), e.g. (0 readout L1) or (G R readout U2). If not included
+# then that command will be sent to all cameras that were opened with the
+# first (open . . .) command.
+#
+CAMERA_PREAMBLE=(open 0 1)
+CAMERA_PREAMBLE=load
+CAMERA_PREAMBLE=(native CSH)
+CAMERA_PREAMBLE=(native PON)
+CAMERA_PREAMBLE=(buffer 4300 2140)
+CAMERA_PREAMBLE=(geometry 4300 2140)
+CAMERA_PREAMBLE=(exptime 0)
+CAMERA_PREAMBLE=(readout SPLIT1)
+CAMERA_PREAMBLE=(useframes false)
+CAMERA_PREAMBLE=(shutter enable)
 
 # NPS power switches
 #
@@ -52,7 +74,7 @@ DB_ACTIVE=targets                    # active target table
 DB_COMPLETED=completed_observations  # completed observations table
 DB_SETS=target_sets                  # table of target sets
 
-# miscellaneous
+# TCS-related configuration
 #
 TCS_OFFSET_RATE_RA=45                # TCS offset rate for RA ("MRATE") in arcsec per second
 TCS_OFFSET_RATE_DEC=45               # TCS offset rate for DEC ("MRATE") in arcsec per second
@@ -60,7 +82,6 @@ TCS_SETTLE_TIMEOUT=20                # seconds to wait for telescope to settle (
 TCS_SETTLE_STABLE=1.5                # time in fractional seconds (to 0.1) that TCS must report TRACKING before it is really stable
 TCS_DOMEAZI_READY=10                 # max degrees azimuth that dome and telescope can differ before ready to observe
 TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify TCS of next target's coords (0 to disable)
-UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
 
 # ACAM Target acquisition
 #
@@ -69,3 +90,7 @@ ACQUIRE_RETRYS=3                     # max number of retrys before acquisition f
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
 ACQUIRE_TCS_MAX_OFFSET=30            # the maximum allowable offset sent to the TCS, in arcsec
+
+# miscellaneous
+#
+UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining

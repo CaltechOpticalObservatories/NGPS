@@ -50,7 +50,8 @@ namespace WTI {
       long open();                ///< open a connection to WTI device
       long close();               ///< close the connection to the WTI device
       long send_command( std::string cmd );
-      long send_command( std::string cmd, std::string &retstring );
+      long send_command( std::string cmd, std::string &reply );
+      long do_send_command( std::string cmd, std::string &retstring );
 
       Interface( std::string name, std::string host, int port );
       Interface();

@@ -1593,7 +1593,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to focus hardware.
+    // Turn on power to science cameras
     //
     logwrite( function, "powering on science cameras" );
     for ( auto plug : seq.power_switch[POWER_CAMERA].plugname ) {
@@ -1625,14 +1625,11 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with science camera controller(s)" );
     }
 
-    ///< TODO @todo send a bunch of stuff, will get cleaned up later
+    // send all of the preamble commands
     //
-//  if (error==NO_ERROR) { logwrite( function, "loading firmware" );  error = seq.camerad.send( "load /home/developer/ss/DSP/SWIFT/sg2_48khz.lod", reply ); }
-    if (error==NO_ERROR) { logwrite( function, "loading firmware" );  error = seq.camerad.send( "load", reply ); }
-    if (error==NO_ERROR) { logwrite( function, "setting buffer");     error = seq.camerad.send( "buffer 1024 1024", reply ); }
-    if (error==NO_ERROR) { logwrite( function, "setting geometry" );  error = seq.camerad.send( "geometry 1024 1024", reply ); }
-    if (error==NO_ERROR) { logwrite( function, "setting readmode" );  error = seq.camerad.send( "readout U1", reply ); }
-    if (error==NO_ERROR) { logwrite( function, "setting useframes" ); error = seq.camerad.send( "useframes false", reply ); }
+    for ( auto cmd : seq.camera_preamble ) {
+      if (error==NO_ERROR) error = seq.camerad.send( cmd, reply );
+    }
 
     // atomically set thr_error so the main thread knows we had an error
     //
@@ -3885,6 +3882,17 @@ logwrite( function, "[DEBUG] setting READY bit" );
       else {
         logwrite( function, "test" );
         this->async.enqueue( "test" );
+      }
+    }
+    else
+
+    // ----------------------------------------------------
+    // preamble -- show the camera preamble commands
+    // ----------------------------------------------------
+    //
+    if ( testname == "preamble" ) {
+      for ( auto cmd : this->camera_preamble ) {
+        logwrite( function, "camera "+cmd );
       }
     }
     else

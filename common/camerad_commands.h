@@ -8,13 +8,73 @@
 
 #ifndef CAMERAD_COMMANDS_H
 #define CAMERAD_COMMANDS_H
-const std::string CAMERAD_OPEN = "open";
-const std::string CAMERAD_ISOPEN = "isopen";
-const std::string CAMERAD_EXPTIME = "exptime";
-const std::string CAMERAD_EXPOSE = "expose";
 const std::string CAMERAD_ABORT = "abort";
-const std::string CAMERAD_PAUSE = "pause";
-const std::string CAMERAD_RESUME = "resume";
-const std::string CAMERAD_STOP = "stop";
+const std::string CAMERAD_AUTODIR = "autodir";
+const std::string CAMERAD_BASENAME = "basename";
+const std::string CAMERAD_BIAS = "bias";
+const std::string CAMERAD_BUFFER = "buffer";
+const std::string CAMERAD_CLOSE = "close";
+const std::string CAMERAD_CONFIG = "config";
+const std::string CAMERAD_CUBEAMPS = "cubeamps";
+const std::string CAMERAD_DATACUBE = "datacube";
+const std::string CAMERAD_ECHO = "echo";
+const std::string CAMERAD_EXPOSE = "expose";
+const std::string CAMERAD_EXPTIME = "exptime";
+const std::string CAMERAD_FITSNAMING = "fitsnaming";
+const std::string CAMERAD_GEOMETRY = "geometry";
+const std::string CAMERAD_IMDIR = "imdir";
+const std::string CAMERAD_IMNUM = "imnum";
+const std::string CAMERAD_INTERFACE = "interface";
+const std::string CAMERAD_ISOPEN = "isopen";
+const std::string CAMERAD_KEY = "key";
+const std::string CAMERAD_LOAD = "load";
+const std::string CAMERAD_LONGERROR = "longerror";
 const std::string CAMERAD_MODEXPTIME = "modexptime";
+const std::string CAMERAD_NATIVE = "native";
+const std::string CAMERAD_OPEN = "open";
+const std::string CAMERAD_PAUSE = "pause";
+const std::string CAMERAD_PREEXPOSURES = "preexposures";
+const std::string CAMERAD_READOUT = "readout";
+const std::string CAMERAD_RESUME = "resume";
+const std::string CAMERAD_SHUTTER = "shutter";
+const std::string CAMERAD_STOP = "stop";
+const std::string CAMERAD_TEST = "test";
+const std::string CAMERAD_USEFRAMES = "useframes";
+const std::string CAMERAD_WRITEKEYS = "writekeys";
+const std::vector<std::string> CAMERAD_SYNTAX = {
+                                                  CAMERAD_ABORT,
+                                                  CAMERAD_AUTODIR,
+                                                  CAMERAD_BASENAME,
+                                                  CAMERAD_BIAS,
+                                                  CAMERAD_BUFFER,
+                                                  CAMERAD_CLOSE,
+                                                  CAMERAD_CONFIG,
+                                                  CAMERAD_CUBEAMPS,
+                                                  CAMERAD_DATACUBE,
+                                                  CAMERAD_ECHO,
+                                                  CAMERAD_EXPOSE,
+                                                  CAMERAD_EXPTIME,
+                                                  CAMERAD_FITSNAMING,
+                                                  CAMERAD_GEOMETRY,
+                                                  CAMERAD_IMDIR,
+                                                  CAMERAD_IMNUM,
+                                                  CAMERAD_INTERFACE,
+                                                  CAMERAD_ISOPEN,
+                                                  CAMERAD_KEY,
+                                                  CAMERAD_LOAD,
+                                                  CAMERAD_LONGERROR,
+                                                  CAMERAD_MODEXPTIME,
+                                                  CAMERAD_NATIVE,
+                                                  CAMERAD_OPEN,
+                                                  CAMERAD_PAUSE,
+                                                  CAMERAD_PREEXPOSURES,
+                                                  CAMERAD_READOUT,
+                                                  CAMERAD_RESUME,
+                                                  CAMERAD_SHUTTER,
+                                                  CAMERAD_STOP,
+                                                  CAMERAD_TEST,
+                                                  CAMERAD_USEFRAMES,
+                                                  CAMERAD_WRITEKEYS
+                                                };
+
 #endif
