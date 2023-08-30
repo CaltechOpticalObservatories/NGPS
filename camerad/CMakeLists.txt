@@ -17,7 +17,7 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 # ----------------------------------------------------------------------------
 message( STATUS "compiling for AstroCam GenIII PCI/PCIe")
 set( INTERFACE_TARGET astrocam)
-set( ARCAPI_DIR "/opt/ARC_API/3.6")
+set( ARCAPI_DIR "${PROJECT_BASE_DIR}/ARC")
 add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
 add_definitions( -DASTROCAM)
 add_definitions( -DARC66_PCIE)
@@ -50,9 +50,6 @@ set(INTERFACE_INCLUDES
         "${ARCAPI_CONIFACE}"
         "${ARCAPI_DEFS}"
         )
-find_library(CARC_BASE "CArcBase3.6" NAMES "libCArcBase3.6" PATHS ${ARCAPI_DIR}/Release)
-find_library(CARC_DEVICE "CArcDevice3.6" NAMES "libCArcDevice3.6.so" PATHS ${ARCAPI_DIR}/Release)
-find_library(CARC_FITS "CArcFitsFile3.6" NAMES "libCArcFitsFile3.6.so" PATHS ${ARCAPI_DIR}/Release)
 
 # ----------------------------------------------------------------------------
 # Add appropriate instrument library here.
@@ -116,15 +113,14 @@ target_link_libraries(camerad
         logentry
         common
         utilities
+        CArcBase
+        CArcDevice
+        CArcFitsFile
         ${INTERFACE_TARGET}
         ${CMAKE_THREAD_LIBS_INIT}
         ${CCFITS_LIB}
         ${CFITS_LIB}
         )
-
-target_link_libraries(camerad ${CARC_BASE})
-target_link_libraries(camerad ${CARC_DEVICE})
-target_link_libraries(camerad ${CARC_FITS})
 
 # ----------------------------------------------------------------------------
 # cURL is not used here, so it's not strictly required, but cfitsio can
