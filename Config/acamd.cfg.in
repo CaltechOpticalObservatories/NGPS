@@ -1,7 +1,7 @@
 # configuration file for acam daemon
 # @ACAMD_CFG_COMMENT@
 #
-LOGPATH=/home/logs/
+LOGPATH=/data/logs/
 BLKPORT=@ACAMD_BLK_PORT@          # server blocking port
 NBPORT=@ACAMD_NB_PORT@            # server non-blocking port
 DAEMON=no                         # is this run as a daemon?

@@ -16,6 +16,7 @@ ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
 LKS_UNIT="1 325 131.215.200.115 3004"      # Lakeshore 325 controller
 LKS_UNIT="2 218 131.215.200.115 3003"      # Lakeshore 218 monitor
+LKS_UNIT="3 336 @IP_LKS_UR@ 7777"          # Lakeshore U/R
 
 # Each Lakeshore channel is assigned using a Lakeshore Channel Key (LKS_CHAN)
 # set as follows: LKS_CHAN="LKS# CHAN# LABEL"
@@ -43,6 +44,10 @@ LKS_CHAN="2 1 mon1"
 LKS_CHAN="2 2 mon2"
 LKS_CHAN="2 3 mon3"
 LKS_CHAN="2 4 mon4"
+
+# Lakeshore unit 3
+#
+LKS_CHAN="3 1 mon1"
 
 # Each Campbell unit is assigned a unit number, host, and port
 # set as follows: CAMP_UNIT="CAMP# MODEL HOST PORT"

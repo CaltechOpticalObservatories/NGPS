@@ -1,0 +1,18 @@
+# ----------------------------------------------------------------------------
+# @file    privatelan
+# @brief   private LAN address definitions for all NGPS software
+# @author  David Hale <dhale@caltech.edu>
+# @details These will be used by CMake to create the individual .cfg files
+#          Listing is in numerical order by IP# to help avoid any conflicts
+# ----------------------------------------------------------------------------
+
+set( IP_GATEWAY         10.0.0.1   )
+
+set( IP_NPS1            10.0.0.11  )
+set( IP_NPS2            10.0.0.12  )
+set( IP_NPS3            10.0.0.13  )
+set( IP_NPS4            10.0.0.14  )
+
+set( IP_LAMP_MODULATOR  10.0.0.36  )
+
+set( IP_LKS_UR          10.0.0.136 )

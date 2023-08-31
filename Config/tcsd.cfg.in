@@ -1,7 +1,7 @@
 # configuration file for tcsd
 # @TCSD_CFG_COMMENT@
 #
-LOGPATH=/home/logs/               # where to write logs
+LOGPATH=/data/logs/               # where to write logs
 BLKPORT=@TCSD_BLK_PORT@           # tcsd server blocking port
 NBPORT=@TCSD_NB_PORT@             # tcsd server non-blocking port
 DAEMON=no                         # run as daemon?

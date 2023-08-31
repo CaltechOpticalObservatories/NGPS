@@ -1,7 +1,7 @@
 # configuration file for telemetry daemon
 # @TELEMD_CFG_COMMENT@
 #
-LOGPATH=/home/logs/
+LOGPATH=/data/logs/
 BLKPORT=@TELEMD_BLK_PORT@         # server blocking port
 NBPORT=@TELEMD_NB_PORT@           # server non-blocking port
 DAEMON=no                         # is this run as a daemon?
