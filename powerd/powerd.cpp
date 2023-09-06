@@ -476,6 +476,17 @@ void doit(Network::TcpSocket sock) {
     }
     else
 
+    // power status
+    //
+    if ( cmd.compare( POWERD_STATUS ) == 0 ) {
+                    ret = powerd.interface.status( retstring );
+                    if ( ret==NO_ERROR ) {
+                      ret=NOTHING;
+                      if ( sock.Write( retstring ) < 0 ) connection_open=false;
+                    }
+    }
+    else
+
     // isopen
     //
     if ( cmd.compare( POWERD_ISOPEN ) == 0 ) {

@@ -191,6 +191,7 @@ namespace Power {
 
       std::map< int, Power::NpsInfo > nps_info;            ///< STL map of NpsInfo objects indexed by NPS unit#
       std::map< int, WTI::NPS >       nps;                 ///< STL map of WTI NPS objects indexed by NPS unit#
+      std::vector<int>                npsvec;              ///< vector of npsnums for indexing
 
       /**
        * @struct plug_t
@@ -203,6 +204,8 @@ namespace Power {
 
       std::map< std::string, plug_t > plugmap;             ///< STL map of plug number indexed by plug name, allows finding {npsnum,plugnum} by plugname
 
+      std::map< std::string, std::string > plugname;       ///< STL map of plug names indexed by a string made of "unit# plug#", e.g. "1 1" or "2 8" etc.
+
       void configure_interface( Power::NpsInfo npsinfo );  ///< configure the NPS interface vector with info from configuration file
       long initialize_class();                             ///< initialize class variables
       long open();                                         ///< open the NPS socket connection
@@ -210,6 +213,7 @@ namespace Power {
       bool isopen();                                       ///< is the NPS socket connection open?
       long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
       void list( std::string &retstring );                 ///< list plug devices
+      long status( std::string &retstring );               ///< status of all plug devices
 
   };
   /***** Power::Interface *****************************************************/

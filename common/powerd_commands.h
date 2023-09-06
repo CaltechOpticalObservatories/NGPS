@@ -12,11 +12,13 @@ const std::string POWERD_CLOSE  = "close";
 const std::string POWERD_ISOPEN = "isopen";
 const std::string POWERD_LIST   = "list";
 const std::string POWERD_OPEN   = "open";
+const std::string POWERD_STATUS = "status";
 const std::vector<std::string> POWERD_SYNTAX = {
                                                  POWERD_CLOSE,
                                                  POWERD_ISOPEN,
                                                  POWERD_LIST,
                                                  POWERD_OPEN,
+                                                 POWERD_STATUS,
                                                  "",
                                                  "<unit#> <plug#> [ ON | OFF ]",
                                                  "<plugname> [ ON | OFF ]"

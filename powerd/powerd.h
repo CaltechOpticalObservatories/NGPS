@@ -232,6 +232,7 @@ namespace Power {
             // The following variables (plugname, npsnum, plugnum) are extracted from this config file
             // by the load_plug_info() function.
             //
+            std::stringstream plugid;
             std::string plugname;
             int         npsnum;
             int         plugnum;
@@ -270,6 +271,16 @@ namespace Power {
               //
               this->interface.plugmap.insert( { plugname, { npsnum, plugnum } } );
 
+              // plugname is an STL map of plug names indexed by plugid which
+              // is a unique ID string consisting of "npsnum plugnum". This enables
+              // lookup of the plugname for any given nps and plug.
+              //
+              plugid << npsnum << " " << plugnum;
+              this->interface.plugname.insert( { plugid.str(), plugname } );
+
+              message.str(""); message << "POWERD:config:" << config.param[entry] << "=" << config.arg[entry];
+              logwrite( function, message.str() );
+              this->interface.async.enqueue( message.str() );
               applied++;
             }
             else error = ERROR;

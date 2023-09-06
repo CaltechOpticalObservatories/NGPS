@@ -105,6 +105,10 @@ namespace Power {
     //
     this->nps.insert( { npsinfo.npsnum, wti_nps } );
 
+    // Create a vector of NPS units
+    //
+    this->npsvec.push_back( npsinfo.npsnum );
+
     return;
   }
   /**************** Power::Interface::configure_interface *********************/
@@ -299,6 +303,59 @@ namespace Power {
     return;
   }
   /***** Power::Interface::list ***********************************************/
+
+
+  /***** Power::Interface::status *********************************************/
+  /**
+   * @brief      list status of all plug devices
+   * @param[out] retstring  reference to string to contain the status of plug devices
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::status( std::string &retstring ) {
+    std::string function = "Power::Interface::status";
+    std::stringstream message, plugid;
+
+    if ( ! this->isopen() ) {
+      logwrite( function, "ERROR:connection not open" );
+      return( ERROR );
+    }
+
+    message << "u p s   plugname\n";
+
+    try {
+      for ( int i=0; i < this->npsvec.size(); i++ ) {       // loop through the vector of NPS units
+        int unit = npsvec.at(i);                            // get the nps unit number
+        int maxplugs = nps_info.at(unit).maxplugs;          // max number of plugs on this unit
+        this->nps.at(unit).get_all( maxplugs, retstring );  // get plug status for all plugs in this unit
+
+        std::vector<std::string> tokens;                    // retstring will be CSV format
+        Tokenize( retstring, tokens, "," );                 // so tokenize on comma to get each value
+
+        for ( int tok=0,plug=1; tok<tokens.size(); tok++,plug++ ) {
+          plugid.str(""); plugid << unit << " " << plug;
+          int status = std::stoi( tokens.at(tok) );
+          message << plugid.str() << " " << ( status==1 ? "\e[1mon\e[0m " : "off" ) 
+                                  << " " << this->plugname[ plugid.str() ] << "\n";
+        }
+      }
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR: invalid argument exception: " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR: out of range exception: " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    retstring = message.str();
+
+    return( NO_ERROR );
+  }
+  /***** Power::Interface::status *********************************************/
 
 
   /***** Power::Interface::command ********************************************/

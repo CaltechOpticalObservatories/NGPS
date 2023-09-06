@@ -351,4 +351,38 @@ namespace WTI {
   }
   /***** WTI::NPS::get_switch *************************************************/
 
+
+  /***** WTI::NPS::get_all ****************************************************/
+  /**
+   * @brief      get the on/off state of all plugs
+   * @details    returned state is CSV format: s,s,s...,s
+   * @param[in]  maxplugs  max number of plugs in this unit
+   * @param[in]  state     on/off state as read back from the NPS, 0=OFF, 1=ON
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long NPS::get_all( int maxplugs, std::string &state ) {
+    std::string function = "WTI::NPS::get_all";
+    std::stringstream message;
+    std::stringstream cmdstr;
+    long error = NO_ERROR;
+
+    cmdstr << "/S 1:" << maxplugs;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] sending " << cmdstr.str() << " to " << this->interface.get_name();
+    logwrite( function, message.str() );
+#endif
+
+    error = this->interface.send_command( cmdstr.str(), state );
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] received " << state;
+    logwrite( function, message.str() );
+#endif
+
+    return( error );
+  }
+  /***** WTI::NPS::get_all ****************************************************/
+
 }

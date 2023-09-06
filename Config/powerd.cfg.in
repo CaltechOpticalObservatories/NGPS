@@ -21,7 +21,7 @@ NPS_UNIT="4 8 localhost 10004"    # WTI DC power switch
 #
 # The NPS# here must have a corresponding NPS# set in an NPS_UNIT above,
 # and the NPS_UNIT must be defined first, before the NPS outlets are
-# assigned below.
+# assigned below. OUTLETNAME must be unique, no spaces.
 
 # NPS unit 1
 #
@@ -58,11 +58,11 @@ NPS_PLUG="3 8 SLICECAM2"
 
 # NPS unit 4
 #
-NPS_PLUG="4 1 empty"
-NPS_PLUG="4 2 empty"
-NPS_PLUG="4 3 empty"
-NPS_PLUG="4 4 empty"
-NPS_PLUG="4 5 empty"
-NPS_PLUG="4 6 empty"
-NPS_PLUG="4 7 empty"
-NPS_PLUG="4 8 empty"
+NPS_PLUG="4 1 EMPTY41"
+NPS_PLUG="4 2 EMPTY42"
+NPS_PLUG="4 3 EMPTY43"
+NPS_PLUG="4 4 EMPTY44"
+NPS_PLUG="4 5 EMPTY45"
+NPS_PLUG="4 6 EMPTY46"
+NPS_PLUG="4 7 EMPTY47"
+NPS_PLUG="4 8 EMPTY48"

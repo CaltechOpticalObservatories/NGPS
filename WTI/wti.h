@@ -83,6 +83,7 @@ namespace WTI {
       bool isconnected() { return this->interface.sock.isconnected(); }  ///< is a socket connection open to hardware?
       long set_switch( int plugnum, int action );                        ///< turn the selected plug on|off
       long get_switch( int plugnum, std::string &state );                ///< get the selected plug's on/off state
+      long get_all( int maxplugs, std::string &state );                  ///< get on/off state of all plugs
   };
   /***** WTI::NPS *************************************************************/
 
