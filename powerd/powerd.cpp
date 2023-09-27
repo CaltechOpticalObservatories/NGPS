@@ -205,6 +205,12 @@ int main(int argc, char **argv) {
   //
   std::thread( new_log_day ).detach();
 
+  // Open a connection to the hardware if set in the config file.
+  // Default is yes but this can be overridden (set to no) in the
+  // config file, which will require the user to send an "open" command.
+  //
+  if ( powerd.open_on_start ) powerd.interface.open();
+
   for (;;) pause();                                  // main thread suspends
   return 0;
 }
@@ -464,6 +470,15 @@ void doit(Network::TcpSocket sock) {
     //
     if ( cmd.compare( POWERD_CLOSE ) == 0 ) {
                     ret = powerd.interface.close( );
+    }
+    else
+
+    // reopen
+    //
+    if ( cmd.compare( POWERD_REOPEN ) == 0 ) {
+                    ret  = powerd.interface.close();
+                    usleep( 100000 );
+                    ret |= powerd.interface.open();
     }
     else
 

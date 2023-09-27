@@ -60,6 +60,7 @@ namespace Power {
         this->blkport=-1;
         this->asyncport=-1;
         this->cmd_num=0;
+        this->open_on_start = true;  // default is to open connection to hardware on startup
       }
 
       /***** Power::~Server ***************************************************/
@@ -83,6 +84,8 @@ namespace Power {
 
       int nonblocking_socket;
       int blocking_socket;
+
+      bool open_on_start;                ///< should the daemon automatically open connection on startup?
 
       std::atomic<int> cmd_num;
 
@@ -195,6 +198,20 @@ namespace Power {
           // ASYNCGROUP
           if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
             this->asyncgroup = config.arg[entry];
+            message.str(""); message << "POWERD:config:" << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->interface.async.enqueue( message.str() );
+            applied++;
+          }
+
+          // OPEN_ON_START
+          if (config.param[entry].compare(0, 13, "OPEN_ON_START")==0) {
+            if ( !config.arg[entry].empty() && config.arg[entry]=="yes" ) {
+              this->open_on_start = true;
+            }
+            else {
+              this->open_on_start = false;
+            }
             message.str(""); message << "POWERD:config:" << config.param[entry] << "=" << config.arg[entry];
             logwrite( function, message.str() );
             this->interface.async.enqueue( message.str() );
