@@ -192,6 +192,8 @@ namespace Slit {
   /***** Slit::Interface::home ************************************************/
   /**
    * @brief      home all daisy-chained motors using the neg limit switch
+   * @details    Both motors are homed simultaneously by spawning a thread for
+   *             each. This will also apply any zeropos, after homing.
    * @return     ERROR or NO_ERROR
    *
    */
@@ -206,13 +208,19 @@ namespace Slit {
       return( ERROR );
     }
 
-    // send the home_axis command for each address in controller_info
+    // home the left and right motors now,
+    // simultaneously, each in its own thread.
     //
+
+    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
+
+    this->motors_running = 2;                                  // set both motors running (number of threads to wait for)
+
+    this->thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
+
     for ( size_t con=0; con < this->numdev; con++ ) {
       try {
-        this->pi.home_axis( this->controller_info.at(con).addr, axis, "neg" );
-        this->controller_info.at(con).ishome   = false;
-        this->controller_info.at(con).ontarget = false;
+        std::thread( dothread_home, std::ref( *this ), con ).detach();
       }
       catch( std::out_of_range &e ) {
         message.str(""); message << "ERROR: controller element " << con << " out of range";
@@ -221,51 +229,19 @@ namespace Slit {
       }
     }
 
-    // Loop sending the is_home command for each address in controller_info
-    // until homed or timeout.
+    // wait for the threads to finish
     //
+    while ( this->motors_running != 0 ) {
+      message.str(""); message << "waiting for " << this->motors_running << " motor" << ( this->motors_running > 1 ? "s":"" );
+      logwrite( function, message.str() );
+      this->cv.wait( wait_lock );
+    }
 
-    // get the time now for timeout purposes
+    logwrite( function, "home complete" );
+
+    // get any errors from the threads
     //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    do {
-      size_t num_home=0;
-      for ( size_t con=0; con < this->numdev; con++ ) {
-        try {
-          bool state;
-          this->pi.is_home( this->controller_info.at(con).addr, axis, state );
-          this->controller_info.at(con).ishome = state;
-          this->controller_info.at(con).ontarget = state;
-          if ( this->controller_info.at(con).ishome ) num_home++;
-        }
-        catch( std::out_of_range &e ) {
-          message.str(""); message << "ERROR: controller element " << con << " out of range";
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-      }
-      if ( num_home == this->numdev ) break;
-      else {
-#ifdef LOGLEVEL_DEBUG
-        logwrite( function, "[DEBUG] waiting for homing..." );
-#endif
-        usleep( 1000000 );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > MOVE_TIMEOUT ) {
-        logwrite( function, "TIMEOUT waiting for homing" );
-        error = TIMEOUT;
-        break;
-      }
-
-    } while ( 1 );
+    error = this->thr_error.load();
 
     return( error );
   }
@@ -436,19 +412,19 @@ namespace Slit {
       return( ERROR );
     }
 
-    float left, right;
+    float leftpos, rightpos;
 
     if ( setoffset >= 0 ) {
-      right = setoffset + setwidth/this->numdev;
-      left  = std::abs( setwidth - right );
+      rightpos = setoffset + setwidth/this->numdev;
+      leftpos  = std::abs( setwidth - rightpos );
     }
     else {
-      left  = setwidth/this->numdev - setoffset;
-      right = std::abs( setwidth - left );
+      leftpos  = setwidth/this->numdev - setoffset;
+      rightpos = std::abs( setwidth - leftpos );
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] left=" << left << " right=" << right << " width=" << setwidth << " offset=" << setoffset
+    message.str(""); message << "[DEBUG] leftpos=" << leftpos << " rightpos=" << rightpos << " width=" << setwidth << " offset=" << setoffset
                              << " leftcon=" << this->leftcon << " rightcon=" << this->rightcon;
     logwrite( function, message.str() );
 #endif
@@ -463,20 +439,24 @@ namespace Slit {
 
     iface.thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
 
-    std::stringstream movstr;                                  // string to contain the move_abs() arguments
-
     // spawn the left motor thread
     //
     if ( this->leftcon >= 0 && this->leftcon < this->numdev ) {
-      movstr.str(""); movstr << this->controller_info.at( this->leftcon ).addr << " " << left;
-      std::thread( dothread_move_abs, std::ref( iface ), movstr.str() ).detach();
+      std::thread( dothread_move_abs,
+                   std::ref( iface ),
+                   this->controller_info.at( this->leftcon ).addr,
+                   leftpos 
+                 ).detach();
     }
 
     // spawn the right motor thread
     //
     if ( this->rightcon >= 0 && this->rightcon < this->numdev ) {
-      movstr.str(""); movstr << this->controller_info.at( this->rightcon ).addr << " " << right;
-      std::thread( dothread_move_abs, std::ref( iface ), movstr.str() ).detach();
+      std::thread( dothread_move_abs,
+                   std::ref( iface ),
+                   this->controller_info.at( this->rightcon ).addr,
+                   rightpos
+                 ).detach();
     }
 
     // wait for the threads to finish
@@ -513,8 +493,8 @@ namespace Slit {
     std::string function = "Slit::Interface::get";
     std::stringstream message;
     long error  = NO_ERROR;
-    float left  = 0.0;
-    float right = 0.0;
+    float leftpos  = 0.0;
+    float rightpos = 0.0;
     float width = 0.0;
     float offs  = 0.0;
 
@@ -525,15 +505,14 @@ namespace Slit {
 
     // get the position for each address in controller_info
     //
-    std::stringstream movstr;
     std::string posstring;
     try {
       int axis=1;
       if ( this->leftcon >= 0 && this->leftcon < this->numdev ) {
-        error = this->pi.get_pos( this->controller_info.at( this->leftcon ).addr, axis, left );
+        error = this->pi.get_pos( this->controller_info.at( this->leftcon ).addr, axis, leftpos );
       }
       if ( this->rightcon >= 0 && this->rightcon < this->numdev ) {
-        error = this->pi.get_pos( this->controller_info.at( this->rightcon ).addr, axis, right );
+        error = this->pi.get_pos( this->controller_info.at( this->rightcon ).addr, axis, rightpos );
       }
     }
     catch( std::invalid_argument &e ) {
@@ -549,11 +528,11 @@ namespace Slit {
 
     // calculate width and offset
     //
-    width = left + right;
-    offs = ( right - left ) / this->numdev;
+    width = leftpos + rightpos;
+    offs = ( rightpos - leftpos ) / this->numdev;
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] left=" << left << " right=" << right << " numdev=" << this->numdev
+    message.str(""); message << "[DEBUG] leftpos=" << leftpos << " rightpos=" << rightpos << " numdev=" << this->numdev
                              << " width=" << width << " offset=" << offs
                              << " leftcon=" << this->leftcon << " rightcon=" << this->rightcon;
     logwrite( function, message.str() );
@@ -573,28 +552,147 @@ namespace Slit {
   /***** Slit::Interface::get *************************************************/
 
 
+  /***** Slit::Interface::dothread_home ***************************************/
+  /**
+   * @brief      threaded function to home and apply zeropos
+   * @param[in]  iface   reference to interface object
+   *
+   * This is the work function to call home() in a thread, intended
+   * to be spawned in a detached thread. Any errors returned by functions
+   * called in here are set in the thr_error class variable.
+   *
+   */
+  void Interface::dothread_home( Slit::Interface &iface, int con ) {
+    std::string function = "Slit::Interface::dothread_home";
+    std::stringstream message;
+    int axis=1;
+    int addr = iface.controller_info.at(con).addr;
+    float zeropos = iface.controller_info.at(con).zeropos;
+    long error=NO_ERROR;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread sending home_axis( " << addr << ", " << axis << ", neg )";
+    logwrite( function, message.str() );
+#endif
+
+    // send the home command by calling home_axis()
+    //
+    try {
+      iface.pi_mutex.lock();
+      iface.pi.home_axis( addr, axis, "neg" );
+      iface.pi_mutex.unlock();
+      iface.controller_info.at(con).ishome   = false;
+      iface.controller_info.at(con).ontarget = false;
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR: controller element " << con << " out of range";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // Loop sending the is_home command for each address in controller_info
+    // until homed or timeout.
+    //
+
+    // get the time now for timeout purposes
+    //
+    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    bool is_home=false;
+
+    do {
+      try {
+        bool state;
+        iface.pi_mutex.lock();
+        iface.pi.is_home( addr, axis, state );
+        iface.pi_mutex.unlock();
+        iface.controller_info.at(con).ishome = state;
+        iface.controller_info.at(con).ontarget = state;
+        is_home = iface.controller_info.at(con).ishome;
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "ERROR: controller element " << con << " out of range";
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+
+      if ( is_home ) break;
+      else {
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] waiting for homing " << addr << " ..." ;
+        logwrite( function, message.str() );
+#endif
+        usleep( 1000000 );
+      }
+
+      // get time now and check for timeout
+      //
+      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
+
+      if ( elapsed > MOVE_TIMEOUT ) {
+        message.str(""); message << "TIMEOUT waiting for homing " << addr;
+        logwrite( function, message.str() );
+        error = TIMEOUT;
+        break;
+      }
+
+    } while ( 1 );
+
+    // If homed OK then apply the zeropos
+    //
+    if ( error == NO_ERROR ) {
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] setting zeropos " << zeropos << " for " << addr << " ..." ;
+        logwrite( function, message.str() );
+#endif
+      std::stringstream cmd;
+      error  = iface.move_abs( addr, zeropos );  // move to zeropos position
+      cmd << addr << " DFH " << axis;
+      error |= iface.send_command( cmd.str() );  // define this as the home position
+    }
+
+    iface.thr_error.fetch_or( error );           // preserve any error returned
+
+    --iface.motors_running;                      // atomically decrement the number of motors waiting
+
+    iface.cv.notify_all();                       // notify parent that I'm done
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread completed home_axis( " << addr << ", " << axis << ", neg )"
+                             << " with error=" << error;
+    logwrite( function, message.str() );
+#endif
+
+    return;
+  }
+  /***** Slit::Interface::dothread_home ***************************************/
+
+
   /***** Slit::Interface::dothread_move_abs ***********************************/
   /**
    * @brief      threaded move_abs function
    * @param[in]  iface   reference to interface object
-   * @param[in]  movstr  string to pass to move_abs
+   * @param[in]  addr    controller address
+   * @param[in]  pos     motor position
    *
    * This is the work function to call move_abs() in a thread, intended
    * to be spawned in a detached thread. Any errors returned by the move_abs()
    * function are set in the thr_error class variable.
    *
    */
-  void Interface::dothread_move_abs( Slit::Interface &iface, std::string movstr ) {
+  void Interface::dothread_move_abs( Slit::Interface &iface, int addr, float pos ) {
     std::string function = "Slit::Interface::dothread_move_abs";
     std::stringstream message;
     long error;
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending mov_abs( " << movstr << " )";
+    message.str(""); message << "[DEBUG] thread sending mov_abs( " << addr << ", " << pos << " )";
     logwrite( function, message.str() );
 #endif
 
-    error = iface.move_abs( movstr );    // send the move_abs command here
+    error = iface.move_abs( addr, pos ); // send the move_abs command here
 
     iface.thr_error.fetch_or( error );   // preserve any error returned
 
@@ -603,7 +701,8 @@ namespace Slit {
     iface.cv.notify_all();               // notify parent that I'm done
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed mov_abs( " << movstr << " ) *** motors_running = " << iface.motors_running;
+    message.str(""); message << "[DEBUG] thread completed mov_abs( " << addr << ", " << pos << " ) "
+                             << " *** motors_running = "<< iface.motors_running;
     logwrite( function, message.str() );
 #endif
 
@@ -615,7 +714,8 @@ namespace Slit {
   /***** Slit::Interface::move_abs ********************************************/
   /**
    * @brief      send move-absolute command to specified controllers
-   * @param[in]  args  string containing addr and pos
+   * @param[in]  addr  controller address
+   * @param[in]  pos   motor position
    * @return     ERROR or NO_ERROR
    *
    * The single string parameter must contain two space-delimited tokens,
@@ -625,11 +725,9 @@ namespace Slit {
    * controller are protected by a mutex.
    *
    */
-  long Interface::move_abs( std::string args ) {
+  long Interface::move_abs( int addr, float pos ) {
     std::string function = "Slit::Interface::move_abs";
     std::stringstream message;
-    int addr;
-    float trypos;
     long error=NO_ERROR;
 
     if ( !this->pi.controller.isconnected() ) {
@@ -637,27 +735,13 @@ namespace Slit {
       return( ERROR );
     }
 
-    // The input args string must contain two tokens, addr pos
-    //
-    std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
-
-    if ( tokens.size() != 2 ) {
-      message.str(""); message << "ERROR: bad number of tokens: " << tokens.size()
-                               << ". expected 2 (addr pos)";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
     try {
       int axis=1;
-      addr   = std::stoi( tokens.at(0) );
-      trypos = std::stof( tokens.at(1) );
 
       // send the move command
       //
       this->pi_mutex.lock();
-      error = this->pi.move_abs( addr, axis, trypos );
+      error = this->pi.move_abs( addr, axis, pos );
       this->pi_mutex.unlock();
 
       // which controller has this addr?

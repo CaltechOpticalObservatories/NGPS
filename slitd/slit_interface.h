@@ -18,7 +18,7 @@
 #include <condition_variable>
 #include <atomic>
 
-#define MOVE_TIMEOUT 20000  ///< number of milliseconds before a move fails
+#define MOVE_TIMEOUT 25000  ///< number of milliseconds before a move fails
 
 /***** Slit *******************************************************************/
 /**
@@ -44,7 +44,9 @@ namespace Slit {
       int addr;                   ///< controller address
       float pos;                  ///< current position of this actuator
       std::string name;           ///< controller name
-      float min, max;             ///< min,max travel range of motor connected to this controller
+      float min;                  ///< min travel range of motor connected to this controller
+      float max;                  ///< max travel range of motor connected to this controller
+      float zeropos;              ///< defined zero position of motor
       bool servo;                 ///< servo state (true=on, false=off)
       bool ishome;                ///< is axis homed?
       bool ontarget;              ///< is axis on target?
@@ -70,7 +72,7 @@ namespace Slit {
        * in the configuration file, to parse and load all of the information
        * assigned by that key into the appropriate class variables.
        *
-       * The input string specifies: "<address> <name> <min> <max>"
+       * The input string specifies: "<address> <name> <min> <max> <zeropos>"
        *
        */
       long load_info( std::string &input ) {
@@ -80,17 +82,18 @@ namespace Slit {
 
         Tokenize( input, tokens, " \"" );
 
-        if ( tokens.size() != 4 ) {
-          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 4";
+        if ( tokens.size() != 5 ) {
+          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 5";
           logwrite( function, message.str() );
           return( ERROR );
         }
 
         try {
-          this->addr = std::stoi( tokens.at(0) );
-          this->name = tokens.at(1);
-          this->min =  std::stof( tokens.at(2) );
-          this->max =  std::stof( tokens.at(3) );
+          this->addr    = std::stoi( tokens.at(0) );
+          this->name    = tokens.at(1);
+          this->min     = std::stof( tokens.at(2) );
+          this->zeropos = std::stof( tokens.at(4) );
+          this->max     = std::stof( tokens.at(3) ) - this->zeropos;  // max is reduced from actuator max by zeropos
         }
         catch ( std::invalid_argument &e ) {
           message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
@@ -109,7 +112,13 @@ namespace Slit {
         }
 
         if ( this->min < 0 ) {
-          message.str(""); message << "error: min " << this->min << " cannot be < 0";
+          message.str(""); message << "ERROR: min " << this->min << " cannot be < 0";
+          logwrite( function, message.str() );
+          return( ERROR );
+        }
+
+        if ( this->zeropos < 0 || this->zeropos >= this->max ) {
+          message.str(""); message << "ERROR: zeropos " << this->zeropos << " must be >=0 and <" << this->max;
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -161,9 +170,10 @@ namespace Slit {
       long set( Slit::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
       long get( std::string &retstring );                                           ///< get the current width and offset
 
-      static void dothread_move_abs( Slit::Interface &iface, std::string movstr );  ///< threaded move_abs function
+      static void dothread_move_abs( Slit::Interface &iface, int addr, float pos ); ///< threaded move_abs function
+      static void dothread_home( Slit::Interface &iface, int con ); ///< threaded home function
 
-      long move_abs( std::string args );         ///< send move-absolute command to specified controllers
+      long move_abs( int addr, float pos );      ///< send move-absolute command to specified controllers
       long move_rel( std::string args );         ///< send move-relative command to specified controllers
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply

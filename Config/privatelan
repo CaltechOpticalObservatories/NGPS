@@ -8,6 +8,8 @@
 
 set( IP_GATEWAY         10.0.0.1   )
 
+set( IP_ETS8P           10.0.0.8   )
+
 set( IP_NPS1            10.0.0.11  )
 set( IP_NPS2            10.0.0.12  )
 set( IP_NPS3            10.0.0.13  )

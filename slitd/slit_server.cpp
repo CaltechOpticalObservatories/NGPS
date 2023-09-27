@@ -430,6 +430,11 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       ret = NOTHING;
       std::string retstring="";
 
+      if ( cmd.compare( "help" ) == 0 ) {
+                      for ( auto s : SLITD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+      }
+      else
+
       if ( cmd.compare( "exit" ) == 0 ) {
                       this->exit_cleanly();                     // shutdown the daemon
       }
@@ -454,8 +459,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       // close
       //
       if ( cmd.compare( SLITD_CLOSE ) == 0 ) {
-                      ret  = this->interface.send_command( "close" );  // just needed for the emulator
-                      ret |= this->interface.close();
+                      ret = this->interface.close();
       }
       else
 
@@ -493,6 +497,13 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       //
       if ( cmd.compare( SLITD_GET ) == 0 ) {
                       ret = this->interface.get( retstring );
+      }
+      else
+
+      // native
+      //
+      if ( cmd.compare( SLITD_NATIVE ) == 0 ) {
+                      ret = this->interface.send_command( args, retstring );
       }
 
       // unknown commands generate an error
