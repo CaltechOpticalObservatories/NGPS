@@ -1,6 +1,6 @@
 /**
- * @file    calibd.cpp
- * @brief   this is the main calib daemon
+ * @file    calib_server.cpp
+ * @brief   this is the main calib server
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
@@ -114,6 +114,57 @@ namespace Calib {
         logwrite( function, message.str() );
         this->interface.async.enqueue( message.str() );
         applied++;
+      }
+
+      // PI_NAME -- this is the name of the PI motor controller subsystem
+      //
+      if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
+        this->interface.name = config.arg[entry];
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // PI_HOST -- hostname for the master PI motor controller
+      //
+      if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
+        this->interface.host = config.arg[entry];
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // PI_PORT -- port number on PI_HOST for the master PI motor controller
+      //
+      if ( config.param[entry].compare( 0, 7, "PI_PORT" ) == 0 ) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch (std::invalid_argument &) {
+          logwrite(function, "ERROR: bad PI_PORT: unable to convert to integer");
+          return(ERROR);
+        }
+        catch (std::out_of_range &) {
+          logwrite(function, "PI_PORT number out of integer range");
+          return(ERROR);
+        }
+        this->interface.port = port;
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
+      //
+      if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
+        Calib::ControllerInfo s;
+        if ( s.load_info( config.arg[entry] ) == NO_ERROR ) {
+          this->interface.controller_info[ s.name ] = s;
+          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->interface.async.enqueue_and_log( function, message.str() );
+          applied++;
+        }
       }
 
     } // end loop through the entries in the configuration file
@@ -379,6 +430,11 @@ namespace Calib {
       ret = NOTHING;
       std::string retstring="";
 
+      if ( cmd.compare( "help" ) == 0 ) {
+                      for ( auto s : CALIBD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+      }
+      else
+
       if ( cmd.compare( "exit" ) == 0 ) {
                       this->exit_cleanly();                     // shutdown the daemon
       }
@@ -396,16 +452,37 @@ namespace Calib {
       // open
       //
       if ( cmd.compare( CALIBD_OPEN ) == 0 ) {
-                      logwrite( function, "[TODO] calib open not yet implemented" );
-                      ret = NO_ERROR;
+                      ret = this->interface.open();
       }
       else
 
       // close
       //
       if ( cmd.compare( CALIBD_CLOSE ) == 0 ) {
-                      logwrite( function, "[TODO] calib close not yet implemented" );
-                      ret = NO_ERROR;
+                      ret  = this->interface.send_command( "close" );
+                      ret |= this->interface.close();
+      }
+      else
+
+      // get state of one or both actuators
+      //
+      if ( ( cmd.compare( CALIBD_GET ) == 0 ) ) {
+                      ret = this->interface.get( args, retstring );
+      }
+      else
+
+      // set state of one or both actuators
+      // args should be actuator=state [ actuator=state ]
+      //
+      if ( ( cmd.compare( CALIBD_SET ) == 0 ) ) {
+                      ret = this->interface.set( args, retstring );
+      }
+      else
+
+      // native
+      //
+      if ( cmd.compare( CALIBD_NATIVE ) == 0 ) {
+                      ret = this->interface.send_command( args, retstring );
       }
 
       // unknown commands generate an error

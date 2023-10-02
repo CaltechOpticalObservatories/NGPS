@@ -8,7 +8,22 @@
 
 #ifndef CALIBD_COMMANDS_H
 #define CALIBD_COMMANDS_H
-const std::string CALIBD_OPEN = "open";      ///< open connection to calib
 const std::string CALIBD_CLOSE = "close";    ///< close connection to calibd hardware
+const std::string CALIBD_EXIT = "exit";      ///< is calib open
+const std::string CALIBD_GET = "get";        ///< get state of both actuators
 const std::string CALIBD_ISOPEN = "isopen";  ///< is calib open
+const std::string CALIBD_NATIVE = "native";  ///< open connection to calib
+const std::string CALIBD_OPEN = "open";      ///< open connection to calib
+const std::string CALIBD_SET = "set";        ///< set state of both actuators
+
+const std::vector<std::string> CALIBD_SYNTAX = {
+                                                 CALIBD_CLOSE,
+                                                 CALIBD_EXIT,
+                                                 CALIBD_GET,
+                                                 CALIBD_ISOPEN,
+                                                 CALIBD_NATIVE,
+                                                 CALIBD_OPEN,
+                                                 CALIBD_SET
+                                               };
+
 #endif
