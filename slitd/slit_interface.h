@@ -149,8 +149,8 @@ namespace Slit {
       std::string name;
       std::string host;
       int port;
-      size_t leftcon;
-      size_t rightcon;
+      size_t con_A;
+      size_t con_B;
 
       Interface();
       ~Interface();

@@ -18,9 +18,9 @@ PI_PORT=@ETS8P_SLIT@              # terminal server port
 #PI_PORT=@SLITD_PI_PORT@          # emulator service port
 
 # for each actuator's controller specify: address name min max zeropos
-# one must be named "left" and the other must be named "right"
+# one must be named "A" and the other must be named "B"
 # min/max are inherent to the actuator
 # zeropos is inherent to the mechanism and must be determined empirically
 #
-MOTOR_CONTROLLER="1 left 0 10 3.55"
-MOTOR_CONTROLLER="2 right 0 10 4.98"
+MOTOR_CONTROLLER="1 A 0 10 3.55"
+MOTOR_CONTROLLER="2 B 0 10 4.98"

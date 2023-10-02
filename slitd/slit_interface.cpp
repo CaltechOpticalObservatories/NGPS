@@ -18,8 +18,8 @@ namespace Slit {
    *
    */
   Interface::Interface() {
-    this->leftcon=-1;
-    this->rightcon=-1;
+    this->con_A=-1;
+    this->con_B=-1;
     this->numdev=-1;
   }
   /***** Slit::Interface::Interface *******************************************/
@@ -87,11 +87,11 @@ namespace Slit {
     for ( size_t con = 0; con < this->numdev; con++ ) {
       this->maxwidth += ( this->controller_info.at(con).max - this->controller_info.at(con).min );
       this->minwidth += this->controller_info.at(con).min;
-      if ( this->controller_info.at(con).name == "left" ) this->leftcon   = con;
+      if ( this->controller_info.at(con).name == "A" ) this->con_A = con;
       else
-      if ( this->controller_info.at(con).name == "right" ) this->rightcon = con;
+      if ( this->controller_info.at(con).name == "B" ) this->con_B = con;
       else {
-        message.str(""); message << "ERROR: unrecognized name \"" << this->controller_info.at(con).name << "\". expected left or right";
+        message.str(""); message << "ERROR: unrecognized name \"" << this->controller_info.at(con).name << "\". expected A or B";
         logwrite( function, message.str() );
         error = ERROR;
       }
@@ -208,7 +208,7 @@ namespace Slit {
       return( ERROR );
     }
 
-    // home the left and right motors now,
+    // home the A and B motors now,
     // simultaneously, each in its own thread.
     //
 
@@ -309,12 +309,9 @@ namespace Slit {
    * @param[out] retstring  string contains the width and offset after move
    * @return     ERROR or NO_ERROR
    *
-   * This function moves the "left" and "right" motors to achieve the requested
+   * This function moves the "A" and "B" motors to achieve the requested
    * width (and offset, if specified, default 0). Each motor is commanded in its
    * own thread so that they can be moved in parallel.
-   *
-   * Note that "left" and "right" are just my words here, and don't necessarily
-   * correspond with any real notion of left and right.
    *
    * This function requires a reference to the slit interface object because it's
    * going to spawn threads for each motor and the threads, being static, would
@@ -412,24 +409,24 @@ namespace Slit {
       return( ERROR );
     }
 
-    float leftpos, rightpos;
+    float pos_A, pos_B;
 
     if ( setoffset >= 0 ) {
-      rightpos = setoffset + setwidth/this->numdev;
-      leftpos  = std::abs( setwidth - rightpos );
+      pos_B = setoffset + setwidth/this->numdev;
+      pos_A = std::abs( setwidth - pos_B );
     }
     else {
-      leftpos  = setwidth/this->numdev - setoffset;
-      rightpos = std::abs( setwidth - leftpos );
+      pos_A = setwidth/this->numdev - setoffset;
+      pos_B = std::abs( setwidth - pos_A );
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] leftpos=" << leftpos << " rightpos=" << rightpos << " width=" << setwidth << " offset=" << setoffset
-                             << " leftcon=" << this->leftcon << " rightcon=" << this->rightcon;
+    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " width=" << setwidth << " offset=" << setoffset
+                             << " con_A=" << this->con_A << " con_B=" << this->con_B;
     logwrite( function, message.str() );
 #endif
 
-    // move the left and right motors now,
+    // move the A and B motors now,
     // simultaneously, each in its own thread.
     //
 
@@ -439,23 +436,23 @@ namespace Slit {
 
     iface.thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
 
-    // spawn the left motor thread
+    // spawn the A motor thread
     //
-    if ( this->leftcon >= 0 && this->leftcon < this->numdev ) {
+    if ( this->con_A >= 0 && this->con_A < this->numdev ) {
       std::thread( dothread_move_abs,
                    std::ref( iface ),
-                   this->controller_info.at( this->leftcon ).addr,
-                   leftpos 
+                   this->controller_info.at( this->con_A ).addr,
+                   pos_A 
                  ).detach();
     }
 
-    // spawn the right motor thread
+    // spawn the B motor thread
     //
-    if ( this->rightcon >= 0 && this->rightcon < this->numdev ) {
+    if ( this->con_B >= 0 && this->con_B < this->numdev ) {
       std::thread( dothread_move_abs,
                    std::ref( iface ),
-                   this->controller_info.at( this->rightcon ).addr,
-                   rightpos
+                   this->controller_info.at( this->con_B ).addr,
+                   pos_B
                  ).detach();
     }
 
@@ -493,8 +490,8 @@ namespace Slit {
     std::string function = "Slit::Interface::get";
     std::stringstream message;
     long error  = NO_ERROR;
-    float leftpos  = 0.0;
-    float rightpos = 0.0;
+    float pos_A = 0.0;
+    float pos_B = 0.0;
     float width = 0.0;
     float offs  = 0.0;
 
@@ -508,11 +505,11 @@ namespace Slit {
     std::string posstring;
     try {
       int axis=1;
-      if ( this->leftcon >= 0 && this->leftcon < this->numdev ) {
-        error = this->pi.get_pos( this->controller_info.at( this->leftcon ).addr, axis, leftpos );
+      if ( this->con_A >= 0 && this->con_A < this->numdev ) {
+        error = this->pi.get_pos( this->controller_info.at( this->con_A ).addr, axis, pos_A );
       }
-      if ( this->rightcon >= 0 && this->rightcon < this->numdev ) {
-        error = this->pi.get_pos( this->controller_info.at( this->rightcon ).addr, axis, rightpos );
+      if ( this->con_B >= 0 && this->con_B < this->numdev ) {
+        error = this->pi.get_pos( this->controller_info.at( this->con_B ).addr, axis, pos_B );
       }
     }
     catch( std::invalid_argument &e ) {
@@ -528,13 +525,13 @@ namespace Slit {
 
     // calculate width and offset
     //
-    width = leftpos + rightpos;
-    offs = ( rightpos - leftpos ) / this->numdev;
+    width = pos_A + pos_B;
+    offs = ( pos_B - pos_A ) / this->numdev;
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] leftpos=" << leftpos << " rightpos=" << rightpos << " numdev=" << this->numdev
+    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " numdev=" << this->numdev
                              << " width=" << width << " offset=" << offs
-                             << " leftcon=" << this->leftcon << " rightcon=" << this->rightcon;
+                             << " con_A=" << this->con_A << " con_B=" << this->con_B;
     logwrite( function, message.str() );
 #endif
 
