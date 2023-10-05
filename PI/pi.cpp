@@ -10,7 +10,12 @@
 
 namespace Physik_Instrumente {
 
-  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /* @var   valid_reftypes
+   * @brief class global vector of valid reference types used for homing
+   */
+  const std::vector<std::string> valid_reftypes{ "neg", "pos", "ref" };
+
+  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
   /**
    * @fn         ServoInterface
    * @brief      default ServoInterface class constructor
@@ -24,10 +29,10 @@ namespace Physik_Instrumente {
     this->port=-1;
     this->initialized = false;
   }
-  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
   /**
    * @fn         ServoInterface
    * @brief      default ServoInterface class constructor
@@ -42,10 +47,10 @@ namespace Physik_Instrumente {
     this->port = port;
     this->initialized = true;
   }
-  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
   /**
    * @fn         ServoInterface
    * @brief      default ServoInterface class constructor
@@ -61,10 +66,10 @@ namespace Physik_Instrumente {
     this->host = host;
     this->initialized = true;
   }
-  /**************** Physik_Instrumente::ServoInterface::ServoInterface ********/
+  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::~ServoInterface *******/
+  /***** Physik_Instrumente::ServoInterface::~ServoInterface ******************/
   /**
    * @fn         ~ServoInterface
    * @brief      ServoInterface class deconstructor
@@ -74,10 +79,10 @@ namespace Physik_Instrumente {
    */
   ServoInterface::~ServoInterface() {
   };
-  /**************** Physik_Instrumente::ServoInterface::~ServoInterface *******/
+  /***** Physik_Instrumente::ServoInterface::~ServoInterface ******************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::open ******************/
+  /***** Physik_Instrumente::ServoInterface::open *****************************/
   /**
    * @fn         open
    * @brief      open a connection to the servo controller
@@ -115,10 +120,10 @@ namespace Physik_Instrumente {
 
     return NO_ERROR;
   }
-  /**************** Physik_Instrumente::ServoInterface::open ******************/
+  /***** Physik_Instrumente::ServoInterface::open *****************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::close *****************/
+  /***** Physik_Instrumente::ServoInterface::close ****************************/
   /**
    * @fn         close
    * @brief      close the connection to the servo controller
@@ -146,10 +151,10 @@ namespace Physik_Instrumente {
 
     return( error );
   }
-  /**************** Physik_Instrumente::ServoInterface::close *****************/
+  /***** Physik_Instrumente::ServoInterface::close ****************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::get_error *************/
+  /***** Physik_Instrumente::ServoInterface::get_error ************************/
   /**
    * @fn         get_error
    * @brief      read the error status
@@ -212,24 +217,38 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /**************** Physik_Instrumente::ServoInterface::get_error *************/
+  /***** Physik_Instrumente::ServoInterface::get_error ************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::set_servo *************/
+  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
   /**
    * @fn         set_servo
    * @brief      set the servo on|off
-   * @param[in]  int addr, address of controller
-   * @param[in]  bool state (on=true, off=false)
+   * @param[in]  addr   address of controller
+   * @param[in]  state  (true=on, false=off)
    * @return     ERROR or NO_ERROR
    *
-   * This function is overloaded with a version where the axis can be specified;
-   * the default is all axes when not specified.
+   * This function is overloaded. This version uses all axes.
    *
    */
   long ServoInterface::set_servo( int addr, bool state ) {
     return( this->set_servo( addr, -1, state ) );
   }
+  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
+
+
+  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
+  /**
+   * @fn         set_servo
+   * @brief      set the servo on|off
+   * @param[in]  addr   address of controller
+   * @param[in]  axis   axis
+   * @param[in]  state  (true=on, false=off)
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.  This version accepts an axis.
+   *
+   */
   long ServoInterface::set_servo( int addr, int axis, bool state ) {
     std::stringstream cmd;
     if ( addr > 0 ) cmd << addr << " ";
@@ -239,10 +258,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /**************** Physik_Instrumente::ServoInterface::set_servo *************/
+  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::move_abs **************/
+  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
   /**
    * @fn         move_abs
    * @brief      send move command in absolute coordinates
@@ -257,10 +276,10 @@ namespace Physik_Instrumente {
   long ServoInterface::move_abs( int addr, float pos ) {
     return( this->move_abs( addr, -1, pos ) );
   }
-  /**************** Physik_Instrumente::ServoInterface::move_abs **************/
+  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::move_abs **************/
+  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
   /**
    * @fn         move_abs
    * @brief      send move command in absolute coordinates
@@ -281,10 +300,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /**************** Physik_Instrumente::ServoInterface::move_abs **************/
+  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::move_rel **************/
+  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
   /**
    * @fn         move_rel
    * @brief      move in relative coordinates
@@ -299,10 +318,10 @@ namespace Physik_Instrumente {
   long ServoInterface::move_rel( int addr, float pos ) {
     return( this->move_rel( addr, -1, pos ) );
   }
-  /**************** Physik_Instrumente::ServoInterface::move_rel **************/
+  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::move_rel **************/
+  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
   /**
    * @fn         move_rel
    * @brief      move in relative coordinates
@@ -323,10 +342,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /**************** Physik_Instrumente::ServoInterface::move_rel **************/
+  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::home_axis *************/
+  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
   /**
    * @fn         home_axis
    * @brief      home an axis by moving to reference switch
@@ -344,10 +363,10 @@ namespace Physik_Instrumente {
   long ServoInterface::home_axis( int addr, std::string ref ) {
     return( this->home_axis( addr, -1, ref ) );       //!< all axes at this addr
   }
-  /**************** Physik_Instrumente::ServoInterface::home_axis *************/
+  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::home_axis *************/
+  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
   /**
    * @fn         home_axis
    * @brief      home an axis by moving to reference switch
@@ -367,8 +386,17 @@ namespace Physik_Instrumente {
     std::stringstream message;
     std::stringstream cmd;
 
-    // start with the address, if specified
+    // if the axis is specified then make sure referencing method is selected
     //
+    if ( addr > 0 ) {
+      if ( addr > 0 ) cmd << addr << " ";
+      cmd << "RON " << axis << " 1";
+      if ( this->send_command( cmd.str() ) != NO_ERROR ) return( ERROR );
+    }
+
+    // start building the reference command
+    //
+    cmd.str("");
     if ( addr > 0 ) cmd << addr << " ";
 
     // add the appropriate homing command based on the ref argument
@@ -390,10 +418,10 @@ namespace Physik_Instrumente {
 
     return( this->send_command( cmd.str() ) );
   }
-  /**************** Physik_Instrumente::ServoInterface::home_axis *************/
+  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::is_home ***************/
+  /***** Physik_Instrumente::ServoInterface::is_home **************************/
   /**
    * @fn          is_home
    * @brief       queries whether referencing has been done
@@ -418,10 +446,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /**************** Physik_Instrumente::ServoInterface::is_home ***************/
+  /***** Physik_Instrumente::ServoInterface::is_home **************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::on_target *************/
+  /***** Physik_Instrumente::ServoInterface::on_target ************************/
   /**
    * @fn         on_target
    * @brief      query the on target state for given addr and axis
@@ -436,10 +464,10 @@ namespace Physik_Instrumente {
   long ServoInterface::on_target( int addr, bool &state ) {
     return( this->on_target( addr, -1, state ) );       //!< all axes at this addr
   }
-  /**************** Physik_Instrumente::ServoInterface::on_target *************/
+  /***** Physik_Instrumente::ServoInterface::on_target ************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::on_target *************/
+  /***** Physik_Instrumente::ServoInterface::on_target ************************/
   /**
    * @fn         on_target
    * @brief      query the on target state for given addr and axis
@@ -467,10 +495,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /**************** Physik_Instrumente::ServoInterface::on_target *************/
+  /***** Physik_Instrumente::ServoInterface::on_target ************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::get_pos ***************/
+  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
   /**
    * @fn         get_pos
    * @brief      get the current position of a motor
@@ -485,10 +513,10 @@ namespace Physik_Instrumente {
   long ServoInterface::get_pos( int addr, float &pos ) {
     return( this->get_pos( addr, -1, pos ) );       //!< all axes at this addr
   }
-  /**************** Physik_Instrumente::ServoInterface::get_pos ***************/
+  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::get_pos ***************/
+  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
   /**
    * @fn         get_pos
    * @brief      get the current position of a motor
@@ -516,10 +544,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /**************** Physik_Instrumente::ServoInterface::get_pos ***************/
+  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::stop_motion ***********/
+  /***** Physik_Instrumente::ServoInterface::stop_motion **********************/
   /**
    * @fn         stop_motion
    * @brief      stop all movement on all axes
@@ -534,10 +562,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /**************** Physik_Instrumente::ServoInterface::stop_motion ***********/
+  /***** Physik_Instrumente::ServoInterface::stop_motion **********************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::send_command **********/
+  /***** Physik_Instrumente::ServoInterface::send_command *********************/
   /**
    * @fn         send_command
    * @brief      send a command string to the controller
@@ -564,10 +592,10 @@ namespace Physik_Instrumente {
 
     return( NO_ERROR );
   }
-  /**************** Physik_Instrumente::ServoInterface::send_command **********/
+  /***** Physik_Instrumente::ServoInterface::send_command *********************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::send_command **********/
+  /***** Physik_Instrumente::ServoInterface::send_command *********************/
   /**
    * @fn         send_command
    * @brief      send a command string to the controller
@@ -631,10 +659,10 @@ namespace Physik_Instrumente {
 
     return( error );
   }
-  /**************** Physik_Instrumente::ServoInterface::send_command **********/
+  /***** Physik_Instrumente::ServoInterface::send_command *********************/
 
 
-  /**************** Physik_Instrumente::ServoInterface::parse_reply ***********/
+  /***** Physik_Instrumente::ServoInterface::parse_reply **********************/
   /**
    * @fn         parse_reply
    * @brief      parse the response from sending a ? command to the controller
@@ -719,6 +747,6 @@ namespace Physik_Instrumente {
     return NO_ERROR;
 
   }
-  /**************** Physik_Instrumente::ServoInterface::parse_reply ***********/
+  /***** Physik_Instrumente::ServoInterface::parse_reply **********************/
 
 }

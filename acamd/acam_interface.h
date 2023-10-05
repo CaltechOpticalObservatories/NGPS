@@ -253,9 +253,9 @@ namespace Acam {
 
       long initialize_class();                 /// initialize the Interface class
       long test_image();                       ///
-      long open( std::string args );           /// wrapper to open all acam-related hardware components
-      bool isopen();                           /// wrapper for all acam-related hardware components
-      long close();                            /// wrapper to open all acam-related hardware components
+      long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
+      long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components
+      long close( std::string component, std::string &help );      /// wrapper to open all acam-related hardware components
       long acquire();                          /// wrapper to acquire an Andor image
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve

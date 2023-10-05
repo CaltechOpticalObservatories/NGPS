@@ -28,6 +28,8 @@ char* getCmdOption( char** begin, char** end, const std::string &option );
 int my_hardware_concurrency();
 int cores_available();
 
+inline int mod( int k, int n ) { return ( (k %= n) < 0 ) ? k+n : k; }
+
 unsigned int parse_val(const std::string& str);     /// returns an unsigned int from a string
 
 int Tokenize(const std::string& str, 

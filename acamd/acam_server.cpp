@@ -118,15 +118,48 @@ namespace Acam {
         applied++;
       }
 
-      // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
+      // STEPPER_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
-      if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
+      if ( config.param[entry].compare( 0, 18, "STEPPER_CONTROLLER" ) == 0 ) {
         Acam::MotionInfo mot;
-        if ( mot.load_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motion.motion_info.push_back( mot );
+        if ( mot.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
+          this->interface.motion.motion_info[ mot.name ] = mot;
           message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
           logwrite( function, message.str() );
           this->interface.async.enqueue( message.str() );
+          applied++;
+        }
+      }
+
+      // STEPPER_POS -- detailed position info for each named motor controller
+      //
+      if ( config.param[entry].compare( 0, 11, "STEPPER_POS" ) == 0 ) {
+        Acam::MotionInfo mot;
+        if ( mot.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+
+          // Make sure the STEPPER_POS's name has a matching name in controller_info
+          // which came from the STEPPER_CONTROLLER configuration.
+          //
+          auto loc = this->interface.motion.motion_info.find( mot.name );
+
+          // If found, then assign the stepper motor map from the local object to the class object.
+          //
+          if ( loc != this->interface.motion.motion_info.end() ) {
+            std::string posname = mot.stepper.begin()->first;  // mot is a local copy so there is only one entry
+            loc->second.stepper[ posname ].id       = mot.stepper[posname].id;
+            loc->second.stepper[ posname ].position = mot.stepper[posname].position;
+            loc->second.stepper[ posname ].posname  = mot.stepper[posname].posname;
+          }
+          else {
+            message.str(""); message << "ERROR: STEPPER_POS name \"" << mot.name << "\" "
+                                     << "has no matching name defined by STEPPER_CONTROLLER";
+            logwrite( function, message.str() );
+            error = ERROR;
+            break;
+          }
+
+          message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
         }
       }
@@ -451,7 +484,7 @@ namespace Acam {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 ) {
+      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                       for ( auto s : ACAMD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else
@@ -538,25 +571,28 @@ namespace Acam {
       // open
       //
       if ( cmd.compare( ACAMD_OPEN ) == 0 ) {
-                      ret = this->interface.open( args );
+                      ret = this->interface.open( args, retstring );
       }
       else
 
       // isopen
       //
       if ( cmd.compare( ACAMD_ISOPEN ) == 0 ) {
-                      bool isopen = this->interface.isopen( );
-                      if ( isopen ) retstring = "true"; else retstring = "false";
-                      ret = NO_ERROR;
+                      bool isopen;
+                      ret = this->interface.isopen( args, isopen, retstring );
+                      if ( retstring.empty() ) { if ( isopen ) retstring = "true"; else retstring = "false"; }
       }
       else
 
       // close
       //
       if ( cmd.compare( ACAMD_CLOSE ) == 0 ) {
-                      ret = this->interface.close();
+                      ret = this->interface.close( args, retstring );
       }
       else
+
+      // config
+      //
       if ( cmd.compare( ACAMD_CONFIG ) == 0 ) {
                       ret = this->interface.configure_interface( config );
       }
@@ -596,31 +632,36 @@ namespace Acam {
       }
       else
 
-      // home
+      // motion control commands
       //
+      if ( cmd.compare( ACAMD_MOTION ) == 0 ) {
+                      ret = this->interface.motion.motion( args, retstring );
+      }
+      else
+
       if ( cmd.compare( ACAMD_HOME ) == 0 ) {
-                      ret = this->interface.motion.home( );
+                      ret = this->interface.motion.home( args, retstring );
       }
       else
 
       // is_home
       //
       if ( cmd.compare( ACAMD_ISHOME ) == 0 ) {
-                      ret = this->interface.motion.is_home( retstring );
+                      ret = this->interface.motion.is_home( args, retstring );
       }
       else
 
       // set/get filter
       //
       if ( cmd.compare( ACAMD_FILTER ) == 0 ) {
-//                    ret = this->interface.motion.filter( std::ref( this->interface ), args, retstring );
+                      ret = this->interface.motion.filter( args, retstring );
       }
       else
 
       // set/get dust cover
       //
       if ( cmd.compare( ACAMD_COVER ) == 0 ) {
-//                    ret = this->interface.motion.cover( std::ref( this->interface ), args, retstring );
+                      ret = this->interface.motion.cover( args, retstring );
       }
 
       // unknown commands generate an error

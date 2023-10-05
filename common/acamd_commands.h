@@ -16,6 +16,7 @@ const std::string ACAMD_CONFIG   = "config";    ///< reload configuration, apply
 const std::string ACAMD_COVER    = "cover";     ///< cover [ open|close ] to set or get the dust over
 const std::string ACAMD_HOME     = "home";      ///< home all motors
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?
+const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OPEN     = "open";      ///< open connection to all devices
 const std::string ACAMD_ISOPEN   = "isopen";    ///< close connection to all devices
 const std::string ACAMD_CLOSE    = "close";     ///< close connection to all devices
@@ -28,14 +29,17 @@ const std::string ACAMD_SOLVE    = "solve";     ///< call the Python astrometry 
 const std::string ACAMD_CAMERASERVER_COORDS = "prepare";  ///< send coordinates to external camera server
 const std::string ACAMD_CAMERASERVER_ACQUIRE = "cameraserveracquire";  ///< acquire an image from the acam camera server
 const std::vector<std::string> ACAMD_SYNTAX = { 
+                                                "--MOTION CONTROL--",
+                                                ACAMD_COVER+" [ open | close ]",
+                                                ACAMD_FILTER+" [ <filtername> ]",
+                                                ACAMD_HOME+" [ <name> ]",
+                                                ACAMD_ISHOME+" [ <name> ]",
+                                                ACAMD_MOTION+" [ [ <name> [ native <cmd> | <posname> ] ] ]",
                                                 ACAMD_EXIT,
                                                 ACAMD_ECHO+" <string>",
-                                                ACAMD_FILTER,
                                                 ACAMD_CONFIG,
-                                                ACAMD_COVER,
-                                                ACAMD_HOME,
-                                                ACAMD_ISHOME,
-                                                ACAMD_OPEN,
+                                                ACAMD_ISOPEN+" [ motion | camera ]",
+                                                ACAMD_OPEN+" [ [motion] [camera [args]] ]",
                                                 ACAMD_CLOSE,
                                                 ACAMD_CAMOPEN,
                                                 ACAMD_CAMCLOSE,

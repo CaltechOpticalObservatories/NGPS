@@ -7,30 +7,80 @@ NBPORT=@ACAMD_NB_PORT@            # server non-blocking port
 DAEMON=no                         # is this run as a daemon?
 STDOUT=/tmp/acamd.stdout          # where to send stdout
 STDERR=/tmp/acamd.stderr          # where to send stderr
+MESSAGEPORT=@MESSAGEPORT@
+MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
+
+# this is the port number that the emulator listens to
+#
+EMULATOR=@FILTERD_PI_PORT@
 
 # host:port for the external camera server
 #
 CAMERASERVER_HOST=localhost
 CAMERASERVER_PORT=@ACAM_CAMERA_SERVER_PORT@
 
+# ASTRONOMY SOLVER
+#
+# Optional key=value args to pass to the astrometry solver.
+# List one per line and place within double quotes: SOLVER_ARGS="key=value"
+#
+#SOLVER_ARGS="lsq=true"
+#SOLVER_ARGS="Ncatalog_max=100"
+#SOLVER_ARGS="Ndetector_max=100"
+#SOLVER_ARGS=
+
+# MOTION CONTROL
+#
 # there is a single host:port for the "master" PI controller
 # at the front of the daisy-chain
 #
-PI_NAME=acam
-PI_HOST=localhost
-PI_PORT=@ACAMD_PI_PORT@
-# for each PI actuator's controller specify: address name min max
-#
-MOTOR_CONTROLLER="1 foo 0 10"
-MOTOR_CONTROLLER="2 bar 0 10"
+PI_NAME=acam-motion     # for reporting purposes only
+PI_HOST=@IP_ETS8P@      # host to connect to PI
+PI_PORT=@ETS8P_FILTER@  # port to use on PI host
 
-MESSAGEPORT=@MESSAGEPORT@
-MESSAGEGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
-
-# Optional key=value args to pass to the astrometry solver.
-# List one per line and place within parentheses (key=value)
+# For each actuator's controller specify: address name referencetype
+# address is the DIP-switch assigned address
+# name will be used to identify which device to move, and in STEPPER_POS below
+# One must be named "filter" and the other must be named "cover"
+# referencetypes are { neg, pos, ref }
 #
-#SOLVER_ARGS=(lsq=true)
-#SOLVER_ARGS=(Ncatalog_max=100)
-#SOLVER_ARGS=(Ndetector_max=100)
-#SOLVER_ARGS=
+STEPPER_CONTROLLER="1 filter pos"
+STEPPER_CONTROLLER="2 cover neg"
+
+# For each motor controller, assign possible positions with STEPPER_POS
+# STEPPER_POS="name ID position positionname"
+# name must have a corresponding name in STEPPER_CONTROLLER above, which must be defined first
+# ID is a 0-based incremental internal ID number {0,1,2,...}
+# position is the real actuator position required to reach location ID
+# positionname is the name of that position (what the user will use)
+#
+
+# These are for the Filter Wheel -- OK to change positionname as required!
+# positionname is the filter name used to select the filter.
+# ID here refers to the numbered positions on the filter. Do not change
+# the position for a given ID. See orientation diagram below.
+#
+STEPPER_POS="filter 0    0 F0"
+STEPPER_POS="filter 1  477 F1"
+STEPPER_POS="filter 2  954 F2"
+STEPPER_POS="filter 3 1431 F3"
+STEPPER_POS="filter 4 1908 F4"
+STEPPER_POS="filter 5 2385 F5"
+
+# These are for the dust cover -- no need to ever change these!
+#
+STEPPER_POS="cover 0   0 open"
+STEPPER_POS="cover 1 504 close"
+
+# Filter orientation, looking away from the sky, facing the camera.
+# Shown in the "home" position. Numbers are the IDs used above.
+#  o  = reference switch
+#  c  = center of rotation
+# [ ] = camera
+#                   o 
+#                      0
+#                  1      [5]
+#                      c
+#                  2       4
+#                      3
+

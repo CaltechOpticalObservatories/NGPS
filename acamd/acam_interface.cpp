@@ -934,6 +934,7 @@ namespace Acam {
   /**
    * @brief      configure the interface from the .cfg file
    * @details    this function can be called at any time, e.g. from HUP or a command
+   * @param[in]  config  reference to Config object
    * @return     ERROR or NO_ERROR
    *
    */
@@ -990,24 +991,97 @@ namespace Acam {
 
   /***** Acam::Interface::open ************************************************/
   /**
-   * @brief      wrapper to open all acam external components
+   * @brief      wrapper to open all or specified acam external components
+   * @param[in]  args  string containing 0 or more args specifying which component to open
+   * @param[out] help  return string containing help on request  
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::open( std::string args ) {
+  long Interface::open( std::string args, std::string &help ) {
     std::string function = "Acam::Interface::open";
     std::stringstream message;
     long error = NO_ERROR;
+    std::vector<std::string> arglist;
+    std::string component, camarg;
 
-//  error |= this->motion.open();
+    // No args opens everything (motion and camera)...
+    //
+    if ( args.empty() ) {
+      component = "all";
+      camarg    = "";
+    }
+    else if ( args == "?" ) {
+      help = ACAMD_OPEN;
+      help.append( " [ [motion] [camera [args]] ]\n" );
+      help.append( "  no arg will open all components, motion and camera\n" );
+      help.append( "  either one or both components may be specified\n" );
+      help.append( "  camera can take an optional arg to pass to camera\n" );
+      return( NO_ERROR );
+    }
+    else { // ...otherwise look at the arg(s):
 
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
+
+      Tokenize( args, arglist, " " );
+
+      // args can be [ [motion] [camera [args]] ]
+      //
+      int ccount=0;
+      for ( size_t i=0; i < arglist.size(); i++ ) {
+        size_t next = i+1;
+        if ( arglist[i] == "motion" ) {
+          component = arglist[i]; ccount++;
+          if ( next < arglist.size() && arglist[next] != "camera" ) {
+            message.str(""); message << "ERROR: unrecognized arg \"" << arglist[next]
+                                     << "\". Expected { [ [motion] [camera [args]] ] }";
+            logwrite( function, message.str() );
+            return( ERROR );
+          }
+        }
+        if ( arglist[i] == "camera" ) {
+          component = arglist[i]; ccount++;
+          if ( next < arglist.size() && arglist[next] != "motion" ) {
+            camarg.append( arglist[ next ] );
+          }
+        }
+      }
+      if ( ccount == 2 ) component = "all";
+
+      message.str(""); message << "[NOTICE] component=" << component << " camarg=" << camarg;
+      logwrite( function, message.str() );
+
+      if ( component.empty() ) {
+        message.str(""); message << "ERROR: unrecognized arg \"" << args
+                                 << "\". Expected { [ [motion] [camera [args]] ] }";
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+    }
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] component=\"" << component << "\"  camarg=\"" << camarg << "\"";
+    logwrite( function, message.str() );
+#endif
+
+    if ( component != "all" && component != "motion" && component != "camera" ) {
+      message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
+                               << "Expected { motion | camera }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    if ( component == "all" || component == "motion" ) {
+      error |= this->motion.open();
+    }
+
+    if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
-    error |= this->camera_server.open();  // get images from external server
+      error |= this->camera_server.open();   // get images from external server
 #endif
-
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
-    error |= this->camera.open( args );   // get images from Andor directly
+      error |= this->camera.open( camarg );  // get images from Andor directly
 #endif
+    }
 
     if ( error != NO_ERROR ) logwrite( function, "ERROR: one or more components failed to open" );
 
@@ -1018,26 +1092,58 @@ namespace Acam {
 
   /***** Acam::Interface::isopen **********************************************/
   /**
-   * @brief      wrapper for all acam hardware components
+   * @brief      wrapper for acam hardware components to check if connection open
+   * @param[in]  component  optional string contains which component to check { camera | motion }
+   * @param[out] state      reference to bool to indicate open {true} or not {false}
+   * @param[out] help       reference to return string (used just for help)
    * @return     ERROR or NO_ERROR
    *
    */
-  bool Interface::isopen() {
+  long Interface::isopen( std::string component, bool &state, std::string &help ) {
     std::string function = "Acam::Interface::isopen";
     std::stringstream message;
-    bool _is_open = true;  // default True, then "and" will make false if any one is false
+    state = true;               // default True, then "and" will make false if any one is false
 
-//  _is_open &= this->motion.isopen();
+    // Help
+    //
+    if ( component == "?" ) {
+      help = ACAMD_ISOPEN;
+      help.append( " [ camera | motion ]\n" );
+      help.append( "  optionally supply the component name to check only that component\n" );
+      help.append( "  checks all components if no arg supplied\n" );
+      return( NO_ERROR );
+    }
 
+    if ( component.empty() ) {  // No component checks everything (motion and camera)...
+      component = "all";
+    }
+    else {
+      std::transform( component.begin(), component.end(), component.begin(), ::tolower );
+    }
+
+    if ( component != "all" && component != "motion" && component != "camera" ) {
+      message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
+                               << "Expected { motion | camera }";
+      logwrite( function, message.str() );
+      state = false;
+      return( ERROR );
+    }
+
+    if ( component == "all" || component == "motion" ) {
+      state &= this->motion.isopen();
+    }
+
+    if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
-    _is_open &= this->camera_server.isopen();
+      state &= this->camera_server.isopen();
 #endif
-
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
-//  _is_open &= this->camera.isopen();
-    _is_open &= this->camera.andor.is_initialized();
+//    state &= this->camera.isopen();
+      state &= this->camera.andor.is_initialized();
 #endif
-    return( _is_open );
+    }
+
+    return( NO_ERROR );
   }
   /***** Acam::Interface::isopen **********************************************/
 
@@ -1045,24 +1151,54 @@ namespace Acam {
   /***** Acam::Interface::close ***********************************************/
   /**
    * @brief      wrapper for all acam hardware components
+   * @param[in]  component  optionally provide the component name to close { camera | motion }
+   * @param[out] help       contains return string for help
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::close() {
+  long Interface::close( std::string component, std::string &help ) {
     std::string function = "Acam::Interface::close";
     std::stringstream message;
     long error = NO_ERROR;
 
-//  error |= this->motion.close();
-//  error |= this->motion.send_command( "close" );  // just needed for the emulator
+    // Help
+    //
+    if ( component == "?" ) {
+      help = ACAMD_CLOSE;
+      help.append( " [ camera | motion ]\n" );
+      help.append( "  optionally supply the component name to close only that component\n" );
+      help.append( "  closes all components if no arg supplied\n" );
+      return( NO_ERROR );
+    }
 
+    if ( component.empty() ) {  // No component closes everything (motion and camera)...
+      component = "all";
+    }
+    else {
+      std::transform( component.begin(), component.end(), component.begin(), ::tolower );
+    }
+
+    if ( component != "all" && component != "motion" && component != "camera" ) {
+      message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
+                               << "Expected { motion | camera }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    if ( component == "all" || component == "motion" ) {
+//    error |= this->motion.send_command( "close" );  // just needed for the emulator
+      error |= this->motion.close();
+    }
+
+    if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
-    error |= this->camera_server.close();
+      error |= this->camera_server.close();
 #endif
 
 #ifdef ACAM_ANDOR_SOURCE_ANDOR
-    error |= this->camera.close();
+      error |= this->camera.close();
 #endif
+    }
 
     return( error );
   }

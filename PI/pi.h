@@ -26,6 +26,10 @@
  */
 namespace Physik_Instrumente {
 
+  /* @var   valid_reftypes
+   * @brief class global vector of valid reference types, used for homing
+   */
+  extern const std::vector<std::string> valid_reftypes;
 
   /***** ServoInterface *******************************************************/
   /**
