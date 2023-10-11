@@ -17,10 +17,10 @@ const std::string POWERD_STATUS = "status";
 const std::vector<std::string> POWERD_SYNTAX = {
                                                  POWERD_CLOSE,
                                                  POWERD_ISOPEN,
-                                                 POWERD_LIST,
+                                                 POWERD_LIST+" [?]",
                                                  POWERD_OPEN,
-                                                 POWERD_REOPEN,
-                                                 POWERD_STATUS,
+                                                 POWERD_REOPEN+" [?]",
+                                                 POWERD_STATUS+" [?]",
                                                  "",
                                                  "<unit#> <plug#> [ ON | OFF ]",
                                                  "<plugname> [ ON | OFF ]"

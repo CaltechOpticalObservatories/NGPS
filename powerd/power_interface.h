@@ -15,6 +15,7 @@
 #include "network.h"
 #include "logentry.h"
 #include "common.h"
+#include "powerd_commands.h"
 #include <sys/stat.h>
 
 /***** Power ******************************************************************/
@@ -212,8 +213,8 @@ namespace Power {
       long close();                                        ///< close the NPS socket connection
       bool isopen();                                       ///< is the NPS socket connection open?
       long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
-      void list( std::string &retstring );                 ///< list plug devices
-      long status( std::string &retstring );               ///< status of all plug devices
+      void list( std::string args, std::string &retstring );   ///< list plug devices
+      long status( std::string args, std::string &retstring ); ///< status of all plug devices
 
   };
   /***** Power::Interface *****************************************************/

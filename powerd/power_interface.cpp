@@ -288,9 +288,18 @@ namespace Power {
    * @param[out] retstring  reference to string to contain the list of plug devices
    *
    */
-  void Interface::list( std::string &retstring ) {
+  void Interface::list( std::string args, std::string &retstring ) {
     std::string function = "Power::Interface::list";
     std::stringstream message;
+
+    // Help
+    //
+    if ( args=="?" ) {
+      retstring = POWERD_LIST;
+      retstring.append( "\n" );
+      retstring.append( "  displays a list of all units/plugs alphabatized by name\n" );
+      return;
+    }
 
     message << "u p plugname\n";
 
@@ -312,9 +321,18 @@ namespace Power {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::status( std::string &retstring ) {
+  long Interface::status( std::string args, std::string &retstring ) {
     std::string function = "Power::Interface::status";
     std::stringstream message, plugid;
+
+    // Help
+    //
+    if ( args=="?" ) {
+      retstring = POWERD_STATUS;
+      retstring.append( "\n" );
+      retstring.append( "  displays the on/off status of each plug, in order of unit and plug\n" );
+      return( NO_ERROR );
+    }
 
     if ( ! this->isopen() ) {
       logwrite( function, "ERROR:connection not open" );

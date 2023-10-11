@@ -14,6 +14,7 @@
 #include "pi.h"
 #include "logentry.h"
 #include "common.h"
+#include "calibd_commands.h"
 #include <sys/stat.h>
 #include <map>
 #include <condition_variable>
@@ -43,6 +44,7 @@ namespace Calib {
       int addr;                   ///< controller address
       float pos;                  ///< current position of this actuator
       std::string name;           ///< controller name
+      std::string reftype;        ///< reference type
       float openpos;              ///< open position for motor connected to this controller
       float closepos;             ///< close position for motor connected to this controller
       bool servo;                 ///< servo state (true=on, false=off)
@@ -70,7 +72,7 @@ namespace Calib {
        * in the configuration file, to parse and load all of the information
        * assigned by that key into the appropriate class variables.
        *
-       * The input string specifies: "<address> <name> <openpos> <closepos>"
+       * The input string specifies: "<address> <name> <reftype> <openpos> <closepos>"
        *
        */
       long load_info( std::string &input ) {
@@ -80,8 +82,8 @@ namespace Calib {
 
         Tokenize( input, tokens, " \"" );
 
-        if ( tokens.size() != 4 ) {
-          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 4";
+        if ( tokens.size() != 5 ) {
+          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 5";
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -89,8 +91,9 @@ namespace Calib {
         try {
           this->addr     = std::stoi( tokens.at(0) );
           this->name     = tokens.at(1);
-          this->openpos  = std::stof( tokens.at(2) );
-          this->closepos = std::stof( tokens.at(3) );
+          this->reftype  = tokens.at(2);
+          this->openpos  = std::stof( tokens.at(3) );
+          this->closepos = std::stof( tokens.at(4) );
         }
         catch ( std::invalid_argument &e ) {
           message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
@@ -116,6 +119,18 @@ namespace Calib {
 
         if ( this->closepos < 0 ) {
           message.str(""); message << "ERROR: closepos " << this->closepos << " cannot be < 0 for " << this->name;
+          logwrite( function, message.str() );
+          return( ERROR );
+        }
+
+        // The specified reftype must be one of the PI valid reftypes.
+        //
+        if ( std::find( Physik_Instrumente::valid_reftypes.begin(),
+                        Physik_Instrumente::valid_reftypes.end(),
+                        this->reftype ) == Physik_Instrumente::valid_reftypes.end() ) {
+          message.str(""); message << "ERROR: reftype \"" << this->reftype << "\" invalid. Expected { ";
+          for ( auto ref : Physik_Instrumente::valid_reftypes ) message << ref << " ";
+          message << "}";
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -153,7 +168,8 @@ namespace Calib {
       bool isopen() { return this->pi.controller.isconnected(); }    ///< is this interface connected to hardware?
       long open();                               ///< opens the PI socket connection
       long close();                              ///< closes the PI socket connection
-      long home();                               ///< home all daisy-chained motors using the neg limit switch
+      long home( std::string arg, std::string &help );    ///< home all daisy-chained motors
+      static void dothread_home( Calib::Interface &iface, std::string name );
       long is_home( std::string &retstring );    ///< return the home state of the motors
 
       long get( std::string name_in, std::string &retstring );  ///< get state of named actuator(s)

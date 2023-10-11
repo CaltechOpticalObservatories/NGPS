@@ -11,19 +11,23 @@
 const std::string CALIBD_CLOSE = "close";    ///< close connection to calibd hardware
 const std::string CALIBD_EXIT = "exit";      ///< is calib open
 const std::string CALIBD_GET = "get";        ///< get state of both actuators
+const std::string CALIBD_HOME = "home";      ///< home all actuators
+const std::string CALIBD_ISHOME = "ishome";  ///< are calib actuators homed?
 const std::string CALIBD_ISOPEN = "isopen";  ///< is calib open
-const std::string CALIBD_NATIVE = "native";  ///< open connection to calib
+const std::string CALIBD_NATIVE = "native";  ///< send native commands to PI controller
 const std::string CALIBD_OPEN = "open";      ///< open connection to calib
 const std::string CALIBD_SET = "set";        ///< set state of both actuators
 
 const std::vector<std::string> CALIBD_SYNTAX = {
                                                  CALIBD_CLOSE,
                                                  CALIBD_EXIT,
-                                                 CALIBD_GET,
+                                                 CALIBD_GET+" [ <actuator> ] | [?]",
+                                                 CALIBD_HOME+" [?]",
+                                                 CALIBD_ISHOME,
                                                  CALIBD_ISOPEN,
-                                                 CALIBD_NATIVE,
+                                                 CALIBD_NATIVE+" <addr> <cmd>",
                                                  CALIBD_OPEN,
-                                                 CALIBD_SET
+                                                 CALIBD_SET+" [ <actuator>=open|close ... ] | [?]"
                                                };
 
 #endif

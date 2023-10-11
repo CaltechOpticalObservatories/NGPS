@@ -448,7 +448,7 @@ void doit(Network::TcpSocket sock) {
     ret = NOTHING;
     std::string retstring="";
 
-    if ( cmd.compare( "help" ) == 0 ) {
+    if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                     for ( auto s : POWERD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
     }
     else
@@ -476,16 +476,19 @@ void doit(Network::TcpSocket sock) {
     // reopen
     //
     if ( cmd.compare( POWERD_REOPEN ) == 0 ) {
-                    ret  = powerd.interface.close();
-                    usleep( 100000 );
-                    ret |= powerd.interface.open();
+                    if ( args=="?" ) { sock.Write( POWERD_REOPEN+"\n  closes, then re-opens connections to hardware\n" ); }
+                    else {
+                      ret  = powerd.interface.close();
+                      usleep( 100000 );
+                      ret |= powerd.interface.open();
+                    }
     }
     else
 
     // list devices
     //
     if ( cmd.compare( POWERD_LIST ) == 0 ) {
-                    powerd.interface.list( retstring );
+                    powerd.interface.list( args, retstring );
                     retstring.append( " DONE\n" );
                     if ( sock.Write( retstring ) < 0 ) connection_open=false;
     }
@@ -494,7 +497,7 @@ void doit(Network::TcpSocket sock) {
     // power status
     //
     if ( cmd.compare( POWERD_STATUS ) == 0 ) {
-                    ret = powerd.interface.status( retstring );
+                    ret = powerd.interface.status( args, retstring );
                     if ( ret==NO_ERROR ) {
                       ret=NOTHING;
                       if ( sock.Write( retstring ) < 0 ) connection_open=false;

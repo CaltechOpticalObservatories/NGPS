@@ -19,9 +19,10 @@ PI_NAME=calib                     # the name of this PI controller
 PI_HOST=@IP_ETS8P@                # terminal server
 PI_PORT=@ETS8P_CALIB@             # terminal server port
 
-# For each actuator's controller specify: address name openpos closepos
+# For each actuator's controller specify: address name reftype openpos closepos
+# valid reftypes are neg|pos|ref
 # One name must be "cover" and the other "door".
 #
-MOTOR_CONTROLLER="1 cover 0.0 32.0"
-MOTOR_CONTROLLER="2 door 30.0 0.0"
+MOTOR_CONTROLLER="1 cover neg 0.0 32.0"
+MOTOR_CONTROLLER="2 door neg 30.0 0.0"
 

@@ -164,6 +164,225 @@ namespace Calib {
   /***** Calib::Interface::close **********************************************/
 
 
+  /***** Calib::Interface::home ***********************************************/
+  /**
+   * @brief      home all calib actuators
+   * @param[in]  arg   input arg, currently only needed to request help
+   * @param[out] help  return string contains help message if requested
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::home( std::string arg, std::string &help ) {
+    std::string function = "Calib::Interface::home";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( arg == "?" ) {
+      help = CALIBD_HOME;
+      help.append( "\n" );
+      help.append( "  homes all actuators simultaneously using the indicated references:\n" );
+      help.append( "  " );
+      for ( auto const& con : this->controller_info ) {
+        help.append( con.first );
+        help.append( ":" );
+        help.append( con.second.reftype );
+        help.append( " " );
+      }
+      help.append( "\n" );
+      return( NO_ERROR );
+    }
+
+    // connection must be open
+    //
+    if ( !this->isopen() ) {
+      logwrite( function, "ERROR: not connected to motor controller" );
+      return( ERROR );
+    }
+
+    this->thr_error.store( NO_ERROR );                         // clear thread error state (threads can set this)
+
+    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
+
+    // loop through every motor in the class
+    //
+    for ( auto mot : this->controller_info ) {
+
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] spawning thread to home " << mot.first;
+      logwrite( function, message.str() );
+#endif
+
+      // spawn a thread to perform the home
+      //
+      std::thread( dothread_home, std::ref( *this ), mot.first ).detach();
+      this->motors_running++;
+    }
+
+    // Wait for the threads to finish
+    //
+    bool motors_homed = false;
+    while ( this->motors_running != 0 ) {
+      motors_homed = true;
+      message.str(""); message << "waiting for " << this->motors_running << " motor"
+                               << ( this->motors_running > 1 ? "s" : "" );
+      logwrite( function, message.str() );
+      this->cv.wait( wait_lock );
+    }
+
+    if ( motors_homed ) logwrite( function, "home complete" );
+
+    // get any errors from the threads
+    //
+    error |= this->thr_error.load();
+
+    return( error );
+  }
+  /***** Calib::Interface::home ***********************************************/
+
+
+  /***** Calib::Interface::dothread_home **************************************/
+  /**
+   * @brief      threaded function to home and apply zeropos
+   * @param[in]  iface  reference to interface object
+   * @param[in]  name   name of motor to home
+   *
+   * This is the work function to call home() in a thread, intended
+   * to be spawned in a detached thread. Any errors returned by functions
+   * called in here are set in the thr_error class variable.
+   *
+   */
+  void Interface::dothread_home( Calib::Interface &iface, std::string name ) {
+    std::string function = "Calib::Interface::dothread_home";
+    std::stringstream message;
+    int axis=1;
+    int addr = iface.controller_info[name].addr;
+    std::string reftype = iface.controller_info[name].reftype;
+    long error=NO_ERROR;
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread sending home_axis( "
+                             << addr << ", " << axis << ", " << reftype << " ) for " << name;
+    logwrite( function, message.str() );
+#endif
+
+    // send the home command by calling home_axis()
+    //
+    iface.pi_mutex.lock();
+    iface.pi.home_axis( addr, axis, reftype );
+    iface.pi_mutex.unlock();
+    iface.controller_info[name].ishome   = false;
+    iface.controller_info[name].ontarget = false;
+
+    // Loop sending the is_home command until homed or timeout.
+    //
+
+    // get the time now for timeout purposes
+    //
+    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    bool is_home=false;
+
+    do {
+      bool state;
+      iface.pi_mutex.lock();
+      iface.pi.is_home( addr, axis, state );
+      iface.pi_mutex.unlock();
+      iface.controller_info[name].ishome = state;
+      iface.controller_info[name].ontarget = state;
+      is_home = iface.controller_info[name].ishome;
+
+      if ( is_home ) break;
+      else {
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
+        logwrite( function, message.str() );
+#endif
+        usleep( 1000000 );
+      }
+
+      // get time now and check for timeout
+      //
+      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
+
+      if ( elapsed > MOVE_TIMEOUT ) {
+        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
+        logwrite( function, message.str() );
+        error = TIMEOUT;
+        break;
+      }
+
+    } while ( 1 );
+
+    iface.thr_error.fetch_or( error );           // preserve any error returned
+
+    --iface.motors_running;                      // atomically decrement the number of motors waiting
+
+    iface.cv.notify_all();                       // notify parent that I'm done
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
+                             << " with error=" << error;
+    logwrite( function, message.str() );
+#endif
+
+    return;
+  }
+  /***** Calib::Interface::dothread_home **************************************/
+
+
+  /***** Calib::Interface::is_home ********************************************/
+  /**
+   * @brief      are all calib actuators homed?
+   * @param[out] retstring  contains "true" | "false"
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::is_home( std::string &retstring ) {
+    std::string function = "Calib::Interface::is_home";
+    std::stringstream message, homestream;
+    long error = NO_ERROR;
+    size_t num_home = 0;
+
+    // Requires an open connection
+    //
+    if ( !this->isopen() ) {
+      logwrite( function, "ERROR: not connected to motor controller" );
+      return( ERROR );
+    }
+
+    // loop through every motor in the class
+    // OK to do them serially (instead of threads) because it's quick to query
+    //
+    for ( auto mot : this->controller_info ) {
+
+      error |= this->pi.is_home( mot.second.addr, 1, mot.second.ishome );
+      homestream << mot.first << ":" << ( mot.second.ishome ? "true" : "false" );
+      if ( mot.second.ishome ) num_home++;
+    }
+
+    // Set the retstring true or false, true only if all requested controllers are the same
+    //
+    if ( num_home == this->controller_info.size() ) retstring = "true";
+    else
+    if ( num_home == 0 )                            retstring = "false";
+    else
+
+    // If not all are the same state then log that but report false
+    //
+    if ( num_home > 0 && num_home < this->controller_info.size() ) {
+      logwrite( function, homestream.str() );
+      retstring = "false";
+    }
+
+    return( error );
+  }
+  /***** Calib::Interface::is_home ********************************************/
+
+
   /***** Calib::Interface::set ************************************************/
   /**
    * @brief      move and/or return status of an actuator
@@ -180,6 +399,20 @@ namespace Calib {
     std::string function = "Calib::Interface::set";
     std::stringstream message;
     long error = NO_ERROR;
+
+    // Help
+    //
+    if ( input == "?" ) {
+      retstring = CALIBD_SET;
+      retstring.append( " <actuator>=<action> [ <actuator>=<action> ]\n" );
+      retstring.append( "  where <actuator> is { " );
+      for ( auto const& con : this->controller_info ) { retstring.append( con.first ); retstring.append( " " ); }
+      retstring.append( "}\n" );
+      retstring.append( "  and <action> is { open | close }.\n" );
+      retstring.append( "  One or both actuators may be set simultaneously.\n" );
+      retstring.append( "  There are no space between <actuator>=<action>, e.g. door=open\n" );
+      return( NO_ERROR );
+    }
 
     if ( ! this->isopen() ) {
       logwrite( function, "ERROR: not connected to motor controller" );
@@ -431,6 +664,19 @@ namespace Calib {
     std::stringstream retstream;
     long error = NO_ERROR;
     std::vector<std::string> name_list;
+
+    // Help
+    //
+    if ( name_in == "?" ) {
+      retstring = CALIBD_GET;
+      retstring.append( " [ <actuator> ]\n" );
+      retstring.append( "  where <actuator> is { " );
+      for ( auto const& con : this->controller_info ) { retstring.append( con.first ); retstring.append( " " ); }
+      retstring.append( "}\n" );
+      retstring.append( "  If no arg is supplied then the state of both is returned.\n" );
+      retstring.append( "  Supplying an actuator name returns the state of only the specified actuator.\n" );
+      return( NO_ERROR );
+    }
 
     if ( ! this->isopen() ) {
       logwrite( function, "ERROR: not connected to motor controller" );

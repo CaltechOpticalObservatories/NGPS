@@ -430,7 +430,7 @@ namespace Calib {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 ) {
+      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                       for ( auto s : CALIBD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else
@@ -464,6 +464,20 @@ namespace Calib {
       }
       else
 
+      // home
+      //
+      if ( cmd.compare( CALIBD_HOME ) == 0 ) {
+                      ret = this->interface.home( args, retstring );
+      }
+      else
+
+      // ishome
+      //
+      if ( cmd.compare( CALIBD_ISHOME ) == 0 ) {
+                      ret = this->interface.is_home( retstring );
+      }
+      else
+
       // get state of one or both actuators
       //
       if ( ( cmd.compare( CALIBD_GET ) == 0 ) ) {
@@ -494,7 +508,7 @@ namespace Calib {
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
+      message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
       logwrite( function, message.str() );
 #endif
 
