@@ -37,6 +37,7 @@ namespace LKS {
    */
   class Interface {
     private:
+      std::string model;          ///< model
       std::string name;           ///< a name for info purposes
       std::string host;           ///< host name for the device
       int port;                   ///< port number for device on host
@@ -47,13 +48,14 @@ namespace LKS {
       bool is_initialized() { return this->initialized; };
       /// what is the name of the device?
       std::string get_name() { return this->name; };
+      std::string get_model() { return this->model; };
 
       long open();                ///< open a connection to LKS device
       long close();               ///< close the connection to the LKS device
       long send_command( std::string cmd );
       long send_command( std::string cmd, std::string &retstring );
 
-      Interface( std::string name, std::string host, int port );
+      Interface( std::string model, std::string name, std::string host, int port );
       Interface();
       ~Interface();
 

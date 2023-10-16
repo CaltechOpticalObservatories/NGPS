@@ -9,14 +9,17 @@ ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
 # Each Lakeshore is assigned a unit number, host, and port
-# set as follows: LKS_UNIT="LKS# MODEL HOST PORT"
-# where MODEL is the model number, e.g. "218, 325, 340, 336"
-# LKS# is an arbitrary number.
+# set as follows: LKS_UNIT="LKS# MODEL NAME HOST PORT"
+# where LKS#  is an arbitrary unit number used to cross-reference LKS_CHAN below.
+#       MODEL is the model number, e.g. "218, 325, 340, 336".
+#       NAME  is any string, used as a helpful identifier in logging and the UI.
+#             This must be unique and must not contain spaces.
+#       HOST  the hostname for connecting to this Lakeshore.
+#       PORT  the port number on HOST for connecting to this Lakeshore.
 # An LKS_UNIT must be defined before any LKS_CHAN(s).
 
-LKS_UNIT="1 325 131.215.200.115 3004"      # Lakeshore 325 controller
-LKS_UNIT="2 218 131.215.200.115 3003"      # Lakeshore 218 monitor
-LKS_UNIT="3 336 @IP_LKS_UR@ 7777"          # Lakeshore U/R
+LKS_UNIT="1 336 UR @IP_LKS_UR@ 7777"          # Lakeshore U/R
+LKS_UNIT="2 336 IG @IP_LKS_IG@ 7777"          # Lakeshore I/G
 
 # Each Lakeshore channel is assigned using a Lakeshore Channel Key (LKS_CHAN)
 # set as follows: LKS_CHAN="LKS# CHAN# LABEL"
@@ -29,25 +32,27 @@ LKS_UNIT="3 336 @IP_LKS_UR@ 7777"          # Lakeshore U/R
 # and should be preceeded by an "H" to designate a heater (H1, H2, etc.).
 #
 # LABEL is a text string label for that channel. It can be any alphanumeric
-# string except it must not contain spaces.
+# string except it must not contain spaces, and it should be unique across
+# all LKS units so that it can be used for identifying channels (although
+# channels can still be identified by LKS# CHAN# even if LABEL is not unique).
 
 # Lakeshore unit 1
 #
-LKS_CHAN="1 A T1"
-LKS_CHAN="1 B T2"
-LKS_CHAN="1 H1 H1"
-LKS_CHAN="1 H2 H2"
+LKS_CHAN="1 A UT1"
+LKS_CHAN="1 B UT2"
+LKS_CHAN="1 C RT3"
+LKS_CHAN="1 D RT4"
+LKS_CHAN="1 H1 UH1"
+LKS_CHAN="1 H2 RH2"
 
 # Lakeshore unit 2
 #
-LKS_CHAN="2 1 mon1"
-LKS_CHAN="2 2 mon2"
-LKS_CHAN="2 3 mon3"
-LKS_CHAN="2 4 mon4"
-
-# Lakeshore unit 3
-#
-LKS_CHAN="3 1 mon1"
+LKS_CHAN="2 A IT1"
+LKS_CHAN="2 B IT2"
+LKS_CHAN="2 C GT3"
+LKS_CHAN="2 D GT4"
+LKS_CHAN="2 H1 IH1"
+LKS_CHAN="2 H2 GH2"
 
 # Each Campbell unit is assigned a unit number, host, and port
 # set as follows: CAMP_UNIT="CAMP# MODEL HOST PORT"

@@ -93,7 +93,7 @@ namespace Thermal {
       void exit_cleanly(void);              ///< exit
       long configure_thermald();            ///< read and apply the configuration file
       long parse_lks_unit( std::string &input, 
-                           int &lksnum, std::string &model, std::string &host, int &port );
+                           int &lksnum, std::string &model, std::string &name, std::string &host, int &port );
       long parse_lks_chan( std::string &input,
                            int &lksnum, std::string &chan, bool &heater, std::string &label );
       long configure_lakeshore();           ///< read and apply the configuration file

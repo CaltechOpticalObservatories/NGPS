@@ -16,6 +16,7 @@ namespace LKS {
    *
    */
   Interface::Interface( ) {
+    this->model = "";
     this->name = "";
     this->port = -1;
     this->host = "";
@@ -27,12 +28,14 @@ namespace LKS {
   /***** LKS::Interface::Interface ********************************************/
   /**
    * @brief      Interface class constructor
-   * @param[in]  name  name of the device for info purposes only
-   * @param[in]  host  hostname of the device
-   * @param[in]  port  port number of the device
+   * @param[in]  model  model name/number of device
+   * @param[in]  name   name of the device for info purposes only
+   * @param[in]  host   hostname of the device
+   * @param[in]  port   port number of the device
    *
    */
-  Interface::Interface( std::string name, std::string host, int port ) {
+  Interface::Interface( std::string model, std::string name, std::string host, int port ) {
+    this->model = model;
     this->name = name;
     this->port = port;
     this->host = host;
@@ -64,7 +67,8 @@ namespace LKS {
     if ( this->sock.isconnected() ) {
       message.str(""); message << "socket connection already open to "
                                << this->sock.gethost() << ":" << this->sock.getport()
-                               << " on fd " << this->sock.getfd() << " for " << this->name;
+                               << " on fd " << this->sock.getfd() << " for LKS" << this->model
+                               << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( NO_ERROR );
     }
@@ -74,11 +78,11 @@ namespace LKS {
 
     // Initialize connection to the LKS
     //
-    message.str(""); message << "opening socket connection for " << this->name;
+    message.str(""); message << "opening socket connection for LKS" << this->model << " (" << this->name << ")";
     logwrite( function, message.str() );
 
     if ( this->sock.Connect() != 0 ) {
-      message.str(""); message << "ERROR connecting socket for " << this->name;
+      message.str(""); message << "ERROR connecting socket for LKS" << this->model << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -89,7 +93,8 @@ namespace LKS {
 
     message.str(""); message << "socket connection to " 
                              << this->sock.gethost() << ":" << this->sock.getport()
-                             << " established on fd " << this->sock.getfd() << " for " << this->name;
+                             << " established on fd " << this->sock.getfd() << " for LKS" << this->model
+                             << " (" << this->name << ")";
     logwrite( function, message.str() );
 
     return NO_ERROR;
@@ -108,7 +113,8 @@ namespace LKS {
     std::stringstream message;
 
     if ( ! this->sock.isconnected() ) {
-      message.str(""); message << "socket connection already closed for " << this->name;
+      message.str(""); message << "socket connection already closed for LKS" << this->model
+                               << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( NO_ERROR );
     }
@@ -116,11 +122,12 @@ namespace LKS {
     long error = this->sock.Close();
 
     if ( error == NO_ERROR ) {
-      message.str(""); message << "socket connection for " << this->name << " closed";
+      message.str(""); message << "socket connection for LKS" << this->model << " (" << this->name << ") closed";
       logwrite( function, message.str() );
     }
     else {
-      message.str(""); message << "ERROR closing socket connection for " << this->name;
+      message.str(""); message << "ERROR closing socket connection for LKS" << this->model
+                               << " ( " << this->name << ")";
       logwrite( function, message.str() );
     }
 
@@ -161,7 +168,8 @@ namespace LKS {
     long retval=0;
 
 #ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] to " << this->name << " on socket " << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
+    message << "[DEBUG] send to LKS" << this->model << " (" << this->name << ") on socket " 
+            << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
     logwrite( function, message.str() );
 #endif
 
@@ -170,14 +178,16 @@ namespace LKS {
     cmd.append( "\n" );                            // add the NEWLINE character
     int written = this->sock.Write( cmd );         // write the command
     if ( written <= 0 ) {                          // return error if error writing to socket
-      message.str(""); message << "ERROR sending " << cmd << " to " << this->name;
+      message.str(""); message << "ERROR sending " << cmd << " to LKS" << this->model << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( ERROR );
     }
 
-    // read the reply
+    // if the cmd has a question mark then read the reply
     //
-    while ( error == NO_ERROR && retval >= 0 ) {
+    bool needs_reply = ( cmd.find("?")!=std::string::npos );
+
+    while ( error == NO_ERROR && retval >= 0 && needs_reply ) {
 
       if ( ( retval=this->sock.Poll() ) <= 0 ) {
         if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd() << ": " << strerror(errno);
@@ -189,7 +199,8 @@ namespace LKS {
       }
 
       if ( ( retval = this->sock.Read( reply, '\n' ) ) < 0 ) {
-        message.str(""); message << "ERROR: " << strerror( errno ) << ": reading from " << this->sock.gethost() << "/" << this->sock.getport();
+        message.str(""); message << "ERROR: " << strerror( errno ) 
+                                 << ": reading from " << this->sock.gethost() << "/" << this->sock.getport();
         logwrite( function, message.str() );
         break;
       }

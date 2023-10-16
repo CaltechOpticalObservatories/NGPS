@@ -13,6 +13,7 @@
 #include "lks.h"
 #include "logentry.h"
 #include "common.h"
+#include "thermald_commands.h"
 #include <string>
 #include <cmath>
 #include <ctgmath>
@@ -20,8 +21,6 @@
 #include <map>
 #include <condition_variable>
 #include <atomic>
-
-#define MOVE_TIMEOUT 20000  ///< number of milliseconds before a move fails
 
 /***** Thermal ****************************************************************/
 /**
@@ -60,6 +59,8 @@ namespace Thermal {
       long read_temp( std::string chan, float &tempval );                ///< read specified temperature channel and return value
       long read_heat( std::string chan );                                ///< read specified heater into class
       long read_heat( std::string chan, float &heat );                   ///< read specified heater and return value
+      long set_setpoint( int output, float setpoint );                   ///< set a setpoint
+      long get_setpoint( int output, float &setpoint );                  ///< get a setpoint
 
   };
   /***** Thermal::Lakeshore ***************************************************/
@@ -95,15 +96,20 @@ namespace Thermal {
         std::string device;                         ///< device type e.g. LKS, CAMP, etc.
         int unit;                                   ///< user-assigned unit number
         std::string model;                          ///< mfg model number e.g. 318, 325 CR1000, etc.
+        std::string name;                           ///< user-assigned name
         std::string chan;                           ///< channel number e.g. A, B, C1, H1, 1, etc.
-        std::string label;                          ///< channel label (must be unique)
+        std::string label;                          ///< channel label (must be unique for indexing by label)
       } thermal_info_t;
 
       std::map<std::string, thermal_info_t> info;   ///< thermal info database, indexed by channel label
 
       long initialize_class();
-      long read_all();                              ///< read all thermal data (into memory)
-      long log_all();                               ///< log all thermal data (to disk)
+      long parse_unit_chan( std::string args, int &unit, std::string &chan );
+      long read_all( std::string args, std::string &retstring );  ///< read all thermal data (into memory)
+      long log_all( std::string args, std::string &retstring );   ///< log read thermal data (to disk)
+      long get( std::string args, std::string &retstring );       ///< read specified channel from specified LKS unit
+      long native( std::string cmd, std::string &retstring );     ///< send Lakeshore-native command to specified unit
+      long setpoint( std::string args, std::string &retstring );  ///< set or get setpoint for specified output
 
   };
   /***** Thermal::Interface ***************************************************/

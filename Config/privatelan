@@ -18,3 +18,4 @@ set( IP_NPS4            10.0.0.14  )
 set( IP_LAMP_MODULATOR  10.0.0.36  )
 
 set( IP_LKS_UR          10.0.0.136 )
+set( IP_LKS_IG          10.0.0.137 )

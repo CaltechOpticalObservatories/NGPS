@@ -139,7 +139,7 @@ namespace Thermal {
    *
    */
   long Server::parse_lks_unit( std::string &input, 
-                               int &lksnum, std::string &model, std::string &host, int &port ) {
+                               int &lksnum, std::string &model, std::string &name, std::string &host, int &port ) {
     std::string function = "Thermal::Server::parse_lks_unit";
     std::stringstream message;
     int applied=0;
@@ -148,8 +148,8 @@ namespace Thermal {
 
     Tokenize( input, tokens, " \"" );
 
-    if ( tokens.size() != 4 ) {
-      message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 4";
+    if ( tokens.size() != 5 ) {
+      message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 5";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -157,8 +157,9 @@ namespace Thermal {
     try {
       lksnum = std::stoi( tokens.at(0) );
       model  = tokens.at(1);
-      host   = tokens.at(2);
-      port   = std::stoi( tokens.at(3) );
+      name   = tokens.at(2);
+      host   = tokens.at(3);
+      port   = std::stoi( tokens.at(4) );
     }
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
@@ -191,7 +192,7 @@ namespace Thermal {
    */
   long Server::parse_lks_chan( std::string &input, 
                                int &lksnum, std::string &chan, bool &heater, std::string &label ) {
-    std::string function = "Thermal::Server::parse_lks_unit";
+    std::string function = "Thermal::Server::parse_lks_chan";
     std::stringstream message;
     int applied=0;
     long error;
@@ -263,17 +264,17 @@ namespace Thermal {
 
       // LKS_UNIT
       if (config.param[entry].compare(0, 8, "LKS_UNIT")==0) {
-        std::string model, host;
+        std::string model, name, host;
         int lksnum, port;
 
         // parse the LKS_UNIT configuration line here
         //
-        error = this->parse_lks_unit( config.arg[entry], lksnum, model, host, port );
+        error = this->parse_lks_unit( config.arg[entry], lksnum, model, name, host, port );
 
         if ( error == NO_ERROR ) {
-          LKS::Interface lks( model, host, port );  // temporary LKS communication object initialized
-          Thermal::Lakeshore Lakeshore;             // temporary Thermal::Lakeshore interface object
-          Lakeshore.lks = lks;                      // assign the lks communication object
+          LKS::Interface lks( model, name, host, port );  // temporary LKS communication object initialized
+          Thermal::Lakeshore Lakeshore;                   // temporary Thermal::Lakeshore interface object
+          Lakeshore.lks = lks;                            // assign the lks communication object
 
           this->interface.lakeshore.insert( { lksnum, Lakeshore } );  // insert it into the map
 
@@ -293,8 +294,8 @@ namespace Thermal {
 
           // First, this lksnum must have a matching lksnum in the lakeshore map
           //
-          auto loc = this->interface.lakeshore.find( lksnum );
-          if ( loc != this->interface.lakeshore.end() ) {  // found lksnum in lakeshore map
+          auto lksnum_found = this->interface.lakeshore.find( lksnum );
+          if ( lksnum_found != this->interface.lakeshore.end() ) {  // found lksnum in lakeshore map
             if ( heater ) {
               this->interface.lakeshore.at( lksnum ).heaters.push_back( chan );
               this->interface.lakeshore.at( lksnum ).heatlabels.push_back( label );
@@ -310,6 +311,23 @@ namespace Thermal {
             this->interface.async.enqueue_and_log( function, message.str() );
             error = ERROR;
             continue;
+          }
+
+          // Second, insert this info into another STL map for indexing by label.
+          // The label must be unique in order for this to be effective.
+          //
+          auto name = this->interface.lakeshore.at( lksnum ).lks.get_name();
+          auto model = this->interface.lakeshore.at( lksnum ).lks.get_model();
+          auto label_found = this->interface.info.find( label );
+          if ( label_found != this->interface.info.end() ) {  // found label in info map
+            message.str(""); message << "ERROR: LKS unit " << lksnum << " duplicate label \"" << label
+                                     << "\" already exists for unit " << this->interface.info[label].unit;
+            this->interface.async.enqueue_and_log( function, message.str() );
+            error = ERROR;
+            continue;
+          }
+          else {
+            this->interface.info[ label ] = { "LKS", lksnum, model, name, chan, label };
           }
         }
         message.str(""); message << "THERMALD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -515,7 +533,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
       buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
 
-      if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
+      if ( buf.empty() ) buf="help";                   // no command automatically displays help
 
       try {
         std::size_t cmd_sep = buf.find_first_of(" ");  // find the first space, which separates command from argument list
@@ -568,6 +586,10 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       ret = NOTHING;
       std::string retstring="";
 
+      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
+                      for ( auto s : THERMALD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+      }
+      else
       if ( cmd.compare( THERMALD_EXIT ) == 0 ) {
                       this->exit_cleanly();                     // shutdown the daemon
       }
@@ -576,23 +598,48 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       // ECHO
       //
       if ( cmd.compare( THERMALD_ECHO ) == 0 ) {
-                      sock.Write( args );
-                      sock.Write( "\n" );
-                      ret = NO_ERROR;
+                      if ( args == "?" ) sock.Write( THERMALD_ECHO
+                                                     +" <string>\n  server receives and writes back <string> to the client.\n"
+                                                     +"  Used to test if the server is responsive.\n" );
+                      else {
+                        sock.Write( args );
+                        sock.Write( "\n" );
+                      }
+      }
+      else
+
+      // get
+      //
+      if ( cmd.compare( THERMALD_GET ) == 0 ) {
+                      ret = this->interface.get( args, retstring );
       }
       else
 
       // LOGALL
       //
       if ( cmd.compare( THERMALD_LOGALL ) == 0 ) {
-                      ret = this->interface.log_all();
+                      ret = this->interface.log_all( args, retstring );
+      }
+      else
+
+      // native
+      //
+      if ( cmd.compare( THERMALD_NATIVE ) == 0 ) {
+                      ret = this->interface.native( args, retstring );
       }
       else
 
       // READALL
       //
       if ( cmd.compare( THERMALD_READALL ) == 0 ) {
-                      ret = this->interface.read_all();
+                      ret = this->interface.read_all( args, retstring );
+      }
+      else
+
+      // setpoint
+      //
+      if ( cmd.compare( THERMALD_SETPOINT ) == 0 ) {
+                      ret = this->interface.setpoint( args, retstring );
       }
 
       // unknown commands generate an error
@@ -602,11 +649,6 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
         logwrite( function, message.str() );
         ret = ERROR;
       }
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
-      logwrite( function, message.str() );
-#endif
 
       if (ret != NOTHING) {
         if ( not retstring.empty() ) retstring.append( " " );

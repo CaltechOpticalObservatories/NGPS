@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+#
+# @file     thermal
+# @brief    provides a command line interface for thermald
+#
+
+source $HOME/Software/Config/thermald.cfg
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command
