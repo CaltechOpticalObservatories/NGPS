@@ -15,8 +15,6 @@ const std::string CAMERAD_BIAS = "bias";
 const std::string CAMERAD_BUFFER = "buffer";
 const std::string CAMERAD_CLOSE = "close";
 const std::string CAMERAD_CONFIG = "config";
-const std::string CAMERAD_CUBEAMPS = "cubeamps";
-const std::string CAMERAD_DATACUBE = "datacube";
 const std::string CAMERAD_ECHO = "echo";
 const std::string CAMERAD_EXPOSE = "expose";
 const std::string CAMERAD_EXPTIME = "exptime";
@@ -29,6 +27,8 @@ const std::string CAMERAD_ISOPEN = "isopen";
 const std::string CAMERAD_KEY = "key";
 const std::string CAMERAD_LOAD = "load";
 const std::string CAMERAD_LONGERROR = "longerror";
+const std::string CAMERAD_MEX = "mex";
+const std::string CAMERAD_MEXAMPS = "mexamps";
 const std::string CAMERAD_MODEXPTIME = "modexptime";
 const std::string CAMERAD_NATIVE = "native";
 const std::string CAMERAD_OPEN = "open";
@@ -49,8 +49,6 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_BUFFER,
                                                   CAMERAD_CLOSE,
                                                   CAMERAD_CONFIG,
-                                                  CAMERAD_CUBEAMPS,
-                                                  CAMERAD_DATACUBE,
                                                   CAMERAD_ECHO,
                                                   CAMERAD_EXPOSE,
                                                   CAMERAD_EXPTIME,
@@ -63,16 +61,22 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_KEY,
                                                   CAMERAD_LOAD,
                                                   CAMERAD_LONGERROR,
+                                                  CAMERAD_MEX,
+                                                  CAMERAD_MEXAMPS,
                                                   CAMERAD_MODEXPTIME,
-                                                  CAMERAD_NATIVE,
-                                                  CAMERAD_OPEN,
+                                                  CAMERAD_NATIVE+" ? | <CMD> [ <ARG1> [ < ARG2> [ <ARG3> [ <ARG4> ] ] ] ]",
+                                                  CAMERAD_OPEN+" [ ? | <devlist> ]",
                                                   CAMERAD_PAUSE,
                                                   CAMERAD_PREEXPOSURES,
                                                   CAMERAD_READOUT,
                                                   CAMERAD_RESUME,
-                                                  CAMERAD_SHUTTER,
+                                                  CAMERAD_SHUTTER+" [ ? | enable | 1 | disable | 0 ]",
                                                   CAMERAD_STOP,
-                                                  CAMERAD_TEST,
+                                                  CAMERAD_TEST+" <testname> ...",
+                                                  "   async [<message>]",
+                                                  "   bw",
+                                                  "   fitsname",
+                                                  "   shutter ?|init|open|close|get|time|expose <msec>",
                                                   CAMERAD_USEFRAMES,
                                                   CAMERAD_WRITEKEYS
                                                 };

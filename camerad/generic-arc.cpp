@@ -14,11 +14,12 @@ namespace AstroCam {
    * @brief      wrapper for do_connect_controller
    * @details    opens a connection to the PCI/e device(s)
    * @param[in]  devices_in  optional string containing space-delimited list of devices
+   * @param[out] help        reference to string to return help on request
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::connect_controller(std::string devices_in="") {
-    return this->do_connect_controller( devices_in );
+  long Interface::connect_controller(std::string devices_in, std::string &help) {
+    return this->do_connect_controller( devices_in, help );
   }
   /***** AstroCam::Interface::connect_controller ******************************/
 

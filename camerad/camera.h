@@ -17,6 +17,11 @@
 #include <queue>
 #include <condition_variable>
 
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <stdio.h>
+
 #include "common.h"
 #include "logentry.h"
 #include "utilities.h"
@@ -31,10 +36,219 @@
  */
 namespace Camera {
 
+  /***** Camera::Shutter ******************************************************/
+  /**
+   * @class    Camera
+   * @brief    This class interfaces the Bonn shutter control port to a serial port.
+   * @details  This class uses ioctl calls to read and write RS232 signals, normally
+   *           used for handshaking. RTS(7) drives the shutter open pin 7, where
+   *           pin 8 is tied to GND(5). Blade A (1) and B (2) status pins are open
+   *           collector outputs that are pulled up to +5V (6) through 1k and are
+   *           read by DSR(6) and CTS(8), respectively. Similarly, the error pin (4)
+   *           is read by DCD(1). Consequently, these are active-LO outputs.
+   *           Since the computer has no RS232 port, a USB-RS232 converter is used.
+   *
+   */
+  class Shutter {
+    private:
+      int RTS_bit;
+      int fd;
+      std::chrono::time_point<std::chrono::high_resolution_clock> open_time, close_time;
+    public:
+      int state;
+      std::condition_variable condition;
+      std::mutex lock;
+
+      /***** Camera::Shutter:init *********************************************/
+      /*
+       * @brief      initialize the Shutter class
+       * @details    Shutter class must be initialized before use.
+       *             This opens a connection to the USB device for the USB-RS232
+       *             serial converter. This requires a proper udev rule to assign
+       *             the appropriate USB device to /dev/shutter
+       * @return     ERROR or NO_ERROR
+       *
+       */
+      long init()  {
+        std::string function = "Camera::Shutter::init";
+        long error = ERROR;
+        int state = -1;
+
+        // close any open fd
+        //
+        if ( this->fd>=0 ) { close( this->fd ); this->fd=-1; }
+
+        // open the USB device
+        //
+        this->fd = open( "/dev/shutter", O_RDWR | O_NOCTTY );
+
+        // If USB device opened then make sure the shutter is actually okay.
+        // Check this by closing it, waiting to make sure it has closed,
+        // then reading the state.
+        //
+        if ( this->fd>=0 ) {
+          error  = this->set_close();
+          std::this_thread::sleep_for( std::chrono::milliseconds( 200 ) );
+          error |= this->get_state( state );
+        }
+        else logwrite( function, "ERROR: failed to open /dev/shutter USB device (check udev)" );
+
+        if ( error==NO_ERROR && state==0) logwrite( function, "shutter initialized OK" );
+        else logwrite( function, "ERROR: failed to initialize shutter" );
+
+        return ( error );
+      }
+      /***** Camera::Shutter:init *********************************************/
+
+
+      /***** Camera::Shutter:shutdown *****************************************/
+      /*
+       * @brief      closes the USB connection
+       *
+       */
+      void shutdown() {
+        if ( this->fd>=0 ) { close( this->fd ); logwrite( "Camera::Shutter::shutdown", "USB device closed" ); }
+        this->fd=-1;
+        return;
+      }
+      /***** Camera::Shutter:shutdown *****************************************/
+
+
+      /***** Camera::Shutter:set_open *****************************************/
+      /*
+       * @brief      opens the shutter
+       * @details    uses iotcl( TIOCMBIS ) to set modem control register RTS bit
+       * @return     ERROR or NO_ERROR
+       *
+       * If this returns ERROR then it means the shutter class has not been initialized.
+       *
+       */
+      inline long set_open() {
+        this->open_time = std::chrono::high_resolution_clock::now();
+        return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+      }
+      /***** Camera::Shutter:set_open *****************************************/
+
+
+      /***** Camera::Shutter:set_close ****************************************/
+      /*
+       * @brief      closes the shutter
+       * @details    uses iotcl( TIOCMBIC ) to clear modem control register RTS bit
+       * @return     ERROR or NO_ERROR
+       *
+       * If this returns ERROR then it means the shutter class has not been initialized.
+       *
+       */
+      inline long set_close() {
+        this->close_time = std::chrono::high_resolution_clock::now();
+        return( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+      }
+      /***** Camera::Shutter:set_close ****************************************/
+
+
+      /***** Camera::Shutter:duration *****************************************/
+      /*
+       * @brief      returns the shutter open/close time duration in milliseconds
+       * @return     double precision duration in msec
+       *
+       */
+      inline double duration() {
+        return( std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
+                                                                   - this->open_time).count() / 1000000. );
+      }
+      /***** Camera::Shutter:duration *****************************************/
+
+
+      /***** Camera::Shutter:get_state ****************************************/
+      /*
+       * @brief      reads the shutter state
+       * @details    Uses ioctl( TIOCMGET ) to read modem control status bits
+       * @param[out] state  reference to int to contain state, where {-1,0,1}={error,closed,open}
+       * @return     ERROR or NO_ERROR
+       *
+       * Note there is a discrepancy among the various Bonn documentation pages
+       * as to which pins are blade A and B. I am using Table 5 of the user manual,
+       * which agrees with the schematic title "Interface to Bonn-Shutter" REV 2.0,
+       * dated Sep 5, 2013.
+       *
+       */
+      long get_state( int &state ) {
+        std::string function = "Camera::Shutter::get_state";
+        std::stringstream message;
+        int serial;
+
+        // get all modem status bits
+        //
+        int err = ioctl( this->fd, TIOCMGET, &serial );
+
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] serial=0x" << std::hex << serial
+                                 << " CAR=0x" << TIOCM_CAR 
+                                 << " DSR=0x" << TIOCM_DSR 
+                                 << " CTS=0x" << TIOCM_CTS;
+        logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] serial & CAR=0x" << (serial & TIOCM_CAR)
+                                 << ( (serial&TIOCM_CAR)==0 ? " <-- Bonn error":"" );
+        logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] serial & DSR=0x" << (serial & TIOCM_DSR)
+                                 << ( (serial&TIOCM_DSR)==0 ? " <-- Blade A closed":"" );
+        logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] serial & CTS=0x" << (serial & TIOCM_CTS)
+                                 << ( (serial&TIOCM_CTS)==0 ? " <-- Blade B closed":"" );
+        logwrite( function, message.str() );
+#endif
+
+        if ( err ) {
+          message.str(""); message << "ERROR: ioctl system call: " << std::strerror(errno);
+          logwrite( function, message.str() );
+          state = -1;
+          return( ERROR );
+        }
+
+        if ( (serial & TIOCM_CAR) == 0 ) {
+          logwrite( function, "ERROR: Bonn shutter fatal error" );
+          state = -1;
+          return( ERROR );
+        }
+
+        if ( ( (serial & TIOCM_DSR) == 0 ) || ( (serial & TIOCM_CTS) == 0 ) ) {  // shutter closed
+          state = 0;
+          return( NO_ERROR );
+        }
+        else
+        if ( ( serial & TIOCM_DSR ) && ( serial & TIOCM_CTS ) ) {                // shutter open
+          state = 1;
+          return( NO_ERROR );
+        }
+        else {
+          message.str(""); message << "ERROR: unknown state 0x" << std::hex << serial;
+          logwrite( function, message.str() );
+          state = -1;
+          return( ERROR );
+        }
+      }
+      /***** Camera::Shutter:get_state ****************************************/
+
+
+      Shutter() {
+        this->RTS_bit = TIOCM_RTS;
+        this->fd = -1;
+        this->state = -1;
+        this->open_time = this->close_time = std::chrono::high_resolution_clock::now();
+      }
+
+      Shutter(const Shutter&) = delete;
+
+      ~Shutter() { this->shutdown(); }
+  };
+  /***** Camera::Shutter ******************************************************/
+
+
   /***** Camera::Camera *******************************************************/
   /**
-   * @class  Camera
-   * @brief  
+   * @class   Camera
+   * @brief   This class describes the overall instrument camera system
+   * @details 
    *
    */
   class Camera {
@@ -45,9 +259,9 @@ namespace Camera {
       std::string fitstime;                  //!< "YYYYMMDDHHMMSS" uesd for filename, set by get_fitsname()
       mode_t dirmode;                        //!< user specified mode to OR with 0700 for imdir creation
       int image_num;
-      bool is_datacube;
+      bool is_mex;
       bool is_longerror;                     //!< set to return error message on command port
-      bool is_cubeamps;                      //!< should amplifiers be written as multi-extension data cubes?
+      bool is_mexamps;                       //!< should amplifiers be written as multi-extension?
       std::atomic<bool> _abortstate;
       std::mutex abort_mutex;
       std::stringstream lasterrorstring;     //!< a place to preserve an error message
@@ -56,10 +270,15 @@ namespace Camera {
       Camera();
       ~Camera() {}
 
+      int32_t       exposure_time;           //!< exposure time in exposure_unit
+
       bool          autodir_state;           //!< if true then images are saved in a date subdir below image_dir, i.e. image_dir/YYYYMMDD/
       bool          abortstate;              //!< set true to abort the current operation (exposure, readout, etc.)
+      bool          bonn_shutter;            //!< set false if Bonn shutter is not connected (defaults true)
       std::string   writekeys_when;          //!< when to write fits keys "before" or "after" exposure
+
       Common::Queue async;                   /// message queue object
+      Shutter shutter;                       /// Bonn Shutter object
 
       void set_abortstate(bool state);
       bool get_abortstate();
@@ -86,15 +305,15 @@ namespace Camera {
       long get_fitsname(std::string &name_out);
       long get_fitsname(std::string controllerid, std::string &name_out);
       void abort();
-      void datacube(bool state_in);
-      bool datacube();
-      long datacube(std::string state_in, std::string &state_out);
+      void mex(bool state_in);
+      bool mex();
+      long mex(std::string state_in, std::string &state_out);
       void longerror(bool state_in);
       bool longerror();
       long longerror(std::string state_in, std::string &state_out);
-      void cubeamps(bool state_in);
-      bool cubeamps();
-      long cubeamps(std::string state_in, std::string &state_out);
+      void mexamps(bool state_in);
+      bool mexamps();
+      long mexamps(std::string state_in, std::string &state_out);
   };
   /***** Camera::Camera *******************************************************/
 
@@ -135,14 +354,31 @@ namespace Camera {
       std::string   current_observing_mode;  //!< the current mode
       std::string   readout_name;            //!< name of the readout source
       int           readout_type;            //!< type of the readout source is an enum
-      long          naxis;
-      long          axes[2];
+      long          axes[3];                 //!< element 0=cols, 1=cols, 2=cubedepth
+
+      /**
+       * @var     cubedepth
+       * @brief   depth, or number of slices for 3D data cubes
+       * @details cubedepth is used to calculate memory allocation and is not necessarily the
+       *          same as fitscubed, which is used to force the fits writer to create a cube.
+       *
+       */
+      long          cubedepth;
+
+      /**
+       * @var     fitscubed
+       * @brief   depth, or number of slices for 3D data cubes
+       * @details fitscubed is used to tell the fitswriter to create a file with a 3rd axis or not
+       *
+       */
+      long          fitscubed;
+
       int           binning[2];
       long          axis_pixels[2];
       long          region_of_interest[4];
       long          image_center[2];
       bool          abortexposure;
-      bool          iscube;                  //!< the info object given to the FITS writer will need to know cube status
+      bool          ismex;                   //!< the info object given to the FITS writer will need to know multi-extension status
       int           extension;               //!< extension number for data cubes
       bool          shutterenable;           //!< set true to allow the controller to open the shutter on expose, false to disable it
       std::string   shutteractivate;         //!< shutter activation state
@@ -161,11 +397,14 @@ namespace Camera {
 
       Common::FitsKeys userkeys;     ///< create a FitsKeys object for FITS keys specified by the user
       Common::FitsKeys systemkeys;   ///< create a FitsKeys object for FITS keys imposed by the software
-
+      Common::FitsKeys extkeys;      ///< create a FitsKeys object for extension-only FITS keys imposed by the software
 
   Information() {
         this->axes[0] = 1;
         this->axes[1] = 1;
+        this->axes[2] = 1;
+        this->cubedepth = 1;
+        this->fitscubed = 1;
         this->binning[0] = 1;
         this->binning[1] = 1;
         this->region_of_interest[0] = 1;
@@ -175,7 +414,7 @@ namespace Camera {
         this->image_center[0] = 1;
         this->image_center[1] = 1;
         this->abortexposure = false;
-        this->iscube = false;
+        this->ismex = false;
         this->datatype = -1;
         this->type_set = false;              // default is datatype undefined
         this->arcsim = false;                // the ARC device is not simulated
@@ -186,10 +425,17 @@ namespace Camera {
         this->exposure_factor = -1;          // default is factor undefined
         this->shutteractivate = "";
         this->num_pre_exposures = 0;         // default is no pre-exposures
+        this->shutterenable = true;          // default is enabled shutter
       }
 
       long pre_exposures( std::string num_in, std::string &num_out );
 
+      /***** Camera::Information:set_axes *************************************/
+      /**
+       * @brief   
+       * @return  ERROR or NO_ERROR
+       *
+       */
       long set_axes() {
         std::string function = "Camera::Information::set_axes";
         std::stringstream message;
@@ -217,17 +463,24 @@ namespace Camera {
         }
         this->type_set = true;         // datatype has been set
 
-        this->naxis = 2;
-
         this->axis_pixels[0] = this->region_of_interest[1] -
                                this->region_of_interest[0] + 1;
         this->axis_pixels[1] = this->region_of_interest[3] -
                                this->region_of_interest[2] + 1;
 
-        this->axes[0] = this->axis_pixels[0] / this->binning[0];
-        this->axes[1] = this->axis_pixels[1] / this->binning[1];
+        if ( this->cubedepth > 1 ) {
+          this->axes[0] = this->axis_pixels[0] / this->binning[0];  // cols
+          this->axes[1] = this->axis_pixels[1] / this->binning[1];  // rows
+          this->axes[2] = this->cubedepth;                          // cubedepth
+        }
+        else {
+          this->axes[0] = this->axis_pixels[0] / this->binning[0];  // cols
+          this->axes[1] = this->axis_pixels[1] / this->binning[1];  // rows
+          this->axes[2] = 1;                                        // (no cube)
+        }
 
-        this->section_size = this->axes[0] * this->axes[1];                    // Pixels to write for this image section
+        this->section_size = this->axes[0] * this->axes[1] * this->axes[2];    // Pixels to write for this image section, includes depth for 3D data cubes
+
         this->image_memory = this->detector_pixels[0] 
                            * this->detector_pixels[1] * bytes_per_pixel;       // Bytes per detector
 

@@ -2,13 +2,12 @@
  * @file    astrocam.cpp
  * @brief   contains the functions for the AstroCam interface
  * @author  David Hale <dhale@astro.caltech.edu>
- * @details 
- * The main server object is instantiated in src/server.cpp and
- * defined extern here so that static functions can access it. The
- * static functions are run in std::threads which means class objects
- * are otherwise be unavailable to them. The interface class is
- * accessible through this because Camera::Server server inherits
- * AstroCam::Interface.
+ * @details The main server object is instantiated in src/server.cpp and
+ *          defined extern here so that static functions can access it. The
+ *          static functions are run in std::threads which means class objects
+ *          are otherwise be unavailable to them. The interface class is
+ *          accessible through this because Camera::Server server inherits
+ *          AstroCam::Interface.
  *
  */
 
@@ -38,6 +37,7 @@ namespace AstroCam {
 #ifdef LOGLEVEL_DEBUG
     std::cerr << "elapsedtime: " << std::setw(10) << uiElapsedTime << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
 #endif
+    return;
   }
   /***** AstroCam::Callback::exposeCallback ***********************************/
 
@@ -59,6 +59,7 @@ namespace AstroCam {
 #ifdef LOGLEVEL_DEBUG
     std::cerr << "pixelcount:  " << std::setw(10) << uiPixelCount << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
 #endif
+    return;
   }
   /***** AstroCam::Callback::readCallback *************************************/
 
@@ -89,13 +90,30 @@ namespace AstroCam {
     std::cerr << "pixelcount:  " << std::setw(10) << (rows*cols) << "\n";
     std::cerr << "framecount:  " << std::setw(10) << fcount << "\n";
 #endif
+    return;
   }
   /***** AstroCam::Callback::frameCallback ************************************/
 
 
+  /***** AstroCam::Callback::ftCallback ***************************************/
+  /**
+   * @brief      called by CArcDevice::frame_transfer() when a frame transfer has been done
+   * @details    set/clear control flags and start the readout waveforms
+   * @param[in]  devnum    device number passed to API
+   *
+   */
+  void Callback::ftCallback( int devnum ) {
+    std::stringstream message;
+    message << "FT_" << devnum << ":complete";
+    std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+    return;
+  }
+  /***** AstroCam::Callback::ftCallback ***************************************/
+
+
   /***** AstroCam::Interface::Interface ***************************************/
   /**
-   * @brief      class constructor
+   * @brief      AstroCam Interface class constructor
    *
    */
   Interface::Interface() {
@@ -109,6 +127,11 @@ namespace AstroCam {
     // Initialize STL map of Readout Amplifiers
     // Indexed by amplifier name.
     // The number is the argument for the Arc command to set this amplifier in the firmware.
+    //
+    // Format here is: { AMP_NAME, { ENUM_TYPE, ARC_ARG } }
+    // where AMP_NAME  is the name of the readout amplifier, the index for this map
+    //       ENUM_TYPE is an enum of type ReadoutType
+    //       ARC_ARG   is the ARC argument for the SOS command to select this readout source
     //
     this->readout_source.insert( { "U1",   { U1,      0x5f5531 } } );  // "_U1"
     this->readout_source.insert( { "L1",  { L1,     0x5f4c31 } } );  // "_L1"
@@ -152,10 +175,107 @@ namespace AstroCam {
   /***** AstroCam::Interface::interface ***************************************/
 
 
+  /***** AstroCam::Interface::parse_controller_config *************************/
+  /**
+   * @brief      parses the CONTROLLER keyword from config file
+   * @param[in]  args  expected format is "PCIDEV CHAN FT FIRMWARE READOUT"
+   *
+   * Each camera controller is defined by
+   * '''
+   * CONTROLLER=(PCIDEV CHAN FT FIRMWARE READOUT)
+   * where PCIDEV    is the PCI device number
+   *       CHAN      is the spectrographic channel {U,R,I,G}
+   *       FT        is {yes|no} to indicate if Frame Transfer is supported
+   *       FIRMWARE  is the default firmware to load
+   *       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
+   * '''
+   *
+   * This function parses the arg string, checks for valid inputs, and
+   * uses the values to create a controller STL map entry for each device.
+   *
+   */
+  long Interface::parse_controller_config( std::string args ) {
+    std::string function = "AstroCam::Interface::parse_controller_config";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    logwrite( function, args );
+
+    int dev, readout_type=-1;
+    uint32_t readout_arg=0xBAD;
+    std::string chan, firm, amp;
+    bool ft, readout_valid=false;
+
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 5 ) {
+      message.str(""); message << "ERROR: bad value \"" << args << "\". expected { PCIDEV CHAN FT FIRMWARE READOUT }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    try {
+      dev  = std::stoi( tokens.at(0) );
+      chan = tokens.at(1);
+      firm = tokens.at(3);
+      amp  = tokens.at(4);
+      if ( tokens.at(2) == "yes" ) ft = true;
+      else
+      if ( tokens.at(2) == "no" )  ft = false;
+      else {
+        message.str(""); message << "unrecognized value for FT: " << tokens.at(2) << ". Expected { yes | no }";
+        this->camera.log_error( function, message.str() );
+        return( ERROR );
+      }
+    }
+    catch (std::invalid_argument &) {
+      this->camera.log_error( function, "invalid number: unable to convert to integer" );
+      return(ERROR);
+    }
+    catch (std::out_of_range &) {
+      this->camera.log_error( function, "value out of integer range" );
+      return(ERROR);
+    }
+
+    // Check the PCIDEV number is in expected range
+    //
+    if ( dev < 0 || dev > 3 ) {
+      message.str(""); message << "ERROR: bad PCIDEV " << dev << ". Expected {0,1,2,3}";
+      this->camera.log_error( function, message.str() );
+      return( ERROR );
+    }
+
+    // Check that READOUT has a match in the list of known readout amps.
+    //
+    for ( auto source : this->readout_source ) {
+      if ( source.first.compare( amp ) == 0 ) {     // found a match
+        readout_valid = true;
+        readout_arg  = source.second.readout_arg;   // get the arg associated with this match
+        readout_type = source.second.readout_type;  // get the type associated with this match
+      }
+    }
+    if ( !readout_valid || readout_type==-1 || readout_arg==0xBAD ) {
+      message.str(""); message << "ERROR: bad READOUT " << amp << " for CHAN " << chan << ". Expected { ";
+      for ( auto source : this->readout_source ) message << source.first << " ";
+      message << "}";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Create a vector of configured device numbers
+    //
+    this->configdev.push_back( dev );
+
+    return( NO_ERROR );
+  }
+  /***** AstroCam::Interface::parse_controller_config *************************/
+
+
   /***** AstroCam::Interface::do_connect_controller ***************************/
   /**
    * @brief      opens a connection to the PCI/e device(s)
    * @param[in]  devices_in  optional string containing space-delimited list of devices
+   * @param[out] help        reference to string to return help on request
    * @return     ERROR or NO_ERROR
    *
    * Input parameter devices_in defaults to empty string which will attempt to
@@ -172,9 +292,22 @@ namespace AstroCam {
    * call with the specific device(s). In other words, it's all (requested) or nothing.
    *
    */
-  long Interface::do_connect_controller(std::string devices_in="") {
+  long Interface::do_connect_controller(std::string devices_in, std::string &help) {
     std::string function = "AstroCam::Interface::do_connect_controller";
     std::stringstream message;
+
+    // Help
+    //
+    if ( devices_in == "?" ) {
+      help = CAMERAD_OPEN;
+      help.append( " [ <devlist> ]\n" );
+      help.append( "  Opens a connection to the indicated PCI/e device(s) where <devlist>\n" );
+      help.append( "  is an optional space-delimited list of device numbers.\n" );
+      help.append( "  e.g. \"0 1\" to open PCI devices 0 and 1\n" );
+      help.append( "  If no list is provided then all detected devices will be opened.\n" );
+      help.append( "  Opening an ARC device requires that the controller is present and powered on.\n" );
+      return( NO_ERROR );
+    }
 
     // Don't allow another open command --
     // Open creates a vector of objects and it's easier to manage by total
@@ -191,9 +324,6 @@ namespace AstroCam {
 
     this->numdev = arc::gen3::CArcPCI::deviceCount();
 
-    message.str(""); message << "found " << this->numdev << " ARC device" << (this->numdev != 1 ? "s" : "");
-    logwrite(function, message.str());
-
     // Nothing to do if there are no devices detected.
     //
     if (this->numdev == 0) {
@@ -203,11 +333,27 @@ namespace AstroCam {
 
     // Log all PCI devices found
     //
-    const std::string* pdevList;
-    pdevList = arc::gen3::CArcPCI::getDeviceStringList();
+    const std::string* pdevNames;                                             // pointer to device list returned from ARC API
+    std::vector<std::string> devNames;                                        // my local copy so I can manipulate it
+    pdevNames = arc::gen3::CArcPCI::getDeviceStringList();
     for ( uint32_t i=0; i < arc::gen3::CArcPCI::deviceCount(); i++ ) {
-      message.str(""); message << "found " << pdevList[ i ];
+      if ( !pdevNames[i].empty() ) {
+        devNames.push_back( pdevNames[i].substr(0, pdevNames[i].size()-1) );  // throw out last character (non-printing)
+      }
+      message.str(""); message << "found " << devNames.back();
       logwrite(function, message.str());
+    }
+
+    // Log PCI devices configured
+    //
+    if ( this->configdev.empty() ) {
+      logwrite( function, "ERROR: no devices configured. Need CONTROLLER keyword in config file." );
+      return( ERROR );
+    }
+
+    for ( auto dev : this->configdev ) {
+      message.str(""); message << "device " << dev << " configured";
+      logwrite( function, message.str() );
     }
 
     // Look at the requested device(s) to open, which are in the
@@ -215,11 +361,9 @@ namespace AstroCam {
     // are stored in a public vector "devlist".
     //
 
-    // If no string is given then build devlist from all detected devices
+    // If no string is given then use vector of configured devices
     //
-    if ( devices_in.empty() ) {
-      for ( auto n = 0; n < this->numdev; n++ ) this->devlist.push_back( n );
-    }
+    if ( devices_in.empty() ) this->devlist = this->configdev;
 
     // Otherwise, tokenize the device list string and build devlist from the tokens
     //
@@ -228,7 +372,10 @@ namespace AstroCam {
       Tokenize(devices_in, tokens, " ");
       for ( auto n : tokens ) {                       // For each token in the devices_in string,
         try {
-          this->devlist.push_back( std::stoi( n ) );  // convert it to int and push into devlist vector.
+          int dev = std::stoi( n );                   // convert to int
+          if ( std::find( this->devlist.begin(), this->devlist.end(), dev ) == this->devlist.end() ) { // If it's not already in the vector,
+            this->devlist.push_back( dev );                                                            // then push into devlist vector.
+          }
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: invalid device number: " << n << ": unable to convert to integer";
@@ -264,7 +411,7 @@ namespace AstroCam {
         this->controller.at(dev).pArcDev = pArcDev;        // set the pointer to this object in the public vector
         this->controller.at(dev).pCallback = pCB;          // set the pointer to this object in the public vector
         this->controller.at(dev).devnum = dev;             // device number
-        this->controller.at(dev).devname = pdevList[dev];  // device name
+        this->controller.at(dev).devname = devNames[dev];  // device name
         this->controller.at(dev).connected = false;        // not yet connected
         this->controller.at(dev).firmwareloaded = false;   // no firmware loaded
         this->controller.at(dev).firmware = "";            // no firmware loaded
@@ -387,7 +534,12 @@ namespace AstroCam {
 
       return( ERROR );
     }
-    else return( NO_ERROR );
+
+    // As the last step to opening the controller, this is where I've chosen
+    // to initialize the Shutter class, required before using the shutter.
+    //
+    return( this->camera.bonn_shutter ? this->camera.shutter.init() : NO_ERROR );
+
   }
   /***** AstroCam::Interface::do_connect_controller ***************************/
 
@@ -490,35 +642,17 @@ namespace AstroCam {
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
 
-      if (this->config.param[entry].compare(0, 16, "DEFAULT_FIRMWARE")==0) {
-        // tokenize each firmware entry because it contains a controller dev number and a filename
-        //
-        std::vector<std::string> tokens;
-        int size = Tokenize( this->config.arg[entry], tokens, " \t" );
-        if (size != 2) {
-          message << "ERROR: bad entry for DEFAULT_FIRMWARE: " << this->config.arg[entry] << ": expected (devnum filename)";
-          logwrite(function, message.str());
-          error = ERROR;
-          continue;
-        }
-        else {
-          try {
-            this->camera.firmware[ parse_val(tokens.at(0)) ] = tokens.at(1);
-            message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-            logwrite( function, message.str() );
-            this->camera.async.enqueue( message.str() );
-            applied++;
-          }
-          catch(std::out_of_range &) {  // should be impossible but here for safety
-            logwrite(function, "ERROR configuring DEFAULT_FIRMWARE: requested tokens out of range");
-            error = ERROR;
-          }
+      if (this->config.param[entry].compare(0, 10, "CONTROLLER")==0) {
+        if ( this->parse_controller_config( this->config.arg[entry] ) != ERROR ) {
+          message.str(""); message << "CAMERAD:config:" << this->config.param[entry] << "=" << this->config.arg[entry];
+          this->camera.async.enqueue_and_log( function, message.str() );
+          applied++;
         }
       }
 
       if (this->config.param[entry].compare(0, 5, "IMDIR")==0) {
         this->camera.imdir( config.arg[entry] );
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->camera.async.enqueue( message.str() );
         applied++;
@@ -539,12 +673,30 @@ namespace AstroCam {
           this->camera.log_error( function, "DIRMODE out of integer range" );
           return(ERROR);
         }
+        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
         applied++;
       }
 
       if (this->config.param[entry].compare(0, 6, "BASENAME")==0) {
         this->camera.basename( config.arg[entry] );
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
+        applied++;
+      }
+
+      if (this->config.param[entry].compare(0, 12, "BONN_SHUTTER")==0) {
+        std::string bs = config.arg[entry];
+        if ( !bs.empty() && bs=="yes" ) this->camera.bonn_shutter = true;
+        else
+        if ( !bs.empty() && bs=="no" ) this->camera.bonn_shutter = false;
+        else {
+          this->camera.log_error( function, "BONN_SHUTTER expected yes | no" );
+          return( ERROR );
+        }
+        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         this->camera.async.enqueue( message.str() );
         applied++;
@@ -655,9 +807,13 @@ namespace AstroCam {
 
     // If no command passed then nothing to do here
     //
-    if ( cmdstr.empty() ) {
-      logwrite(function, "ERROR: missing command");
-      return( ERROR );
+    if ( cmdstr.empty() || cmdstr == "?" ) {
+      retstring = CAMERAD_NATIVE;
+      retstring.append( " <CMD> [ <ARG1> [ < ARG2> [ <ARG3> [ <ARG4> ] ] ] ]\n" );
+      retstring.append( "  send 3-letter command <CMD> with up to four optional args to all open ARC controllers\n" );
+      retstring.append( "  Input <CMD> is not case-sensitive and any values default to base-10\n" );
+      retstring.append( "  unless preceeded by 0x to indicate base-16 (e.g. rdm 0x400001).\n" );
+      return( NO_ERROR );
     }
 
     // Ensure command and args are uppercase
@@ -886,25 +1042,86 @@ namespace AstroCam {
       rs << "0x" << std::hex << std::uppercase << retval;
       retstring = rs.str();
     }
+    return;
   }
   /***** AstroCam::Interface::retval_to_string ********************************/
+
+
+  /***** AstroCam::Interface::dothread_shutter ********************************/
+  /**
+   * @brief      run in a thread to operate the shutter
+   * @param[in]  cam  reference to Camera class object
+   *
+   * This function uses the std::chrono API to sleep for the requested
+   * exposure time. The shutter open and close times are recorded before
+   * and after the sleep, and the chrono API's duration class is used
+   * to record the actual shutter-open time.
+   *
+   * When the shutter closes, this function will notify all threads
+   * that are waiting on the camera.shutter condition variable.
+   *
+   * @todo  This function is missing the call to actually operate the shutter!
+   *
+   */
+  void Interface::dothread_shutter( Camera::Camera &cam ) {
+    std::string function = "AstroCam::Interface::dothread_shutter";
+    std::stringstream message;
+
+    // open the shutter
+    //
+    cam.shutter.set_open();
+
+    // Log shutter open time
+    //
+    message.str(""); message << "shutter opened at " << get_timestamp();
+    cam.async.enqueue_and_log( "CAMERAD", function, message.str() );
+
+    cam.shutter.state = 1;               // shutter state open
+
+    // Here is the shutter timer
+    //
+    std::this_thread::sleep_for( std::chrono::milliseconds( cam.exposure_time ) );
+
+    // close the shutter
+    //
+    cam.shutter.set_close();
+
+    // Log shutter close time
+    //
+    message.str(""); message << "shutter closed at " << get_timestamp();
+    cam.async.enqueue_and_log( "CAMERAD", function, message.str() );
+
+    cam.shutter.state = 0;               // shutter state closed
+
+    cam.shutter.condition.notify_all();  // notify waiting threads that the shutter has closed
+
+    // Log shutter duration
+    // @TODO add this to keyword database
+    //
+//  const auto elapsed = ( std::chrono::duration_cast<std::chrono::nanoseconds>(close_time - open_time).count() / 1000000. );
+//  message.str(""); message << "shutter was open for " << elapsed << " msec";
+//  logwrite( function, message.str() );
+
+    return;
+  }
+  /***** AstroCam::Interface::dothread_shutter ********************************/
 
 
   /***** AstroCam::Interface::dothread_expose *********************************/
   /**
    * @brief      run in a thread to actually send the command
-   * @param[in]  _controller  reference to Controller class object
+   * @param[in]  con  reference to Controller class object
    *
    */
-  void Interface::dothread_expose( Controller &_controller ) {
+  void Interface::dothread_expose( Controller &con ) {
     std::string function = "AstroCam::Interface::dothread_expose";
     std::stringstream message;
 
 #ifdef LOGLEVEL_DEBUG
     message.str("");
-    message << "[DEBUG] _controller.devnum=" << _controller.devnum 
-            << " .devname=" << _controller.devname << " _controller.section_size=" << _controller.info.section_size
-            << " shutterenable=" << _controller.info.shutterenable;
+    message << "[DEBUG] con.devnum=" << con.devnum 
+            << " .devname=" << con.devname << " con.section_size=" << con.info.section_size
+            << " shutterenable=" << con.info.shutterenable;
     logwrite(function, message.str());
 #endif
 
@@ -914,32 +1131,33 @@ namespace AstroCam {
     try {
       // get system time just before the actual expose() call
       //
-      _controller.info.start_time = get_timestamp( );  // current system time formatted as YYYY-MM-DDTHH:MM:SS.sss
+      con.info.start_time = get_timestamp( );  // current system time formatted as YYYY-MM-DDTHH:MM:SS.sss
 
       // Send the actual command to start the exposure.
       // This API call will send the SEX command to trigger the exposure.
       // The devnum is passed in so that the Callback functions know which device they belong to.
       //
-      _controller.pArcDev->expose(_controller.devnum, 
-                                  _controller.info.exposure_time,
-                                  _controller.info.detector_pixels[0], 
-                                  _controller.info.detector_pixels[1], 
-                                  server.camera.abortstate, 
-                                  _controller.pCallback, 
-                                  _controller.info.shutterenable);
+      con.pArcDev->expose( con.devnum, 
+                           con.info.exposure_time,
+                           con.info.detector_pixels[0], 
+                           con.info.detector_pixels[1], 
+                           server.camera.abortstate, 
+                           con.pCallback, 
+                           con.info.shutterenable
+                         );
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] pArcDev->expose started on " << _controller.devname;
+      message.str(""); message << "[DEBUG] pArcDev->expose started on " << con.devname;
       logwrite( function, message.str() );
 #endif
 
       // The system writes a few things in the header
       //
-      _controller.pFits->add_key("FIRMWARE", "STRING",  _controller.firmware , "controller firmware");
-      _controller.pFits->add_key("EXPSTART", "STRING", _controller.info.start_time, "exposure start time");
-      _controller.pFits->add_key("READOUT", "STRING",  _controller.info.readout_name, "readout amplifier");
+      con.pFits->add_key( true, "FIRMWARE", "STRING",  con.firmware , "controller firmware" );
+      con.pFits->add_key( true, "EXPSTART", "STRING", con.info.start_time, "exposure start time" );
+      con.pFits->add_key( true, "READOUT", "STRING",  con.info.readout_name, "readout amplifier" );
 
-      _controller.pFits->add_key("DEVNUM", "INT",  std::to_string(_controller.devnum), "PCI device number");
-      _controller.pFits->add_key("EXPTIME", "INT", std::to_string(_controller.info.exposure_time), "exposure time in msec");
+      con.pFits->add_key( true, "DEVNUM", "INT",  std::to_string(con.devnum), "PCI device number" );
+      con.pFits->add_key( true, "EXPTIME", "INT", std::to_string(con.info.exposure_time), "exposure time in msec" );
     }
     catch (const std::exception &e) {
       // arc::gen3::CArcDevice::expose() will throw an exception for an abort.
@@ -949,24 +1167,24 @@ namespace AstroCam {
       std::string estring = e.what();
       message.str("");
       if ( estring.find("aborted") != std::string::npos ) {
-        message << "ABORT on " << _controller.devname << ": " << e.what();
+        message << "ABORT on " << con.devname << ": " << e.what();
       }
       else {
-        message << "ERROR on " << _controller.devname << ": " << e.what();
+        message << "ERROR on " << con.devname << ": " << e.what();
       }
       server.camera.set_abortstate( true );
       logwrite(function, message.str());
-      _controller.error = ERROR;
+      con.error = ERROR;
       return;
     }
     catch(...) {
-      message.str(""); message << "ERROR: unknown exception calling pArcDev->expose() on " << _controller.devname << ". forcing abort.";
+      message.str(""); message << "ERROR: unknown exception calling pArcDev->expose() on " << con.devname << ". forcing abort.";
       logwrite(function, message.str() );
       server.camera.set_abortstate( true );
-      _controller.error = ERROR;
+      con.error = ERROR;
       return;
     }
-    _controller.error = NO_ERROR;
+    con.error = NO_ERROR;
     return;
   }
   /***** AstroCam::Interface::dothread_expose *********************************/
@@ -975,11 +1193,11 @@ namespace AstroCam {
   /***** AstroCam::Interface::dothread_native *********************************/
   /**
    * @brief      run in a thread to actually send the command
-   * @param[in]  controller  reference to Controller object
-   * @param[in]  cmd         vector containing command and args
+   * @param[in]  con  reference to Controller object
+   * @param[in]  cmd  vector containing command and args
    *
    */
-  void Interface::dothread_native( Controller &controller, std::vector<uint32_t> cmd ) {
+  void Interface::dothread_native( Controller &con, std::vector<uint32_t> cmd ) {
     std::string function = "AstroCam::Interface::dothread_native";
     std::stringstream message;
     uint32_t command;
@@ -990,40 +1208,41 @@ namespace AstroCam {
       // ARC_API now uses an initialized_list object for the TIM_ID, command, and arguments.
       // The list object must be instantiated with a fixed size at compile time.
       //
-      if (cmd.size() == 1) controller.retval = controller.pArcDev->command( { TIM_ID, cmd.at(0) } );
+      if (cmd.size() == 1) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0) } );
       else
-      if (cmd.size() == 2) controller.retval = controller.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1) } );
+      if (cmd.size() == 2) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1) } );
       else
-      if (cmd.size() == 3) controller.retval = controller.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2) } );
+      if (cmd.size() == 3) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2) } );
       else
-      if (cmd.size() == 4) controller.retval = controller.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3) } );
+      if (cmd.size() == 4) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3) } );
       else
-      if (cmd.size() == 5) controller.retval = controller.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3), cmd.at(4) } );
+      if (cmd.size() == 5) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3), cmd.at(4) } );
       else {
         message.str(""); message << "ERROR: invalid number of command arguments: " << cmd.size() << " (expecting 1,2,3,4,5)";
         logwrite(function, message.str());
-        controller.retval = 0x455252;
+        con.retval = 0x455252;
       }
     }
     catch(const std::runtime_error &e) {
       message.str(""); message << "ERROR sending 0x" << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
-                                                     << command << " to " << controller.devname << ": " << e.what();
+                                                     << command << " to " << con.devname << ": " << e.what();
       logwrite(function, message.str());
-      controller.retval = 0x455252;
+      con.retval = 0x455252;
       return;
     }
     catch(std::out_of_range &) {  // impossible
       logwrite(function, "ERROR: indexing command argument");
-      controller.retval = 0x455252;
+      con.retval = 0x455252;
       return;
     }
     catch(...) {
       message.str(""); message << "unknown error sending 0x" << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
-                                                             << command << " to " << controller.devname;
+                                                             << command << " to " << con.devname;
       logwrite(function, message.str());
-      controller.retval = 0x455252;
+      con.retval = 0x455252;
       return;
     }
+    return;
   }
   /***** AstroCam::Interface::dothread_native *********************************/
 
@@ -1350,6 +1569,18 @@ namespace AstroCam {
 
     message.str(""); message << "starting exposure at " << _start_time;
     logwrite(function, message.str());
+
+    // Spawn a thread to operate the shutter if needed
+    //
+    if ( this->camera.exposure_time > 0 ) {
+      this->camera.shutter.state = -1;     // shutter state pending, prevents potential race conditions
+                                           // while waiting for shutter_state to transition from 1 -> 0
+      std::thread( std::ref(AstroCam::Interface::dothread_shutter), std::ref(this->camera) ).detach();
+    }
+    else {
+      logwrite( function, "shutter not opened" );
+      this->camera.shutter.state = 0;      // shutter state closed (not used for exposure_time == 0)
+    }
 
     // prepare the camera info class object for each controller
     //
@@ -1771,7 +2002,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::dothread_load ***********************************/
   /**
    * @brief      run in a thread to actually perform the load
-   * @param[in]  contoller   reference to Controller object
+   * @param[in]  con         reference to Controller object
    * @param[in]  timlodfile  string of lodfile name to load
    *
    * loadControllerFile() doesn't return a value but throws std::runtime_error on error.
@@ -1780,32 +2011,32 @@ namespace AstroCam {
    * to ERR on exception or to DON if no exception is thrown.
    *
    */
-  void Interface::dothread_load(Controller &controller, std::string timlodfile) {
+  void Interface::dothread_load(Controller &con, std::string timlodfile) {
     std::string function = "AstroCam::Interface::dothread_load";
     std::stringstream message;
 
     try {
-      controller.pArcDev->loadControllerFile( timlodfile );  // Do the load here
+      con.pArcDev->loadControllerFile( timlodfile );  // Do the load here
     }
     catch(const std::exception &e) {
-      message.str(""); message << "ERROR: " << controller.devname << ": " << e.what();
+      message.str(""); message << "ERROR: " << con.devname << ": " << e.what();
       logwrite(function, message.str());
-      controller.retval = ERR;
-      controller.firmwareloaded = false;
+      con.retval = ERR;
+      con.firmwareloaded = false;
       return;
     }
     catch(...) {
-      message.str(""); message << "unknown error loading firmware for " << controller.devname;
+      message.str(""); message << "unknown error loading firmware for " << con.devname;
       logwrite(function, message.str());
-      controller.retval = ERR;
-      controller.firmwareloaded = false;
+      con.retval = ERR;
+      con.firmwareloaded = false;
       return;
     }
-    message.str(""); message << "devnum " << controller.devnum << ": loaded firmware " << timlodfile;
+    message.str(""); message << "devnum " << con.devnum << ": loaded firmware " << timlodfile;
     logwrite(function, message.str());
-    controller.retval = DON;
-    controller.firmwareloaded = true;
-    controller.firmware = timlodfile;
+    con.retval = DON;
+    con.firmwareloaded = true;
+    con.firmware = timlodfile;
 
     return;
   }
@@ -2427,6 +2658,23 @@ namespace AstroCam {
     bool shutten;
     shutter_out = "undefined";  // undefined until set below
 
+    // Help
+    //
+    if ( shutter_in == "?" ) {
+      shutter_out = CAMERAD_SHUTTER;
+      shutter_out.append( " [ enable | 1 | disable | 0 ]\n" );
+      shutter_out.append( "  Sets (and reads) the shutter enable state which controls whether\n" );
+      shutter_out.append( "  or not the shutter will open for an exposure. 1 and 0 are equivalent\n" );
+      shutter_out.append( "  to enable and disable, respectively. If no arg is given then the\n" );
+      shutter_out.append( "  current shutterenable state is returned.\n" );
+      shutter_out.append( "\n" );
+      shutter_out.append( "  A PCI connection must be opened to a controller before the enable\n" );
+      shutter_out.append( "  state can be set or read.\n" );
+      shutter_out.append( "\n" );
+      shutter_out.append( "  See also \""+CAMERAD_TEST+" shutter\" for manual shutter operation.\n" );
+      return( NO_ERROR );
+    }
+
     // Process an input argument to set the shutter enable/disable state
     //
     if ( !shutter_in.empty() ) {
@@ -2643,6 +2891,7 @@ namespace AstroCam {
    */
   void Interface::handle_queue(std::string message) {
     server.camera.async.enqueue( message );
+    return;
   }
   /***** AstroCam::Interface::handle_queue ************************************/
 
@@ -3070,6 +3319,7 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
 
     deinterlace.do_deinterlace( row_start, row_stop, index, index_flip );
 
+    return;
   }
   /***** AstroCam::Interface::dothread_deinterlace ****************************/
 
@@ -3103,7 +3353,7 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
     Tokenize(args, tokens, " ");
 
     if (tokens.size() < 1) {
-      logwrite(function, "no test name provided");
+      logwrite( function, "ERROR: no test name provided" );
       return ERROR;
     }
 
@@ -3171,6 +3421,80 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
     } // end if (testname==bw)
 
     // ----------------------------------------------------
+    // shutter
+    // ----------------------------------------------------
+    //
+    else
+    if (testname == "shutter") {
+      if ( tokens.size() == 2 ) {
+        error = NO_ERROR;
+        if ( tokens[1] == "open" ) {
+          error  = this->camera.shutter.set_open();
+          usleep( 150000 );
+          error |= this->test( "shutter get", retstring );
+        }
+        else
+        if ( tokens[1] == "close" ) {
+          error  = this->camera.shutter.set_close();
+          usleep( 150000 );
+          error |= this->test( "shutter get", retstring );
+        }
+        else
+        if ( tokens[1] == "init" ) {
+          error = this->camera.shutter.init();
+        }
+        else
+        if ( tokens[1] == "get" ) {
+          int state;
+          error = this->camera.shutter.get_state(state);
+          switch( state ) {
+            case 0:  retstring="closed";  break;
+            case 1:  retstring="open";    break;
+            default: retstring="unknown"; break;
+          }
+        }
+        else
+        if ( tokens[1] == "time" ) {
+          double el = this->camera.shutter.duration();
+          retstring = std::to_string( el );
+        }
+        else
+        if ( tokens[1] == "?" ) {
+          retstring = CAMERAD_TEST;
+          retstring.append( " shutter init | open | close | get | time | expose <msec> \n" );
+          retstring.append( "  init:           initializes Shutter class and opens USB device, required before use\n" );
+          retstring.append( "  open:           manually open shutter now\n" );
+          retstring.append( "  close:          manually close now\n" );
+          retstring.append( "  get:            returns shutter state\n" );
+          retstring.append( "  time:           returns the last shutter open/close time duration\n" );
+          retstring.append( "  expose <msec>:  open shutter for integral <msec> milliseconds\n" );
+          error = NO_ERROR;
+        }
+        else {
+          logwrite( function, "ERROR: expected { init | open | close | get | time | expose <msec> }" );
+          error = ERROR;
+        }
+      }
+      else
+      if ( tokens.size() == 3 ) {
+        if ( tokens[1] == "expose" ) {
+          int sl;
+          try { retstring="bad exptime: expected integral number of msec"; sl = std::stoi( tokens[2] ); }
+          catch ( std::invalid_argument & ) { return ERROR; } catch ( std::out_of_range & ) { return ERROR; }
+          error  = this->camera.shutter.set_open();
+          if ( error==NO_ERROR ) std::this_thread::sleep_for(std::chrono::milliseconds(sl));
+          error |= this->camera.shutter.set_close();
+          double el = this->camera.shutter.duration();
+          retstring = ( error==NO_ERROR ? std::to_string( el ) : "NaN" );
+        }
+      }
+      else {
+        logwrite( function, "ERROR: expected { init | open | close | get | time | expose <msec> }" );
+        error = ERROR;
+      }
+    } // end if (testname==shutter)
+
+    // ----------------------------------------------------
     // invalid test name
     // ----------------------------------------------------
     //
@@ -3188,6 +3512,8 @@ server.camera.async.enqueue( "NOTICE:override nthreads=2 !!!" );
   /**** AstroCam::Interface::Controller::write ********************************/
   /**
    * @brief      wrapper to write a fits file
+   * @details    This will call the write_image() member function of the
+   *             FITS_file class, pointed to by pFits for this controller.
    * @return     ERROR or NO_ERROR
    *
    * called by Interface::write_frame( ) which is called by the handle_frame thread
@@ -3343,6 +3669,7 @@ message.str(""); message << "datatype=" << this->info.datatype; logwrite( functi
       message << "deleted old deinterlacing buffer " << std::hex << this->workbuf;
       logwrite(function, message.str());
     }
+    return;
   }
   /***** AstroCam::Interface::Controller::free_workbuf ************************/
 

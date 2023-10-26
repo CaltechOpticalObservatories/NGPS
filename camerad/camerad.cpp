@@ -402,7 +402,7 @@ void doit(Network::TcpSocket &sock) {
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
 
-    if (sbuf.empty()) {sock.Write("\n"); continue;}  // acknowledge empty command so client doesn't time out
+    if ( sbuf.empty() ) sbuf="help";                 // no command automatically displays help
 
     try {
       std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
@@ -439,7 +439,7 @@ void doit(Network::TcpSocket &sock) {
     ret = NOTHING;
     std::string retstring="";                               // string for return the value (where needed)
 
-    if ( cmd.compare( "help" ) == 0 ) {
+    if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                     for ( auto s : CAMERAD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
     }
     else
@@ -458,7 +458,8 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if (cmd.compare( CAMERAD_OPEN )==0) {
-                    ret = server.connect_controller(args);
+                    ret = server.connect_controller(args, retstring);
+                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if (cmd.compare( CAMERAD_CLOSE )==0) {
@@ -493,8 +494,8 @@ void doit(Network::TcpSocket &sock) {
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_DATACUBE )==0) {
-                    ret = server.camera.datacube(args, retstring);
+    if (cmd.compare( CAMERAD_MEX )==0) {
+                    ret = server.camera.mex(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
@@ -511,8 +512,8 @@ void doit(Network::TcpSocket &sock) {
                     sock.Write( " " );
                     }
     else
-    if (cmd.compare( CAMERAD_CUBEAMPS )==0) {
-                    ret = server.camera.cubeamps(args, retstring);
+    if (cmd.compare( CAMERAD_MEXAMPS )==0) {
+                    ret = server.camera.mexamps(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }

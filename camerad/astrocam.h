@@ -65,6 +65,7 @@ namespace AstroCam {
     NUM_READOUT_TYPES
     };
 
+
   /***** AstroCam::Callback ***************************************************/
   /**
    * @class Callback
@@ -81,6 +82,7 @@ namespace AstroCam {
                           std::uint32_t uiRows,
                           std::uint32_t uiCols,
                           void* pBuffer );                            ///< called by CArcDevice::expose() when a frame has been received
+      void ftCallback( int devnum );
   };
   /***** AstroCam::Callback ***************************************************/
 
@@ -538,12 +540,10 @@ namespace AstroCam {
   /***** AstroCam::Interface **************************************************/
   /**
    * @class Interface
-   * @brief 
+   * @brief This class defines the interface to the AstroCam controller
    */
   class Interface {
     private:
-//    int rows; // REMOVE
-//    int cols; // REMOVE
       int bufsize;
       int FITS_STRING_KEY;
       int FITS_DOUBLE_KEY;
@@ -573,6 +573,7 @@ namespace AstroCam {
 //    void* workbuf;               //!< workspace for performing deinterlacing
       int num_deinter_thr;         //!< number of threads that can de-interlace an image
       int numdev;                  //!< total number of Arc devices detected in system
+      std::vector<int> configdev;  //!< vector of configured Arc devices (from camerad.cfg file)
       std::vector<int> devlist;    //!< vector of all opened and connected devices
 
       void retval_to_string( std::uint32_t check_retval, std::string& retstring );
@@ -646,7 +647,7 @@ namespace AstroCam {
           int rows;
           int cols;
 
-          arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer
+          arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
           bool connected;                  //!< true if controller connected (requires successful TDL command)
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
@@ -656,6 +657,11 @@ namespace AstroCam {
           std::uint32_t retval;            //!< convenient place to hold return values for threaded commands to this controller
           std::map<int, frameinfo_t>  frameinfo;  //!< STL map of frameinfo structure (see above)
           uint32_t readout_arg;
+
+          bool have_ft;                    //!< Do I have (and am I using) frame transfer?
+          bool exposure_pending;           //!< Is there an exposure that needs to be stored someplace? (FT or not)
+          bool in_readout;                 //!< Is the controller currently reading out/transmitting pixels?
+          bool in_frametransfer;           //!< Is the controller currently performing a frame transfer?
 
           // Functions
           //
@@ -716,10 +722,11 @@ namespace AstroCam {
 
       // Functions
       //
+      long parse_controller_config( std::string args );
       long test(std::string args, std::string &retstring);                 ///< test routines
       long interface(std::string &iface);                                  ///< returns the interface
-      long do_connect_controller(std::string devices_in);                  ///< opens a connection to the PCI/e device(s)
-      long connect_controller(std::string devices_in);                     ///< wrapper for do_connect_controller
+      long do_connect_controller(std::string devices_in, std::string &help); ///< opens a connection to the PCI/e device(s)
+      long connect_controller(std::string devices_in, std::string &help);  ///< wrapper for do_connect_controller
       long is_connected( std::string &retstring );                         ///< are all selected controllers connected?
       long do_disconnect_controller();                                     ///< closes the connection to the PCI/e device(s)
       long disconnect_controller();                                        ///< wrapper for do_disconnect_controller
@@ -757,9 +764,10 @@ namespace AstroCam {
       long do_native( int dev, std::string cmdstr, std::string &retstring );
       long do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring );
       long write_frame(int devnum, int fpbcount);
-      static void dothread_load( Controller &controller, std::string timlodfile );
-      static void dothread_expose( Controller &controller );
-      static void dothread_native( Controller &controller, std::vector<uint32_t> cmd );
+      static void dothread_load( Controller &con, std::string timlodfile );
+      static void dothread_shutter( Camera::Camera &cam );
+      static void dothread_expose( Controller &con );
+      static void dothread_native( Controller &con, std::vector<uint32_t> cmd );
       static void handle_frame( int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer );
       static void handle_queue( std::string message );
 

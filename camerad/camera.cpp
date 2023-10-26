@@ -25,9 +25,9 @@
 namespace Camera {
 
   Camera::Camera() {
-    this->is_cubeamps = false;           // don't force amplifiers to be written as multi-extension cubes
+    this->is_mexamps = false;            // don't force amplifiers to be written as multi-extension
     this->is_longerror = false;
-    this->is_datacube = false;
+    this->is_mex = false;
     this->image_dir = "/tmp";
     this->dirmode = 0;                   // user specified mode to OR with 0700 for imdir creation
     this->base_name = "image";
@@ -38,6 +38,7 @@ namespace Camera {
     this->_abortstate = false;
     this->writekeys_when = "before";
     this->autodir_state = true;
+    this->bonn_shutter = true;           // defaults to Bonn shutter is present
   }
 
 
@@ -525,7 +526,7 @@ bool Camera::get_abortstate() {
    * If the filename already exists then a -number is inserted, incrementing that
    * number until a unique name is achieved.
    *
-   * This function is overloaded, to allow passing a controller id to include in the filename.
+   * This function is overloaded.
    *
    */
   long Camera::get_fitsname(std::string &name_out) {
@@ -546,7 +547,7 @@ bool Camera::get_abortstate() {
    * If the filename already exists then a -number is inserted, incrementing that
    * number until a unique name is achieved.
    *
-   * This function is overloaded, to allow passing a controller id to include in the filename.
+   * This function is overloaded; this version accepts a controller ID to put in the filename.
    *
    */
   long Camera::get_fitsname(std::string controllerid, std::string &name_out) {
@@ -645,38 +646,41 @@ bool Camera::get_abortstate() {
   /***** Camera::Camera:get_fitsname ******************************************/
 
 
-  /***** Camera::Camera::datacube *********************************************/
+  /***** Camera::Camera::mex **************************************************/
   /**
-   * @brief      set the datacube state
-   * @param[in]  state_in  boolean value to indicate whether to write a datacube(T) or not(F)
+   * @brief      set the multi-extension state
+   * @details    This version is write-only
+   * @param[in]  state_in  boolean value to indicate whether to write a multi-extension (T) or not (F)
    *
    * This function is overloaded.
    *
    */
-  void Camera::datacube(bool state_in) {                                  // write-only boolean
+  void Camera::mex(bool state_in) {
     std::string dontcare;
-    this->datacube( (state_in ? "true" : "false"), dontcare );
+    this->mex( (state_in ? "true" : "false"), dontcare );
   }
-  /***** Camera::Camera::datacube *********************************************/
+  /***** Camera::Camera::mex **************************************************/
 
 
-  /***** Camera::Camera::datacube *********************************************/
+  /***** Camera::Camera::mex **************************************************/
   /**
-   * @brief      get the datacube state
+   * @brief      get the multi-extension state
+   * @details    This version is read-only
    * @return     true or false
    *
    * This function is overloaded.
    *
    */
-  bool Camera::datacube() {                                               // read-only boolean
-    return ( this->is_datacube );
+  bool Camera::mex() {
+    return ( this->is_mex );
   }
-  /***** Camera::Camera::datacube *********************************************/
+  /***** Camera::Camera::mex **************************************************/
 
 
-  /***** Camera::Camera::datacube *********************************************/
+  /***** Camera::Camera::mex **************************************************/
   /**
-   * @brief      set or get the datacube state
+   * @brief      set or get the multi-extension state
+   * @details    This version is read/write
    * @param[in]  state_in   string containing requested state "true" or "false"
    * @param[out] state_out  reference to string containing the current state "true" or "false"
    * @return     true or false
@@ -684,19 +688,19 @@ bool Camera::get_abortstate() {
    * This function is overloaded.
    *
    */
-  long Camera::datacube(std::string state_in, std::string &state_out) {
-    std::string function = "Camera::Camera::datacube";
+  long Camera::mex(std::string state_in, std::string &state_out) {
+    std::string function = "Camera::Camera::mex";
     std::stringstream message;
     int error = NO_ERROR;
 
-    // If something is passed then try to use it to set the datacube state
+    // If something is passed then try to use it to set the multi-extension state
     //
     if ( !state_in.empty() ) {
       try {
         std::transform( state_in.begin(), state_in.end(), state_in.begin(), ::tolower );    // make lowercase
-        if (state_in == "false" ) this->is_datacube = false;
+        if (state_in == "false" ) this->is_mex = false;
         else
-        if (state_in == "true"  ) this->is_datacube = true;
+        if (state_in == "true"  ) this->is_mex = true;
         else {
           message.str(""); message << state_in << " is invalid. Expecting true or false";
           this->log_error( function, message.str() );
@@ -712,16 +716,16 @@ bool Camera::get_abortstate() {
 
     // error or not, the state reported is whatever was last successfully set
     //
-    state_out = (this->is_datacube ? "true" : "false");
+    state_out = (this->is_mex ? "true" : "false");
     logwrite( function, state_out );
-    message.str(""); message << "NOTICE:datacube=" << state_out;
+    message.str(""); message << "NOTICE:mex=" << state_out;
     this->async.enqueue( message.str() );
 
     // and this lets the server know if it was set or not
     //
     return( error );
   }
-  /***** Camera::Camera::datacube *********************************************/
+  /***** Camera::Camera::mex **************************************************/
 
 
   /***** Camera::Camera::longerror ********************************************/
@@ -803,69 +807,72 @@ bool Camera::get_abortstate() {
   /***** Camera::Camera::longerror ********************************************/
 
 
-  /***** Camera::Camera::cubeamps *********************************************/
+  /***** Camera::Camera::mexamps **********************************************/
   /**
-   * @brief      set the cubeamps state
-   * @param[in]  state_in  boolean value to indicate whether to write datacubes (T) or not (F)
+   * @brief      set the mexamps state
+   * @details    This version is write-only
+   * @param[in]  state_in  boolean value to indicate whether to write mex amps (T) or not (F)
    *
    * This function is overloaded.
    *
-   * datacube also gets enabled/disabled along with cubeamps. If datacube
-   * is needed after disabling cubeamps then it must be separately enabled.
+   * mex also gets enabled/disabled along with mexamps. If mex (multi-extension)
+   * is needed after disabling mexamps then it must be separately enabled.
    *
    */
-  void Camera::cubeamps(bool state_in) {
+  void Camera::mexamps(bool state_in) {
     std::string dontcare;
-    this->cubeamps( (state_in ? "true" : "false"), dontcare );
+    this->mexamps( (state_in ? "true" : "false"), dontcare );
   }
-  /***** Camera::Camera::cubeamps *********************************************/
+  /***** Camera::Camera::mexamps **********************************************/
 
 
-  /***** Camera::Camera::cubeamps *********************************************/
+  /***** Camera::Camera::mexamps **********************************************/
   /**
-   * @brief      get the cubeamps state
+   * @brief      get the mexamps state
+   * @details    This version is read-only
    * @return     true or false
    *
    * This function is overloaded.
    *
    */
-  bool Camera::cubeamps() {
-    return ( this->is_cubeamps );
+  bool Camera::mexamps() {
+    return ( this->is_mexamps );
   }
-  /***** Camera::Camera::cubeamps *********************************************/
+  /***** Camera::Camera::mexamps **********************************************/
 
 
-  /***** Camera::Camera::cubeamps *********************************************/
+  /***** Camera::Camera::mexamps **********************************************/
   /**
-   * @brief      set or get the cubeamps state
+   * @brief      set or get the mexamps state
+   * @details    This version is read/write
    * @param[in]  state_in   string containing requested state "true" or "false"
    * @param[out] state_out  reference to string containing the current state "true" or "false"
    * @return     true or false
    *
    * This function is overloaded.
    *
-   * datacube also gets enabled/disabled along with cubeamps. If datacube
-   * is needed after disabling cubeamps then it must be separately enabled.
+   * mex also gets enabled/disabled along with mexamps. If mex (multi-extension)
+   * is needed after disabling mexamps then it must be separately enabled.
    *
    */
-  long Camera::cubeamps(std::string state_in, std::string &state_out) {
-    std::string function = "Camera::Camera::cubeamps";
+  long Camera::mexamps(std::string state_in, std::string &state_out) {
+    std::string function = "Camera::Camera::mexamps";
     std::stringstream message;
     int error = NO_ERROR;
 
-    // If something is passed then try to use it to set the cubeamps state
+    // If something is passed then try to use it to set the mexamps state
     //
     if ( !state_in.empty() ) {
       try {
         std::transform( state_in.begin(), state_in.end(), state_in.begin(), ::tolower );    // make lowercase
         if (state_in == "false" ) {
-          this->is_cubeamps = false;
-          this->is_datacube = false;
+          this->is_mexamps = false;
+          this->is_mex     = false;
         }
         else
         if (state_in == "true"  ) {
-          this->is_cubeamps = true;
-          this->is_datacube = true;
+          this->is_mexamps = true;
+          this->is_mex     = true;
         }
         else {
           message.str(""); message << state_in << " is invalid. Expecting true or false";
@@ -882,16 +889,16 @@ bool Camera::get_abortstate() {
 
     // error or not, the state reported is whatever was last successfully set
     //
-    state_out = (this->is_cubeamps ? "true" : "false");
+    state_out = (this->is_mexamps ? "true" : "false");
     logwrite( function, state_out );
-    message.str(""); message << "NOTICE:cubeamps=" << state_out;
+    message.str(""); message << "NOTICE:mexamps=" << state_out;
     this->async.enqueue( message.str() );
 
     // and this lets the server know if it was set or not
     //
     return( error );
   }
-  /***** Camera::Camera::cubeamps *********************************************/
+  /***** Camera::Camera::mexamps **********************************************/
 
 
   /***** Camera::Information::pre_exposures ***********************************/
@@ -947,5 +954,6 @@ bool Camera::get_abortstate() {
     }
   }
   /***** Camera::Information::pre_exposures ***********************************/
+
 
 }

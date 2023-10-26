@@ -39,7 +39,7 @@ class FITS_file {
     std::atomic<bool> error;                        ///< indicates an error occured in a file writing thread
     std::atomic<bool> file_open;                    ///< semaphore indicates file is open
     std::atomic<int> threadcount;                   ///< keep track of number of write_image_thread threads
-    std::atomic<int> framen;                        ///< internal frame counter for data cubes
+    std::atomic<int> framen;                        ///< internal frame counter for multi-extensions
     CCfits::ExtHDU* imageExt;                       ///< image extension header unit
     std::string fits_name;
 
@@ -99,7 +99,7 @@ class FITS_file {
         return(ERROR);
       }
 
-      if (info.iscube) {     // special num_axis, axes for data cube
+      if (info.ismex) {      // special num_axis, axes for multi-extensions, no data associated with primary header
         num_axis = 0;
         axes[0] = 0;
         axes[1] = 0;
@@ -111,7 +111,10 @@ class FITS_file {
       }
 
       if (!info.type_set) { // This is a programming error, means datatype is uninitialized.
-        logwrite(function, "ERROR: FITS datatype is uninitialized. Call set_axes()");
+        message.str(""); message << "ERROR: FITS datatype for " << info.fits_name << " is uninitialized. Call set_axes()";
+        logwrite( function, message.str() );
+        this->close_file( writekeys, info );
+        return( ERROR );
       }
 
       try {
@@ -128,7 +131,7 @@ class FITS_file {
         for (keyit  = info.systemkeys.keydb.begin();
              keyit != info.systemkeys.keydb.end();
              keyit++) {
-          this->add_key(keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment);
+          this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
         }
 
         // If specified, iterate through the user-defined FITS keyword databases and add them to the primary header.
@@ -138,7 +141,7 @@ class FITS_file {
           for (keyit  = info.userkeys.keydb.begin();
                keyit != info.userkeys.keydb.end();
                keyit++) {
-            this->add_key(keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment);
+            this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
           }
         }
       }
@@ -219,7 +222,7 @@ class FITS_file {
         for (keyit  = info.userkeys.keydb.begin();
              keyit != info.userkeys.keydb.end();
              keyit++) {
-          this->add_key(keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment);
+          this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
         }
       }
 
@@ -293,14 +296,20 @@ class FITS_file {
       this->threadcount++;                                   // increment threadcount for each thread spawned
 
 #ifdef LOGLEVEL_DEBUG
+      long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
+      long axes[num_axis];
+      for ( int i=0; i < num_axis; i++ ) axes[i] = info.axes[i];
       message.str("");
-      message << "[DEBUG] threadcount=" << this->threadcount << " iscube=" << info.iscube << " section_size=" << info.section_size 
-              << ". spawning image writing thread for frame " << this->framen << " of " << info.fits_name;
+      message << "[DEBUG] threadcount=" << this->threadcount << " ismex=" << info.ismex << " section_size=" << info.section_size 
+              << " cubedepth=" << info.cubedepth
+              << " axes=";
+      for ( auto aa : axes ) message << aa << " ";
+      message << ". spawning image writing thread for frame " << this->framen << " of " << info.fits_name;
       logwrite(function, message.str());
 #endif
       std::thread([&]() {                                    // create the detached thread here
-        if (info.iscube) {
-          this->write_cube_thread(array, info, this);
+        if (info.ismex) {
+          this->write_mex_thread(array, info, this);
         }
         else {
           this->write_image_thread(array, info, this);
@@ -418,11 +427,11 @@ class FITS_file {
     /***** FITS_file::write_image_thread **************************************/
 
 
-    /***** FITS_file::write_cube_thread ***************************************/
+    /***** FITS_file::write_mex_thread ****************************************/
     /**
-     * @brief      This is where the data are actually written for datacubes
+     * @brief      This is where the data are actually written for multi-extensions
      * @param[in]  data  reference to the data
-     * @param[in]  info  reference to the camera info structure
+     * @param[in]  info  reference to the Camera::Information camera_info structure
      * @param[in]  self  pointer to this-> FITS_file object
      *
      * This is the worker thread, to write the data using CCFits,
@@ -430,8 +439,8 @@ class FITS_file {
      *
      */
     template <class T>
-    void write_cube_thread(std::valarray<T> &data, Camera::Information &info, FITS_file *self) {
-      std::string function = "FITS_file::write_cube_thread";
+    void write_mex_thread(std::valarray<T> &data, Camera::Information &info, FITS_file *self) {
+      std::string function = "FITS_file::write_mex_thread";
       std::stringstream message;
 
 #ifdef LOGLEVEL_DEBUG
@@ -479,9 +488,12 @@ class FITS_file {
       //
       try {
         long fpixel(1);              // start with the first pixel always
-        std::vector<long> axes(2);   // addImage() wants a vector
-        axes[0]=info.axes[0];
-        axes[1]=info.axes[1];
+
+        long num_axis = ( info.fitscubed > 1 ? 3 : 2 );
+
+        std::vector<long> axes(2);   // addImage() wants a vector, which has the size of the number of axes
+
+        for ( int i=0; i < num_axis; i++ ) axes[i]=info.axes[i];
 
         // create the extension name
         // This shows up as keyword EXTNAME and in DS9's "display header"
@@ -501,6 +513,13 @@ class FITS_file {
         if (info.datatype == SHORT_IMG) {
           this->imageExt->addKey("BZERO", 32768, "offset for signed short int");
           this->imageExt->addKey("BSCALE", 1, "scaling factor");
+        }
+
+        Common::FitsKeys::fits_key_t::iterator keyit;
+        for ( keyit  = info.extkeys.keydb.begin();
+              keyit != info.extkeys.keydb.end();
+              keyit++ ) {
+          this->add_key( false, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
         }
 
         // Add AMPSEC keys
@@ -541,7 +560,7 @@ class FITS_file {
       this->framen++;
       self->writing_file = false;
     }
-    /***** FITS_file::write_cube_thread ***************************************/
+    /***** FITS_file::write_mex_thread ****************************************/
 
 
     /***** FITS_file::make_camera_header **************************************/
@@ -574,16 +593,23 @@ class FITS_file {
     /***** FITS_file::add_key *************************************************/
     /**
      * @brief      wrapper to write keywords to the FITS file header
+     * @param[in]  primary  boolean is true for primary, false for extension
      * @param[in]  keyword
      * @param[in]  type
      * @param[in]  value
      * @param[in]  comment
      *
-     * Uses CCFits
+     * Uses CCFits addKey template function, this wrapper ensures the correct type is passed.
+     *
      */
-    void add_key(std::string keyword, std::string type, std::string value, std::string comment) {
+    void add_key( bool primary, std::string keyword, std::string type, std::string value, std::string comment ) {
       std::string function = "FITS_file::add_key";
       std::stringstream message;
+
+#ifdef LOGLEVEL_DEBUG
+      message << "[DEBUG] keyword=" << keyword << " type=" << type << " value=" << value << " comment=" << comment;
+      logwrite( function, message.str() );
+#endif
 
       // The file must have been opened first
       //
@@ -595,16 +621,20 @@ class FITS_file {
       try {
         if (type.compare("BOOL") == 0) {
           bool boolvalue = ( value == "T" ? true : false );
-          this->pFits->pHDU().addKey( keyword, boolvalue, comment );
+          ( primary ? this->pFits->pHDU().addKey( keyword, boolvalue, comment )
+                    : this->imageExt->addKey( keyword, boolvalue, comment ) );
         }
         else if (type.compare("INT") == 0) {
-          this->pFits->pHDU().addKey(keyword, std::stoi(value), comment);
+          ( primary ? this->pFits->pHDU().addKey(keyword, std::stoi(value), comment)
+                    : this->imageExt->addKey(keyword, std::stoi(value), comment) );
         }
         else if (type.compare("FLOAT") == 0) {
-          this->pFits->pHDU().addKey(keyword, std::stof(value), comment);
+          ( primary ? this->pFits->pHDU().addKey(keyword, std::stof(value), comment)
+                    : this->imageExt->addKey(keyword, std::stof(value), comment) );
         }
         else if (type.compare("STRING") == 0) {
-          this->pFits->pHDU().addKey(keyword, value, comment);
+          ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
+                    : this->imageExt->addKey(keyword, value, comment) );
         }
         else {
           message.str(""); message << "ERROR unknown type: " << type << " for user keyword: " << keyword << "=" << value
@@ -612,8 +642,28 @@ class FITS_file {
           logwrite(function, message.str());
         }
       }
+      // There could be an error converting a value to INT or FLOAT with stoi or stof,
+      // in which case save the keyword as a STRING.
+      //
+      catch ( std::invalid_argument & ) { 
+        message.str(""); message << "ERROR: unable to convert value " << value;
+        logwrite( function, message.str() );
+        if (type.compare("STRING") != 0) {
+          ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
+                    : this->imageExt->addKey( keyword, value, comment ) );
+        }
+      }
+      catch ( std::out_of_range & ) {
+        message.str(""); message << "ERROR: value " << value << " out of range";
+        logwrite( function, message.str() );
+        if (type.compare("STRING") != 0) {
+          ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
+                    : this->imageExt->addKey( keyword, value, comment ) );
+        }
+      }
       catch (CCfits::FitsError & err) {
-        message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << ") : "
+        message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << ")"
+                                 << " to " << ( primary ? "primary" : "extension" ) << " :"
                                  << err.message();
         logwrite(function, message.str());
       }

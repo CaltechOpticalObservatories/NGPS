@@ -1,17 +1,6 @@
 # configuration file for camera-server
 # @CAMERAD_CFG_COMMENT@
 #
-#DEFAULT_FIRMWARE=(0 /home/developer/Software/dsp/SWIFT/sg2_48khz.waveforms.reverse.down.quad.lod)
-#DEFAULT_FIRMWARE=(0 /home/developer/Software/dsp/SWIFT/ngps-sg2-48khz-led.lod)
-DEFAULT_FIRMWARE=(0 /home/developer/Software/DSP/SWIFT/sg2_48khz-led.lod)
-DEFAULT_FIRMWARE=(1 /home/developer/Software/DSP/SWIFT/engg_48khz.lod)
-#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/engg_48khz.reverse.updated.bias.up.lod)
-#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/ngps-engg-48khz-led.lod)
-#DEFAULT_FIRMWARE=(1 /home/developer/Software/dsp/SWIFT/ngps-engg-48khz.frame.lod)
-#DEFAULT_FIRMWARE=(2 /home/developer/ss/DSP/SWIFT/sg2_48khz.lod)
-#DEFAULT_FIRMWARE=(2 /home/developer/Software/dsp/SWIFT/sg2_48khz-led.lod)
-#DEFAULT_FIRMWARE=(3 /home/developer/ss/DSP/SWIFT/sg2_48khz.lod)
-#DEFAULT_FIRMWARE=(3 /home/developer/Software/dsp/SWIFT/sg2_48khz-led.lod)
 IMDIR=/data
 BASENAME=swift
 BLKPORT=@CAMERAD_BLK_PORT@        # server blocking port
@@ -21,5 +10,28 @@ ASYNCPORT=@MESSAGEPORT@
 ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
 DAEMON=yes
 
+# Each camera controller is defined by
+# CONTROLLER=(PCIDEV CHAN FT FIRMWARE)
+# where PCIDEV    is the PCI device number {0,1,2,3}
+#       CHAN      is the spectrographic channel {U,R,I,G}
+#       FT        is {yes|no} to indicate if Frame Transfer is supported
+#       FIRMWARE  is the default firmware to load
+#       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
+#
+CONTROLLER=(0 I yes /home/developer/Software/DSP/lod/sg2_experimental.lod U1)
+CONTROLLER=(1 R no /home/developer/Software/DSP/lod/engg_experimental.lod SPLIT1)
+
+# not yet implemented
+# IMAGE_AREA=(CHAN ROWS COLS OSROWS OSCOLS SKIPROWS NROWS)
+IMAGE_AREA=(I 2040 4114 0 50 0 2040)
+IMAGE_AREA=(R 2040 4114 0 50 0 2040)
+
+# Disabling the BONN_SHUTTER is only for when the Bonn shutter is
+# not present. Under normal operations this should be set to yes.
+# When set to no then no attempt will be made to initialize or
+# communicate with the shutter.
+#
+BONN_SHUTTER=no
+
 # The following are for simulated ARC controllers
-ARCSIM_NUMDEV=4
+#ARCSIM_NUMDEV=4
