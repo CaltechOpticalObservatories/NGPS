@@ -112,6 +112,8 @@ namespace arc
 				virtual void setupController( bool bReset, bool bTdl, bool bPower, std::uint32_t uiRows, std::uint32_t uiCols, const std::string& sTimFile,
 											  const std::string& sUtilFile = "", const std::string& sPciFile = "", const bool& bAbort = false );
 
+                		virtual void selectOutputSource( std::uint32_t arg );
+
 				virtual void loadControllerFile( const std::string& sFilename, bool bValidate = true, const bool& bAbort = false );
 
 				virtual void setImageSize( std::uint32_t uiRows, std::uint32_t uiCols );
@@ -147,7 +149,7 @@ namespace arc
 
 				virtual void expose( float fExpTime, std::uint32_t uiRows, std::uint32_t uiCols, const bool& bAbort = false, arc::gen3::CExpIFace* pExpIFace = nullptr, bool bOpenShutter = true );
 				virtual void expose( int devnum, const std::uint32_t &uiExpTime, std::uint32_t uiRows, std::uint32_t uiCols, const bool& bAbort = false, arc::gen3::CooExpIFace* pCooExpIFace = nullptr, bool bOpenShutter = true );
-				virtual void readout( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace = nullptr );
+				virtual void readout( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, const bool &bAbort = false, arc::gen3::CooExpIFace* pCooExpIFace = nullptr );
 				virtual void frame_transfer( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace );
 
 				virtual void stopExposure( void ) = 0;

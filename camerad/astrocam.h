@@ -55,8 +55,8 @@ namespace AstroCam {
     SPLIT1,
     SPLIT2,
     QUAD,
-    FT12S2,
-    FT21S1,
+    FT2,
+    FT1,
 //  HAWAII_1CH,         // TODO
 //  HAWAII_4CH,         // TODO
 //  HAWAII_16CH,        // TODO
@@ -437,7 +437,7 @@ namespace AstroCam {
           case L2:
             this->flip_ud( row_start, row_stop, index_ud );
             break;
-          case FT21S1:
+          case FT1:
           case SPLIT1:
             if ( this->cols % 2 != 0 ) {   // should have already been checked, but here for safety
               logwrite( function, "ERROR: cannot deinterlace: lowerboth requires an even number of columns" );
@@ -445,7 +445,7 @@ namespace AstroCam {
             }
             this->split_serial( row_start, row_stop, index );
             break;
-          case FT12S2:
+          case FT2:
           case SPLIT2:
             if ( this->cols % 2 != 0 ) {   // should have already been checked, but here for safety
               logwrite( function, "ERROR: cannot deinterlace: upperboth requires an even number of columns" );
@@ -541,6 +541,7 @@ namespace AstroCam {
   /**
    * @class Interface
    * @brief This class defines the interface to the AstroCam controller
+   *
    */
   class Interface {
     private:
@@ -603,7 +604,7 @@ namespace AstroCam {
         bool  inuse;                    //!< this thread ID is in use, set when thread is spawned, cleared when handle_frame is done
       } frameinfo_t;
 
-      std::map<int, frameinfo_t> frameinfo;
+//    std::map<int, frameinfo_t> frameinfo;  // instantiation moved to Controller class
 
 //    std::vector< XeInterlace<T> > deinter;
 
@@ -652,6 +653,7 @@ namespace AstroCam {
           bool connected;                  //!< true if controller connected (requires successful TDL command)
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
           std::string firmware;            //!< name of firmware (.lod) file
+          std::string channel;             //!< name of spectrographic channel
           int devnum;                      //!< this controller's devnum
           std::string devname;             //!< comes from arc::gen3::CArcPCI::getDeviceStringList()
           std::uint32_t retval;            //!< convenient place to hold return values for threaded commands to this controller
@@ -674,22 +676,13 @@ namespace AstroCam {
           inline int get_framecount();
           inline void increment_framecount();
 
-          template <class T>
-          T* deinterlace(T* imbuf);
+          template <class T> T* deinterlace(T* imbuf);
 
-/*
-          template <class T>
-          static void dothread_deinterlace(T &imagebuf, T &workbuf, XeInterlace<T> &deinterlace, int section);
-*/
+          template <class T> static void dothread_deinterlace( DeInterlace<T> &deinterlace, int cols, int rows, int section, int nthreads );
 
-          template <class T>
-          static void dothread_deinterlace( DeInterlace<T> &deinterlace, int cols, int rows, int section, int nthreads );
+          template <class T> void* alloc_workbuf(T* buf);
 
-          template <class T>
-          void* alloc_workbuf(T* buf);
-
-          template <class T>    
-          void free_workbuf(T* buf);
+          template <class T> void free_workbuf(T* buf);
 
           long write();                 //!< wrapper for this->pFits->write_image()
 
@@ -699,11 +692,9 @@ namespace AstroCam {
       /***** AstroCam::Controller *********************************************/
 
 
-      // Vector of Controller objects, created by Interface::connect_controller()
+      // STL map of Controller objects, indexed by dev and created by Interface::connect_controller()
       //
-      std::vector<Controller> controller;
-
-//    std::vector<arc::gen3::CArcDevice*> controller; //!< vector of arc::CController object pointers, one for each PCI device
+      std::map<int, Controller> controller;
 
       // This is used for Archon. May or may not use modes for Astrocam, TBD.
       //
@@ -766,6 +757,7 @@ namespace AstroCam {
       long write_frame(int devnum, int fpbcount);
       static void dothread_load( Controller &con, std::string timlodfile );
       static void dothread_shutter( Camera::Camera &cam );
+      static void dothread_read( Camera::Camera &cam, Controller &con );
       static void dothread_expose( Controller &con );
       static void dothread_native( Controller &con, std::vector<uint32_t> cmd );
       static void handle_frame( int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer );

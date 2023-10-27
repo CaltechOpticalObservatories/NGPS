@@ -338,6 +338,28 @@ namespace arc
 
 
 		// +----------------------------------------------------------------------------+
+		// |  selectOutputSource                                                        |
+		// +----------------------------------------------------------------------------+
+		// |  Calls the 3-letter command SOS to select the output source                |
+		// |  specified board.                                                          |
+		// |                                                                            |
+		// |  Throws std::runtime_error on error                                        |
+		// |                                                                            |
+		// |  <IN> -> arg - argument for SOS command to select the readout amplifer     |
+		// +----------------------------------------------------------------------------+
+		void CArcDevice::selectOutputSource( std::uint32_t arg )
+		{
+			// select output source command
+			auto uiRetVal = command( { TIM_ID, SOS, arg } );
+
+			if ( uiRetVal != DON )
+			{
+				THROW( "Failed to set the output source (SOS). Reply: 0x%X", uiRetVal );
+			}
+		}
+
+
+		// +----------------------------------------------------------------------------+
 		// |  loadControllerFile                                                        |
 		// +----------------------------------------------------------------------------+
 		// |  Loads a SmallCam/GenI/II/III timing or utility file (.lod) into the       |
@@ -1652,21 +1674,112 @@ namespace arc
 		// +----------------------------------------------------------------------------
 		// |  readout -- Caltech
 		// +----------------------------------------------------------------------------
-		void CArcDevice::readout( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace )
+		// |  Starts the readout waveforms in the controller.
+		// |
+		// |  Throws std::runtime_error on error
+		// |
+		// |  <IN> -> uiRows - The image row size ( in pixels ).
+		// |  <IN> -> uiCols - The image column size ( in pixels ).
+		// |  <IN> -> bAbort - Pointer to boolean value that can cause the readout
+		// |                   method to abort/stop either exposing or image readout.
+		// |                   NULL by default.
+		// |  <IN> -> pExpIFace - Function pointer to CooExpIFace class. NULL by default.
+		// +----------------------------------------------------------------------------
+		void CArcDevice::readout( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, const bool &bAbort, arc::gen3::CooExpIFace* pCooExpIFace )
 		{
-			std::cerr << "[ARC_API] in readout with devnum=" << devnum << "\n";
-
+			bool		bInReadout		= false;
+			std::uint32_t	uiTimeoutCounter	= 0;
+			std::uint32_t	uiLastPixelCount	= 0;
+			std::uint32_t	uiPixelCount		= 0;
+			std::uint32_t	uiFPBCount		= 0;
 			std::uint32_t	uiPCIFrameCount		= 0;
+			std::uint32_t uiImageSize         	= uiRows * uiCols * sizeof( std::uint16_t );
+			std::uint32_t uiBoundedImageSize  	= getContinuousImageSize( uiImageSize );
+
+			//
+			// Check for adequate buffer size
+			//
+			if ( ( static_cast<std::uint64_t>( uiRows ) * static_cast< std::uint64_t >( uiCols ) * sizeof( std::uint16_t ) ) > commonBufferSize() )
+			{
+				THROW( "arc::gen3::CArcDevice::expose() Image [ %u x %u ] exceeds buffer size: %u. Try ReMapCommonBuffer().", uiCols, uiRows, commonBufferSize() );
+			}
+
+			//
+			// Start the readout
+			//
+			auto uiRetVal = command( { TIM_ID, SRE } );
+
+			if ( uiRetVal != DON )
+			{
+				THROW( "arc::gen3::CArcDevice::expose() Start exposure command failed. Reply: 0x%X", uiRetVal );
+			}
+
+			while ( uiPixelCount < ( uiRows * uiCols ) )
+			{
+				if ( isReadout() )
+				{
+					bInReadout = true;
+				}
+
+				// ----------------------------
+				// READOUT PIXEL COUNT
+				// ----------------------------
+
+				// Save the last pixel count for use by the timeout counter.
+				uiLastPixelCount = uiPixelCount;
+				uiPixelCount     = getPixelCount();
+
+				if ( containsError( uiPixelCount ) )
+				{
+					stopExposure();
+					THROW( "arc::gen3::CArcDevice::readout() Failed to read pixel count!" );
+				}
+
+				if ( bAbort )
+				{
+					stopExposure();
+					THROW( "arc::gen3::CArcDevice::readout() aborted" );
+				}
+
+				if ( bInReadout && pCooExpIFace != nullptr )
+				{
+					pCooExpIFace->readCallback( devnum, uiPixelCount, uiRows*uiCols );
+				}
+
+				// If the controller's in READOUT, then increment the timeout
+				// counter. Checking for readout prevents timeouts when clearing
+				// large and/or slow arrays.
+				if ( bInReadout && uiPixelCount == uiLastPixelCount )
+				{
+					uiTimeoutCounter++;
+				}
+				else
+				{
+					uiTimeoutCounter = 0;
+				}
+
+				if ( uiTimeoutCounter >= READ_TIMEOUT )
+				{
+					stopExposure();
+					THROW( "arc::gen3::CArcDevice::readout() Read timeout!" );
+				}
+
+				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
+			}
+
+//			std::cerr << "[ARC_API] done reading image " << uiPCIFrameCount << " on dev " << devnum << "\n";
 
 			uiPCIFrameCount = getFrameCount();
 
 			// Call external deinterlace and fits file functions here
 			if ( pCooExpIFace != nullptr )
 			{
-				std::cerr << "[ARC_API] CArcDevice::readout calling frameCallback with devnum=" << devnum << "\n";
-
-				pCooExpIFace->frameCallback( devnum, 
-							  0,
+//				std::cerr << "[ARC_API] calling frameCallback with devnum=" << devnum 
+//					  << " uiFPBCount=" << uiFPBCount 
+//					  << " uiPCIFrameCount=" << uiPCIFrameCount 
+//					  << " uiRows=" << uiRows << " uiCols=" << uiCols << "\n";
+				pCooExpIFace->frameCallback( devnum,
+							  uiFPBCount,
 							  uiPCIFrameCount,
 							  uiRows,
 							  uiCols,
@@ -1686,7 +1799,17 @@ namespace arc
 
 			uiPCIFrameCount = getFrameCount();
 
-			// Call external deinterlace and fits file functions here
+			// Trigger the FRame Transfer waveforms
+			//
+			auto uiRetVal = command( { TIM_ID, FRT } );
+
+			if ( uiRetVal != DON )
+			{
+				THROW( "arc::gen3::CArcDevice::expose() Frame Transfer command (FRT) failed. Reply: 0x%X", uiRetVal );
+			}
+
+			// Generate Callback
+			//
 			if ( pCooExpIFace != nullptr )
 			{
 				std::cerr << "[ARC_API] CArcDevice::frame_transfer calling ftCallback with devnum=" << devnum << "\n";

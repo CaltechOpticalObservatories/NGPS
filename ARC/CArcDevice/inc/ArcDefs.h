@@ -50,6 +50,8 @@ namespace arc
 	#define RDM			0x0052444D	// ReaD Memory
 	#define WRM			0x0057524D	// WRite Memory
 	#define SEX			0x00534558	// Start EXposure
+	#define SRE			0x00535245	// Start REadout
+	#define FRT			0x00465254	// FRame Transfer
 	#define SET			0x00534554	// Set Exposure Time
 	#define PEX			0x00504558	// Pause EXposure
 	#define REX			0x00524558	// Resume EXposure
