@@ -577,6 +577,9 @@ namespace AstroCam {
       std::vector<int> configdev;  //!< vector of configured Arc devices (from camerad.cfg file)
       std::vector<int> devlist;    //!< vector of all opened and connected devices
 
+      std::mutex epend_mutex;
+      std::vector<int> exposures_pending;  //!< vector of devnums that have a pending exposure (which needs to be stored)
+
       void retval_to_string( std::uint32_t check_retval, std::string& retstring );
 
     public:
@@ -617,6 +620,73 @@ namespace AstroCam {
       inline void remove_framethread();
       inline int get_framethread_count();
       inline void init_framethread_count();
+
+      /*
+       * exposure pending stuff
+       *
+       */
+      std::condition_variable exposure_condition;
+      std::mutex exposure_lock;
+      static void dothread_monitor_exposure_pending( Interface &interface );
+
+
+      /***** Interface::exposure_pending_list *********************************/
+      /**
+       * @brief      returns the exposure_pending vector
+       * @return     std::vector<int>
+       *
+       */
+      inline std::vector<int> exposure_pending_list() {
+        std::lock_guard<std::mutex> lock( this->epend_mutex );
+        return( this->exposures_pending );
+      }
+      /***** Interface::exposure_pending_list *********************************/
+
+
+      /***** Interface::exposure_pending **************************************/
+      /**
+       * @brief      Is an exposure pending or can a new exposure be started?
+       * @returns    bool { true | false }
+       *
+       * This function is overloaded with a version that allows
+       * setting the exposure_pending state.
+       *
+       */
+      inline bool exposure_pending() {
+        std::lock_guard<std::mutex> lock( this->epend_mutex );
+        return ( this->exposures_pending.size() > 0 ? true : false );
+      }
+      /***** Interface::exposure_pending **************************************/
+
+
+      /***** Interface::exposure_pending **************************************/
+      /**
+       * @brief      Set or clear the exposure pending state for a given controller
+       * @param[in]  devnum  controller device number
+       * @param[in]  add     bool true to add, false to remove from pending vector
+       *
+       * This function is overloaded with an inline version that returns a bool
+       * to indicate if there are any controllers with a pending exposure.
+       *
+       */
+      void exposure_pending( int devnum, bool add ) {
+        std::lock_guard<std::mutex> lock(this->epend_mutex);       // protect exposures_pending vector
+
+        auto it     = std::find( this->exposures_pending.begin(),
+                                 this->exposures_pending.end(),
+                                 devnum );                         // iterator of devnum in exposures_pending vector
+        bool found  = ( it != this->exposures_pending.end() );     // was devnum found in vector?
+        bool remove = !add;                                        // do I remove it?
+
+        if ( add && !found )   { this->exposures_pending.push_back( devnum ); }
+        else
+        if ( found && remove ) { this->exposures_pending.erase( it ); }
+
+        this->exposure_condition.notify_all();
+
+        return;                                                    // lock_guard releases on exit
+      }
+      /***** Interface::exposure_pending **************************************/
 
 
       /***** AstroCam::Controller *********************************************/
@@ -661,7 +731,6 @@ namespace AstroCam {
           uint32_t readout_arg;
 
           bool have_ft;                    //!< Do I have (and am I using) frame transfer?
-          bool exposure_pending;           //!< Is there an exposure that needs to be stored someplace? (FT or not)
           bool in_readout;                 //!< Is the controller currently reading out/transmitting pixels?
           bool in_frametransfer;           //!< Is the controller currently performing a frame transfer?
 

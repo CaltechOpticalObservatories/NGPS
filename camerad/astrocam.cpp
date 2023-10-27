@@ -124,7 +124,7 @@ namespace AstroCam {
     }
 
     server.controller[devnum].in_frametransfer = false;
-    server.controller[devnum].exposure_pending = false;
+    server.exposure_pending( devnum, false );
     server.controller[devnum].in_readout       = true;
 
     // Trigger the readout waveforms here.
@@ -332,7 +332,7 @@ namespace AstroCam {
     this->controller[dev].info.readout_type = readout_type;
     this->controller[dev].readout_arg = readout_arg;
 
-    this->controller[dev].exposure_pending = false;
+    this->exposure_pending( dev, false );
     this->controller[dev].in_readout = false;
     this->controller[dev].in_frametransfer = false;
 
@@ -1122,7 +1122,7 @@ namespace AstroCam {
     try {
       // set the exposure_pending flag for this controller
       //
-      con.exposure_pending = true;
+      server.exposure_pending( con.devnum, true );
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "DEBUG: dev " << con.devnum << " chan " << con.channel << " exposure_pending=true";
       cam.async.enqueue_and_log( "CAMERAD", function, message.str() );
@@ -1526,6 +1526,41 @@ namespace AstroCam {
   /***** AstroCam::Interface::nframes *****************************************/
 
 
+  /***** AstroCam::Interface::dothread_monitor_exposure_pending ***************/
+  /**
+   * @brief      block on exposure_condition, notifies when ready for exposure
+   * @details    This thread is spawned with each new exposure and broadcasts
+   *             an async message announcing the state of exposure_pending.
+   * @param[in]  interface  reference to this->interface
+   *
+   */
+  void Interface::dothread_monitor_exposure_pending( Interface &interface ) {
+    std::string function = "AstroCam::Interface::dothread_monitor_exposure_pending";
+    std::stringstream message;
+
+    // Log this message once only
+    //
+    if ( interface.exposure_pending() ) {
+      interface.camera.async.enqueue_and_log( function, "NOTICE:exposure pending" );
+      interface.camera.async.enqueue( "CAMERAD:READY:false" );
+    }
+
+    // Block on exposure_condition until exposure_pending() returns false
+    //
+    while ( interface.exposure_pending() ) {
+      std::unique_lock<std::mutex> exposure_lock( interface.exposure_lock );
+      interface.exposure_condition.wait( exposure_lock );
+      exposure_lock.unlock();
+    }
+
+    interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
+    interface.camera.async.enqueue( "CAMERAD:READY:true" );
+
+    return;
+  }
+  /***** AstroCam::Interface::dothread_monitor_exposure_pending ***************/
+
+
   /***** AstroCam::Interface::do_expose ***************************************/
   /**
    * @brief      initiate an exposure
@@ -1554,10 +1589,8 @@ namespace AstroCam {
     // exposure_pending flag (depending on whether or not they support frame transfer), but
     // if an exposure is pending for any controller then do not start a new exposure.
     //
-    std::vector<int> pending;
-    for ( auto dev : this->devlist ) { if ( this->controller[dev].exposure_pending ) { pending.push_back( dev ); } }
-
-    if ( !pending.empty() ) {
+    if ( this->exposure_pending() ) {
+      std::vector<int> pending = this->exposure_pending_list();
       message.str(""); message << "ERROR: cannot start new exposure while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
       for ( auto dev : pending ) message << this->controller[dev].channel << " ";
@@ -1705,6 +1738,13 @@ namespace AstroCam {
       logwrite( function, "shutter not opened" );
       this->camera.shutter.state = 0;      // shutter state closed (not used for exposure_time == 0)
     }
+
+    // Shutter or not, an exposure is now pending, so set the exposure_pending flag
+    // and spawn a thread to monitor it, which will provide a notification
+    // when ready for the next exposure.
+    //
+    for ( auto dev : this->devlist ) this->exposure_pending( dev, true );
+    std::thread( std::ref(AstroCam::Interface::dothread_monitor_exposure_pending), std::ref(*this) ).detach();
 
     // prepare the camera info class object for each controller
     //
@@ -2969,7 +3009,7 @@ namespace AstroCam {
     // When useframes is false, fpbcount=0, fcount=0, framenum=0
     //
     if ( ! server.controller[devnum].have_ft ) {
-      server.controller[devnum].exposure_pending = false;
+      server.exposure_pending( devnum, false );
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "DEBUG: dev " << devnum << " chan " << server.controller[devnum].channel << " exposure_pending=false";
       server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
