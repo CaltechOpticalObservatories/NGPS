@@ -99,18 +99,11 @@ int main(int argc, char **argv) {
   logwrite(function, message.str());
 
   if (ret==NO_ERROR) ret=thermald.configure_thermald();    // get needed values out of read-in configuration file for the daemon
+  if (ret==NO_ERROR) ret=thermald.configure_telemetry();   // get needed values out of read-in configuration file for the daemon
   if (ret==NO_ERROR) ret=thermald.configure_lakeshore();   // get needed values out of read-in configuration file for the Lakeshores
 
-{
-message.str(""); message << "size=" << thermald.interface.lakeshore.size(); logwrite( function, message.str() );
-std::string foo = thermald.interface.lakeshore.at(2).lks.get_name();
-message.str(""); message << "[DEBUG] foo=" << foo; logwrite( function, message.str() );
-std::string reply;
-thermald.interface.lakeshore.at(1).lks.open();
-thermald.interface.lakeshore.at(1).lks.send_command("KRDG?A", reply);
-thermald.interface.lakeshore.at(1).lks.close();
-message.str(""); message << "[DEBUG] reply=" << reply; logwrite( function, message.str() );
-}
+  if (ret==NO_ERROR) thermald.interface.open_lakeshores();  // open connection to all configured Lakeshore devices (allowed to fail)
+
   if (ret != NO_ERROR) {
     logwrite(function, "ERROR: unable to configure system");
     thermald.exit_cleanly();
@@ -170,6 +163,13 @@ message.str(""); message << "[DEBUG] reply=" << reply; logwrite( function, messa
   //
   std::thread( std::ref(Thermal::Server::new_log_day), logpath ).detach();
 
+  // start the telemetry watchdog thread
+  // the watchdog will in turn start the telemetry thread
+  //
+  std::thread( std::ref(thermald.telemetry_watchdog), std::ref(thermald) ).detach();
+
+  logwrite( function, "daemon is running" );
+
   for (;;) pause();                                  // main thread suspends
   return 0;
 }
@@ -196,6 +196,8 @@ void signal_handler(int signo) {
       break;
     case SIGHUP:
       logwrite(function, "caught SIGHUP");
+      thermald.configure_telemetry();            // read and apply telemetry configuration
+      thermald.configure_lakeshore();            // read and apply lakeshore configuration
       break;
     case SIGPIPE:
       logwrite(function, "caught SIGPIPE");

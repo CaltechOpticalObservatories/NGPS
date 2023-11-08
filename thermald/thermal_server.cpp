@@ -17,6 +17,10 @@ namespace Thermal {
    */
   void Server::exit_cleanly(void) {
     std::string function = "Thermal::Server::exit_cleanly";
+
+    logwrite( function, "closing Lakeshores" );
+    this->interface.close_lakeshores();
+
     logwrite( function, "exiting" );
 
     exit(EXIT_SUCCESS);
@@ -125,8 +129,6 @@ namespace Thermal {
     message << "applied " << applied << " configuration lines to thermald";
     logwrite(function, message.str());
 
-    if ( error == NO_ERROR ) error = this->interface.initialize_class();
-
     return error;
   }
   /***** Thermal::Server::configure_thermald **********************************/
@@ -142,8 +144,6 @@ namespace Thermal {
                                int &lksnum, std::string &model, std::string &name, std::string &host, int &port ) {
     std::string function = "Thermal::Server::parse_lks_unit";
     std::stringstream message;
-    int applied=0;
-    long error;
     std::vector<std::string> tokens;
 
     Tokenize( input, tokens, " \"" );
@@ -194,8 +194,6 @@ namespace Thermal {
                                int &lksnum, std::string &chan, bool &heater, std::string &label ) {
     std::string function = "Thermal::Server::parse_lks_chan";
     std::stringstream message;
-    int applied=0;
-    long error;
     std::vector<std::string> tokens;
 
     Tokenize( input, tokens, " \"" );
@@ -245,6 +243,113 @@ namespace Thermal {
   /***** Thermal::Server::parse_lks_chan **************************************/
 
 
+  /***** Thermal::Server::configure_telemetry *********************************/
+  /**
+   * @brief      read and apply the configuration file for the telemetry
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Server::configure_telemetry() {
+    std::string function = "Thermal::Server::configure_telemetry";
+    std::stringstream message;
+    int applied=0;
+    long error;
+
+    std::string db_host;
+    std::string db_port;
+    std::string db_user;
+    std::string db_pass;
+    std::string db_schema;
+    std::string db_table;
+
+    this->db_info.clear();
+
+    // loop through the entries in the configuration file, stored in config class
+    //
+    for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      // DB_HOST
+      if (config.param[entry].compare( 0, 7, "DB_HOST" )==0) {
+        db_host = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // DB_PORT
+      if (config.param[entry].compare( 0, 7, "DB_PORT" )==0) {
+        try { std::stoi( config.arg[entry] ); }
+        catch ( std::invalid_argument & ) { logwrite(function, "ERROR: bad DB_PORT: unable to convert to integer"); return(ERROR); }
+        catch ( std::out_of_range & ) { logwrite(function, "ERROR: DB_PORT number out of integer range"); return(ERROR); }
+        db_port = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // DB_USER
+      if (config.param[entry].compare( 0, 7, "DB_USER" )==0) {
+        db_user = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // DB_PASS
+      if (config.param[entry].compare( 0, 7, "DB_PASS" )==0) {
+        db_pass = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // DB_SCHEMA
+      if (config.param[entry].compare( 0, 9, "DB_SCHEMA" )==0) {
+        db_schema = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // DB_TABLE
+      if (config.param[entry].compare( 0, 8, "DB_TABLE" )==0) {
+        db_table = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // TELEM_PERIOD
+      if (config.param[entry].compare( 0, 12, "TELEM_PERIOD" )==0) {
+        try { this->telem_period = std::stoi( config.arg[entry] ); }
+        catch ( std::invalid_argument & ) { logwrite(function, "ERROR: bad DB_PORT: unable to convert to integer"); return(ERROR); }
+        catch ( std::out_of_range & ) { logwrite(function, "ERROR: DB_PORT number out of integer range"); return(ERROR); }
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+    } // end loop through the entries in the configuration file
+
+    this->db_info = { db_host, db_port, db_user, db_pass, db_schema, db_table };
+
+    message.str("");
+    if (applied!=7) {
+      message << "ERROR: expected 7 but ";
+      error = ERROR;
+    }
+    else {
+      error = NO_ERROR;
+    }
+    message << "applied " << applied << " configuration lines to thermald";
+    logwrite(function, message.str());
+
+    return error;
+
+  }
+  /***** Thermal::Server::configure_telemetry *********************************/
+
+
   /***** Thermal::Server::configure_lakeshore *********************************/
   /**
    * @brief      read and apply the configuration file for the Lakeshore(s)
@@ -257,6 +362,9 @@ namespace Thermal {
     std::stringstream message;
     int applied=0;
     long error;
+
+    this->interface.lakeshore.clear();
+    this->interface.thermal_info.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -272,11 +380,10 @@ namespace Thermal {
         error = this->parse_lks_unit( config.arg[entry], lksnum, model, name, host, port );
 
         if ( error == NO_ERROR ) {
-          LKS::Interface lks( model, name, host, port );  // temporary LKS communication object initialized
           Thermal::Lakeshore Lakeshore;                   // temporary Thermal::Lakeshore interface object
-          Lakeshore.lks = lks;                            // assign the lks communication object
+          Lakeshore.lks = new LKS::Interface( model, name, host, port );  // assign lks object to constructed LKS communication object pointer
 
-          this->interface.lakeshore.insert( { lksnum, Lakeshore } );  // insert it into the map
+          this->interface.lakeshore.insert( { lksnum, Lakeshore } );      // insert Lakeshore object into the map
 
           message.str(""); message << "THERMALD:config:" << config.param[entry] << "=" << config.arg[entry];
           logwrite( function, message.str() );
@@ -297,12 +404,10 @@ namespace Thermal {
           auto lksnum_found = this->interface.lakeshore.find( lksnum );
           if ( lksnum_found != this->interface.lakeshore.end() ) {  // found lksnum in lakeshore map
             if ( heater ) {
-              this->interface.lakeshore.at( lksnum ).heaters.push_back( chan );
-              this->interface.lakeshore.at( lksnum ).heatlabels.push_back( label );
+              this->interface.lakeshore[ lksnum ].heat_info[ chan ] = label;
             }
             else {
-              this->interface.lakeshore.at( lksnum ).tempchans.push_back( chan );
-              this->interface.lakeshore.at( lksnum ).templabels.push_back( label );
+              this->interface.lakeshore[ lksnum ].temp_info[ chan ] = label;
             }
           }
           else {                                           // lksnum not found in lakeshore map
@@ -316,18 +421,18 @@ namespace Thermal {
           // Second, insert this info into another STL map for indexing by label.
           // The label must be unique in order for this to be effective.
           //
-          auto name = this->interface.lakeshore.at( lksnum ).lks.get_name();
-          auto model = this->interface.lakeshore.at( lksnum ).lks.get_model();
-          auto label_found = this->interface.info.find( label );
-          if ( label_found != this->interface.info.end() ) {  // found label in info map
+          auto name = this->interface.lakeshore.at( lksnum ).lks->get_name();
+          auto model = this->interface.lakeshore.at( lksnum ).lks->get_model();
+          auto label_found = this->interface.thermal_info.find( label );
+          if ( label_found != this->interface.thermal_info.end() ) {  // found label in info map
             message.str(""); message << "ERROR: LKS unit " << lksnum << " duplicate label \"" << label
-                                     << "\" already exists for unit " << this->interface.info[label].unit;
+                                     << "\" already exists for unit " << this->interface.thermal_info[label].unit;
             this->interface.async.enqueue_and_log( function, message.str() );
             error = ERROR;
             continue;
           }
           else {
-            this->interface.info[ label ] = { "LKS", lksnum, model, name, chan, label };
+            this->interface.thermal_info[ label ] = { "LKS", lksnum, model, name, chan, label };
           }
         }
         message.str(""); message << "THERMALD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -341,6 +446,177 @@ namespace Thermal {
     return( NO_ERROR );
   }
   /***** Thermal::Server::configure_lakeshore *********************************/
+
+
+  /***** Thermal::Server::telemetry_watchdog *********************************/
+  /**
+   * @brief      watchdog runs at 1Hz to keep the telemetry thread running
+   * @details    this thread must be spawned by main() and never exit
+   * @param[in]  thermal  reference to Thermal::Server
+   *
+   */
+  void Server::telemetry_watchdog( Thermal::Server &server ) {
+    std::string function = "Thermal::Server::telemetry_watchdog";
+    std::stringstream message;
+
+    logwrite( function, "telemetry watchdog active" );
+
+    while ( true ) {
+
+      if ( server.telem_sleeptimer.running() && !server.telem_running ) {
+        logwrite( function, "starting telemetry thread" );
+        std::thread( std::ref(server.dothread_telemetry), std::ref(server) ).detach();
+      }
+
+      std::this_thread::sleep_for ( std::chrono::seconds( 1 ) );
+    }
+    return;
+  }
+  /***** Thermal::Server::telemetry_watchdog *********************************/
+
+
+  /***** Thermal::Server::dothread_telemetry *********************************/
+  /**
+   * @brief      This is the main telemetry thread.
+   * @details    Runs until stopped by command or exception.
+   * @param[in]  thermal  reference to Thermal::Server
+   *
+   */
+  void Server::dothread_telemetry( Thermal::Server &server ) {
+    std::string function = "Thermal::Server::dothread_telemetry";
+    std::stringstream message;
+
+    logwrite( function, "telemetry thread running" );
+
+    server.telem_running = true;
+
+    // The telemetry utility function can clear telem_running to
+    // cause this thread to exit, but normally it will run forever.
+    //
+    while ( server.telem_running ) {
+
+      logwrite( function, "NOTICE:thermald telemetry has started" );
+
+      try {
+        // Creating a Database object here connects to the database
+        // specified by the db_info vector. When this object goes
+        // out of scope it is destructed and the connection
+        // automatically closes.
+        //
+        Database::Database database( server.db_info );
+
+        int duration=server.telem_period;
+
+        if ( duration >= 60 ) {            // For 1 minute or more,
+          timeout( 0, "min" );             // wait until the next integral minute.
+        }
+
+        if ( duration >= 1 ) duration--;   // allows timeout(0,sec) to end on next integral second
+
+        // Stopping the SleepTimer will break this loop, close
+        // the database, and block until it has been restarted.
+        //
+        while ( server.telem_sleeptimer.running() ) {
+          server.interface.lakeshore_readall();
+
+          server.interface.telemdata.clear();
+          server.interface.telemdata.merge( server.interface.campbelldata );
+          server.interface.telemdata.merge( server.interface.lakeshoredata );
+
+          database.write( server.interface.telemdata );
+
+          server.telem_sleeptimer.sleepFor( std::chrono::seconds( duration ) );
+          timeout( 0, "sec" );
+        }
+
+        database.close();  // Database is destructed when it leaves scope but this is tidy.
+        logwrite( function, "telemetry database closed" );
+      }
+      catch ( const mysqlx::Error &err ) {
+        message.str(""); message << "ERROR: " << err;
+        logwrite( function, message.str() );
+        break;
+      }
+      catch ( std::exception &e ) {
+        message.str(""); message << "ERROR: " << e.what();
+        logwrite( function, message.str() );
+        break;
+      }
+      catch ( ... ) {
+        logwrite( function, "ERROR: unknown exception." );
+        break;
+      }
+
+      logwrite( function, "NOTICE:thermald telemetry has stopped" );
+    }
+
+    server.telem_running = false;
+    logwrite( function, "NOTICE:thermald telemetry thread terminated" );
+    return;
+  }
+  /***** Thermal::Server::dothread_telemetry *********************************/
+
+
+  /***** Thermal::Server::telemetry ******************************************/
+  /**
+   * @brief      telemetry utility to start, stop or check status
+   * @param[in]  args       can be { start, stop, status, ? }
+   * @param[out] retstring  returns status string
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Server::telemetry( std::string args, std::string &retstring ) {
+    std::string function = "Thermal::Server::telemetry";
+    std::stringstream message;
+
+    // "?" or no arg displays usage and possible inputs, then return
+    //
+    if ( args == "?" ) {
+      retstring = THERMALD_TELEMETRY;
+      retstring.append( " start | stop | status\n" );
+      retstring.append( "  Starts, stops or returns the status of the thermald telemetry.\n" );
+      retstring.append( "  Telemetry starts automatically and should always be running,\n" );
+      retstring.append( "  so this command is for test/engineering purposes only.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  Reply will be \"running\", \"not running\", or \"starting\",\n" );
+      retstring.append( "  where starting means the watchdog will start the telemetry.\n" );
+      return( NO_ERROR );
+    }
+
+    if ( args == "start" ) {
+      // Start the SleepTimer, rely on the watchdog to now spawn
+      // the telemetry thread, which will set telem_running.
+      //
+      this->telem_sleeptimer.start();
+    }
+    else
+    if ( args == "stop" ) {
+      // Stop the SleepTimer and clear telem_running, which
+      // causes the telemetry thread to exit.
+      //
+      this->telem_sleeptimer.stop();
+      this->telem_running = false;
+    }
+    else
+    if ( args == "status" || args.empty() ) {  // don't need to do anything, status is implied
+    }
+    else {
+      message.str(""); message << "ERROR: unrecognized \"" << args << "\". expected { start, stop, status }";
+      logwrite( function, message.str() );
+      retstring = "bad_arg";
+      return( ERROR );
+    }
+
+    if ( this->telem_sleeptimer.running() && this->telem_running ) retstring  = "running";
+    else
+    if ( this->telem_sleeptimer.running() && !this->telem_running ) retstring = "starting";
+    else
+    if ( !this->telem_sleeptimer.running() ) retstring = "not running";
+    else retstring = "unknown";
+
+    return( NO_ERROR );
+  }
+  /***** Thermal::Server::telemetry ******************************************/
 
 
   /***** Server::new_log_day **************************************************/
@@ -492,7 +768,6 @@ namespace Thermal {
 
     while (connection_open) {
 
-message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwrite( function, message.str() );
       // Wait (poll) connected socket for incoming data...
       //
       int pollret;
@@ -608,31 +883,38 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       }
       else
 
-      // get
+      // GET
       //
       if ( cmd.compare( THERMALD_GET ) == 0 ) {
                       ret = this->interface.get( args, retstring );
       }
       else
 
-      // LOGALL
-      //
-      if ( cmd.compare( THERMALD_LOGALL ) == 0 ) {
-                      ret = this->interface.log_all( args, retstring );
-      }
-      else
-
-      // native
+      // NATIVE
       //
       if ( cmd.compare( THERMALD_NATIVE ) == 0 ) {
                       ret = this->interface.native( args, retstring );
       }
       else
 
-      // READALL
+      // RECONNECT
+      // Must run configure_* functions first because a device may have been
+      // removed from the maps if they had an error.
       //
-      if ( cmd.compare( THERMALD_READALL ) == 0 ) {
-                      ret = this->interface.read_all( args, retstring );
+      if ( cmd.compare( THERMALD_RECONNECT ) == 0 ) {
+                      if ( args=="?" ) {
+                        retstring = THERMALD_RECONNECT;
+                        retstring.append( "\n" );
+                        retstring.append( "  Stops telemetry, re-reads config file, applies configuration,\n" );
+                        retstring.append( "  closes and re-opens connections to hardware, starts telemetry.\n" );
+                        ret = NO_ERROR;
+                      }
+                      else {
+                        ret = this->telemetry( "stop", retstring );
+                        ret = this->configure_lakeshore();
+                        ret = this->interface.reconnect( args, retstring );
+                        ret = this->telemetry( "start", retstring );
+                      }
       }
       else
 
@@ -640,6 +922,13 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       //
       if ( cmd.compare( THERMALD_SETPOINT ) == 0 ) {
                       ret = this->interface.setpoint( args, retstring );
+      }
+      else
+
+      // telemetry
+      //
+      if ( cmd.compare( THERMALD_TELEMETRY ) == 0 ) {
+                      ret = this->telemetry( args, retstring );
       }
 
       // unknown commands generate an error
@@ -665,5 +954,6 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
     return;
   }
   /***** Server::doit *********************************************************/
+
 
 }

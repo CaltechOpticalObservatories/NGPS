@@ -64,10 +64,12 @@ namespace LKS {
     std::string function = "LKS::Interface::open";
     std::stringstream message;
 
+    std::lock_guard<std::mutex> lock( this->mtx );
+
     if ( this->sock.isconnected() ) {
       message.str(""); message << "socket connection already open to "
                                << this->sock.gethost() << ":" << this->sock.getport()
-                               << " on fd " << this->sock.getfd() << " for LKS" << this->model
+                               << " on fd " << this->sock.getfd() << " for LKS " << this->model
                                << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( NO_ERROR );
@@ -78,11 +80,11 @@ namespace LKS {
 
     // Initialize connection to the LKS
     //
-    message.str(""); message << "opening socket connection for LKS" << this->model << " (" << this->name << ")";
+    message.str(""); message << "opening socket connection for LKS " << this->model << " (" << this->name << ")";
     logwrite( function, message.str() );
 
     if ( this->sock.Connect() != 0 ) {
-      message.str(""); message << "ERROR connecting socket for LKS" << this->model << " (" << this->name << ")";
+      message.str(""); message << "ERROR connecting socket for LKS " << this->model << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -93,7 +95,7 @@ namespace LKS {
 
     message.str(""); message << "socket connection to " 
                              << this->sock.gethost() << ":" << this->sock.getport()
-                             << " established on fd " << this->sock.getfd() << " for LKS" << this->model
+                             << " established on fd " << this->sock.getfd() << " for LKS " << this->model
                              << " (" << this->name << ")";
     logwrite( function, message.str() );
 
@@ -112,8 +114,10 @@ namespace LKS {
     std::string function = "LKS::Interface::close";
     std::stringstream message;
 
+    std::lock_guard<std::mutex> lock( this->mtx );
+
     if ( ! this->sock.isconnected() ) {
-      message.str(""); message << "socket connection already closed for LKS" << this->model
+      message.str(""); message << "socket connection already closed for LKS " << this->model
                                << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( NO_ERROR );
@@ -122,11 +126,11 @@ namespace LKS {
     long error = this->sock.Close();
 
     if ( error == NO_ERROR ) {
-      message.str(""); message << "socket connection for LKS" << this->model << " (" << this->name << ") closed";
+      message.str(""); message << "socket connection for LKS " << this->model << " (" << this->name << ") closed";
       logwrite( function, message.str() );
     }
     else {
-      message.str(""); message << "ERROR closing socket connection for LKS" << this->model
+      message.str(""); message << "ERROR closing socket connection for LKS " << this->model
                                << " ( " << this->name << ")";
       logwrite( function, message.str() );
     }
@@ -168,17 +172,26 @@ namespace LKS {
     long retval=0;
 
 #ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] send to LKS" << this->model << " (" << this->name << ") on socket " 
-            << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
-    logwrite( function, message.str() );
+//  message << "[DEBUG] send to LKS " << this->model << " (" << this->name << ") on socket " 
+//          << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
+//  logwrite( function, message.str() );
 #endif
+
+    std::lock_guard<std::mutex> lock( this->mtx );
+
+    if ( ! this->sock.isconnected() ) {
+      message.str(""); message << "ERROR not connected to LKS " << this->model << " (" << this->name << ")";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
 
     // send the command
     //
     cmd.append( "\n" );                            // add the NEWLINE character
     int written = this->sock.Write( cmd );         // write the command
     if ( written <= 0 ) {                          // return error if error writing to socket
-      message.str(""); message << "ERROR sending " << cmd << " to LKS" << this->model << " (" << this->name << ")";
+      cmd.erase(std::remove(cmd.begin(), cmd.end(), '\n' ), cmd.end());  // remove the newline for better logging
+      message.str(""); message << "ERROR sending \"" << cmd << "\" to LKS " << this->model << " (" << this->name << ")";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -216,7 +229,7 @@ namespace LKS {
     retstring = reply;
 
 #ifdef LOGLEVEL_DEBUG
-    message << " reply=" << reply; logwrite( function, message.str() );
+//  message << " reply=" << reply; logwrite( function, message.str() );
 #endif
 
     return( error );

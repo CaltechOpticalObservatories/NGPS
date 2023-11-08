@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 #include <regex>
+#include <mutex>
 
 /***** LKS ********************************************************************/
 /**
@@ -42,6 +43,7 @@ namespace LKS {
       std::string host;           ///< host name for the device
       int port;                   ///< port number for device on host
       bool initialized;           ///< has the class been initialized?
+      std::mutex mtx;
 
     public:
       /// has the class been initialized?
@@ -54,6 +56,8 @@ namespace LKS {
       long close();               ///< close the connection to the LKS device
       long send_command( std::string cmd );
       long send_command( std::string cmd, std::string &retstring );
+
+      inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
 
       Interface( std::string model, std::string name, std::string host, int port );
       Interface();

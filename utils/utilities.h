@@ -20,6 +20,9 @@
 #include <fstream>   // for ifstream
 #include <iterator>  // for istream_iterator
 #include <thread>
+#include <chrono>
+#include <mutex>
+#include <atomic>
 
 extern std::string zone;
 
@@ -53,7 +56,7 @@ std::string get_file_time();                        /// return current time in f
 
 double get_clock_time();
 
-void timeout(float seconds=0, bool next_sec=true);
+long timeout( int wholesec=0, std::string next="" );
 
 int compare_versions(std::string v1, std::string v2);
 
@@ -85,5 +88,74 @@ std::string to_string_prec( const T value_in, const int prec = 6 ) {
   return std::move(out).str();
 }
 /***** to_string_prec *******************************************************/
+
+
+/***** InterruptableSleepTimer***********************************************/
+/**
+ * @class   InterruptableSleepTimer
+ * @brief   creates a sleep timer that can be interrupted.
+ * @details This class uses try_lock_for in order to put a thread to sleep,
+ *          while allowing it to be woken up early.
+ *
+ */
+class InterruptableSleepTimer {
+  private:
+    std::timed_mutex _mut;
+    std::atomic<bool> _locked;        // track whether the mutex is locked
+    std::atomic<bool> _run;
+
+    inline void _lock() { _mut.lock(); _locked = true; }       // lock mutex
+
+    inline void _unlock() { _locked = false; _mut.unlock(); }  // unlock mutex
+
+  public:
+    // lock on creation
+    //
+    InterruptableSleepTimer() {
+      _lock();
+      _run = true;
+    }
+
+    // unlock on destruction, if wake was never called
+    //
+    ~InterruptableSleepTimer() {
+      if ( _locked ) {
+        _unlock();
+        _run = false;
+      }
+    }
+
+    inline bool running() { return _run; }
+
+    // called by any thread except the creator
+    // waits until wake is called or the specified time passes
+    //
+    template< class Rep, class Period >
+    void sleepFor( const std::chrono::duration<Rep,Period> &timeout_duration ) {
+      if ( _run && _mut.try_lock_for( timeout_duration ) ) {
+        // if successfully locked, remove the lock
+        //
+        _mut.unlock();
+      }
+    }
+
+    // unblock any waiting threads, handling a situation
+    // where wake has already been called.
+    // should only be called by the creating thread
+    //
+    inline void stop() {
+      if ( _locked ) {
+        _run = false;
+        _unlock();
+      }
+    }
+    inline void start() {
+      if ( ! _locked ) {
+        _lock();
+        _run = true;
+      }
+    }
+};
+/***** InterruptableSleepTimer **********************************************/
 
 #endif

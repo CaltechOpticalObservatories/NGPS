@@ -32,24 +32,81 @@ namespace Thermal {
   /***** Thermal::Interface::~Interface ***************************************/
 
 
-  /***** Thermal::Interface::initialize_class ********************************/
+  /***** Thermal::Interface::open_lakeshores *********************************/
   /**
-   * @brief      initializes the class from configure_thermald()
+   * @brief      open connection to all configured Lakeshore devices
    * @return     ERROR or NO_ERROR
    *
-   * This is called by Thermal::Server::configure_thermald() after reading the
-   * configuration file to apply the config file setting.
+   */
+  long Interface::open_lakeshores() {
+    std::string function = "Thermal::Interface::open_lakeshores";
+    std::stringstream message;
+    long error=NO_ERROR;
+
+    // Iterate through the this->lakeshore map.
+    // Use an iterator (instead of range-based loop) so that the map can be modified.
+    //
+    for ( auto iter = this->lakeshore.begin(); iter != this->lakeshore.end(); ) {
+
+      // get a reference to the original Thermal::Lakeshore object stored in the map
+      //
+      Thermal::Lakeshore &my_lakeshore = iter->second;
+
+      // Try to open my_lakeshore
+      //
+      if ( my_lakeshore.lks->open() == ERROR ) {
+        message.str(""); message << "ERROR: opening Lakeshore " << my_lakeshore.lks->get_name()
+                                 << " and will not be used.";
+        logwrite( function, message.str() );
+
+        // Remove unresponsive device from the this->lakeshore map.
+        // erase will return an iterator to the next element.
+        //
+        iter = this->lakeshore.erase( iter );
+        error |= ERROR;
+      }
+      else ++iter;  // Lakehore open successful, so increment the iterator
+    }
+
+    return( error );
+  }
+  /***** Thermal::Interface::open_lakeshores *********************************/
+
+
+  /***** Thermal::Interface::close_lakeshores ********************************/
+  /**
+   * @brief      close connection to all configured Lakeshore devices
+   * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::initialize_class() {
-    std::string function = "Thermal::Interface::initialize_class";
+  long Interface::close_lakeshores() {
+    std::string function = "Thermal::Interface::close_lakeshores";
     std::stringstream message;
-
-    logwrite( function, "initialized" );
-
+    for ( auto const &lakeshore : this->lakeshore ) {
+      if ( lakeshore.second.lks->close() == ERROR ) {
+        message.str(""); message << "ERROR: closing Lakeshore " << lakeshore.second.lks->get_name();
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+    }
     return( NO_ERROR );
   }
-  /***** Thermal::Interface::initialize_class *********************************/
+  /***** Thermal::Interface::close_lakeshores ********************************/
+
+
+  /***** Thermal::Interface::reconnect ***************************************/
+  /**
+   * @brief      close, then open all hardware devices
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::reconnect( std::string args, std::string &retstring ) {
+    long error = NO_ERROR;
+    if ( error==NO_ERROR ) error = this->close_lakeshores();
+    if ( error==NO_ERROR ) error = this->open_lakeshores();
+    return( error );
+  }
+  /***** Thermal::Interface::reconnect ***************************************/
 
 
   /***** Thermal::Interface::parse_unit_chan **********************************/
@@ -75,9 +132,9 @@ namespace Thermal {
 
     if ( tokens.size() == 1 ) {                     // <label>
 
-      auto lks_it = this->info.find( tokens[0] );   // Is the arg a known label?
+      auto lks_it = this->thermal_info.find( tokens[0] );   // Is the arg a known label?
 
-      if ( lks_it != this->info.end() ) {           // yes, label found
+      if ( lks_it != this->thermal_info.end() ) {   // yes, label found
         unit = lks_it->second.unit;                 // here's the unit number
         chan = lks_it->second.chan;                 // here's the channel
       }
@@ -103,10 +160,7 @@ namespace Thermal {
       }
       else {                                        // yes, unit found
                                                     // now find the channel in this unit's tempchans vector
-        if ( std::find( this->lakeshore[unit].tempchans.begin(),
-                        this->lakeshore[unit].tempchans.end(),
-                        trychan
-                      ) == this->lakeshore[unit].tempchans.end() ) {  // chan not found
+        if ( this->lakeshore[unit].temp_info.find( trychan ) == this->lakeshore[unit].temp_info.end() ) {
           message.str(""); message << "ERROR: chan " << trychan << " not found. Check configuration.";
           logwrite( function, message.str() );
           error = ERROR;
@@ -151,23 +205,23 @@ namespace Thermal {
     // "?" or no arg displays usage and possible inputs, then return
     //
     if ( args=="?" || args.empty() ) {
-      retstream << THERMALD_GET << " <label> | <unit> <chan>\n"   // usage
+      retstream << THERMALD_GET << " <label> | <unit> <chan>\n"  // usage
                 << "  Returns temperature of channel specified by <label> or <unit> <chan> using...\n";
 
-      for ( auto lks_it : this->lakeshore ) {             // loop through all lakeshores
+      for ( auto lakeshore_it : this->lakeshore ) {              // loop through all lakeshores
         retstream << "\n";
-        retstream << "  known unit: ";
-        retstream << lks_it.first << " (" << lks_it.second.lks.get_name() << ")\n";  // unit and name
-        retstream << "       chans: ";
+        retstream << "    unit: ";
+        retstream << lakeshore_it.first << " (" << lakeshore_it.second.lks->get_name() << ")\n";  // unit and name
+        retstream << "   chans: ";
 
-        for ( auto &chan : lks_it.second.tempchans ) {    // loop through all chans for this lakeshore
-          retstream << chan << " ";                       // chan
+        for ( auto &temp : lakeshore_it.second.temp_info ) {     // loop through all tempchans for this lakeshore
+          retstream << temp.first << " ";                        // temp chan
         }
         retstream << "\n";
-        retstream << "      labels: ";
+        retstream << "  labels: ";
 
-        for ( auto &label : lks_it.second.templabels ) {  // loop through all labels for this lakeshore
-          retstream << label << " ";                      // label
+        for ( auto &temp : lakeshore_it.second.temp_info ) {     // loop through all tempchans for this lakeshore
+          retstream << temp.second << " ";                       // temp label
         }
       }
       retstream << "\n";
@@ -183,12 +237,10 @@ namespace Thermal {
     //
     error = this->parse_unit_chan( args, unit, chan );
 
-    // Open the designated Lakeshore, read that channel, close the connection.
+    // read and return the value
     //
-    if ( error==NO_ERROR ) error = this->lakeshore[unit].open();
     if ( error==NO_ERROR ) error = this->lakeshore[unit].read_temp( chan, tempval );
     if ( error==NO_ERROR ) retstring = std::to_string( tempval );
-    if ( error==NO_ERROR ) error = this->lakeshore[unit].close();
 
     return( error );
   }
@@ -222,7 +274,7 @@ namespace Thermal {
 
       retstream << "  known <unit>: ";
       for ( auto lks_it : this->lakeshore ) {             // loop through all lakeshores
-        retstream << lks_it.first << " (" << lks_it.second.lks.get_name() << ")\n";  // unit and name
+        retstream << lks_it.first << " (" << lks_it.second.lks->get_name() << ")\n";  // unit and name
         retstream << "                ";
       }
       retstream << "\n";
@@ -270,18 +322,16 @@ namespace Thermal {
       error=ERROR;
     }
 
-    // Open the designated Lakeshore, read/write that setpoint as needed, close the connection.
+    // read/write setpoint as needed
     //
-    if ( error==NO_ERROR )          error = this->lakeshore[unit].open();
     if ( error==NO_ERROR && set )   error = this->lakeshore[unit].set_setpoint( output, setval );
     if ( error==NO_ERROR && get ) { error = this->lakeshore[unit].get_setpoint( output, setval );
                                     retstream << setval; retstring=retstream.str();
                                   }
-    if ( error==NO_ERROR )          error = this->lakeshore[unit].close();
 
     return( error );
   }
-  /***** Thermal::Interface::get **********************************************/
+  /***** Thermal::Interface::setpoint *****************************************/
 
 
   /***** Thermal::Interface::native *******************************************/
@@ -329,7 +379,7 @@ namespace Thermal {
       retstream << "  where <unit>: ";
       for ( auto lks_it : this->lakeshore ) {          // loop through all lakeshores
         retstream << lks_it.first;
-        retstream << " (" << lks_it.second.lks.get_name() << ")\n";
+        retstream << " (" << lks_it.second.lks->get_name() << ")\n";
         retstream << "                ";
       }
       retstream << "\n";
@@ -339,200 +389,87 @@ namespace Thermal {
       return( NO_ERROR );
     }
 
-    if ( error==NO_ERROR ) error = this->lakeshore[unit].open();
-    if ( error==NO_ERROR ) error = this->lakeshore[unit].lks.send_command( cmd, retstring );
-    if ( error==NO_ERROR ) error = this->lakeshore[unit].close();
+    // send the command
+    //
+    if ( error==NO_ERROR ) error = this->lakeshore[unit].lks->send_command( cmd, retstring );
 
     return error;
   }
   /***** Thermal::Interface::native *******************************************/
 
 
-  /***** Thermal::Interface::read_all *****************************************/
+  /***** Thermal::Interface::lakeshore_readall ********************************/
   /**
-   * @brief      read all channels of all devices
-   * @details    results are stored in the respective classes for each device
-   * @param[in]  args       used only for asking for help
-   * @param[out] retstring  used only for returning help
+   * @brief      read all channels of all Lakeshore devices
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::read_all( std::string args, std::string &retstring ) {
-    std::string function = "Thermal::Interface::read_all";
+  long Interface::lakeshore_readall() {
+    std::string function = "Thermal::Interface::lakeshore_readall";
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
     long error = NO_ERROR;
 
-    if ( args == "?" ) {
-      retstring = THERMALD_READALL;
-      retstring.append( "\n" );
-      retstring.append( "  Read all channels of all devices into memory.\n" );
-      retstring.append( "  Pair with \""+THERMALD_LOGALL+"\" command to write the data.\n" );
-      return( NO_ERROR );
-    }
-
-    std::string datetime = get_timestamp();
+    this->lakeshoredata.clear();
+    this->lakeshoredata["datetime"] = get_timestamp();
 
     // Iterate through all configured Lakeshores
     //
-    for ( auto lks_it = this->lakeshore.begin(); lks_it != this->lakeshore.end(); ++lks_it ) {
+    for ( auto lakeshore_it = this->lakeshore.begin(); lakeshore_it != this->lakeshore.end(); ++lakeshore_it ) {
 
-      // open a connection to this Lakeshore
+      // Loop separately through the configured temperature, then heater channels for this Lakeshore.
+      // The readings, if valid, will be stored in a master STL map indexed by label (which is the
+      // database column name). This map will then be passed to the Telemetry object for recording
+      // into the telemetry database.
       //
-      if ( lks_it->second.open() == ERROR ) {
-        message.str(""); message << "ERROR: opening Lakeshore " << lks_it->second.device_name()
-                                 << ": will be skipped";
-        logwrite( function, message.str() );
-        error = ERROR;
-        continue;
-      }
 
-      lks_it->second.data.clear();
-      lks_it->second.data.insert( { "datetime", datetime } );
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] cleared data map for Lakeshore " << lks_it->second.device_name()
-                               << " and inserted timestamp " << datetime;
-      logwrite( function, message.str() );
-#endif
-
-      // loop through all configured temperature channels for this Lakeshore
+      // Loop through all configured temperature channels for this Lakeshore.
       //
-      for ( auto & tempchan : lks_it->second.tempchans ) {
-        if ( lks_it->second.read_temp( tempchan ) == ERROR ) {
-          message.str(""); message << "ERROR: reading Lakeshore " << lks_it->second.device_name()
-                                   << ": will be skipped";
+      for ( auto & temp : lakeshore_it->second.temp_info ) {
+        float fvalue = NAN;
+        if ( lakeshore_it->second.read_temp( temp.first, fvalue ) == ERROR ) {
+          message.str(""); message << "ERROR reading from Lakeshore " 
+                                   << lakeshore_it->second.device_name() << ": will be skipped";
           logwrite( function, message.str() );
           error = ERROR;
           break;
         }
+        // If this reading is not NaN then save it in the lakeshoredata map,
+        // which is indexed by label, converting to string on insertion.
+        //
+        if ( ! std::isnan( fvalue ) ) { this->lakeshoredata[ temp.second ] = to_string_prec( fvalue, 2 ); }
       }
 
-      // loop through all configured heater channels for this Lakeshore
+      // Loop through all configured heater channels for this Lakeshore.
       //
-      for ( auto & heater : lks_it->second.heaters ) {
-        if( lks_it->second.read_heat( heater ) == ERROR ) {
+      for ( auto & heat : lakeshore_it->second.heat_info ) {
+        float fvalue = NAN;
+        if ( lakeshore_it->second.read_heat( heat.first, fvalue ) == ERROR ) {
+          message.str(""); message << "ERROR reading from Lakeshore " 
+                                   << lakeshore_it->second.device_name() << ": will be skipped";
+          logwrite( function, message.str() );
           error = ERROR;
           break;
         }
+        // If this reading is not NaN then save it in the lakeshoredata map,
+        // which is indexed by label, converting to string on insertion.
+        //
+        if ( ! std::isnan( fvalue ) ) { this->lakeshoredata[ heat.second ] = to_string_prec( fvalue, 2 ); }
       }
 
-      // close the Lakeshore connection
-      //
-      lks_it->second.lks.close();
     }
 
     if ( error != NO_ERROR ) logwrite( function, "ERROR: reading one or more devices" );
 
     return( error );
   }
-  /***** Thermal::Interface::read_all *****************************************/
-
-
-  /***** Thermal::Interface::log_all ******************************************/
-  /**
-   * @brief      log all read data (in the class) to disk
-   * @param[in]  args       used only for asking for help
-   * @param[out] retstring  used only for returning help
-   * @return     ERROR or NO_ERROR
-   *
-   * Data must have been read first, using read_all() function.
-   *
-   */
-  long Interface::log_all( std::string args, std::string &retstring ) {
-    std::string function = "Thermal::Interface::log_all";
-    std::stringstream message, logstr;
-
-    if ( args == "?" ) {
-      retstring = THERMALD_LOGALL;
-      retstring.append( "\n" );
-      retstring.append( "  Log data in memory read using the \""+THERMALD_READALL+"\" command.\n" );
-      return( NO_ERROR );
-    }
-
-    // Iterate through all configured Lakeshores
-    //
-    for ( auto lks_it = this->lakeshore.begin(); lks_it != this->lakeshore.end(); ++lks_it ) {
-
-      // If the datetime key is missing then there must be a problem with the data.
-      // 
-      if ( lks_it->second.data.find("datetime") == lks_it->second.data.end() ) {
-        message.str(""); message << "ERROR: missing datetime key from Lakeshore " << lks_it->second.device_name();
-        logwrite( function, message.str() );
-        continue;
-      }
-
-      logstr.str(""); logstr << lks_it->second.data.at("datetime");
-
-      for ( auto & tempchan : lks_it->second.tempchans ) {
-        if ( lks_it->second.data.find( tempchan ) == lks_it->second.data.end() ) {
-          message.str(""); message << "ERROR: Lakeshore " << lks_it->second.device_name() << " missing channel " << tempchan;
-          logwrite( function, message.str() );
-          logstr << ", NaN";
-        }
-        else {
-          logstr << ", " << lks_it->second.data.at( tempchan );
-        }
-      }
-
-      for ( auto & heater : lks_it->second.heaters ) {
-        heater.insert( 0, "H" );
-        if ( lks_it->second.data.find( heater ) == lks_it->second.data.end() ) {
-          message.str(""); message << "ERROR: Lakeshore " << lks_it->second.device_name() << " missing heater " << heater;
-          logwrite( function, message.str() );
-          logstr << ", NaN";
-        }
-        else {
-          logstr << ", " << lks_it->second.data.at( heater );
-        }
-      }
-
-      logwrite( function, logstr.str() );
-    }
-
-    return( NO_ERROR );
-  }
-  /***** Thermal::Interface::close ********************************************/
-
-
-  /***** Thermal::Lakeshore::read_temp ****************************************/
-  /**
-   * @brief      read the specified Lakeshore temperature channel into the class
-   * @details    This function should be used when reading all channels, for logging.
-   * @param[in]  chan     Lakeshore channel name (e.g. "A, B, C1, etc.")
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  long Lakeshore::read_temp( std::string chan ) {
-    std::string function = "Thermal::Interface::read_temp";
-    std::stringstream message;
-    float tempval;
-    std::string tempstr;
-
-    long error = this->read_temp( chan, tempval );  // read the channel
-
-    try {
-      tempstr = ( std::isnan( tempval ) ? "NAN" : to_string_prec( tempval, 2 ) );
-    }
-    catch ( std::exception &ex ) {
-      message.str(""); message << "ERROR: parsing value: " << ex.what();
-      logwrite( function, message.str() );
-    }
-
-    this->data.insert( { chan, tempstr } );         // save it to the class
-
-    return error;
-  }
-  /***** Thermal::Lakeshore::read_temp ****************************************/
+  /***** Thermal::Interface::lakeshore_readall ********************************/
 
 
   /***** Thermal::Lakeshore::read_temp ****************************************/
   /**
    * @brief      read the specified Lakeshore temperature channel into memory
-   * @details    This function is called by read_temp( chan ) and it may also
-   *             be called by a user, to get an immediate value, because it
-   *             does not store the result in the class.
    * @param[in]  chan     Lakeshore channel name (e.g. "A, B, C1, etc.")
    * @param[out] tempval  reference to float variable to hold temperature
    * @return     ERROR or NO_ERROR
@@ -551,7 +488,7 @@ namespace Thermal {
     // format and send the command to read the temperature
     //
     cmd << "KRDG? " << chan;
-    error = this->lks.send_command( cmd.str(), reply );
+    error = this->lks->send_command( cmd.str(), reply );
 
     if ( error != NO_ERROR ) return error;
 
@@ -578,41 +515,7 @@ namespace Thermal {
 
   /***** Thermal::Lakeshore::read_heat ****************************************/
   /**
-   * @brief      read the specified Lakeshore heater channel into the class
-   * @details    This function should be used when reading all channels, for logging.
-   * @param[in]  chan     Lakeshore channel name
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  long Lakeshore::read_heat( std::string chan ) {
-    std::string function = "Thermal::Interface::read_heat";
-    std::stringstream message;
-    float heatval;
-    std::string heatstr;
-
-    long error = this->read_heat( chan, heatval );  // read the channel
-
-    try {
-      heatstr = ( std::isnan( heatval ) ? "NAN" : to_string_prec( heatval, 1 ) );
-    }
-    catch ( std::exception &ex ) {
-      message.str(""); message << "ERROR: parsing value: " << ex.what();
-      logwrite( function, message.str() );
-    }
-
-    this->data.insert( { "H"+chan, heatstr } );     // save it to the class
-
-    return error;
-  }
-  /***** Thermal::Lakeshore::read_heat ****************************************/
-
-
-  /***** Thermal::Lakeshore::read_heat ****************************************/
-  /**
    * @brief      read the specified Lakeshore heater channel into memory
-   * @details    This function is called by read_heat( chan ) and it may also
-   *             be called by a user, to get an immediate value, because it
-   *             does not store the result in the class.
    * @param[in]  chan     Lakeshore channel name
    * @param[out] heatval  reference to float variable to hold heater power
    * @return     ERROR or NO_ERROR
@@ -631,7 +534,7 @@ namespace Thermal {
     // format and send the command to read the heater
     //
     cmd << "HTR? " << chan;
-    error = this->lks.send_command( cmd.str(), reply );
+    error = this->lks->send_command( cmd.str(), reply );
 
     if ( error != NO_ERROR ) return error;
 
@@ -666,13 +569,12 @@ namespace Thermal {
     std::string function = "Thermal::Lakeshore::set_setpoint";
     std::stringstream message, cmd;
     std::string reply;
-    long error = NO_ERROR;
 
     // format and send the command to change the setpoint
     //
     cmd << "SETP " << output << ", " << setpoint;
 
-    return this->lks.send_command( cmd.str() );
+    return this->lks->send_command( cmd.str() );
   }
   /***** Thermal::Lakeshore::set_setpoint ************************************/
 
@@ -696,7 +598,7 @@ namespace Thermal {
     //
     cmd << "SETP? " << output;
 
-    error = this->lks.send_command( cmd.str(), reply );
+    error = this->lks->send_command( cmd.str(), reply );
 
     if ( error != NO_ERROR ) return error;
 

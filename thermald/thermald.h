@@ -27,6 +27,7 @@
 #include "build_date.h"
 #include "daemonize.h"
 #include "thermal_server.h"
+#include "utilities.h"
 
 #define  N_THREADS    10          ///< total number of threads spawned by daemon, one for blocking and the rest for non-blocking
 #define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds

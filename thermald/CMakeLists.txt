@@ -6,6 +6,8 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+
 set( THERMALD_DIR ${PROJECT_BASE_DIR}/thermald )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
@@ -14,19 +16,30 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+# -- MySQL database ------------------------------------------------------------
+#
+set ( MYSQL_DIR "/usr/local/mysql/connector" )
+find_path( MYSQL_API "mysqlx/xdevapi.h" PATHS ${MYSQL_DIR}/include )
+set( MYSQL_INCLUDES "${MYSQL_API}" )
+find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64 )
+include_directories( ${MYSQL_INCLUDES} )
+
 add_executable(thermald 
         ${THERMALD_DIR}/thermald.cpp 
         ${THERMALD_DIR}/thermal_server.cpp 
         ${THERMALD_DIR}/thermal_interface.cpp 
+        ${MYSQL_INCLUDES}
         )
 
 target_link_libraries(thermald
         lks
         network
+        database
         common
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
+        ${MYSQL_LIB}
         )
 
 # -- Port/Address Definitions --------------------------------------------------

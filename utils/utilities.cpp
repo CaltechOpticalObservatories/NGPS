@@ -336,8 +336,8 @@ std::string zone="";   ///< time zone
 
   /***** get_timestamp ********************************************************/
   /**
-   * @brief      return a string of the current time "YYYY-MM-DDTHH:MM:SS.ssssss"
-   * @return     string  YYYY-MM-DDTHH:MM:SS.ssssss
+   * @brief      return a string of the current time "YYYY-MM-DDTHH:MM:SS.sss"
+   * @return     string  YYYY-MM-DDTHH:MM:SS.sss
    *
    */
   std::string get_timestamp() {
@@ -348,13 +348,13 @@ std::string zone="";   ///< time zone
 
     // Get the system time, return a bad timestamp on error
     //
-    if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return("9999-99-99T99:99:99.999999");
+    if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return("9999-99-99T99:99:99.999");
 
     // Convert the time of day to local or GMT
     //
     t = timenow.tv_sec;
-    if ( zone == "local" ) { if ( localtime_r( &t, &mytime ) == NULL ) return( "9999-99-99T99:99:99.999999" ); }
-    else                   { if ( gmtime_r( &t, &mytime ) == NULL )    return( "9999-99-99T99:99:99.999999" ); }
+    if ( zone == "local" ) { if ( localtime_r( &t, &mytime ) == NULL ) return( "9999-99-99T99:99:99.999" ); }
+    else                   { if ( gmtime_r( &t, &mytime ) == NULL )    return( "9999-99-99T99:99:99.999" ); }
 
     current_time.setf(std::ios_base::right);
     current_time << std::setfill('0') << std::setprecision(0)
@@ -363,8 +363,8 @@ std::string zone="";   ///< time zone
                  << std::setw(2) << mytime.tm_mday    << "T"
                  << std::setw(2) << mytime.tm_hour  << ":"
                  << std::setw(2) << mytime.tm_min << ":"
-                 << std::setw(2) << mytime.tm_sec
-                 << "." << std::setw(6) << timenow.tv_nsec/1000;
+                 << std::setw(2) << mytime.tm_sec << "." 
+                 << std::setw(3) << timenow.tv_nsec/1000000;
 
     return(current_time.str());
   }
@@ -458,35 +458,56 @@ std::string zone="";   ///< time zone
 
   /***** timeout **************************************************************/
   /**
-   * @brief      sleeps
-   * @param[in]  seconds
-   * @param[in]  next_sec  set true to return on the next second
+   * @brief      sleeps integral number of minutes or seconds
+   * @param[in]  wholesec  an optional number of integral seconds to sleep first
+   * @param[in]  next      string "sec" or "min" to return on integral sec or min
+   * @return     0 on success, 1 on error
    *
    */
-  void timeout(float seconds, bool next_sec) {
-    if (seconds < 1 && seconds > 0) {
-      usleep(seconds * 1000000);
-    }
-    else {
-      // Sleep the number of seconds called for
-      //
-      if (seconds > 0) {
-        sleep((int)seconds);
-      }
+  long timeout( int wholesec, std::string next ) {
 
-      if (next_sec == true) {
-        // Get the current time to the microsecond
-        //
-        struct timespec data;                // Time of day container
-        if(clock_gettime(CLOCK_REALTIME, &data) != 0) return;
+    time_t t;                        // Container for system time
+    struct timespec timenow;         // Time of day container
+    struct tm mytime;                // GMT time container
+    long error=0;
+    int nsec, sec;
 
-        // If the microseconds are less than 0.9999999, we sleep that long
-        //
-        if (data.tv_nsec/1000000000 < 0.999999999) {
-          usleep((useconds_t)((999999999-data.tv_nsec)/1000));
-        }
+    // sleep for any requested whole number of seconds
+    //
+    if ( wholesec > 0 ) std::this_thread::sleep_for( std::chrono::seconds( wholesec ) );
+
+    // Get the system time, return a bad timestamp on error
+    //
+    if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) error = 1;
+
+    // Convert the time of day to local or GMT
+    //
+    if ( !error ) {
+      t = timenow.tv_sec;
+      if ( gmtime_r( &t, &mytime ) == NULL ) error = 1;
+      sec  = mytime.tm_sec;    // current second
+      nsec = timenow.tv_nsec;  // current nanosecond
+    }
+
+    // sleep for the required fraction to get to the next whole number
+    // of sec or min, as requested
+    //
+    if ( !error && next == "sec" ) {
+      if (nsec < 999999999) {
+        std::this_thread::sleep_for( std::chrono::nanoseconds( 999999999-nsec ) );
       }
     }
+    else
+    if ( !error && next == "min" ) {
+      if (sec < 59) {
+        std::this_thread::sleep_for( std::chrono::seconds( 59-sec ) );
+      }
+      if (nsec < 999999999) {
+        std::this_thread::sleep_for( std::chrono::nanoseconds( 999999999-nsec ) );
+      }
+    }
+
+    return error;
   }
   /***** timeout **************************************************************/
 
