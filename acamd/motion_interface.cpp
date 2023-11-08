@@ -322,7 +322,7 @@ namespace Acam {
 
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
-      if ( elapsed > MOVE_TIMEOUT ) {
+      if ( elapsed > HOME_TIMEOUT ) {
         message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
         logwrite( function, message.str() );
         error = TIMEOUT;
@@ -381,7 +381,8 @@ namespace Acam {
     // Requires an open connection
     //
     if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
+      logwrite( function, "ERROR: not connected to motion component" );
+      retstring="not_open";
       return( ERROR );
     }
 
@@ -397,6 +398,7 @@ namespace Acam {
         message.str(""); message << "ERROR: too many names specified: " << name_in.size() << " "
                                  << "(max " << this->numdev << ")";
         logwrite( function, message.str() );
+        retstring="bad_args";
         return( ERROR );
       }
     }
@@ -408,6 +410,7 @@ namespace Acam {
       if ( name_found == this->motion_info.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
+        retstring="not_found";
         return( ERROR );
       }
 
@@ -503,7 +506,7 @@ namespace Acam {
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
       if ( elapsed > MOVE_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for cal " << name;
+        message.str(""); message << "TIMEOUT waiting for move " << name;
         logwrite( function, message.str() );
         error = TIMEOUT;
         break;
@@ -563,6 +566,7 @@ namespace Acam {
 
     if ( arglist.size() <= 0 ) {  // should be impossible since args ! empty
       logwrite( function, "ERROR: bad argument list" );
+      retstring="bad_args";
       return( ERROR );
     }
 
@@ -579,6 +583,7 @@ namespace Acam {
       if ( this->motion_info.find( name ) == this->motion_info.end() ) {
         message.str(""); message << "ERROR: motor name \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
+        retstring="motor_not_found";
         return( ERROR );
       }
 
@@ -601,7 +606,7 @@ namespace Acam {
       if ( this->motion_info[name].stepper.find( posname ) == this->motion_info[name].stepper.end() ) {
         message.str(""); message << "ERROR: position name \"" << posname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
-        retstring="";
+        retstring="posname_not_found";
         return( ERROR );
       }
 
@@ -624,6 +629,7 @@ namespace Acam {
     if ( arglist.size() > 2 ) {
       if ( arglist[1] != "native" ) {
         logwrite( function, "ERROR: expected motion [ [ <name> [ native <cmd> | <posname> ] ] ]" );
+        retstring="bad_args";
         return( ERROR );
       }
       else {
@@ -631,7 +637,8 @@ namespace Acam {
         // This requires an open connection (nothing else so far in this function does)
         //
         if ( !this->isopen() ) {
-          logwrite( function, "ERROR: not connected to motor controller" );
+          logwrite( function, "ERROR: not connected to motion component" );
+          retstring="not_open";
           return( ERROR );
         }
 
@@ -640,6 +647,7 @@ namespace Acam {
         cmdstream << addr;
         for ( int i=2; i<(int)arglist.size(); i++ ) cmdstream << " " << arglist[i];
         error = this->send_command( cmdstream.str(), retstring );
+        logwrite( function, retstring );
       }
     }
 
@@ -689,7 +697,8 @@ namespace Acam {
     std::stringstream message;
 
     if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
+      logwrite( function, "ERROR: not connected to motion component" );
+      retstring="not_open";
       return( ERROR );
     }
 
@@ -721,26 +730,40 @@ namespace Acam {
     //
     if ( destname == "?" ) {
       retstring = ACAMD_FILTER;
-      retstring.append( " [ <filtername> ]\n" );
+      retstring.append( " [ <filtername> | home | ishome ]\n" );
+      retstring.append( "  Move filterwheel to filter <filtername> \n" );
       retstring.append( "  where <filtername> = { " );
       for ( auto const &pos : this->motion_info[ filter ].stepper ) {
         retstring.append( pos.first );
         retstring.append( " " );
       }
       retstring.append( "}\n" );
-      retstring.append( "  Move filter wheel to filter <filtername>. returns <filtername>\n" );
-      retstring.append( "  If no arg provided, return only the current <filtername>\n" );
+      retstring.append( "  and return <filtername>.\n" );
+      retstring.append( "  Optionally home the filterwheel or check if homed, return true|false.\n" );
+      retstring.append( "  If no arg provided, return only the current <filtername>.\n" );
       return( NO_ERROR );
     }
 
     // Connection must be open to motion component
     //
     if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
+      logwrite( function, "ERROR: not connected to motion component" );
+      retstring = "not_open";
       return( ERROR );
     }
 
-    // Filter motor must be homed
+    // Option to home the filter or check if homed
+    //
+    if ( destname == "home" ) {
+      this->home( filter, destname );
+      destname="";
+    }
+    else
+    if ( destname == "ishome" ) {
+      return this->is_home( filter, retstring );
+    }
+
+    // Otherwise filter motor must be homed
     //
     std::string ishome;
     error = this->is_home( filter, ishome );
@@ -748,6 +771,7 @@ namespace Acam {
     else
     if ( error==NO_ERROR && ishome != "true" ) {
       logwrite( function, "ERROR: filter motor is not homed" );
+      retstring = "not_homed";
       return( ERROR );
     }
 
@@ -760,7 +784,7 @@ namespace Acam {
       if ( this->motion_info[filter].stepper.find( destname ) == this->motion_info[filter].stepper.end() ) {
         message.str(""); message << "ERROR: position \"" << destname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
-        retstring="";
+        retstring="filter_not_found";
         return( ERROR );
       }
 
@@ -918,7 +942,7 @@ namespace Acam {
   /***** Acam::MotionInterface::cover *****************************************/
   /**
    * @brief      set or get the cover position
-   * @param[in]  posname    string containing { "open" | "close" }
+   * @param[in]  posname    string containing { "open" | "close" | "home" | "ishome" | "?" }
    * @param[out] retstring  return string contains the current position name
    * @return     ERROR or NO_ERROR
    *
@@ -934,8 +958,10 @@ namespace Acam {
     //
     if ( posname == "?" ) {
       retstring = ACAMD_COVER;
-      retstring.append( " [ open | close ]\n" );
-      retstring.append( "  Move cover to position open | close. returns open|closed\n" );
+      retstring.append( " [ open | close | home | ishome ]\n" );
+      retstring.append( "  Move cover to position open | close, or home the cover motor.\n" );
+      retstring.append( "  For these three options, return open|closed\n" );
+      retstring.append( "  For \"ishome\" return true|false\n" );
       retstring.append( "  If no arg provided, return only the current position { open | closed }\n" );
       return( NO_ERROR );
     }
@@ -943,18 +969,31 @@ namespace Acam {
     // Connection must be open to motion component
     //
     if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
+      logwrite( function, "ERROR: not connected to motion component" );
+      retstring = "not_open";
       return( ERROR );
     }
+    else
+    // Option to home the cover
+    //
+    if ( posname == "home" ) {
+      this->home( cover, posname );
+      posname="";
+    }
+    else
+    if ( posname == "ishome" ) {
+      return this->is_home( cover, retstring );
+    }
 
-    // Cover motor must be homed
+    // Otherwise cover motor must be homed
     //
     std::string ishome;
     error = this->is_home( cover, ishome );
-    if ( error != NO_ERROR ) return( error );
+    if ( error != NO_ERROR ) { retstring="not_homed"; return( error ); }
     else
     if ( error==NO_ERROR && ishome != "true" ) {
       logwrite( function, "ERROR: cover motor is not homed" );
+      retstring = "not_homed";
       return( ERROR );
     }
 
@@ -967,7 +1006,7 @@ namespace Acam {
       if ( this->motion_info[cover].stepper.find( posname ) == this->motion_info[cover].stepper.end() ) {
         message.str(""); message << "ERROR: position \"" << posname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
-        retstring="";
+        retstring="not_found";
         return( ERROR );
       }
 

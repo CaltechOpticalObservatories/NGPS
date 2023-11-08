@@ -594,7 +594,9 @@ namespace Acam {
       // config
       //
       if ( cmd.compare( ACAMD_CONFIG ) == 0 ) {
-                      ret = this->interface.configure_interface( config );
+                      if ( args == "?" ) sock.Write( ACAMD_CONFIG
+                                                     +"\n  re-read and parse .cfg file\n" );
+                      else ret = this->interface.configure_interface( config );
       }
       else
 
@@ -611,8 +613,13 @@ namespace Acam {
       else
 
       if ( cmd.compare( ACAMD_ECHO ) == 0 ) {
-                      sock.Write( args );
-                      sock.Write( "\n" );
+                      if ( args == "?" ) sock.Write( ACAMD_ECHO
+                                                     +" <string>\n  server receives and writes back <string> to the client.\n"
+                                                     +"  Used to test if the server is responsive.\n" );
+                      else {
+                        sock.Write( args );
+                        sock.Write( "\n" );
+                      }
       }
       else
 

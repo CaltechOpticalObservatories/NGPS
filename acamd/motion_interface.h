@@ -22,6 +22,7 @@
 #include <cmath>  // for NAN
 
 #define MOVE_TIMEOUT 20000   ///< timeout in sec before a move fails
+#define HOME_TIMEOUT 45000   ///< timeout in sec before a home fails
 
 /***** Acam *******************************************************************/
 /**

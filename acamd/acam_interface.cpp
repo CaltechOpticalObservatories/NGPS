@@ -730,57 +730,28 @@ namespace Acam {
       return( ERROR );
     }
 
-    // Expected a List: [ string, float, float, float ]
+    // Expected a dictionary
     //
-    if ( PyList_Check( pReturn ) ) {
-
-      int list_size = PyList_Size( pReturn );
-
-      for ( int listn = 0; listn < list_size; ++listn ) {    // loop through the List to get each item
-        PyObject* pItem = PyList_GetItem( pReturn, listn );  // grab an item
-
-        // The first item is a string
-        //
-        if ( listn == 0 ) {
-          if ( !PyUnicode_Check( pItem ) ) {
-            logwrite( function, "ERROR expected a string for item 0" );
-            return( ERROR );
-          }
-          int itemlen    = PyUnicode_GetLength( pItem );
-          int itemkind   = PyUnicode_KIND( pItem );
-          void* itemdata = PyUnicode_DATA( pItem );
-          PyUnicode_READ( itemkind, itemdata, itemlen );
-          this->result.assign( (char*)itemdata );
-        }
-
-        // and the subsequent items are floats
-        //
-        else {
-          if ( PyFloat_Check( pItem ) ) {
-            switch ( listn ) {
-              case 1: this->ra  = PyFloat_AsDouble( pItem ); break;
-              case 2: this->dec = PyFloat_AsDouble( pItem ); break;
-              case 3: this->pa  = PyFloat_AsDouble( pItem ); break;
-              default:
-                message.str(""); message << "ERROR unexpected list item " << listn << ": expected {0,1,2,3}";
-                logwrite( function, message.str() );
-                return( ERROR );
-                break;
-            }
-          }
-          else {  // if ! PyFloat_Check(pItem)
-            message.str(""); message << "ERROR expected float for item " << listn;
-            logwrite( function, message.str() );
-            return( ERROR );
-          }
-        }
-      }
-
-    }
-    else {
-      logwrite( function, "ERROR Python astrometry function did not return expected list" );
+    if ( ! PyDict_Check( pReturn ) ) {
+      logwrite( function, "ERROR: did not return expected dictionary" );
       return( ERROR );
     }
+
+    // get the needed values from the returned dictionary
+    //
+    PyObject* result_   = PyDict_GetItemString( pReturn, "result" );
+    PyObject* ra_       = PyDict_GetItemString( pReturn, "solveRA" );
+    PyObject* dec_      = PyDict_GetItemString( pReturn, "solveDEC" );
+    PyObject* pa_       = PyDict_GetItemString( pReturn, "solveANG" );
+
+    // store them in the class
+    //
+    const char* cresult = PyUnicode_AsUTF8( result_ );
+    this->result.assign( cresult );
+
+    this->ra  = PyFloat_Check( ra_ )  ? PyFloat_AsDouble( ra_ )  : NAN;
+    this->dec = PyFloat_Check( dec_ ) ? PyFloat_AsDouble( dec_ ) : NAN;
+    this->pa  = PyFloat_Check( pa_ )  ? PyFloat_AsDouble( pa_ )  : NAN;
 
     message.str(""); message << "result=" << this->result
                              << std::fixed << std::setprecision(6)
@@ -1264,14 +1235,24 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
   /***** Acam::Interface::image_quality ***************************************/
   /**
    * @brief      wrapper for Astrometry::image_quality()
-   * @param[in]  
-   * @param[out] 
+   * @param[in]  args
+   * @param[out] retstring
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::image_quality( std::string args, std::string &retstring ) {
     std::string function = "Acam::Interface::image_quality";
     std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_QUALITY;
+      retstring.append( "\n" );
+      retstring.append( "  Calls the (Python) astrometry image quality function\n" );
+      return( NO_ERROR );
+    }
+
     long error = this->astrometry.image_quality( );
     if ( error != NO_ERROR) this->async.enqueue( "ERROR: calling image_quality" );
     return( error );
@@ -1304,6 +1285,21 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     message.str(""); message << "[DEBUG] args=" << args << " wcsname=" << this->wcsname << " imagename=" << this->imagename;
     logwrite( function, message.str() );
 #endif
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_SOLVE;
+      retstring.append( " [<filename>] [ <key>=<val> ... ]\n" );
+      retstring.append( "  Calls the (Python) astrometry solver.\n" );
+      retstring.append( "  If <filename> is provided (fully qualified path with .fits extension)\n" );
+      retstring.append( "  then send that filename to the solver; otherwise, if no filename\n" );
+      retstring.append( "  then the output file of the previous solve will be used.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  Any number of optional <key>=<value> pairs may be included, which\n" );
+      retstring.append( "  will be passed to the (Python) solver.\n" );
+      return( NO_ERROR );
+    }
 
     // This is the local vector of solver args that are passed with
     // the ACAMD_SOLVE command. This vector is passed to the astrometry
