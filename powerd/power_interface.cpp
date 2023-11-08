@@ -103,7 +103,7 @@ namespace Power {
 
     // Insert this NPS object into the STL map of WTI::NPS Objects
     //
-    this->nps.insert( { npsinfo.npsnum, wti_nps } );
+    this->npsmap.insert( { npsinfo.npsnum, wti_nps } );
 
     // Create a vector of NPS units
     //
@@ -174,29 +174,42 @@ namespace Power {
 
     // Iterate over all NPS units
     //
-    for ( auto nps_it = this->nps.begin(); nps_it != this->nps.end(); ++nps_it ) {
+    for ( auto iter = this->npsmap.begin(); iter != this->npsmap.end(); ) {
 
       // First make sure that the class object was initialized properly
       // (pretty much has to be)
       //
-      if ( ! nps_it->second.interface.is_initialized() ) {
-        message.str(""); message << "ERROR: " << nps_it->second.interface.get_name() << " class was not initialized";
+      if ( ! iter->second.interface.is_initialized() ) {
+        message.str(""); message << "ERROR: " << iter->second.interface.get_name() << " class was not initialized";
         logwrite( function, message.str() );
         error = ERROR;
         continue;
       }
 
-      // Try to open the nps hardware interface
+      // Try to open the nps hardware interface.
+      // If the open fails, then remove that hardware from the map and continue.
+      // Yes, this means that unit will not be available, but if it failed to open
+      // then it's unavailable and this way the other devices can be accessed.
       //
-      if ( nps_it->second.interface.open() != NO_ERROR ) {
-        message.str(""); message << "ERROR opening connection to " << nps_it->second.interface.get_name();
+      if ( iter->second.interface.open() != NO_ERROR ) {
+        message.str(""); message << "ERROR opening connection to " << iter->second.interface.get_name();
         logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << iter->second.interface.get_name() << " didn't respond and has been disabled";
+        this->async.enqueue_and_log( function, message.str() );
         error = ERROR;
+
+        // save a string of missing hardware, to notify the user
+        //
+        if ( this->missing.empty() ) this->missing.append( "missing:" );  // first time through
+        this->missing.append( " " ); this->missing.append( iter->second.interface.get_name() );
+
+        iter = this->npsmap.erase( iter );  // erasing will return an iterator to the next element
         continue;
       }
       else {
-        message.str(""); message << "opened connection to " << nps_it->second.interface.get_name();
+        message.str(""); message << "opened connection to " << iter->second.interface.get_name();
         logwrite( function, message.str() );
+        ++iter;                             // open successful so increment the iterator
       }
     }
 
@@ -226,7 +239,7 @@ namespace Power {
 
     // Iterate over all NPS units
     //
-    for ( auto nps_it = this->nps.begin(); nps_it != this->nps.end(); ++nps_it ) {
+    for ( auto nps_it = this->npsmap.begin(); nps_it != this->npsmap.end(); ++nps_it ) {
 
       // First make sure that the class object was initialized properly
       // (pretty much has to be)
@@ -259,9 +272,10 @@ namespace Power {
 
   /**************** Power::Interface::isopen **********************************/
   /**
-   * @fn         isopen
-   * @brief      is the NPS socket connection open?
-   * @param[in]  none
+   * @brief      are the NPS socket connections open?
+   * @details    Requires all defined devices to be true in order to return true.
+   *             If one or more devices failed to connect then they will not be
+   *             considered here.
    * @return     true or false
    *
    */
@@ -269,7 +283,7 @@ namespace Power {
     std::string function = "Power::Interface::isopen";
     std::stringstream message;
 
-    for ( auto it = this->nps.begin(); it != this->nps.end(); ++it ) {
+    for ( auto it = this->npsmap.begin(); it != this->npsmap.end(); ++it ) {
       if ( ! it->second.isconnected() ) {
         message.str(""); message << it->second.interface.get_name() << " not open";
         logwrite( function, message.str() );
@@ -342,10 +356,10 @@ namespace Power {
     message << "u p s   plugname\n";
 
     try {
-      for ( int i=0; i < this->npsvec.size(); i++ ) {       // loop through the vector of NPS units
-        int unit = npsvec.at(i);                            // get the nps unit number
+      for ( auto nps : this->npsmap ) {                     // loop through all units in the map
+        int unit = nps.first;                               // get the nps unit number from the map
         int maxplugs = nps_info.at(unit).maxplugs;          // max number of plugs on this unit
-        this->nps.at(unit).get_all( maxplugs, retstring );  // get plug status for all plugs in this unit
+        nps.second.get_all( maxplugs, retstring );          // get plug status for all plugs in this unit
 
         std::vector<std::string> tokens;                    // retstring will be CSV format
         Tokenize( retstring, tokens, "," );                 // so tokenize on comma to get each value
@@ -357,6 +371,7 @@ namespace Power {
                                   << " " << this->plugname[ plugid.str() ] << "\n";
         }
       }
+      message << this->missing;  // notify of missing hardware, if any
     }
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR: invalid argument exception: " << e.what();
@@ -556,7 +571,7 @@ namespace Power {
 
     // Must be connected to this NPS unit
     //
-    if ( ! this->nps.at(unit).isconnected() ) {
+    if ( ! this->npsmap.at(unit).isconnected() ) {
       message.str(""); message << "ERROR not connected to nps" << unit;
       logwrite( function, message.str() );
       return( ERROR );
@@ -572,10 +587,10 @@ namespace Power {
     //
     long error = NO_ERROR;
     switch( command ) {
-      case -1: error = this->nps.at(unit).get_switch( plug, retstring );
+      case -1: error = this->npsmap.at(unit).get_switch( plug, retstring );
                break;
       case  0:
-      case  1: error = this->nps.at(unit).set_switch( plug, command );
+      case  1: error = this->npsmap.at(unit).set_switch( plug, command );
                message.str(""); message << ( error != NO_ERROR ? "ERROR setting " : "set " )
                                         << ( name.empty() ? "empty" : name ) << ( command == 0 ? " OFF" : " ON" );
                logwrite( function, message.str() );

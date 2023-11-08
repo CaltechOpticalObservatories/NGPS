@@ -458,11 +458,10 @@ namespace Network {
 
   /***** Network::TcpSocket::~TcpSocket ***************************************/
   /**
-   * @brief      TcpSocket class deconstructor
+   * @brief      TcpSocket class destructor
    *
    */
   TcpSocket::~TcpSocket() {
-    this->Close();
   };
   /***** Network::TcpSocket::~TcpSocket ***************************************/
 

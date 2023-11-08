@@ -69,8 +69,7 @@ namespace WTI {
       return( NO_ERROR );
     }
 
-    Network::TcpSocket s( this->host, this->port );
-    this->sock = s;
+    this->sock = Network::TcpSocket( this->host, this->port );
 
     // Initialize connection to the WTI
     //

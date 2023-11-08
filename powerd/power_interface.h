@@ -191,7 +191,7 @@ namespace Power {
       Common::Queue async;                                 ///< asynchronous message queue object
 
       std::map< int, Power::NpsInfo > nps_info;            ///< STL map of NpsInfo objects indexed by NPS unit#
-      std::map< int, WTI::NPS >       nps;                 ///< STL map of WTI NPS objects indexed by NPS unit#
+      std::map< int, WTI::NPS >       npsmap;              ///< STL map of WTI NPS objects indexed by NPS unit#
       std::vector<int>                npsvec;              ///< vector of npsnums for indexing
 
       /**
@@ -202,6 +202,8 @@ namespace Power {
         int npsnum;                                        ///< NPS number
         int plugnum;                                       ///< plug number
       } plug_t;
+
+      std::string missing;                                 ///< reports any missing hardware (configured but unresponsive)
 
       std::map< std::string, plug_t > plugmap;             ///< STL map of plug number indexed by plug name, allows finding {npsnum,plugnum} by plugname
 

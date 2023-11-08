@@ -128,6 +128,8 @@ namespace Power {
         int applied=0;
         long error = NO_ERROR;
 
+        this->interface.missing.clear();
+
         // loop through the entries in the configuration file, stored in config class
         //
         for (int entry=0; entry < this->config.n_entries; entry++) {

@@ -448,6 +448,11 @@ void doit(Network::TcpSocket sock) {
     ret = NOTHING;
     std::string retstring="";
 
+    if ( ! powerd.interface.missing.empty() ) { // notify someone!
+      message.str(""); message << "NOTICE:" << powerd.interface.missing;
+      powerd.interface.async.enqueue( message.str() );
+    }
+
     if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                     for ( auto s : POWERD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
     }
@@ -463,6 +468,7 @@ void doit(Network::TcpSocket sock) {
     //
     if ( cmd.compare( POWERD_OPEN ) == 0 ) {
                     ret = powerd.interface.open( );
+                    retstring = powerd.interface.missing;
     }
     else
 
@@ -476,11 +482,13 @@ void doit(Network::TcpSocket sock) {
     // reopen
     //
     if ( cmd.compare( POWERD_REOPEN ) == 0 ) {
-                    if ( args=="?" ) { sock.Write( POWERD_REOPEN+"\n  closes, then re-opens connections to hardware\n" ); }
+                    if ( args=="?" ) { sock.Write( POWERD_REOPEN+"\n  closes, reads cfg file, then re-opens connections to hardware\n" ); }
                     else {
                       ret  = powerd.interface.close();
                       usleep( 100000 );
+                      ret |= powerd.configure_powerd();
                       ret |= powerd.interface.open();
+                      retstring = powerd.interface.missing;
                     }
     }
     else
