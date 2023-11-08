@@ -400,9 +400,9 @@ namespace Power {
    *
    * Expected strings are:
    *   "<plugname>"
-   *   "<plugname> ON|OFF"
+   *   "<plugname> ON|OFF|BOOT"
    *   "<unit#> <plug#>"
-   *   "<unit#> <plug#> ON|OFF"
+   *   "<unit#> <plug#> ON|OFF|BOOT"
    *
    * This function checks the above pemutations and for all cases ultimately
    * extracts the unit# and plug#, then reads or commands that plug on that unit.
@@ -445,7 +445,7 @@ namespace Power {
     else
 
     // Two tokens can either be
-    //   "<plugname> <command>" to turn plugname ON|OFF
+    //   "<plugname> <command>" to turn plugname ON|OFF|BOOT
     // or
     //   "<unit#> <plug#>"      to read plug state
     //
@@ -456,6 +456,8 @@ namespace Power {
       if ( tokens.at(1) == "OFF" ) command =  0;  // turn off plug
       else
       if ( tokens.at(1) == "ON"  ) command =  1;  // turn on plug
+      else
+      if ( tokens.at(1) == "BOOT" ) command =  2; // reboot  plug
       else
                                    command = -1;  // read plug state
 
@@ -508,7 +510,7 @@ namespace Power {
     }
     else
 
-    // Three tokens is interpreted as "<unit#> <plug#> <command>" to set plug on|off
+    // Three tokens is interpreted as "<unit#> <plug#> <command>" to set plug on|off|boot
     //
     if ( nargs == 3 ) {
       try {
@@ -517,7 +519,7 @@ namespace Power {
       }
       catch ( std::invalid_argument &e ) {
         message.str(""); message << "ERROR converting unit \"" << tokens.at(0) << "\" or plug \"" << tokens.at(1) 
-                                 << "\" to integer. Expected <unit#> <plug#> <on|off>";
+                                 << "\" to integer. Expected <unit#> <plug#> <on|off|boot>";
         logwrite( function, message.str() );
         return( ERROR );
       }
@@ -529,6 +531,8 @@ namespace Power {
       if ( tokens.at(2) == "OFF" ) command =  0;  // turn off plug
       else
       if ( tokens.at(2) == "ON"  ) command =  1;  // turn on plug
+      else
+      if ( tokens.at(2) == "BOOT"  ) command =  2;  // reboot plug
       else {
         message.str(""); message << "ERROR unrecognized command " << tokens.at(2);
         logwrite( function, message.str() );
@@ -590,9 +594,13 @@ namespace Power {
       case -1: error = this->npsmap.at(unit).get_switch( plug, retstring );
                break;
       case  0:
-      case  1: error = this->npsmap.at(unit).set_switch( plug, command );
+      case  1:
+      case  2: error = this->npsmap.at(unit).set_switch( plug, command );
                message.str(""); message << ( error != NO_ERROR ? "ERROR setting " : "set " )
-                                        << ( name.empty() ? "empty" : name ) << ( command == 0 ? " OFF" : " ON" );
+                                        << ( name.empty() ? "empty" : name );
+               if ( command==0 ) message << " OFF";
+               if ( command==1 ) message << " ON";
+               if ( command==2 ) message << " BOOT";
                logwrite( function, message.str() );
                break;
       default: message.str(""); message << "ERROR bad command " << command;                   // should be impossible

@@ -285,7 +285,7 @@ namespace WTI {
   /**
    * @brief      turn the selected plug on|off
    * @param[in]  plugnum  plug number
-   * @param[in]  action   action to take, 0=OFF, 1=ON
+   * @param[in]  action   action to take, 0=OFF, 1=ON, 2=REBOOT
    * @return     ERROR or NO_ERROR
    *
    */
@@ -299,6 +299,8 @@ namespace WTI {
       case  0: cmdstr << "/OFF " << plugnum << ",Y";
                break;
       case  1: cmdstr << "/ON " << plugnum << ",Y";
+               break;
+      case  2: cmdstr << "/BOOT " << plugnum << ",Y";
                break;
       default: message.str(""); message << "ERROR unrecognized action " << action;  // should be impossible
                logwrite( function, message.str() );

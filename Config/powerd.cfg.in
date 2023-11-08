@@ -15,7 +15,7 @@ OPEN_ON_START=yes                 # open connection to hardware automatically on
 NPS_UNIT="1 8 @IP_NPS1@ 3001"     # WTI VMR-8
 NPS_UNIT="2 8 @IP_NPS2@ 3001"     # WTI VMR-8
 NPS_UNIT="3 8 @IP_NPS3@ 3001"     # WTI VMR-8
-#NPS_UNIT="4 8 localhost 10004"    # WTI DC power switch
+NPS_UNIT="4 8 @IP_NPS4@ 3001"     # WTI RPC DC power switch
 
 # each outlet is assigned by a Network Power Switch plug key (NPS_PLUG)
 # set as follows: NPS_PLUG="NPS# OUTLET# OUTLETNAME"
@@ -59,11 +59,11 @@ NPS_PLUG="3 8 SLICECAM2"
 
 # NPS unit 4
 #
-#NPS_PLUG="4 1 EMPTY41"
-#NPS_PLUG="4 2 EMPTY42"
-#NPS_PLUG="4 3 EMPTY43"
-#NPS_PLUG="4 4 EMPTY44"
-#NPS_PLUG="4 5 EMPTY45"
-#NPS_PLUG="4 6 EMPTY46"
-#NPS_PLUG="4 7 EMPTY47"
-#NPS_PLUG="4 8 EMPTY48"
+NPS_PLUG="4 1 DCA1"
+NPS_PLUG="4 2 DCA2"
+NPS_PLUG="4 3 DCA3"
+NPS_PLUG="4 4 DCA4"
+NPS_PLUG="4 5 DCB1"
+NPS_PLUG="4 6 DCB2"
+NPS_PLUG="4 7 DCB3"
+NPS_PLUG="4 8 DCB4"
