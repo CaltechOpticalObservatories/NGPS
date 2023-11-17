@@ -10,7 +10,6 @@
 #define THERMAL_INTERFACE_H
 
 #include "network.h"
-#include "lks.h"
 #include "logentry.h"
 #include "common.h"
 #include "thermald_commands.h"
@@ -48,7 +47,7 @@ namespace Thermal {
       std::map<std::string, std::string> temp_info;  ///< STL map of temp labels indexed by channel
       std::map<std::string, std::string> heat_info;  ///< STL map of heater labels indexed by channel
 
-      LKS::Interface *lks;                           ///< pointer to Object for communicating with the Lakeshore
+      Network::Interface *lks;                       ///< pointer to object for interfacing with the Lakeshore
 
       inline std::string device_name() { return this->lks->get_name(); }  ///< return Lakeshore device name
       inline long open() { return this->lks->open(); }                    ///< open Lakeshore device
@@ -94,7 +93,6 @@ namespace Thermal {
       typedef struct {
         std::string device;                         ///< device type e.g. LKS, CAMP, etc.
         int unit;                                   ///< user-assigned unit number
-        std::string model;                          ///< mfg model number e.g. 318, 325 CR1000, etc.
         std::string name;                           ///< user-assigned name
         std::string chan;                           ///< channel number e.g. A, B, C1, H1, 1, etc.
         std::string label;                          ///< channel label (must be unique for indexing by label)

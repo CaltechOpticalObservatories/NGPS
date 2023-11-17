@@ -141,25 +141,24 @@ namespace Thermal {
    *
    */
   long Server::parse_lks_unit( std::string &input, 
-                               int &lksnum, std::string &model, std::string &name, std::string &host, int &port ) {
+                               int &lksnum, std::string &name, std::string &host, int &port ) {
     std::string function = "Thermal::Server::parse_lks_unit";
     std::stringstream message;
     std::vector<std::string> tokens;
 
     Tokenize( input, tokens, " \"" );
 
-    if ( tokens.size() != 5 ) {
-      message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 5";
+    if ( tokens.size() != 4 ) {
+      message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 4";
       logwrite( function, message.str() );
       return( ERROR );
     }
 
     try {
       lksnum = std::stoi( tokens.at(0) );
-      model  = tokens.at(1);
-      name   = tokens.at(2);
-      host   = tokens.at(3);
-      port   = std::stoi( tokens.at(4) );
+      name   = tokens.at(1);
+      host   = tokens.at(2);
+      port   = std::stoi( tokens.at(3) );
     }
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
@@ -372,16 +371,16 @@ namespace Thermal {
 
       // LKS_UNIT
       if (config.param[entry].compare(0, 8, "LKS_UNIT")==0) {
-        std::string model, name, host;
+        std::string name, host;
         int lksnum, port;
 
         // parse the LKS_UNIT configuration line here
         //
-        error = this->parse_lks_unit( config.arg[entry], lksnum, model, name, host, port );
+        error = this->parse_lks_unit( config.arg[entry], lksnum, name, host, port );
 
         if ( error == NO_ERROR ) {
           Thermal::Lakeshore Lakeshore;                   // temporary Thermal::Lakeshore interface object
-          Lakeshore.lks = new LKS::Interface( model, name, host, port );  // assign lks object to constructed LKS communication object pointer
+          Lakeshore.lks = new Network::Interface( name, host, port );     // assign lks object to constructed LKS communication object pointer
 
           this->interface.lakeshore.insert( { lksnum, Lakeshore } );      // insert Lakeshore object into the map
 
@@ -422,7 +421,6 @@ namespace Thermal {
           // The label must be unique in order for this to be effective.
           //
           auto name = this->interface.lakeshore.at( lksnum ).lks->get_name();
-          auto model = this->interface.lakeshore.at( lksnum ).lks->get_model();
           auto label_found = this->interface.thermal_info.find( label );
           if ( label_found != this->interface.thermal_info.end() ) {  // found label in info map
             message.str(""); message << "ERROR: LKS unit " << lksnum << " duplicate label \"" << label
@@ -432,7 +430,7 @@ namespace Thermal {
             continue;
           }
           else {
-            this->interface.thermal_info[ label ] = { "LKS", lksnum, model, name, chan, label };
+            this->interface.thermal_info[ label ] = { "LKS", lksnum, name, chan, label };
           }
         }
         message.str(""); message << "THERMALD:config:" << config.param[entry] << "=" << config.arg[entry];

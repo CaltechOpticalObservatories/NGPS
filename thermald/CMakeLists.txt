@@ -6,12 +6,11 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
 
 set( THERMALD_DIR ${PROJECT_BASE_DIR}/thermald )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
-include_directories( ${PROJECT_BASE_DIR}/LKS )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
@@ -28,11 +27,13 @@ add_executable(thermald
         ${THERMALD_DIR}/thermald.cpp 
         ${THERMALD_DIR}/thermal_server.cpp 
         ${THERMALD_DIR}/thermal_interface.cpp 
+        ${CMAKE_BINARY_DIR}/build_info.cpp
         ${MYSQL_INCLUDES}
         )
 
+add_dependencies( thermald generate_build_info )
+
 target_link_libraries(thermald
-        lks
         network
         database
         common

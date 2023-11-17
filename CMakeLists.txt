@@ -6,9 +6,9 @@
 
 add_definitions(-DLOGLEVEL_DEBUG)
 
-#add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
-
 cmake_minimum_required( VERSION 3.12 )
+
+set( CMAKE_CXX_STANDARD 17 )
 
 project( NGPS )
 
@@ -22,6 +22,22 @@ set( CMAKE_C_COMPILER /usr/bin/g++ )
 set( CMAKE_CXX_COMPILER /usr/bin/g++ )
 
 find_package( Threads )
+
+message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
+
+# This file just needs to exist for now, it will get updated below
+#
+file( TOUCH ${CMAKE_BINARY_DIR}/build_info.cpp )
+
+# Custom target to trigger the script execution after building your_target
+#
+add_custom_target(
+    generate_build_info
+    COMMAND ${PROJECT_BASE_DIR}/run/generate_build_info.sh ${CMAKE_BINARY_DIR}/build_info.cpp
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Generating build date/hash information"
+    VERBATIM
+)
 
 #add_subdirectory( ${PROJECT_BASE_DIR}/AndorCamera2 )
 add_subdirectory( ${PROJECT_BASE_DIR}/Andor )
@@ -42,5 +58,4 @@ add_subdirectory( ${PROJECT_BASE_DIR}/emulator )
 add_subdirectory( ${PROJECT_BASE_DIR}/tcsd )
 add_subdirectory( ${PROJECT_BASE_DIR}/PI )
 add_subdirectory( ${PROJECT_BASE_DIR}/WTI )
-add_subdirectory( ${PROJECT_BASE_DIR}/LKS )
 add_subdirectory( ${PROJECT_BASE_DIR}/ARC )

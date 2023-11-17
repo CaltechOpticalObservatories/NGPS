@@ -24,15 +24,14 @@ TELEM_PERIOD=60
 # Each Lakeshore is assigned a unit number, host, and port
 # set as follows: LKS_UNIT="LKS# MODEL NAME HOST PORT"
 # where LKS#  is an arbitrary unit number used to cross-reference LKS_CHAN below.
-#       MODEL is the model number, e.g. "218, 325, 340, 336".
 #       NAME  is any string, used as a helpful identifier in logging and the UI.
 #             This must be unique and must not contain spaces.
 #       HOST  the hostname for connecting to this Lakeshore.
 #       PORT  the port number on HOST for connecting to this Lakeshore.
 # An LKS_UNIT must be defined before any LKS_CHAN(s).
 
-LKS_UNIT="1 336 UR @IP_LKS_UR@ 7777"          # Lakeshore U/R
-LKS_UNIT="2 336 IG @IP_LKS_IG@ 7777"          # Lakeshore I/G
+LKS_UNIT="1 Lakeshore_UR @IP_LKS_UR@ 7777"          # Lakeshore U/R
+LKS_UNIT="2 Lakeshore_IG @IP_LKS_IG@ 7777"          # Lakeshore I/G
 
 # Each Lakeshore channel is assigned using a Lakeshore Channel Key (LKS_CHAN)
 # set as follows: LKS_CHAN="LKS# CHAN# LABEL"
