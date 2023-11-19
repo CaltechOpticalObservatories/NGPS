@@ -25,20 +25,33 @@ find_package( Threads )
 
 message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
 
-# This file just needs to exist for now, it will get updated below
+# Define the output file for the git commit hash, and
+# touch it in case we're starting from scratch.
 #
-file( TOUCH ${CMAKE_BINARY_DIR}/build_info.cpp )
+set(GIT_COMMIT_FILE "${CMAKE_BINARY_DIR}/git_commit.txt")
+file( TOUCH ${GIT_COMMIT_FILE} )
 
-# Custom target to trigger the script execution after building your_target
+# Create a custom target with a command that runs every time make is invoked.
+# This creates the file which contains SET commands to set cmake variables.
 #
-add_custom_target(
-    generate_build_info
-    COMMAND ${PROJECT_BASE_DIR}/run/generate_build_info.sh ${CMAKE_BINARY_DIR}/build_info.cpp
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generating build date/hash information"
-    VERBATIM
+add_custom_target(update_git_commit
+    COMMAND ${CMAKE_COMMAND} -E remove ${GIT_COMMIT_FILE}
+    COMMAND bash -c "echo -n set '\\( GIT_COMMIT_HASH ' " > ${GIT_COMMIT_FILE} &&
+            bash -c "git rev-parse HEAD " | awk '{print $0}' | xargs echo -n >> ${GIT_COMMIT_FILE} &&
+            bash -c "echo ' \\)'" >> ${GIT_COMMIT_FILE}
+    COMMAND bash -c "echo -n set '\\( PROJECT_BUILD_DATE ' " >> ${GIT_COMMIT_FILE} &&
+            bash -c "date +%Y-%m-%dT%H:%M:%S_%Z" | awk '{print $0}' | xargs echo -n >> ${GIT_COMMIT_FILE} &&
+            bash -c "echo ' \\)'" >> ${GIT_COMMIT_FILE}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Updating git commit hash file"
 )
 
+# include the git commit hash output file so that config files can use it
+#
+INCLUDE( ${GIT_COMMIT_FILE} )
+
+# Here is everything to build
+#
 #add_subdirectory( ${PROJECT_BASE_DIR}/AndorCamera2 )
 add_subdirectory( ${PROJECT_BASE_DIR}/Andor )
 add_subdirectory( ${PROJECT_BASE_DIR}/acamd )
