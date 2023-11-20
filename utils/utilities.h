@@ -23,6 +23,9 @@
 #include <chrono>
 #include <mutex>
 #include <atomic>
+#include <filesystem>
+#include <cmath>
+#include "md5.h"
 
 extern std::string zone;
 
@@ -50,15 +53,32 @@ void string_replace_char(std::string &str, const char *oldchar, const char *newc
 
 long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
 
-std::string get_timestamp();                        /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.ssssss"
+std::string timestamp_from( struct timespec &time_n );  /// return time from input timespec struct in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
+
+inline std::string get_timestamp() {                /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
+  struct timespec timenow;
+  clock_gettime( CLOCK_REALTIME, &timenow );
+  return timestamp_from( timenow );
+}
+
 std::string get_system_date();                      /// return current date in formatted string "YYYYMMDD"
 std::string get_file_time();                        /// return current time in formatted string "YYYYMMDDHHMMSS" used for filenames
 
 double get_clock_time();
 
-long timeout( int wholesec=0, std::string next="" );
+long timeout( int wholesec=0, std::string next="" );  /// wait until next integral second or minute
+
+double mjd_from( struct timespec &time_n );         /// modified Julian date from input timespec struct
+
+inline double mjd_now() {                           /// modified Julian date now
+  struct timespec timenow;
+  clock_gettime( CLOCK_REALTIME, &timenow );
+  return( mjd_from( timenow ) );
+}
 
 int compare_versions(std::string v1, std::string v2);
+
+long md5_file( const std::string &filename, std::string &hash );  /// compute md5 checksum of file
 
 static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );
@@ -68,6 +88,7 @@ inline bool caseCompareChar( char a, char b ) { return ( std::toupper(a) == std:
 
 inline bool caseCompareString( const std::string &s1, const std::string &s2 ) {
   return( (s1.size()==s2.size() ) && std::equal( s1.begin(), s1.end(), s2.begin(), caseCompareChar) ); }
+
 
 /***** to_string_prec *******************************************************/
 /**
@@ -157,5 +178,24 @@ class InterruptableSleepTimer {
     }
 };
 /***** InterruptableSleepTimer **********************************************/
+
+
+/***** Time *****************************************************************/
+/**
+ * @class   Time
+ * @brief   encapsulates the logic of getting current time into timespec struct
+ * @details static function getTimeNow allows calling without creating an
+ *          instance of the class.
+ *
+ */
+class Time {
+  public:
+    static timespec getTimeNow() {
+      struct timespec timenow;
+      clock_gettime( CLOCK_REALTIME, &timenow );
+      return timenow;
+    }
+};
+/***** Time *****************************************************************/
 
 #endif

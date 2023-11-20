@@ -6,10 +6,13 @@
 
 cmake_minimum_required(VERSION 3.12)
 
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
+
 set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/utils)
 
 add_library(utilities STATIC
         ${PROJECT_UTILS_DIR}/utilities.cpp
+        md5
         )
 
 add_library(logentry STATIC
@@ -18,6 +21,10 @@ add_library(logentry STATIC
 
 add_library(network STATIC
         ${PROJECT_UTILS_DIR}/network.cpp
+        )
+
+add_library( md5 STATIC
+        ${PROJECT_UTILS_DIR}/md5.c
         )
 
 # -- MySQL database ------------------------------------------------------------

@@ -1507,7 +1507,7 @@ namespace arc
 			//
 			if ( ( static_cast<std::uint64_t>( uiRows ) * static_cast< std::uint64_t >( uiCols ) * sizeof( std::uint16_t ) ) > commonBufferSize() )
 			{
-				THROW( "arc::gen3::CArcDevice::expose() Image [ %u x %u ] exceeds buffer size: %u. Try ReMapCommonBuffer().", uiCols, uiRows, commonBufferSize() );
+				THROW( "(arc::gen3::CArcDevice::expose) Image [ %u x %u ] exceeds buffer size: %u. Try ReMapCommonBuffer().", uiCols, uiRows, commonBufferSize() );
 			}
 
 			//
@@ -1522,7 +1522,7 @@ namespace arc
 
 			if ( uiRetVal != DON )
 			{
-				THROW( "arc::gen3::CArcDevice::expose() Start exposure command failed. Reply: 0x%X", uiRetVal );
+				THROW( "(arc::gen3::CArcDevice::expose) Start exposure command failed. Reply: 0x%X", uiRetVal );
 			}
 
 			while ( uiPixelCount < ( uiRows * uiCols ) )
@@ -1555,13 +1555,13 @@ namespace arc
 							if ( containsError( uiElapsedTime ) || containsError( uiElapsedTime, 0, uiExpTime ) )
 							{
 								stopExposure();
-								THROW( "arc::gen3::CArcDevice::expose() Failed to read elapsed time!" );
+								THROW( "(arc::gen3::CArcDevice::expose) Failed to read elapsed time!" );
 							}
 
 							if ( bAbort )
 							{
 								stopExposure();
-								THROW( "arc::gen3::CArcDevice::expose() aborted" );
+								THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 							}
 
 							uiExposeCounter  = 0;
@@ -1593,7 +1593,7 @@ namespace arc
 				if ( bAbort )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::expose() aborted" );
+					THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 				}
 
 				// Save the last pixel count for use by the timeout counter.
@@ -1603,24 +1603,24 @@ namespace arc
 				if ( containsError( uiPixelCount ) )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::expose() Failed to read pixel count!" );
+					THROW( "(arc::gen3::CArcDevice::expose) Failed to read pixel count!" );
 				}
 
 				if ( bAbort )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::expose() aborted" );
+					THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 				}
 
 				if ( bInReadout && pCooExpIFace != nullptr )
 				{
-					pCooExpIFace->readCallback( devnum, uiPixelCount, uiRows*uiCols );
+					pCooExpIFace->readCallback( 0, devnum, uiPixelCount, uiRows*uiCols );
 				}
 
 				if ( bAbort )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::expose() aborted" );
+					THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 				}
 
 				// If the controller's in READOUT, then increment the timeout
@@ -1638,13 +1638,13 @@ namespace arc
 				if ( bAbort )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::expose() aborted" );
+					THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 				}
 
 				if ( uiTimeoutCounter >= READ_TIMEOUT )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::expose() Read timeout!" );
+					THROW( "(arc::gen3::CArcDevice::expose) Read timeout!" );
 				}
 
 				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
@@ -1661,7 +1661,7 @@ namespace arc
 //					  << " uiFPBCount=" << uiFPBCount 
 //					  << " uiPCIFrameCount=" << uiPCIFrameCount 
 //					  << " uiRows=" << uiRows << " uiCols=" << uiCols << "\n";
-				pCooExpIFace->frameCallback( devnum, 
+				pCooExpIFace->frameCallback( 0, devnum, 
 							  uiFPBCount,
 							  uiPCIFrameCount,
 							  uiRows,
@@ -1678,6 +1678,8 @@ namespace arc
 		// |
 		// |  Throws std::runtime_error on error
 		// |
+		// |  <IN> -> expbuf - exposure buffer number
+		// |  <IN> -> devnum - device number
 		// |  <IN> -> uiRows - The image row size ( in pixels ).
 		// |  <IN> -> uiCols - The image column size ( in pixels ).
 		// |  <IN> -> bAbort - Pointer to boolean value that can cause the readout
@@ -1685,7 +1687,7 @@ namespace arc
 		// |                   NULL by default.
 		// |  <IN> -> pExpIFace - Function pointer to CooExpIFace class. NULL by default.
 		// +----------------------------------------------------------------------------
-		void CArcDevice::readout( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, const bool &bAbort, arc::gen3::CooExpIFace* pCooExpIFace )
+		void CArcDevice::readout( int expbuf, int devnum, std::uint32_t uiRows, std::uint32_t uiCols, const bool &bAbort, arc::gen3::CooExpIFace* pCooExpIFace )
 		{
 			bool		bInReadout		= false;
 			std::uint32_t	uiTimeoutCounter	= 0;
@@ -1701,8 +1703,10 @@ namespace arc
 			//
 			if ( ( static_cast<std::uint64_t>( uiRows ) * static_cast< std::uint64_t >( uiCols ) * sizeof( std::uint16_t ) ) > commonBufferSize() )
 			{
-				THROW( "arc::gen3::CArcDevice::expose() Image [ %u x %u ] exceeds buffer size: %u. Try ReMapCommonBuffer().", uiCols, uiRows, commonBufferSize() );
+				THROW( "(arc::gen3::CArcDevice::readout) Image [ %u x %u ] exceeds buffer size: %u. Try ReMapCommonBuffer().", uiCols, uiRows, commonBufferSize() );
 			}
+
+			if ( isReadout() ) THROW( "(arc::gen3::CArcDevice::readout) already in readout" );
 
 			//
 			// Start the readout
@@ -1711,7 +1715,7 @@ namespace arc
 
 			if ( uiRetVal != DON )
 			{
-				THROW( "arc::gen3::CArcDevice::expose() Start exposure command failed. Reply: 0x%X", uiRetVal );
+				THROW( "(arc::gen3::CArcDevice::readout) Start readout command failed. Reply: 0x%X", uiRetVal );
 			}
 
 			while ( uiPixelCount < ( uiRows * uiCols ) )
@@ -1732,18 +1736,18 @@ namespace arc
 				if ( containsError( uiPixelCount ) )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::readout() Failed to read pixel count!" );
+					THROW( "(arc::gen3::CArcDevice::readout) Failed to read pixel count!" );
 				}
 
 				if ( bAbort )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::readout() aborted" );
+					THROW( "(arc::gen3::CArcDevice::readout) aborted" );
 				}
 
 				if ( bInReadout && pCooExpIFace != nullptr )
 				{
-					pCooExpIFace->readCallback( devnum, uiPixelCount, uiRows*uiCols );
+					pCooExpIFace->readCallback( expbuf, devnum, uiPixelCount, uiRows*uiCols );
 				}
 
 				// If the controller's in READOUT, then increment the timeout
@@ -1761,7 +1765,7 @@ namespace arc
 				if ( uiTimeoutCounter >= READ_TIMEOUT )
 				{
 					stopExposure();
-					THROW( "arc::gen3::CArcDevice::readout() Read timeout!" );
+					THROW( "(arc::gen3::CArcDevice::readout) Read timeout!" );
 				}
 
 				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
@@ -1778,7 +1782,8 @@ namespace arc
 //					  << " uiFPBCount=" << uiFPBCount 
 //					  << " uiPCIFrameCount=" << uiPCIFrameCount 
 //					  << " uiRows=" << uiRows << " uiCols=" << uiCols << "\n";
-				pCooExpIFace->frameCallback( devnum,
+				pCooExpIFace->frameCallback( expbuf,
+							  devnum,
 							  uiFPBCount,
 							  uiPCIFrameCount,
 							  uiRows,
@@ -1791,7 +1796,7 @@ namespace arc
 		// +----------------------------------------------------------------------------
 		// |  frame_transfer -- Caltech
 		// +----------------------------------------------------------------------------
-		void CArcDevice::frame_transfer( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace )
+		void CArcDevice::frame_transfer( int expbuf, int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace )
 		{
 			std::cerr << "[ARC_API] in frame_transfer with devnum=" << devnum << "\n";
 
@@ -1805,7 +1810,7 @@ namespace arc
 
 			if ( uiRetVal != DON )
 			{
-				THROW( "arc::gen3::CArcDevice::expose() Frame Transfer command (FRT) failed. Reply: 0x%X", uiRetVal );
+				THROW( "(arc::gen3::CArcDevice::frame_transfer) Frame Transfer command (FRT) failed. Reply: 0x%X", uiRetVal );
 			}
 
 			// Generate Callback
@@ -1814,7 +1819,7 @@ namespace arc
 			{
 				std::cerr << "[ARC_API] CArcDevice::frame_transfer calling ftCallback with devnum=" << devnum << "\n";
 
-				pCooExpIFace->ftCallback( devnum );
+				pCooExpIFace->ftCallback( expbuf, devnum );
 			}
 		}
 

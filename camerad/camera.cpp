@@ -39,6 +39,7 @@ namespace Camera {
     this->writekeys_when = "before";
     this->autodir_state = true;
     this->bonn_shutter = true;           // defaults to Bonn shutter is present
+    this->ext_shutter = false;           // defaults to external shutter not present
   }
 
 
@@ -483,7 +484,7 @@ bool Camera::get_abortstate() {
   /***** Camera::Camera:set_fitstime ******************************************/
   /**
    * @brief      set the "fitstime" variable used for the filename
-   * @param[in]  time_in  string formatted as "YYYY-MM-DDTHH:MM:SS.ssssss"
+   * @param[in]  time_in  string formatted as "YYYY-MM-DDTHH:MM:SS.sss"
    *
    * The Camera class has a public string variable "fitstime" which is
    * to be used for the FITS filename, when the time-format is selected.
@@ -496,7 +497,7 @@ bool Camera::get_abortstate() {
     std::string function = "Camera::Camera::set_fitstime";
     std::stringstream message;
 
-    if ( time_in.length() != 26 ) {  // wrong number of characters, input can't be formatted correctly
+    if ( time_in.length() != 23 ) {  // wrong number of characters, input can't be formatted correctly
       message.str(""); message << "ERROR: bad input time: " << time_in;
       logwrite(function, message.str());
       this->fitstime = "99999999999999";

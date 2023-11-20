@@ -334,41 +334,42 @@ std::string zone="";   ///< time zone
   /***** get_time *************************************************************/
 
 
-  /***** get_timestamp ********************************************************/
+  /***** timestamp_from *******************************************************/
   /**
-   * @brief      return a string of the current time "YYYY-MM-DDTHH:MM:SS.sss"
-   * @return     string  YYYY-MM-DDTHH:MM:SS.sss
+   * @brief      get a human-readable timestamp from a timespec struct
+   * @details    The timespec struct must have been filled before calling
+   *             this function. This function only gets the time from it. This
+   *             is used when multiple functions might need to do things all
+   *             with the same time and you don't want the time to differ by
+   *             even a fraction of a second between those operations.
+   * @param[in]  time_in  reference to a filled timespec struct
+   * @return     string   YYYY-MM-DDTHH:MM:SS.sss
    *
    */
-  std::string get_timestamp() {
+  std::string timestamp_from( struct timespec &time_in ) {
     std::stringstream current_time;  // String to contain the time
     time_t t;                        // Container for system time
-    struct timespec timenow;         // Time of day container
-    struct tm mytime;                // GMT time container
+    struct tm time;                  // time container
 
-    // Get the system time, return a bad timestamp on error
+    // Convert the input time to local or GMT
     //
-    if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return("9999-99-99T99:99:99.999");
-
-    // Convert the time of day to local or GMT
-    //
-    t = timenow.tv_sec;
-    if ( zone == "local" ) { if ( localtime_r( &t, &mytime ) == NULL ) return( "9999-99-99T99:99:99.999" ); }
-    else                   { if ( gmtime_r( &t, &mytime ) == NULL )    return( "9999-99-99T99:99:99.999" ); }
+    t = time_in.tv_sec;
+    if ( zone == "local" ) { if ( localtime_r( &t, &time ) == NULL ) return( "9999-99-99T99:99:99.999" ); }
+    else                   { if ( gmtime_r( &t, &time ) == NULL )    return( "9999-99-99T99:99:99.999" ); }
 
     current_time.setf(std::ios_base::right);
     current_time << std::setfill('0') << std::setprecision(0)
-                 << std::setw(4) << mytime.tm_year + 1900   << "-"
-                 << std::setw(2) << mytime.tm_mon + 1 << "-"
-                 << std::setw(2) << mytime.tm_mday    << "T"
-                 << std::setw(2) << mytime.tm_hour  << ":"
-                 << std::setw(2) << mytime.tm_min << ":"
-                 << std::setw(2) << mytime.tm_sec << "." 
-                 << std::setw(3) << timenow.tv_nsec/1000000;
+                 << std::setw(4) << time.tm_year + 1900   << "-"
+                 << std::setw(2) << time.tm_mon + 1 << "-"
+                 << std::setw(2) << time.tm_mday    << "T"
+                 << std::setw(2) << time.tm_hour  << ":"
+                 << std::setw(2) << time.tm_min << ":"
+                 << std::setw(2) << time.tm_sec << "." 
+                 << std::setw(3) << std::fixed << std::round( time_in.tv_nsec/1000000. );
 
     return(current_time.str());
   }
-  /***** get_timestamp ********************************************************/
+  /***** timestamp_from *******************************************************/
 
 
   /***** get_system_date ******************************************************/
@@ -512,6 +513,54 @@ std::string zone="";   ///< time zone
   /***** timeout **************************************************************/
 
 
+  /***** mjd_from *************************************************************/
+  /**
+   * @brief      return Modified Julian Date for time in a timespec struct
+   * @details    The input timespec struct must have been filled before calling
+   *             this function. This function only calculates the MJD from it.
+   *             
+   *             I got this from ZTF's astronomy.h which says it came from
+   *             Meeus' Astronomical Formulae for Calculators.  The two JD
+   *             conversion routines routines were replaced 1998 November 29
+   *             to avoid inclusion of copyrighted "Numerical Recipes" code.
+   *             A test of 1 million random JDs between 1585 and 3200 AD gave
+   *             the same conversions as the NR routines.
+   * @param[in]  time_in  reference to timespec struct filled by clock_gettime()
+   * @return     double, 0 on error
+   *
+   */
+  double mjd_from( struct timespec &time_in ) {
+    time_t t;                        // Container for system time
+    struct tm time;                  // GMT time container
+    double a, y, m;
+    double jdn, jd;
+
+    // Convert the input time to GMT
+    //
+    t = time_in.tv_sec;
+    if ( gmtime_r( &t, &time ) == NULL ) return 0.;
+
+    a = std::floor((14 - (time.tm_mon + 1)) / 12);
+    y = (time.tm_year + 1900) +4800 - a;
+    m = (time.tm_mon + 1) + 12 * a - 3;
+    jdn = time.tm_mday
+        + std::floor((153 * m + 2) / 5)
+        + 365 * y
+        + std::floor(y / 4)
+        - std::floor(y / 100)
+        + std::floor(y / 400)
+        - 32045;
+
+    jd = jdn + (time.tm_hour - 12) / 24. 
+             + time.tm_min / 1440. 
+             + time.tm_sec / 86400. 
+             + (time_in.tv_nsec/1000000000.)/86400.;
+
+    return( jd - 2400000.5 );
+  }
+  /***** mjd_from *************************************************************/
+
+
   /***** compare_versions *****************************************************/
   /**
    * @brief      compares two version numbers represented as strings
@@ -566,3 +615,61 @@ std::string zone="";   ///< time zone
   }
   /***** compare_versions *****************************************************/
 
+
+  /***** md5_file *************************************************************/
+  /**
+   * @brief      compute the md5sum of a file
+   * @details    This makes use of an external source, md5.h and md5.c
+   * @param[in]  filename  const reference to filename to process
+   * @param[out] hash      reference to a string to contain result
+   *
+   */
+  long md5_file( const std::string &filename, std::string &hash ) {
+    MD5_CTX ctx;
+    md5_init( &ctx );
+
+    try {
+      // open the input file stream
+      //
+      std::ifstream instream( filename, std::ios::binary );
+      if ( ! instream.is_open() ) {
+        std::cerr << "ERROR opening file: " << filename << "\n";
+        return 1;
+      }
+
+      // process a byte at a time so the entire file never lives in memory
+      // use a vector for better cleanup
+      //
+      std::vector<BYTE> buffer(1, 0);
+      while ( instream.read(reinterpret_cast<char*>(buffer.data()), 1) ) {
+          md5_update( &ctx, buffer.data(), instream.gcount() );
+      }
+
+      instream.close();
+    }
+    catch ( std::ifstream::failure &e ) {
+      std::cout << "md5_file( " << filename << " ): " << e.what() << "\n";
+      hash = "ERROR";
+      return 1;
+    }
+    catch ( std::exception &e ) {
+      std::cout << "md5_file( " << filename << " ): " << e.what() << "\n";
+      hash = "ERROR";
+      return 1;
+    }
+
+    BYTE result[MD5_BLOCK_SIZE];
+    md5_final( &ctx, result );
+
+    // convert result to a string
+    //
+    std::stringstream str;
+    for (int i = 0; i < MD5_BLOCK_SIZE; ++i) {
+      str << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(result[i]);
+    }
+
+    hash = str.str();
+
+    return 0;
+  }
+  /***** md5_file *************************************************************/

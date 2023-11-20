@@ -1,37 +1,82 @@
-# configuration file for camera-server
+# -----------------------------------------------------------------------------
+# configuration file for camerad
 # @CAMERAD_CFG_COMMENT@
-#
-IMDIR=/data
-BASENAME=swift
+# -----------------------------------------------------------------------------
+GIT_HASH=@GIT_COMMIT_HASH@            # git commit hash
+PROJ_BUILD_DATE=@PROJECT_BUILD_DATE@  # the last time make was run
+# -----------------------------------------------------------------------------
+IMDIR=/data                       # default root directory for images
+BASENAME=swift                    # default basename for images
 BLKPORT=@CAMERAD_BLK_PORT@        # server blocking port
 NBPORT=@CAMERAD_NB_PORT@          # server non-blocking port
 LOGPATH=/data/logs/               # fully qualified path to save log files
 ASYNCPORT=@MESSAGEPORT@
 ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
-DAEMON=yes
+DAEMON=yes                        # run as a daemon? {yes,no}
 
+# -----------------------------------------------------------------------------
 # Each camera controller is defined by
 # CONTROLLER=(PCIDEV CHAN FT FIRMWARE)
 # where PCIDEV    is the PCI device number {0,1,2,3}
 #       CHAN      is the spectrographic channel {U,R,I,G}
+#       CCDID     CCD Identifier (E.G. serial number, name, etc.)
 #       FT        is {yes|no} to indicate if Frame Transfer is supported
 #       FIRMWARE  is the default firmware to load
 #       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
-CONTROLLER=(0 I yes /home/developer/Software/DSP/lod/sg2_experimental.lod U1)
-CONTROLLER=(1 R no /home/developer/Software/DSP/lod/engg_experimental.lod SPLIT1)
+#CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/sg2_experimental.lod U1)
+CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/bob.lod SPLIT1)
+CONTROLLER=(1 R engg no /home/developer/Software/DSP/lod/bob.lod SPLIT1)
+#CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/SWIFT/ngps_sg2__e880ba.lod U1)
+#CONTROLLER=(1 R engg no /home/developer/Software/DSP/lod/chaztest-engg-48-reverse.lod SPLIT1)
 
 # not yet implemented
 # IMAGE_AREA=(CHAN ROWS COLS OSROWS OSCOLS SKIPROWS NROWS)
+# CHAN must correspond to a CHAN defined in CONTROLLER above
+#
 IMAGE_AREA=(I 2040 4114 0 50 0 2040)
 IMAGE_AREA=(R 2040 4114 0 50 0 2040)
+# -----------------------------------------------------------------------------
 
-# Disabling the BONN_SHUTTER is only for when the Bonn shutter is
-# not present. Under normal operations this should be set to yes.
-# When set to no then no attempt will be made to initialize or
-# communicate with the shutter.
+# Disabling the BONN_SHUTTER is only for when the Bonn shutter is not present.
+# Under normal operations this should be set to yes.  When set to no then no
+# attempt will be made to initialize or communicate with the shutter.
 #
 BONN_SHUTTER=no
 
+# An external shutter trigger can be enabled. If EXT_SHUTTER is yes, then
+# openshutter/closeshutter commands will be sent to the ARC controller
+# at the start/stop of each exposure to operate the controller's shutter
+# trigger. This works independently of the state of BONN_SHUTTER.
+#
+EXT_SHUTTER=yes
+
 # The following are for simulated ARC controllers
 #ARCSIM_NUMDEV=4
+
+# -----------------------------------------------------------------------------
+# Constant FITS header keywords, added to every FITS file, grouped
+# by PRImary and EXTensions.
+#
+# Provide keyword, value and optional comment.  If the <comment> contains
+# spaces then it must be enclosed in double quotes, i.e. "this is a comment".
+#
+
+# Primary HDU
+# CONSTKEY_PRI=( <keyword> <value> [ <comment> ] )
+#
+CONSTKEY_PRI=(INSTRUME NGPS "name of instrument")
+CONSTKEY_PRI=(TELESCOP P200 "name of telescope")
+CONSTKEY_PRI=(OBSLON -116.8583299 "Observatory longitude")
+CONSTKEY_PRI=(OBSLAT 33.353498586 "Observatory latitude")
+
+# Secondary Extensions
+# CONSTKEY_EXT=( <keyword> <value> [ <comment> ] )
+#
+CONSTKEY_EXT=(CUNIT1A Angstrom)
+CONSTKEY_EXT=(CUNIT2A arcsec)
+CONSTKEY_EXT=(WCSNAMEA SPECTRUM)
+CONSTKEY_EXT=(WCSNAME DISPLAY)
+CONSTKEY_EXT=(PCOUNT 0)
+CONSTKEY_EXT=(GCOUNT 1)
+# -----------------------------------------------------------------------------

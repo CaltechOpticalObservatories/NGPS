@@ -18,6 +18,7 @@
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 
 #include <sys/ioctl.h>                 // for ioctl, FIONREAD
 #include <poll.h>                      // for pollfd
@@ -33,6 +34,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "logentry.h"                  // for logwrite() within the Network namespace
+
 #define POLLTIMEOUT 30000              ///< default Poll timeout in msec
 #define LISTENQ 64                     ///< listen(3n) backlog 
 #define UDPMSGLEN 256                  ///< UDP message length
@@ -44,6 +47,10 @@
  *
  */
 namespace Network {
+
+  extern const long ERROR;
+  extern const long NO_ERROR;
+  extern const long TIMEOUT;
 
   /***** TcpSocket ************************************************************/
   /**
@@ -167,6 +174,43 @@ namespace Network {
       int Receive( std::string &message );                  ///< receive a UDP message from the Listener fd
   };
   /***** UdpSocket ************************************************************/
+
+
+  /***** Interface ************************************************************/
+  /**
+   * @class  Interface
+   * @brief  interface class is generic interfacing to something via sockets
+   *
+   */
+  class Interface {
+    private:
+      std::string name;           ///< a friendly name for info purposes
+      std::string host;           ///< host name for the device
+      int port;                   ///< port number for device on host
+      bool initialized;           ///< has the class been initialized?
+      std::mutex mtx;
+
+    public:
+      /// has the class been initialized?
+      bool is_initialized() { return this->initialized; };
+      /// what is the name of the device?
+      std::string get_name() { return this->name; };
+
+      long open();                ///< open a connection to LKS device
+      long close();               ///< close the connection to the LKS device
+      long send_command( std::string cmd );
+      long send_command( std::string cmd, std::string &retstring );
+
+      inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
+
+      Interface( std::string name, std::string host, int port );
+      Interface();
+      ~Interface();
+
+      TcpSocket sock;    ///< provides the network communication
+
+  };
+  /***** Interface ************************************************************/
 
 }
 /***** Network ****************************************************************/

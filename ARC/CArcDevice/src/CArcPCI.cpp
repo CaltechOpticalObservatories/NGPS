@@ -157,7 +157,7 @@ namespace arc
 
 			if ( m_vDevList == nullptr )
 			{
-				THROW( "Failed to allocate resources for PCI device list!" );
+				THROW( "(CArcPCI::findDevices) Failed to allocate resources for PCI device list!" );
 			}
 
 			#ifdef __APPLE__
@@ -182,7 +182,7 @@ namespace arc
 		
 					if ( m_vDevList->size() > 0 )
 					{
-						THROW( "Failed to free existing device list!" );
+						THROW( "(CArcPCI::findDevices) Failed to free existing device list!" );
 					}
 				}
 	
@@ -206,7 +206,7 @@ namespace arc
 
 				if ( HardwareDeviceInfo == INVALID_HANDLE_VALUE )
 				{
-					THROW( "SetupDiGetClassDevs failed!" );
+					THROW( "(CArcPCI::findDevices) SetupDiGetClassDevs failed!" );
 				}
 
 				DeviceInterfaceData.cbSize = sizeof( SP_DEVICE_INTERFACE_DATA );
@@ -291,7 +291,7 @@ namespace arc
 	
 				if ( kernResult != KERN_SUCCESS )
 				{
-					THROW( "IOServiceGetMatchingServices failed: 0x%X", kernResult );
+					THROW( "(CArcPCI) IOServiceGetMatchingServices failed: 0x%X", kernResult );
 				}
 	
 				while ( ( service = IOIteratorNext( iterator ) ) != IO_OBJECT_NULL )
@@ -318,7 +318,7 @@ namespace arc
 
 				if ( pDir == NULL )
 				{
-					THROW( "Failed to open dir: %s", DEVICE_DIR );
+					THROW( "(CArcPCI) Failed to open dir: %s", DEVICE_DIR );
 				}
 
 				else
@@ -347,7 +347,7 @@ namespace arc
 			//
 			if ( m_vDevList->empty() )
 			{
-				THROW( "No device bindings exist! Make sure an ARC, Inc PCI card is installed!" );
+				THROW( "(CArcPCI) No device bindings exist! Make sure an ARC, Inc PCI card is installed!" );
 			}
 		}
 
@@ -380,7 +380,7 @@ namespace arc
 
 				if ( m_psDevList == nullptr )
 				{
-					THROW( "Failed to allocate storage for PCI device std::string list" );
+					THROW( "(CArcPCI) Failed to allocate storage for PCI device std::string list" );
 				}
 
 				for ( decltype( m_vDevList->size() ) i = 0; i < m_vDevList->size(); i++ )
@@ -402,7 +402,7 @@ namespace arc
 
 				if ( m_psDevList == nullptr )
 				{
-					THROW( "Failed to allocate storage for PCI device std::string list" );
+					THROW( "(CArcPCI) Failed to allocate storage for PCI device std::string list" );
 				}
 
 				m_psDevList[ 0 ] = std::string( "No Devices Found!" );
@@ -439,7 +439,7 @@ namespace arc
 		{
 			if ( isOpen() )
 			{
-				THROW( "Device already open, call close() first!" );
+				THROW( "(CArcPCI::open) Device already open, call close() first!" );
 			}
 
 			//
@@ -447,14 +447,14 @@ namespace arc
 			//
 			if ( m_vDevList->empty() )
 			{
-				THROW( "No device bindings exist!" );
+				THROW( "(CArcPCI::open) No device bindings exist!" );
 			}
 
 			// Verify gen3 number
 			//
 			if ( uiDeviceNumber < 0 || uiDeviceNumber > static_cast<std::uint32_t>( m_vDevList->size() ) )
 			{
-				THROW( "Invalid device number: %u", uiDeviceNumber );
+				THROW( "(CArcPCI::open) Invalid device number: %u", uiDeviceNumber );
 			}
 
 			std::string sDeviceName = m_vDevList->at( uiDeviceNumber ).sName;
@@ -473,7 +473,7 @@ namespace arc
 	
 			if ( m_hDevice == INVALID_HANDLE_VALUE )
 			{
-				THROW( "Failed to open device ( %s ) : %e", sDeviceName.c_str(), arc::gen3::CArcBase::getSystemError() );
+				THROW( "(CArcPCI::open) Failed to open device ( %s ) : %e", sDeviceName.c_str(), arc::gen3::CArcBase::getSystemError() );
 			}
 
 			// EXTREMELY IMPORTANT
@@ -579,7 +579,7 @@ namespace arc
 
 			if ( uiReply != DON )
 			{
-				THROW( "PCI reset failed! Expected: 'DON' [ 0x444F4E ], Received: 0x%X", uiReply );
+				THROW( "(CArcPCI::reset) PCI reset failed! Expected: 'DON' [ 0x444F4E ], Received: 0x%X", uiReply );
 			}
 		}
 
@@ -597,7 +597,7 @@ namespace arc
 		{
 			if ( uiBytes <= 0 )
 			{
-				THROW( "Invalid buffer size: %u. Must be greater than zero!", uiBytes );		
+				THROW( "(CArcPCI::mapCommonBuffer) Invalid buffer size: %u. Must be greater than zero!", uiBytes );
 			}
 
 			m_tImgBuffer.pUserAddr = ( std::uint16_t* )Arc_MMap( m_hDevice, ASTROPCI_MEM_MAP, size_t( uiBytes ) );
@@ -606,14 +606,14 @@ namespace arc
 			{
 				arc::gen3::CArcBase::zeroMemory( &m_tImgBuffer, sizeof( arc::gen3::device::ImgBuf_t ) );
 
-				THROW( "Failed to map image buffer : [ %d ] %e", arc::gen3::CArcBase::getSystemError(), arc::gen3::CArcBase::getSystemError() );		
+				THROW( "(CArcPCI::mapCommonBuffer) Failed to map image buffer : [ %d ] %e", arc::gen3::CArcBase::getSystemError(), arc::gen3::CArcBase::getSystemError() );
 			}
 
 			bool bSuccess = getCommonBufferProperties();
 
 			if ( !bSuccess )
 			{
-				THROW( "Failed to read image buffer size : [ %d ] %e", arc::gen3::CArcBase::getSystemError(), arc::gen3::CArcBase::getSystemError() );		
+				THROW( "(CArcPCI::mapCommonBuffer) Failed to read image buffer size : [ %d ] %e", arc::gen3::CArcBase::getSystemError(), arc::gen3::CArcBase::getSystemError() );
 			}
 
 			std::cout << "(arc::gen3::CArcPCI::mapCommonBuffer) PCI VA=" << std::hex << std::showbase << m_tImgBuffer.pUserAddr 
@@ -624,7 +624,7 @@ namespace arc
 			{
 				std::ostringstream oss;
 
-				oss << "Failed to allocate buffer of the correct size.\nWanted: "
+				oss << "(CArcPCI::mapCommonBuffer) Failed to allocate buffer of the correct size.\nWanted: "
 					<< uiBytes << " bytes [ " << ( uiBytes / 1E6 ) << "MB ] - Received: "
 					<< m_tImgBuffer.ulSize << " bytes [ " << ( m_tImgBuffer.ulSize / 1E6 )
 					<< "MB ]";
@@ -752,7 +752,7 @@ namespace arc
 
 			if ( !inFile.is_open() )
 			{
-				THROW( "Cannot open file: %s", sFilename.c_str() );
+				THROW( "(CArcPCI::loadDeviceFile) Cannot open file: %s", sFilename.c_str() );
 			}
 
 			//
@@ -762,7 +762,7 @@ namespace arc
 
 			if ( sLine.find( "PCI" ) == std::string::npos )
 			{
-				THROW( "Invalid PCI file, no PCIBOOT std::string found." );
+				THROW( "(CArcPCI::loadDeviceFile) Invalid PCI file, no PCIBOOT std::string found." );
 			}
 
 			//
@@ -886,7 +886,7 @@ namespace arc
 				//
 				if ( uiRetVal != DON )
 				{
-					THROW( "PCI download failed. Reply: 0x%X", uiRetVal );
+					THROW( "(CArcPCI::loadDeviceFile) PCI download failed. Reply: 0x%X", uiRetVal );
 				}
 			}
 
@@ -912,7 +912,7 @@ namespace arc
 			//
 			if ( uiFailedCount >= MAX_PCI_COMM_TEST )
 			{
-				THROW( "PCI communications test failed." );
+				THROW( "(CArcPCI::loadDeviceFile) PCI communications test failed." );
 			}
 
 			inFile.close();
@@ -935,12 +935,12 @@ namespace arc
 		{
 			if ( !isOpen() )
 			{
-				THROW( "Not connected to any device!" );
+				THROW( "(CArcPCI::command) Not connected to any device!" );
 			}
 
 			if ( tCmdList.size() > CTLR_CMD_MAX )
 			{
-				THROW( "Command list too large. Cannot exceed four arguments!" );
+				THROW( "(CArcPCI::command) Command list too large. Cannot exceed four arguments!" );
 			}
 
 			std::unique_ptr<std::uint32_t[]> pCmdData( new std::uint32_t[ CTLR_CMD_MAX ] );
@@ -975,6 +975,7 @@ namespace arc
 					m_pCLog->put( sCmd.c_str() );
 				}
 
+				sCmd.insert( 0, "(CArcPCI::command) " );
 				THROW( sCmd );
 			}
 
@@ -989,7 +990,7 @@ namespace arc
 
 			if ( uiReply == CNR )
 			{
-				THROW( "Controller not ready! Verify controller has been setup! Reply: 0x%X", uiReply );
+				THROW( "(CArcPCI::command) Controller not ready! Verify controller has been setup! Reply: 0x%X", uiReply );
 			}
 
 			return uiReply;
@@ -1114,7 +1115,7 @@ namespace arc
 
 			if ( uiRetVal != SYR )
 			{
-				THROW( "Reset controller failed. Reply: 0x%X", uiRetVal );
+				THROW( "(CArcPCI::resetController) Reset controller failed. Reply: 0x%X", uiRetVal );
 			}
 		}
 
@@ -1412,7 +1413,7 @@ namespace arc
 
 			if ( !inFile.is_open() )
 			{
-				THROW( "Cannot open file: %s", sFilename.c_str() );
+				THROW( "(CArcPCI) Cannot open file: %s", sFilename.c_str() );
 			}
 
 			if ( bAbort ) { inFile.close(); return; }
@@ -1440,7 +1441,7 @@ namespace arc
 
 			else
 			{
-				THROW( "Invalid file. Missing 'TIMBOOT/CRT' or 'UTILBOOT' std::string." );
+				THROW( "(CArcPCI) Invalid file. Missing 'TIMBOOT/CRT' or 'UTILBOOT' std::string." );
 			}
 
 			if ( bAbort ) { inFile.close(); return; }
@@ -1454,7 +1455,7 @@ namespace arc
 
 			if ( uiReply != DON )
 			{
-				THROW( "Stop ('STP') controller failed. Reply: 0x%X", uiReply );
+				THROW( "(CArcPCI) Stop ('STP') controller failed. Reply: 0x%X", uiReply );
 			}
 
 			if ( bAbort ) { inFile.close(); return; }
@@ -1470,7 +1471,7 @@ namespace arc
 
 			if ( uiReply != DON )
 			{
-				THROW( "Set PCI status bit 1 failed. Reply: 0x%X", uiReply );
+				THROW( "(CArcPCI) Set PCI status bit 1 failed. Reply: 0x%X", uiReply );
 			}
 
 			//
@@ -1534,7 +1535,7 @@ namespace arc
 
 								if ( uiReply != DON )
 								{
-									THROW( "Write ('WRM') to controller %s board failed. WRM 0x%X 0x%X -> 0x%X",
+									THROW( "(CArcPCI) Write ('WRM') to controller %s board failed. WRM 0x%X 0x%X -> 0x%X",
 											( uiBoardId == TIM_ID ? "TIMING" : "UTILITY" ),
 											( uiType | uiAddr ),
 											 uiData,
@@ -1552,7 +1553,7 @@ namespace arc
 
 									if ( uiReply != uiData )
 									{
-										THROW( "Write ('WRM') to controller %s board failed. RDM 0x%X -> 0x%X [ Expected: 0x%X ]",
+										THROW( "(CArcPCI) Write ('WRM') to controller %s board failed. RDM 0x%X -> 0x%X [ Expected: 0x%X ]",
 												( uiBoardId == TIM_ID ? "TIMING" : "UTILITY" ),
 												( uiType | uiAddr ),
 												 uiReply,
@@ -1590,7 +1591,7 @@ namespace arc
 
 				if ( uiReply != DON )
 				{
-					THROW( "Clear PCI status bit 1 failed. Reply: 0x%X", uiReply );
+					THROW( "(CArcPCI) Clear PCI status bit 1 failed. Reply: 0x%X", uiReply );
 				}
 			}
 
@@ -1607,7 +1608,7 @@ namespace arc
 
 				if ( uiReply != DON )
 				{
-					THROW( "Jump from boot code failed. Reply: 0x%X", uiReply );
+					THROW( "(CArcPCI) Jump from boot code failed. Reply: 0x%X", uiReply );
 				}
 			}
 		}
@@ -1662,7 +1663,7 @@ namespace arc
 			// +------------------------------------------------------+
 			if ( isReadout() )
 			{
-				THROW( "Device reports readout in progress! Status: 0x%X", getStatus() );
+				THROW( "(CArcPCI) Device reports readout in progress! Status: 0x%X", getStatus() );
 			}
 
 			//
@@ -1670,7 +1671,7 @@ namespace arc
 			// +------------------------------------------------------+
 			if ( pvData->size() > 6 )
 			{
-				THROW( "Data vector too large: 0x%X! Must be less than 6!",	pvData->size() );
+				THROW( "(CArcPCI) Data vector too large: 0x%X! Must be less than 6!",	pvData->size() );
 			}
 
 			//
@@ -1678,7 +1679,7 @@ namespace arc
 			// +------------------------------------------------------+
 			if ( uiBoardId != SMALLCAM_DLOAD_ID )
 			{
-				THROW( "Invalid board id: %u! Must be: %u",	uiBoardId, SMALLCAM_DLOAD_ID );
+				THROW( "(CArcPCI) Invalid board id: %u! Must be: %u",	uiBoardId, SMALLCAM_DLOAD_ID );
 			}
 
 			try
@@ -1724,7 +1725,7 @@ namespace arc
 
 				std::ostringstream oss;
 
-				oss << e.what() << std::endl << "Exception Details:" << std::endl << "0x" << std::hex << uiHeader << std::dec;
+				oss << "(CArcPCI) " << e.what() << std::endl << "Exception Details:" << std::endl << "0x" << std::hex << uiHeader << std::dec;
 
 				for ( decltype( pvData->size() ) i = 0; i < pvData->size(); i++ )
 				{
@@ -1806,7 +1807,7 @@ namespace arc
 		{
 			if ( !isOpen() )
 			{
-				THROW( "Not conntected to any device." );
+				THROW( "(CArcPCI) Not conntected to any device." );
 			}
 
 			std::uint64_t uiRetVal = uiArg;
@@ -1822,7 +1823,7 @@ namespace arc
 					m_pCLog->put( sCmd.c_str() );
 				}
 
-				THROW( "Ioctl failed cmd: 0x%X arg: 0x%X : %e", uiIoctlCmd, uiArg, true );
+				THROW( "(CArcPCI) Ioctl failed cmd: 0x%X arg: 0x%X : %e", uiIoctlCmd, uiArg, true );
 			}
 
 			// Set the debug message queue
@@ -1851,7 +1852,7 @@ namespace arc
 		{
 			if ( !isOpen() )
 			{
-				THROW( "Not conntected to any device." );
+				THROW( "(CArcPCI) Not conntected to any device." );
 			}
 
 			std::uint32_t uiRetVal = uiArg;
@@ -1867,7 +1868,7 @@ namespace arc
 					m_pCLog->put( sCmd.c_str() );
 				}
 
-				THROW( "Ioctl failed cmd: 0x%X arg: 0x%X : %e",	uiIoctlCmd,	uiArg, arc::gen3::CArcBase::getSystemError() );
+				THROW( "(CArcPCI) Ioctl failed cmd: 0x%X arg: 0x%X : %e",	uiIoctlCmd,	uiArg, arc::gen3::CArcBase::getSystemError() );
 			}
 
 			// Set the debug message queue
@@ -1896,14 +1897,14 @@ namespace arc
 		{
 			if ( !isOpen() )
 			{
-				THROW( "Not conntected to any device." );
+				THROW( "(CArcPCI) Not conntected to any device." );
 			}
 
 			std::unique_ptr<std::uint32_t[]> pArgs( new std::uint32_t[ tArgList.size() ] );
 
 			if ( pArgs == nullptr )
 			{
-				THROW( "Failed to allocate argument buffer!" );
+				THROW( "(CArcPCI) Failed to allocate argument buffer!" );
 			}
 
 			auto pInserter = pArgs.get();
@@ -1928,7 +1929,7 @@ namespace arc
 
 				std::ostringstream oss;
 
-				oss << "Ioctl failed cmd: 0x" << std::hex << uiIoctlCmd << std::dec;
+				oss << "(CArcPCI) Ioctl failed cmd: 0x" << std::hex << uiIoctlCmd << std::dec;
 
 				for ( auto it = tArgList.begin(); it != tArgList.end(); it++ )
 				{

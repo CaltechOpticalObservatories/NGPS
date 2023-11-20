@@ -212,6 +212,24 @@ namespace Camera {
             applied++;
           }
 
+          // GIT_HASH
+          if (config.param[entry].compare(0, 8, "GIT_HASH")==0) {
+            this->camera_info.prikeys.addkey( "GIT_HASH", config.arg[entry], "software git hash" );
+            message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->camera.async.enqueue( message.str() );
+            applied++;
+          }
+
+          // PROJ_BUILD_DATE
+          if (config.param[entry].compare(0, 15, "PROJ_BUILD_DATE")==0) {
+            this->camera_info.prikeys.addkey( "SW_BUILD", config.arg[entry], "software build date" );
+            message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            this->camera.async.enqueue( message.str() );
+            applied++;
+          }
+
         } // end loop through the entries in the configuration file
 
         message.str("");
@@ -227,6 +245,58 @@ namespace Camera {
         return error;
       }
       /***** Camera::Server::configure_server *********************************/
+
+
+      /***** Camera::Server::configure_constkeys ******************************/
+      /**
+       * @brief      processes the CONSTKEY_* keywords from the config file
+       * @details    constant keywords allow insertion into all FITS files
+       *             header keywords that won't change
+       * @return     ERROR or NO_ERROR
+       *
+       */
+      long configure_constkeys() {
+        std::string function = "Camera::Server::configure_constkeys";
+        std::stringstream message;
+        int applied=0;
+        long error=NO_ERROR;
+
+        // loop through the entries in the configuration file, stored in config class
+        //
+        for (int entry=0; entry < this->config.n_entries; entry++) {
+
+          // CONSTKEY_*
+          //
+          if (config.param[entry].compare(0, 9, "CONSTKEY_")==0) {
+            // convert the arg into a vector and use the vector form of addkey()
+            //
+            std::vector<std::string> tokens;
+            Tokenize( config.arg[entry], tokens, " " );
+
+            if ( config.param[entry].compare( 9, 3, "PRI" )==0 ) error = this->camera_info.prikeys.addkey( tokens );
+            else
+            if ( config.param[entry].compare( 9, 3, "EXT" )==0 ) error = this->camera_info.extkeys.addkey( tokens );
+            else
+            continue;
+
+            if ( error == ERROR ) {
+              message.str(""); message << "ERROR: parsing config " << config.param[entry] << "=" << config.arg[entry];
+              logwrite( function, message.str() );
+              return( ERROR );
+            }
+
+            message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+            logwrite( function, message.str() );
+            applied++;
+          }
+
+        } // end loop through the entries in the configuration file
+
+        message.str(""); message << "applied " << applied << " constant FITS keys";
+        error==NO_ERROR ? logwrite(function, message.str()) : this->camera.log_error( function, message.str() );
+        return error;
+      }
+      /***** Camera::Server::configure_constkeys ******************************/
 
   };
   /***** Camera::Server *******************************************************/

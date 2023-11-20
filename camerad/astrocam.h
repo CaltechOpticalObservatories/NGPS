@@ -44,6 +44,8 @@
  */
 namespace AstroCam {
 
+  const int NUM_EXPBUF = 3;  // number of exposure buffers
+
   /**
    * ENUM list for each readout type
    */
@@ -75,14 +77,15 @@ namespace AstroCam {
     public:
       Callback(){}
       void exposeCallback( int devnum, std::uint32_t uiElapsedTime, std::uint32_t uiExposureTime ); ///< called by CArcDevice::expose() during exposure
-      void readCallback( int devnum, std::uint32_t uiPixelCount, std::uint32_t uiFrameSize );       ///< called by CArcDevice::expose() during readout
-      void frameCallback( int devnum,
+      void readCallback( int expbuf, int devnum, std::uint32_t uiPixelCount, std::uint32_t uiFrameSize );       ///< called by CArcDevice::expose() during readout
+      void frameCallback( int expbuf,
+                          int devnum,
                           std::uint32_t uiFramesPerBuffer,
                           std::uint32_t uiFrameCount,
                           std::uint32_t uiRows,
                           std::uint32_t uiCols,
                           void* pBuffer );                            ///< called by CArcDevice::expose() when a frame has been received
-      void ftCallback( int devnum );
+      void ftCallback( int expnun, int devnum );
   };
   /***** AstroCam::Callback ***************************************************/
 
@@ -558,6 +561,8 @@ namespace AstroCam {
       int nframes;                 //!< total number of frames to acquire from controller, per "expose"
       int nsequences;              //!< number of sequences
       int expdelay;                //!< exposure delay
+      int _expbuf;                 //!< points to next avail in exposure vector
+      std::mutex _expbuf_mutex;    //!< mutex to protect expbuf operations
       int imnumber;                //!< 
       int nchans;                  //!<
       int writefreq;               //!<
@@ -580,6 +585,9 @@ namespace AstroCam {
       std::mutex epend_mutex;
       std::vector<int> exposures_pending;  //!< vector of devnums that have a pending exposure (which needs to be stored)
 
+      std::vector<std::vector<int>> writes_pending;     //!< vector of devnums that still have to write to FITS file for each exposure number
+                                                        //!< (exposure number is the outer vector, dev is the inner vector)
+
       void retval_to_string( std::uint32_t check_retval, std::string& retstring );
 
     public:
@@ -591,8 +599,6 @@ namespace AstroCam {
       Config config;
       Camera::Camera camera;            /// instantiate a Camera object
       Camera::Information camera_info;  /// this is the main camera_info object
-      Common::FitsKeys userkeys;        /// create a FitsKeys object for FITS keys specified by the user
-      Common::FitsKeys systemkeys;      /// create a FitsKeys object for FITS keys provided by the server
 
       // The frameinfo structure holds frame information for each frame
       // received by the callback. This is used to keep track of all the 
@@ -620,6 +626,17 @@ namespace AstroCam {
       inline void remove_framethread();
       inline int get_framethread_count();
       inline void init_framethread_count();
+
+      inline void inc_expbuf() {
+        std::lock_guard<std::mutex> lock( _expbuf_mutex );
+        _expbuf = ( ( ++_expbuf >= NUM_EXPBUF ) ? 0 : _expbuf );
+        return;
+      }
+
+      inline int get_expbuf() {
+        std::lock_guard<std::mutex> lock( _expbuf_mutex );
+        return _expbuf;
+      }
 
       /*
        * exposure pending stuff
@@ -689,6 +706,63 @@ namespace AstroCam {
       /***** Interface::exposure_pending **************************************/
 
 
+      /*
+       * write pending stuff
+       *
+       */
+      std::condition_variable write_condition;
+      std::mutex write_lock;
+
+      /***** Interface::writes_pending_list ***********************************/
+      /**
+       * @brief      returns the writes_pending vector
+       * @param[in]  expbuf  the exposure buffer number
+       * @return     std::vector<int>, the vector of devnums for this expbuf
+       *
+       */
+      inline std::vector<int> writes_pending_list( int expbuf ) {
+        std::lock_guard<std::mutex> lock( this->write_lock );
+        try { return( this->writes_pending.at( expbuf ) ); }
+        catch ( std::out_of_range & ) { return {}; }
+      }
+      /***** Interface::writes_pending_list ***********************************/
+
+
+      /***** Interface::write_pending *****************************************/
+      /**
+       * @brief      Set or clear the write pending state for a given exposure
+       * @param[in]  expbuf  exposure buffer number
+       * @param[in]  devnum  device number
+       * @param[in]  add     bool true to add, false to remove from pending vector
+       *
+       * This function is overloaded with an inline version that returns a bool
+       * to indicate if there are any controllers with a pending write.
+       *
+       */
+      void write_pending( int expbuf, int devnum, bool add ) {
+
+        try {
+          std::lock_guard<std::mutex> lock(this->write_lock);               // protect writes_pending vector
+          auto it = std::find( this->writes_pending.at( expbuf ).begin(),
+                               this->writes_pending.at( expbuf ).end(),
+                               devnum );                                    // iterator of devnum in writes_pending[expbuf] vector
+          bool found  = ( it != this->writes_pending.at( expbuf ).end() );  // was expbuf found in vector?
+          bool remove = !add;                                               // do I remove it?
+
+          if ( add && !found )   { this->writes_pending.at( expbuf ).push_back( devnum ); }
+          else
+          if ( found && remove ) { this->writes_pending.at( expbuf ).erase( it ); }
+
+        }                                                                   // lock_guard releases when it goes out of scope
+        catch ( std::out_of_range & ) { return; }
+
+        this->write_condition.notify_all();
+
+        return;
+      }
+      /***** Interface::write_pending *****************************************/
+
+
       /***** AstroCam::Controller *********************************************/
       /**
        * @class    Controller
@@ -703,15 +777,24 @@ namespace AstroCam {
         private:
           int bufsize;
           int framecount;               //!< keep track of the number of frames received per expose
-          void* workbuf;                //!< pointer to workspace for performing deinterlacing
+//        void* workbuf;                //!< pointer to workspace for performing deinterlacing
           long workbuf_size;
 
         public:
           Controller();                 //!< class constructor
           ~Controller() { };            //!< no deconstructor
           Camera::Information info;     //!< this is the main controller info object
-//        Camera::FitsKeys userkeys;    //!< create a FitsKeys object for FITS keys specified by the user
+          Common::FitsKeys prikeys;     //!< create a FitsKeys object for system FITS keys for primary HDU
+          Common::FitsKeys extkeys;     //!< create a FitsKeys object for system FITS keys for extensions
           FITS_file *pFits;             //!< FITS container object has to be a pointer here
+          void* workbuf;                //!< pointer to workspace for performing deinterlacing
+
+          /**
+           * @var     expinfo
+           * @brief   vector of Camera::Information class, one for each exposure buffer
+           * @details this contains the camera
+           */
+          std::vector<Camera::Information> expinfo;
 
           int error;
 
@@ -724,6 +807,7 @@ namespace AstroCam {
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
           std::string firmware;            //!< name of firmware (.lod) file
           std::string channel;             //!< name of spectrographic channel
+          std::string ccd_id;              //!< CCD identifier (E.G. serial number, name, etc.)
           int devnum;                      //!< this controller's devnum
           std::string devname;             //!< comes from arc::gen3::CArcPCI::getDeviceStringList()
           std::uint32_t retval;            //!< convenient place to hold return values for threaded commands to this controller
@@ -745,7 +829,7 @@ namespace AstroCam {
           inline int get_framecount();
           inline void increment_framecount();
 
-          template <class T> T* deinterlace(T* imbuf);
+          template <class T> T* deinterlace( int expbuf, T* imbuf );
 
           template <class T> static void dothread_deinterlace( DeInterlace<T> &deinterlace, int cols, int rows, int section, int nthreads );
 
@@ -771,7 +855,8 @@ namespace AstroCam {
 
       bool useframes;                   //!< Not all firmware supports frames.
 
-      FITS_file fits_file;              //!< instantiate a FITS container object
+//    FITS_file fits_file;              //!< instantiate a FITS container object
+      std::vector<FITS_file*> pFits;    //!< vector of FITS containers, one for each exposure number for multiple buffering
 
       typedef struct {
         ReadoutType readout_type;       //!< enum for readout type
@@ -823,14 +908,15 @@ namespace AstroCam {
       long do_native(std::vector<uint32_t> selectdev, std::string cmdstr);
       long do_native( int dev, std::string cmdstr, std::string &retstring );
       long do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring );
-      long write_frame(int devnum, int fpbcount);
+      long write_frame( int expbuf, int devnum, int fpbcount );
       static void dothread_load( Controller &con, std::string timlodfile );
-      static void dothread_shutter( Camera::Camera &cam );
-      static void dothread_read( Camera::Camera &cam, Controller &con );
+      static void dothread_shutter( int expbuf, Interface &interface );
+      static void dothread_read( Camera::Camera &cam, Controller &con, int expbuf );
       static void dothread_expose( Controller &con );
       static void dothread_native( Controller &con, std::vector<uint32_t> cmd );
-      static void handle_frame( int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer );
+      static void handle_frame( int expbuf, int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer );
       static void handle_queue( std::string message );
+      static void FITS_handler( int expbuf, Interface &interface );
 
       // Functions fully defined here (no code in astrocam.c)
       //

@@ -86,10 +86,10 @@ namespace Common {
   /**
    * @brief      return the keyword type based on the keyvalue
    * @param[in]  value   string to get the type
-   * @return     string  one of the following: "BOOL", "STRING", "FLOAT", "INT"
+   * @return     string  one of the following: "BOOL", "STRING", "DOUBLE", "INT"
    *
    * This function looks at the contents of the value string to determine if it
-   * contains an INT, FLOAT, BOOL or STRING, and returns a string identifying the type.
+   * contains an INT, DOUBLE, BOOL or STRING, and returns a string identifying the type.
    * That type is used in FITS_file::add_user_key() for adding keywords to the header.
    *
    */
@@ -126,8 +126,8 @@ namespace Common {
     if (pos == keyvalue.size()) {
       if (keyvalue.find(".") == std::string::npos)    // all numbers and no decimals, it's an integer
         return std::string("INT");
-      else                                            // otherwise numbers with a decimal, it's a float
-        return std::string("FLOAT");
+      else                                            // otherwise numbers with a decimal, it's a double
+        return std::string("DOUBLE");
     }
     else return std::string("STRING");                // lastly, must be a string
   }
@@ -158,19 +158,36 @@ namespace Common {
   /***** Common::FitsKeys::listkeys *******************************************/
 
 
+  /***** Common::FitsKeys::delkey *********************************************/
+  /**
+   * @brief      convenience function to delete FITS keyword from internal database
+   * @details    simply calls addkey with a value="." which removes the keyword
+   * @param[in]  key  string containing the keyword to remove
+   * @return     ERROR or NO_ERROR, as returned by addkey()
+   *
+   */
+  long FitsKeys::delkey( const std::string &key ) {
+    return this->addkey( std::vector<std::string> { key, ".", "" } );
+  }
+  /***** Common::FitsKeys::delkey *********************************************/
+
+
   /***** Common::FitsKeys::addkey *********************************************/
   /**
    * @brief      add FITS keyword to internal database
+   * @details    parses the input string and calls overloaded function addkey()
    * @param[in]  arg  string formatted as "KEYWORD=VALUE//COMMENT"
    * @return     ERROR for improper input arg, otherwise NO_ERROR
    *
-   * Expected format of input arg is KEYWORD=VALUE//COMMENT
+   * This function is overloaded (a template function is defined in common.h).
+   *
+   * This version expects format of input arg as KEYWORD=VALUE//COMMENT
    * where COMMENT is optional. KEYWORDs are automatically converted to uppercase.
    *
    * Internal database is Common::FitsKeys::keydb
    * 
    */
-  long FitsKeys::addkey(std::string arg) {
+  long FitsKeys::addkey( const std::string &arg ) {
     std::string function = "Common::FitsKeys::addkey";
     std::stringstream message;
     std::vector<std::string> tokens;
@@ -226,19 +243,60 @@ namespace Common {
       return(NO_ERROR);
     }
 
-    // insert new entry into the database
+    // insert new entry into the database using the overloaded function
     //
-    this->keydb[keyword].keyword    = keyword;
-    this->keydb[keyword].keytype    = this->get_keytype(keyvalue);
-    this->keydb[keyword].keyvalue   = keyvalue;
-    this->keydb[keyword].keycomment = keycomment;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] added key: " << keyword << "=" << keyvalue << " (" << this->keydb[keyword].keytype << ") // " << keycomment;
-    logwrite( function, message.str() );
-#endif
+    this->addkey( keyword, keyvalue, keycomment );
 
     return(NO_ERROR);
+  }
+  /***** Common::FitsKeys::addkey *********************************************/
+
+
+  /***** Common::FitsKeys::addkey *********************************************/
+  /**
+   * @brief      add FITS keyword to internal database
+   * @details    parses the input string and calls overloaded function addkey()
+   * @param[in]  vec  vector containing strings for KEYWORD, VALUE and optional COMMENT
+   * @return     ERROR for improper input arg, otherwise NO_ERROR
+   *
+   * This function is overloaded
+   *
+   * This version expects a vector containing 2 or 3 elements, in the order of
+   * { KEYWORD, VALUE, [COMMENT] }.
+   *
+   * Internal database is Common::FitsKeys::keydb
+   * 
+   */
+  long FitsKeys::addkey( const std::vector<std::string> &vec ) {
+    std::string function = "Common::FitsKeys::addkey";
+    std::stringstream message;
+    std::string key, val, com;
+
+    auto vsize = vec.size();
+
+    // input vector must have 2 or 3 elements
+    //
+    if ( vsize < 2 || vsize > 3 ) {
+      message << "ERROR: bad number of elements in vector: " << vsize << ". expected 2 or 3";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // assign each element of the input vector to a string
+    //
+    try {
+      key = vec.at(0);
+      val = vec.at(1);
+      com = ( vsize==3 ? vec.at(2) : "" );
+    }
+    catch ( std::out_of_range &e ) {
+      logwrite( function, "ERROR: exception parsing vector" );
+      return( ERROR );
+    }
+
+    // use the template class version of addkey() with these three strings
+    //
+    return this->addkey( key, val, com );
   }
   /***** Common::FitsKeys::addkey *********************************************/
 

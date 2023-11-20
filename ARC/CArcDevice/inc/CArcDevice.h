@@ -149,8 +149,8 @@ namespace arc
 
 				virtual void expose( float fExpTime, std::uint32_t uiRows, std::uint32_t uiCols, const bool& bAbort = false, arc::gen3::CExpIFace* pExpIFace = nullptr, bool bOpenShutter = true );
 				virtual void expose( int devnum, const std::uint32_t &uiExpTime, std::uint32_t uiRows, std::uint32_t uiCols, const bool& bAbort = false, arc::gen3::CooExpIFace* pCooExpIFace = nullptr, bool bOpenShutter = true );
-				virtual void readout( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, const bool &bAbort = false, arc::gen3::CooExpIFace* pCooExpIFace = nullptr );
-				virtual void frame_transfer( int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace );
+				virtual void readout( int expbuf, int devnum, std::uint32_t uiRows, std::uint32_t uiCols, const bool &bAbort = false, arc::gen3::CooExpIFace* pCooExpIFace = nullptr );
+				virtual void frame_transfer( int expbuf, int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace );
 
 				virtual void stopExposure( void ) = 0;
 

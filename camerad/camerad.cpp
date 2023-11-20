@@ -110,13 +110,16 @@ int main(int argc, char **argv) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     server.exit_cleanly();
   }
+
+  // add the time zone to the primary system keys database
+  //
   if ( zone == "local" ) {
     logwrite( function, "using local time zone" );
-    server.systemkeys.addkey( "TM_ZONE=local//time zone" );
+    server.camera_info.prikeys.addkey( "TM_ZONE", "local", "time zone" );
   }
   else {
     logwrite( function, "using GMT time zone" );
-    server.systemkeys.addkey( "TM_ZONE=GMT//time zone" );
+    server.camera_info.prikeys.addkey( "TM_ZONE", "GMT", "time zone" );
   }
 
   if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
@@ -146,19 +149,17 @@ int main(int argc, char **argv) {
     server.exit_cleanly();
   }
 
-  // log and add server build date to system keys db
+  // log build date and hash
   //
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
-  logwrite(function, message.str());
-
-  message.str(""); message << "CAMD_VER=" << BUILD_DATE << " " << BUILD_TIME << " // camerad build date";
-  server.systemkeys.addkey( message.str() );
+  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  logwrite( function, message.str() );
 
   message.str(""); message << server.config.n_entries << " lines read from " << server.config.filename;
   logwrite(function, message.str());
 
   if (ret==NO_ERROR) ret=server.configure_server();      // get needed values out of read-in configuration file for the server
   if (ret==NO_ERROR) ret=server.configure_controller();  // get needed values out of read-in configuration file for the controller
+  if (ret==NO_ERROR) ret=server.configure_constkeys();   // get constant FITS keys out of read-in configuration file
 
   if (ret != NO_ERROR) {
     logwrite(function, "ERROR: unable to configure system");
@@ -535,11 +536,12 @@ void doit(Network::TcpSocket &sock) {
     else
     if (cmd.compare( CAMERAD_KEY )==0) {
                     if (args.compare(0, 4, "list")==0) {
-                      logwrite( function, "systemkeys:" ); ret = server.systemkeys.listkeys();
-                      logwrite( function, "userkeys:" );   ret = server.userkeys.listkeys();
+                      logwrite( function, "prikeys:" );  ret = server.camera_info.prikeys.listkeys();
+                      logwrite( function, "extkeys:" );  ret = server.camera_info.extkeys.listkeys();
+                      logwrite( function, "userkeys:" ); ret = server.camera_info.userkeys.listkeys();
                     }
                     else {
-                      ret = server.userkeys.addkey(args);
+                      ret = server.camera_info.userkeys.addkey(args);
                       if ( ret != NO_ERROR ) server.camera.log_error( function, "bad syntax" );
                     }
                     }

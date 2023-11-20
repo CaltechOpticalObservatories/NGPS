@@ -51,13 +51,17 @@ namespace Camera {
    */
   class Shutter {
     private:
+      int state;
       int RTS_bit;
       int fd;
       std::chrono::time_point<std::chrono::high_resolution_clock> open_time, close_time;
     public:
-      int state;
       std::condition_variable condition;
       std::mutex lock;
+
+      inline bool isopen()   { return ( this->state==1 ? true : false ); }
+      inline bool isclosed() { return ( this->state==0 ? true : false ); }
+      inline void arm()      { this->state = -1; }
 
       /***** Camera::Shutter:init *********************************************/
       /*
@@ -125,6 +129,7 @@ namespace Camera {
        */
       inline long set_open() {
         this->open_time = std::chrono::high_resolution_clock::now();
+        this->state=1;
         return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
       }
       /***** Camera::Shutter:set_open *****************************************/
@@ -141,6 +146,7 @@ namespace Camera {
        */
       inline long set_close() {
         this->close_time = std::chrono::high_resolution_clock::now();
+        this->state=0;
         return( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
       }
       /***** Camera::Shutter:set_close ****************************************/
@@ -155,6 +161,22 @@ namespace Camera {
       inline double duration() {
         return( std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
                                                                    - this->open_time).count() / 1000000. );
+      }
+      /***** Camera::Shutter:duration *****************************************/
+
+
+      /***** Camera::Shutter:duration *****************************************/
+      /*
+       * @brief      returns the shutter open/close time duration in milliseconds
+       * @param[out] retstring  reference to string to return duration as string
+       * @return     double precision duration in msec
+       *
+       */
+      double duration( std::string &retstring ) {
+        double dur = this->duration();
+        try { retstring = std::to_string( dur ); }
+        catch ( std::bad_alloc &e ) { retstring="error"; return NAN; }
+        return dur;
       }
       /***** Camera::Shutter:duration *****************************************/
 
@@ -275,6 +297,7 @@ namespace Camera {
       bool          autodir_state;           //!< if true then images are saved in a date subdir below image_dir, i.e. image_dir/YYYYMMDD/
       bool          abortstate;              //!< set true to abort the current operation (exposure, readout, etc.)
       bool          bonn_shutter;            //!< set false if Bonn shutter is not connected (defaults true)
+      bool          ext_shutter;             //!< set true if an external shutter is connected to an ARC controller (defaults false)
       std::string   writekeys_when;          //!< when to write fits keys "before" or "after" exposure
 
       Common::Queue async;                   /// message queue object
@@ -396,7 +419,7 @@ namespace Camera {
       std::vector< std::vector<long> > amp_section;
 
       Common::FitsKeys userkeys;     ///< create a FitsKeys object for FITS keys specified by the user
-      Common::FitsKeys systemkeys;   ///< create a FitsKeys object for FITS keys imposed by the software
+      Common::FitsKeys prikeys;      ///< create a FitsKeys object for FITS keys imposed by the software
       Common::FitsKeys extkeys;      ///< create a FitsKeys object for extension-only FITS keys imposed by the software
 
   Information() {

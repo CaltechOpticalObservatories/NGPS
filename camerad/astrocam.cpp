@@ -45,6 +45,7 @@ namespace AstroCam {
   /***** AstroCam::Callback::readCallback *************************************/
   /**
    * @brief      called by CArcDevice::expose() during readout
+   * @param[in]  expbuf        exposure buffer number passed to API on expose
    * @param[in]  devnum        device number passed to API on expose
    * @param[in]  uiPixelCount  number of pixels read ( getPixelCount() )
    *
@@ -52,7 +53,7 @@ namespace AstroCam {
    * arc::gen3::CArcDevice::expose() when bInReadout is true.
    *
    */
-  void Callback::readCallback( int devnum, std::uint32_t uiPixelCount, std::uint32_t uiImageSize ) {
+  void Callback::readCallback( int expbuf, int devnum, std::uint32_t uiPixelCount, std::uint32_t uiImageSize ) {
     std::stringstream message;
     message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE: " << uiImageSize;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
@@ -67,6 +68,7 @@ namespace AstroCam {
   /***** AstroCam::Callback::frameCallback ************************************/
   /**
    * @brief      called by CArcDevice::expose() when a frame has been received
+   * @param[in]  expbuf    exposure buffer number passed to API on expose
    * @param[in]  devnum    device number passed to API on expose
    * @param[in]  fpbcount  frames per buffer count ( uiFPBCount ) wraps to 0 at FPB
    * @param[in]  fcount    actual frame counter ( uiPCIFrameCount = getFrameCount() )
@@ -78,8 +80,10 @@ namespace AstroCam {
    * arc::gen3::CArcDevice::expose() when a new frame is received.
    * Spawn a separate thread to handle the incoming frame.
    *
+   * incoming frame from ARC -> frameCallback()
+   *
    */
-  void Callback::frameCallback( int devnum, std::uint32_t fpbcount, std::uint32_t fcount, std::uint32_t rows, std::uint32_t cols, void* buffer ) {
+  void Callback::frameCallback( int expbuf, int devnum, std::uint32_t fpbcount, std::uint32_t fcount, std::uint32_t rows, std::uint32_t cols, void* buffer ) {
     if ( ! server.useframes ) fcount=1;  // when firmware doesn't support frames this prevents fcount from being a wild value
     std::stringstream message;
 
@@ -94,7 +98,7 @@ namespace AstroCam {
 
     server.add_framethread();            // framethread_count is incremented because a thread has been added
 
-    std::thread( std::ref(AstroCam::Interface::handle_frame), devnum, fpbcount, fcount, buffer ).detach();
+    std::thread( std::ref(AstroCam::Interface::handle_frame), expbuf, devnum, fpbcount, fcount, buffer ).detach();
 
 #ifdef LOGLEVEL_DEBUG
     std::cerr << "pixelcount:  " << std::setw(10) << (rows*cols) << "\n";
@@ -109,10 +113,11 @@ namespace AstroCam {
   /**
    * @brief      called by CArcDevice::frame_transfer() when a frame transfer has been done
    * @details    set/clear control flags and start the readout waveforms
+   * @param[in]  expbuf    exposure buffer number passed to API
    * @param[in]  devnum    device number passed to API
    *
    */
-  void Callback::ftCallback( int devnum ) {
+  void Callback::ftCallback( int expbuf, int devnum ) {
     std::stringstream message;
     message << "FT_" << devnum << ":complete";
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
@@ -124,13 +129,14 @@ namespace AstroCam {
     }
 
     server.controller[devnum].in_frametransfer = false;
-    server.exposure_pending( devnum, false );
+    server.exposure_pending( devnum, false );    // this also does the notify
     server.controller[devnum].in_readout       = true;
 
     // Trigger the readout waveforms here.
     //
     try {
-      server.controller[devnum].pArcDev->readout( devnum,
+      server.controller[devnum].pArcDev->readout( expbuf,
+                                                  devnum,
                                                   server.controller[devnum].info.detector_pixels[0],
                                                   server.controller[devnum].info.detector_pixels[1],
                                                   server.camera.abortstate,
@@ -161,6 +167,10 @@ namespace AstroCam {
     this->nfpseq = 1;
     this->useframes = true;
     this->framethreadcount = 0;
+
+    this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
+
+    this->writes_pending.resize( NUM_EXPBUF );  // pre-allocate writes_pending vector for each exposure buffer
 
     // Initialize STL map of Readout Amplifiers
     // Indexed by amplifier name.
@@ -223,6 +233,7 @@ namespace AstroCam {
    * CONTROLLER=(PCIDEV CHAN FT FIRMWARE READOUT)
    * where PCIDEV    is the PCI device number
    *       CHAN      is the spectrographic channel {U,R,I,G}
+   *       ID        is the CCD Identifier (E.G. serial number, name, etc.)
    *       FT        is {yes|no} to indicate if Frame Transfer is supported
    *       FIRMWARE  is the default firmware to load
    *       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
@@ -241,13 +252,13 @@ namespace AstroCam {
 
     int dev, readout_type=-1;
     uint32_t readout_arg=0xBAD;
-    std::string chan, firm, amp;
+    std::string chan, id, firm, amp;
     bool ft, readout_valid=false;
 
     Tokenize( args, tokens, " " );
 
-    if ( tokens.size() != 5 ) {
-      message.str(""); message << "ERROR: bad value \"" << args << "\". expected { PCIDEV CHAN FT FIRMWARE READOUT }";
+    if ( tokens.size() != 6 ) {
+      message.str(""); message << "ERROR: bad value \"" << args << "\". expected { PCIDEV CHAN ID FT FIRMWARE READOUT }";
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -255,11 +266,12 @@ namespace AstroCam {
     try {
       dev  = std::stoi( tokens.at(0) );
       chan = tokens.at(1);
-      firm = tokens.at(3);
-      amp  = tokens.at(4);
-      if ( tokens.at(2) == "yes" ) ft = true;
+      id   = tokens.at(2);
+      firm = tokens.at(4);
+      amp  = tokens.at(5);
+      if ( tokens.at(3) == "yes" ) ft = true;
       else
-      if ( tokens.at(2) == "no" )  ft = false;
+      if ( tokens.at(3) == "no" )  ft = false;
       else {
         message.str(""); message << "unrecognized value for FT: " << tokens.at(2) << ". Expected { yes | no }";
         this->camera.log_error( function, message.str() );
@@ -311,6 +323,7 @@ namespace AstroCam {
     //
     this->controller[dev].devnum = dev;             // device number
     this->controller[dev].channel = chan;           // spectrographic channel
+    this->controller[dev].ccd_id  = id;             // CCD identifier
     this->controller[dev].have_ft = ft;             // frame transfer supported?
     this->controller[dev].firmware = firm;          // firmware file
 
@@ -580,12 +593,10 @@ namespace AstroCam {
     // close all of the PCI devices
     //
     for ( auto &con : this->controller ) {
-      if ( con.second.connected ) {
-        message.str(""); message << "closing " << con.second.devname;
-        logwrite(function, message.str());
-        con.second.pArcDev->close();  // throws nothing, no error handling
-        con.second.connected=false;
-      }
+      message.str(""); message << "closing " << con.second.devname;
+      logwrite(function, message.str());
+      con.second.pArcDev->close();  // throws nothing, no error handling
+      con.second.connected=false;
     }
 
     this->devlist.clear();   // no devices open
@@ -702,13 +713,48 @@ namespace AstroCam {
         applied++;
       }
 
+      // If the Bonn shutter has been disabled ( = "no" ) then add a FITS keyword
+      // to indicate that. If present, which is the normal operating condition,
+      // then remove that keyword -- only need to flag this if non-standard condition.
+      //
       if (this->config.param[entry].compare(0, 12, "BONN_SHUTTER")==0) {
         std::string bs = config.arg[entry];
-        if ( !bs.empty() && bs=="yes" ) this->camera.bonn_shutter = true;
+        if ( !bs.empty() && bs=="no" ) {
+          this->camera.bonn_shutter = false;
+          this->camera_info.prikeys.addkey( "BONNSHUT", false, "Bonn shutter not in use" );
+        }
         else
-        if ( !bs.empty() && bs=="no" ) this->camera.bonn_shutter = false;
+        if ( !bs.empty() && bs=="yes" ) {
+          this->camera.bonn_shutter = true;
+          this->camera_info.prikeys.delkey( "BONNSHUT" );
+        }
         else {
           this->camera.log_error( function, "BONN_SHUTTER expected yes | no" );
+          return( ERROR );
+        }
+        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
+        applied++;
+      }
+
+      // If an external shutter has been enabled ( = "yes" ) then add a FITS keyword
+      // to indicate that. If not present, which is the normal operating condition,
+      // then remove that keyword -- only need to flag this is in use.
+      //
+      if (this->config.param[entry].compare(0, 11, "EXT_SHUTTER")==0) {
+        std::string es = config.arg[entry];
+        if ( !es.empty() && es=="yes" ) {
+          this->camera.ext_shutter = true;
+          this->camera_info.prikeys.addkey( "EXT_SHUT", true, "external shutter trigger in use" );
+        }
+        else
+        if ( !es.empty() && es=="no" ) {
+          this->camera.ext_shutter = false;
+          this->camera_info.prikeys.delkey( "EXT_SHUT" );
+        }
+        else {
+          this->camera.log_error( function, "EXT_SHUTTER expected yes | no" );
           return( ERROR );
         }
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -904,8 +950,8 @@ namespace AstroCam {
 
     // Send the command to each selected device via a separate thread
     //
-    {  // begin local scope
-    std::vector<std::thread> threads;       // create a local scope vector for the threads
+    {                                       // start local scope for this stuff
+    std::vector<std::thread> threads;       // local scope vector stores all of the threads created here
     for ( auto dev : selectdev ) {          // spawn a thread for each device in selectdev
       std::thread thr( std::ref(AstroCam::Interface::dothread_native), std::ref(this->controller[dev]), cmd );
       threads.push_back(std::move(thr));    // push the thread into a vector
@@ -922,9 +968,7 @@ namespace AstroCam {
       return(ERROR);
     }
     catch(...) { logwrite(function, "unknown error joining threads"); return(ERROR); }
-
-    threads.clear();                        // deconstruct the threads vector
-    }  // end local scope
+    }                                       // end local scope cleans up this stuff
 
     // Check to see if all retvals are the same by comparing them all to the first.
     //
@@ -1026,47 +1070,71 @@ namespace AstroCam {
    * When the shutter closes, this function will notify all threads
    * that are waiting on the camera.shutter condition variable.
    *
-   * @todo  This function is missing the call to actually operate the shutter!
+   * @TODO make the shutter timer able to be stopped/paused/resumed!
    *
    */
-  void Interface::dothread_shutter( Camera::Camera &cam ) {
+  void Interface::dothread_shutter( int expbuf, Interface &interface ) {
     std::string function = "AstroCam::Interface::dothread_shutter";
     std::stringstream message;
+    std::string timestring;
+    timespec timenow;
+    double mjd0, mjd1, mjd;
 
-    // open the shutter
+    // If configured, send a command to the ARC controller to open
+    // the shutter. This is not connected to the shutter but can be
+    // used to trigger an external light source for testing. This
+    // is done first, before operating the Bonn shutter, so as not
+    // to introduce any delay in the real shutter timing (and will
+    // be closed after the real shutter has closed).
     //
-    cam.shutter.set_open();
+    if ( interface.camera.ext_shutter ) interface.do_native( "OSH" );
+
+    // open the Bonn shutter
+    //
+    interface.camera.shutter.set_open();
 
     // Log shutter open time
     //
-    message.str(""); message << "NOTICE:shutter opened at " << get_timestamp();
-    cam.async.enqueue_and_log( function, message.str() );
+    timenow = Time::getTimeNow();            // get the time NOW
+    timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+    mjd0 = mjd_from( timenow );              // modified Julian date of start
 
-    cam.shutter.state = 1;               // shutter state open
+    interface.camera_info.prikeys.addkey( "EXPSTART", timestring, "exposure start time" );
+    interface.camera_info.prikeys.addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
+
+    message.str(""); message << "NOTICE:shutter opened at " << timestring;
+    interface.camera.async.enqueue_and_log( function, message.str() );
 
     // Here is the shutter timer
     //
-    std::this_thread::sleep_for( std::chrono::milliseconds( cam.exposure_time ) );
+    std::this_thread::sleep_for( std::chrono::milliseconds( interface.camera.exposure_time ) );
 
-    // close the shutter
+    // close the Bonn shutter
     //
-    cam.shutter.set_close();
+    interface.camera.shutter.set_close();
 
     // Log shutter close time
     //
-    message.str(""); message << "NOTICE:shutter closed at " << get_timestamp();
-    cam.async.enqueue_and_log( function, message.str() );
+    timenow = Time::getTimeNow();            // get the time NOW
+    timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+    mjd1 = mjd_from( timenow );              // modified Julian date of stop
+    mjd = (mjd1-mjd0)/2.;                    // average mjd
 
-    cam.shutter.state = 0;               // shutter state closed
+    interface.camera_info.prikeys.addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
+    interface.camera_info.prikeys.addkey( "MJD", mjd, "average of MJD0 and MJD1" );
 
-    cam.shutter.condition.notify_all();  // notify waiting threads that the shutter has closed
+    message.str(""); message << "NOTICE:shutter closed at " << timestring;
+    interface.camera.async.enqueue_and_log( function, message.str() );
 
-    // Log shutter duration
-    // @TODO add this to keyword database
+    // Send external close shutter command, if configured.
     //
-//  const auto elapsed = ( std::chrono::duration_cast<std::chrono::nanoseconds>(close_time - open_time).count() / 1000000. );
-//  message.str(""); message << "shutter was open for " << elapsed << " msec";
-//  logwrite( function, message.str() );
+    if ( interface.camera.ext_shutter ) interface.do_native( "CSH" );
+
+    interface.camera.shutter.condition.notify_all();  // notify waiting threads that the shutter has closed
+
+    // Save shutter duration to keyword database
+    //
+    interface.camera_info.prikeys.addkey( "SHUTTIME", interface.camera.shutter.duration(), "actual shutter open time in msec", 3 );
 
     return;
   }
@@ -1083,14 +1151,14 @@ namespace AstroCam {
    * @param[in]  con  reference to Controller class object
    *
    */
-  void Interface::dothread_read( Camera::Camera &cam, Controller &con ) {
+  void Interface::dothread_read( Camera::Camera &cam, Controller &con, int expbuf ) {
     std::string function = "AstroCam::Interface::dothread_read";
     std::stringstream message;
     std::string which_waveforms;
 
 #ifdef LOGLEVEL_DEBUG
     message.str("");
-    message << "[DEBUG] con.devnum=" << con.devnum << " .channel=" << con.channel
+    message << "[DEBUG] expbuf " << expbuf << " con.devnum=" << con.devnum << " .channel=" << con.channel
             << " .devname=" << con.devname << " con.section_size=" << con.info.section_size
             << " shutterenable=" << con.info.shutterenable;
     logwrite(function, message.str());
@@ -1100,7 +1168,7 @@ namespace AstroCam {
     // This is conditional (on shutter_state) so if the shutter has already closed
     // then there is no waiting.
     //
-    while ( cam.shutter.state != 0 ) {
+    while ( !cam.shutter.isclosed() ) {
       std::unique_lock<std::mutex> shutter_lock( cam.shutter.lock );
       cam.shutter.condition.wait( shutter_lock );
       shutter_lock.unlock();
@@ -1108,7 +1176,7 @@ namespace AstroCam {
 
 #ifdef LOGLEVEL_DEBUG
     if ( cam.exposure_time > 0 ) {
-      message.str(""); message << "[DEBUG] dev " << con.devnum << " chan " << con.channel << " has detected shutter closure!";
+      message.str(""); message << "[DEBUG] dev " << con.devnum << " chan " << con.channel << " detected shutter closure!";
     }
     else {
       message.str(""); message << "[DEBUG] dev " << con.devnum << " chan " << con.channel << " no need to wait for shutter closure";
@@ -1124,7 +1192,7 @@ namespace AstroCam {
       //
       server.exposure_pending( con.devnum, true );
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "DEBUG: dev " << con.devnum << " chan " << con.channel << " exposure_pending=true";
+      message.str(""); message << "[DEBUG] expbuf " << expbuf << " dev " << con.devnum << " chan " << con.channel << " exposure_pending=true";
       cam.async.enqueue_and_log( "CAMERAD", function, message.str() );
 #endif
 
@@ -1133,18 +1201,20 @@ namespace AstroCam {
       if ( ! con.have_ft ) {
         con.in_readout = true;
         which_waveforms="readout";
-        // Send the actual command to start the exposure. @TODO CHANGE THIS TO START READOUT WAVEFORMS
-        // This API call will send the SEX command to trigger the exposure.
-        // The devnum is passed in so that the Callback functions know which device they belong to.
+        // Send the actual command to start the readout waveforms.
+        // This API call will send the SRE command to trigger the readout.
+        // The expbuf and devnum are passed in so that the Callback functions know
+        // which exposure and device they belong to, respectively.
         //
-        con.pArcDev->readout( con.devnum,
+        con.pArcDev->readout( expbuf,
+                              con.devnum,
                               con.info.detector_pixels[0],
                               con.info.detector_pixels[1],
                               cam.abortstate,
                               con.pCallback
                             );
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] pArcDev->readout waveforms started on " << con.devname;
+        message.str(""); message << "[DEBUG] pArcDev->readout waveforms started on " << con.devname << " for exposure buffer " << expbuf;
         logwrite( function, message.str() );
 #endif
       }
@@ -1163,29 +1233,37 @@ namespace AstroCam {
         }
         con.in_frametransfer = true;
         which_waveforms="frame_transfer";
-        // Send the actual command to start the exposure. @TODO CHANGE THIS TO START FRAME TRANSFER WAVEFORMS
-        // This API call will send the SEX command to trigger the exposure.
-        // The devnum is passed in so that the Callback functions know which device they belong to.
+        // Send the actual command to start the frame transfer waveforms.
+        // This API call will send the FRT command to trigger the frame transfer.
+        // The expbuf and devnum are passed in so that the Callback functions know
+        // which exposure and device they belong to, respectively.
         //
-        con.pArcDev->frame_transfer( con.devnum,
+        con.pArcDev->frame_transfer( expbuf,
+                                     con.devnum,
                                      con.info.detector_pixels[0],
                                      con.info.detector_pixels[1],
                                      con.pCallback
                                    );
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] pArcDev->frame transfer waveforms started on " << con.devname;
+        message.str(""); message << "[DEBUG] pArcDev->frame transfer waveforms started on " << con.devname << " for exposure buffer " << expbuf;
         logwrite( function, message.str() );
 #endif
       }
 
       // The system writes a few things in the header
       //
+/*** 10/30/23 BOB
       con.pFits->add_key( true, "FIRMWARE", "STRING", con.firmware , "controller firmware" );
       con.pFits->add_key( true, "EXPSTART", "STRING", con.info.start_time, "exposure start time" );
-      con.pFits->add_key( true, "READOUT", "STRING",  con.info.readout_name, "readout amplifier" );
+***/
 
-      con.pFits->add_key( true, "DEVNUM", "INT",  std::to_string(con.devnum), "PCI device number" );
-      con.pFits->add_key( true, "EXPTIME", "INT", std::to_string(cam.exposure_time), "exposure time in msec" );
+//    con.pFits->add_key( true, "READOUT", "STRING",  con.info.readout_name, "readout amplifier" );
+      con.expinfo.at(expbuf).prikeys.addkey( "READOUT", con.expinfo.at(expbuf).readout_name, "readout amplifier" );
+
+//    con.pFits->add_key( true, "DEVNUM", "INT",  std::to_string(con.devnum), "PCI device number" );
+      con.expinfo.at(expbuf).prikeys.addkey( "DEVNUM", con.devnum, "PCI device number" );
+
+//    con.pFits->add_key( true, "EXPTIME", "INT", std::to_string(cam.exposure_time), "exposure time in msec" );
     }
     catch (const std::exception &e) {
       // arc::gen3::CArcDevice::expose() will throw an exception for an abort.
@@ -1206,7 +1284,8 @@ namespace AstroCam {
       return;
     }
     catch(...) {
-      message.str(""); message << "ERROR: unknown exception calling " << which_waveforms << " on " << con.devname << ". forcing abort.";
+      message.str(""); message << "ERROR: unknown exception calling " << which_waveforms << " on " << con.devname 
+                               << " for exposure buffer " << expbuf << ". forcing abort.";
       logwrite(function, message.str() );
       cam.set_abortstate( true );
       con.error = ERROR;
@@ -1222,6 +1301,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::dothread_expose *********************************/
   /**
    * @brief      run in a thread to actually send the command
+   * @details    no longer in use, probably should remove
    * @param[in]  con  reference to Controller class object
    *
    */
@@ -1531,6 +1611,7 @@ namespace AstroCam {
    * @brief      block on exposure_condition, notifies when ready for exposure
    * @details    This thread is spawned with each new exposure and broadcasts
    *             an async message announcing the state of exposure_pending.
+   *             This is also where the exposure number gets incremented.
    * @param[in]  interface  reference to this->interface
    *
    */
@@ -1545,13 +1626,22 @@ namespace AstroCam {
       interface.camera.async.enqueue( "CAMERAD:READY:false" );
     }
 
-    // Block on exposure_condition until exposure_pending() returns false
+    // Block on exposure_condition until exposure_pending() returns false,
+    // which only happens when all devices have reported no exposure pending.
+    // This is also when the exposure number gets incremented because the
+    // system is ready for a new exposure.
     //
     while ( interface.exposure_pending() ) {
       std::unique_lock<std::mutex> exposure_lock( interface.exposure_lock );
       interface.exposure_condition.wait( exposure_lock );
       exposure_lock.unlock();
     }
+
+    interface.inc_expbuf();  // increment exposure buffer number
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] incremented expbuf buffer to " << interface.get_expbuf(); logwrite( function, message.str() );
+#endif
 
     interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
     interface.camera.async.enqueue( "CAMERAD:READY:true" );
@@ -1569,7 +1659,7 @@ namespace AstroCam {
    *
    */
   long Interface::do_expose(std::string nseq_in) {
-    std::string function = "AstroCam::Interface::expose";
+    std::string function = "AstroCam::Interface::do_expose";
     std::stringstream message;
     std::string nseqstr;
     std::string devstr;
@@ -1597,6 +1687,15 @@ namespace AstroCam {
       this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
       return(ERROR);
     }
+
+    // This is the exposure buffer number for this exposure.
+    // Lock it in now, before another exposure comes in.
+    //
+    int this_expbuf = this->get_expbuf();
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] this_expbuf=" << this_expbuf;
+    logwrite( function, message.str() );
+#endif
 
     // For all connected devices...
     //
@@ -1650,6 +1749,7 @@ namespace AstroCam {
         this->controller[dev].info.binning[0] = 1;
         this->controller[dev].info.binning[1] = 1;
 
+        this->controller[dev].info.ismex = true;
         this->controller[dev].info.bitpix = 16;
         this->controller[dev].info.frame_type = Camera::FRAME_RAW;
         if ( this->controller[dev].info.set_axes() != NO_ERROR ) {
@@ -1658,8 +1758,15 @@ namespace AstroCam {
           return( ERROR );
         }
 
-        this->controller[dev].info.systemkeys.keydb = this->systemkeys.keydb;
+
+/**
+        this->controller[dev].info.prikeys.keydb = this->prikeys.keydb;
         this->controller[dev].info.userkeys.keydb   = this->userkeys.keydb;
+
+        this->controller[dev].expinfo.at(this_expbuf).prikeys.keydb = this->prikeys.keydb;
+        this->controller[dev].expinfo.at(this_expbuf).userkeys.keydb   = this->userkeys.keydb;
+
+**/
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
@@ -1721,22 +1828,58 @@ namespace AstroCam {
 //  this->camera_info.userkeys.keydb = this->userkeys.keydb;
 
 //  this->camera_info.start_time = get_timestamp( );                // current system time formatted as YYYY-MM-DDTHH:MM:SS.sss
-    _start_time = get_timestamp( );                                 // current system time formatted as YYYY-MM-DDTHH:MM:SS.sss
-    this->camera.set_fitstime( _start_time );                       // sets camera.fitstime (YYYYMMDDHHMMSS) used for filename
+//  _start_time = get_timestamp();                                  // format that time as YYYY-MM-DDTHH:MM:SS.sss
 
-    message.str(""); message << "starting exposure at " << _start_time;
-    logwrite(function, message.str());
+    // Set camera.fitstime (YYYYMMDDHHMMSS) used for filename
+    // this may be a fraction of a second before the recorded EXPTIME but this
+    // rounds to the nearest second and is only used for the filename. The
+    // real shutter open time for the exposure start will be recorded by
+    // the shutter thread.
+    //
+    this->camera.set_fitstime( get_timestamp() );
 
-    // Spawn a thread to operate the shutter if needed
+//  message.str(""); message << "EXPSTART=" << _start_time << "// exposure start time";
+//  this->camera_info.prikeys.addkey( "EXPSTART", _start_time, "exposure start time" );
+
+    if ( ( error = this->camera.get_fitsname( this->camera_info.fits_name ) ) != NO_ERROR ) {
+      this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
+      return( error );
+    }
+
+    this->camera_info.prikeys.addkey( "FITSNAME", this->camera_info.fits_name, "this filename" );
+
+    this->camera_info.prikeys.addkey( "EXPTIME", this->camera.exposure_time, "exposure time in msec" );
+
+    // Spawn a thread to open and write FITS files as the frames come in
+    //
+    for ( auto dev : this->devlist ) this->write_pending( this_expbuf, dev, true );
+    std::thread( std::ref(AstroCam::Interface::FITS_handler), this_expbuf, std::ref(*this) ).detach();
+
+    // send CLR command from local scope since these strings won't be needed elsewere
+    //
+    { std::string cmd = "CLR";
+      std::string retstr;
+      error = this->do_native( cmd, retstr );  // send the clear command here
+      if ( error != NO_ERROR ) {
+        message.str(""); message << "ERROR clearing CCDs: " << retstr;
+        logwrite( function, message.str() );
+        return( error );
+      }
+    }
+    logwrite( function, "cleared CCDs" );
+
+    // Spawn a thread to operate the shutter if needed.
     //
     if ( this->camera.exposure_time > 0 ) {
-      this->camera.shutter.state = -1;     // shutter state pending, prevents potential race conditions
+      this->camera.shutter.arm();          // puts shutter into pending state to prevent potential race conditions
                                            // while waiting for shutter_state to transition from 1 -> 0
-      std::thread( std::ref(AstroCam::Interface::dothread_shutter), std::ref(this->camera) ).detach();
+      std::thread( std::ref(AstroCam::Interface::dothread_shutter), this_expbuf, std::ref(*this) ).detach();
     }
     else {
       logwrite( function, "shutter not opened" );
-      this->camera.shutter.state = 0;      // shutter state closed (not used for exposure_time == 0)
+      message.str(""); message << "NOTICE: incremented exposure buffer to " << server.get_expbuf(); logwrite( function, message.str() );
+      // Save shutter duration = 0 to keyword database now, because dothread_shutter won't run
+      this->camera_info.prikeys.addkey( "SHUTTIME", 0.0, "actual shutter open time in msec", 3 );
     }
 
     // Shutter or not, an exposure is now pending, so set the exposure_pending flag
@@ -1762,6 +1905,7 @@ namespace AstroCam {
           return( error );
         }
 
+/*** 10/30/23 *** BOB
         // then set the filename for this specific dev
         // Assemble the FITS filename.
         // If naming type = "time" then this will use this->fitstime so that must be set first.
@@ -1778,6 +1922,7 @@ namespace AstroCam {
           this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
           return( error );
         }
+***/
 
 #ifdef LOGLEVEL_DEBUG
         message.str("");
@@ -1809,15 +1954,44 @@ namespace AstroCam {
     //
     for (auto dev : this->devlist) {        // spawn a thread for each device in devlist
       try {
+        // copy the info class from controller[dev] to controller[dev].expinfo[expbuf]  -- kludge for now
+        //
+        this->controller[dev].expinfo.at(this_expbuf) = this->controller[dev].info;
+
+logwrite( function, "copying master keyword databases to expinfo now" );
+        this->controller[dev].expinfo.at(this_expbuf).prikeys.keydb = this->camera_info.prikeys.keydb;
+        this->controller[dev].expinfo.at(this_expbuf).userkeys.keydb   = this->camera_info.userkeys.keydb;
+
+        this->controller[dev].expinfo.at(this_expbuf).fits_name="not_needed";
+
+        std::string hash;
+        md5_file( this->controller[dev].firmware, hash );                 // compute the md5 hash
+
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "FIRM_MD5", hash, "MD5 checksum of firmware" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "FIRMWARE", this->controller[dev].firmware, "" );  // no room for a comment
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "DEV_ID", this->controller[dev].devnum, "detector controller device ID" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "SPEC_ID", this->controller[dev].channel, "spectrograph channel" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "CCD_ID", this->controller[dev].ccd_id, "CCD identifier" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "AMP_ID", this->controller[dev].info.readout_name, "CCD readout amplifier ID" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "FT", this->controller[dev].have_ft, "frame transfer used" );
+
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "WCSNAME", "DISPLAY", "" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "WCSNAMEA", "SPECTRUM", "" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "CUNIT1A", "Angstrom", "" );
+        this->controller[dev].expinfo.at(this_expbuf).extkeys.addkey( "CUNIT2A", "arcsec", "" );
+
+/*** 10/30/23 *** BOB
         // Open the fits file, ...
         //
         error = this->controller[dev].open_file( this->camera.writekeys_when );
+***/
 
         // ... then spawn a thread to trigger the appropriate readout waveforms in the ARC controller
         //
         std::thread( std::ref(AstroCam::Interface::dothread_read),
                      std::ref(this->camera),
-                     std::ref(this->controller[dev])
+                     std::ref(this->controller[dev]),
+                     this_expbuf
                    ).detach();
       }
       catch(std::out_of_range &) {
@@ -1840,6 +2014,38 @@ namespace AstroCam {
     }
 
     logwrite( function, "[DEBUG] expose is done now!" );
+
+    for (auto dev : this->devlist) {
+      message.str(""); 
+      message << "** dev=" << dev << " type_set=" << this->controller[dev].info.type_set << " frame_type=" << this->controller[dev].info.frame_type
+              << " detector_pixels[]=" << this->controller[dev].info.detector_pixels[0] << " " << this->controller[dev].info.detector_pixels[1]
+              << " section_size=" << this->controller[dev].info.section_size << " image_memory=" << this->controller[dev].info.image_memory
+              << " readout_name=" << this->controller[dev].info.readout_name 
+              << " readout_name2=" << this->controller[dev].expinfo.at(this_expbuf).readout_name
+              << " readout_type=" << this->controller[dev].info.readout_type
+              << " axes[]=" << this->controller[dev].info.axes[0] << " " << this->controller[dev].info.axes[1] << " " << this->controller[dev].info.axes[2]
+              << " cubedepth=" << this->controller[dev].info.cubedepth << " fitscubed=" << this->controller[dev].info.fitscubed
+              << " binning=" << this->controller[dev].info.binning[0] << " " << this->controller[dev].info.binning[1]
+              << " axis_pixels[]=" << this->controller[dev].info.axis_pixels[0] << " " << this->controller[dev].info.axis_pixels[1]
+              << " ismex=" << this->controller[dev].info.ismex << " extension=" << this->controller[dev].info.extension;
+      logwrite( function, message.str() );
+    }
+
+    for (auto dev : this->devlist) {
+      for ( int ii=0; ii<NUM_EXPBUF; ii++ ) {
+        message.str(""); 
+        message << "** dev=" << dev << " expbuf=" << ii << " type_set=" << this->controller[dev].expinfo.at(ii).type_set << " frame_type=" << this->controller[dev].expinfo.at(ii).frame_type
+                << " detector_pixels[]=" << this->controller[dev].expinfo.at(ii).detector_pixels[0] << " " << this->controller[dev].expinfo.at(ii).detector_pixels[1]
+                << " section_size=" << this->controller[dev].expinfo.at(ii).section_size << " image_memory=" << this->controller[dev].expinfo.at(ii).image_memory
+                << " readout_name=" << this->controller[dev].expinfo.at(ii).readout_name << " readout_type=" << this->controller[dev].expinfo.at(ii).readout_type
+                << " axes[]=" << this->controller[dev].expinfo.at(ii).axes[0] << " " << this->controller[dev].expinfo.at(ii).axes[1] << " " << this->controller[dev].expinfo.at(ii).axes[2]
+                << " cubedepth=" << this->controller[dev].expinfo.at(ii).cubedepth << " fitscubed=" << this->controller[dev].expinfo.at(ii).fitscubed
+                << " binning=" << this->controller[dev].expinfo.at(ii).binning[0] << " " << this->controller[dev].expinfo.at(ii).binning[1]
+                << " axis_pixels[]=" << this->controller[dev].expinfo.at(ii).axis_pixels[0] << " " << this->controller[dev].expinfo.at(ii).axis_pixels[1]
+                << " ismex=" << this->controller[dev].expinfo.at(ii).ismex << " extension=" << this->controller[dev].expinfo.at(ii).extension;
+        logwrite( function, message.str() );
+      }
+    }
 
     return( error );
 
@@ -2141,9 +2347,19 @@ namespace AstroCam {
 
     try {
       con.pArcDev->loadControllerFile( timlodfile );        // Do the load here
+
       if ( !con.info.readout_name.empty() ) {  // Set readout amplifier if defined
         con.pArcDev->selectOutputSource( con.readout_arg );
       }
+
+      std::string hash;
+      md5_file( timlodfile, hash );                         // compute the md5 hash
+
+      con.prikeys.addkey( "READOUT", con.info.readout_name, "readout amplifier" );
+      con.prikeys.addkey( "CCD_ID", con.ccd_id, "CCD identifier" );
+      con.prikeys.addkey( "FT", con.have_ft, "frame transfer used" );
+      con.prikeys.addkey( "FIRMWARE", timlodfile, "" );     // no room for a comment
+      con.prikeys.addkey( "FIRM_MD5", hash, "MD5 checksum of firmware" );
     }
     catch(const std::exception &e) {
       message.str(""); message << "ERROR: " << con.devname << ": " << e.what();
@@ -2415,6 +2631,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::write_frame *************************************/
   /**
    * @brief      writes the image_data buffer to disk for the specified device
+   * @param[in]  expbuf    exposure buffer number
    * @param[in]  devnum    device number
    * @param[in]  fpbcount  frame number = also thread ID receiving the frame
    * @return     ERROR or NO_ERROR
@@ -2422,8 +2639,10 @@ namespace AstroCam {
    * This function is called by the handle_frame thread.
    * It will call deinterlace() before calling write().
    *
+   * incoming frame from ARC -> frameCallback() -> handle_frame() -> write_frame()
+   *
    */
-  long Interface::write_frame(int devnum, int fpbcount) {
+  long Interface::write_frame( int expbuf, int devnum, int fpbcount ) {
     std::string function = "AstroCam::Interface::write_frame";
     std::stringstream message;
     long error=NO_ERROR;
@@ -2450,17 +2669,33 @@ namespace AstroCam {
     try {
       switch (this->controller[devnum].info.datatype) {
         case USHORT_IMG: {
-          this->controller[devnum].deinterlace( (uint16_t *)imbuf );
-          error = this->controller[devnum].write( );
+          this->controller[devnum].deinterlace( expbuf, (uint16_t *)imbuf );
+message.str(""); message << this->controller[devnum].devname << " exposure buffer " << expbuf << " deinterlaced " << std::hex << imbuf;
+logwrite(function, message.str());
+message.str(""); message << "about to write section size " << this->controller[devnum].expinfo.at(expbuf).section_size ; // << " to file \"" << this->pFits.at(expbuf)->fits_name << "\"";
+logwrite(function, message.str());
+
+          // Call write_image(),
+          // passing a pointer to the workbuf for this controller (which has the deinterlaced image), and
+          // a pointer for the info class for this exposure buf on this controller.
+          //
+          error = this->pFits.at( expbuf )->write_image( (uint16_t *)this->controller[ devnum ].workbuf, this->controller[ devnum ].expinfo.at(expbuf) );
+
+          this->pFits.at( expbuf )->extension++;
+
+message.str(""); message << this->controller[devnum].devname << " exposure buffer " << expbuf << " wrote " << std::hex << this->controller[devnum].workbuf;
+logwrite(function, message.str());
+
+//        error = this->controller[devnum].write( );  10/30/23 BOB -- the write is above. .write() called ->write_image(), skip that extra function
           break;
         }
         case SHORT_IMG: {
-          this->controller[devnum].deinterlace( (int16_t *)imbuf );
+          this->controller[devnum].deinterlace( expbuf, (int16_t *)imbuf );
           error = this->controller[devnum].write( );
           break;
         }
         case FLOAT_IMG: {
-          this->controller[devnum].deinterlace( (uint32_t *)imbuf );
+          this->controller[devnum].deinterlace( expbuf, (uint32_t *)imbuf );
           error = this->controller[devnum].write( );
           break;
         }
@@ -2795,8 +3030,7 @@ namespace AstroCam {
 
     // Add the shutter enable keyword to the system keys db
     //
-    message.str(""); message << "SHUTTEN=" << ( this->camera_info.shutterenable ? "T" : "F" ) << "// shutter was enabled";
-    this->systemkeys.addkey( message.str() );
+    this->camera_info.prikeys.addkey( "SHUTTEN", ( this->camera_info.shutterenable ? "T" : "F" ), "shutter was enabled" );
 
     return error;
   }
@@ -2978,6 +3212,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::handle_frame ************************************/
   /**
    * @brief      process frame received by frameCallback for specified device
+   * @param[in]  expbuf    exposure buffer number
    * @param[in]  devnum    controller device number
    * @param[in]  fpbcount  frames per buffer count, returned from the ARC API
    * @param[in]  fcount    number of frames read, returned from the ARC API
@@ -2986,14 +3221,16 @@ namespace AstroCam {
    * This function is static, spawned in a thread created by frameCallback()
    * which is the callback fired by the ARC API when a frame has been received.
    *
+   * incoming frame from ARC -> frameCallback() -> handle_frame()
+   *
    */
-  void Interface::handle_frame(int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer) {
+  void Interface::handle_frame( int expbuf, int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer ) {
     std::string function = "AstroCam::Interface::handle_frame";
     std::stringstream message;
     int error = NO_ERROR;
 
 #ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] devnum=" << devnum << " " << "fpbcount=" << fpbcount 
+    message << "[DEBUG] expbuf=" << expbuf << " devnum=" << devnum << " " << "fpbcount=" << fpbcount 
             << " fcount=" << fcount << " PCI buffer=" << std::hex << std::uppercase << buffer;
     logwrite(function, message.str());
 #endif
@@ -3009,15 +3246,15 @@ namespace AstroCam {
     // When useframes is false, fpbcount=0, fcount=0, framenum=0
     //
     if ( ! server.controller[devnum].have_ft ) {
-      server.exposure_pending( devnum, false );
+      server.exposure_pending( devnum, false );    // this also does the notify
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "DEBUG: dev " << devnum << " chan " << server.controller[devnum].channel << " exposure_pending=false";
+      message.str(""); message << "[DEBUG] dev " << devnum << " chan " << server.controller[devnum].channel << " exposure_pending=false";
       server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
 #endif
     }
     server.controller[devnum].in_readout = false;
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "DEBUG: dev " << devnum << " chan " << server.controller[devnum].channel << " in_readout=false";
+    message.str(""); message << "[DEBUG] dev " << devnum << " chan " << server.controller[devnum].channel << " in_readout=false";
     server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
 #endif
 
@@ -3081,7 +3318,7 @@ namespace AstroCam {
     message.str(""); message << "[DEBUG] calling server.write_frame for devnum=" << devnum << " fpbcount=" << fpbcount;
     logwrite(function, message.str());
 #endif
-      error = server.write_frame( devnum, fpbcount );
+      error = server.write_frame( expbuf, devnum, fpbcount );
     }
     else {
       logwrite(function, "aborted!");
@@ -3098,15 +3335,92 @@ namespace AstroCam {
     server.frameinfo_mutex.lock();                 // protect access to frameinfo structure
 //  server.controller[devnum].frameinfo.erase( fpbcount );
 
+/*** 10/30/23 BOB
     server.controller[devnum].close_file( server.camera.writekeys_when );
+***/
 
     server.frameinfo_mutex.unlock();
 
     server.remove_framethread();  // framethread_count is decremented because a thread has completed
 
+    server.write_pending( expbuf, devnum, false ); // this also does the notify
+
     return;
   }
   /***** AstroCam::Interface::handle_frame ************************************/
+
+
+  /***** AstroCam::Interface::FITS_handler ************************************/
+  /**
+   * @brief      performs the opening and closing of FITS files
+   * @details    The FITS file is opened as soon as this thread starts, then
+   *             this thread blocks on a condition wait until notified that
+   *             all writes have been completed, at which time the FITS file
+   *             is closed and this thread exits.
+   * @param[in]  expbuf     exposure buffer number
+   * @param[in]  interface  reference to Interface class object
+   *
+   */
+  void Interface::FITS_handler( int expbuf, Interface &interface ) {
+    std::string function = "AstroCam::Interface::FITS_handler";
+    std::stringstream message;
+
+    // Initialize the pFits pointer for this exposure buffer to a new FITS_file object
+    //
+    try {
+      interface.camera_info.datatype = USHORT_IMG;
+      interface.camera_info.type_set = true;
+      interface.camera_info.ismex = true;
+      interface.pFits.at( expbuf ) = ( new FITS_file() );
+      interface.pFits.at( expbuf )->extension=0;
+      logwrite( function, "about to call pFits.at( expbuf )->open_file()" );
+      long error = interface.pFits.at( expbuf )->open_file( true, interface.camera_info );
+      if ( error==NO_ERROR ) {
+        message.str(""); message << "opened \"" << interface.camera_info.fits_name << "\" returned " << error;
+        logwrite( function, message.str() );
+      }
+      else {
+        interface.pFits.at(expbuf)->close_file( true, interface.camera_info );
+        message.str(""); message << "ERROR opening \"" << interface.camera_info.fits_name << "\". FITS handler exiting";
+        logwrite( function, message.str() );
+        return;
+      }
+    }
+    catch ( std::out_of_range & ) {
+      message.str(""); message << "ERROR: exposure buffer " << expbuf << " not in pFits vector";
+      logwrite( function, message.str() );
+      return;  // @TODO get this error back to do_expose? or readout?
+    }
+
+    // Block on write_condition until there are no writes pending
+    // (writes_pending vector has zero size) which only happens when
+    // all devices have written their frames for this exposure number.
+    //
+    while ( interface.writes_pending.at( expbuf ).size() > 0 ) {
+      std::unique_lock<std::mutex> write_lock( interface.write_lock );
+
+      message.str(""); message << "NOTICE:exposure buffer " << expbuf << " waiting for frames from ";
+      std::vector<int> pending = interface.writes_pending.at( expbuf );
+      for ( auto dev : pending ) message << interface.controller[dev].channel << " ";
+      logwrite( function, message.str() );
+
+      // wait() will repeatedly call this lambda function before actually entering
+      // the waiting state, and if false, it won't wait and will continue. The
+      // loop will exit only when the predicate returns true. wait() will also
+      // automatically release the mutex lock temporarily to allow other threads
+      // access the shared data.
+      //
+      interface.write_condition.wait( write_lock, [&] { return !(interface.writes_pending.at( expbuf ).size()>0); } );
+    }
+
+    message.str(""); message << "NOTICE:all frames written for exposure buffer " << expbuf;
+    logwrite( function, message.str() );
+
+    interface.pFits.at(expbuf)->close_file( true, interface.camera_info );
+
+    return;
+  }
+  /***** AstroCam::Interface::FITS_handler ************************************/
 
 
   /***** AstroCam::Interface::add_framethread *********************************/
@@ -3182,6 +3496,7 @@ namespace AstroCam {
     this->info.readout_name = "";
     this->info.readout_type = -1;
     this->readout_arg = 0xBAD;
+    this->expinfo.resize( NUM_EXPBUF );  // vector of Camera::Information, one for each exposure buffer
   }
   /***** AstroCam::Interface::Controller::Controller **************************/
 
@@ -3289,9 +3604,11 @@ namespace AstroCam {
    * 
    * Called by write_frame(), which is called by the handle_frame thread.
    *
+   * incoming frame from ARC -> frameCallback() -> handle_frame() -> write_frame() -> deinterlace()
+   *
    */
   template <class T>
-  T* Interface::Controller::deinterlace(T* imbuf) {
+  T* Interface::Controller::deinterlace( int expbuf, T* imbuf ) {
     std::string function = "AstroCam::Interface::deinterlace";
     std::stringstream message;
 
@@ -3577,6 +3894,43 @@ namespace AstroCam {
         error = ERROR;
       }
     } // end if (testname==shutter)
+
+    else 
+    if ( testname == "pending" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = CAMERAD_TEST;
+        retstring.append( " pending\n" );
+        retstring.append( "  returns which channels have an exposure pending and for each\n" );
+        retstring.append( "  exposure buffer which devices have writes pending.\n\n" );
+        error = NO_ERROR;
+      }
+
+      // this shows which channels have an exposure pending
+      {
+      std::vector<int> pending = this->exposure_pending_list();
+      message.str(""); message << "exposures pending: ";
+      for ( auto dev : pending ) message << this->controller[dev].channel << " ";
+      logwrite( function, message.str() );
+      }
+      retstring.append( message.str() ); retstring.append( "\n" );
+
+      // loop over all exposure buffers...
+      //
+      for ( int i=0; i<NUM_EXPBUF; i++ ) {
+        message.str(""); message << "writes_pending ";
+        std::vector<int> pending = this->writes_pending_list(i);  // internally mutex-protected
+        message << i << ": ";
+
+        // ...and for each exposure buffer, show which devices have writes pending
+        //
+        for ( auto wp : pending ) {
+          message << wp << " ";
+        }
+        logwrite( function, message.str() );
+        retstring.append( message.str() ); retstring.append( "\n" );
+      }
+      error = NO_ERROR;
+    }
 
     // ----------------------------------------------------
     // invalid test name

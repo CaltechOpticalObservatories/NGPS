@@ -18,7 +18,7 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 message( STATUS "compiling for AstroCam GenIII PCI/PCIe")
 set( INTERFACE_TARGET astrocam)
 set( ARCAPI_DIR "${PROJECT_BASE_DIR}/ARC")
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
 add_definitions( -DASTROCAM)
 add_definitions( -DARC66_PCIE)
 find_path( ARCAPI_BASE "CArcBase.h" PATHS ${ARCAPI_DIR}/CArcBase/inc)
@@ -113,6 +113,7 @@ target_link_libraries(camerad
         logentry
         common
         utilities
+        md5
         CArcBase
         CArcDevice
         CArcFitsFile

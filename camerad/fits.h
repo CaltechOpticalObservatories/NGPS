@@ -44,9 +44,11 @@ class FITS_file {
     std::string fits_name;
 
   public:
+    std::atomic<int> extension;
     bool iserror() { return this->error; };         ///< allows outsiders access to errors that occurred in a fits writing thread
     bool isopen()  { return this->file_open; };     ///< allows outsiders access file open status
     FITS_file() {                                   ///< constructor
+      this->extension = 0;
       this->threadcount = 0;
       this->framen = 0;
       this->writing_file = false;
@@ -128,8 +130,8 @@ class FITS_file {
         // Iterate through the system-defined FITS keyword databases and add them to the primary header.
         //
         Common::FitsKeys::fits_key_t::iterator keyit;
-        for (keyit  = info.systemkeys.keydb.begin();
-             keyit != info.systemkeys.keydb.end();
+        for (keyit  = info.prikeys.keydb.begin();
+             keyit != info.prikeys.keydb.end();
              keyit++) {
           this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
         }
@@ -214,9 +216,19 @@ class FITS_file {
         return;
       }
 
+      // Iterate through the system-defined FITS keyword databases and add them to the primary header.
+      //
+      Common::FitsKeys::fits_key_t::iterator keyit;
+      logwrite( function, "writing primary system keys after exposure" );
+      for (keyit  = info.prikeys.keydb.begin();
+           keyit != info.prikeys.keydb.end();
+           keyit++) {
+        this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
+      }
+
       // Write the user keys on close, if specified
       //
-      if ( writekeys ) {
+      if ( true ) {
         logwrite( function, "writing user-defined keys after exposure" );
         Common::FitsKeys::fits_key_t::iterator keyit;
         for (keyit  = info.userkeys.keydb.begin();
@@ -252,6 +264,7 @@ class FITS_file {
       message.str(""); message << this->fits_name << " closed";
       logwrite(function, message.str());
       this->fits_name="";
+      return;
     }
     /***** FITS_file::close_file **********************************************/
 
@@ -274,7 +287,7 @@ class FITS_file {
       // The file must have been opened first
       //
       if ( !this->file_open ) {
-        message.str(""); message << "ERROR: FITS file \"" << info.fits_name << "\" not open";
+        message.str(""); message << "ERROR: FITS file \"" << this->fits_name << "\" not open";
         logwrite(function, message.str());
         return (ERROR);
       }
@@ -304,7 +317,7 @@ class FITS_file {
               << " cubedepth=" << info.cubedepth
               << " axes=";
       for ( auto aa : axes ) message << aa << " ";
-      message << ". spawning image writing thread for frame " << this->framen << " of " << info.fits_name;
+      message << ". spawning image writing thread for frame " << this->framen << " of file \"" << this->fits_name << "\"";
       logwrite(function, message.str());
 #endif
       std::thread([&]() {                                    // create the detached thread here
@@ -319,7 +332,7 @@ class FITS_file {
       }).detach();
 #ifdef LOGLEVEL_DEBUG
       message.str("");
-      message << "[DEBUG] spawned image writing thread for frame " << this->framen << " of " << info.fits_name;
+      message << "[DEBUG] spawned image writing thread for frame " << this->framen << " of file \"" << this->fits_name << "\"";
       logwrite(function, message.str());
 #endif
 
@@ -341,7 +354,7 @@ class FITS_file {
                                    << " threadcount=" << threadcount 
                                    << " extension=" << info.extension 
                                    << " framen=" << this->framen
-                                   << " file=" << info.fits_name;
+                                   << " file=" << this->fits_name;
           logwrite(function, message.str());
           this->writing_file = false;
           return (ERROR);
@@ -350,13 +363,13 @@ class FITS_file {
 
       if (this->error) {
         message.str("");
-        message << "an error occured in one of the FITS writing threads for " << info.fits_name;
+        message << "an error occured in one of the FITS writing threads for file \"" << this->fits_name << "\"";
         logwrite(function, message.str());
       }
 #ifdef LOGLEVEL_DEBUG
       else {
         message.str("");
-        message << "[DEBUG] " << info.fits_name << " complete";
+        message << "[DEBUG] file \"" << this->fits_name << "\" complete";
         logwrite(function, message.str());
       }
 #endif
@@ -382,6 +395,18 @@ class FITS_file {
       std::string function = "FITS_file::write_image_thread";
       std::stringstream message;
 
+      // This shouldn't happen (unless there's a programming error) but an
+      // attempt to call pHDU().write(...) with zero size can cause a fatal 
+      // exception (i.e. crash) which doesn't get caught.
+      //
+      if ( info.section_size == 0 ) {
+        message << "ERROR: section_size=0 for file \"" << self->fits_name << "\"";
+        logwrite( function, message.str() );
+        self->writing_file = false;
+        self->error = true;      // tells the calling function that I had an error
+        return;
+      }
+
       // This makes the thread wait while another thread is writing images. This
       // function is really for single image writing, it's here just in case.
       //
@@ -390,7 +415,7 @@ class FITS_file {
         usleep(1000);
         if (--wait < 0) {
           message.str(""); message << "ERROR: timeout waiting for last frame to complete. "
-                                   << "unable to write " << info.fits_name;
+                                   << "unable to write " << self->fits_name;
           logwrite(function, message.str());
           self->writing_file = false;
           self->error = true;    // tells the calling function that I had an error
@@ -415,7 +440,14 @@ class FITS_file {
         self->pFits->flush();  // make sure the image is written to disk
       }
       catch (CCfits::FitsError& error){
-        message.str(""); message << "FITS file error thrown: " << error.message();
+        message.str(""); message << "ERROR: writing " << info.section_size << " pixels to \"" << self->fits_name << "\": " << error.message();
+        logwrite(function, message.str());
+        self->writing_file = false;
+        self->error = true;    // tells the calling function that I had an error
+        return;
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR: writing " << info.section_size << " pixels to \"" << self->fits_name << "\": " << e.what();
         logwrite(function, message.str());
         self->writing_file = false;
         self->error = true;    // tells the calling function that I had an error
@@ -423,6 +455,7 @@ class FITS_file {
       }
 
       self->writing_file = false;
+      return;
     }
     /***** FITS_file::write_image_thread **************************************/
 
@@ -444,7 +477,7 @@ class FITS_file {
       std::stringstream message;
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] info.extension=" << info.extension << " this->framen=" << this->framen;
+      message.str(""); message << "[DEBUG] info.extension=" << info.extension << " this->extension=" << this->extension << " this->framen=" << this->framen;
       logwrite( function, message.str() );
 #endif
 
@@ -454,7 +487,8 @@ class FITS_file {
       //
       int last_threadcount = this->threadcount;
       int wait = FITS_WRITE_WAIT;
-      while (info.extension != this->framen) {
+//    while (info.extension != this->framen) {
+      while (this->extension != this->framen) {
         usleep(1000);
         if (this->threadcount >= last_threadcount) {  // threads are not completing
           wait--;                                     // start decrementing wait timer
@@ -466,7 +500,8 @@ class FITS_file {
         if (wait < 0) {
           message.str(""); message << "ERROR: timeout waiting for frame write."
                                    << " threadcount=" << threadcount 
-                                   << " extension=" << info.extension 
+                                   << " info.extension=" << info.extension 
+                                   << " this->extension=" << this->extension 
                                    << " framen=" << this->framen;
           logwrite(function, message.str());
           self->writing_file = false;
@@ -498,10 +533,13 @@ class FITS_file {
         // create the extension name
         // This shows up as keyword EXTNAME and in DS9's "display header"
         //
-        std::string extname = std::to_string( info.extension+1 );
+//      std::string extname = std::to_string( info.extension+1 );
+//      std::string extname = std::to_string( this->extension+1 );
+
+        std::string extname = info.extkeys.keydb["SPEC_ID"].keyvalue;
 
         message.str(""); message << "adding " << axes[0] << " x " << axes[1] 
-                                 << " frame to extension " << extname << " in file " << info.fits_name;
+                                 << " frame to extension " << this->extension+1 << " (" << extname << ") in file " << self->fits_name;
         logwrite(function, message.str());
 
         // Add the extension here
@@ -548,7 +586,7 @@ class FITS_file {
         self->pFits->flush();
       }
       catch (CCfits::FitsError& error){
-        message.str(""); message << "FITS file error thrown: " << error.message();
+        message.str(""); message << "ERROR: " << error.message();
         logwrite(function, message.str());
         self->writing_file = false;
         self->error = true;    // tells the calling function that I had an error
@@ -559,6 +597,7 @@ class FITS_file {
       //
       this->framen++;
       self->writing_file = false;
+      return;
     }
     /***** FITS_file::write_mex_thread ****************************************/
 
@@ -583,9 +622,10 @@ class FITS_file {
         //
       }
       catch (CCfits::FitsError & err) {
-        message.str(""); message << "error creating FITS header: " << err.message();
+        message.str(""); message << "ERROR: " << err.message();
         logwrite(function, message.str());
       }
+      return;
     }
     /***** FITS_file::make_camera_header **************************************/
 
@@ -602,6 +642,11 @@ class FITS_file {
      * Uses CCFits addKey template function, this wrapper ensures the correct type is passed.
      *
      */
+    void safe_add_key( bool primary, std::string keyword, std::string type, std::string value, std::string comment ) {
+      const std::lock_guard<std::mutex> lock(this->fits_mutex);
+      this->add_key( primary, keyword, type, value, comment );
+      return;
+    }
     void add_key( bool primary, std::string keyword, std::string type, std::string value, std::string comment ) {
       std::string function = "FITS_file::add_key";
       std::stringstream message;
@@ -614,7 +659,8 @@ class FITS_file {
       // The file must have been opened first
       //
       if ( !this->file_open ) {
-        logwrite(function, "ERROR: no fits file open!");
+        message.str(""); message << "ERROR: adding key " << keyword << "=" << value << ": no FITS file open";
+        logwrite( function, message.str() );
         return;
       }
 
@@ -628,9 +674,17 @@ class FITS_file {
           ( primary ? this->pFits->pHDU().addKey(keyword, std::stoi(value), comment)
                     : this->imageExt->addKey(keyword, std::stoi(value), comment) );
         }
+        else if (type.compare("LONG") == 0) {
+          ( primary ? this->pFits->pHDU().addKey(keyword, std::stol(value), comment)
+                    : this->imageExt->addKey(keyword, std::stol(value), comment) );
+        }
         else if (type.compare("FLOAT") == 0) {
           ( primary ? this->pFits->pHDU().addKey(keyword, std::stof(value), comment)
                     : this->imageExt->addKey(keyword, std::stof(value), comment) );
+        }
+        else if (type.compare("DOUBLE") == 0) {
+          ( primary ? this->pFits->pHDU().addKey(keyword, std::stod(value), comment)
+                    : this->imageExt->addKey(keyword, std::stod(value), comment) );
         }
         else if (type.compare("STRING") == 0) {
           ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
@@ -638,11 +692,11 @@ class FITS_file {
         }
         else {
           message.str(""); message << "ERROR unknown type: " << type << " for user keyword: " << keyword << "=" << value
-                                   << ": expected {INT,FLOAT,STRING,BOOL}";
+                                   << ": expected {INT,LONG,DOUBLE,FLOAT,STRING,BOOL}";
           logwrite(function, message.str());
         }
       }
-      // There could be an error converting a value to INT or FLOAT with stoi or stof,
+      // There could be an error converting a value to INT or DOUBLE with stoi or stof,
       // in which case save the keyword as a STRING.
       //
       catch ( std::invalid_argument & ) { 
@@ -667,6 +721,7 @@ class FITS_file {
                                  << err.message();
         logwrite(function, message.str());
       }
+      return;
     }
     /***** FITS_file::add_key *************************************************/
 
