@@ -1118,7 +1118,7 @@ namespace AstroCam {
     timenow = Time::getTimeNow();            // get the time NOW
     timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     mjd1 = mjd_from( timenow );              // modified Julian date of stop
-    mjd = (mjd1-mjd0)/2.;                    // average mjd
+    mjd = (mjd1+mjd0)/2.;                    // average mjd
 
     interface.camera_info.prikeys.addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
     interface.camera_info.prikeys.addkey( "MJD", mjd, "average of MJD0 and MJD1" );
