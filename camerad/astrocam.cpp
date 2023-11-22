@@ -58,7 +58,7 @@ namespace AstroCam {
     message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE: " << uiImageSize;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
 #ifdef LOGLEVEL_DEBUG
-    std::cerr << "pixelcount:  " << std::setw(10) << uiPixelCount << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
+    std::cerr << "dev:" << devnum << " pixelcount:  " << std::setw(10) << uiPixelCount << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
 #endif
     return;
   }
@@ -95,14 +95,15 @@ namespace AstroCam {
 
     message << "FRAMECOUNT_" << devnum << ":" << fcount << " rows=" << rows << " cols=" << cols;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+    logwrite( "Callback::frameCallback", message.str() );
 
     server.add_framethread();            // framethread_count is incremented because a thread has been added
 
     std::thread( std::ref(AstroCam::Interface::handle_frame), expbuf, devnum, fpbcount, fcount, buffer ).detach();
 
 #ifdef LOGLEVEL_DEBUG
-    std::cerr << "pixelcount:  " << std::setw(10) << (rows*cols) << "\n";
-    std::cerr << "framecount:  " << std::setw(10) << fcount << "\n";
+    std::cerr << "\n dev:" << devnum << " pixelcount:  " << std::setw(10) << (rows*cols) << "\n";
+    std::cerr << "\n dev:" << devnum << " framecount:  " << std::setw(10) << fcount << "\n";
 #endif
     return;
   }
@@ -119,8 +120,9 @@ namespace AstroCam {
    */
   void Callback::ftCallback( int expbuf, int devnum ) {
     std::stringstream message;
-    message << "FT_" << devnum << ":complete";
+    message << "FRAMETRANSFER_" << devnum << ":complete";
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+    logwrite( "Callback::ftCallback", message.str() );
 
     if ( server.controller.find(devnum) == server.controller.end() ) {
       message.str(""); message << "ERROR in AstroCam::Callback::ftCallback (fatal): devnum " << devnum << " not in controller configuration";
@@ -2392,13 +2394,12 @@ logwrite( function, "copying master keyword databases to expinfo now" );
 
   /***** AstroCam::Interface::buffer ******************************************/
   /**
-   * @brief      set/get mapped image buffer
+   * @brief      set/get mapped PCI image buffer
+   * @details    This function uses the ARC API to allocate PCI/e buffer space
+   *             for doing the DMA transfers.
    * @param[in]  size_in   string containing the buffer allocation info
    * @param[out] retstring reference to a string for return values
    * @return     ERROR or NO_ERROR
-   *
-   * This function uses the ARC API to allocate PCI/e buffer space for doing
-   * the DMA transfers.
    *
    * Function returns only ERROR or NO_ERROR on error or success. The 
    * reference to retstring is used to return the size of the allocated
@@ -2410,10 +2411,22 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     std::stringstream message;
     uint32_t try_bufsize=0;
 
+    if ( size_in == "?" ) {
+      retstring = CAMERAD_BUFFER;
+      retstring.append( " [ <bytes> | <rows> <cols> ]\n" );
+      retstring.append( "  Allocate PCI buffer space for performing DMA transfers.\n" );
+      retstring.append( "  Provide either the size of the buffer <bytes>, or if two values\n" );
+      retstring.append( "  are provided then they are taken as <rows> x <cols> pixels and a\n" );
+      retstring.append( "  buffer will be allocated to accomodate an image of that size.\n" );
+      retstring.append( "  If no args are supplied then the current buffer size is returned.\n" );
+      return( NO_ERROR );
+    }
+
     // If no connected devices then nothing to do here
     //
     if (this->numdev == 0) {
       logwrite(function, "ERROR: no connected devices");
+      retstring="not_connected";
       return(ERROR);
     }
 
@@ -2440,6 +2453,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
       default: // bad
                message.str(""); message << "ERROR: invalid arguments: " << size_in << ": expected bytes or cols rows";
                logwrite(function, message.str());
+               retstring="invalid_arguments";
                return(ERROR);
                break;
     }
@@ -2456,14 +2470,16 @@ logwrite( function, "copying master keyword databases to expinfo now" );
         for (auto check : this->devlist) message << check << " ";
         message << "}";
         logwrite(function, message.str());
+        retstring="bad_device";
         return(ERROR);
       }
       catch(const std::exception &e) {
         message.str(""); message << "ERROR: device number " << dev << ": " << e.what();
         logwrite(function, message.str());
+        retstring="bad_device";
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error mapping memory"); return(ERROR); }
+      catch(...) { logwrite(function, "unknown error mapping memory"); retstring="memory_error"; return(ERROR); }
 
       this->bufsize = try_bufsize;
     }
@@ -3099,15 +3115,17 @@ logwrite(function, message.str());
         message.str(""); message << "ERROR: unable to convert one or more values to integer: ";
         for ( auto arg : arglist ) message << arg << " ";
         logwrite( function, message.str() );
+        retstring="invalid_argument";
         return( ERROR );
       }
       catch ( std::out_of_range & ) {
         message.str(""); message << "ERROR: one or more values outside range: ";
         for ( auto arg : arglist ) message << arg << " ";
         logwrite( function, message.str() );
+        retstring="out_of_range";
         return( ERROR );
       }
-      catch(...) { logwrite(function, "unknown error setting geometry"); return( ERROR ); }
+      catch(...) { logwrite(function, "ERROR: unknown exception setting geometry"); retstring="unknown_exception"; return( ERROR ); }
 
       if ( _cols < 1 || _rows < 1 ) {
         logwrite( function, "ERROR: cols rows must be > 0" );
@@ -3824,28 +3842,30 @@ logwrite(function, message.str());
     // ----------------------------------------------------
     // shutter
     // ----------------------------------------------------
+    // Shutter control (see help below)
+    // init, open, close, get, time, expose
     //
     else
     if (testname == "shutter") {
       if ( tokens.size() == 2 ) {
         error = NO_ERROR;
-        if ( tokens[1] == "open" ) {
+        if ( tokens[1] == "open" ) {     // manually open shutter now
           error  = this->camera.shutter.set_open();
           usleep( 150000 );
           error |= this->test( "shutter get", retstring );
         }
         else
-        if ( tokens[1] == "close" ) {
+        if ( tokens[1] == "close" ) {    // manually close shutter now
           error  = this->camera.shutter.set_close();
           usleep( 150000 );
           error |= this->test( "shutter get", retstring );
         }
         else
-        if ( tokens[1] == "init" ) {
+        if ( tokens[1] == "init" ) {     // initialize Shutter class and open USB device
           error = this->camera.shutter.init();
         }
         else
-        if ( tokens[1] == "get" ) {
+        if ( tokens[1] == "get" ) {      // get the shutter state
           int state;
           error = this->camera.shutter.get_state(state);
           switch( state ) {
@@ -3855,12 +3875,12 @@ logwrite(function, message.str());
           }
         }
         else
-        if ( tokens[1] == "time" ) {
+        if ( tokens[1] == "time" ) {     // report the last recorded exposure duration
           double el = this->camera.shutter.duration();
           retstring = std::to_string( el );
         }
         else
-        if ( tokens[1] == "?" ) {
+        if ( tokens[1] == "?" ) {        // help
           retstring = CAMERAD_TEST;
           retstring.append( " shutter init | open | close | get | time | expose <msec> \n" );
           retstring.append( "  init:           initializes Shutter class and opens USB device, required before use\n" );
@@ -3878,7 +3898,7 @@ logwrite(function, message.str());
       }
       else
       if ( tokens.size() == 3 ) {
-        if ( tokens[1] == "expose" ) {
+        if ( tokens[1] == "expose" ) {   // open the shutter for an integral number of msec, report measured exposure time
           int sl;
           try { retstring="bad exptime: expected integral number of msec"; sl = std::stoi( tokens[2] ); }
           catch ( std::invalid_argument & ) { return ERROR; } catch ( std::out_of_range & ) { return ERROR; }
@@ -3895,6 +3915,10 @@ logwrite(function, message.str());
       }
     } // end if (testname==shutter)
 
+    // ----------------------------------------------------
+    // pending
+    // ----------------------------------------------------
+    //
     else 
     if ( testname == "pending" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
@@ -3930,6 +3954,96 @@ logwrite(function, message.str());
         retstring.append( message.str() ); retstring.append( "\n" );
       }
       error = NO_ERROR;
+    } // end if (testname==pending)
+
+    // ----------------------------------------------------
+    // frametransfer
+    // ----------------------------------------------------
+    // run the frame transfer waveforms on the indicated device
+    //
+    else
+    if ( testname == "frametransfer" ) {
+
+      if ( tokens.size()==1 || ( tokens.size() > 1 && tokens[1] == "?" ) ) {
+        retstring = CAMERAD_TEST;
+        retstring.append( " frametransfer <dev#> | <chan>\n" );
+        retstring.append( "  Initiate the frame transfer waveforms on the indicated device.\n" );
+        retstring.append( "  Supply dev# or chan from { " );
+        message.str("");
+        for ( auto dd : this->devlist ) {
+          message << dd << " " << this->controller[dd].channel << " ";
+        }
+        if ( this->devlist.empty() ) message << "no_devices_open ";
+        message << "}";
+        retstring.append( message.str() );
+        return( NO_ERROR );
+      }
+
+      // must have at least one device open
+      //
+      if ( this->devlist.empty() ) {
+        logwrite( function, "ERROR: no open devices" );
+        retstring="no_devices";
+        return( ERROR );
+      }
+
+      // check if arg is a channel by comparing to all the defined channels in the devlist
+      //
+      int dev=-1;
+      for ( auto dd : this->devlist ) {
+        if ( this->controller[dd].channel == tokens[1] ) {
+          dev = dd;
+          break;
+        }
+      }
+
+      // not a channel so check if dev#
+      //
+      if ( dev < 0 && tokens.size()==2 ) {
+        // try to convert to integer
+        //
+        try { dev = std::stoi( tokens.at(1) ); }
+	catch ( std::invalid_argument & ) { logwrite( function, "ERROR: invalid argument" ); retstring="bad_arg"; return ERROR; }
+        catch ( std::out_of_range & ) { logwrite( function, "ERROR: out of range" ); retstring="exception"; return ERROR; }
+
+        if ( this->controller.find(dev) == this->controller.end() ) {
+          message.str(""); message << "ERROR: " << tokens[1] << " is neither a known channel nor device#";
+          logwrite( function, message.str() );
+          retstring="bad_arg";
+          return( ERROR );
+        }
+      }
+
+      // initiate the frame transfer waveforms
+      //
+      this->controller[dev].pArcDev->frame_transfer( 0,
+                                                     this->controller[dev].devnum,
+                                                     this->controller[dev].info.detector_pixels[0],
+                                                     this->controller[dev].info.detector_pixels[1],
+                                                     this->controller[dev].pCallback
+                                                   );
+      retstring=this->controller[dev].channel;
+      return( NO_ERROR );
+    }
+
+    // ----------------------------------------------------
+    // controller
+    // ----------------------------------------------------
+    //
+    else
+    if ( testname == "controller" ) {
+
+      message.str(""); message << "this->bufsize=" << this->bufsize; logwrite( function, message.str() );
+
+      for ( auto &con : this->controller ) {
+        message.str(""); message << "controller[" << con.second.devnum << "] connected:" << ( con.second.connected ? "T" : "F" )
+                                 << " bufsize:" << con.second.get_bufsize()
+                                 << " rows:" << con.second.rows << " cols:" << con.second.cols
+                                 << " in_readout:" << ( con.second.in_readout ? "T" : "F" )
+                                 << " in_frametransfer:" << ( con.second.in_frametransfer ? "T" : "F" );
+        logwrite( function, message.str() );
+      }
+      return( NO_ERROR );
     }
 
     // ----------------------------------------------------

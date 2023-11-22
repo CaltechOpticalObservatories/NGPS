@@ -25,8 +25,8 @@ DAEMON=yes                        # run as a daemon? {yes,no}
 #       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
 #CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/sg2_experimental.lod U1)
-CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/bob.lod SPLIT1)
-CONTROLLER=(1 R engg no /home/developer/Software/DSP/lod/bob.lod SPLIT1)
+CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod SPLIT1)
 #CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/SWIFT/ngps_sg2__e880ba.lod U1)
 #CONTROLLER=(1 R engg no /home/developer/Software/DSP/lod/chaztest-engg-48-reverse.lod SPLIT1)
 

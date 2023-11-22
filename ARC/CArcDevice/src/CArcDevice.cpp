@@ -1798,26 +1798,46 @@ namespace arc
 		// +----------------------------------------------------------------------------
 		void CArcDevice::frame_transfer( int expbuf, int devnum, std::uint32_t uiRows, std::uint32_t uiCols, arc::gen3::CooExpIFace* pCooExpIFace )
 		{
-			std::cerr << "[ARC_API] in frame_transfer with devnum=" << devnum << "\n";
+			std::uint32_t uiRetVal;
 
-			std::uint32_t	uiPCIFrameCount		= 0;
+			std::cerr << "\n(arc::gen3::CArcDevice::frame_transfer) expbuf:" << expbuf << " devnum:" << devnum << "\n";
 
-			uiPCIFrameCount = getFrameCount();
+			// set Y:IN_FT = 2 for "pending"
+			// FRAME_TRANSFER subroutine will set this to 1 on entry, then 0 on exit.
+			//
+			uiRetVal = command( { TIM_ID, WRM, ( Y_MEM | 0x25 ), 2 } );
+
+			if ( uiRetVal != DON )
+			{
+				THROW( "(arc::gen3::CArcDevice::frame_transfer) Failed to set FrameTransferState. reply: 0x%X", uiRetVal );
+			}
 
 			// Trigger the FRame Transfer waveforms
 			//
-			auto uiRetVal = command( { TIM_ID, FRT } );
+			uiRetVal = command( { TIM_ID, FRT } );
 
 			if ( uiRetVal != DON )
 			{
 				THROW( "(arc::gen3::CArcDevice::frame_transfer) Frame Transfer command (FRT) failed. Reply: 0x%X", uiRetVal );
 			}
 
+			auto FrameTransferState = command( { TIM_ID, RDM, ( Y_MEM | 0x25 ) } );
+
+			int to=0;
+			while( FrameTransferState != 0 ) {
+				FrameTransferState = command( { TIM_ID, RDM, ( Y_MEM | 0x25 ) } );
+				if ( FrameTransferState != 0 ) std::this_thread::sleep_for( std::chrono::microseconds( 1 ) );
+				if ( ++to > 10 ) {
+					THROW( "(arc::gen3::CArcDevice::frame_transfer) timeout exceeded waiting for Frame Transfer to end" );
+				}
+			}
+			std::cerr << "(arc::gen3::CArcDevice::frame_transfer) FRAME_TRANSFER complete expbuf:" << expbuf << " devnum:" << devnum << "\n";
+
 			// Generate Callback
 			//
 			if ( pCooExpIFace != nullptr )
 			{
-				std::cerr << "[ARC_API] CArcDevice::frame_transfer calling ftCallback with devnum=" << devnum << "\n";
+				std::cerr << "(arc::gen3::CArcDevice::frame_transfer) calling ftCallback with devnum=" << devnum << "\n\n";
 
 				pCooExpIFace->ftCallback( expbuf, devnum );
 			}
