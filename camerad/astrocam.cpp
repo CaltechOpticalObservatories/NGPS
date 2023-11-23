@@ -366,11 +366,92 @@ namespace AstroCam {
   /***** AstroCam::Interface::parse_controller_config *************************/
 
 
+  /***** AstroCam::Interface::extract_dev_chan ********************************/
+  /**
+   * @brief      extract a dev#, channel name, and optional string from provided args
+   * @details    The dev# | chan must exist in a configured controller object.
+   *             The additional string is optional and can be anything.
+   * @param[in]  args       expected: <dev#>|<chan> [ <string> ]
+   * @param[out] dev        reference to returned dev#
+   * @param[out] chan       reference to returned channel
+   * @param[out] retstring  carries either error message, or <string> if present
+   *
+   */
+  long Interface::extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring ) {
+    std::string function = "AstroCam::Interface::extract_dev_chan";
+    std::stringstream message;
+
+    // make sure input references are initialized
+    //
+    dev=-1;
+    chan.empty();
+    retstring.empty();
+
+    std::vector<std::string> tokens;
+    std::string trydev;
+
+    // Tokenize args to extract requested <dev>|<chan> and <string>, as appropriate
+    //
+    switch( Tokenize( args, tokens, " " ) ) {
+      case 1 : trydev    = tokens[0];             // dev|chan only
+               break;
+      case 2 : trydev    = tokens[0];             // dev|chan and string
+               retstring = tokens[1];
+               break;
+      default: logwrite( function, "ERROR: bad arguments. expected <dev> | <chan> [ <string> ]" );
+               retstring="bad_args";
+               return( ERROR );
+    }
+
+    // Try to convert the "trydev" to integer. If successful then it's a dev#,
+    // and if that fails then check if it's a known channel.
+    //
+    try {
+      dev = std::stoi( trydev );  // convert to integer
+      if ( dev < 0 ) {            // don't let the user input a negative number
+        logwrite( function, "ERROR: dev# must be >= 0" );
+        retstring="bad_args";
+        return( ERROR );
+      }
+    }
+    catch ( std::out_of_range & ) { logwrite( function, "ERROR: out of range" ); retstring="exception"; return ERROR; }
+    catch ( std::invalid_argument & ) { }    // ignore this for now, it just means it's not a number
+
+    // If the stoi conversion failed then we're out here with a negative dev.
+    // If it succeeded then all we have is a number >= 0.
+    // But now check that either the dev# is a known devnum or the trydev is a known channel.
+    //
+    for ( auto &con : this->controller ) {
+      if ( con.second.channel == trydev ) {  // check to see if it matches a configured channel.
+        dev  = con.second.devnum;
+        chan = trydev;
+        break;
+      }
+      if ( con.second.devnum == dev ) {      // check for a known dev#
+        chan = con.second.channel;
+        break;
+      }
+    }
+
+    // By now, these must both be known.
+    //
+    if ( dev < 0 || chan.empty() ) {
+      message.str(""); message << "ERROR: " << trydev << " is neither a known channel nor device#";
+      logwrite( function, message.str() );
+      retstring="bad_args";
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
+  }
+  /***** AstroCam::Interface::extract_dev_chan ********************************/
+
+
   /***** AstroCam::Interface::do_connect_controller ***************************/
   /**
    * @brief      opens a connection to the PCI/e device(s)
    * @param[in]  devices_in  optional string containing space-delimited list of devices
-   * @param[out] help        reference to string to return help on request
+   * @param[out] retstring   reference to string to return error or help
    * @return     ERROR or NO_ERROR
    *
    * Input parameter devices_in defaults to empty string which will attempt to
@@ -387,20 +468,20 @@ namespace AstroCam {
    * call with the specific device(s). In other words, it's all (requested) or nothing.
    *
    */
-  long Interface::do_connect_controller(std::string devices_in, std::string &help) {
+  long Interface::do_connect_controller( std::string devices_in, std::string &retstring ) {
     std::string function = "AstroCam::Interface::do_connect_controller";
     std::stringstream message;
 
     // Help
     //
     if ( devices_in == "?" ) {
-      help = CAMERAD_OPEN;
-      help.append( " [ <devlist> ]\n" );
-      help.append( "  Opens a connection to the indicated PCI/e device(s) where <devlist>\n" );
-      help.append( "  is an optional space-delimited list of device numbers.\n" );
-      help.append( "  e.g. \"0 1\" to open PCI devices 0 and 1\n" );
-      help.append( "  If no list is provided then all detected devices will be opened.\n" );
-      help.append( "  Opening an ARC device requires that the controller is present and powered on.\n" );
+      retstring = CAMERAD_OPEN;
+      retstring.append( " [ <devlist> ]\n" );
+      retstring.append( "  Opens a connection to the indicated PCI/e device(s) where <devlist>\n" );
+      retstring.append( "  is an optional space-delimited list of device numbers.\n" );
+      retstring.append( "  e.g. \"0 1\" to open PCI devices 0 and 1\n" );
+      retstring.append( "  If no list is provided then all detected devices will be opened.\n" );
+      retstring.append( "  Opening an ARC device requires that the controller is present and powered on.\n" );
       return( NO_ERROR );
     }
 
@@ -414,6 +495,7 @@ namespace AstroCam {
     //
     if (this->numdev == 0) {
       logwrite(function, "ERROR: no devices found");
+      retstring="no_devices";
       return(ERROR);
     }
 
@@ -434,6 +516,7 @@ namespace AstroCam {
     //
     if ( this->configdev.empty() ) {
       logwrite( function, "ERROR: no devices configured. Need CONTROLLER keyword in config file." );
+      retstring="not_configured";
       return( ERROR );
     }
 
@@ -466,14 +549,16 @@ namespace AstroCam {
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: invalid device number: " << n << ": unable to convert to integer";
           logwrite(function, message.str());
+          retstring="invalid_argument";
           return(ERROR);
         }
         catch (std::out_of_range &) {
           message.str(""); message << "ERROR: device number " << n << ": out of integer range";
           logwrite(function, message.str());
+          retstring="out_of_range";
           return(ERROR);
         }
-        catch(...) { logwrite(function, "unknown error getting device number"); return(ERROR); }
+        catch(...) { logwrite(function, "unknown error getting device number"); retstring="exception"; return(ERROR); }
       }
     }
 
@@ -502,6 +587,7 @@ namespace AstroCam {
         message.str(""); message << "ERROR: devnum " << dev << " not found in controller definition. check config file";
         logwrite( function, message.str() );
         this->do_disconnect_controller();
+        retstring="unknown_device";
         return( ERROR );
       }
 
@@ -535,6 +621,7 @@ namespace AstroCam {
                                  << " channel " << this->controller[dev].channel << ": " << e.what();
         this->camera.async.enqueue_and_log( function, message.str() );
         this->do_disconnect_controller();
+        retstring="exception";
         return( ERROR );
       }
     }
@@ -569,6 +656,7 @@ namespace AstroCam {
       //
       this->do_disconnect_controller();
 
+      retstring="bad_device_count";
       return( ERROR );
     }
 
@@ -865,12 +953,19 @@ namespace AstroCam {
     //
     if (this->numdev == 0) {
       logwrite(function, "ERROR: no connected devices");
+      retstring="not_connected";
+      return(ERROR);
+    }
+
+    if ( cmdstr.empty() ) {
+      logwrite(function, "ERROR: missing command");
+      retstring="bad_arg";
       return(ERROR);
     }
 
     // If no command passed then nothing to do here
     //
-    if ( cmdstr.empty() || cmdstr == "?" ) {
+    if ( cmdstr == "?" ) {
       retstring = CAMERAD_NATIVE;
       retstring.append( " <CMD> [ <ARG1> [ < ARG2> [ <ARG3> [ <ARG4> ] ] ] ]\n" );
       retstring.append( "  send 3-letter command <CMD> with up to four optional args to all open ARC controllers\n" );
@@ -901,6 +996,7 @@ namespace AstroCam {
     if (nargs > 4) {
       message.str(""); message << "ERROR: too many arguments: " << nargs << " (max 4)";
       logwrite(function, message.str());
+      retstring="bad_arg";
       return(ERROR);
     }
 
@@ -910,6 +1006,7 @@ namespace AstroCam {
       if (tokens.at(0).length() != 3) {
         message.str(""); message << "ERROR: bad command " << tokens.at(0) << ": native command requires 3 letters";
         logwrite(function, message.str());
+        retstring="bad_command";
         return(ERROR);
       }
 
@@ -941,14 +1038,16 @@ namespace AstroCam {
       for (auto check : tokens) message << check << " ";
       message << ": out of range";
       logwrite(function, message.str());
+      retstring="out_of_range";
       return(ERROR);
     }
     catch(const std::exception &e) {
       message.str(""); message << "ERROR forming command: " << e.what();
       logwrite(function, message.str());
+      retstring="exception";
       return(ERROR);
     }
-    catch(...) { logwrite(function, "unknown error forming command"); return(ERROR); }
+    catch(...) { logwrite(function, "unknown error forming command"); retstring="exception"; return(ERROR); }
 
     // Send the command to each selected device via a separate thread
     //
@@ -967,9 +1066,10 @@ namespace AstroCam {
     catch(const std::exception &e) {
       message.str(""); message << "ERROR joining threads: " << e.what();
       logwrite(function, message.str());
+      retstring="exception";
       return(ERROR);
     }
-    catch(...) { logwrite(function, "unknown error joining threads"); return(ERROR); }
+    catch(...) { logwrite(function, "unknown error joining threads"); retstring="exception"; return(ERROR); }
     }                                       // end local scope cleans up this stuff
 
     // Check to see if all retvals are the same by comparing them all to the first.
@@ -980,6 +1080,7 @@ namespace AstroCam {
     }
     catch(std::out_of_range &) {
       logwrite(function, "ERROR: no device found. Is the controller connected?");
+      retstring="out_of_range";
       return(ERROR);
     }
 
@@ -2135,6 +2236,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     //
     if ( this->numdev == 0 ) {
       logwrite(function, "ERROR: no connected devices");
+      retstring="not_connected";
       return(ERROR);
     }
 
@@ -2194,6 +2296,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     //
     if (this->numdev == 0) {
       logwrite(function, "ERROR: no connected devices");
+      retstring="not_connected";
       return(ERROR);
     }
 
@@ -2213,6 +2316,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     //
     if (tokens.size() < 1) {
       logwrite(function, "ERROR: too few arguments");
+      retstring="bad_args";
       return( ERROR );
     }
 
@@ -2221,6 +2325,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     //
     if ((int)tokens.size() > this->numdev+1) {
       logwrite(function, "ERROR: too many arguments");
+      retstring="bad_args";
       return( ERROR );
     }
 
@@ -2268,14 +2373,16 @@ logwrite( function, "copying master keyword databases to expinfo now" );
           for (auto check : selectdev) message << check << " ";
           message << "}";
           logwrite(function, message.str());
+          retstring="out_of_range";
           return(ERROR);
         }
         catch(const std::exception &e) {
           message.str(""); message << "ERROR threading command: " << e.what();
           logwrite(function, message.str());
+          retstring="exception";
           return(ERROR);
         }
-        catch(...) { logwrite(function, "unknown error threading command to controller"); return(ERROR); }
+        catch(...) { logwrite(function, "unknown error threading command to controller"); retstring="exception"; return(ERROR); }
       }
 
       try {
@@ -2286,9 +2393,10 @@ logwrite( function, "copying master keyword databases to expinfo now" );
       catch(const std::exception &e) {
         message.str(""); message << "ERROR joining threads: " << e.what();
         logwrite(function, message.str());
+        retstring="exception";
         return(ERROR);
       }
-      catch(...) { logwrite(function, "unknown error joining threads"); return(ERROR); }
+      catch(...) { logwrite(function, "unknown error joining threads"); retstring="exception"; return(ERROR); }
 
       threads.clear();                                // deconstruct the threads vector
 
@@ -2492,137 +2600,93 @@ logwrite( function, "copying master keyword databases to expinfo now" );
   /***** AstroCam::Interface::do_readout **************************************/
   /**
    * @brief      set or get type of readout
-   * @param[in]  readout_in   string containing the requested readout type
-   * @param[out] readout_out  reference to a string for return values
+   * @param[in]  args       string containing <dev>|<chan> [ <amp> ]
+   * @param[out] retstring  reference to a string for return values
    * @return     ERROR or NO_ERROR
    *
-   * This function sets (or gets) the type of readout. This will encompass
-   * which amplifier(s) for a CCD (by name) or infrared (by number).
-   * Selecting the readout will also set the appropriate deinterlacing
-   * scheme to be used.
-   *
    */
-  long Interface::do_readout(std::string readout_in, std::string &readout_out) {
+  long Interface::do_readout( std::string args, std::string &retstring ) {
     std::string function = "AstroCam::Interface::do_readout";
     std::stringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
-    // Tokenize the args into a dev list and an arg list
+    // Help
     //
-    std::vector<uint32_t> selectdev;
-    std::vector<std::string> arglist;
-    int ndev, narg;
-    Tokenize( readout_in, selectdev, ndev, arglist, narg );
-
-    if ( ndev < 0 ) {                       // Tokenize() sets ndev < 0 on error
-      message.str(""); message << "ERROR: tokenizing device list from {" << readout_in << "}";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    if ( ndev == 0 ) {                      // No device list, so
-      for ( auto dev : this->devlist ) {    // build selectdev vector from all connected controllers.
-        selectdev.push_back( dev );
+    if ( args == "?" ) {
+      retstring = CAMERAD_READOUT;
+      retstring.append( " <dev#> | <chan> [ <amp> ]\n" );
+      retstring.append( "  Set or get readout amp for specified device.\n" );
+      retstring.append( "  A connection to the device must already be open to change the readout.\n" );
+      retstring.append( "  If optional amp is omitted then current amp is returned.\n" );
+      retstring.append( "  Specify <dev#> or <chan> from { " );
+      message.str("");
+      for ( auto &con : this->controller ) {
+        message << con.second.devnum << " " << con.second.channel << " ";
       }
+      message << "}\n";
+      retstring.append( message.str() );
+      message.str("");
+      retstring.append( "  Specify <amp> from { " );
+      for ( auto type : this->readout_source ) message << type.first << " ";
+      message << "}\n";
+      retstring.append( message.str() );
+      return( NO_ERROR );
     }
 
-    if ( selectdev.empty() ) {              // dev list will be empty if no connections open
-      logwrite( function, "ERROR: no connected devices!" );
-      return( ERROR );
-    }
+    int dev;
+    std::string chan;
 
-    if ( narg > 1 ) {                       // Too many arguments
-      message.str(""); message << "ERROR: expected one argument for readout type but received " << narg << ": ";
-      for ( auto arg : arglist ) message << arg << " ";
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-
-    std::string readout_name_req;           // requested readout source name
+    std::string readout_name;               // requested readout source name
     uint32_t readout_arg;                   // argument associated with requested type
     ReadoutType readout_type;
     bool readout_name_valid = false;
 
-    // Special case -- if requested a list then return a list of accepted readout amp names
-    //
-    if ( narg == 1 && arglist.front() == "list" ) {
-      std::stringstream rs;
-      for ( auto type : this->readout_source ) rs << type.first << " ";
-      readout_out = rs.str();
-      logwrite( function, rs.str() );
-      return( NO_ERROR );
-    }
-    else
+    error = this->extract_dev_chan( args, dev, chan, readout_name );
 
-    // Otherwise, the argument is a requested readout type
-    //
-    if ( narg == 1 ) {
-      readout_name_req = arglist.front();
+    if ( error != NO_ERROR ) return error;
 
-      // Check that the requested readout amplifer has a matches in the list of known readout amps.
-      // This list is an STL map. this->readout_source.first is the amplifier name,
+    // If supplied, ...
+    //
+    if ( !readout_name.empty() ) {
+      // ... then check that the requested readout amplifer has a matches in the list of known
+      // readout amps. This list is an STL map. this->readout_source.first is the amplifier name,
       // and .second is the argument for the Arc 3-letter command.
       //
       for ( auto source : this->readout_source ) {
-        if ( source.first.compare( readout_name_req ) == 0 ) {  // found a match
+        if ( source.first.compare( readout_name ) == 0 ) {  // found a match
           readout_name_valid = true;
-          readout_arg  = source.second.readout_arg;             // get the arg associated with this match
-          readout_type = source.second.readout_type;            // get the type associated with this match
+          readout_arg  = source.second.readout_arg;         // get the arg associated with this match
+          readout_type = source.second.readout_type;        // get the type associated with this match
           break;
         }
       }
       if ( !readout_name_valid ) {
-        message.str(""); message << "ERROR: readout " << readout_name_req << " not recognized";
+        message.str(""); message << "ERROR: readout " << readout_name << " not recognized";
         logwrite( function, message.str() );
-        error = ERROR;
+        retstring="bad_args";
+        return( ERROR );
       }
       else {  // requested readout type is known, so set it for each of the specified devices
-        for ( auto dev : selectdev ) {
-          try {
-            this->controller[ dev ].info.readout_name = readout_name_req;
-            this->controller[ dev ].info.readout_type = readout_type;
-            this->controller[ dev ].readout_arg = readout_arg;
-            this->controller[ dev ].pArcDev->selectOutputSource( readout_arg );  // this sets the readout amplifier
-          }
-          catch ( std::out_of_range & ) {
-            message.str(""); message << "ERROR: no active controller for device number " << dev;
-            logwrite( function, message.str() );
-            return( ERROR );
-          }
-          // Send the amplifier selection command to the connected controllers
-          //
-          std::stringstream cmd;
-          std::string retstr;
-          cmd.str(""); cmd << "SOS " << readout_arg;                ///< TODO @todo should this 3-letter command be generalized, or configurable?
-          error = this->do_native( selectdev, cmd.str(), retstr );  // send the native command here
-          if ( error != NO_ERROR || retstr == "ERR" ) {
-            message.str(""); message << "ERROR setting output source 0x" << std::hex << std::uppercase << readout_arg << " for device " << dev;
-            logwrite( function, message.str() );
-            return( ERROR );
-          }
+        try {
+          this->controller[ dev ].info.readout_name = readout_name;
+          this->controller[ dev ].info.readout_type = readout_type;
+          this->controller[ dev ].readout_arg = readout_arg;
+          this->controller[ dev ].pArcDev->selectOutputSource( readout_arg );  // this sets the readout amplifier
+        }
+        catch ( const std::exception &e ) { // arc::gen3::CArcDevice::selectOutputSource() may throw an exception
+          message.str(""); message << "ERROR: setting output source for dev " << dev << " chan " << chan << ": " << e.what();
+          logwrite( function, message.str() );
+          return( ERROR );
         }
       }
     }
 
-    std::stringstream rs;
+    // In any case, set or not, get the current type
+    //
+    retstring = this->controller[dev].info.readout_name;
 
-    for ( auto dev : selectdev ) {
-      std::string mytype;
-      if ( this->controller[ dev ].connected ) mytype = this->controller[ dev ].info.readout_name;
-      else {
-        error = ERROR;
-        mytype = "???";
-      }
-      rs << dev << ":" << mytype << " ";
-    }
-
-    message.str(""); message << "readout type " << rs.str();
-    logwrite( function, message.str() );
-
-    readout_out = rs.str();
-
-    return( error );
+    return( NO_ERROR );
   }
   /***** AstroCam::Interface::do_readout **************************************/
 
@@ -2770,6 +2834,7 @@ logwrite(function, message.str());
 
     if (this->controller.size() < 1) {
       logwrite(function, "ERROR: controller not configured");
+      retstring="not_configured";
       return(ERROR);
     }
 
@@ -2783,11 +2848,13 @@ logwrite(function, message.str());
       catch ( std::invalid_argument & ) {
         message.str(""); message << "ERROR: unable to convert exposure time: " << exptime_in << " to integer";
         logwrite( function, message.str() );
+        retstring="invalid_argument";
         return( ERROR );
       }
       catch ( std::out_of_range & ) {
         message.str(""); message << "ERROR: exposure time " << exptime_in << " outside integer range";
         logwrite( function, message.str() );
+        retstring="out_of_range";
         return( ERROR );
       }
 
@@ -2809,6 +2876,7 @@ logwrite(function, message.str());
     catch ( std::bad_alloc &e ) {
       message.str(""); message << "ERROR: exposure time " << this->camera.exposure_time << " exception: " << e.what();
       logwrite( function, message.str() );
+      retstring="bad_alloc";
       error = ERROR;
     }
 
@@ -2843,6 +2911,7 @@ logwrite(function, message.str());
     //
     if ( exptime_in.empty() ) {
       logwrite( function, "ERROR: requested exposure time cannot be empty" );
+      retstring="missing_exptime";
       return( ERROR );
     }
 
@@ -2854,11 +2923,13 @@ logwrite(function, message.str());
     catch ( std::invalid_argument & ) {
       message.str(""); message << "ERROR: exception converting exposure time: " << exptime_in << " to long";
       logwrite( function, message.str() );
+      retstring="invalid_argument";
       return( ERROR );
     }
     catch ( std::out_of_range & ) {
       message.str(""); message << "ERROR: exception exposure time " << exptime_in << " outside long range";
       logwrite( function, message.str() );
+      retstring="out_of_range";
       return( ERROR );
     }
 
@@ -2884,6 +2955,7 @@ logwrite(function, message.str());
     if ( error==NO_ERROR && tokens.size() < 1 ) {
       message.str(""); message << "ERROR reply \"" << reply << "\": has not enough tokens";
       logwrite( function, message.str() );
+      retstring="bad_args";
       error = ERROR;
     }
 
@@ -2913,6 +2985,7 @@ logwrite(function, message.str());
       else {
         message.str(""); message << "ERROR malformed reply \"" << reply << "\". expected dev:value";
         logwrite( function, message.str() );
+        retstring="bad_reply";
         error = ERROR;
       }
     }
@@ -2922,6 +2995,7 @@ logwrite(function, message.str());
     if ( (error==NO_ERROR) && ( (this->camera.exposure_time - elapsed_time) < 2000 ) ) {
       message.str(""); message << "ERROR cannot change exposure time with less than 2000 msec exptime remaining";
       logwrite( function, message.str() );
+      retstring="too_late";
       error = ERROR;
     }
 
@@ -2930,6 +3004,7 @@ logwrite(function, message.str());
     if ( (error==NO_ERROR) && (requested_exptime >= 0) && (requested_exptime < elapsed_time) ) {
       message.str(""); message << "ERROR elapsed time " << elapsed_time << " already exceeds requested exposure time " << requested_exptime;
       logwrite( function, message.str() );
+      retstring="too_late";
       error = ERROR;
     }
 
@@ -2958,6 +3033,7 @@ logwrite(function, message.str());
     if ( tokens.size() > 1 ) {
       message.str(""); message << "ERROR not all cameras returned the same value: " << retstring;
       logwrite( function, message.str() );
+      retstring="camera_mismatch";
       error = ERROR;
     }
 
@@ -3051,6 +3127,68 @@ logwrite(function, message.str());
     return error;
   }
   /***** AstroCam::Interface::shutter *****************************************/
+
+
+  /***** AstroCam::Interface::frame_transfer_mode *****************************/
+  /**
+   * @brief      set/get frame transfer mode
+   * @param[in]  args       contains: <dev> | <chan> [ yes | no ]
+   * @param[out] retstring  reference to string for return value
+   * @return     ERROR or NO_ERROR
+   *
+   * args contains the device# or channel and optionally yes|no
+   * If yes|no is omitted then the current state for that chan/dev is returned.
+   *
+   */
+  long Interface::frame_transfer_mode( std::string args, std::string &retstring ) {
+    std::string function = "AstroCam::Interface::frame_transfer_mode";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = CAMERAD_FRAMETRANSFER;
+      retstring.append( " <dev#> | <chan> [ yes | no ]\n" );
+      retstring.append( "  Set or get frame transfer mode for specified device.\n" );
+      retstring.append( "  If optional yes|no is omitted then current state is returned.\n" );
+      retstring.append( "  Specify <dev#> or <chan> from { " );
+      message.str("");
+      for ( auto &con : this->controller ) {
+        message << con.second.devnum << " " << con.second.channel << " ";
+      }
+      message << "}\n";
+      retstring.append( message.str() );
+      return( NO_ERROR );
+    }
+
+    // Get the devnum and channel from args.
+    // Borrow retstring temporarily to carry the state, if supplied.
+    //
+    int dev;
+    std::string chan;
+
+    long error = this->extract_dev_chan( args, dev, chan, retstring );
+
+    if ( error != NO_ERROR ) return error;
+
+    if ( !retstring.empty() && retstring != "yes" && retstring != "no" ) {
+      message.str(""); message << "ERROR: bad state \"" << retstring << "\". expected { yes | no }";
+      logwrite( function, message.str() );
+      retstring="bad_args";
+      return( ERROR );
+    }
+
+    // If a state was provided then set it
+    //
+    if ( ! retstring.empty() ) this->controller[dev].have_ft = ( retstring == "yes" ? true : false );
+
+    // In any case, return the current state
+    //
+    retstring = ( this->controller[dev].have_ft ? "yes" : "no" );
+
+    return( NO_ERROR );
+  }
+  /***** AstroCam::Interface::frame_transfer_mode *****************************/
 
 
   /***** AstroCam::Interface::do_geometry *************************************/

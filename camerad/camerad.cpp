@@ -582,6 +582,11 @@ void doit(Network::TcpSocket &sock) {
                     if (!args.empty()) { sock.Write(args); sock.Write(" "); }
                     }
     else
+    if (cmd.compare( CAMERAD_FRAMETRANSFER )==0) {
+                    ret = server.frame_transfer_mode(args, retstring);
+                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
+                    }
+    else
     if (cmd.compare( CAMERAD_GEOMETRY )==0) {
                     ret = server.geometry(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }

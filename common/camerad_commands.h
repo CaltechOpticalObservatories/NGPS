@@ -19,6 +19,7 @@ const std::string CAMERAD_ECHO = "echo";
 const std::string CAMERAD_EXPOSE = "expose";
 const std::string CAMERAD_EXPTIME = "exptime";
 const std::string CAMERAD_FITSNAMING = "fitsnaming";
+const std::string CAMERAD_FRAMETRANSFER = "frametransfer";
 const std::string CAMERAD_GEOMETRY = "geometry";
 const std::string CAMERAD_IMDIR = "imdir";
 const std::string CAMERAD_IMNUM = "imnum";
@@ -53,6 +54,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_EXPOSE,
                                                   CAMERAD_EXPTIME,
                                                   CAMERAD_FITSNAMING,
+                                                  CAMERAD_FRAMETRANSFER+" [ ? ] | [ <dev#> | <chan> [ yes | no ] ]",
                                                   CAMERAD_GEOMETRY,
                                                   CAMERAD_IMDIR,
                                                   CAMERAD_IMNUM,
@@ -68,7 +70,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_OPEN+" [ ? | <devlist> ]",
                                                   CAMERAD_PAUSE,
                                                   CAMERAD_PREEXPOSURES,
-                                                  CAMERAD_READOUT,
+                                                  CAMERAD_READOUT+" [ ? ] | [ <dev#> | <chan> [ <amp> ] ]",
                                                   CAMERAD_RESUME,
                                                   CAMERAD_SHUTTER+" [ ? | enable | 1 | disable | 0 ]",
                                                   CAMERAD_STOP,

@@ -868,9 +868,10 @@ namespace AstroCam {
       // Functions
       //
       long parse_controller_config( std::string args );
+      long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
       long test(std::string args, std::string &retstring);                 ///< test routines
       long interface(std::string &iface);                                  ///< returns the interface
-      long do_connect_controller(std::string devices_in, std::string &help); ///< opens a connection to the PCI/e device(s)
+      long do_connect_controller(std::string devices_in, std::string &retstring); ///< opens a connection to the PCI/e device(s)
       long connect_controller(std::string devices_in, std::string &help);  ///< wrapper for do_connect_controller
       long is_connected( std::string &retstring );                         ///< are all selected controllers connected?
       long do_disconnect_controller();                                     ///< closes the connection to the PCI/e device(s)
@@ -890,6 +891,7 @@ namespace AstroCam {
       long modify_exptime( std::string exptime_in, std::string &retstring );
       long do_modify_exptime( std::string exptime_in, std::string &retstring );
       long shutter(std::string shutter_in, std::string& shutter_out);
+      long frame_transfer_mode( std::string args, std::string &retstring );
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);
