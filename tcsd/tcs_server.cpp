@@ -26,7 +26,8 @@ namespace TCS {
 
   /***** TCS::Server::load_tcs_info *******************************************/
   /**
-   * @brief      load tcs host info from config file into the class
+   * @brief      load tcs host info from config file
+   * @details    this will also construct a map of TcsIO objects
    * @param[in]  input  input string expected to contain "name host port"
    * @return     ERROR or NO_ERROR
    *
@@ -35,8 +36,8 @@ namespace TCS {
     std::string function = "TCS::Server::load_tcs_info";
     std::stringstream message;
     std::vector<std::string> tokens;
-    std::string _name, _host;
-    int _port=-1;
+    std::string tryname, tryhost;
+    int tryport=-1;
 
     // Extract the name, host and port from the input string
     //
@@ -49,9 +50,9 @@ namespace TCS {
     }
 
     try {
-      _name = tokens.at(0);
-      _host = tokens.at(1);
-      _port = std::stoi( tokens.at(2) );
+      tryname = tokens.at(0);
+      tryhost = tokens.at(1);
+      tryport = std::stoi( tokens.at(2) );
     }
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
@@ -66,23 +67,26 @@ namespace TCS {
 
     // Check that (potentially) valid values have been extracted
     //
-    if ( _port < 1 ) {
-      message.str(""); message << "ERROR port " << _port << " must be greater than 0";
+    if ( tryport < 1 ) {
+      message.str(""); message << "ERROR port " << tryport << " must be greater than 0";
       logwrite( function, message.str() );
       return( ERROR );
     }
-    if ( _name.empty() ) {
+    if ( tryname.empty() ) {
       logwrite( function, "ERROR name cannot be empty" );
       return( ERROR );
     }
-    if ( _host.empty() ) {
+    if ( tryhost.empty() ) {
       logwrite( function, "ERROR host cannot be empty" );
       return( ERROR );
     }
 
-    // Add them to the class
+    // Insert a new element into the tcsmap with the name loaded from the config file,
+    // constructing a TCS::TcsIO object at the same time, using the loaded {name,host,port}
+    // and the terminating characters for TCS writes (\r) and reads (\0).
     //
-    this->interface.tcsmap.insert( { _name, { _host, _port } } );
+    this->interface.tcsmap.emplace( tryname, 
+                                    TCS::TcsIO{std::make_unique<Network::Interface>(tryname, tryhost, tryport, '\r', '\0')});
 
     return( NO_ERROR );
   }
@@ -230,8 +234,8 @@ namespace TCS {
   /***** Server::block_main ***************************************************/
   /**
    * @brief      main function for blocking connection thread
-   * @param[in]  tcs   reference to Acam::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to TCS::Server object
+   * @param[in]  sock    Network::TcpSocket socket object
    *
    * This function is run in a separate thread spawned by main() and
    * accepts a socket connection and processes the request by
@@ -240,10 +244,10 @@ namespace TCS {
    * This thread never terminates.
    *
    */
-  void Server::block_main( TCS::Server &tcs, Network::TcpSocket sock ) {
+  void Server::block_main( TCS::Server &server, Network::TcpSocket sock ) {
     while(1) {
       sock.Accept();
-      tcs.doit(sock);               // call function to do the work
+      server.doit(sock);            // call function to do the work
       sock.Close();
     }
     return;
@@ -254,8 +258,8 @@ namespace TCS {
   /***** Server::thread_main **************************************************/
   /**
    * @brief      main function for all non-blocked threads
-   * @param[in]  tcs   reference to TCS::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to TCS::Server object
+   * @param[in]  sock    Network::TcpSocket socket object
    *
    * This function is run in a separate thread spawned by main() and
    * accepts a socket connection and processes the request by
@@ -268,12 +272,12 @@ namespace TCS {
    * is mutex-protected.
    *
    */
-  void Server::thread_main( TCS::Server &tcs, Network::TcpSocket sock ) {
+  void Server::thread_main( TCS::Server &server, Network::TcpSocket sock ) {
     while (1) {
-      tcs.conn_mutex.lock();
+      server.conn_mutex.lock();
       sock.Accept();
-      tcs.conn_mutex.unlock();
-      tcs.doit(sock);            // call function to do the work
+      server.conn_mutex.unlock();
+      server.doit(sock);         // call function to do the work
       sock.Close();
     }
     return;
@@ -284,29 +288,29 @@ namespace TCS {
   /***** Server::async_main ***************************************************/
   /**
    * @brief      asynchronous message sending thread
-   * @param[in]  tcs   reference to TCS::Server object
-   * @param[in]  sock  Network::UdpSocket socket object
+   * @param[in]  server  reference to TCS::Server object
+   * @param[in]  sock    Network::UdpSocket socket object
    *
    * This function is run in a separate thread spawned by main() and
    * loops forever, when a message arrives in the status message queue it is
    * sent out via multi-cast UDP datagram.
    *
    */
-  void Server::async_main( TCS::Server &tcs, Network::UdpSocket sock ) {
+  void Server::async_main( TCS::Server &server, Network::UdpSocket sock ) {
     std::string function = "TCS::Server::async_main";
     int retval;
 
     retval = sock.Create();                                   // create the UDP socket
     if (retval < 0) {
       logwrite(function, "error creating UDP multicast socket for asynchronous messages");
-      tcs.exit_cleanly();                                     // do not continue on error
+      server.exit_cleanly();                                  // do not continue on error
     }
     if (retval==1) {                                          // exit this thread but continue with daemon
       logwrite(function, "asyncrhonous message port disabled by request");
     }
 
     while (1) {
-      std::string message = tcs.interface.async.dequeue();    // get the latest message from the queue (blocks)
+      std::string message = server.interface.async.dequeue(); // get the latest message from the queue (blocks)
       retval = sock.Send(message);                            // transmit the message
       if (retval < 0) {
         std::stringstream errstm;
@@ -447,7 +451,7 @@ namespace TCS {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 ) {
+      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                       for ( auto s : TCSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
                       ret = NO_ERROR;
       }
@@ -490,37 +494,37 @@ namespace TCS {
       // isopen
       //
       if ( cmd.compare( TCSD_ISOPEN ) == 0 ) {
-                      ret = this->interface.isopen( retstring );
+                      ret = this->interface.isopen( args, retstring );
       }
       else
 
       if ( cmd.compare( TCSD_GET_CASS ) == 0 ) {
-                      ret = this->interface.get_cass( retstring );
+                      ret = this->interface.get_cass( args, retstring );
       }
       else
 
       if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
-                      ret = this->interface.get_coords( retstring );
+                      ret = this->interface.get_coords( args, retstring );
       }
       else
 
       if ( cmd.compare( TCSD_GET_DOME ) == 0 ) {
-                      ret = this->interface.get_dome( retstring );
+                      ret = this->interface.get_dome( args, retstring );
       }
       else
 
       if ( cmd.compare( TCSD_GET_FOCUS ) == 0 ) {
-                      ret = this->interface.get_focus( retstring );
+                      ret = this->interface.get_focus( args, retstring );
       }
       else
 
       if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
-                      ret = this->interface.get_weather_coords( retstring );
+                      ret = this->interface.get_weather_coords( args, retstring );
       }
       else
 
       if ( cmd.compare( TCSD_GET_MOTION ) == 0 ) {
-                      ret = this->interface.get_motion( retstring );
+                      ret = this->interface.get_motion( args, retstring );
       }
       else
 
@@ -550,7 +554,7 @@ namespace TCS {
       }
 
 #ifdef LOGLEVEL_DEBUG  // this can be a little much when polling
-//    message.str(""); message << "cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
+//    message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
 //    logwrite( function, message.str() );
 #endif
 

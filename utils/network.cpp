@@ -584,6 +584,11 @@ namespace Network {
     int ret = poll( &poll_struct, 1, timeout );
     short revents = poll_struct.revents;
 
+    // Look for some events:
+    //  POLLHUP (hang-up)           Remote side has closed their connection
+    //  POLLERR (error)             An error condition on the file descriptor
+    //  POLLNVAL (invalid request)  Invalid request such as polling a fd that isn't open
+    //
     if ( ( revents & POLLHUP ) || ( revents & POLLERR) || ( revents & POLLNVAL ) ) {
       message.str(""); message << ( revents & POLLHUP  ? "POLLHUP "  : "" )
                                << ( revents & POLLERR  ? "POLLERR "  : "" )
@@ -658,8 +663,6 @@ namespace Network {
       logwrite(function, errstm.str());
       return(-1);
     }
-
-//  flags |= O_NONBLOCK;
 
     if (fcntl(this->fd, F_SETFL, flags) < 0) {
       errstm << "error " << errno << " setting socket file descriptor flags: " << std::strerror(errno);
@@ -791,99 +794,65 @@ namespace Network {
 
   /***** Network::TcpSocket::Read *********************************************/
   /**
-   * @brief      read data from connected socket
-   * @param[in]  buf    pointer to buffer
-   * @param[in]  count  number of bytes to read
+   * @brief      read data from connected socket until newline
+   * @details    this calls the Read(retstring,term) with term set to newline
+   * @param[out] retstring  reference to string to contain reply
    * @return     number of bytes read or -1 on error
    *
-   * If data not immediately available then wait for up to POLLTIMEOUT
-   *
-   * This function is overloaded; this version accepts a pointer to a
-   * buffer and the number of bytes to read.
+   * This function is overloaded
    *
    */
-  int TcpSocket::Read( std::string &sbuf ) {
-    std::string function = "Network::TcpSocket::Read[sbuf]";
-    std::stringstream message;
-    int nread;
-    size_t count = 8192;
-    char* buf;
-    buf = new char[count+1];
-
-    // get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    while ( ( nread = read( this->fd, buf, count ) ) < 0 ) {
-      if ( errno != EAGAIN ) {
-        message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
-        logwrite( function, message.str() );
-        break;
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > POLLTIMEOUT ) {
-        message << "ERROR: timeout waiting for data on fd " << this->fd;
-        logwrite( function, message.str() );
-        break;
-      }
-    }
-    sbuf = buf;
-    delete [] buf;
-    return( nread );
+  int TcpSocket::Read( std::string &retstring ) {
+    return this->Read( retstring, '\n' );
   }
   /***** Network::TcpSocket::Read *********************************************/
 
 
   /***** Network::TcpSocket::Read *********************************************/
   /**
-   * @brief      read data from connected socket until delimeter char
+   * @brief      read data from connected socket until terminating char
    * @param[out] retstring  reference to string to read in to
-   * @param[in]  delim      read until this delimiting char is found
+   * @param[in]  term       read until this terminating char is found
    * @return     number of bytes read or -1 on error or -2 on timeout
    *
    * If data not immediately available then wait for up to POLLTIMEOUT
    *
    * This function is overloaded; this version accepts a reference to a string
-   * and a delimiter char to read until.
+   * and a terminating char to read until. The terminating character remains
+   * in the string.
    *
    */
-  int TcpSocket::Read(std::string &retstring, char delim) {
-    std::string function = "Network::TcpSocket::Read[delim]";
+  int TcpSocket::Read( std::string &retstring, char term ) {
+    std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
-    std::stringstream bufstream;
-    int nread, bytesread=0;
-    char buf[2];
-    memset(buf,'\0',2);
+    size_t nread, bytesread=0;
+    char charin;
+
+    retstring.clear();                   // make sure the return string starts empty
 
     // get the time now for timeout purposes
     //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+    auto tstart = std::chrono::steady_clock::now();
 
-    while ( 1 ) {
-      nread = read( this->fd, buf, 1 );  // read a byte at a time
+    while ( true ) {
+      nread = read( this->fd, &charin, 1 );  // read a byte at a time
       if ( nread<0 ) {
         message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
         logwrite( function, message.str() );
         break;
       }
       if ( nread == 0 ) {
-        message << "no data on socket " << this->host << "/" << this->port << " fd " << this->fd << ": closing connection";
+        message << "no data on socket " << this->host << ":" << this->port << " fd " << this->fd << ". closing connection";
         logwrite( function, message.str() );
         this->Close();
         break;
       }
       bytesread++;                       // keep count of total bytes read
-      bufstream << buf;                  // build up return string from each byte read
+      retstring.push_back( charin );     // append the read-in character to the return string
 
       // get time now and check for timeout
       //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
+      auto tnow = std::chrono::steady_clock::now();
 
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
@@ -894,10 +863,8 @@ namespace Network {
         break;
       }
 
-      if ( strchr(buf, delim) ) break;   // break when the delim character is found
+      if ( charin == term ) break;       // break when the terminating character is found
     }
-
-    retstring = bufstream.str();         // assign the assembled stream to the return string
 
     if ( nread <= 0 ) return( nread );   // return error
     else return( bytesread );            // or bytes read
@@ -1027,6 +994,7 @@ namespace Network {
   /***** Network::Interface::Interface ****************************************/
   /**
    * @brief      Interface class constructor
+   * @details    when constructed without terminating chars, use newline
    * @param[in]  name   name of the device for info purposes only
    * @param[in]  host   hostname of the device
    * @param[in]  port   port number of the device
@@ -1036,6 +1004,30 @@ namespace Network {
     this->name = name;
     this->port = port;
     this->host = host;
+    this->term_write = '\n';
+    this->term_read  = '\n';
+    this->initialized = true;
+  }
+  /***** Network::Interface::Interface ****************************************/
+
+
+  /***** Network::Interface::Interface ****************************************/
+  /**
+   * @brief      Interface class constructor
+   * @details    this constructor accepts terminating chars
+   * @param[in]  name        name of the device for info purposes only
+   * @param[in]  host        hostname of the device
+   * @param[in]  port        port number of the device
+   * @param[in]  term_write  send_command() adds this char on writes
+   * @param[in]  term_read   send_command() looks for this char on reads (if reply requested)
+   *
+   */
+  Interface::Interface( std::string name, std::string host, int port, char term_write, char term_read ) {
+    this->name = name;
+    this->port = port;
+    this->host = host;
+    this->term_write = term_write;
+    this->term_read  = term_read;
     this->initialized = true;
   }
   /***** Network::Interface::Interface ****************************************/
@@ -1136,14 +1128,14 @@ namespace Network {
   /***** Network::Interface::send_command *************************************/
   /**
    * @brief      send specified command to the socket interface
-   * @details    This function is overloaded. This version discards the reply.
+   * @details    This function is overloaded. This version won't read a reply.
    * @param[in]  cmd        command to send
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::send_command( std::string cmd ) {
-    std::string dontcare;
-    return this->send_command( cmd, dontcare );
+    std::string retstring="noreply";
+    return this->send_command( cmd, retstring );
   }
   /***** Network::Interface::send_command *************************************/
 
@@ -1161,14 +1153,6 @@ namespace Network {
     std::string function = "Network::Interface::send_command";
     std::stringstream message;
     std::string reply;
-    long error=NO_ERROR;
-    long retval=0;
-
-#ifdef LOGLEVEL_DEBUG
-//  message << "[DEBUG] send to " << this->name << " on socket " 
-//          << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
-//  logwrite( function, message.str() );
-#endif
 
     std::lock_guard<std::mutex> lock( this->mtx );
 
@@ -1180,7 +1164,7 @@ namespace Network {
 
     // send the command
     //
-    cmd.append( "\n" );                            // add the NEWLINE character
+    cmd += this->term_write;                       // add the terminating character for writes
     int written = this->sock.Write( cmd );         // write the command
     if ( written <= 0 ) {                          // return error if error writing to socket
       cmd.erase(std::remove(cmd.begin(), cmd.end(), '\n' ), cmd.end());  // remove the newline for better logging
@@ -1189,42 +1173,30 @@ namespace Network {
       return( ERROR );
     }
 
-    // if the cmd has a question mark then read the reply
+    // Unless retstring has been pre-set with "noreply" by the overloaded function,
+    // then try to read a reply.
     //
-    bool needs_reply = ( cmd.find("?")!=std::string::npos );
+    bool needs_reply = ( retstring=="noreply" ? false : true );
+    long error=NO_ERROR;
 
-    while ( error == NO_ERROR && retval >= 0 && needs_reply ) {
-
+    if ( needs_reply ) {
+      long retval=0;
       if ( ( retval=this->sock.Poll() ) <= 0 ) {
         if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd() << ": " << strerror(errno);
                            error = TIMEOUT; }
         if ( retval <0 ) { message.str(""); message << "ERROR on fd " << this->sock.getfd() << ": " << strerror(errno);
                            error = ERROR; }
         if ( error != NO_ERROR ) logwrite( function, message.str() );
-        break;
       }
-
-      if ( ( retval = this->sock.Read( reply, '\n' ) ) < 0 ) {
+      else
+      if ( ( retval = this->sock.Read( reply, this->term_read ) ) < 0 ) {
         message.str(""); message << "ERROR: " << strerror( errno )
                                  << ": reading from " << this->sock.gethost() << "/" << this->sock.getport();
         logwrite( function, message.str() );
-        break;
       }
-
-      // remove any newline characters and get out
-      //
-      reply.erase(std::remove(reply.begin(), reply.end(), '\r' ), reply.end());
-      reply.erase(std::remove(reply.begin(), reply.end(), '\n' ), reply.end());
-      break;
-
     }
 
     retstring = reply;
-
-#ifdef LOGLEVEL_DEBUG
-//  message.str(""); message << "[DEBUG] reply=" << reply; logwrite( function, message.str() );
-//  logwrite( function, message.str() );
-#endif
 
     return( error );
   }

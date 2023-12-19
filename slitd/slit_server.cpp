@@ -515,7 +515,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
+      message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
       logwrite( function, message.str() );
 #endif
 

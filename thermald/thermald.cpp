@@ -7,8 +7,6 @@
 
 #include "thermald.h"
 
-extern const char* BuildDate;
-extern const char* GitHash;
 
 /***** main *******************************************************************/
 /**
@@ -94,8 +92,8 @@ int main(int argc, char **argv) {
     thermald.exit_cleanly();
   }
 
-  message.str(""); message << "build date " << BuildDate;  logwrite( function, message.str() );
-  message.str(""); message << "git hash "   << GitHash;    logwrite( function, message.str() );
+  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  logwrite(function, message.str());
 
   message.str(""); message << thermald.config.n_entries << " lines read from " << thermald.config.filename;
   logwrite(function, message.str());

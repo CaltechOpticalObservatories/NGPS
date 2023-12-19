@@ -36,7 +36,7 @@
 
 #include "logentry.h"                  // for logwrite() within the Network namespace
 
-#define POLLTIMEOUT 30000              ///< default Poll timeout in msec
+#define POLLTIMEOUT 3000               ///< default Poll timeout in msec
 #define LISTENQ 64                     ///< listen(3n) backlog 
 #define UDPMSGLEN 256                  ///< UDP message length
 
@@ -106,9 +106,9 @@ namespace Network {
       int Connect();                     ///< connect to this->host on this->port
       int Close();                       ///< close a socket connection
       int Read(void* buf, size_t count); ///< read data from connected socket
-      int Read(std::string &sbuf);
-      int Read(std::string &retstring, char delim); ///< read data from connected socket until delimiter found
-      int Read(std::string &retstring, std::string endstr);
+      int Read(std::string &retstring);  ///< read data from connected socket until newline
+      int Read(std::string &retstring, char term); ///< read data from connected socket until terminating char found
+      int Read(std::string &retstring, std::string endstr);  ///< read data from connected socket until endstr
       int Bytes_ready();                 ///< get the number of bytes available on the socket descriptor this->fd
       void Flush();                      ///< flush a socket by reading until it's empty
 
@@ -189,12 +189,16 @@ namespace Network {
       int port;                   ///< port number for device on host
       bool initialized;           ///< has the class been initialized?
       std::mutex mtx;
+      char term_write;            ///< send_command() adds this char on writes
+      char term_read;             ///< send_command() looks for this char on reads (if reply requested)
 
     public:
       /// has the class been initialized?
       bool is_initialized() { return this->initialized; };
       /// what is the name of the device?
       std::string get_name() { return this->name; };
+      std::string get_host() { return this->host; };
+      int get_port() { return this->port; };
 
       long open();                ///< open a connection to LKS device
       long close();               ///< close the connection to the LKS device
@@ -203,6 +207,7 @@ namespace Network {
 
       inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
 
+      Interface( std::string name, std::string host, int port, char term_write, char term_read );
       Interface( std::string name, std::string host, int port );
       Interface();
       ~Interface();

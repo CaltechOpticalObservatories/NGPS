@@ -25,18 +25,18 @@ const std::string TCSD_WEATHER_COORDS = "weathercoords";
 
 const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_CLOSE,
-                                               TCSD_COORDS+" <ra> <dec> [target]",
+                                               TCSD_COORDS+" ? | <ra> <dec> <equinox> <ramotion> <decmotion> [<motionflag>] [ \"<targetname>\" ]",
                                                TCSD_EXIT,
-                                               TCSD_GET_CASS,
-                                               TCSD_GET_COORDS,
-                                               TCSD_GET_DOME,
-                                               TCSD_GET_FOCUS,
-                                               TCSD_GET_MOTION,
+                                               TCSD_GET_CASS+" [ ? ]",
+                                               TCSD_GET_COORDS+" [ ? ]",
+                                               TCSD_GET_DOME+" [ ? ]",
+                                               TCSD_GET_FOCUS+" [ ? ]",
+                                               TCSD_GET_MOTION+" [ ? ]",
                                                TCSD_ISOPEN,
                                                TCSD_LIST,
                                                TCSD_LLIST,
-                                               TCSD_OPEN,
-                                               TCSD_RINGGO+" <angle>",
-                                               TCSD_WEATHER_COORDS
+                                               TCSD_OPEN+" ? | <name>",
+                                               TCSD_RINGGO+" ? | <angle>",
+                                               TCSD_WEATHER_COORDS+" [ ? ]"
                                              };
 #endif
