@@ -1,2 +1,2 @@
 #!/bin/sh
-xterm -geometry 150x50 -e colorlog &
+xterm -geometry 200x50 -e colorlog &

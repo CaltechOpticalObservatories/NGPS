@@ -22,6 +22,7 @@
 #include <mysqlx/xdevapi.h>
 
 #define ERROR_TARGETLIST_BAD_HEADER 1001  ///< TODO change this
+
 #define PYTHON_PATH "/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_FPOFFSETS_MODULE "FPoffsets"
 #define PYTHON_FPOFFSETS_FUNCTION "compute_offset"

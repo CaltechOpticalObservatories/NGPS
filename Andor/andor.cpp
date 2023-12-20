@@ -264,6 +264,13 @@ namespace Andor {
   /***** Andor::Interface::_GetTemperature ************************************/
 
 
+  long Interface::_GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) {
+    std::string function = "Andor::Interface::_GetVersionInfo";
+    std::stringstream message;
+    unsigned int ret = GetVersionInfo( arr, info, len );
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+
   /***** Andor::Interface::_Initialize ****************************************/
   /**
    * @brief      wrapper for Andor SDK Initialize checks return value
@@ -588,6 +595,13 @@ namespace Andor {
       return error;
     }
 
+    char info[128];
+    if ( _GetVersionInfo( AT_SDKVersion, info, 128 ) == NO_ERROR ) {
+      this->camera_info.sdk_version = std::string(info);
+      message.str(""); message << "SDK version " << this->camera_info.sdk_version;
+      logwrite( function, message.str() );
+    }
+
     // Initialize the Andor SDK
     //
     logwrite( function, "initializing Andor SDK" );
@@ -599,6 +613,12 @@ namespace Andor {
       message.str(""); message << "ERROR initializing Andor SDK for camera " << index;
       logwrite( function, message.str() );
       return error;
+    }
+
+    if ( _GetVersionInfo( AT_DeviceDriverVersion, info, 128 ) == NO_ERROR ) {
+      this->camera_info.driver_version = std::string(info);
+      message.str(""); message << "Device Driver version " << this->camera_info.driver_version;
+      logwrite( function, message.str() );
     }
 
     // The Andor SDK takes several seconds to initialize but returns

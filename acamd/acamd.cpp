@@ -105,9 +105,11 @@ int main(int argc, char **argv) {
     start_daemon = true;
   }
 
+  // daemonize, but don't close all file descriptors, required for the Andor camera
+  //
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
-    Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "" );
+    Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
   }
 
   if ( ( init_log( logpath, Acam::DAEMON_NAME ) != 0 ) ) {           // initialize the logging system

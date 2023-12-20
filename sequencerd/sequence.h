@@ -165,6 +165,7 @@ namespace Sequencer {
   const std::uint32_t THR_STARTUP                  = 1 << STARTUP_BIT;
   const std::uint32_t THR_SHUTDOWN                 = 1 << SHUTDOWN_BIT;
 
+
   /***** Sequencer::Sequence **************************************************/
   /**
    * @class Sequence

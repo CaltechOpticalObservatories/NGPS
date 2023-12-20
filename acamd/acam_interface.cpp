@@ -984,9 +984,9 @@ namespace Acam {
     else if ( args == "?" ) {
       help = ACAMD_OPEN;
       help.append( " [ [motion] [camera [args]] ]\n" );
-      help.append( "  no arg will open all components, motion and camera\n" );
-      help.append( "  either one or both components may be specified\n" );
-      help.append( "  camera can take an optional arg to pass to camera\n" );
+      help.append( "  Open connections to all devices (by default).\n" );
+      help.append( "  Optionally indicate motion | camera to open only the indicated component.\n" );
+      help.append( "  The camera component can take an optional arg to pass to the camera.\n" );
       return( NO_ERROR );
     }
     else { // ...otherwise look at the arg(s):

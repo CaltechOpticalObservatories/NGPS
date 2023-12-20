@@ -1,18 +1,15 @@
 # ----------------------------------------------------------------------------
-# @file    PI/CMakeLists.txt
-# @brief   input to the CMake build system for building PI software packages
+# @file    LKS/CMakeLists.txt
+# @brief   input to the CMake build system for building LKS software packages
 # @author  David Hale <dhale@caltech.edu>
 # ----------------------------------------------------------------------------
-
 cmake_minimum_required( VERSION 3.12 )
 
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
-
-set( PI_DIR ${PROJECT_BASE_DIR}/PI )
+set( LKS_DIR ${PROJECT_BASE_DIR}/LKS )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
-add_library( physik_instrumente STATIC
-        ${PI_DIR}/pi.cpp
+add_library( lks STATIC
+        ${LKS_DIR}/lks.cpp
         )

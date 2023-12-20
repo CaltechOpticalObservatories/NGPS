@@ -48,6 +48,8 @@ namespace Andor {
       unsigned long section_size;
       double exposure_time;      ///< exposure time in seconds
       std::string fits_name;
+      std::string sdk_version;     ///< SDK version
+      std::string driver_version;  ///< device driver version
 
       Information();
   };
@@ -118,6 +120,7 @@ namespace Andor {
       long _GetStatus( int* status );
       long _GetStatus( int* status, std::stringstream &status_msg );
       long _GetTemperature();
+      long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len );
       long _Initialize( );
       long _SetAcquisitionMode( int mode );
       long _SetCurrentCamera( int handle );

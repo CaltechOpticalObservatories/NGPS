@@ -23,6 +23,7 @@ const std::string CAMERAD_FRAMETRANSFER = "frametransfer";
 const std::string CAMERAD_GEOMETRY = "geometry";
 const std::string CAMERAD_IMDIR = "imdir";
 const std::string CAMERAD_IMNUM = "imnum";
+const std::string CAMERAD_IMSIZE = "imsize";
 const std::string CAMERAD_INTERFACE = "interface";
 const std::string CAMERAD_ISOPEN = "isopen";
 const std::string CAMERAD_KEY = "key";
@@ -47,17 +48,18 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_AUTODIR,
                                                   CAMERAD_BASENAME,
                                                   CAMERAD_BIAS,
-                                                  CAMERAD_BUFFER+" [ ? | <rows> <cols> | <bytes> ]",
+                                                  CAMERAD_BUFFER+" ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]",
                                                   CAMERAD_CLOSE,
                                                   CAMERAD_CONFIG,
                                                   CAMERAD_ECHO,
                                                   CAMERAD_EXPOSE,
                                                   CAMERAD_EXPTIME,
                                                   CAMERAD_FITSNAMING,
-                                                  CAMERAD_FRAMETRANSFER+" [ ? ] | [ <dev#> | <chan> [ yes | no ] ]",
-                                                  CAMERAD_GEOMETRY,
+                                                  CAMERAD_FRAMETRANSFER+" ? | <dev#> | <chan> [ yes | no ]",
+                                                  CAMERAD_GEOMETRY+" ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]",
                                                   CAMERAD_IMDIR,
                                                   CAMERAD_IMNUM,
+                                                  CAMERAD_IMSIZE+" ? | <dev#>|<chan> [ <cols> <rows> <oscols> <osrows> [ <skiprows> ] ]",
                                                   CAMERAD_INTERFACE,
                                                   CAMERAD_ISOPEN,
                                                   CAMERAD_KEY,

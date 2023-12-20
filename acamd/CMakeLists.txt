@@ -7,27 +7,25 @@
 cmake_minimum_required( VERSION 3.12 )
 
 # Uncomment _one_ of these to select the source of real Andor images,
-# either direct from the camera or via an external server.
+# either direct from the camera (ACAM_ANDOR_SOURCE_ANDOR) or via an
+# external server (ACAM_ANDOR_SOURCE_SERVER) aka "the gui".
 #
-add_definitions(-DACAM_ANDOR_SOURCE_SERVER)
-#add_definitions(-DACAM_ANDOR_SOURCE_ANDOR)
+#add_definitions(-DACAM_ANDOR_SOURCE_SERVER)
+add_definitions(-DACAM_ANDOR_SOURCE_ANDOR)
 
 # Uncmoment this to use the Andor simulator
 #
 #add_definitions(-DANDORSIM)
 
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
-#add_definitions( -I/home/developer/anaconda3/include/python3.9 -I/home/developer/anaconda3/include/python3.9  -Wno-unused-result -Wsign-compare -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O3 -ffunction-sections -pipe -isystem /home/developer/anaconda3/include -fdebug-prefix-map=/opt/conda/conda-bld/python-split_1661469458365/work=/usr/local/src/conda/python-3.9.13 -fdebug-prefix-map=/home/developer/anaconda3=/usr/local/src/conda-prefix -I/home/developer/anaconda3/include -DNDEBUG  -O3 -Wall )
-add_definitions( -I/usr/include/python3.9 -I/usr/include/python3.9  -Wno-unused-result -Wsign-compare  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv  -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv )
+
+#add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
+#add_definitions( -I/usr/include/python3.9 -I/usr/include/python3.9  -Wno-unused-result -Wsign-compare  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv  -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv )
 
 
 set( ACAMD_DIR ${PROJECT_BASE_DIR}/acamd )
 
 # C-Python API Development libraries and headers
 #
-#find_path( PYTHON_DEV "Python.h" PATHS /home/developer/anaconda3/include/python3.9 )
-#find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /home/developer/anaconda3/lib )
-#add_link_options( -L/home/developer/anaconda3/lib/python3.9/config-3.9-x86_64-linux-gnu -L/home/developer/anaconda3/lib -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm)
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
@@ -74,6 +72,7 @@ target_link_libraries(acamd
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
+target_compile_options(acamd PRIVATE -g -Wall -O0 -Wno-variadic-macros -ggdb)
 add_executable( newpytest
         ${ACAMD_DIR}/newpytest.cpp 
         ${PYTHON_DEV}

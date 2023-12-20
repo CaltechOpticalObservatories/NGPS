@@ -1035,7 +1035,7 @@ namespace Sequencer {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 ) {
+      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                       for ( auto s : SEQUENCERD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else

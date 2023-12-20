@@ -8,14 +8,21 @@
 
 set( IP_GATEWAY         10.0.0.1   )
 
+# terminal server
+#
 set( IP_ETS8P           10.0.0.8   )
 
+# network power switches
+#
 set( IP_NPS1            10.0.0.11  )
 set( IP_NPS2            10.0.0.12  )
 set( IP_NPS3            10.0.0.13  )
 set( IP_NPS4            10.0.0.14  )
 
 set( IP_LAMP_MODULATOR  10.0.0.36  )
+set( IP_CR1000X         10.0.0.100 )
 
+# Lakeshores
+#
 set( IP_LKS_UR          10.0.0.136 )
 set( IP_LKS_IG          10.0.0.137 )

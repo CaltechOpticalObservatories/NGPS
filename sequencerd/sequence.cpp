@@ -1620,8 +1620,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     if (error==NO_ERROR) error = seq.parse_state( function, reply, isopen );
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to camera hardware" );
-//    error = seq.camerad.send( CAMERAD_OPEN, reply );
-      error = seq.camerad.send( "open 2 3", reply );     ///< TODO @todo two controllers working for testing
+      error = seq.camerad.send( CAMERAD_OPEN, reply );   // This will open all devices configured with CONTROLLER key in config file
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with science camera controller(s)" );
     }
 
@@ -3891,6 +3890,14 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "preamble" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test preamble\n";
+        retstring.append( "  Log all of the camera preamble commands.\n" );
+        retstring.append( "  These are commands that will be sent to the camera daemon\n" );
+        retstring.append( "  on initialization.\n" );
+        return( NO_ERROR );
+      }
+
       for ( auto cmd : this->camera_preamble ) {
         logwrite( function, "camera "+cmd );
       }
@@ -3942,6 +3949,12 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "states" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test states\n";
+        retstring.append( "  Log the REQSTATE and SEQSTATE bits that are set,\n" );
+        retstring.append( "  and a list of the threads currently running\n" );
+        return( NO_ERROR );
+      }
 
       // get the seqstate and reqstate and put them (numerically) into the return string
       //
@@ -4042,6 +4055,14 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "getnext" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test getnext\n";
+        retstring.append( "  Read the next PENDING target from the database.\n" );
+        retstring.append( "  This is the equivalent (and necessary) step performed prior\n" );
+        retstring.append( "  to starting an observation.\n" );
+        return( NO_ERROR );
+      }
+
       TargetInfo::TargetState ret;
       std::stringstream rts;
       std::string targetstatus;
@@ -4112,6 +4133,13 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "completed" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test completed\n";
+        retstring.append( "  Update state of current target in target table to COMPLETE\n" );
+        retstring.append( "  and insert a record in the completed observations table.\n" );
+        retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
+        return( NO_ERROR );
+      }
       error = this->target.update_state( Sequencer::TARGET_COMPLETE );
       if (error==NO_ERROR) error = this->target.insert_completed();
 
@@ -4132,6 +4160,12 @@ logwrite( function, "[DEBUG] setting READY bit" );
         return( ERROR );
       }
       else {
+        if ( tokens[1] == "?" ) {
+          retstring = "test update { pending | complete | unassigned }\n";
+          retstring.append( "  Update state of current target in target table to PENDING | COMPLETE | UNASSIGNED.\n" );
+          retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
+          return( NO_ERROR );
+        }
         if ( tokens[1] != "pending" && tokens[1] != "complete" && tokens[1] != "unassigned" ) {
           logwrite( function, "update expected { pending | complete | unassigned }" );
           return( ERROR );
@@ -4151,6 +4185,12 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "radec" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test radec\n";
+        retstring.append( "  Convert the RA,DEC of the current target from HH:MM:SS to decimal.\n" );
+        retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
+        return( NO_ERROR );
+      }
       double ra,dec;
       ra  = this->target.radec_to_decimal( target.ra_hms );
       dec = this->target.radec_to_decimal( target.dec_dms );
@@ -4166,6 +4206,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "notify" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test notify\n";
+        retstring.append( "  Send a notification signal to unblock all waiting threads.\n" );
+        return( NO_ERROR );
+      }
       this->cv.notify_all();
     }
     else
@@ -4175,6 +4220,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "tablenames" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test tablenames\n";
+        retstring.append( "  Print the names of the tables in the database\n" );
+        return( NO_ERROR );
+      }
       error = this->target.get_table_names();
     }
     else
@@ -4203,6 +4253,16 @@ logwrite( function, "[DEBUG] setting READY bit" );
     //
     if ( testname == "moveto" ) {
 
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test moveto { <solverargs> }\n";
+        retstring.append( "  Spawn a thread to move to the target.\n" );
+        retstring.append( "  This will disable guiding, slew the telescope, move the cass ring,\n" );
+        retstring.append( "  and start the acquisition sequence. Optional <solverargs> may be\n" );
+        retstring.append( "  included to send to the solver.\n" );
+        retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
+        return( NO_ERROR );
+      }
+
       // any and all args are taken to be optional solver args
       //
       if ( tokens.size() > 1 ) {
@@ -4230,6 +4290,14 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ---------------------------------------------------------
     //
     if ( testname == "acquire" ) {
+
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test acquire\n";
+        retstring.append( "  Spawn a thread to start the acquisition sequence.\n" );
+        retstring.append( "  This only performs the acquisition so the TCS must\n" );
+        retstring.append( "  already be tracking on a target.\n" );
+        return( NO_ERROR );
+      }
 
       // Read the current cass angle from the TCS
       //
@@ -4305,6 +4373,15 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ---------------------------------------------------------
     //
     if ( testname == "fpoffset" ) {
+
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test fpoffset <from> <to>\n";
+        retstring.append( "  Convert the coordinates of the current target from one\n" );
+        retstring.append( "  coordinate system to another, as specified by <from> and <to>.\n" );
+        retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
+        return( NO_ERROR );
+      }
+
       std::string from, to;
       double ra,dec;
       ra  = this->target.radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
@@ -4323,6 +4400,28 @@ logwrite( function, "[DEBUG] setting READY bit" );
       }
       this->target.fpoffsets.set_inputs( ra, dec, this->target.casangle );
       error = this->target.fpoffsets.compute_offset( from, to );
+    }
+    else
+
+    // ---------------------------------------------------------
+    // script -- 
+    // ---------------------------------------------------------
+    //
+    if ( testname == "script" ) {
+
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test script <file>\n";
+        retstring.append( "  Run <file> as a script\n" );
+        return( NO_ERROR );
+      }
+
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR: expected one argument" );
+        retstring = "bad_arg";
+        return( ERROR );
+      }
+
+//    if (error==NO_ERROR) std::thread( dothread_runscript, std::ref(*this) ).detach();
     }
 
     // ----------------------------------------------------

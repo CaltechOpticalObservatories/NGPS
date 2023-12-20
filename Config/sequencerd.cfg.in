@@ -67,7 +67,7 @@ POWER_ACAM=(ACAM SLITCAM) #(AG_CAMERA SLICE_CAMERA_1 SLICE_CAMERA_2)
 #
 DB_HOST=localhost
 DB_PORT=@DB_PORT@
-DB_USER=ngps
+DB_USER=obseq
 DB_PASS=Write1Spec2.!
 DB_SCHEMA=ngps
 DB_ACTIVE=targets                    # active target table

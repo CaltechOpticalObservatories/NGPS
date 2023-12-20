@@ -34,9 +34,6 @@ namespace AstroCam {
     message << "ELAPSEDTIME_" << devnum << ":" << uiElapsedTime;
     if ( uiExposureTime != 0x1BAD1BAD ) message<< " EXPTIME:" << uiExposureTime;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
-#ifdef LOGLEVEL_DEBUG
-    std::cerr << "elapsedtime: " << std::setw(10) << uiElapsedTime << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
-#endif
     return;
   }
   /***** AstroCam::Callback::exposeCallback ***********************************/
@@ -57,9 +54,6 @@ namespace AstroCam {
     std::stringstream message;
     message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE: " << uiImageSize;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
-#ifdef LOGLEVEL_DEBUG
-    std::cerr << "dev:" << devnum << " pixelcount:  " << std::setw(10) << uiPixelCount << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
-#endif
     return;
   }
   /***** AstroCam::Callback::readCallback *************************************/
@@ -101,10 +95,6 @@ namespace AstroCam {
 
     std::thread( std::ref(AstroCam::Interface::handle_frame), expbuf, devnum, fpbcount, fcount, buffer ).detach();
 
-#ifdef LOGLEVEL_DEBUG
-    std::cerr << "\n dev:" << devnum << " pixelcount:  " << std::setw(10) << (rows*cols) << "\n";
-    std::cerr << "\n dev:" << devnum << " framecount:  " << std::setw(10) << fcount << "\n";
-#endif
     return;
   }
   /***** AstroCam::Callback::frameCallback ************************************/
@@ -374,7 +364,7 @@ namespace AstroCam {
    * @param[in]  args       expected: <dev#>|<chan> [ <string> ]
    * @param[out] dev        reference to returned dev#
    * @param[out] chan       reference to returned channel
-   * @param[out] retstring  carries either error message, or <string> if present
+   * @param[out] retstring  carries error message, or any remaining strings, if present
    *
    */
   long Interface::extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring ) {
@@ -388,29 +378,38 @@ namespace AstroCam {
     retstring.empty();
 
     std::vector<std::string> tokens;
-    std::string trydev;
+    std::string tryme;
 
     // Tokenize args to extract requested <dev>|<chan> and <string>, as appropriate
     //
-    switch( Tokenize( args, tokens, " " ) ) {
-      case 1 : trydev    = tokens[0];             // dev|chan only
-               break;
-      case 2 : trydev    = tokens[0];             // dev|chan and string
-               retstring = tokens[1];
-               break;
-      default: logwrite( function, "ERROR: bad arguments. expected <dev> | <chan> [ <string> ]" );
-               retstring="bad_args";
-               return( ERROR );
+    Tokenize( args, tokens, " " );
+    size_t ntok = tokens.size();
+    if ( ntok < 1 ) {                   // need at least one token
+      logwrite( function, "ERROR: bad arguments. expected <dev> | <chan> [ <string> ]" );
+      retstring="invalid_argument";
+      return( ERROR );
+    }
+    else
+    if ( ntok == 1 ) {                  // dev|chan only
+      tryme = tokens[0];
+    }
+    else {                              // dev|chan plus string
+      tryme = tokens[0];
+      retstring.clear();
+      for ( size_t i=1; i<ntok; i++ ) {   // If more than one token in string, then put
+        retstring.append( tokens[i] );  // them all back together and return as one string.
+        retstring.append( ( i+1 < ntok ? " " : "" ) );
+      }
     }
 
-    // Try to convert the "trydev" to integer. If successful then it's a dev#,
+    // Try to convert the "tryme" to integer. If successful then it's a dev#,
     // and if that fails then check if it's a known channel.
     //
     try {
-      dev = std::stoi( trydev );  // convert to integer
+      dev = std::stoi( tryme );   // convert to integer
       if ( dev < 0 ) {            // don't let the user input a negative number
         logwrite( function, "ERROR: dev# must be >= 0" );
-        retstring="bad_args";
+        retstring="invalid_argument";
         return( ERROR );
       }
     }
@@ -419,12 +418,12 @@ namespace AstroCam {
 
     // If the stoi conversion failed then we're out here with a negative dev.
     // If it succeeded then all we have is a number >= 0.
-    // But now check that either the dev# is a known devnum or the trydev is a known channel.
+    // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
     for ( auto &con : this->controller ) {
-      if ( con.second.channel == trydev ) {  // check to see if it matches a configured channel.
+      if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
-        chan = trydev;
+        chan = tryme;
         break;
       }
       if ( con.second.devnum == dev ) {      // check for a known dev#
@@ -436,9 +435,9 @@ namespace AstroCam {
     // By now, these must both be known.
     //
     if ( dev < 0 || chan.empty() ) {
-      message.str(""); message << "ERROR: " << trydev << " is neither a known channel nor device#";
+      message.str(""); message << "ERROR: " << tryme << " is neither a known channel nor device#";
       logwrite( function, message.str() );
-      retstring="bad_args";
+      retstring="invalid_argument";
       return( ERROR );
     }
 
@@ -959,7 +958,7 @@ namespace AstroCam {
 
     if ( cmdstr.empty() ) {
       logwrite(function, "ERROR: missing command");
-      retstring="bad_arg";
+      retstring="invalid_argument";
       return(ERROR);
     }
 
@@ -996,7 +995,7 @@ namespace AstroCam {
     if (nargs > 4) {
       message.str(""); message << "ERROR: too many arguments: " << nargs << " (max 4)";
       logwrite(function, message.str());
-      retstring="bad_arg";
+      retstring="invalid_argument";
       return(ERROR);
     }
 
@@ -1623,6 +1622,10 @@ namespace AstroCam {
     std::stringstream message;
     std::vector<std::string> tokens;
 
+    logwrite( function, "ERROR: should you be using this?" );
+    return( ERROR );
+
+/*****
     Tokenize(valstring, tokens, " ");
 
     if (tokens.size() != 2) {
@@ -1654,12 +1657,10 @@ namespace AstroCam {
         if ( this->do_native(fps.str()) != 0x444F4E ) return -1;
 
 ///< TODO @todo set fitskey NFRAMES
-/**
-        fitskeystr.str(""); fitskeystr << "NFRAMES=" << this->nframes << "//number of frames";
-        this->fitskey.set_fitskey(fitskeystr.str()); // TODO
-**/
+//      fitskeystr.str(""); fitskeystr << "NFRAMES=" << this->nframes << "//number of frames";
+//      this->fitskey.set_fitskey(fitskeystr.str()); // TODO
 
-        int _framesize = rows * cols * sizeof(unsigned short);
+        int _framesize = rows * cols * sizeof(uint16_t);
         if (_framesize < 1) {
           message.str(""); message << "error: bad framesize: " << _framesize;
           logwrite(function, message.str());
@@ -1669,7 +1670,7 @@ namespace AstroCam {
 
         if ( (_nfpb < 1) ||
              ( (this->nframes > 1) &&
-               (this->get_bufsize() < (int)(2*rows*cols*sizeof(unsigned short))) ) ) {
+               (this->get_bufsize() < (int)(2*rows*cols*sizeof(uint16_t))) ) ) {
           message.str(""); message << "insufficient buffer size (" 
                                    << this->get_bufsize()
                                    << " bytes) for "
@@ -1705,6 +1706,7 @@ namespace AstroCam {
     }
 
     return 0;
+*****/
   }
   /***** AstroCam::Interface::nframes *****************************************/
 
@@ -1826,14 +1828,16 @@ namespace AstroCam {
         // check buffer size
         // need allocation for at least 2 frames if nframes is greater than 1
         //
-        int bufsize = this->get_bufsize();
-        if ( bufsize < (int)( (this->nframes>1?2:1) * rows * cols * sizeof(unsigned short) ) ) {  ///< TODO @todo type check bufsize: is it big enough?
+        int bufsize = this->controller[dev].get_bufsize();
+        if ( bufsize < (int)( (this->nframes>1?2:1) * rows * cols * sizeof(uint16_t) ) ) {  ///< TODO @todo type check bufsize: is it big enough?
           message.str(""); message << "ERROR: insufficient buffer size (" << bufsize
                                    << " bytes) for " << this->nframes << " frame" << (this->nframes==1?"":"s")
                                    << " of " << rows << " x " << cols << " pixels";
           logwrite(function, message.str());
-          message.str(""); message << "minimum buffer size is " << (this->nframes>1?2:1) * rows * cols * sizeof(unsigned short) << " bytes";
+          message.str(""); message << "minimum buffer size is " << (this->nframes>1?2:1) * rows * cols * sizeof(uint16_t) << " bytes";
           this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+message.str(""); message << "[DEBUG] nframes:" << this->nframes << " rows:" << rows << " cols:" << cols << " sizeof:" << sizeof(uint16_t);
+logwrite( function, message.str() );
           return(ERROR);
         }
 
@@ -2316,7 +2320,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     //
     if (tokens.size() < 1) {
       logwrite(function, "ERROR: too few arguments");
-      retstring="bad_args";
+      retstring="invalid_argument";
       return( ERROR );
     }
 
@@ -2325,7 +2329,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
     //
     if ((int)tokens.size() > this->numdev+1) {
       logwrite(function, "ERROR: too many arguments");
-      retstring="bad_args";
+      retstring="invalid_argument";
       return( ERROR );
     }
 
@@ -2505,7 +2509,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
    * @brief      set/get mapped PCI image buffer
    * @details    This function uses the ARC API to allocate PCI/e buffer space
    *             for doing the DMA transfers.
-   * @param[in]  size_in   string containing the buffer allocation info
+   * @param[in]  args      string containing <dev>|<chan> [ <bytes> | <rows> <cols> ]
    * @param[out] retstring reference to a string for return values
    * @return     ERROR or NO_ERROR
    *
@@ -2514,84 +2518,100 @@ logwrite( function, "copying master keyword databases to expinfo now" );
    * buffer.
    *
    */
-  long Interface::buffer(std::string size_in, std::string &retstring) {
+  long Interface::buffer( std::string args, std::string &retstring ) {
     std::string function = "AstroCam::Interface::buffer";
     std::stringstream message;
     uint32_t try_bufsize=0;
 
-    if ( size_in == "?" ) {
+    // Help
+    //
+    if ( args == "?" ) {
       retstring = CAMERAD_BUFFER;
-      retstring.append( " [ <bytes> | <rows> <cols> ]\n" );
-      retstring.append( "  Allocate PCI buffer space for performing DMA transfers.\n" );
-      retstring.append( "  Provide either the size of the buffer <bytes>, or if two values\n" );
-      retstring.append( "  are provided then they are taken as <rows> x <cols> pixels and a\n" );
-      retstring.append( "  buffer will be allocated to accomodate an image of that size.\n" );
-      retstring.append( "  If no args are supplied then the current buffer size is returned.\n" );
+      retstring.append( " <dev#> | <chan> [ <bytes> | <rows> <cols> ]\n" );
+      retstring.append( "  Allocate PCI buffer space for performing DMA transfers for specified device.\n" );
+      retstring.append( "  Provide either a single value in <bytes> or two values as <rows> <cols>.\n" );
+      retstring.append( "  If no args are supplied then the buffer size for dev#|chan is returned (in Bytes).\n" );
+      retstring.append( "  Specify <dev#> or <chan> from { " );
+      message.str("");
+      for ( auto &con : this->controller ) {
+        message << con.second.devnum << " " << con.second.channel << " ";
+      }
+      message << "}\n";
+      retstring.append( message.str() );
       return( NO_ERROR );
     }
 
     // If no connected devices then nothing to do here
     //
-    if (this->numdev == 0) {
+    if ( this->numdev == 0 ) {
       logwrite(function, "ERROR: no connected devices");
       retstring="not_connected";
-      return(ERROR);
+      return( ERROR );
     }
 
-    // If no buffer size specified then return the current setting
-    //
-    if (size_in.empty()) {
-      retstring = std::to_string( this->bufsize );
-      return(NO_ERROR);
+    int dev;
+    std::string chan;
+
+    long error = this->extract_dev_chan( args, dev, chan, retstring );
+
+    auto it = this->controller.find( dev );
+
+    if ( it == this->controller.end() ) {
+      message.str(""); message << "ERROR: dev# " << dev << " for chan " << chan << " not configured";
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return( ERROR );
     }
 
-    // Tokenize size_in string and set buffer size accordingly --
-    // size_in string can contain 1 value to allocate that number of bytes
-    // size_in string can contain 2 values to allocate a buffer of rows x cols
-    // Anything other than 1 or 2 tokens is invalid.
-    //
-    std::vector<std::string> tokens;
-    switch( Tokenize( size_in, tokens, " " ) ) {
-      case 1:  // allocate specified number of bytes
-               try_bufsize = (uint32_t)parse_val( tokens.at(0) );
-               break;
-      case 2:  // allocate (col x row) bytes
-               try_bufsize = (uint32_t)parse_val(tokens.at(0)) * (uint32_t)parse_val(tokens.at(1)) * sizeof(uint16_t);
-               break;
-      default: // bad
-               message.str(""); message << "ERROR: invalid arguments: " << size_in << ": expected bytes or cols rows";
-               logwrite(function, message.str());
-               retstring="invalid_arguments";
-               return(ERROR);
-               break;
-    }
+    auto &con = it->second;  // need reference so that values can be modified here
 
-    // For each connected device, try to re-map the requested buffer size.
-    // This is done sequentially for each device.
+    if ( error != NO_ERROR ) return error;
+
+    // If there is a buffer or array size provided then parse it,
+    // then try to map the buffer size.
     //
-    for (auto dev : this->devlist) {
+    if ( ! retstring.empty() ) {
+
+      // Still have to tokenize retstring now, to get the requested buffer size.
+      //
+      // retstring can contain 1 value to allocate that number of bytes
+      // retstring can contain 2 values to allocate a buffer of rows x cols
+      // Anything other than 1 or 2 tokens is invalid.
+      //
+      std::vector<std::string> tokens;
+      switch( Tokenize( retstring, tokens, " " ) ) {
+        case 1:  // allocate specified number of bytes
+                 try_bufsize = (uint32_t)parse_val( tokens.at(0) );
+                 break;
+        case 2:  // allocate (col x row) bytes
+                 try_bufsize = (uint32_t)parse_val(tokens.at(0)) * (uint32_t)parse_val(tokens.at(1)) * sizeof(uint16_t);
+                 break;
+        default: // bad
+                 message.str(""); message << "ERROR: invalid arguments: " << retstring << ": expected <bytes> or <rows> <cols>";
+                 logwrite(function, message.str());
+                 retstring="invalid_argument";
+                 return(ERROR);
+                 break;
+      }
+
+      // Now try to re-map the buffer size for the requested device.
+      //
       try {
-        this->controller[dev].pArcDev->reMapCommonBuffer( try_bufsize );
+        con.pArcDev->reMapCommonBuffer( try_bufsize );
       }
-      catch(std::out_of_range &) {
-        message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for (auto check : this->devlist) message << check << " ";
-        message << "}";
+      catch( const std::exception &e ) {
+        message.str(""); message << "ERROR: for dev " << dev << " chan " << chan << ": " << e.what();
         logwrite(function, message.str());
-        retstring="bad_device";
-        return(ERROR);
+        retstring="arc_exception";
+        return( ERROR );
       }
-      catch(const std::exception &e) {
-        message.str(""); message << "ERROR: device number " << dev << ": " << e.what();
-        logwrite(function, message.str());
-        retstring="bad_device";
-        return(ERROR);
-      }
-      catch(...) { logwrite(function, "unknown error mapping memory"); retstring="memory_error"; return(ERROR); }
+      catch(...) { logwrite( function, "ERROR: unknown exception mapping memory" ); retstring="exception"; return( ERROR ); }
 
-      this->bufsize = try_bufsize;
-    }
-    retstring = std::to_string( this->bufsize );
+      con.set_bufsize( try_bufsize );  // save the new buffer size to the controller map for this dev
+    }  // end if ! retstring.empty()
+
+    retstring = std::to_string( con.get_bufsize() );
+
     return(NO_ERROR);
   }
   /***** AstroCam::Interface::buffer ******************************************/
@@ -2644,7 +2664,7 @@ logwrite( function, "copying master keyword databases to expinfo now" );
 
     error = this->extract_dev_chan( args, dev, chan, readout_name );
 
-    if ( error != NO_ERROR ) return error;
+    if ( error != NO_ERROR ) { retstring=readout_name; return error; }
 
     // If supplied, ...
     //
@@ -2664,21 +2684,24 @@ logwrite( function, "copying master keyword databases to expinfo now" );
       if ( !readout_name_valid ) {
         message.str(""); message << "ERROR: readout " << readout_name << " not recognized";
         logwrite( function, message.str() );
-        retstring="bad_args";
+        retstring="invalid_argument";
         return( ERROR );
       }
       else {  // requested readout type is known, so set it for each of the specified devices
         try {
-          this->controller[ dev ].info.readout_name = readout_name;
-          this->controller[ dev ].info.readout_type = readout_type;
-          this->controller[ dev ].readout_arg = readout_arg;
-          this->controller[ dev ].pArcDev->selectOutputSource( readout_arg );  // this sets the readout amplifier
+          this->controller[ dev ].pArcDev->selectOutputSource( readout_arg );  // this sets the readout amplifier and can throw an exception
         }
-        catch ( const std::exception &e ) { // arc::gen3::CArcDevice::selectOutputSource() may throw an exception
+        catch ( const std::exception &e ) {  // arc::gen3::CArcDevice::selectOutputSource() may throw an exception
           message.str(""); message << "ERROR: setting output source for dev " << dev << " chan " << chan << ": " << e.what();
           logwrite( function, message.str() );
+          retstring="controller_fault";
           return( ERROR );
         }
+        // update the rest of the controller only after selectOutputSource() succeeds
+        //
+        this->controller[ dev ].info.readout_name = readout_name;
+        this->controller[ dev ].info.readout_type = readout_type;
+        this->controller[ dev ].readout_arg = readout_arg;
       }
     }
 
@@ -2955,7 +2978,7 @@ logwrite(function, message.str());
     if ( error==NO_ERROR && tokens.size() < 1 ) {
       message.str(""); message << "ERROR reply \"" << reply << "\": has not enough tokens";
       logwrite( function, message.str() );
-      retstring="bad_args";
+      retstring="invalid_argument";
       error = ERROR;
     }
 
@@ -3174,7 +3197,7 @@ logwrite(function, message.str());
     if ( !retstring.empty() && retstring != "yes" && retstring != "no" ) {
       message.str(""); message << "ERROR: bad state \"" << retstring << "\". expected { yes | no }";
       logwrite( function, message.str() );
-      retstring="bad_args";
+      retstring="invalid_argument";
       return( ERROR );
     }
 
@@ -3191,140 +3214,262 @@ logwrite(function, message.str());
   /***** AstroCam::Interface::frame_transfer_mode *****************************/
 
 
-  /***** AstroCam::Interface::do_geometry *************************************/
+  /***** AstroCam::Interface::image_size **************************************/
   /**
-   * @brief      set/get geometry
-   * @param[in]  args       contains: X Y (i.e. cols rows)
+   * @brief      set/get image size parameters and allocate PCI memory
+   * @details    Sets/gets ROWS COLS OSROWS OSCOLS SKIPROWS for a
+   *             given device|channel. This calls geometry() and buffer() to
+   *             set the image geometry on the controller and allocate a PCI buffer.
+   * @param[in]  args       contains DEV|CHAN [ [ ROWS COLS OSROWS OSCOLS [SKIPROWS] ]
    * @param[out] retstring  reference to string for return value
    * @return     ERROR or NO_ERROR
    *
-   * args string can optionally contain a comma-separated list of devices,
-   * separated from args by a colon, E.G.
-   *   "dev: X Y"
-   *   "dev,dev: X Y"
-   *
-   * or "dev:"
-   *    "dev,dev:"
-   * to read-only from dev or dev list
-   *
    */
-  long Interface::do_geometry(std::string args, std::string &retstring) {
-    std::string function = "AstroCam::Interface::do_geometry";
+  long Interface::image_size( std::string args, std::string &retstring ) {
+    std::string function = "AstroCam::Interface::image_size";
     std::stringstream message;
-    int _rows=-1;
-    int _cols=-1;
-    long error = NO_ERROR;
 
-    // Tokenize the args into a dev list and an arg list
+    // Help
     //
-    std::vector<uint32_t> selectdev;
-    std::vector<std::string> arglist;
-    int ndev, narg;
-    Tokenize( args, selectdev, ndev, arglist, narg );
-
-    // Tokenize sets ndev < 0 on error
-    //
-    if ( ndev < 0 ) {
-      message.str(""); message << "ERROR: tokenizing device list from {" << args << "}";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    if ( ndev == 0 ) {                      // No device list, so
-      for ( auto dev : this->devlist ) {    // build selectdev vector from all connected controllers.
-        selectdev.push_back( dev );
+    if ( args == "?" ) {
+      retstring = CAMERAD_IMSIZE;
+      retstring.append( " <dev#>|<chan> [ [ <rows> <cols> <osrows> <oscols> [ <skiprows> ] ]\n" );
+      retstring.append( "  Configures image parameters used to set image size in the controller,\n" );
+      retstring.append( "  allocate needed PCI buffer space and for FITS header keywords.\n" );
+      retstring.append( "  Camera controller connection must first be open.\n" );
+      retstring.append( "  If no args are supplied then the current parameters for dev|chan are returned.\n" );
+      retstring.append( "  Specify <dev#> or <chan> from { " );
+      message.str("");
+      for ( auto &con : this->controller ) {
+        message << con.second.devnum << " " << con.second.channel << " ";
       }
+      message << "}\n";
+      retstring.append( message.str() );
+      return( NO_ERROR );
     }
 
-    if ( selectdev.empty() ) {              // dev list will be empty if no connections open
-      logwrite( function, "ERROR: no connected devices!" );
+    // If no connected devices then nothing to do here
+    //
+    if ( this->numdev == 0 ) {
+      logwrite(function, "ERROR: no connected devices");
+      retstring="not_connected";
       return( ERROR );
     }
 
-    // If geometry was passed in then it's in the arglist.
-    // Get each value and try to convert them to integers--
+    // Get the requested dev# and channel from supplied args
     //
-    if ( narg == 2 ) {
+    int dev;
+    std::string chan;
+    if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
+
+    // retstring now should contain [ ROWS COLS OSROWS OSCOLS [SKIPROWS] ]
+    // It can contain 0, 4, or 5 tokens.
+    //
+    std::vector<std::string> tokens;
+    Tokenize( retstring, tokens, " " );
+
+    if ( ! tokens.empty() ) {
+
+      // Having other than 4 or 5 tokens is automatic disqualification so get out now
+      //
+      if ( tokens.size() < 4 || tokens.size() > 5 ) {
+        message.str(""); message << "ERROR: invalid arguments: " << retstring << ": expected <rows> <cols> <osrows> <oscols> [<skiprows>]";
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+
+      int tryrows=-1, trycols=-1, tryosrows=-1, tryoscols=-1, tryskiprows=-1;
+
       try {
-        _cols = std::stoi( arglist.at( 0 ) );
-        _rows = std::stoi( arglist.at( 1 ) );
+        if ( tokens.size() >= 4 ) {  // at least 4, so get the first 4
+          tryrows     = std::stoi( tokens.at(0) );
+          trycols     = std::stoi( tokens.at(1) );
+          tryosrows   = std::stoi( tokens.at(2) );
+          tryoscols   = std::stoi( tokens.at(3) );
+          // default, if not specified by 5 tokens below
+          tryskiprows = 0;
+        }
+
+        if ( tokens.size() == 5 ) {  // all five, so get the last one and override default
+          logwrite( function, "NOTICE: skiprows not currently implemented and will be ignored!" );
+          tryskiprows = std::stoi( tokens.at(4) );
+        }
       }
       catch ( std::invalid_argument & ) {
-        message.str(""); message << "ERROR: unable to convert one or more values to integer: ";
-        for ( auto arg : arglist ) message << arg << " ";
+        message.str(""); message << "ERROR: exception converting " << retstring << " to integer";
         logwrite( function, message.str() );
         retstring="invalid_argument";
         return( ERROR );
       }
       catch ( std::out_of_range & ) {
-        message.str(""); message << "ERROR: one or more values outside range: ";
-        for ( auto arg : arglist ) message << arg << " ";
+        message.str(""); message << "ERROR: " << retstring << " outside integer range";
+        logwrite( function, message.str() );
+        retstring="out_of_range";
+        return( ERROR );
+      }
+      catch ( ... ) {
+        message.str(""); message << "ERROR: unknown exception parsing " << retstring;
+        logwrite( function, message.str() );
+        retstring="exception";
+        return( ERROR );
+      }
+
+      // Should be impossible, but check just in case
+      //
+      if ( ( tokens.size() >= 4 ) && ( tryrows<0 || trycols<0 || tryosrows<0 || tryoscols<0 || tryskiprows<0 ) ) {
+        message.str(""); message << "ERROR: invalid image size " << tryrows << " " << trycols << " "
+                                 << tryosrows << " " << tryoscols << " " << tryskiprows;
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+
+      message.str(""); message << "[DEBUG] imsize: " << tryrows << " " << trycols << " "
+                               << tryosrows << " " << tryoscols << " " << tryskiprows;
+      logwrite( function, message.str() );
+
+      int bufrows = tryrows + tryosrows;
+      int bufcols = trycols + tryoscols;
+      std::stringstream geostring;
+      geostring << dev << " " << bufrows << " " << bufcols;
+
+      message.str(""); message << "[DEBUG] geostring: " << geostring.str();
+      logwrite( function, message.str() );
+
+      if ( this->buffer( geostring.str(), retstring ) != NO_ERROR ) return ERROR;
+
+      if ( this->do_geometry( geostring.str(), retstring ) != NO_ERROR ) return ERROR;
+
+    }  // end if !tokens.empty()
+
+    return( NO_ERROR );
+  }
+  /***** AstroCam::Interface::image_size **************************************/
+
+
+  /***** AstroCam::Interface::do_geometry *************************************/
+  /**
+   * @brief      set/get geometry
+   * @param[in]  args       contains <dev>|<chan> [ <rows> <cols> ]
+   * @param[out] retstring  reference to string for return value
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::do_geometry(std::string args, std::string &retstring) {
+    std::string function = "AstroCam::Interface::do_geometry";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = CAMERAD_GEOMETRY;
+      retstring.append( " <dev#> | <chan> [ <rows> <cols> ]\n" );
+      retstring.append( "  Configures geometry of the detector for the specified device, including\n" );
+      retstring.append( "  any overscans. In other words, these are the number of rows and columns that\n" );
+      retstring.append( "  will be read out. Camera controller connection must first be open.\n" );
+      retstring.append( "  If no args are supplied then the current geometry is returned.\n" );
+      retstring.append( "  Specify <dev#> or <chan> from { " );
+      message.str("");
+      for ( auto &con : this->controller ) {
+        message << con.second.devnum << " " << con.second.channel << " ";
+      }
+      message << "}\n";
+      retstring.append( message.str() );
+      return( NO_ERROR );
+    }
+
+    // If no connected devices then nothing to do here
+    //
+    if ( this->numdev == 0 ) {
+      logwrite(function, "ERROR: no connected devices");
+      retstring="not_connected";
+      return( ERROR );
+    }
+
+    int dev;
+    std::string chan;
+
+    if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
+
+    std::vector<std::string> tokens;
+
+    Tokenize( retstring, tokens, " " );
+
+    // If geometry was passed in then it's in the retstring.
+    // Get each value and try to convert them to integers.
+    // There can be 2 tokens (set) or 0 tokens (read only) but no other number of tokens.
+    //
+    if ( tokens.size() == 2 ) {
+      int setrows=-1;
+      int setcols=-1;
+      try {
+        setrows = std::stoi( tokens.at( 0 ) );
+        setcols = std::stoi( tokens.at( 1 ) );
+      }
+      catch ( std::invalid_argument & ) {
+        message.str(""); message << "ERROR: exception converting " << args << " to integer";
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+      catch ( std::out_of_range & ) {
+        message.str(""); message << "ERROR: " << args << " outside integer range";
         logwrite( function, message.str() );
         retstring="out_of_range";
         return( ERROR );
       }
       catch(...) { logwrite(function, "ERROR: unknown exception setting geometry"); retstring="unknown_exception"; return( ERROR ); }
 
-      if ( _cols < 1 || _rows < 1 ) {
-        logwrite( function, "ERROR: cols rows must be > 0" );
+      if ( setrows < 1 || setcols < 1 ) {
+        logwrite( function, "ERROR: rows cols must be > 0" );
+        retstring="invalid_argument";
         return( ERROR );
       }
+
+      message.str(""); message << "[DEBUG] " << this->controller[dev].devname
+                                             << " chan " << this->controller[dev].channel << " rows:" << setrows << " cols:" << setcols;
+      logwrite( function, message.str() );
 
       // Write the geometry to the selected controllers
       //
       std::stringstream cmd;
 
-      cmd.str(""); cmd << "WRM 0x400001 " << _cols;
-      if ( error == NO_ERROR && this->do_native( selectdev, cmd.str() ) == ERROR ) error = ERROR;
+      cmd.str(""); cmd << "WRM 0x400001 " << setcols;
+      if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
-      cmd.str(""); cmd << "WRM 0x400002 " << _rows;
-      if ( error == NO_ERROR && this->do_native( selectdev, cmd.str() ) == ERROR ) error = ERROR;
-
-      if (error == ERROR) logwrite(function, "ERROR: writing geometry to controller");
+      cmd.str(""); cmd << "WRM 0x400002 " << setrows;
+      if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
     }
-    else if ( narg != 0 ) {                 // some other number of args besides 0 or 2 is confusing
-      message.str(""); message << "ERROR: expected no args (for read) or 2 args (X Y for write) but received " << narg << " arguments";
+    else if ( tokens.size() != 0 ) {                 // some other number of args besides 0 or 2 is confusing
+      message.str(""); message << "ERROR: expected [ rows cols ] but received \"" << retstring << "\"";
       logwrite( function, message.str() );
+      retstring="bad_arguments";
       return( ERROR );
     }
 
     // Now read back the geometry from each controller
     //
     std::stringstream rs;
+    std::stringstream cmd;
+    std::string getrows, getcols;
 
-    for ( auto dev : selectdev ) {
-      std::stringstream cmd;
-      std::string col_s, row_s;
+    // Return value from this->do_native() is of the form "dev:0xVALUE"
+    // so must parse the hex value after the colon.
+    //
+    cmd.str(""); cmd << "RDM 0x400001 ";
+    if ( this->do_native( dev, cmd.str(), getcols ) != NO_ERROR ) return ERROR;
+    this->controller[dev].cols = (uint32_t)parse_val( getcols.substr( getcols.find(":")+1 ) );
 
-      try {
-        // Return value from this->do_native() is of the form "dev:0xVALUE"
-        // so must parse the hex value after the colon.
-        //
-        cmd.str(""); cmd << "RDM 0x400001 ";
-        if ( error == NO_ERROR && this->do_native( dev, cmd.str(), col_s ) == ERROR ) error = ERROR;
-        if ( error == NO_ERROR ) this->controller[dev].cols = (uint32_t)parse_val( col_s.substr( col_s.find(":")+1 ) );
+    cmd.str(""); cmd << "RDM 0x400002 ";
+    if ( this->do_native( dev, cmd.str(), getrows ) != NO_ERROR ) return ERROR;
+    this->controller[dev].rows = (uint32_t)parse_val( getrows.substr( getrows.find(":")+1 ) );
 
-        cmd.str(""); cmd << "RDM 0x400002 ";
-        if ( error == NO_ERROR && this->do_native( dev, cmd.str(), row_s ) == ERROR ) error = ERROR;
-        if ( error == NO_ERROR ) this->controller[dev].rows = (uint32_t)parse_val( row_s.substr( row_s.find(":")+1 ) );
+    rs << this->controller[dev].rows << " " << this->controller[dev].cols;
 
-        rs << dev << ":" << this->controller[dev].cols << " " << this->controller[dev].rows << " ";
-      }
-      catch ( std::out_of_range & ) {
-        message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for ( auto check : selectdev ) message << check << " ";
-        message << "}";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
-    }
+    retstring = rs.str();    // Form the return string from the read-back rows cols
 
-    if ( error == NO_ERROR ) retstring = rs.str();    // Form the return string from the read-back cols rows
-    else {
-      logwrite(function, "ERROR: reading geometry from controller");
-    }
-
-    return( error );
+    return( NO_ERROR );
   }
   /***** AstroCam::Interface::do_geometry *************************************/
 
@@ -3642,6 +3787,9 @@ logwrite(function, message.str());
   Interface::Controller::Controller() {
     this->workbuf = NULL;
     this->workbuf_size = 0;
+    this->bufsize = 0;
+    this->rows=0;
+    this->cols=0;
     this->devnum = 0;
     this->framecount = 0;
     this->pArcDev = NULL;
@@ -4141,13 +4289,13 @@ logwrite(function, message.str());
         // try to convert to integer
         //
         try { dev = std::stoi( tokens.at(1) ); }
-	catch ( std::invalid_argument & ) { logwrite( function, "ERROR: invalid argument" ); retstring="bad_arg"; return ERROR; }
+	catch ( std::invalid_argument & ) { logwrite( function, "ERROR: invalid argument" ); retstring="invalid_argument"; return ERROR; }
         catch ( std::out_of_range & ) { logwrite( function, "ERROR: out of range" ); retstring="exception"; return ERROR; }
 
         if ( this->controller.find(dev) == this->controller.end() ) {
           message.str(""); message << "ERROR: " << tokens[1] << " is neither a known channel nor device#";
           logwrite( function, message.str() );
-          retstring="bad_arg";
+          retstring="invalid_argument";
           return( ERROR );
         }
       }
@@ -4170,8 +4318,6 @@ logwrite(function, message.str());
     //
     else
     if ( testname == "controller" ) {
-
-      message.str(""); message << "this->bufsize=" << this->bufsize; logwrite( function, message.str() );
 
       for ( auto &con : this->controller ) {
         message.str(""); message << "controller[" << con.second.devnum << "] connected:" << ( con.second.connected ? "T" : "F" )

@@ -119,7 +119,7 @@ namespace Calib {
       // PI_NAME -- this is the name of the PI motor controller subsystem
       //
       if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
-        this->interface.name = config.arg[entry];
+        this->interface.motion.name = config.arg[entry];
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
@@ -128,7 +128,7 @@ namespace Calib {
       // PI_HOST -- hostname for the master PI motor controller
       //
       if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
-        this->interface.host = config.arg[entry];
+        this->interface.motion.host = config.arg[entry];
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
@@ -149,7 +149,7 @@ namespace Calib {
           logwrite(function, "PI_PORT number out of integer range");
           return(ERROR);
         }
-        this->interface.port = port;
+        this->interface.motion.port = port;
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
@@ -158,13 +158,22 @@ namespace Calib {
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
       if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
-        Calib::ControllerInfo s;
+        Calib::MotionInfo s;
         if ( s.load_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.controller_info[ s.name ] = s;
+          this->interface.motion.motion_info[ s.name ] = s;
           message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
         }
+      }
+
+      // LAMPMOD -- lamp modulator ( host port )
+      //
+      if ( config.param[entry].compare( 0, 7, "LAMPMOD" ) == 0 ) {
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.modulator.configure( config.arg[entry] );
+        applied++;
       }
 
     } // end loop through the entries in the configuration file
@@ -180,7 +189,7 @@ namespace Calib {
     message << "applied " << applied << " configuration lines to calibd";
     logwrite(function, message.str());
 
-    if ( error == NO_ERROR ) error = this->interface.initialize_class();
+    if ( error == NO_ERROR ) error = this->interface.motion.configure_class();
 
     return error;
   }
@@ -443,7 +452,7 @@ namespace Calib {
       // isopen
       //
       if ( cmd.compare( CALIBD_ISOPEN ) == 0 ) {
-                      bool isopen = this->interface.isopen( );
+                      bool isopen = this->interface.motion.isopen( );
                       if ( isopen ) retstring = "true"; else retstring = "false";
                       ret = NO_ERROR;
       }
@@ -452,36 +461,36 @@ namespace Calib {
       // open
       //
       if ( cmd.compare( CALIBD_OPEN ) == 0 ) {
-                      ret = this->interface.open();
+                      ret = this->interface.motion.open();
       }
       else
 
       // close
       //
       if ( cmd.compare( CALIBD_CLOSE ) == 0 ) {
-                      ret  = this->interface.send_command( "close" );
-                      ret |= this->interface.close();
+                      ret  = this->interface.motion.send_command( "close" );
+                      ret |= this->interface.motion.close();
       }
       else
 
       // home
       //
       if ( cmd.compare( CALIBD_HOME ) == 0 ) {
-                      ret = this->interface.home( args, retstring );
+                      ret = this->interface.motion.home( args, retstring );
       }
       else
 
       // ishome
       //
       if ( cmd.compare( CALIBD_ISHOME ) == 0 ) {
-                      ret = this->interface.is_home( retstring );
+                      ret = this->interface.motion.is_home( retstring );
       }
       else
 
       // get state of one or both actuators
       //
       if ( ( cmd.compare( CALIBD_GET ) == 0 ) ) {
-                      ret = this->interface.get( args, retstring );
+                      ret = this->interface.motion.get( args, retstring );
       }
       else
 
@@ -489,14 +498,14 @@ namespace Calib {
       // args should be actuator=state [ actuator=state ]
       //
       if ( ( cmd.compare( CALIBD_SET ) == 0 ) ) {
-                      ret = this->interface.set( args, retstring );
+                      ret = this->interface.motion.set( args, retstring );
       }
       else
 
       // native
       //
       if ( cmd.compare( CALIBD_NATIVE ) == 0 ) {
-                      ret = this->interface.send_command( args, retstring );
+                      ret = this->interface.motion.send_command( args, retstring );
       }
 
       // unknown commands generate an error

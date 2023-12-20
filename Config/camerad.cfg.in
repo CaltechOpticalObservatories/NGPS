@@ -12,7 +12,7 @@ NBPORT=@CAMERAD_NB_PORT@          # server non-blocking port
 LOGPATH=/data/logs/               # fully qualified path to save log files
 ASYNCPORT=@MESSAGEPORT@
 ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
-DAEMON=yes                        # run as a daemon? {yes,no}
+DAEMON=no                        # run as a daemon? {yes,no}
 
 # -----------------------------------------------------------------------------
 # Each camera controller is defined by
@@ -24,18 +24,19 @@ DAEMON=yes                        # run as a daemon? {yes,no}
 #       FIRMWARE  is the default firmware to load
 #       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
-#CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/sg2_experimental.lod U1)
-CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod SPLIT1)
-#CONTROLLER=(0 I sg2 no /home/developer/Software/DSP/SWIFT/ngps_sg2__e880ba.lod U1)
-#CONTROLLER=(1 R engg no /home/developer/Software/DSP/lod/chaztest-engg-48-reverse.lod SPLIT1)
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
 
-# not yet implemented
-# IMAGE_AREA=(CHAN ROWS COLS OSROWS OSCOLS SKIPROWS NROWS)
-# CHAN must correspond to a CHAN defined in CONTROLLER above
+# IMAGE_SIZE=(CHAN COLS ROWS OSCOLS OSROWS SKIPROWS)
+# where CHAN      must correspond to a CHAN defined in CONTROLLER key above
+#       ROWS      number of rows in image
+#       COLS      number of columns in image
+#       OSROWS    number of overscan rows
+#       OSCOLS    number of overscan columns
+#       SKIPROWS  number of rows to skip before reading ROWS (not currently supported)
 #
-IMAGE_AREA=(I 2040 4114 0 50 0 2040)
-IMAGE_AREA=(R 2040 4114 0 50 0 2040)
+IMAGE_SIZE=(I 2040 4114 10 50 0)
+IMAGE_SIZE=(R 1020 4114 10 50 0)
 # -----------------------------------------------------------------------------
 
 # Disabling the BONN_SHUTTER is only for when the Bonn shutter is not present.

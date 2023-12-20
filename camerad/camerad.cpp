@@ -382,8 +382,7 @@ void doit(Network::TcpSocket &sock) {
     // Data available, now read from connected socket...
     //
     std::string sbuf;
-    char delim='\n';
-    if ( ( ret=sock.Read( sbuf, delim ) ) <= 0 ) {
+    if ( ( ret=sock.Read( sbuf, '\n' ) ) <= 0 ) {
       if (ret<0) {                // could be an actual read error
         message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
       }
@@ -594,6 +593,11 @@ void doit(Network::TcpSocket &sock) {
     else
     if (cmd.compare( CAMERAD_BUFFER )==0) {
                     ret = server.buffer(args, retstring);
+                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
+                    }
+    else
+    if (cmd.compare( CAMERAD_IMSIZE )==0) {
+                    ret = server.image_size(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else

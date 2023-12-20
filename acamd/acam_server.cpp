@@ -493,13 +493,6 @@ namespace Acam {
       }
       else
 
-      // commands for the Python functions
-      //
-      if ( cmd.compare( "astrometry" ) == 0 ) {
-                      ret = this->interface.astrometry.solve( args );
-      }
-      else
-
       // commands for the Andor camera direct
       //
       if ( cmd.compare( "cameraopen" ) == 0 ) {
@@ -550,25 +543,12 @@ namespace Acam {
 
       // commands for the external camera server
       //
-      if ( cmd.compare( "cameraserveropen" ) == 0 ) {
-                      ret = this->interface.camera_server.open( );
-      }
-      else
-      if ( cmd.compare( "cameraserverclose" ) == 0 ) {
-                      ret = this->interface.camera_server.close( );
-      }
-      else
-      if ( cmd.compare( ACAMD_CAMERASERVER_ACQUIRE ) == 0 ) {
-                      ret = this->interface.camera_server.acquire( args, retstring );
-      }
-      else
       if ( cmd.compare( ACAMD_CAMERASERVER_COORDS ) == 0 ) {
-//                    this->interface.acquire_init( );
                       ret = this->interface.camera_server.coords( args );
       }
       else
 
-      // open
+      // open connections to all devices, camera and motion
       //
       if ( cmd.compare( ACAMD_OPEN ) == 0 ) {
                       ret = this->interface.open( args, retstring );
@@ -595,7 +575,8 @@ namespace Acam {
       //
       if ( cmd.compare( ACAMD_CONFIG ) == 0 ) {
                       if ( args == "?" ) sock.Write( ACAMD_CONFIG
-                                                     +"\n  re-read and parse .cfg file\n" );
+                                                     +"\n  re-read, parse, and re-apply config file: "
+                                                     +this->config.filename+"\n" );
                       else ret = this->interface.configure_interface( config );
       }
       else
@@ -614,8 +595,8 @@ namespace Acam {
 
       if ( cmd.compare( ACAMD_ECHO ) == 0 ) {
                       if ( args == "?" ) sock.Write( ACAMD_ECHO
-                                                     +" <string>\n  server receives and writes back <string> to the client.\n"
-                                                     +"  Used to test if the server is responsive.\n" );
+                                                     +" <string>\n  Daemon receives and writes back <string> to the client.\n"
+                                                     +"  Used to test if the daemon is responsive.\n" );
                       else {
                         sock.Write( args );
                         sock.Write( "\n" );

@@ -8,6 +8,7 @@
 #ifndef DAEMONIZE_H
 #define DAEMONIZE_H
 
+#include <cstring>
 #include <iostream>
 #include <sys/resource.h>
 #include <sys/stat.h>
@@ -38,10 +39,18 @@ namespace Daemon {
    * @param[in]  outfile  where to direct stdout, /dev/null by default
    * @param[in]  errfile  where to direct stderr, /dev/null by default
    * @param[in]  infile   stdin, /dev/null by default
+   * @param[in]  closefd  set true to close all file descriptors
    * @return     0
    *
+   * This function is overloaded
+   *
+   * This version accepts a boolean to indicate if all file descriptors should
+   * be closed (true) or not (false). Some applications (E.G. Andor camera)
+   * can't handle having all file descriptors closed, so setting this to false
+   * will cause only stdin, stdout, and stderr to be closed.
+   *
    */
-  int daemonize( std::string name, std::string path, std::string outfile, std::string errfile, std::string infile ) {
+  int daemonize( std::string name, std::string path, std::string outfile, std::string errfile, std::string infile, bool closefd ) {
     if ( path.empty() )    { path = "/tmp"; }
     if ( name.empty() )    { name = "mydaemon"; }
     if ( infile.empty() )  { infile = "/dev/null"; }
@@ -85,9 +94,11 @@ namespace Daemon {
       exit( EXIT_FAILURE );
     }
 
-    // Close all open file descriptors
+    // Close file descriptors, either {0:MAX} (closefd=true)
+    // or only {0:2} (closefd=false).
     //
-    for( int fd = sysconf( _SC_OPEN_MAX ); fd >= 0; fd-- ) close( fd );
+    int fdmax = ( closefd ? sysconf( _SC_OPEN_MAX ) : 2 );
+    for( int fd = fdmax; fd >= 0; fd-- ) close( fd );
 
     // reopen stdin, stdout, stderr
     //
@@ -99,6 +110,49 @@ namespace Daemon {
     //
     openlog( name.c_str(), LOG_PID, LOG_DAEMON );
     return( 0 );
+  }
+  /***** Daemon::daemonize ****************************************************/
+
+
+  /***** Daemon::daemonize ****************************************************/
+  /**
+   * @brief      this function will daemonize a process
+   * @param[in]  name     the name for this daemon
+   * @param[in]  path     directory to chdir to when running daemon
+   * @param[in]  outfile  where to direct stdout, /dev/null by default
+   * @param[in]  errfile  where to direct stderr, /dev/null by default
+   * @param[in]  infile   stdin, /dev/null by default
+   * @return     0
+   *
+   * This function is overloaded
+   *
+   * This version is for backwards compatibility with functions that were
+   * written prior to adding the closefd boolean argument. If that arg is
+   * missing then this will call the new function with closefd=true.
+   * I.E., the default is to close all file descriptors.
+   *
+   */
+  int daemonize( std::string name, std::string path, std::string outfile, std::string errfile, std::string infile ) {
+    return daemonize( name, path, outfile, errfile, infile, true );
+  }
+  /***** Daemon::daemonize ****************************************************/
+
+
+  /***** Daemon::daemonize ****************************************************/
+  /**
+   * @brief      this function will daemonize a process
+   * @param[in]  name     the name for this daemon
+   * @param[in]  path     directory to chdir to when running daemon
+   * @return     0
+   *
+   * This function is overloaded
+   *
+   * This version accepts only a name and path, using defaults
+   * for all other arguments.
+   *
+   */
+  int daemonize( std::string name, std::string path ) {
+    return daemonize( name, path, "", "", "" );
   }
   /***** Daemon::daemonize ****************************************************/
 

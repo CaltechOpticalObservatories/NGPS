@@ -30,16 +30,38 @@
  */
 namespace Calib {
 
-  /***** Calib::ControllerInfo ************************************************/
+  /***** Calib::Modulator *****************************************************/
   /**
-   * @class  ControllerInfo
-   * @brief  calib motor controller information class
+   * @class  Modulator
+   * @brief  calib modulator class
+   *
+   * This class contains the interface to the modulator controller.
+   *
+   */
+  class Modulator {
+    public:
+      Modulator()  { this->arduino = nullptr; };
+      ~Modulator() { };
+
+      std::unique_ptr< Network::Interface > arduino;
+
+      long configure( std::string input );
+  };
+  /***** Calib::Modulator *****************************************************/
+
+
+  /***** Calib::MotionInfo ****************************************************/
+  /**
+   * @class  MotionInfo
+   * @brief  calib motion information class
    *
    * This class contains the information for each calib motor controller
    * and a function for loading the information from the configuration file.
+   * This will be used in the Motion class, to create an STL map of this class
+   * indexed by controller name.
    *
    */
-  class ControllerInfo {
+  class MotionInfo {
     public:
       int addr;                   ///< controller address
       float pos;                  ///< current position of this actuator
@@ -52,16 +74,16 @@ namespace Calib {
       bool ontarget;              ///< is axis on target?
 
       /**
-       * ControllerInfo
+       * MotionInfo
        * class constructor
        */
-      ControllerInfo() {
+      MotionInfo() {
         this->servo=false;
         this->ishome=false;
         this->ontarget=false;
         }
 
-      /***** Calib::ControllerInfo::load_info *********************************/
+      /***** Calib::MotionInfo::load_info *************************************/
       /**
        * @fn         load_info
        * @brief      loads information from the configuration file into the class
@@ -76,7 +98,7 @@ namespace Calib {
        *
        */
       long load_info( std::string &input ) {
-        std::string function = "Calib::ControllerInfo::load_info";
+        std::string function = "Calib::MotionInfo::load_info";
         std::stringstream message;
         std::vector<std::string> tokens;
 
@@ -137,21 +159,21 @@ namespace Calib {
 
         return( NO_ERROR );
       }
-      /***** Calib::ControllerInfo::load_info *********************************/
+      /***** Calib::MotionInfo::load_info *************************************/
   };
-  /***** Calib::ControllerInfo ************************************************/
+  /***** Calib::MotionInfo ****************************************************/
 
 
-  /***** Calib::Interface *****************************************************/
+  /***** Calib::Motion ********************************************************/
   /**
-   * @class  Interface
-   * @brief  interface class for the calib hardware
+   * @class  Motion
+   * @brief  motion interface class for the calib hardware
    *
    * This class defines the interface for all of the calib hardware and
    * contains the functions used to communicate with it.
    *
    */
-  class Interface {
+  class Motion {
     private:
       bool class_initialized;
       size_t numdev;
@@ -161,15 +183,16 @@ namespace Calib {
       std::string host;
       int port;
 
-      Interface();
-      ~Interface();
+      Motion();
+      ~Motion() { };
 
-      long initialize_class();
+      long configure_class();
+
       bool isopen() { return this->pi.controller.isconnected(); }    ///< is this interface connected to hardware?
       long open();                               ///< opens the PI socket connection
       long close();                              ///< closes the PI socket connection
       long home( std::string arg, std::string &help );    ///< home all daisy-chained motors
-      static void dothread_home( Calib::Interface &iface, std::string name );
+      static void dothread_home( Calib::Motion &motion, std::string name );
       long is_home( std::string &retstring );    ///< return the home state of the motors
 
       long get( std::string name_in, std::string &retstring );  ///< get state of named actuator(s)
@@ -177,12 +200,10 @@ namespace Calib {
       long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
       long send_command( std::string cmd, std::string &retstring );  ///< writes command?, reads reply
 
-      static void dothread_move_abs( Calib::Interface &iface, std::string name, float pos ); ///< threaded move_abs function
+      static void dothread_move_abs( Calib::Motion &motion, std::string name, float pos ); ///< threaded move_abs function
       long move_abs( std::string name, float pos );
 
-      Common::Queue async;                       ///< asynchronous message queue object
-
-      std::map<std::string, ControllerInfo> controller_info;
+      std::map<std::string, MotionInfo> motion_info;  ///< map of MotionInfo objects indexed by controller name
 
       Physik_Instrumente::ServoInterface pi;     ///< object for communicating with the PI
 
@@ -193,6 +214,29 @@ namespace Calib {
       std::mutex wait_mtx;                       ///< mutex object for waiting for threads
       std::condition_variable cv;                ///< condition variable for waiting for threads
 
+  };
+  /***** Calib::Motion ********************************************************/
+
+
+  /***** Calib::Interface *****************************************************/
+  /**
+   * @class  Interface
+   * @brief  main interface class for the calib hardware
+   *
+   * This class defines the interface for all of the calib hardware and
+   * contains the functions used to communicate with it.
+   *
+   */
+  class Interface {
+    public:
+      Interface()  { };
+      ~Interface() { };
+
+      Common::Queue async;                       ///< asynchronous message queue object
+
+      Motion motion;                             ///< motion object
+
+      Modulator modulator;                       ///< modulator object
   };
   /***** Calib::Interface *****************************************************/
 

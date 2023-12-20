@@ -548,7 +548,7 @@ namespace AstroCam {
    */
   class Interface {
     private:
-      int bufsize;
+//    int bufsize;
       int FITS_STRING_KEY;
       int FITS_DOUBLE_KEY;
       int FITS_INTEGER_KEY;
@@ -775,7 +775,7 @@ namespace AstroCam {
        */
       class Controller {
         private:
-          int bufsize;
+          uint32_t bufsize;
           int framecount;               //!< keep track of the number of frames received per expose
 //        void* workbuf;                //!< pointer to workspace for performing deinterlacing
           long workbuf_size;
@@ -798,8 +798,14 @@ namespace AstroCam {
 
           int error;
 
-          int rows;
-          int cols;
+          int cols;                        //!< total number of columns read (includes overscan)
+          int rows;                        //!< total number of rows read (includes overscan)
+
+          int imcols;                      //!< number of columns in image area
+          int imrows;                      //!< number of rows in image area
+          int oscols;                      //!< number of overscan rows
+          int osrows;                      //!< number of overscan columns
+          int skiprows;                    //!< number of rows to skip before reading ROWS (not currently supported)
 
           arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
@@ -820,7 +826,8 @@ namespace AstroCam {
 
           // Functions
           //
-          int get_bufsize() { return this->bufsize; };
+          inline uint32_t get_bufsize() { return this->bufsize; };
+          inline uint32_t set_bufsize( uint32_t sz ) { this->bufsize=sz; return this->bufsize; };
           long alloc_workbuf();
 //        int get_devnum() { return this->devnum; }
 //        void set_devnum(int devnum) { this->devnum = devnum; }
@@ -892,6 +899,7 @@ namespace AstroCam {
       long do_modify_exptime( std::string exptime_in, std::string &retstring );
       long shutter(std::string shutter_in, std::string& shutter_out);
       long frame_transfer_mode( std::string args, std::string &retstring );
+      long image_size( std::string args, std::string &retstring );
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);
@@ -929,7 +937,7 @@ namespace AstroCam {
       int fits_bpp32()      { return this->FITS_BPP32;       };
 //    int get_rows() { return this->rows; }; // REMOVE
 //    int get_cols() { return this->cols; }; // REMOVE
-      int get_bufsize() { return this->bufsize; };
+//    int get_bufsize() { return this->bufsize; };
 //    int set_rows(int r) { if (r>0) this->rows = r; return r; }; // REMOVE
 //    int set_cols(int c) { if (c>0) this->cols = c; return c; }; // REMOVE
 //    int get_image_rows() { return this->rows; };  // REMOVE

@@ -1,2 +1,2 @@
 #!/bin/sh
-xterm -geometry 60x60 -bg LemonChiffon -fg black -e listen $1 &
+xterm -geometry 75x60 -bg LemonChiffon -fg black -e listen $1 &

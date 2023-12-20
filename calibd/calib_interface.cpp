@@ -10,43 +10,29 @@
 namespace Calib {
 
 
-  /***** Calib::Interface::Interface ******************************************/
+  /***** Calib::Motion::Motion ************************************************/
   /**
-   * @fn         Interface
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
+   * @brief      Motion class constructor
    *
    */
-  Interface::Interface() {
+  Motion::Motion() {
+    this->port=-1;
+    this->numdev=0;
   }
-  /***** Calib::Interface::Interface ******************************************/
+  /***** Calib::Motion::Motion ************************************************/
 
 
-  /***** Calib::Interface::~Interface *****************************************/
+  /***** Calib::Motion::configure_class ***************************************/
   /**
-   * @fn         ~Interface
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** Calib::Interface::~Interface *****************************************/
-
-
-  /***** Calib::Interface::initialize_class ***********************************/
-  /**
-   * @brief      initializes the class from configure_calibd()
+   * @brief      configures the class from configure_calibd()
    * @return     ERROR or NO_ERROR
    *
    * This is called by Calib::Server::configure_calibd() after reading the
    * configuration file to apply the config file setting.
    *
    */
-  long Interface::initialize_class() {
-    std::string function = "Calib::Interface::initialize_class";
+  long Motion::configure_class() {
+    std::string function = "Calib::Motion::configure_class";
     std::stringstream message;
     long error = ERROR;
 
@@ -59,10 +45,10 @@ namespace Calib {
     Physik_Instrumente::ServoInterface s( this->name, this->host, this->port );
     this->pi = s;
 
-    this->numdev = this->controller_info.size();
+    this->numdev = this->motion_info.size();
 
     if ( this->numdev == 2 ) {
-      logwrite( function, "interface initialized ok" );
+      logwrite( function, "motion interface configured ok" );
       error = NO_ERROR;
     }
     else if ( this->numdev > 2 ) {
@@ -81,29 +67,29 @@ namespace Calib {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    for ( auto const& con : this->controller_info ) {
-      message.str(""); message << "[DEBUG] controller " << con.first
-                               << " addr=" << con.second.addr
-                               << " openpos=" << con.second.openpos
-                               << " closepos=" << con.second.closepos;
+    for ( auto const &mot : this->motion_info ) {
+      message.str(""); message << "[DEBUG] motion controller " << mot.first
+                               << " addr=" << mot.second.addr
+                               << " openpos=" << mot.second.openpos
+                               << " closepos=" << mot.second.closepos;
       logwrite( function, message.str() );
     }
 #endif
 
     return( error );
   }
-  /***** Calib::Interface::initialize_class ***********************************/
+  /***** Calib::Motion::configure_class ***************************************/
 
 
-  /***** Calib::Interface::open ***********************************************/
+  /***** Calib::Motion::open **************************************************/
   /**
    * @fn         open
    * @brief      opens the PI socket connection
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::open() {
-    std::string function = "Calib::Interface::open";
+  long Motion::open() {
+    std::string function = "Calib::Motion::open";
     std::stringstream message;
     // Should be impossible --
     // The initialization should have been called automatically at start up
@@ -121,28 +107,28 @@ namespace Calib {
     if ( error != NO_ERROR ) return( error );
 
     // clear any error codes on startup, and
-    // enable the servo for each address in controller_info
+    // enable the servo for each address in motion_info
     //
-    for ( auto const& con : this->controller_info ) {
+    for ( auto const &mot : this->motion_info ) {
       int axis=1;
       int errcode;
-      error |= this->pi.get_error( con.second.addr, errcode );     // read error to clear, don't care the value
-      error |= this->pi.set_servo( con.second.addr, axis, true );  // turn the servos on
+      error |= this->pi.get_error( mot.second.addr, errcode );     // read error to clear, don't care the value
+      error |= this->pi.set_servo( mot.second.addr, axis, true );  // turn the servos on
     }
 
     return( error );
   }
-  /***** Calib::Interface::open ***********************************************/
+  /***** Calib::Motion::open **************************************************/
 
 
-  /***** Calib::Interface::close **********************************************/
+  /***** Calib::Motion::close *************************************************/
   /**
    * @brief      closes the PI socket connection
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::close( ) {
-    std::string function = "Calib::Interface::close";
+  long Motion::close( ) {
+    std::string function = "Calib::Motion::close";
     std::stringstream message;
 
     if ( !this->pi.controller.isconnected() ) {
@@ -161,10 +147,10 @@ namespace Calib {
 
     return( this->pi.close() );
   }
-  /***** Calib::Interface::close **********************************************/
+  /***** Calib::Motion::close *************************************************/
 
 
-  /***** Calib::Interface::home ***********************************************/
+  /***** Calib::Motion::home **************************************************/
   /**
    * @brief      home all calib actuators
    * @param[in]  arg   input arg, currently only needed to request help
@@ -172,8 +158,8 @@ namespace Calib {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::home( std::string arg, std::string &help ) {
-    std::string function = "Calib::Interface::home";
+  long Motion::home( std::string arg, std::string &help ) {
+    std::string function = "Calib::Motion::home";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -184,10 +170,10 @@ namespace Calib {
       help.append( "\n" );
       help.append( "  homes all actuators simultaneously using the indicated references:\n" );
       help.append( "  " );
-      for ( auto const& con : this->controller_info ) {
-        help.append( con.first );
+      for ( auto const &mot : this->motion_info ) {
+        help.append( mot.first );
         help.append( ":" );
-        help.append( con.second.reftype );
+        help.append( mot.second.reftype );
         help.append( " " );
       }
       help.append( "\n" );
@@ -207,7 +193,7 @@ namespace Calib {
 
     // loop through every motor in the class
     //
-    for ( auto mot : this->controller_info ) {
+    for ( auto mot : this->motion_info ) {
 
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] spawning thread to home " << mot.first;
@@ -239,26 +225,26 @@ namespace Calib {
 
     return( error );
   }
-  /***** Calib::Interface::home ***********************************************/
+  /***** Calib::Motion::home **************************************************/
 
 
-  /***** Calib::Interface::dothread_home **************************************/
+  /***** Calib::Motion::dothread_home *****************************************/
   /**
    * @brief      threaded function to home and apply zeropos
-   * @param[in]  iface  reference to interface object
-   * @param[in]  name   name of motor to home
+   * @param[in]  motion  reference to interface object
+   * @param[in]  name     name of motor to home
    *
    * This is the work function to call home() in a thread, intended
    * to be spawned in a detached thread. Any errors returned by functions
    * called in here are set in the thr_error class variable.
    *
    */
-  void Interface::dothread_home( Calib::Interface &iface, std::string name ) {
-    std::string function = "Calib::Interface::dothread_home";
+  void Motion::dothread_home( Calib::Motion &motion, std::string name ) {
+    std::string function = "Calib::Motion::dothread_home";
     std::stringstream message;
     int axis=1;
-    int addr = iface.controller_info[name].addr;
-    std::string reftype = iface.controller_info[name].reftype;
+    int addr = motion.motion_info[name].addr;
+    std::string reftype = motion.motion_info[name].reftype;
     long error=NO_ERROR;
 
 #ifdef LOGLEVEL_DEBUG
@@ -269,11 +255,11 @@ namespace Calib {
 
     // send the home command by calling home_axis()
     //
-    iface.pi_mutex.lock();
-    iface.pi.home_axis( addr, axis, reftype );
-    iface.pi_mutex.unlock();
-    iface.controller_info[name].ishome   = false;
-    iface.controller_info[name].ontarget = false;
+    motion.pi_mutex.lock();
+    motion.pi.home_axis( addr, axis, reftype );
+    motion.pi_mutex.unlock();
+    motion.motion_info[name].ishome   = false;
+    motion.motion_info[name].ontarget = false;
 
     // Loop sending the is_home command until homed or timeout.
     //
@@ -286,12 +272,12 @@ namespace Calib {
 
     do {
       bool state;
-      iface.pi_mutex.lock();
-      iface.pi.is_home( addr, axis, state );
-      iface.pi_mutex.unlock();
-      iface.controller_info[name].ishome = state;
-      iface.controller_info[name].ontarget = state;
-      is_home = iface.controller_info[name].ishome;
+      motion.pi_mutex.lock();
+      motion.pi.is_home( addr, axis, state );
+      motion.pi_mutex.unlock();
+      motion.motion_info[name].ishome = state;
+      motion.motion_info[name].ontarget = state;
+      is_home = motion.motion_info[name].ishome;
 
       if ( is_home ) break;
       else {
@@ -317,11 +303,11 @@ namespace Calib {
 
     } while ( 1 );
 
-    iface.thr_error.fetch_or( error );           // preserve any error returned
+    motion.thr_error.fetch_or( error );           // preserve any error returned
 
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
+    --motion.motors_running;                      // atomically decrement the number of motors waiting
 
-    iface.cv.notify_all();                       // notify parent that I'm done
+    motion.cv.notify_all();                       // notify parent that I'm done
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
@@ -331,18 +317,18 @@ namespace Calib {
 
     return;
   }
-  /***** Calib::Interface::dothread_home **************************************/
+  /***** Calib::Motion::dothread_home *****************************************/
 
 
-  /***** Calib::Interface::is_home ********************************************/
+  /***** Calib::Motion::is_home ***********************************************/
   /**
    * @brief      are all calib actuators homed?
    * @param[out] retstring  contains "true" | "false"
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::is_home( std::string &retstring ) {
-    std::string function = "Calib::Interface::is_home";
+  long Motion::is_home( std::string &retstring ) {
+    std::string function = "Calib::Motion::is_home";
     std::stringstream message, homestream;
     long error = NO_ERROR;
     size_t num_home = 0;
@@ -357,7 +343,7 @@ namespace Calib {
     // loop through every motor in the class
     // OK to do them serially (instead of threads) because it's quick to query
     //
-    for ( auto mot : this->controller_info ) {
+    for ( auto mot : this->motion_info ) {
 
       error |= this->pi.is_home( mot.second.addr, 1, mot.second.ishome );
       homestream << mot.first << ":" << ( mot.second.ishome ? "true" : "false" );
@@ -366,24 +352,24 @@ namespace Calib {
 
     // Set the retstring true or false, true only if all requested controllers are the same
     //
-    if ( num_home == this->controller_info.size() ) retstring = "true";
+    if ( num_home == this->motion_info.size() ) retstring = "true";
     else
     if ( num_home == 0 )                            retstring = "false";
     else
 
     // If not all are the same state then log that but report false
     //
-    if ( num_home > 0 && num_home < this->controller_info.size() ) {
+    if ( num_home > 0 && num_home < this->motion_info.size() ) {
       logwrite( function, homestream.str() );
       retstring = "false";
     }
 
     return( error );
   }
-  /***** Calib::Interface::is_home ********************************************/
+  /***** Calib::Motion::is_home ***********************************************/
 
 
-  /***** Calib::Interface::set ************************************************/
+  /***** Calib::Motion::set ***************************************************/
   /**
    * @brief      move and/or return status of an actuator
    * @details    Input list can be comma or space delimited, but there must be
@@ -395,8 +381,8 @@ namespace Calib {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::set( std::string input, std::string &retstring ) {
-    std::string function = "Calib::Interface::set";
+  long Motion::set( std::string input, std::string &retstring ) {
+    std::string function = "Calib::Motion::set";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -406,7 +392,7 @@ namespace Calib {
       retstring = CALIBD_SET;
       retstring.append( " <actuator>=<action> [ <actuator>=<action> ]\n" );
       retstring.append( "  where <actuator> is { " );
-      for ( auto const& con : this->controller_info ) { retstring.append( con.first ); retstring.append( " " ); }
+      for ( auto const &mot : this->motion_info ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
       retstring.append( "  and <action> is { open | close }.\n" );
       retstring.append( "  One or both actuators may be set simultaneously.\n" );
@@ -456,18 +442,18 @@ namespace Calib {
 
       // requested named actuator must have been defined
       //
-      auto actuator_found = this->controller_info.find( name );
+      auto actuator_found = this->motion_info.find( name );
 
       float openpos, closepos, reqpos;
 
-      if ( error==NO_ERROR && actuator_found == this->controller_info.end() ) {
+      if ( error==NO_ERROR && actuator_found == this->motion_info.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         error = ERROR;
       }
       else {
-        openpos  = this->controller_info[ name ].openpos;
-        closepos = this->controller_info[ name ].closepos;
+        openpos  = this->motion_info[ name ].openpos;
+        closepos = this->motion_info[ name ].closepos;
         valid_names << name << " ";
       }
 
@@ -527,13 +513,13 @@ namespace Calib {
 
     return( error );
   }
-  /***** Calib::Interface::set ************************************************/
+  /***** Calib::Motion::set ***************************************************/
 
 
-  /***** Calib::Interface::dothread_move_abs **********************************/
+  /***** Calib::Motion::dothread_move_abs *************************************/
   /**
    * @brief      threaded move_abs function
-   * @param[in]  iface   reference to interface object
+   * @param[in]  motion  reference to interface object
    * @param[in]  name    name of controller
    * @param[in]  pos     motor position
    *
@@ -542,8 +528,8 @@ namespace Calib {
    * function are set in the thr_error class variable.
    *
    */
-  void Interface::dothread_move_abs( Calib::Interface &iface, std::string name, float pos ) {
-    std::string function = "Calib::Interface::dothread_move_abs";
+  void Motion::dothread_move_abs( Calib::Motion &motion, std::string name, float pos ) {
+    std::string function = "Calib::Motion::dothread_move_abs";
     std::stringstream message;
     long error;
 
@@ -552,26 +538,26 @@ namespace Calib {
     logwrite( function, message.str() );
 #endif
 
-    error = iface.move_abs( name, pos ); // send the move_abs command here
+    error = motion.move_abs( name, pos ); // send the move_abs command here
 
-    iface.thr_error.fetch_or( error );   // preserve any error returned
+    motion.thr_error.fetch_or( error );   // preserve any error returned
 
-    --iface.motors_running;              // atomically decrement the number of motors waiting
+    --motion.motors_running;              // atomically decrement the number of motors waiting
 
-    iface.cv.notify_all();               // notify parent that I'm done
+    motion.cv.notify_all();               // notify parent that I'm done
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] thread completed mov_abs( " << name << ", " << pos << " ) "
-                             << " *** motors_running = "<< iface.motors_running;
+                             << " *** motors_running = "<< motion.motors_running;
     logwrite( function, message.str() );
 #endif
 
     return;
   }
-  /***** Calib::Interface::dothread_move_abs **********************************/
+  /***** Calib::Motion::dothread_move_abs *************************************/
 
 
-  /***** Calib::Interface::move_abs *******************************************/
+  /***** Calib::Motion::move_abs **********************************************/
   /**
    * @brief      send move-absolute command to specified controllers
    * @param[in]  name  controller name
@@ -582,8 +568,8 @@ namespace Calib {
    * controller are protected by a mutex.
    *
    */
-  long Interface::move_abs( std::string name, float pos ) {
-    std::string function = "Calib::Interface::move_abs";
+  long Motion::move_abs( std::string name, float pos ) {
+    std::string function = "Calib::Motion::move_abs";
     std::stringstream message;
     long error=NO_ERROR;
 
@@ -592,13 +578,13 @@ namespace Calib {
       return( ERROR );
     }
 
-    if ( this->controller_info.find( name ) == this->controller_info.end() ) {
+    if ( this->motion_info.find( name ) == this->motion_info.end() ) {
       message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
       logwrite( function, message.str() );
       return( ERROR );
     }
 
-    int addr = this->controller_info[ name ].addr;
+    int addr = this->motion_info[ name ].addr;
     int axis = 1;
 
     // send the move command
@@ -620,9 +606,9 @@ namespace Calib {
       this->pi_mutex.lock();
       error = this->pi.on_target( addr, axis, state );
       this->pi_mutex.unlock();
-      this->controller_info[ name ].ontarget = state;
+      this->motion_info[ name ].ontarget = state;
 
-      if ( this->controller_info[ name ].ontarget ) break;
+      if ( this->motion_info[ name ].ontarget ) break;
       else {
 #ifdef LOGLEVEL_DEBUG
         message.str(""); message << "[DEBUG] waiting for cal " << name;
@@ -647,10 +633,10 @@ namespace Calib {
 
     return( error );
   }
-  /***** Calib::Interface::move_abs *******************************************/
+  /***** Calib::Motion::move_abs **********************************************/
 
 
-  /***** Calib::Interface::get ************************************************/
+  /***** Calib::Motion::get ***************************************************/
   /**
    * @brief      get the state of the named actuator(s)
    * @param[in]  name_in    name of actuator(s), can be space-delimited list
@@ -658,8 +644,8 @@ namespace Calib {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::get( std::string name_in, std::string &retstring ) {
-    std::string function = "Slit::Interface::get";
+  long Motion::get( std::string name_in, std::string &retstring ) {
+    std::string function = "Slit::Motion::get";
     std::stringstream message;
     std::stringstream retstream;
     long error = NO_ERROR;
@@ -671,7 +657,7 @@ namespace Calib {
       retstring = CALIBD_GET;
       retstring.append( " [ <actuator> ]\n" );
       retstring.append( "  where <actuator> is { " );
-      for ( auto const& con : this->controller_info ) { retstring.append( con.first ); retstring.append( " " ); }
+      for ( auto const &mot : this->motion_info ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
       retstring.append( "  If no arg is supplied then the state of both is returned.\n" );
       retstring.append( "  Supplying an actuator name returns the state of only the specified actuator.\n" );
@@ -686,8 +672,8 @@ namespace Calib {
     // If no name(s) supplied then create a vector of all defined actuator names
     //
     if ( name_in.empty() ) {
-      for ( auto const& con : this->controller_info ) {
-        name_list.push_back( con.first );
+      for ( auto const &mot : this->motion_info ) {
+        name_list.push_back( mot.first );
       }
     }
     else {
@@ -697,17 +683,17 @@ namespace Calib {
     for ( auto name : name_list ) {
       std::string state;
 
-      if ( this->controller_info.find( name ) == this->controller_info.end() ) {
+      if ( this->motion_info.find( name ) == this->motion_info.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         state = "error";
         error = ERROR;
       }
       else {
-        int addr = this->controller_info[ name ].addr;
+        int addr = this->motion_info[ name ].addr;
         int axis = 1;
-        float openpos = this->controller_info[ name ].openpos;
-        float closepos = this->controller_info[ name ].closepos;
+        float openpos = this->motion_info[ name ].openpos;
+        float closepos = this->motion_info[ name ].closepos;
         float pos=-1;
 
         // and then get the current position of this actuator.
@@ -731,10 +717,10 @@ namespace Calib {
 
     return error;
   }
-  /***** Calib::Interface::get ************************************************/
+  /***** Calib::Motion::get ***************************************************/
 
 
-  /***** Calib::Interface::send_command ***************************************/
+  /***** Calib::Motion::send_command ******************************************/
   /**
    * @brief      writes the raw command as received to the master controller
    * @param[in]  cmd  command to send
@@ -744,8 +730,8 @@ namespace Calib {
    * This version writes a command that expects no reply.
    *
    */
-  long Interface::send_command( std::string cmd ) {
-    std::string function = "Calib::Interface::send_command";
+  long Motion::send_command( std::string cmd ) {
+    std::string function = "Calib::Motion::send_command";
     std::stringstream message;
 
     if ( !this->pi.controller.isconnected() ) {
@@ -755,10 +741,10 @@ namespace Calib {
 
     return( this->pi.send_command( cmd ) );
   }
-  /***** Calib::Interface::send_command ***************************************/
+  /***** Calib::Motion::send_command ******************************************/
 
 
-  /***** Calib::Interface::send_command ***************************************/
+  /***** Calib::Motion::send_command ******************************************/
   /**
    * @brief      writes the raw command to the master controller, reads back reply
    * @param[in]  cmd        command to send
@@ -770,8 +756,8 @@ namespace Calib {
    * a question mark, "?".
    *
    */
-  long Interface::send_command( std::string cmd, std::string &retstring ) {
-    std::string function = "Calib::Interface::send_command";
+  long Motion::send_command( std::string cmd, std::string &retstring ) {
+    std::string function = "Calib::Motion::send_command";
     std::stringstream message;
 
     if ( !this->pi.controller.isconnected() ) {
@@ -782,6 +768,75 @@ namespace Calib {
     if ( cmd.find( "?" ) != std::string::npos ) return( this->pi.send_command( cmd, retstring ) );
     else return( this->pi.send_command( cmd ) );
   }
-  /***** Calib::Interface::send_command ***************************************/
+  /***** Calib::Motion::send_command ******************************************/
 
+
+  /***** Calib::Modulator::configure ******************************************/
+  /**
+   * @brief      writes the raw command to the master controller, reads back reply
+   *
+   */
+  long Modulator::configure( std::string input ) {
+    std::string function = "Calib::Modulator::configure";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    std::string tryhost;
+    int tryport=-1;
+
+    // In case the Arduino has already been configured then
+    // make sure the connection is closed.
+    //
+    if ( this->arduino != nullptr && this->arduino->sock.isconnected() ) {
+      message.str(""); message << "closing existing connection to " << this->arduino->get_name() << " "
+                               << this->arduino->get_host() << ":" << this->arduino->get_port();
+      logwrite( function, message.str() );
+      this->arduino->close();
+    }
+
+    // Extract the host and port from the input string
+    //
+    Tokenize( input, tokens, " \"" );
+
+    if ( tokens.size() != 2 ) {
+      message.str(""); message << "ERROR bad number of parameters in \"" << input
+                               << "\": expected 2 but received " << tokens.size();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    try {
+      tryhost = tokens.at(0);
+      tryport = std::stoi( tokens.at(1) );
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Check that (potentially) valid values have been extracted
+    //
+    if ( tryport < 1 ) {
+      message.str(""); message << "ERROR port " << tryport << " must be greater than 0";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    if ( tryhost.empty() ) {
+      logwrite( function, "ERROR host cannot be empty" );
+      return( ERROR );
+    }
+
+    // Configure the modulator arduino pointer
+    //
+    this->arduino = std::make_unique<Network::Interface>("modulator", tryhost, tryport, '\n', '\n');
+
+    return( NO_ERROR );
+
+  }
+  /***** Calib::Modulator::configure ******************************************/
 }
