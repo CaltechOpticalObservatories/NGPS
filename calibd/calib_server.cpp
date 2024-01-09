@@ -167,12 +167,21 @@ namespace Calib {
         }
       }
 
-      // LAMPMOD -- lamp modulator ( host port )
+      // LAMPMOD_HOST -- lamp modulator host info ( host port )
       //
-      if ( config.param[entry].compare( 0, 7, "LAMPMOD" ) == 0 ) {
+      if ( config.param[entry].compare( 0, 12, "LAMPMOD_HOST" ) == 0 ) {
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
-        this->interface.modulator.configure( config.arg[entry] );
+        this->interface.modulator.configure_host( config.arg[entry] );
+        applied++;
+      }
+
+      // LAMPMOD_MOD -- lamp modulator modulator info
+      //
+      if ( config.param[entry].compare( 0, 11, "LAMPMOD_MOD" ) == 0 ) {
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.modulator.configure_mod( config.arg[entry] );
         applied++;
       }
 
@@ -506,6 +515,13 @@ namespace Calib {
       //
       if ( cmd.compare( CALIBD_NATIVE ) == 0 ) {
                       ret = this->interface.motion.send_command( args, retstring );
+      }
+      else
+
+      // lampmod
+      //
+      if ( cmd.compare( CALIBD_LAMPMOD ) == 0 ) {
+                      ret = this->interface.modulator.control( args, retstring );
       }
 
       // unknown commands generate an error

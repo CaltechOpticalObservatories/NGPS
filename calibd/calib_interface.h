@@ -21,6 +21,7 @@
 #include <atomic>
 
 #define MOVE_TIMEOUT 25000  ///< number of milliseconds before a move fails
+#define MOD_MAX          8  ///< largest allowed modulator number <n>
 
 /***** Calib ******************************************************************/
 /**
@@ -35,17 +36,43 @@ namespace Calib {
    * @class  Modulator
    * @brief  calib modulator class
    *
-   * This class contains the interface to the modulator controller.
+   * This class contains the interface to the lamp modulator.
    *
    */
   class Modulator {
     public:
-      Modulator()  { this->arduino = nullptr; };
+      Modulator()  { this->arduino = nullptr; };                   ///< no default constructor
       ~Modulator() { };
 
-      std::unique_ptr< Network::Interface > arduino;
+      std::unique_ptr< Network::Interface > arduino;               ///< communcate with Arduino through this interface
 
-      long configure( std::string input );
+      /**
+       * @typedef mod_info_t
+       * @brief   structure of modulator info from config file
+       */
+      typedef struct {
+        int    num;  ///< modulator number
+        double dut;  ///< duty cycle
+        double per;  ///< period
+      } mod_info_t;
+
+      std::map<std::string, mod_info_t> mod_map;                   ///< map of modulator info indexed by modulator name
+      std::vector<int> mod_nums;                                   ///< vector of configured modulator numbers
+
+      long configure_host( std::string input );                    ///< configure lamp modulator host
+      long configure_mod( std::string input );                     ///< configure lamp modulators
+
+      long open_arduino();
+      long close_arduino();
+      long reopen_arduino();
+      long control( std::string args, std::string &retstring );    ///< lamp modulator control main parser
+      long control( int num, std::string &status );                ///< lamp modulator control return status
+      long control( int num, int power );                          ///< lamp modulator control set power
+      long control( int num, double dut, double per );             ///< lamp modulator control set D and T
+      long set_defaults();                                         ///< set all modulators as defined in config file
+      long mod( int num, double dut, double per );                 ///< send command to change duty cycle and period
+      long power( int num, int pow );                              ///< send command to set power state
+      long status( int num, double &dut, double &per, int &pow );  ///< send command to read all status
   };
   /***** Calib::Modulator *****************************************************/
 
@@ -236,7 +263,7 @@ namespace Calib {
 
       Motion motion;                             ///< motion object
 
-      Modulator modulator;                       ///< modulator object
+      Modulator modulator;                       ///< lamp modulator object
   };
   /***** Calib::Interface *****************************************************/
 
