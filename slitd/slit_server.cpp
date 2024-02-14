@@ -36,9 +36,9 @@ namespace Slit {
     int applied=0;
     long error;
 
-    // Clear the controller_info vector before loading new information from the config file
+    // Clear the motormap map before loading new information from the config file
     //
-    this->interface.controller_info.clear();
+    this->interface.motormap.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -46,7 +46,7 @@ namespace Slit {
 
       // NBPORT -- nonblocking listening port for the slit daemon
       //
-      if (config.param[entry].compare(0, 6, "NBPORT")==0) {
+      if ( config.param[entry].find( "NBPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -67,7 +67,7 @@ namespace Slit {
 
       // BLKPORT -- blocking listening port for the slit daemon
       //
-      if (config.param[entry].compare(0, 7, "BLKPORT")==0) {
+      if ( config.param[entry].find( "BLKPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -88,7 +88,7 @@ namespace Slit {
 
       // ASYNCPORT -- asynchronous broadcast message port for the slit daemon
       //
-      if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
+      if ( config.param[entry].find( "ASYNCPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -109,7 +109,7 @@ namespace Slit {
 
       // ASYNCGROUP -- asynchronous broadcast group for the slit daemon
       //
-      if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
+      if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
         message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
@@ -118,7 +118,7 @@ namespace Slit {
 
       // PI_NAME -- this is the name of the PI motor controller subsystem
       //
-      if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
+      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
         this->interface.name = config.arg[entry];
         message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
@@ -127,7 +127,7 @@ namespace Slit {
 
       // PI_HOST -- hostname for the master PI motor controller
       //
-      if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
+      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
         this->interface.host = config.arg[entry];
         message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
@@ -136,7 +136,7 @@ namespace Slit {
 
       // PI_PORT -- port number on PI_HOST for the master PI motor controller
       //
-      if ( config.param[entry].compare( 0, 7, "PI_PORT" ) == 0 ) {
+      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -157,12 +157,17 @@ namespace Slit {
 
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
-      if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
-        Slit::ControllerInfo s;
-        if ( s.load_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.controller_info.push_back( s );
+      if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
+        // Create temporary object for parsing the config line. If no error
+        // then this object gets copied into the class map of objects.
+        //
+        Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo> MOT;
+
+        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
+          this->interface.motormap[ MOT.name ] = MOT;
           message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
+          this->interface.async.enqueue( message.str() );
           applied++;
         }
       }
@@ -430,19 +435,19 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 ) {
+      if ( cmd == "help" ) {
                       for ( auto s : SLITD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else
 
-      if ( cmd.compare( "exit" ) == 0 ) {
+      if ( cmd == "exit" ) {
                       this->exit_cleanly();                     // shutdown the daemon
       }
       else
 
       // isopen
       //
-      if ( cmd.compare( SLITD_ISOPEN ) == 0 ) {
+      if ( cmd == SLITD_ISOPEN ) {
                       bool isopen = this->interface.isopen( );
                       if ( isopen ) retstring = "true"; else retstring = "false";
                       ret = NO_ERROR;
@@ -451,21 +456,21 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
 
       // open
       //
-      if ( cmd.compare( SLITD_OPEN ) == 0 ) {
+      if ( cmd == SLITD_OPEN ) {
                       ret = this->interface.open();
       }
       else
 
       // close
       //
-      if ( cmd.compare( SLITD_CLOSE ) == 0 ) {
+      if ( cmd == SLITD_CLOSE ) {
                       ret = this->interface.close();
       }
       else
 
       // echo
       //
-      if ( cmd.compare( "echo" ) == 0 ) {
+      if ( cmd == "echo" ) {
                       sock.Write( args );
                       sock.Write( "\n" );
                       ret = NO_ERROR;
@@ -474,35 +479,35 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
 
       // home
       //
-      if ( cmd.compare( SLITD_HOME ) == 0 ) {
-                      ret = this->interface.home();
+      if ( cmd == SLITD_HOME ) {
+                      ret = this->interface.home( args, retstring );
       }
       else
 
       // is_home
       //
-      if ( cmd.compare( SLITD_ISHOME ) == 0 ) {
+      if ( cmd == SLITD_ISHOME ) {
                       ret = this->interface.is_home( retstring );
       }
       else
 
       // set width and offset
       //
-      if ( cmd.compare( SLITD_SET ) == 0 ) {
+      if ( cmd == SLITD_SET ) {
                       ret = this->interface.set( std::ref( this->interface ), args, retstring );
       }
       else
 
       // get width and offset
       //
-      if ( cmd.compare( SLITD_GET ) == 0 ) {
+      if ( cmd == SLITD_GET ) {
                       ret = this->interface.get( retstring );
       }
       else
 
       // native
       //
-      if ( cmd.compare( SLITD_NATIVE ) == 0 ) {
+      if ( cmd == SLITD_NATIVE ) {
                       ret = this->interface.send_command( args, retstring );
       }
 

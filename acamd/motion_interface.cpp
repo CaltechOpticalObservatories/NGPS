@@ -52,10 +52,10 @@ namespace Acam {
       return( ERROR );
     }
 
-    Physik_Instrumente::ServoInterface s( this->name, this->host, this->port );
+    Physik_Instrumente::Interface s( this->name, this->host, this->port );
     this->pi = s;
 
-    this->numdev = this->motion_info.size();
+    this->numdev = this->motormap.size();
 
     if ( this->numdev == 2 ) {
       logwrite( function, "interface initialized ok" );
@@ -73,7 +73,7 @@ namespace Acam {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    for ( auto const& con : this->motion_info ) {
+    for ( auto const& con : this->motormap ) {
       message.str(""); message << "[DEBUG] controller " << con.first
                                << " addr=" << con.second.addr
                                << " reftype=" << con.second.reftype;
@@ -112,9 +112,9 @@ namespace Acam {
     if ( error != NO_ERROR ) return( error );
 
     // clear any error codes on startup, and
-    // enable the servo for each address in motion_info
+    // enable the servo for each address in motormap
     //
-    for ( auto const& mot : this->motion_info ) {
+    for ( auto const& mot : this->motormap ) {
       int axis=1;
       int errcode;
       error |= this->pi.get_error( mot.second.addr, errcode );     // read error to clear, don't care the value
@@ -175,7 +175,7 @@ namespace Acam {
     if ( name_in == "?" ) {
       help = ACAMD_HOME;
       help.append( " [ " );
-      for ( auto const& mot : this->motion_info ) {
+      for ( auto const& mot : this->motormap ) {
         help.append( mot.first );
         help.append( " " );
       }
@@ -195,7 +195,7 @@ namespace Acam {
     // If name_in is empty then build up a vector of each motor name
     //
     if ( name_in.empty() ) {
-      for ( auto mot : this->motion_info ) { name_list.push_back( mot.first ); }
+      for ( auto mot : this->motormap ) { name_list.push_back( mot.first ); }
     }
     else {
       std::transform( name_in.begin(), name_in.end(), name_in.begin(), ::tolower );
@@ -214,9 +214,9 @@ namespace Acam {
     //
     for ( auto name : name_list ) {
 
-      auto name_found = this->motion_info.find( name );
+      auto name_found = this->motormap.find( name );
 
-      if ( name_found == this->motion_info.end() ) {
+      if ( name_found == this->motormap.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         return( ERROR );
@@ -271,8 +271,8 @@ namespace Acam {
     std::string function = "Acam::MotionInterface::dothread_home";
     std::stringstream message;
     int axis=1;
-    int addr = iface.motion_info[name].addr;
-    std::string reftype = iface.motion_info[name].reftype;
+    int addr = iface.motormap[name].addr;
+    std::string reftype = iface.motormap[name].reftype;
     long error=NO_ERROR;
 
 #ifdef LOGLEVEL_DEBUG
@@ -286,8 +286,8 @@ namespace Acam {
     iface.pi_mutex.lock();
     iface.pi.home_axis( addr, axis, reftype );
     iface.pi_mutex.unlock();
-    iface.motion_info[name].ishome   = false;
-    iface.motion_info[name].ontarget = false;
+    iface.motormap[name].ishome   = false;
+    iface.motormap[name].ontarget = false;
 
     // Loop sending the is_home command until homed or timeout.
     //
@@ -303,9 +303,9 @@ namespace Acam {
       iface.pi_mutex.lock();
       iface.pi.is_home( addr, axis, state );
       iface.pi_mutex.unlock();
-      iface.motion_info[name].ishome = state;
-      iface.motion_info[name].ontarget = state;
-      is_home = iface.motion_info[name].ishome;
+      iface.motormap[name].ishome = state;
+      iface.motormap[name].ontarget = state;
+      is_home = iface.motormap[name].ishome;
 
       if ( is_home ) break;
       else {
@@ -372,7 +372,7 @@ namespace Acam {
       retstring = ACAMD_ISHOME;
       retstring.append( " [ <name> ]\n" );
       retstring.append( "  where <name> = { " );
-      for ( auto mot : this->motion_info ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( auto mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
       retstring.append( "  if no arg provided then both must be true to return true\n" );
       return( NO_ERROR );
@@ -389,7 +389,7 @@ namespace Acam {
     // If name_in is empty then build up a vector of each motor name
     //
     if ( name_in.empty() ) {
-      for ( auto mot : this->motion_info ) { name_list.push_back( mot.first ); }
+      for ( auto mot : this->motormap ) { name_list.push_back( mot.first ); }
     }
     else {
       std::transform( name_in.begin(), name_in.end(), name_in.begin(), ::tolower );
@@ -405,9 +405,9 @@ namespace Acam {
 
     for ( auto name : name_list ) {
 
-      auto name_found = this->motion_info.find( name );
+      auto name_found = this->motormap.find( name );
 
-      if ( name_found == this->motion_info.end() ) {
+      if ( name_found == this->motormap.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="not_found";
@@ -416,12 +416,12 @@ namespace Acam {
 
       int axis = 1;
 
-      error |= this->pi.is_home( this->motion_info[name].addr,
+      error |= this->pi.is_home( this->motormap[name].addr,
                                  axis,
-                                 this->motion_info[name].ishome );  // error is OR'd so any error is preserved
+                                 this->motormap[name].ishome );  // error is OR'd so any error is preserved
       homestream << name << ":"
-                 << ( this->motion_info[name].ishome ? "true" : "false" ) << " ";
-      if ( this->motion_info[name].ishome ) num_home++;
+                 << ( this->motormap[name].ishome ? "true" : "false" ) << " ";
+      if ( this->motormap[name].ishome ) num_home++;
     }
 
     // Set the retstring true or false, true only if all requested controllers are the same
@@ -464,13 +464,13 @@ namespace Acam {
       return( ERROR );
     }
 
-    if ( this->motion_info.find( name ) == this->motion_info.end() ) {
+    if ( this->motormap.find( name ) == this->motormap.end() ) {
       message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
       logwrite( function, message.str() );
       return( ERROR );
     }
 
-    int addr = this->motion_info[ name ].addr;
+    int addr = this->motormap[ name ].addr;
     int axis = 1;
 
     // send the move command
@@ -492,9 +492,9 @@ namespace Acam {
       this->pi_mutex.lock();
       error = this->pi.on_target( addr, axis, state );
       this->pi_mutex.unlock();
-      this->motion_info[ name ].ontarget = state;
+      this->motormap[ name ].ontarget = state;
 
-      if ( this->motion_info[ name ].ontarget ) break;
+      if ( this->motormap[ name ].ontarget ) break;
       else {
         usleep( 1000000 );
       }
@@ -548,12 +548,12 @@ namespace Acam {
       return( NO_ERROR );
     }
 
-    // No args, print all of the indices of the motion_info STL map,
+    // No args, print all of the indices of the motormap STL map,
     // which will be a list of the STEPPER_CONTROLLER names.
     //
     if ( args.empty() ) {
       retstream << "{ ";
-      for ( auto mot : this->motion_info ) { retstream << mot.first << " "; }
+      for ( auto mot : this->motormap ) { retstream << mot.first << " "; }
       retstream << "}";
       retstring = retstream.str();
       logwrite( function, retstring );
@@ -571,16 +571,16 @@ namespace Acam {
     }
 
     // One arg, taken to be the name of a STEPPER_CONTROLLER,
-    // print all of the indices of the stepper STL map for the named controller,
+    // print all of the indices of the posmap STL map for the named controller,
     // which will be a list of the STEPPER_POS position names.
     //
     std::string name;
     if ( arglist.size() >= 1 ) {
       name = arglist[0];
 
-      // Check that name is found in the motion_info map
+      // Check that name is found in the motormap map
       //
-      if ( this->motion_info.find( name ) == this->motion_info.end() ) {
+      if ( this->motormap.find( name ) == this->motormap.end() ) {
         message.str(""); message << "ERROR: motor name \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="motor_not_found";
@@ -589,7 +589,7 @@ namespace Acam {
 
       if ( arglist.size() == 1 ) {
         retstream << "{ ";
-        for ( auto const &pos : this->motion_info[ name ].stepper ) { retstream << pos.first << " "; }
+        for ( auto const &pos : this->motormap[ name ].posmap ) { retstream << pos.first << " "; }
         retstream << "}";
         retstring = retstream.str();
         logwrite( function, retstring );
@@ -601,18 +601,18 @@ namespace Acam {
     if ( arglist.size() == 2 ) {
       std::string posname = arglist[1];
 
-      // Check that posname is found in the motion_info.stepper map
+      // Check that posname is found in the motormap.posmap map
       //
-      if ( this->motion_info[name].stepper.find( posname ) == this->motion_info[name].stepper.end() ) {
+      if ( this->motormap[name].posmap.find( posname ) == this->motormap[name].posmap.end() ) {
         message.str(""); message << "ERROR: position name \"" << posname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="posname_not_found";
         return( ERROR );
       }
 
-      retstream << this->motion_info[ name ].stepper[ posname ].posname << ": "
-                << "id="       << this->motion_info[ name ].stepper[ posname ].id << " "
-                << "position=" << this->motion_info[ name ].stepper[ posname ].position;
+      retstream << this->motormap[ name ].posmap[ posname ].posname << ": "
+                << "id="       << this->motormap[ name ].posmap[ posname ].id << " "
+                << "position=" << this->motormap[ name ].posmap[ posname ].position;
       retstring = retstream.str();
       logwrite( function, retstring );
     }
@@ -642,7 +642,7 @@ namespace Acam {
           return( ERROR );
         }
 
-        int addr = this->motion_info[ name ].addr;  // Get the address from the class,
+        int addr = this->motormap[ name ].addr;  // Get the address from the class,
         std::stringstream cmdstream;                // then build the command from the arglist.
         cmdstream << addr;
         for ( int i=2; i<(int)arglist.size(); i++ ) cmdstream << " " << arglist[i];
@@ -733,7 +733,7 @@ namespace Acam {
       retstring.append( " [ <filtername> | home | ishome ]\n" );
       retstring.append( "  Move filterwheel to filter <filtername> \n" );
       retstring.append( "  where <filtername> = { " );
-      for ( auto const &pos : this->motion_info[ filter ].stepper ) {
+      for ( auto const &pos : this->motormap[ filter ].posmap ) {
         retstring.append( pos.first );
         retstring.append( " " );
       }
@@ -779,9 +779,9 @@ namespace Acam {
     //
     if ( !destname.empty() ) {
 
-      // Check that destname is found in the motion_info.stepper map
+      // Check that destname is found in the motormap.posmap map
       //
-      if ( this->motion_info[filter].stepper.find( destname ) == this->motion_info[filter].stepper.end() ) {
+      if ( this->motormap[filter].posmap.find( destname ) == this->motormap[filter].posmap.end() ) {
         message.str(""); message << "ERROR: position \"" << destname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="filter_not_found";
@@ -789,9 +789,9 @@ namespace Acam {
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] dest=" << this->motion_info[filter].stepper[destname].posname << " "
-                               << "id="       << this->motion_info[filter].stepper[destname].id << " "
-                               << "position=" << this->motion_info[filter].stepper[destname].position;
+      message.str(""); message << "[DEBUG] dest=" << this->motormap[filter].posmap[destname].posname << " "
+                               << "id="       << this->motormap[filter].posmap[destname].id << " "
+                               << "position=" << this->motormap[filter].posmap[destname].position;
       logwrite( function, message.str() );
 #endif
 
@@ -801,8 +801,8 @@ namespace Acam {
 
       // Where do we want to go?
       //
-      int destid = this->motion_info[ filter ].stepper[ destname ].id;
-      float destpos = this->motion_info[ filter ].stepper[ destname ].position;
+      int destid = this->motormap[ filter ].posmap[ destname ].id;
+      float destpos = this->motormap[ filter ].posmap[ destname ].position;
       int newid = mod( ( destid + ( 2 - currid ) ) , 6 );
 
 #ifdef LOGLEVEL_DEBUG
@@ -818,8 +818,8 @@ namespace Acam {
       //
       std::stringstream cmd;
       float remap;
-      for ( auto fit = this->motion_info[filter].stepper.begin(); 
-                 fit != this->motion_info[filter].stepper.end(); ++fit) {
+      for ( auto fit = this->motormap[filter].posmap.begin(); 
+                 fit != this->motormap[filter].posmap.end(); ++fit) {
         if ( fit->second.id == 2 ) remap = fit->second.position;          // remap = (position for id=2)
       }
       cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( cmd.str() );
@@ -829,8 +829,8 @@ namespace Acam {
       // Now move to the position with the calculated "newid"
       //
       float newpos=NAN;
-      for ( auto fit = this->motion_info[filter].stepper.begin(); 
-                 fit != this->motion_info[filter].stepper.end(); ++fit) {
+      for ( auto fit = this->motormap[filter].posmap.begin(); 
+                 fit != this->motormap[filter].posmap.end(); ++fit) {
         if ( fit->second.id == newid ) newpos = fit->second.position;     // newpos = (position for id=newid)
       }
       if ( ! std::isnan( newpos ) ) error = this->move_abs( filter, newpos );
@@ -852,7 +852,7 @@ namespace Acam {
 
     // Whether or not a filter was supplied, read the current position now.
     //
-//  int addr = this->motion_info[ filter ].addr;
+//  int addr = this->motormap[ filter ].addr;
 //  float pos;
 //  error = this->pi.get_pos( addr, axis, pos );
 
@@ -909,7 +909,7 @@ namespace Acam {
 
     // Read the current position now.
     //
-    int addr = this->motion_info[ filter ].addr;
+    int addr = this->motormap[ filter ].addr;
     int axis = 1;
     float pos;
 
@@ -919,8 +919,8 @@ namespace Acam {
     currid=-1;
     currpos=-1;
 
-    for ( auto fit = this->motion_info[filter].stepper.begin(); 
-               fit != this->motion_info[filter].stepper.end(); ++fit) {
+    for ( auto fit = this->motormap[filter].posmap.begin(); 
+               fit != this->motormap[filter].posmap.end(); ++fit) {
       if ( std::abs( fit->second.position - pos < tolerance ) ) {
         currname = fit->second.posname;
         currid   = fit->second.id;
@@ -1001,9 +1001,9 @@ namespace Acam {
     //
     if ( !posname.empty() ) {
 
-      // Check that posname is found in the motion_info.stepper map
+      // Check that posname is found in the motormap.posmap map
       //
-      if ( this->motion_info[cover].stepper.find( posname ) == this->motion_info[cover].stepper.end() ) {
+      if ( this->motormap[cover].posmap.find( posname ) == this->motormap[cover].posmap.end() ) {
         message.str(""); message << "ERROR: position \"" << posname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="not_found";
@@ -1011,25 +1011,25 @@ namespace Acam {
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] dest=" << this->motion_info[cover].stepper[posname].posname << " "
-                               << "id="       << this->motion_info[cover].stepper[posname].id << " "
-                               << "position=" << this->motion_info[cover].stepper[posname].position;
+      message.str(""); message << "[DEBUG] dest=" << this->motormap[cover].posmap[posname].posname << " "
+                               << "id="       << this->motormap[cover].posmap[posname].id << " "
+                               << "position=" << this->motormap[cover].posmap[posname].position;
       logwrite( function, message.str() );
 #endif
 
-      this->move_abs( cover, this->motion_info[cover].stepper[posname].position );
+      this->move_abs( cover, this->motormap[cover].posmap[posname].position );
 
     }
 
     // Whether or not a filter was supplied, read the current position now.
     //
     float pos;
-    error = this->pi.get_pos( this->motion_info[cover].addr, 1, pos );
+    error = this->pi.get_pos( this->motormap[cover].addr, 1, pos );
 
     // Loop through all cover positions to see if <pos> matches a known position
     //
-    for ( auto cit = this->motion_info[ cover ].stepper.begin();
-               cit != this->motion_info[ cover ].stepper.end(); ++cit ) {
+    for ( auto cit = this->motormap[ cover ].posmap.begin();
+               cit != this->motormap[ cover ].posmap.end(); ++cit ) {
       if ( std::abs( cit->second.position - pos ) < tolerance ) {
         retstring = cit->second.posname;
       }

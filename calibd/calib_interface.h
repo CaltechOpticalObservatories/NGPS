@@ -77,120 +77,6 @@ namespace Calib {
   /***** Calib::Modulator *****************************************************/
 
 
-  /***** Calib::MotionInfo ****************************************************/
-  /**
-   * @class  MotionInfo
-   * @brief  calib motion information class
-   *
-   * This class contains the information for each calib motor controller
-   * and a function for loading the information from the configuration file.
-   * This will be used in the Motion class, to create an STL map of this class
-   * indexed by controller name.
-   *
-   */
-  class MotionInfo {
-    public:
-      int addr;                   ///< controller address
-      float pos;                  ///< current position of this actuator
-      std::string name;           ///< controller name
-      std::string reftype;        ///< reference type
-      float openpos;              ///< open position for motor connected to this controller
-      float closepos;             ///< close position for motor connected to this controller
-      bool servo;                 ///< servo state (true=on, false=off)
-      bool ishome;                ///< is axis homed?
-      bool ontarget;              ///< is axis on target?
-
-      /**
-       * MotionInfo
-       * class constructor
-       */
-      MotionInfo() {
-        this->servo=false;
-        this->ishome=false;
-        this->ontarget=false;
-        }
-
-      /***** Calib::MotionInfo::load_info *************************************/
-      /**
-       * @fn         load_info
-       * @brief      loads information from the configuration file into the class
-       * @param[in]  input
-       * @return     ERROR or NO_ERROR
-       *
-       * This function is called whenever the MOTOR_CONTROLLER key is found
-       * in the configuration file, to parse and load all of the information
-       * assigned by that key into the appropriate class variables.
-       *
-       * The input string specifies: "<address> <name> <reftype> <openpos> <closepos>"
-       *
-       */
-      long load_info( std::string &input ) {
-        std::string function = "Calib::MotionInfo::load_info";
-        std::stringstream message;
-        std::vector<std::string> tokens;
-
-        Tokenize( input, tokens, " \"" );
-
-        if ( tokens.size() != 5 ) {
-          message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 5";
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-
-        try {
-          this->addr     = std::stoi( tokens.at(0) );
-          this->name     = tokens.at(1);
-          this->reftype  = tokens.at(2);
-          this->openpos  = std::stof( tokens.at(3) );
-          this->closepos = std::stof( tokens.at(4) );
-        }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-        catch ( std::out_of_range &e ) {
-          message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
-          logwrite( function, message.str() );
-        }
-
-        if ( this->addr < 1 ) {
-          message.str(""); message << "ERROR: addr " << this->addr << " cannot be < 1";
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-
-        if ( this->openpos < 0 ) {
-          message.str(""); message << "ERROR: openpos " << this->openpos << " cannot be < 0 for " << this->name;
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-
-        if ( this->closepos < 0 ) {
-          message.str(""); message << "ERROR: closepos " << this->closepos << " cannot be < 0 for " << this->name;
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-
-        // The specified reftype must be one of the PI valid reftypes.
-        //
-        if ( std::find( Physik_Instrumente::valid_reftypes.begin(),
-                        Physik_Instrumente::valid_reftypes.end(),
-                        this->reftype ) == Physik_Instrumente::valid_reftypes.end() ) {
-          message.str(""); message << "ERROR: reftype \"" << this->reftype << "\" invalid. Expected { ";
-          for ( auto ref : Physik_Instrumente::valid_reftypes ) message << ref << " ";
-          message << "}";
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-
-        return( NO_ERROR );
-      }
-      /***** Calib::MotionInfo::load_info *************************************/
-  };
-  /***** Calib::MotionInfo ****************************************************/
-
-
   /***** Calib::Motion ********************************************************/
   /**
    * @class  Motion
@@ -230,9 +116,12 @@ namespace Calib {
       static void dothread_move_abs( Calib::Motion &motion, std::string name, float pos ); ///< threaded move_abs function
       long move_abs( std::string name, float pos );
 
-      std::map<std::string, MotionInfo> motion_info;  ///< map of MotionInfo objects indexed by controller name
+      // map of all daisy-chain connected motor controllers,
+      // indexed by name.
+      //
+      std::map<std::string, Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo>> motormap;
 
-      Physik_Instrumente::ServoInterface pi;     ///< object for communicating with the PI
+      Physik_Instrumente::Interface pi;          ///< object for communicating with the PI
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 

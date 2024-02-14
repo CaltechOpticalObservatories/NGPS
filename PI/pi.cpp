@@ -10,88 +10,16 @@
 
 namespace Physik_Instrumente {
 
-  /* @var   valid_reftypes
-   * @brief class global vector of valid reference types used for homing
-   */
-  const std::vector<std::string> valid_reftypes{ "neg", "pos", "ref" };
-
-  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
-  /**
-   * @fn         ServoInterface
-   * @brief      default ServoInterface class constructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  ServoInterface::ServoInterface() {
-    this->name = "";
-    this->host = "";
-    this->port=-1;
-    this->initialized = false;
-  }
-  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
-
-
-  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
-  /**
-   * @fn         ServoInterface
-   * @brief      default ServoInterface class constructor
-   * @param[in]  host
-   * @param[in]  port
-   * @return     none
-   *
-   */
-  ServoInterface::ServoInterface( std::string host, int port ) {
-    this->name = "";
-    this->host = host;
-    this->port = port;
-    this->initialized = true;
-  }
-  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
-
-
-  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
-  /**
-   * @fn         ServoInterface
-   * @brief      default ServoInterface class constructor
-   * @param[in]  name
-   * @param[in]  host
-   * @param[in]  port
-   * @return     none
-   *
-   */
-  ServoInterface::ServoInterface( std::string name, std::string host, int port ) {
-    this->name = name;
-    this->port = port;
-    this->host = host;
-    this->initialized = true;
-  }
-  /***** Physik_Instrumente::ServoInterface::ServoInterface *******************/
-
-
-  /***** Physik_Instrumente::ServoInterface::~ServoInterface ******************/
-  /**
-   * @fn         ~ServoInterface
-   * @brief      ServoInterface class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  ServoInterface::~ServoInterface() {
-  };
-  /***** Physik_Instrumente::ServoInterface::~ServoInterface ******************/
-
-
-  /***** Physik_Instrumente::ServoInterface::open *****************************/
+  /***** Physik_Instrumente::Interface::open **********************************/
   /**
    * @fn         open
-   * @brief      open a connection to the servo controller
+   * @brief      open a connection to the controller
    * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
-  long ServoInterface::open() {
-    std::string function = "Physik_Instrumente::ServoInterface::open";
+  long Interface::open() {
+    std::string function = "Physik_Instrumente::Interface::open";
     std::stringstream message;
 
     if ( this->controller.isconnected() ) {
@@ -102,7 +30,7 @@ namespace Physik_Instrumente {
     Network::TcpSocket s( this->host, this->port );
     this->controller = s;
 
-    // Initialize connection to the servo controller
+    // Initialize connection to the controller
     //
     message.str(""); message << "opening connection to " << this->name << " controller";
     logwrite( function, message.str() );
@@ -120,19 +48,19 @@ namespace Physik_Instrumente {
 
     return NO_ERROR;
   }
-  /***** Physik_Instrumente::ServoInterface::open *****************************/
+  /***** Physik_Instrumente::Interface::open **********************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::close ****************************/
+  /***** Physik_Instrumente::Interface::close *********************************/
   /**
    * @fn         close
-   * @brief      close the connection to the servo controller
+   * @brief      close the connection to the controller
    * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    */
-  long ServoInterface::close() {
-    std::string function = "Physik_Instrumente::ServoInterface::close";
+  long Interface::close() {
+    std::string function = "Physik_Instrumente::Interface::close";
     std::stringstream message;
 
     if ( !this->controller.isconnected() ) {
@@ -143,18 +71,18 @@ namespace Physik_Instrumente {
     long error = this->controller.Close();
 
     if ( error == NO_ERROR ) {
-      logwrite( function, "connection to servo controller closed" );
+      logwrite( function, "connection to controller closed" );
     }
     else {
-      logwrite( function, "error closing servo connection" );
+      logwrite( function, "error closing connection" );
     }
 
     return( error );
   }
-  /***** Physik_Instrumente::ServoInterface::close ****************************/
+  /***** Physik_Instrumente::Interface::close *********************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::get_error ************************/
+  /***** Physik_Instrumente::Interface::get_error *****************************/
   /**
    * @fn         get_error
    * @brief      read the error status
@@ -162,8 +90,8 @@ namespace Physik_Instrumente {
    * @return     ERROR or NO_ERROR
    *
    */
-  long ServoInterface::get_error( int addr, int &errcode ) {
-    std::string function = "Physik_Instrumente::ServoInterface::get_error";
+  long Interface::get_error( int addr, int &errcode ) {
+    std::string function = "Physik_Instrumente::Interface::get_error";
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
@@ -217,10 +145,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /***** Physik_Instrumente::ServoInterface::get_error ************************/
+  /***** Physik_Instrumente::Interface::get_error *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
+  /***** Physik_Instrumente::Interface::set_servo *****************************/
   /**
    * @fn         set_servo
    * @brief      set the servo on|off
@@ -231,13 +159,13 @@ namespace Physik_Instrumente {
    * This function is overloaded. This version uses all axes.
    *
    */
-  long ServoInterface::set_servo( int addr, bool state ) {
+  long Interface::set_servo( int addr, bool state ) {
     return( this->set_servo( addr, -1, state ) );
   }
-  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
+  /***** Physik_Instrumente::Interface::set_servo *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
+  /***** Physik_Instrumente::Interface::set_servo *****************************/
   /**
    * @fn         set_servo
    * @brief      set the servo on|off
@@ -249,7 +177,7 @@ namespace Physik_Instrumente {
    * This function is overloaded.  This version accepts an axis.
    *
    */
-  long ServoInterface::set_servo( int addr, int axis, bool state ) {
+  long Interface::set_servo( int addr, int axis, bool state ) {
     std::stringstream cmd;
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "SVO";
@@ -258,10 +186,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /***** Physik_Instrumente::ServoInterface::set_servo ************************/
+  /***** Physik_Instrumente::Interface::set_servo *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
+  /***** Physik_Instrumente::Interface::move_abs ******************************/
   /**
    * @fn         move_abs
    * @brief      send move command in absolute coordinates
@@ -273,13 +201,13 @@ namespace Physik_Instrumente {
    * the default is all axes when not specified.
    *
    */
-  long ServoInterface::move_abs( int addr, float pos ) {
+  long Interface::move_abs( int addr, float pos ) {
     return( this->move_abs( addr, -1, pos ) );
   }
-  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
+  /***** Physik_Instrumente::Interface::move_abs ******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
+  /***** Physik_Instrumente::Interface::move_abs ******************************/
   /**
    * @fn         move_abs
    * @brief      send move command in absolute coordinates
@@ -291,8 +219,19 @@ namespace Physik_Instrumente {
    * This function is overloaded with a version where the axis is not specified.
    *
    */
-  long ServoInterface::move_abs( int addr, int axis, float pos ) {
+  long Interface::move_abs( int addr, int axis, float pos ) {
+    std::string function = "Physik_Instrumente::Interface::move_abs";
+    std::stringstream message;
     std::stringstream cmd;
+    if ( addr < 0 ) {
+      message.str(""); message << "ERROR: bad address " << addr;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    if ( std::isnan( pos ) ) {
+      logwrite( function, "ERROR: position is NaN" );
+      return( ERROR );
+    }
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "MOV";
     if ( axis > 0 ) cmd << " " << axis;
@@ -300,10 +239,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /***** Physik_Instrumente::ServoInterface::move_abs *************************/
+  /***** Physik_Instrumente::Interface::move_abs ******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
+  /***** Physik_Instrumente::Interface::move_rel ******************************/
   /**
    * @fn         move_rel
    * @brief      move in relative coordinates
@@ -315,13 +254,13 @@ namespace Physik_Instrumente {
    * the default is all axes when not specified.
    *
    */
-  long ServoInterface::move_rel( int addr, float pos ) {
+  long Interface::move_rel( int addr, float pos ) {
     return( this->move_rel( addr, -1, pos ) );
   }
-  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
+  /***** Physik_Instrumente::Interface::move_rel ******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
+  /***** Physik_Instrumente::Interface::move_rel ******************************/
   /**
    * @fn         move_rel
    * @brief      move in relative coordinates
@@ -333,8 +272,19 @@ namespace Physik_Instrumente {
    * This function is overloaded with a version where the axis is not specified.
    *
    */
-  long ServoInterface::move_rel( int addr, int axis, float pos ) {
+  long Interface::move_rel( int addr, int axis, float pos ) {
+    std::string function = "Physik_Instrumente::Interface::move_rel";
+    std::stringstream message;
     std::stringstream cmd;
+    if ( addr < 0 ) {
+      message.str(""); message << "ERROR: bad address " << addr;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    if ( std::isnan( pos ) ) {
+      logwrite( function, "ERROR: position is NaN" );
+      return( ERROR );
+    }
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "MVR";
     if ( axis > 0 ) cmd << " " << axis;
@@ -342,10 +292,10 @@ namespace Physik_Instrumente {
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /***** Physik_Instrumente::ServoInterface::move_rel *************************/
+  /***** Physik_Instrumente::Interface::move_rel ******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
+  /***** Physik_Instrumente::Interface::home_axis *****************************/
   /**
    * @fn         home_axis
    * @brief      home an axis by moving to reference switch
@@ -360,13 +310,13 @@ namespace Physik_Instrumente {
    * positive or negative limit switches, as indicated by the "ref" argument.
    *
    */
-  long ServoInterface::home_axis( int addr, std::string ref ) {
+  long Interface::home_axis( int addr, std::string ref ) {
     return( this->home_axis( addr, -1, ref ) );       //!< all axes at this addr
   }
-  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
+  /***** Physik_Instrumente::Interface::home_axis *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
+  /***** Physik_Instrumente::Interface::home_axis *****************************/
   /**
    * @fn         home_axis
    * @brief      home an axis by moving to reference switch
@@ -381,8 +331,8 @@ namespace Physik_Instrumente {
    * positive or negative limit switches, as indicated by the "ref" argument.
    *
    */
-  long ServoInterface::home_axis( int addr, int axis, std::string ref ) {
-    std::string function = "Physik_Instrumente::ServoInterface::home_axis";
+  long Interface::home_axis( int addr, int axis, std::string ref ) {
+    std::string function = "Physik_Instrumente::Interface::home_axis";
     std::stringstream message;
     std::stringstream cmd;
 
@@ -418,10 +368,10 @@ namespace Physik_Instrumente {
 
     return( this->send_command( cmd.str() ) );
   }
-  /***** Physik_Instrumente::ServoInterface::home_axis ************************/
+  /***** Physik_Instrumente::Interface::home_axis *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::is_home **************************/
+  /***** Physik_Instrumente::Interface::is_home *******************************/
   /**
    * @fn          is_home
    * @brief       queries whether referencing has been done
@@ -431,8 +381,8 @@ namespace Physik_Instrumente {
    * @return      ERROR or NO_ERROR
    *
    */
-  long ServoInterface::is_home( int addr, int axis, bool &state ) {
-    std::string function = "Physik_Instrumente::ServoInterface::is_home";
+  long Interface::is_home( int addr, int axis, bool &state ) {
+    std::string function = "Physik_Instrumente::Interface::is_home";
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
@@ -446,10 +396,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /***** Physik_Instrumente::ServoInterface::is_home **************************/
+  /***** Physik_Instrumente::Interface::is_home *******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::on_target ************************/
+  /***** Physik_Instrumente::Interface::on_target *****************************/
   /**
    * @fn         on_target
    * @brief      query the on target state for given addr and axis
@@ -461,13 +411,13 @@ namespace Physik_Instrumente {
    * the default is all axes when not specified.
    * 
    */
-  long ServoInterface::on_target( int addr, bool &state ) {
+  long Interface::on_target( int addr, bool &state ) {
     return( this->on_target( addr, -1, state ) );       //!< all axes at this addr
   }
-  /***** Physik_Instrumente::ServoInterface::on_target ************************/
+  /***** Physik_Instrumente::Interface::on_target *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::on_target ************************/
+  /***** Physik_Instrumente::Interface::on_target *****************************/
   /**
    * @fn         on_target
    * @brief      query the on target state for given addr and axis
@@ -479,8 +429,8 @@ namespace Physik_Instrumente {
    * This function is overloaded with a version where the axis is not specified.
    * 
    */
-  long ServoInterface::on_target( int addr, int axis, bool &state ) {
-    std::string function = "Physik_Instrumente::ServoInterface::on_target";
+  long Interface::on_target( int addr, int axis, bool &state ) {
+    std::string function = "Physik_Instrumente::Interface::on_target";
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
@@ -495,10 +445,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /***** Physik_Instrumente::ServoInterface::on_target ************************/
+  /***** Physik_Instrumente::Interface::on_target *****************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
+  /***** Physik_Instrumente::Interface::get_pos *******************************/
   /**
    * @fn         get_pos
    * @brief      get the current position of a motor
@@ -510,13 +460,13 @@ namespace Physik_Instrumente {
    * the default is all axes when not specified.
    * 
    */
-  long ServoInterface::get_pos( int addr, float &pos ) {
+  long Interface::get_pos( int addr, float &pos ) {
     return( this->get_pos( addr, -1, pos ) );       //!< all axes at this addr
   }
-  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
+  /***** Physik_Instrumente::Interface::get_pos *******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
+  /***** Physik_Instrumente::Interface::get_pos *******************************/
   /**
    * @fn         get_pos
    * @brief      get the current position of a motor
@@ -528,8 +478,8 @@ namespace Physik_Instrumente {
    * This function is overloaded with a version where the axis is not specified.
    * 
    */
-  long ServoInterface::get_pos( int addr, int axis, float &pos ) {
-    std::string function = "Physik_Instrumente::ServoInterface::get_pos";
+  long Interface::get_pos( int addr, int axis, float &pos ) {
+    std::string function = "Physik_Instrumente::Interface::get_pos";
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
@@ -544,10 +494,10 @@ namespace Physik_Instrumente {
 
     return error;
   }
-  /***** Physik_Instrumente::ServoInterface::get_pos **************************/
+  /***** Physik_Instrumente::Interface::get_pos *******************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::stop_motion **********************/
+  /***** Physik_Instrumente::Interface::stop_motion ***************************/
   /**
    * @fn         stop_motion
    * @brief      stop all movement on all axes
@@ -555,17 +505,17 @@ namespace Physik_Instrumente {
    * @return     ERROR or NO_ERROR
    *
    */
-  long ServoInterface::stop_motion( int addr ) {
+  long Interface::stop_motion( int addr ) {
     std::stringstream cmd;
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "STP";
     this->send_command( cmd.str() );
     return NO_ERROR;
   }
-  /***** Physik_Instrumente::ServoInterface::stop_motion **********************/
+  /***** Physik_Instrumente::Interface::stop_motion ***************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::send_command *********************/
+  /***** Physik_Instrumente::Interface::send_command **************************/
   /**
    * @fn         send_command
    * @brief      send a command string to the controller
@@ -578,8 +528,8 @@ namespace Physik_Instrumente {
    * This version sends a command only and does not read back any reply.
    *
    */
-  long ServoInterface::send_command( std::string cmd ) {
-    std::string function = "Physik_Instrumente::ServoInterface::send_command";
+  long Interface::send_command( std::string cmd ) {
+    std::string function = "Physik_Instrumente::Interface::send_command";
     std::stringstream message;
 
     logwrite( function, cmd );
@@ -592,10 +542,10 @@ namespace Physik_Instrumente {
 
     return( NO_ERROR );
   }
-  /***** Physik_Instrumente::ServoInterface::send_command *********************/
+  /***** Physik_Instrumente::Interface::send_command **************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::send_command *********************/
+  /***** Physik_Instrumente::Interface::send_command **************************/
   /**
    * @fn         send_command
    * @brief      send a command string to the controller
@@ -612,8 +562,8 @@ namespace Physik_Instrumente {
    * string.
    *
    */
-  long ServoInterface::send_command( std::string cmd, std::string &retstring ) {
-    std::string function = "Physik_Instrumente::ServoInterface::send_command";
+  long Interface::send_command( std::string cmd, std::string &retstring ) {
+    std::string function = "Physik_Instrumente::Interface::send_command";
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
@@ -659,10 +609,10 @@ namespace Physik_Instrumente {
 
     return( error );
   }
-  /***** Physik_Instrumente::ServoInterface::send_command *********************/
+  /***** Physik_Instrumente::Interface::send_command **************************/
 
 
-  /***** Physik_Instrumente::ServoInterface::parse_reply **********************/
+  /***** Physik_Instrumente::Interface::parse_reply ***************************/
   /**
    * @fn         parse_reply
    * @brief      parse the response from sending a ? command to the controller
@@ -679,8 +629,8 @@ namespace Physik_Instrumente {
    *
    */
   template <typename T>
-  long ServoInterface::parse_reply( int axis, std::string &reply, T &retval ) {
-    std::string function = "Physik_Instrumente::ServoInterface::parse_reply";
+  long Interface::parse_reply( int axis, std::string &reply, T &retval ) {
+    std::string function = "Physik_Instrumente::Interface::parse_reply";
     std::stringstream message;
     std::vector<std::string> tokens;
     std::stringstream sep;
@@ -747,6 +697,79 @@ namespace Physik_Instrumente {
     return NO_ERROR;
 
   }
-  /***** Physik_Instrumente::ServoInterface::parse_reply **********************/
+  // Explicit instantiation for possible types for this template function
+  //
+  template long Interface::parse_reply<int>( int axis, std::string &reply, int &retval );
+  template long Interface::parse_reply<float>( int axis, std::string &reply, float &retval );
+  template long Interface::parse_reply<bool>( int axis, std::string &reply, bool &retval );
+  /***** Physik_Instrumente::Interface::parse_reply ***************************/
+
+
+  /***** Physik_Instrumente::ServoInfo::load_controller_info ******************/
+  /**
+   * @brief      Loads controller information from the config file into the class
+   * @details    This is the derived class version which will parse the ServoInfo
+   *             specific arguments not handled by the template.
+   * @param[in]  tokens  vector passed by ControllerInfo::load_controller_info()
+   * @return     ERROR or NO_ERROR
+   *
+   * Here, the input vector is expected to contain <min> <max> <zeropos> <reftype>
+   *
+   */
+  long ServoInfo::load_controller_info( std::vector<std::string> tokens ) {
+    std::string function = "Physik_Instrumente::ServoInfo::load_controller_info";
+    std::stringstream message;
+
+    if ( tokens.size() != 3 ) {
+      message.str(""); message << "ERROR: expected { <min> <max> <zeropos> } but received { ";
+      for ( auto tok : tokens ) message << tok << " ";
+      message << "}";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    float trymin, trymax, tryzero;
+
+    try {
+      trymin  = std::stof( tokens[0] );
+      trymax  = std::stof( tokens[1] );
+      tryzero = std::stof( tokens[2] );
+    }
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR converting numeric tokens from { "
+                               << tokens[0] << " " << tokens[1] << " " << tokens[2] << " }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // store them in the class only now that they've all been converted
+    //
+    this->min     = trymin;
+    this->max     = trymax - tryzero;  // max is reduced from actuator max by zeropos
+    this->zeropos = tryzero;
+
+    return( NO_ERROR );
+  }
+  /***** Physik_Instrumente::ServoInfo::load_controller_info ******************/
+
+
+  /***** Physik_Instrumente::StepperInfo::load_controller_info ****************/
+  /**
+   * @brief      Loads controller information from the config file into the class
+   * @details    This is the derived class version which will parse the StepperInfo
+   *             specific arguments not handled by the template.
+   * @param[in]  tokens  vector passed by ControllerInfo::load_controller_info()
+   * @return     ERROR or NO_ERROR
+   *
+   * Currently no additional controller info for steppers.
+   *
+   */
+  long StepperInfo::load_controller_info( std::vector<std::string> tokens ) {
+    std::string function = "Physik_Instrumente::StepperInfo::load_controller_info";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Physik_Instrumente::StepperInfo::load_controller_info ****************/
 
 }

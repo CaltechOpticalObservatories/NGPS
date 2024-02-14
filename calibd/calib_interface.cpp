@@ -42,10 +42,10 @@ namespace Calib {
       return( ERROR );
     }
 
-    Physik_Instrumente::ServoInterface s( this->name, this->host, this->port );
+    Physik_Instrumente::Interface s( this->name, this->host, this->port );
     this->pi = s;
 
-    this->numdev = this->motion_info.size();
+    this->numdev = this->motormap.size();
 
     if ( this->numdev == 2 ) {
       logwrite( function, "motion interface configured ok" );
@@ -67,11 +67,12 @@ namespace Calib {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    for ( auto const &mot : this->motion_info ) {
+    for ( auto const &mot : this->motormap ) {
       message.str(""); message << "[DEBUG] motion controller " << mot.first
-                               << " addr=" << mot.second.addr
-                               << " openpos=" << mot.second.openpos
-                               << " closepos=" << mot.second.closepos;
+                               << " addr=" << mot.second.addr;
+      for ( auto const &pos : mot.second.posmap ) {
+        message << " " << pos.second.posname << "=" << pos.second.position;
+      }
       logwrite( function, message.str() );
     }
 #endif
@@ -107,9 +108,9 @@ namespace Calib {
     if ( error != NO_ERROR ) return( error );
 
     // clear any error codes on startup, and
-    // enable the servo for each address in motion_info
+    // enable the servo for each address in motormap
     //
-    for ( auto const &mot : this->motion_info ) {
+    for ( auto const &mot : this->motormap ) {
       int axis=1;
       int errcode;
       error |= this->pi.get_error( mot.second.addr, errcode );     // read error to clear, don't care the value
@@ -170,7 +171,7 @@ namespace Calib {
       help.append( "\n" );
       help.append( "  homes all actuators simultaneously using the indicated references:\n" );
       help.append( "  " );
-      for ( auto const &mot : this->motion_info ) {
+      for ( auto const &mot : this->motormap ) {
         help.append( mot.first );
         help.append( ":" );
         help.append( mot.second.reftype );
@@ -193,7 +194,7 @@ namespace Calib {
 
     // loop through every motor in the class
     //
-    for ( auto mot : this->motion_info ) {
+    for ( auto mot : this->motormap ) {
 
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] spawning thread to home " << mot.first;
@@ -243,9 +244,22 @@ namespace Calib {
     std::string function = "Calib::Motion::dothread_home";
     std::stringstream message;
     int axis=1;
-    int addr = motion.motion_info[name].addr;
-    std::string reftype = motion.motion_info[name].reftype;
     long error=NO_ERROR;
+    int addr = -1;
+    std::string reftype;
+
+    try {
+      addr    = motion.motormap.at(name).addr;
+      reftype = motion.motormap.at(name).reftype;
+    }
+    catch ( const std::out_of_range &e ) {
+      message.str(""); message << "ERROR: name \"" << name << "\" not in motormap: " << e.what();
+      logwrite( function, message.str() );
+      motion.thr_error.fetch_or( ERROR );         // preserve this error
+      --motion.motors_running;                    // atomically decrement the number of motors waiting
+      motion.cv.notify_all();                     // notify parent that I'm done
+      return;
+    }
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] thread sending home_axis( "
@@ -258,8 +272,8 @@ namespace Calib {
     motion.pi_mutex.lock();
     motion.pi.home_axis( addr, axis, reftype );
     motion.pi_mutex.unlock();
-    motion.motion_info[name].ishome   = false;
-    motion.motion_info[name].ontarget = false;
+    motion.motormap[name].ishome   = false;
+    motion.motormap[name].ontarget = false;
 
     // Loop sending the is_home command until homed or timeout.
     //
@@ -275,9 +289,9 @@ namespace Calib {
       motion.pi_mutex.lock();
       motion.pi.is_home( addr, axis, state );
       motion.pi_mutex.unlock();
-      motion.motion_info[name].ishome = state;
-      motion.motion_info[name].ontarget = state;
-      is_home = motion.motion_info[name].ishome;
+      motion.motormap[name].ishome = state;
+      motion.motormap[name].ontarget = state;
+      is_home = motion.motormap[name].ishome;
 
       if ( is_home ) break;
       else {
@@ -343,7 +357,7 @@ namespace Calib {
     // loop through every motor in the class
     // OK to do them serially (instead of threads) because it's quick to query
     //
-    for ( auto mot : this->motion_info ) {
+    for ( auto mot : this->motormap ) {
 
       error |= this->pi.is_home( mot.second.addr, 1, mot.second.ishome );
       homestream << mot.first << ":" << ( mot.second.ishome ? "true" : "false" );
@@ -352,14 +366,14 @@ namespace Calib {
 
     // Set the retstring true or false, true only if all requested controllers are the same
     //
-    if ( num_home == this->motion_info.size() ) retstring = "true";
+    if ( num_home == this->motormap.size() ) retstring = "true";
     else
     if ( num_home == 0 )                            retstring = "false";
     else
 
     // If not all are the same state then log that but report false
     //
-    if ( num_home > 0 && num_home < this->motion_info.size() ) {
+    if ( num_home > 0 && num_home < this->motormap.size() ) {
       logwrite( function, homestream.str() );
       retstring = "false";
     }
@@ -390,13 +404,19 @@ namespace Calib {
     //
     if ( input == "?" ) {
       retstring = CALIBD_SET;
-      retstring.append( " <actuator>=<action> [ <actuator>=<action> ]\n" );
-      retstring.append( "  where <actuator> is { " );
-      for ( auto const &mot : this->motion_info ) { retstring.append( mot.first ); retstring.append( " " ); }
-      retstring.append( "}\n" );
-      retstring.append( "  and <action> is { open | close }.\n" );
+      retstring.append( " <actuator>=<posname> [ <actuator>=<posname> ]\n" );
+      retstring.append( "  where <posname> is\n" );
+      for ( auto const &mot : this->motormap ) {
+        retstring.append( "                     { " );
+        for ( auto const &pos : mot.second.posmap ) {
+          retstring.append( pos.second.posname ); retstring.append( " " );
+        }
+        retstring.append( "} for <actuator> = " );
+        retstring.append( mot.first );
+        retstring.append( "\n" );
+      }
       retstring.append( "  One or both actuators may be set simultaneously.\n" );
-      retstring.append( "  There are no space between <actuator>=<action>, e.g. door=open\n" );
+      retstring.append( "  There are no space between <actuator>=<posname>, e.g. set door=open\n" );
       return( NO_ERROR );
     }
 
@@ -423,12 +443,12 @@ namespace Calib {
     //
     for ( auto actuator : input_list ) {
 
-      std::string name, action;
+      std::string name, posname;
 
       // Tokenize each item in above vector on "=" to get
-      // the actuator name and the desired action.
+      // the actuator name and the desired posname.
       //
-      std::vector<std::string> actuator_tokens;      // vector of individual actuator, action for each actuator entry
+      std::vector<std::string> actuator_tokens;      // vector of individual actuator, posname for each actuator entry
       Tokenize( actuator, actuator_tokens, "=" );
       if ( actuator_tokens.size() != 2 ) {
         message.str(""); message << "ERROR: bad input \"" << actuator << "\". expected actuator=state";
@@ -436,58 +456,45 @@ namespace Calib {
         error = ERROR;
       }
       else {
-        name   = actuator_tokens[0];
-        action = actuator_tokens[1];
+        name    = actuator_tokens[0];
+        posname = actuator_tokens[1];
       }
 
       // requested named actuator must have been defined
       //
-      auto actuator_found = this->motion_info.find( name );
+      bool actuator_found = ( ( this->motormap.find( name ) != this->motormap.end() ) ? true : false );
 
-      float openpos, closepos, reqpos;
-
-      if ( error==NO_ERROR && actuator_found == this->motion_info.end() ) {
+      if ( !actuator_found ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         error = ERROR;
       }
-      else {
-        openpos  = this->motion_info[ name ].openpos;
-        closepos = this->motion_info[ name ].closepos;
-        valid_names << name << " ";
+
+      // If the actuator was found then the
+      // requested posname must be defined for that actuator.
+      //
+      bool posname_found = ( ( actuator_found &&
+                               (this->motormap[name].posmap.find( posname ) != this->motormap[name].posmap.end()) )
+                             ? true : false );
+
+      if ( !posname_found ) {
+        message.str(""); message << "ERROR: position \"" << posname << "\" not found. Check configuration.";
+        logwrite( function, message.str() );
+        error = ERROR;
       }
 
-      // if an action is requested ( open | close ) then perform that action
+      // If both are found then get the position from the posmap
+      // and spawn a thread to move to that position.
       //
-      if ( error==NO_ERROR && ! action.empty() ) {
-        try {
-          std::transform( action.begin(), action.end(), action.begin(), ::tolower );  // convert to lowercase
-        }
-        catch (...) {
-          logwrite( function, "ERROR converting action to lowercase" );
-          error = ERROR;
-        }
-
-        if ( error==NO_ERROR && action == "open" ) reqpos = openpos;
-        else
-        if ( error==NO_ERROR && action == "close" ) reqpos = closepos;
-        else {
-          message.str(""); message << "ERROR: undefined action \"" << action << "\". Expected { open | close }.";
-          logwrite( function, message.str() );
-          error = ERROR;
-        }
-
-        // Spawn a thread to perform the actual move
-        //
-        if ( error==NO_ERROR ) {
-          std::thread( dothread_move_abs, std::ref( *this ), name, reqpos).detach();
-          this->motors_running++;
-
+      if ( actuator_found && posname_found ) {
+        valid_names << name << " ";
+        float reqpos = this->motormap[name].posmap[posname].position;
+        std::thread( dothread_move_abs, std::ref( *this ), name, reqpos).detach();
+        this->motors_running++;
 #ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] spawning thread to " << action << " " << name;
-          logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] spawning thread to move " << name << " to " << posname;
+        logwrite( function, message.str() );
 #endif
-        }
       }
     }
 
@@ -578,13 +585,13 @@ namespace Calib {
       return( ERROR );
     }
 
-    if ( this->motion_info.find( name ) == this->motion_info.end() ) {
+    if ( this->motormap.find( name ) == this->motormap.end() ) {
       message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
       logwrite( function, message.str() );
       return( ERROR );
     }
 
-    int addr = this->motion_info[ name ].addr;
+    int addr = this->motormap[ name ].addr;
     int axis = 1;
 
     // send the move command
@@ -606,9 +613,9 @@ namespace Calib {
       this->pi_mutex.lock();
       error = this->pi.on_target( addr, axis, state );
       this->pi_mutex.unlock();
-      this->motion_info[ name ].ontarget = state;
+      this->motormap[ name ].ontarget = state;
 
-      if ( this->motion_info[ name ].ontarget ) break;
+      if ( this->motormap[ name ].ontarget ) break;
       else {
 #ifdef LOGLEVEL_DEBUG
         message.str(""); message << "[DEBUG] waiting for cal " << name;
@@ -638,9 +645,9 @@ namespace Calib {
 
   /***** Calib::Motion::get ***************************************************/
   /**
-   * @brief      get the state of the named actuator(s)
+   * @brief      get the position of the named actuator(s)
    * @param[in]  name_in    name of actuator(s), can be space-delimited list
-   * @param[out] retstring  current state of actuator(s) { open | closed }
+   * @param[out] retstring  current position of actuator(s) { open | closed }
    * @return     ERROR or NO_ERROR
    *
    */
@@ -657,10 +664,10 @@ namespace Calib {
       retstring = CALIBD_GET;
       retstring.append( " [ <actuator> ]\n" );
       retstring.append( "  where <actuator> is { " );
-      for ( auto const &mot : this->motion_info ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( auto const &mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
-      retstring.append( "  If no arg is supplied then the state of both is returned.\n" );
-      retstring.append( "  Supplying an actuator name returns the state of only the specified actuator.\n" );
+      retstring.append( "  If no arg is supplied then the position of both is returned.\n" );
+      retstring.append( "  Supplying an actuator name returns the position of only the specified actuator.\n" );
       return( NO_ERROR );
     }
 
@@ -672,7 +679,7 @@ namespace Calib {
     // If no name(s) supplied then create a vector of all defined actuator names
     //
     if ( name_in.empty() ) {
-      for ( auto const &mot : this->motion_info ) {
+      for ( auto const &mot : this->motormap ) {
         name_list.push_back( mot.first );
       }
     }
@@ -681,36 +688,39 @@ namespace Calib {
     }
 
     for ( auto name : name_list ) {
-      std::string state;
+      std::string thisposname;
 
-      if ( this->motion_info.find( name ) == this->motion_info.end() ) {
+      if ( this->motormap.find( name ) == this->motormap.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
-        state = "error";
+        thisposname = "error";
         error = ERROR;
       }
       else {
-        int addr = this->motion_info[ name ].addr;
-        int axis = 1;
-        float openpos = this->motion_info[ name ].openpos;
-        float closepos = this->motion_info[ name ].closepos;
-        float pos=-1;
-
         // and then get the current position of this actuator.
         //
-        error = this->pi.get_pos( addr, axis, pos );
+        int addr = this->motormap[ name ].addr;
+        int axis = 1;
+        float thispos = -1;
+        float tolerance = 0.001;
 
-        if ( std::abs( pos - openpos ) < 0.001 ) state = "open";
-        else
-        if ( std::abs( pos - closepos ) < 0.001 ) state = "closed";
-        else {
-          message.str(""); message << "ERROR: actuator \"" << name << "\" not in known position: " << pos;
+        error = this->pi.get_pos( addr, axis, thispos );
+
+        if ( error == ERROR ) {
+          message.str(""); message << "ERROR reading position of actuator \"" << name << "\"";
           logwrite( function, message.str() );
-          state = "error";
-          error = ERROR;
+          thisposname = "error";
+        }
+        // Check thispos against the positions in the posmap and if one
+        // is found within tolerance then that is the current position.
+        //
+        else for ( auto const &pos : this->motormap[ name ].posmap ) {
+          if ( std::abs( pos.second.position - thispos ) < tolerance ) {
+            thisposname = pos.second.posname;
+          }
         }
       }
-      retstream << name << "=" << state << " ";
+      retstream << name << "=" << thisposname << " ";
     }
 
     retstring = retstream.str();

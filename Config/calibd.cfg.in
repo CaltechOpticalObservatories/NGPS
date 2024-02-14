@@ -20,13 +20,32 @@ PI_HOST=@IP_ETS8P@                # terminal server
 PI_PORT=@ETS8P_CALIB@             # terminal server port
 
 # For each actuator's controller specify:
-# MOTOR_CONTROLLER="<address> <name> <reftype> <openpos> <closepos>"
-#   Address is PI address.
-#   One name must be "cover" and the other "door".
-#   Valid reftypes are {neg|pos|ref}
+# MOTOR_CONTROLLER="<address> <name> <reftype>"
+#   <addr>  Address is PI address. (int)
+#   <name>  name of controller
+#   <ref>   reference type: {neg|pos|ref}
+#   <min>   min allowed motion (float)
+#   <max>   max allowed motion (float)
+#   <zero>  value to add to home position (float)
 #
-MOTOR_CONTROLLER="1 cover neg 0.0 32.0"
-MOTOR_CONTROLLER="2 door neg 30.0 0.0"
+# For calibd, one controller must be named "cover" and the other must be "door"
+#
+MOTOR_CONTROLLER="1 cover neg 0.0 32.0 0.0"
+MOTOR_CONTROLLER="2 door  neg 0.0 30.0 0.0"
+
+# Specify named positions for each actuator:
+# MOTOR_POS="<name> <ID> <pos> <posname>"
+#   <name>     name of controller, must have a corresponding MOTOR_CONTROLLER above
+#   <ID>       0-based incremental number {0,1,2,...} (int)
+#   <pos>      real actuator position (float)
+#   <posname>  name of that position, what the user will use
+#
+# For calibd, one position must be named "open" and the other must be "close"
+#
+MOTOR_POS="cover 0  0.0 open"
+MOTOR_POS="cover 1 32.0 close"
+MOTOR_POS="door  0 30.0 open"
+MOTOR_POS="door  1  0.0 close"
 
 # Lamp modulator arduino host:
 # LAMPMOD_HOST="<host> <port>"
@@ -35,8 +54,8 @@ LAMPMOD_HOST="@IP_LAMP_MODULATOR@ 23"
 
 # Lamp modulators:
 # LAMPMOD_MOD="<num> <name> <D> <T>"
-#   <num>   is the modulator number {1:8}
-#   <name>  is the name of the modulator, no spaces
+#   <num>   is the modulator number {1:8} (int)
+#   <name>  is the name of the modulator, can be anything, but no spaces
 #   <D>     is the default duty cycle fraction {0:1} (float)
 #   <T>     is the default period in msec {0,50:3600000} (float)
 #

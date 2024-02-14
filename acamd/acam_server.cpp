@@ -36,9 +36,9 @@ namespace Acam {
     int applied=0;
     long error;
 
-    // Clear the motion_info vector before loading new information from the config file
+    // Clear the motormap map before loading new information from the config file
     //
-    this->interface.motion.motion_info.clear();
+    this->interface.motion.motormap.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -46,7 +46,7 @@ namespace Acam {
 
       // PI_NAME -- this is the name of the PI motor controller subsystem
       //
-      if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
+      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
         this->interface.motion.name = config.arg[entry];
         message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
@@ -56,7 +56,7 @@ namespace Acam {
 
       // PI_HOST -- hostname for the master PI motor controller
       //
-      if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
+      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
         this->interface.motion.host = config.arg[entry];
         message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
@@ -66,7 +66,7 @@ namespace Acam {
 
       // PI_PORT -- port number on PI_HOST for the master PI motor controller
       //
-      if ( config.param[entry].compare( 0, 7, "PI_PORT" ) == 0 ) {
+      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -88,7 +88,7 @@ namespace Acam {
 
       // CAMERASERVER_HOST -- hostname for the external camera server
       //
-      if ( config.param[entry].compare( 0, 17, "CAMERASERVER_HOST" ) == 0 ) {
+      if ( config.param[entry].find( "CAMERASERVER_HOST" ) == 0 ) {
         this->interface.cameraserver_host = config.arg[entry];
         message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
@@ -98,7 +98,7 @@ namespace Acam {
 
       // CAMERASERVER_PORT -- port number on CAMSERVER_HOST for the external camera server
       //
-      if ( config.param[entry].compare( 0, 17, "CAMERASERVER_PORT" ) == 0 ) {
+      if ( config.param[entry].find( "CAMERASERVER_PORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -118,12 +118,15 @@ namespace Acam {
         applied++;
       }
 
-      // STEPPER_CONTROLLER -- address and name of each PI motor controller in daisy-chain
+      // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
-      if ( config.param[entry].compare( 0, 18, "STEPPER_CONTROLLER" ) == 0 ) {
-        Acam::MotionInfo mot;
-        if ( mot.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motion.motion_info[ mot.name ] = mot;
+      if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
+        // Create temporary object for parsing the config line. If no error
+        // then this object gets copied into the class map of objects.
+        //
+        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
+        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
+          this->interface.motion.motormap[ MOT.name ] = MOT;
           message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
           logwrite( function, message.str() );
           this->interface.async.enqueue( message.str() );
@@ -131,28 +134,32 @@ namespace Acam {
         }
       }
 
-      // STEPPER_POS -- detailed position info for each named motor controller
+      // MOTOR_POS -- detailed position info for each named motor controller
       //
-      if ( config.param[entry].compare( 0, 11, "STEPPER_POS" ) == 0 ) {
-        Acam::MotionInfo mot;
-        if ( mot.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+      if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
+        // Create temporary object for parsing the config line. If no error
+        // and a matching name is already in the motormap, then relevant parts
+        // of this object gets copied into the class map of objects.
+        //
+        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
+        if ( MOT.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
 
-          // Make sure the STEPPER_POS's name has a matching name in controller_info
-          // which came from the STEPPER_CONTROLLER configuration.
+          // Make sure the MOTOR_POS's name has a matching name in controller_info
+          // which came from the MOTOR_CONTROLLER configuration.
           //
-          auto loc = this->interface.motion.motion_info.find( mot.name );
+          auto loc = this->interface.motion.motormap.find( MOT.name );
 
-          // If found, then assign the stepper motor map from the local object to the class object.
+          // If found, then assign the motor map from the local object to the class object.
           //
-          if ( loc != this->interface.motion.motion_info.end() ) {
-            std::string posname = mot.stepper.begin()->first;  // mot is a local copy so there is only one entry
-            loc->second.stepper[ posname ].id       = mot.stepper[posname].id;
-            loc->second.stepper[ posname ].position = mot.stepper[posname].position;
-            loc->second.stepper[ posname ].posname  = mot.stepper[posname].posname;
+          if ( loc != this->interface.motion.motormap.end() ) {
+            std::string posname = MOT.posmap.begin()->first;  // mot is a local copy so there is only one entry
+            loc->second.posmap[ posname ].id       = MOT.posmap[posname].id;
+            loc->second.posmap[ posname ].position = MOT.posmap[posname].position;
+            loc->second.posmap[ posname ].posname  = MOT.posmap[posname].posname;
           }
           else {
-            message.str(""); message << "ERROR: STEPPER_POS name \"" << mot.name << "\" "
-                                     << "has no matching name defined by STEPPER_CONTROLLER";
+            message.str(""); message << "ERROR: MOTOR_POS name \"" << MOT.name << "\" "
+                                     << "has no matching name defined by MOTOR_CONTROLLER";
             logwrite( function, message.str() );
             error = ERROR;
             break;
@@ -166,7 +173,7 @@ namespace Acam {
 
       // NBPORT -- nonblocking listening port for the acam daemon
       //
-      if (config.param[entry].compare(0, 6, "NBPORT")==0) {
+      if ( config.param[entry].find( "NBPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -188,7 +195,7 @@ namespace Acam {
 
       // BLKPORT -- blocking listening port for the acam daemon
       //
-      if (config.param[entry].compare(0, 7, "BLKPORT")==0) {
+      if ( config.param[entry].find( "BLKPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -210,7 +217,7 @@ namespace Acam {
 
       // MESSAGEPORT -- asynchronous broadcast message port for the acam daemon
       //
-      if (config.param[entry].compare(0, 11, "MESSAGEPORT")==0) {
+      if ( config.param[entry].find( "MESSAGEPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -232,7 +239,7 @@ namespace Acam {
 
       // MESSAGEGROUP -- asynchronous broadcast group for the acam daemon
       //
-      if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
+      if ( config.param[entry].find( "MESSAGEGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
         message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
@@ -484,58 +491,58 @@ namespace Acam {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
+      if ( cmd == "help" || cmd == "?" ) {
                       for ( auto s : ACAMD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else
-      if ( cmd.compare( ACAMD_EXIT ) == 0 ) {
+      if ( cmd == ACAMD_EXIT ) {
                       this->exit_cleanly();                      // shutdown the daemon
       }
       else
 
       // commands for the Andor camera direct
       //
-      if ( cmd.compare( "cameraopen" ) == 0 ) {
+      if ( cmd == "cameraopen" ) {
                       ret = this->interface.camera.open( args );
       }
       else
-      if ( cmd.compare( "cameraclose" ) == 0 ) {
+      if ( cmd == "cameraclose" ) {
                       ret = this->interface.camera.close( );
       }
       else
-      if ( cmd.compare( "cameraexptime" ) == 0 ) {
+      if ( cmd == "cameraexptime" ) {
                       ret = this->interface.camera.andor.exptime( args, retstring );
       }
       else
-      if ( cmd.compare( "cameraacquire" ) == 0 ) {
+      if ( cmd == "cameraacquire" ) {
                       ret = this->interface.camera.start_acquisition( );
       }
       else
-      if ( cmd.compare( "camerastat" ) == 0 ) {
+      if ( cmd == "camerastat" ) {
                       ret = this->interface.camera.get_status( );
       }
       else
-      if ( cmd.compare( "camerashutter" ) == 0 ) {
+      if ( cmd == "camerashutter" ) {
                       ret = this->interface.camera.andor.shutter( );
       }
       else
-      if ( cmd.compare( "camerafits" ) == 0 ) {
+      if ( cmd == "camerafits" ) {
                       ret = this->interface.test_image( );
       }
       else
-      if ( cmd.compare( "cameragetframe" ) == 0 ) {
+      if ( cmd == "cameragetframe" ) {
                       ret = this->interface.camera.get_frame( );
       }
       else
-      if ( cmd.compare( "cameratest" ) == 0 ) {
+      if ( cmd == "cameratest" ) {
                       ret = this->interface.camera.andor.test( );
       }
       else
-      if ( cmd.compare( "testacquire" ) == 0 ) {
+      if ( cmd == "testacquire" ) {
                       ret = this->interface.camera.andor.acquire_one();
       }
       else
-      if ( cmd.compare( "testsave" ) == 0 ) {
+      if ( cmd == "testsave" ) {
                       ret = this->interface.camera.andor.save_acquired( args, retstring );
 
       }
@@ -543,21 +550,21 @@ namespace Acam {
 
       // commands for the external camera server
       //
-      if ( cmd.compare( ACAMD_CAMERASERVER_COORDS ) == 0 ) {
+      if ( cmd == ACAMD_CAMERASERVER_COORDS ) {
                       ret = this->interface.camera_server.coords( args );
       }
       else
 
       // open connections to all devices, camera and motion
       //
-      if ( cmd.compare( ACAMD_OPEN ) == 0 ) {
+      if ( cmd == ACAMD_OPEN ) {
                       ret = this->interface.open( args, retstring );
       }
       else
 
       // isopen
       //
-      if ( cmd.compare( ACAMD_ISOPEN ) == 0 ) {
+      if ( cmd == ACAMD_ISOPEN ) {
                       bool isopen;
                       ret = this->interface.isopen( args, isopen, retstring );
                       if ( retstring.empty() ) { if ( isopen ) retstring = "true"; else retstring = "false"; }
@@ -566,14 +573,14 @@ namespace Acam {
 
       // close
       //
-      if ( cmd.compare( ACAMD_CLOSE ) == 0 ) {
+      if ( cmd == ACAMD_CLOSE ) {
                       ret = this->interface.close( args, retstring );
       }
       else
 
       // config
       //
-      if ( cmd.compare( ACAMD_CONFIG ) == 0 ) {
+      if ( cmd == ACAMD_CONFIG ) {
                       if ( args == "?" ) sock.Write( ACAMD_CONFIG
                                                      +"\n  re-read, parse, and re-apply config file: "
                                                      +this->config.filename+"\n" );
@@ -583,17 +590,17 @@ namespace Acam {
 
       // commands for the Python functions
       //
-      if ( cmd.compare( ACAMD_SOLVE ) == 0 ) {
+      if ( cmd == ACAMD_SOLVE ) {
                       ret = this->interface.solve( args, retstring );
       }
       else
 
-      if ( cmd.compare( ACAMD_QUALITY ) == 0 ) {
+      if ( cmd == ACAMD_QUALITY ) {
                       ret = this->interface.image_quality( args, retstring );
       }
       else
 
-      if ( cmd.compare( ACAMD_ECHO ) == 0 ) {
+      if ( cmd == ACAMD_ECHO ) {
                       if ( args == "?" ) sock.Write( ACAMD_ECHO
                                                      +" <string>\n  Daemon receives and writes back <string> to the client.\n"
                                                      +"  Used to test if the daemon is responsive.\n" );
@@ -606,49 +613,49 @@ namespace Acam {
 
       // ACQUIRE
       //
-      if ( cmd.compare( ACAMD_ACQUIRE ) == 0 ) {
+      if ( cmd == ACAMD_ACQUIRE ) {
                       ret = this->interface.acquire( );
       }
       else
-      if ( cmd.compare( ACAMD_INIT ) == 0 ) {
+      if ( cmd == ACAMD_INIT ) {
                       this->interface.acquire_init( );
                       ret = NO_ERROR;  // acquire_init() returns void, never fails
       }
       else
-      if ( cmd.compare( "exptime" ) == 0 ) {
+      if ( cmd == "exptime" ) {
                       ret = this->interface.exptime( args, retstring );
       }
       else
 
       // motion control commands
       //
-      if ( cmd.compare( ACAMD_MOTION ) == 0 ) {
+      if ( cmd == ACAMD_MOTION ) {
                       ret = this->interface.motion.motion( args, retstring );
       }
       else
 
-      if ( cmd.compare( ACAMD_HOME ) == 0 ) {
+      if ( cmd == ACAMD_HOME ) {
                       ret = this->interface.motion.home( args, retstring );
       }
       else
 
       // is_home
       //
-      if ( cmd.compare( ACAMD_ISHOME ) == 0 ) {
+      if ( cmd == ACAMD_ISHOME ) {
                       ret = this->interface.motion.is_home( args, retstring );
       }
       else
 
       // set/get filter
       //
-      if ( cmd.compare( ACAMD_FILTER ) == 0 ) {
+      if ( cmd == ACAMD_FILTER ) {
                       ret = this->interface.motion.filter( args, retstring );
       }
       else
 
       // set/get dust cover
       //
-      if ( cmd.compare( ACAMD_COVER ) == 0 ) {
+      if ( cmd == ACAMD_COVER ) {
                       ret = this->interface.motion.cover( args, retstring );
       }
 

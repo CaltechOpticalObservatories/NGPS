@@ -55,10 +55,10 @@ namespace Slit {
       return( ERROR );
     }
 
-    Physik_Instrumente::ServoInterface s( this->name, this->host, this->port );
+    Physik_Instrumente::Interface s( this->name, this->host, this->port );
     this->pi = s;
 
-    this->numdev = this->controller_info.size();
+    this->numdev = this->motormap.size();
 
     if ( this->numdev == 2 ) {
       logwrite( function, "interface initialized ok" );
@@ -84,20 +84,20 @@ namespace Slit {
     this->minwidth=0;
     this->maxwidth=0;
 
-    for ( size_t con = 0; con < this->numdev; con++ ) {
-      this->maxwidth += ( this->controller_info.at(con).max - this->controller_info.at(con).min );
-      this->minwidth += this->controller_info.at(con).min;
-      if ( this->controller_info.at(con).name == "A" ) this->con_A = con;
+    for ( auto const &con : this->motormap ) {
+      this->maxwidth += ( con.second.max - con.second.min );
+      this->minwidth += con.second.min;
+      if ( con.second.name == "A" ) this->con_A = con.second.addr;
       else
-      if ( this->controller_info.at(con).name == "B" ) this->con_B = con;
+      if ( con.second.name == "B" ) this->con_B = con.second.addr;
       else {
-        message.str(""); message << "ERROR: unrecognized name \"" << this->controller_info.at(con).name << "\". expected A or B";
+        message.str(""); message << "ERROR: unrecognized name \"" << con.second.name << "\". expected A or B";
         logwrite( function, message.str() );
         error = ERROR;
       }
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] controller #" << con
-                               << " max=" << this->controller_info.at(con).max << " min=" << this->controller_info.at(con).min;
+      message.str(""); message << "[DEBUG] controller #" << con.second.addr
+                               << " max=" << con.second.max << " min=" << con.second.min;
       logwrite( function, message.str() );
 #endif
     }
@@ -141,18 +141,11 @@ namespace Slit {
     // clear any error codes on startup, and
     // enable the servo for each address in controller_info
     //
-    for ( size_t con=0; con < this->numdev; con++ ) {
-      try {
-        int axis=1;
-        int errcode;
-        error |= this->pi.get_error( this->controller_info.at(con).addr, errcode );     // read error to clear, don't care the value
-        error |= this->pi.set_servo( this->controller_info.at(con).addr, axis, true );  // turn the servos on
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "ERROR: controller element " << con << " out of range";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
+    for ( auto const &con : this->motormap ) {
+      int axis=1;
+      int errcode;
+      error |= this->pi.get_error( con.second.addr, errcode );     // read error to clear, don't care the value
+      error |= this->pi.set_servo( con.second.addr, axis, true );  // turn the servos on
     }
 
     return( error );
@@ -191,42 +184,48 @@ namespace Slit {
 
   /***** Slit::Interface::home ************************************************/
   /**
-   * @brief      home all daisy-chained motors using the neg limit switch
+   * @brief      home all daisy-chained motors
    * @details    Both motors are homed simultaneously by spawning a thread for
    *             each. This will also apply any zeropos, after homing.
+   * @param[in]  arg   optional arg for help only
+   * @param[out] help  return string containing help
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::home( ) {
+  long Interface::home( std::string arg, std::string &help ) {
     std::string function = "Slit::Interface::home";
     std::stringstream message;
     int axis=1;
     long error = NO_ERROR;
 
-    if ( !this->pi.controller.isconnected() ) {
+    // Help
+    //
+    if ( arg == "?" ) {
+      help = SLITD_HOME;
+      help.append( "  home both slit motors simultaneously\n" );
+      return( NO_ERROR );
+    }
+
+    // Anything else requires an open connection
+    //
+    if ( !this->isopen() ) {
       logwrite( function, "ERROR: not connected to motor controller" );
       return( ERROR );
     }
 
-    // home the A and B motors now,
-    // simultaneously, each in its own thread.
+    // Loop through map of motors, spawn a thread to home each one
     //
 
     std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
-
-    this->motors_running = 2;                                  // set both motors running (number of threads to wait for)
-
     this->thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
 
-    for ( size_t con=0; con < this->numdev; con++ ) {
-      try {
-        std::thread( dothread_home, std::ref( *this ), con ).detach();
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "ERROR: controller element " << con << " out of range";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
+    for ( auto mot : this->motormap ) {
+      std::thread( dothread_home, std::ref( *this ), mot.first ).detach();
+      this->motors_running++;
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] spawning thread to home " << name;
+      logwrite( function, message.str() );
+#endif
     }
 
     // wait for the threads to finish
@@ -268,21 +267,11 @@ namespace Slit {
     // of the number that are homed.
     //
     size_t num_home=0;
-    for ( size_t con=0; con < this->numdev; con++ ) {
-      try {
-        int axis=1;
-        error |= this->pi.is_home( this->controller_info.at(con).addr,
-                                   axis,
-                                   this->controller_info.at(con).ishome );  // error is OR'd so any error is preserved
-        homestream << this->controller_info.at(con).addr << ":"
-                   << ( this->controller_info.at(con).ishome ? "true" : "false" ) << " ";
-        if ( this->controller_info.at(con).ishome ) num_home++;
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "ERROR: controller element " << con << " out of range";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
+    for ( auto &con : this->motormap ) {
+      int axis=1;
+      error |= this->pi.is_home( con.second.addr, axis, con.second.ishome );  // error is OR'd so any error is preserved
+      homestream << con.second.addr << ":" << ( con.second.ishome ? "true" : "false" ) << " ";
+      if ( con.second.ishome ) num_home++;
     }
 
     // Set the retstring true or false, true only if all controllers are homed.
@@ -421,54 +410,47 @@ namespace Slit {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " width=" << setwidth << " offset=" << setoffset
-                             << " con_A=" << this->con_A << " con_B=" << this->con_B;
+    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " width=" << setwidth
+                             << " offset=" << setoffset << " con_A=" << this->con_A << " con_B=" << this->con_B;
     logwrite( function, message.str() );
 #endif
 
     // move the A and B motors now,
     // simultaneously, each in its own thread.
     //
+    try {
+      std::unique_lock<std::mutex> wait_lock( iface.wait_mtx );  // create a mutex object for waiting for threads
 
-    std::unique_lock<std::mutex> wait_lock( iface.wait_mtx );  // create a mutex object for waiting for threads
+      iface.motors_running = 2;                                  // set both motors running (number of threads to wait for)
 
-    iface.motors_running = 2;                                  // set both motors running (number of threads to wait for)
+      iface.thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
 
-    iface.thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
+      // spawn threads to move each motor, A and B
+      //
+      std::thread( dothread_move_abs, std::ref( iface ), this->motormap.at("A").addr, pos_A).detach();
+      std::thread( dothread_move_abs, std::ref( iface ), this->motormap.at("B").addr, pos_B).detach();
 
-    // spawn the A motor thread
-    //
-    if ( this->con_A >= 0 && this->con_A < this->numdev ) {
-      std::thread( dothread_move_abs,
-                   std::ref( iface ),
-                   this->controller_info.at( this->con_A ).addr,
-                   pos_A 
-                 ).detach();
+      // wait for the threads to finish
+      //
+      while ( iface.motors_running != 0 ) {
+        message.str(""); message << "waiting for " << iface.motors_running << " motor" << ( iface.motors_running > 1 ? "s":"" );
+        logwrite( function, message.str() );
+        iface.cv.wait( wait_lock );
+      }
+      logwrite( function, "slit motor moves complete" );
+
+      error = iface.thr_error.load();                            // get any errors from the threads
     }
-
-    // spawn the B motor thread
-    //
-    if ( this->con_B >= 0 && this->con_B < this->numdev ) {
-      std::thread( dothread_move_abs,
-                   std::ref( iface ),
-                   this->controller_info.at( this->con_B ).addr,
-                   pos_B
-                 ).detach();
-    }
-
-    // wait for the threads to finish
-    //
-    while ( iface.motors_running != 0 ) {
-      message.str(""); message << "waiting for " << iface.motors_running << " motor" << ( iface.motors_running > 1 ? "s":"" );
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR: unknown motor: " << e.what();
       logwrite( function, message.str() );
-      iface.cv.wait( wait_lock );
+      error = ERROR;
     }
-
-    logwrite( function, "slit motor moves complete" );
-
-    // get any errors from the threads
-    //
-    error = iface.thr_error.load();
+    catch ( std::exception &e ) {
+      message.str(""); message << "ERROR: other exception: " << e.what();
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
 
     // after all the moves, read and return the position
     //
@@ -503,24 +485,15 @@ namespace Slit {
     // get the position for each address in controller_info
     //
     std::string posstring;
+    int axis=1;
     try {
-      int axis=1;
-      if ( this->con_A >= 0 && this->con_A < this->numdev ) {
-        error = this->pi.get_pos( this->controller_info.at( this->con_A ).addr, axis, pos_A );
-      }
-      if ( this->con_B >= 0 && this->con_B < this->numdev ) {
-        error = this->pi.get_pos( this->controller_info.at( this->con_B ).addr, axis, pos_B );
-      }
+      error = this->pi.get_pos( this->motormap.at("A").addr, axis, pos_A );
+      error = this->pi.get_pos( this->motormap.at("B").addr, axis, pos_B );
     }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert position " << posstring << " : " << e.what();
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR: unknown motor: " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "out of range converting position " << posstring << " : " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+      error = ERROR;
     }
 
     // calculate width and offset
@@ -553,19 +526,35 @@ namespace Slit {
   /**
    * @brief      threaded function to home and apply zeropos
    * @param[in]  iface   reference to interface object
+   * @param[in]  name    reference to name of motor to home
    *
    * This is the work function to call home() in a thread, intended
    * to be spawned in a detached thread. Any errors returned by functions
    * called in here are set in the thr_error class variable.
    *
    */
-  void Interface::dothread_home( Slit::Interface &iface, int con ) {
+  void Interface::dothread_home( Slit::Interface &iface, std::string name ) {
     std::string function = "Slit::Interface::dothread_home";
     std::stringstream message;
     int axis=1;
-    int addr = iface.controller_info.at(con).addr;
-    float zeropos = iface.controller_info.at(con).zeropos;
     long error=NO_ERROR;
+    int addr=-1;
+    float zeropos=NAN;
+    std::string reftype;
+
+    try {
+      addr    = iface.motormap.at(name).addr;
+      zeropos = iface.motormap.at(name).zeropos;
+      reftype = iface.motormap.at(name).reftype;
+    }
+    catch ( const std::out_of_range &e ) {
+      message.str(""); message << "ERROR: name \"" << name << "\" not in motormap: " << e.what();
+      logwrite( function, message.str() );
+      iface.thr_error.fetch_or( ERROR );         // preserve this error
+      --iface.motors_running;                    // atomically decrement the number of motors waiting
+      iface.cv.notify_all();                     // notify parent that I'm done
+      return;
+    }
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] thread sending home_axis( " << addr << ", " << axis << ", neg )";
@@ -574,21 +563,13 @@ namespace Slit {
 
     // send the home command by calling home_axis()
     //
-    try {
-      iface.pi_mutex.lock();
-      iface.pi.home_axis( addr, axis, "neg" );
-      iface.pi_mutex.unlock();
-      iface.controller_info.at(con).ishome   = false;
-      iface.controller_info.at(con).ontarget = false;
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: controller element " << con << " out of range";
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
+    iface.pi_mutex.lock();
+    iface.pi.home_axis( addr, axis, reftype );
+    iface.pi_mutex.unlock();
+    iface.motormap[name].ishome   = false;
+    iface.motormap[name].ontarget = false;
 
-    // Loop sending the is_home command for each address in controller_info
-    // until homed or timeout.
+    // Loop sending the is_home command until homed or timeout.
     //
 
     // get the time now for timeout purposes
@@ -598,28 +579,21 @@ namespace Slit {
     bool is_home=false;
 
     do {
-      try {
-        bool state;
-        iface.pi_mutex.lock();
-        iface.pi.is_home( addr, axis, state );
-        iface.pi_mutex.unlock();
-        iface.controller_info.at(con).ishome = state;
-        iface.controller_info.at(con).ontarget = state;
-        is_home = iface.controller_info.at(con).ishome;
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "ERROR: controller element " << con << " out of range";
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
+      bool state;
+      iface.pi_mutex.lock();
+      iface.pi.is_home( addr, axis, state );
+      iface.pi_mutex.unlock();
+      iface.motormap[name].ishome = state;
+      iface.motormap[name].ontarget = state;
+      is_home = iface.motormap[name].ishome;
 
       if ( is_home ) break;
       else {
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for homing " << addr << " ..." ;
+        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
         logwrite( function, message.str() );
 #endif
-        usleep( 1000000 );
+        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       }
 
       // get time now and check for timeout
@@ -628,14 +602,20 @@ namespace Slit {
 
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
-      if ( elapsed > MOVE_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for homing " << addr;
+      if ( elapsed > HOME_TIMEOUT ) {
+        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
         logwrite( function, message.str() );
         error = TIMEOUT;
         break;
       }
 
     } while ( 1 );
+
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
+                             << " with error=" << error;
+    logwrite( function, message.str() );
+#endif
 
     // If homed OK then apply the zeropos
     //
@@ -743,15 +723,15 @@ namespace Slit {
 
       // which controller has this addr?
       //
-      int mycon=-1;
-      for ( size_t con=0; con < this->numdev; con++ ) {
-        if ( this->controller_info.at(con).addr == addr ) {
-          mycon = con;
+      std::string myname;
+      for ( auto &con : this->motormap ) {
+        if ( con.second.addr = addr ) {
+          myname = con.second.name;
           break;
         }
       }
 
-      if ( mycon == -1 ) {  // should be impossible because numdev was checked in initialize_class()
+      if ( myname.empty() ) {
         logwrite( function, "ERROR: no motor controllers defined" );
         return( ERROR );
       }
@@ -769,15 +749,15 @@ namespace Slit {
         this->pi_mutex.lock();
         error = this->pi.on_target( addr, axis, state );
         this->pi_mutex.unlock();
-        this->controller_info.at( mycon ).ontarget = state;
+        this->motormap.at(myname).ontarget = state;
         
-        if ( this->controller_info.at( mycon ).ontarget ) break;
+        if ( this->motormap.at(myname).ontarget ) break;
         else {
 #ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] waiting for " << this->controller_info.at( mycon ).name;
+          message.str(""); message << "[DEBUG] waiting for " << this->motormap.at(myname).name;
           logwrite( function, message.str() );
 #endif
-          usleep( 1000000 );
+          std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
         }
 
         // get time now and check for timeout
@@ -787,7 +767,7 @@ namespace Slit {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
         if ( elapsed > MOVE_TIMEOUT ) {
-          message.str(""); message << "TIMEOUT waiting for " << this->controller_info.at( mycon ).name;
+          message.str(""); message << "TIMEOUT waiting for " << this->motormap.at(myname).name;
           logwrite( function, message.str() );
           error = TIMEOUT;
           break;
@@ -801,6 +781,11 @@ namespace Slit {
     }
     catch( std::out_of_range &e ) {
       message.str(""); message << "one or more values out of range: " << e.what();
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+    catch( std::exception &e ) {
+      message.str(""); message << "ERROR: other exception: " << e.what();
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -876,15 +861,8 @@ namespace Slit {
 
     // send the stop_motion command for each address in controller_info
     //
-    for ( size_t con=0; con < this->numdev; con++ ) {
-      try {
-        this->pi.stop_motion( this->controller_info.at(con).addr );
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "ERROR: controller element " << con << " out of range";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
+    for ( auto const &mot : this->motormap ) {
+      this->pi.stop_motion( mot.second.addr );
     }
 
     return( NO_ERROR );

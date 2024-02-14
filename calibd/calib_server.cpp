@@ -19,7 +19,9 @@ namespace Calib {
     std::string function = "Calib::Server::exit_cleanly";
     logwrite( function, "exiting" );
 
-    exit(EXIT_SUCCESS);
+    close_log();                        // flush and close logfile stream
+
+    return;
   }
   /***** Calib::Server::exit_cleanly ******************************************/
 
@@ -42,7 +44,7 @@ namespace Calib {
 
       // NBPORT -- nonblocking listening port for the calib daemon
       //
-      if (config.param[entry].compare(0, 6, "NBPORT")==0) {
+      if ( config.param[entry].find( "NBPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -64,7 +66,7 @@ namespace Calib {
 
       // BLKPORT -- blocking listening port for the calib daemon
       //
-      if (config.param[entry].compare(0, 7, "BLKPORT")==0) {
+      if ( config.param[entry].find( "BLKPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -86,7 +88,7 @@ namespace Calib {
 
       // ASYNCPORT -- asynchronous broadcast message port for the calib daemon
       //
-      if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
+      if ( config.param[entry].find( "ASYNCPORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -108,7 +110,7 @@ namespace Calib {
 
       // ASYNCGROUP -- asynchronous broadcast group for the calib daemon
       //
-      if (config.param[entry].compare(0, 10, "ASYNCGROUP")==0) {
+      if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
@@ -118,7 +120,7 @@ namespace Calib {
 
       // PI_NAME -- this is the name of the PI motor controller subsystem
       //
-      if ( config.param[entry].compare( 0, 7, "PI_NAME" ) == 0 ) {
+      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
         this->interface.motion.name = config.arg[entry];
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
@@ -127,7 +129,7 @@ namespace Calib {
 
       // PI_HOST -- hostname for the master PI motor controller
       //
-      if ( config.param[entry].compare( 0, 7, "PI_HOST" ) == 0 ) {
+      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
         this->interface.motion.host = config.arg[entry];
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
@@ -136,7 +138,7 @@ namespace Calib {
 
       // PI_PORT -- port number on PI_HOST for the master PI motor controller
       //
-      if ( config.param[entry].compare( 0, 7, "PI_PORT" ) == 0 ) {
+      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
         int port;
         try {
           port = std::stoi( config.arg[entry] );
@@ -157,10 +159,51 @@ namespace Calib {
 
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
-      if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
-        Calib::MotionInfo s;
-        if ( s.load_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motion.motion_info[ s.name ] = s;
+      if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
+        // Create temporary object for parsing the config line. If no error
+        // then this object gets copied into the class map of objects.
+        //
+        Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo> MOT;
+        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
+          this->interface.motion.motormap[ MOT.name ] = MOT;
+          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          this->interface.async.enqueue( message.str() );
+          applied++;
+        }
+      }
+
+      // MOTOR_POS -- detailed position info for each named motor controller
+      //
+      if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
+        // Create temporary object for parsing the config line. If no error
+        // and a matching name is already in the motormap, then relevant parts
+        // of this object gets copied into the class map of objects.
+        //
+        Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo> MOT;
+        if ( MOT.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+
+          // Make sure the MOTOR_POS's name has a matching name in controller_info
+          // which came from the MOTOR_CONTROLLER configuration.
+          //
+          auto loc = this->interface.motion.motormap.find( MOT.name );
+
+          // If found, then assign the motor map from the local object to the class object.
+          //
+          if ( loc != this->interface.motion.motormap.end() ) {
+            std::string posname = MOT.posmap.begin()->first;  // mot is a local copy so there is only one entry
+            loc->second.posmap[ posname ].id       = MOT.posmap[posname].id;
+            loc->second.posmap[ posname ].position = MOT.posmap[posname].position;
+            loc->second.posmap[ posname ].posname  = MOT.posmap[posname].posname;
+          }
+          else {
+            message.str(""); message << "ERROR: MOTOR_POS name \"" << MOT.name << "\" "
+                                     << "has no matching name defined by MOTOR_CONTROLLER";
+            logwrite( function, message.str() );
+            error = ERROR;
+            break;
+          }
+
           message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
@@ -169,7 +212,7 @@ namespace Calib {
 
       // LAMPMOD_HOST -- lamp modulator host info ( host port )
       //
-      if ( config.param[entry].compare( 0, 12, "LAMPMOD_HOST" ) == 0 ) {
+      if ( config.param[entry].find( "LAMPMOD_HOST" ) == 0 ) {
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         this->interface.modulator.configure_host( config.arg[entry] );
@@ -178,7 +221,7 @@ namespace Calib {
 
       // LAMPMOD_MOD -- lamp modulator modulator info
       //
-      if ( config.param[entry].compare( 0, 11, "LAMPMOD_MOD" ) == 0 ) {
+      if ( config.param[entry].find( "LAMPMOD_MOD" ) == 0 ) {
         message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
         this->interface.modulator.configure_mod( config.arg[entry] );
@@ -242,7 +285,7 @@ namespace Calib {
    *
    */
   void Server::block_main( Calib::Server &calib, Network::TcpSocket sock ) {
-    while(1) {
+    while( true ) {
       sock.Accept();
       calib.doit(sock);             // call function to do the work
       sock.Close();
@@ -270,7 +313,7 @@ namespace Calib {
    *
    */
   void Server::thread_main( Calib::Server &calib, Network::TcpSocket sock ) {
-    while (1) {
+    while ( true ) {
       calib.conn_mutex.lock();
       sock.Accept();
       calib.conn_mutex.unlock();
@@ -353,7 +396,7 @@ namespace Calib {
     logwrite( function, message.str() );
 #endif
 
-    while (connection_open) {
+    while ( connection_open ) {
 
       // Wait (poll) connected socket for incoming data...
       //
@@ -448,19 +491,21 @@ namespace Calib {
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
+      if ( cmd == "help" || cmd == "?" ) {
                       for ( auto s : CALIBD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else
 
-      if ( cmd.compare( "exit" ) == 0 ) {
-                      this->exit_cleanly();                     // shutdown the daemon
+      if ( cmd == "exit" ) {
+                      sock.Write( "\n" );  // write terminating char in case client is waiting for something
+                      ret = EXIT;          // this will raise SIGUSR1
+                      break;
       }
       else
 
       // isopen
       //
-      if ( cmd.compare( CALIBD_ISOPEN ) == 0 ) {
+      if ( cmd == CALIBD_ISOPEN ) {
                       bool isopen = this->interface.motion.isopen( );
                       if ( isopen ) retstring = "true"; else retstring = "false";
                       ret = NO_ERROR;
@@ -469,14 +514,14 @@ namespace Calib {
 
       // open
       //
-      if ( cmd.compare( CALIBD_OPEN ) == 0 ) {
+      if ( cmd == CALIBD_OPEN ) {
                       ret = this->interface.motion.open();
       }
       else
 
       // close
       //
-      if ( cmd.compare( CALIBD_CLOSE ) == 0 ) {
+      if ( cmd == CALIBD_CLOSE ) {
                       ret  = this->interface.motion.send_command( "close" );
                       ret |= this->interface.motion.close();
       }
@@ -484,21 +529,21 @@ namespace Calib {
 
       // home
       //
-      if ( cmd.compare( CALIBD_HOME ) == 0 ) {
+      if ( cmd == CALIBD_HOME ) {
                       ret = this->interface.motion.home( args, retstring );
       }
       else
 
       // ishome
       //
-      if ( cmd.compare( CALIBD_ISHOME ) == 0 ) {
+      if ( cmd == CALIBD_ISHOME ) {
                       ret = this->interface.motion.is_home( retstring );
       }
       else
 
       // get state of one or both actuators
       //
-      if ( ( cmd.compare( CALIBD_GET ) == 0 ) ) {
+      if ( cmd == CALIBD_GET ) {
                       ret = this->interface.motion.get( args, retstring );
       }
       else
@@ -506,21 +551,21 @@ namespace Calib {
       // set state of one or both actuators
       // args should be actuator=state [ actuator=state ]
       //
-      if ( ( cmd.compare( CALIBD_SET ) == 0 ) ) {
+      if ( cmd == CALIBD_SET ) {
                       ret = this->interface.motion.set( args, retstring );
       }
       else
 
       // native
       //
-      if ( cmd.compare( CALIBD_NATIVE ) == 0 ) {
+      if ( cmd == CALIBD_NATIVE ) {
                       ret = this->interface.motion.send_command( args, retstring );
       }
       else
 
       // lampmod
       //
-      if ( cmd.compare( CALIBD_LAMPMOD ) == 0 ) {
+      if ( cmd == CALIBD_LAMPMOD ) {
                       ret = this->interface.modulator.control( args, retstring );
       }
 
@@ -549,6 +594,7 @@ namespace Calib {
     }
 
     sock.Close();
+    if ( ret == EXIT ) raise( SIGUSR1 );
     return;
   }
   /***** Server::doit *********************************************************/

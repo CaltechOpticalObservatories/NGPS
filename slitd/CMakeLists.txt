@@ -29,6 +29,9 @@ target_link_libraries(slitd
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
+# Set the setgid bit on the resulting executable
+add_custom_command( TARGET slitd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:slitd> )
+
 # -- Port Definitions ----------------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and is used to generate the

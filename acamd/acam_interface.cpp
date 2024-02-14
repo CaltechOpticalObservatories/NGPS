@@ -926,7 +926,7 @@ namespace Acam {
     //
     for (int entry=0; entry < config.n_entries; entry++) {
 
-      if (config.param[entry].compare(0, 11, "SOLVER_ARGS")==0) {
+      if ( config.param[entry].find( "SOLVER_ARGS" ) == 0 ) {
         // tokenize each solverargs entry to check that it is of the format key=value
         //
         std::vector<std::string> tokens;
