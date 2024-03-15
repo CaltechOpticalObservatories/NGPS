@@ -19,5 +19,5 @@ do
 done
 
 # send the command string
-$HOME/Software/bin/socksend -h localhost -p $port "$command" -t 5000
+/home/developer/Software/bin/socksend -h localhost -p $port "$command" -t 5000
 

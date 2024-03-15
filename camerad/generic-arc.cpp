@@ -9,6 +9,28 @@
 
 namespace AstroCam {
 
+  long Interface::abort() {
+    logwrite( "AstroCam::Interface::abort", "[DEBUG] calling do_abort()" );
+    return this->do_abort();
+  }
+
+  /***** AstroCam::Interface::bin *********************************************/
+  /**
+   * @brief      wrapper for do_bin
+   * @details    set or get the binning factor for the specified direction
+   * @param[in]  args       argument string contains <chan> <axis> [ <factor> ]
+   * @param[out] retstring  return string
+   * @return     ERROR or NO_ERROR
+   *
+   * The bindir string can be implementation-specific.
+   *
+   */
+  long Interface::bin( std::string args, std::string &retstring ) {
+    return this->do_bin( args, retstring );
+  }
+  /***** AstroCam::Interface::bin *********************************************/
+
+
   /***** AstroCam::Interface::connect_controller ******************************/
   /**
    * @brief      wrapper for do_connect_controller
@@ -120,7 +142,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::geometry **************8*************************/
   /**
    * @brief      wrapper for do_geometry
-   * @details    initiate an exposure
+   * @details    
    * @return     ERROR or NO_ERROR
    *
    */

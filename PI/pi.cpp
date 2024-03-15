@@ -705,6 +705,26 @@ namespace Physik_Instrumente {
   /***** Physik_Instrumente::Interface::parse_reply ***************************/
 
 
+  /***** Physik_Instrumente::PiezoInfo::load_controller_info ******************/
+  /**
+   * @brief      Loads controller information from the config file into the class
+   * @details    This is the derived class version which will parse the PiezoInfo
+   *             specific arguments not handled by the template.
+   * @param[in]  tokens  vector passed by ControllerInfo::load_controller_info()
+   * @return     ERROR or NO_ERROR
+   *
+   * Currently no additional controller info for piezos.
+   *
+   */
+  long PiezoInfo::load_controller_info( std::vector<std::string> tokens ) {
+    std::string function = "Physik_Instrumente::PiezoInfo::load_controller_info";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Physik_Instrumente::PiezoInfo::load_controller_info ******************/
+
+
   /***** Physik_Instrumente::ServoInfo::load_controller_info ******************/
   /**
    * @brief      Loads controller information from the config file into the class

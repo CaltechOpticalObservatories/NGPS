@@ -1,2 +1,11 @@
 #!/bin/sh
-xterm -geometry 200x50 -e colorlog &
+# if supplied with an argument then that argument is the date
+#
+if [ "$#" == "1" ]; then
+  DATE=$1
+# otherwise use the current UTC date
+#
+else
+  DATE=`date --utc +"%Y-%m-%d"`
+fi
+xterm -geometry 200x50 -T "colorlog for UTC: "$DATE -e colorlog $1 &

@@ -7,6 +7,7 @@
 #ifndef LOGENTRY_H
 #define LOGENTRY_H
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>

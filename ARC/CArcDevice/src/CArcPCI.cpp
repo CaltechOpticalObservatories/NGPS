@@ -1823,7 +1823,7 @@ namespace arc
 					m_pCLog->put( sCmd.c_str() );
 				}
 
-				THROW( "(CArcPCI) Ioctl failed cmd: 0x%X arg: 0x%X : %e", uiIoctlCmd, uiArg, true );
+				THROW( "(CArcPCI::ioctlDevice64) Ioctl failed cmd: 0x%X arg: 0x%X : %e", uiIoctlCmd, uiArg, true );
 			}
 
 			// Set the debug message queue
@@ -1868,7 +1868,7 @@ namespace arc
 					m_pCLog->put( sCmd.c_str() );
 				}
 
-				THROW( "(CArcPCI) Ioctl failed cmd: 0x%X arg: 0x%X : %e",	uiIoctlCmd,	uiArg, arc::gen3::CArcBase::getSystemError() );
+				THROW( "(CArcPCI::ioctlDevice) Ioctl failed cmd: 0x%X arg: 0x%X : %e",	uiIoctlCmd,	uiArg, arc::gen3::CArcBase::getSystemError() );
 			}
 
 			// Set the debug message queue
@@ -1929,7 +1929,7 @@ namespace arc
 
 				std::ostringstream oss;
 
-				oss << "(CArcPCI) Ioctl failed cmd: 0x" << std::hex << uiIoctlCmd << std::dec;
+				oss << "(CArcPCI::ioctlDevice) Ioctl failed cmd: 0x" << std::hex << uiIoctlCmd << std::dec;
 
 				for ( auto it = tArgList.begin(); it != tArgList.end(); it++ )
 				{

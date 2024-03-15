@@ -119,6 +119,29 @@ namespace Physik_Instrumente {
   /***** ControllerInfoBase ***************************************************/
 
 
+  /***** PiezoInfo ************************************************************/
+  /**
+   * @class    PiezoInfo
+   * @brief    Derived class containing information specific to piezo controllers
+   * @details  This is the derived class for piezo controllers, containing
+   *           members relevant only to piezo controllers. It inherits the base
+   *           class to gain access to common base members. This will always be
+   *           constructed after the base class (and before the specialization).
+   *
+   */
+  class PiezoInfo : public ControllerInfoBase {
+    public:
+
+      PiezoInfo() { }                                ///< constructor
+
+      // The following are special functions to load info from the config
+      // file into the class, for this type of controller.
+      //
+      long load_controller_info( std::vector<std::string> tokens );
+  };
+  /***** PiezoInfo ************************************************************/
+
+
   /***** ServoInfo ************************************************************/
   /**
    * @class    ServoInfo

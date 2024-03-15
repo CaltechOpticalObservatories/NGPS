@@ -214,7 +214,7 @@ namespace Camera {
 
           // GIT_HASH
           if (config.param[entry].compare(0, 8, "GIT_HASH")==0) {
-            this->camera_info.prikeys.addkey( "GIT_HASH", config.arg[entry], "software git hash" );
+            this->camera_info.systemkeys.primary().addkey( "GIT_HASH", config.arg[entry], "software git hash" );
             message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
             logwrite( function, message.str() );
             this->camera.async.enqueue( message.str() );
@@ -223,7 +223,7 @@ namespace Camera {
 
           // PROJ_BUILD_DATE
           if (config.param[entry].compare(0, 15, "PROJ_BUILD_DATE")==0) {
-            this->camera_info.prikeys.addkey( "SW_BUILD", config.arg[entry], "software build date" );
+            this->camera_info.systemkeys.primary().addkey( "SW_BUILD", config.arg[entry], "software build date" );
             message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
             logwrite( function, message.str() );
             this->camera.async.enqueue( message.str() );
@@ -273,9 +273,9 @@ namespace Camera {
             std::vector<std::string> tokens;
             Tokenize( config.arg[entry], tokens, " " );
 
-            if ( config.param[entry].compare( 9, 3, "PRI" )==0 ) error = this->camera_info.prikeys.addkey( tokens );
+            if ( config.param[entry].compare( 9, 3, "PRI" )==0 ) error = this->camera_info.systemkeys.primary().addkey( tokens );
             else
-            if ( config.param[entry].compare( 9, 3, "EXT" )==0 ) error = this->camera_info.extkeys.addkey( tokens );
+            if ( config.param[entry].compare( 9, 3, "EXT" )==0 ) error = this->camera_info.systemkeys.extension().addkey( tokens );
             else
             continue;
 

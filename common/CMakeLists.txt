@@ -14,3 +14,6 @@ include_directories( ${PROJECT_BASE_DIR}/utils )    # needed for logentry
 add_library(common STATIC
         ${PROJECT_UTILS_DIR}/common.cpp
         )
+add_library(telemetry STATIC
+        ${PROJECT_UTILS_DIR}/telemetry.cpp
+        )

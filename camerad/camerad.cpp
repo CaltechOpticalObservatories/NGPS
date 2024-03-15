@@ -115,11 +115,11 @@ int main(int argc, char **argv) {
   //
   if ( zone == "local" ) {
     logwrite( function, "using local time zone" );
-    server.camera_info.prikeys.addkey( "TM_ZONE", "local", "time zone" );
+    server.camera_info.systemkeys.primary().addkey( "TM_ZONE", "local", "time zone" );
   }
   else {
     logwrite( function, "using GMT time zone" );
-    server.camera_info.prikeys.addkey( "TM_ZONE", "GMT", "time zone" );
+    server.camera_info.systemkeys.primary().addkey( "TM_ZONE", "GMT", "time zone" );
   }
 
   if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
@@ -439,16 +439,16 @@ void doit(Network::TcpSocket &sock) {
     ret = NOTHING;
     std::string retstring="";                               // string for return the value (where needed)
 
-    if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
+    if ( cmd == "help" || cmd == "?" ) {
                     for ( auto s : CAMERAD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
     }
     else
-    if (cmd.compare("exit")==0) {
+    if ( cmd == "exit" ) {
                     server.camera.async.enqueue("exit");    // shutdown the async message thread if running
                     server.exit_cleanly();                  // shutdown the server
                     }
     else
-    if (cmd.compare( CAMERAD_CONFIG ) == 0 ) {              // report the config file used for camerad
+    if ( cmd == CAMERAD_CONFIG ) {              // report the config file used for camerad
                     std::stringstream cfg;
                     cfg << "CONFIG:" << server.config.filename;
                     server.camera.async.enqueue( cfg.str() );
@@ -457,170 +457,189 @@ void doit(Network::TcpSocket &sock) {
                     ret = NO_ERROR;
                     }
     else
-    if (cmd.compare( CAMERAD_OPEN )==0) {
+    if ( cmd == CAMERAD_OPEN ) {
                     ret = server.connect_controller(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_CLOSE )==0) {
+    if ( cmd == CAMERAD_CLOSE ) {
                     ret = server.disconnect_controller();
                     }
     else
-    if (cmd.compare( CAMERAD_LOAD )==0) {
+    if ( cmd == CAMERAD_LOAD ) {
                     if (args.empty()) ret = server.load_firmware(retstring);
                     else              ret = server.load_firmware(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_BASENAME )==0) {
+    if ( cmd == CAMERAD_BASENAME ) {
                     ret = server.camera.basename(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_IMNUM )==0) {
+    if ( cmd == CAMERAD_IMNUM ) {
                     ret = server.camera.imnum(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_IMDIR )==0) {
+    if ( cmd == CAMERAD_IMDIR ) {
                     ret = server.camera.imdir(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_AUTODIR )==0) {
+    if ( cmd == CAMERAD_AUTODIR ) {
                     ret = server.camera.autodir(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_MEX )==0) {
+    if ( cmd == CAMERAD_MEX ) {
                     ret = server.camera.mex(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_LONGERROR )==0) {
+    if ( cmd == CAMERAD_LONGERROR ) {
                     ret = server.camera.longerror(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_PREEXPOSURES )==0) {
+    if ( cmd == CAMERAD_PREEXPOSURES ) {
                     ret = server.camera_info.pre_exposures( args, retstring );
                     sock.Write( retstring );
                     sock.Write( " " );
                     }
     else
-    if (cmd.compare( CAMERAD_MEXAMPS )==0) {
+    if ( cmd == CAMERAD_MEXAMPS ) {
                     ret = server.camera.mexamps(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_FITSNAMING )==0) {
+    if ( cmd == CAMERAD_FITSNAMING ) {
                     ret = server.camera.fitsnaming(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_SHUTTER )==0) {
+    if ( cmd == CAMERAD_SHUTTER ) {
                     ret = server.shutter(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_WRITEKEYS )==0) {
+    if ( cmd == CAMERAD_WRITEKEYS ) {
                     ret = server.camera.writekeys(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_KEY )==0) {
-                    if (args.compare(0, 4, "list")==0) {
-                      logwrite( function, "prikeys:" );  ret = server.camera_info.prikeys.listkeys();
-                      logwrite( function, "extkeys:" );  ret = server.camera_info.extkeys.listkeys();
-                      logwrite( function, "userkeys:" ); ret = server.camera_info.userkeys.listkeys();
+    if ( cmd == CAMERAD_KEY ) {
+                    if ( args.substr(0, 4) == "list" ) {
+//                    logwrite( function, "prikeys:" );  ret = server.camera_info.prikeys.listkeys();
+//                    logwrite( function, "extkeys:" );  ret = server.camera_info.extkeys.listkeys();
+                      for ( std::size_t i=0; i<server.fitsinfo.size(); ++i ) {
+                        auto const &info = server.fitsinfo[i];
+                        message.str(""); message << "fitsinfo[" << i << "] primary systemkeys:"; logwrite( function, message.str() );
+                        ret = info != nullptr && info->systemkeys.primary().listkeys();
+                        message.str(""); message << "fitsinfo[" << i << "] primary telemkeys:"; logwrite( function, message.str() );
+                        ret = info != nullptr && info->telemkeys.primary().listkeys();
+                        message.str(""); message << "fitsinfo[" << i << "] extension systemkeys:"; logwrite( function, message.str() );
+                        ret = info != nullptr && info->systemkeys.extension().listkeys();
+                        message.str(""); message << "fitsinfo[" << i << "] extension telemkeys:"; logwrite( function, message.str() );
+                        ret = info != nullptr && info->telemkeys.extension().listkeys();
+                        message.str(""); message << "fitsinfo[" << i << "] extension userkeys:"; logwrite( function, message.str() );
+                        ret = info != nullptr && info->userkeys.extension().listkeys();
+                        if ( info != nullptr ) break; // one expbuf is enough
+                      }
+                      message.str(""); message << "extension userkeys:"; logwrite( function, message.str() );
+                      ret = server.camera_info.userkeys.primary().listkeys();
+//                    logwrite( function, "userkeys:" ); ret = server.camera_info.userkeys.listkeys();
                     }
                     else {
-                      ret = server.camera_info.userkeys.addkey(args);
-                      if ( ret != NO_ERROR ) server.camera.log_error( function, "bad syntax" );
+                      ret = server.camera_info.userkeys.primary().addkey(args);
+//                    server.fitsinfo[0]->telemkeys.primary().addkey( "FOO", true, "test telemetry primary key" );
+//                    for ( auto &info : server.fitsinfo ) ret = info->userkeys.extension().addkey( args );
+//                    if ( ret != NO_ERROR ) server.camera.log_error( function, "bad syntax" );
                     }
                     }
     else
-    if (cmd.compare( CAMERAD_NATIVE )==0) {
+    if ( cmd == CAMERAD_NATIVE ) {
                     ret = server.native(args, retstring);  // @todo make this work with Archon
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
 #ifdef ASTROCAM
     else
-    if (cmd.compare( CAMERAD_MODEXPTIME )==0) {
+    if ( cmd == CAMERAD_MODEXPTIME ) {
                     ret = server.modify_exptime(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_PAUSE )==0) {
+    if ( cmd == CAMERAD_PAUSE ) {
                     ret = server.native( "PEX" );
                     }
     else
-    if (cmd.compare( CAMERAD_RESUME )==0) {
+    if ( cmd == CAMERAD_RESUME ) {
                     ret = server.native( "REX" );
                     }
     else
-    if (cmd.compare( CAMERAD_ABORT )==0) {
+    if ( cmd == CAMERAD_ABORT ) {
                     server.camera_info.abortexposure=true;
                     server.camera.abort();
+                    server.abort();
                     ret = 0;
                     }
     else
-    if (cmd.compare( CAMERAD_ISOPEN )==0) {
+    if ( cmd == CAMERAD_ISOPEN ) {
                     ret = server.is_connected( retstring );
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_USEFRAMES )==0) {
+    if ( cmd == CAMERAD_USEFRAMES ) {
                     ret = server.access_useframes(args);
                     if (!args.empty()) { sock.Write(args); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_FRAMETRANSFER )==0) {
+    if ( cmd == CAMERAD_FRAMETRANSFER ) {
                     ret = server.frame_transfer_mode(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_GEOMETRY )==0) {
+    if ( cmd == CAMERAD_GEOMETRY ) {
                     ret = server.geometry(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_BUFFER )==0) {
+    if ( cmd == CAMERAD_BUFFER ) {
                     ret = server.buffer(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_IMSIZE )==0) {
+    if ( cmd == CAMERAD_IMSIZE ) {
                     ret = server.image_size(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_READOUT )==0) {
+    if ( cmd == CAMERAD_READOUT ) {
                     ret = server.readout(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
 #endif
 #ifdef STA_ARCHON
     else
-    if (cmd.compare("roi")==0) {
+    if ( cmd == "roi" ) {
                     ret = server.region_of_interest( args, retstring );
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("isloaded")==0) {
+    if ( cmd == "isloaded" ) {
                     retstring = server.firmwareloaded ? "true" : "false";
                     sock.Write(retstring);
                     sock.Write(" ");
                     ret = NO_ERROR;
                     }
     else
-    if (cmd.compare("mode")==0) {
+    if ( cmd == "mode" ) {
                     if (args.empty()) {     // no argument means asking for current mode
                       if (server.modeselected) {
                         ret=NO_ERROR;
@@ -631,73 +650,73 @@ void doit(Network::TcpSocket &sock) {
                     else ret = server.set_camera_mode(args);
                     }
     else
-    if (cmd.compare("getp")==0) {
+    if ( cmd == "getp" ) {
                     ret = server.get_parameter(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("setp")==0) {
+    if ( cmd == "setp" ) {
                     ret = server.set_parameter(args);
                     }
     else
-    if (cmd.compare("loadtiming")==0) {
+    if ( cmd == "loadtiming" ) {
                     if (args.empty()) ret = server.load_timing(retstring);
                     else              ret = server.load_timing(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("inreg")==0) {
+    if ( cmd == "inreg" ) {
                     ret = server.inreg(args);
                     }
     else
-    if (cmd.compare("printstatus")==0) {
+    if ( cmd == "printstatus" ) {
                     ret = server.get_frame_status();
                     if (ret==NO_ERROR) server.print_frame_status();
                     }
     else
-    if (cmd.compare("readframe")==0) {
+    if ( cmd == "readframe" ) {
                     ret = server.read_frame();
                     }
     else
-    if (cmd.compare("writeframe")==0) {
+    if ( cmd == "writeframe" ) {
                     ret = server.write_frame();
                     }
     else
-    if (cmd.compare("cds")==0) {
+    if ( cmd == "cds" ) {
                     ret = server.cds(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("heater")==0) {
+    if ( cmd == "heater" ) {
                     ret = server.heater(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("sensor")==0) {
+    if ( cmd == "sensor" ) {
                     ret = server.sensor(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("longexposure")==0) {
+    if ( cmd == "longexposure" ) {
                     ret = server.longexposure(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("hdrshift")==0) {
+    if ( cmd == "hdrshift" ) {
                     ret = server.hdrshift(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare("trigin")==0) {
+    if ( cmd == "trigin" ) {
                     ret = server.trigin(args);
                     }
 #endif
     else
-    if (cmd.compare( CAMERAD_EXPOSE )==0) {
+    if ( cmd == CAMERAD_EXPOSE ) {
                     ret = server.expose(args);
                     }
     else
-    if (cmd.compare( CAMERAD_EXPTIME )==0) {
+    if ( cmd == CAMERAD_EXPTIME ) {
                     // Neither controller allows fractional exposure times
                     // so catch that here.
                     //
@@ -713,23 +732,28 @@ void doit(Network::TcpSocket &sock) {
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_BIAS )==0) {
+    if ( cmd == CAMERAD_BIAS ) {
                     ret = server.bias(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
-    if (cmd.compare( CAMERAD_ECHO )==0) {
+    if ( cmd == CAMERAD_BIN ) {
+                    ret = server.bin( args, retstring );
+                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
+                    }
+    else
+    if ( cmd == CAMERAD_ECHO ) {
                     sock.Write(args);
                     sock.Write("\n");
                     }
     else
-    if (cmd.compare( CAMERAD_INTERFACE )==0) {
+    if ( cmd == CAMERAD_INTERFACE ) {
                     ret = server.interface(retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
                     }
     else
-    if (cmd.compare( CAMERAD_TEST )==0) {
+    if ( cmd == CAMERAD_TEST ) {
                     ret = server.test(args, retstring);
                     if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }

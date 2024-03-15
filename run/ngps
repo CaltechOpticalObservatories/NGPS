@@ -9,10 +9,50 @@
 # @return: none
 #
 usage() {
-	echo "Usage:"
-	echo "	ngps start | stop | reload <module> [ <module> ... ]"
+	echo -e "\033[1mUsage:\033[0m"
+	echo -e "	ngps start | stop | kill [ \e[3m<module>\e[0m ... ]"
 	echo "	ngps status"
 	echo "	ngps list"
+	echo "	ngps help"
+	echo ""
+	exit
+}
+
+# @fn:     help
+# @brief:  displays long form help
+# @param:  none
+# @return: none
+#
+help() {
+	echo -e "\033[1mHelp:\033[0m"
+	echo -e "	ngps start | stop | kill [ \e[3m<module>\e[0m ... ] : starts/stops/kills all (default) or specified module(s)"
+	echo "	ngps status                               : show run state of modules"
+	echo "	ngps list                                 : list all available modules"
+	echo "	ngps help                                 : this help"
+	echo ""
+	echo "	\"stop\" will attempt to exit the module(s) gracefully"
+	echo "	\"kill\" will kill the module process(es) and can be used in case a module fails to stop"
+	echo ""
+	echo -e "\033[1mOther commands:\033[0m"
+	echo -e "	listen [ \e[3m<key>\e[0m ]  : listen to asynchronous messages (in current terminal). Filter by optional \e[3m<key>\e[0m"
+	echo -e "	xlisten [ \e[3m<key>\e[0m ] : open an xterm to listen to asynchronous message. Filter by optional \e[3m<key>\e[0m"
+	echo "	colorlog          : monitor today's (UTC) log files (in current terminal)"
+	echo "	xcolorlog         : open an xterm to monitor today's (UTC) log files"
+	echo "	ngps-observe      : start observing GUI"
+	echo "	ngps-plan         : start planning tool GUI"
+	echo ""
+	echo -e "\033[1mCommands to communicate with modules:\033[0m"
+	echo "	acam"
+	echo "	calib"
+	echo "	camera"
+	echo "	power"
+	echo "	seq"
+	echo "	slit"
+	echo "	tcs"
+	echo "	thermal"
+	echo ""
+	echo "	when module is running, add \"help\" or \"?\" for more help on each command,"
+	echo -e "	\e[3mE.G.\e[0m \"seq help\" or \"acam ?\""
 	echo ""
 	exit
 }
@@ -30,7 +70,7 @@ start_proc( ) {
 	fproc=$(eval "pgrep -f $2")
 	nproc=$(eval "pgrep -c -f $2")
 	if [ $nproc -gt 0 ]; then
-		echo "$1 already running with PID $fproc"
+		echo -e "\033[3m$1 already running with\033[0m PID $fproc"
 		return 1
 	fi
 
@@ -48,14 +88,70 @@ start_proc( ) {
 		echo "error starting $1"
 		return 0
 	else
-		echo "$1 running"
+		echo -e "\033[1m$1 running\033[0m"
 		return 1
 	fi
 }
 
+# @fn:      all_proc
+# @brief:   used to stop all processes
+# @param:   $1 = what to do, "killing" | "exiting"
+# @return:  none
+# @details: "exiting" will send the "exit" command to all daemons
+#           "killing" will kill all remaining daemons
+#
+all_proc( ) {
+	for i in "${!PROCS[@]}"; do
+		running=$(eval "pgrep -c -f ${PROCS[$i]}")
+		if [ $running -gt 0 ]; then
+			echo -n $1" "${PROCNAMES[$i]}
+			[ "$1" == "exiting" ] && { result=$(eval "${PROCSOCK[$i]} exit" 2>&1);echo ""; }
+			[ "$1" == "killing" ] && { $(eval "pkill -f ${PROCS[$i]}"); echo ""; }
+			[ "$1" == "ERROR" ] && echo " was not stopped"
+		fi
+	done
+}
+
+# @fn:      select_proc
+# @brief:   used to stop select processes
+# @param:   $1 = what to do, "killing" | "exiting" | "ERROR"
+# @return:  none
+# @details: "exiting" will send the "exit" command to all daemons
+#           "killing" will kill all remaining daemons
+#           "ERROR" will print an error if exiting and killing can't stop the process
+#
+select_proc( ) {
+	what_to_do="$1"
+	shift
+	for procname in "$@"
+	do
+		namefound="false"
+
+		# Search all $PROCNAMES for the specified $procname and
+		# if running then kill only that one.
+		#
+		for i in "${!PROCNAMES[@]}"; do
+			if [ $procname == "${PROCNAMES[$i]}" ]; then
+				running=$(eval "pgrep -c -f ${PROCS[$i]}")
+				namefound="true"
+				if [ $running -gt 0 ]; then
+					echo -n $what_to_do" "$procname
+					[ "$what_to_do" == "exiting" ] && { result=$(eval "${PROCSOCK[$i]} exit" 2>&1); echo ""; }
+					[ "$what_to_do" == "killing" ] && { $(eval "pkill -f ${PROCS[$i]}"); echo ""; }
+					[ "$what_to_do" == "ERROR" ] && echo " was not stopped"
+				fi
+			fi
+		done
+
+		if [ "$namefound" == "false" ]; then
+			echo "ERROR: unrecognized module: "$procname
+		fi
+	done
+}
+
 # Get the fully qualified paths for each process and their config files here
 #
-source ~/Software/run/ngps-config
+source /home/developer/Software/run/ngps-config
 
 # Arrays of all processes, their associated names, and their associated config files
 # These two arrays must be aligned!
@@ -70,8 +166,11 @@ DAEMON=" -d"
 
 if [ "$1" == "start" ]; then
 	shift
+	# If no arg supplied then start all
 	if [ $# == 0 ]; then
-		usage
+		for i in "${!PROCS[@]}"; do
+			start_proc ${PROCNAMES[$i]} ${PROCS[$i]} ${CONFIGS[$i]}
+		done
 	fi
 
 	for procname in "$@"
@@ -81,13 +180,6 @@ if [ "$1" == "start" ]; then
 		#
 		if [ "$procname" == "--no-daemon" ]; then
 			DAEMON=""
-
-		# For "start all" loop through all $PROCS and start each one.
-		#
-		elif [ "$procname" == "all" ]; then
-			for i in "${!PROCS[@]}"; do
-				start_proc ${PROCNAMES[$i]} ${PROCS[$i]} ${CONFIGS[$i]}
-			done
 
 		# Otherwise, search the $PROCNAMES array for the specified procname
 		# and start only that one.
@@ -110,44 +202,37 @@ if [ "$1" == "start" ]; then
 
 elif [ "$1" == "stop" ]; then
 	shift
-	for procname in "$@"
-	do
-		# For "stop all" loop through all $PROCS
-		# If running then kill it.
-		#
-		if [ "$procname" == "all" ]; then
-			for i in "${!PROCS[@]}"; do
-				running=$(eval "pgrep -c -f ${PROCS[$i]}")
-				if [ $running -gt 0 ]; then
-					echo "killing "${PROCNAMES[$i]}
-					$(eval "pkill -f ${PROCS[$i]}")
-				fi
-			done
-			exit 0
+	# If no arg supplied then stop all
+	#
+	if [ $# == 0 ]; then
+		all_proc "exiting"
+		all_proc "killing"
+		all_proc "ERROR"
+		exit 0
+	fi
 
-		# Otherwise search all $PROCNAMES for the specified $procname
-		# If running then kill only that one.
-		#
-		else
-			namefound="false"
+	# Otherwise iterate through the list of supplied procname(s)
+	#
+	select_proc "exiting" $@
+	select_proc "killing" $@
+	select_proc "ERROR" $@
+	exit 0
 
-			for i in "${!PROCNAMES[@]}"; do
-				if [ $procname == "${PROCNAMES[$i]}" ]; then
-					running=$(eval "pgrep -c -f ${PROCS[$i]}")
-					namefound="true"
-					if [ $running -gt 0 ]; then
-						echo "killing "$procname
-						$(eval "pkill -f ${PROCS[$i]}")
-					fi
-				fi
-			done
+elif [ "$1" == "kill" ]; then
+	shift
+	# If no arg supplied then kill all
+	#
+	if [ $# == 0 ]; then
+		all_proc "killing"
+		all_proc "ERROR"
+		exit 0
+	fi
 
-			if [ "$namefound" == "false" ]; then
-				echo "ERROR: unrecognized module: "$procname
-			fi
-		fi
-
-	done
+	# Otherwise iterate through the list of supplied procname(s)
+	#
+	select_proc "killing" $@
+	select_proc "ERROR" $@
+	exit 0
 
 elif [ "$1" == "status" ]; then
 	shift
@@ -155,19 +240,20 @@ elif [ "$1" == "status" ]; then
 		running=$(eval "pgrep -c -f ${PROCS[$i]}")
 		procid=$(eval "pgrep -f ${PROCS[$i]}")
 		if [ $running -gt 0 ]; then
-			echo "  ${PROCNAMES[$i]} is running with pid $procid"
+			echo -e "\033[1m  ${PROCNAMES[$i]} is running with pid $procid\033[0m"
 		else
-			echo "* ${PROCNAMES[$i]} is not running"
+			echo -e "* ${PROCNAMES[$i]} is not running"
 		fi
 	done
 
 elif [ "$1" == "list" ]; then
-	echo "recognized modules:"
-	echo "	all"
+	echo -e "\033[1mrecognized modules:\033[0m"
 	for name in "${PROCNAMES[@]}"; do
 		echo "	$name"
 	done
 	exit
+elif [ "$1" == "help" ]; then
+	help
 else
 	usage
 fi

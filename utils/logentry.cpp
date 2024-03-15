@@ -76,13 +76,58 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
   try {
     filestream.open(filename.str(), std::ios_base::app);
   }
-  catch(...) {
-    message << "ERROR: opening log file " << filename.str() << ": " << std::strerror(errno);
+  catch ( const std::filesystem::filesystem_error& e ) {
+    message.str(""); message << "ERROR " << filename.str() << ": " << e.what() << ": " << e.code().value();
     logwrite(function, message.str());
     return 1;
   }
+  catch(...) {
+    message.str(""); message << "ERROR: opening log file " << filename.str() << ": " << std::strerror(errno);
+    logwrite(function, message.str());
+    return 1;
+  }
+
+  // If I am the owner then make sure the permissions are set correctly.
+  // Only the owner can change permissions. Even if I have write access,
+  // if I'm not the owner then I can't change the permissions.
+  //
+  if ( is_owner( filename.str() ) ) {
+    try {
+      // remove all permissions
+      //
+      std::filesystem::permissions( filename.str(),
+                                    std::filesystem::perms::all,
+                                    std::filesystem::perm_options::remove
+                                  );
+
+      // add back permissions rw-rw-r-- (664)
+      //
+      std::filesystem::permissions( filename.str(),
+                                    std::filesystem::perms::owner_read  |
+                                    std::filesystem::perms::owner_write |
+                                    std::filesystem::perms::group_read  |
+                                    std::filesystem::perms::group_write |
+                                    std::filesystem::perms::others_read,
+                                    std::filesystem::perm_options::add
+                                  );
+    }
+    catch ( const std::filesystem::filesystem_error& e ) {
+      message.str(""); message << "ERROR " << filename.str() << ": " << e.what() << ": " << e.code().value();
+      logwrite(function, message.str());
+      return 1;
+    }
+  }
+
+  // If I do not have write permission then that is a fatal error
+  //
+  if ( ! has_write_permission( filename.str() ) ) {
+    message.str(""); message << "ERROR: no write permission for log file " << filename.str();
+    logwrite(function, message.str());
+    return 1;
+  }
+
   if ( ! filestream.is_open() ) {
-    message << "ERROR: log file " << filename.str() << " not open";
+    message.str(""); message << "ERROR: log file " << filename.str() << " not open";
     logwrite(function, message.str());
     return 1;
   }
@@ -101,6 +146,7 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
  */
 void close_log() {
   if (filestream.is_open() == true) {
+    std::cerr << std::flush;
     filestream.flush();
     filestream.close();
   }

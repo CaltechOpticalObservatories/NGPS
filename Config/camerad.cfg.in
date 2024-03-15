@@ -15,45 +15,78 @@ ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
 DAEMON=no                        # run as a daemon? {yes,no}
 
 # -----------------------------------------------------------------------------
+# The following are for simulated ARC controllers
+#ARCSIM_NUMDEV=4
+
+# -----------------------------------------------------------------------------
 # Each camera controller is defined by
 # CONTROLLER=(PCIDEV CHAN FT FIRMWARE)
-# where PCIDEV    is the PCI device number {0,1,2,3}
-#       CHAN      is the spectrographic channel {U,R,I,G}
+# where PCIDEV    the PCI device number {0,1,2,3}
+#       CHAN      the channel name {U,R,I,G}
 #       CCDID     CCD Identifier (E.G. serial number, name, etc.)
-#       FT        is {yes|no} to indicate if Frame Transfer is supported
-#       FIRMWARE  is the default firmware to load
-#       READOUT   is the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
+#       FT        {yes|no} indicates Frame Transfer is supported (doesn't enable it)
+#       FIRMWARE  the default firmware to load
+#       READOUT   the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
+### I CHANNEL LODFILE HAS BEEN CHANGED FOR DEBUGGING  --CHAZ
+#CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
+#CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
+CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
+#CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
 
-# IMAGE_SIZE=(CHAN COLS ROWS OSCOLS OSROWS SKIPROWS)
+# -----------------------------------------------------------------------------
+# This defines the default image size and binning for each controller.
+#
+# IMAGE_SIZE=(CHAN COLS ROWS OSCOLS OSROWS BINROWS BINCOLS)
+#
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
 #       ROWS      number of rows in image
 #       COLS      number of columns in image
 #       OSROWS    number of overscan rows
 #       OSCOLS    number of overscan columns
-#       SKIPROWS  number of rows to skip before reading ROWS (not currently supported)
+#       BINROWS   binning rows
+#       BINCOLS   binning cols
 #
-IMAGE_SIZE=(I 2040 4114 10 50 0)
-IMAGE_SIZE=(R 1020 4114 10 50 0)
-# -----------------------------------------------------------------------------
+IMAGE_SIZE=(I 1020 4114 10 50 1 1)
+IMAGE_SIZE=(R 1020 4114 10 50 1 1)
 
+# -----------------------------------------------------------------------------
+# Detector orientation of ROWS/COLS with respect to X,Y axes
+# DET_ORIENTATION=(CHAN X Y)
+# where CHAN      must correspond to a CHAN defined in CONTROLLER key above
+#       X         is {ROW,COL} for the x-axis
+#       Y         is {ROW,COL} for the y-axis
+#
+DET_ORIENTATION=(I COL ROW)
+DET_ORIENTATION=(R COL ROW)
+DET_ORIENTATION=(G COL ROW)
+DET_ORIENTATION=(U ROW COL)
+
+# -----------------------------------------------------------------------------
+# Optional axis labels. If not specified then the x-axis is named "X"
+# and the y-axis is named "Y". Must not contain spaces.
+#
+#   AXIS_LABEL_X= <label for x-axis>
+#   AXIS_LABEL_Y= <label for y-axis>
+#
+DET_AXIS_LABEL_X=spec
+DET_AXIS_LABEL_Y=spat
+
+# -----------------------------------------------------------------------------
 # Disabling the BONN_SHUTTER is only for when the Bonn shutter is not present.
 # Under normal operations this should be set to yes.  When set to no then no
 # attempt will be made to initialize or communicate with the shutter.
 #
-BONN_SHUTTER=no
+BONN_SHUTTER=yes
 
+# -----------------------------------------------------------------------------
 # An external shutter trigger can be enabled. If EXT_SHUTTER is yes, then
 # openshutter/closeshutter commands will be sent to the ARC controller
 # at the start/stop of each exposure to operate the controller's shutter
 # trigger. This works independently of the state of BONN_SHUTTER.
 #
-EXT_SHUTTER=yes
-
-# The following are for simulated ARC controllers
-#ARCSIM_NUMDEV=4
+EXT_SHUTTER=no
 
 # -----------------------------------------------------------------------------
 # Constant FITS header keywords, added to every FITS file, grouped
@@ -80,4 +113,4 @@ CONSTKEY_EXT=(WCSNAMEA SPECTRUM)
 CONSTKEY_EXT=(WCSNAME DISPLAY)
 CONSTKEY_EXT=(PCOUNT 0)
 CONSTKEY_EXT=(GCOUNT 1)
-# -----------------------------------------------------------------------------
+

@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 #
-# @file     calib
-# @brief    provides a command line interface for calibd
+# @file     flexure
+# @brief    provides a command line interface for flexured
 #
 
 source /home/developer/Software/run/ngps-config
-source $CALIBD_CONFIG
+source $FLEXURED_CONFIG
 
 command=""
 while [ $# -gt 0 ]

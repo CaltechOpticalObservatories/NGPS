@@ -4,7 +4,8 @@
 # @brief    provides a command line interface for tcsd
 #
 
-source $HOME/Software/Config/tcsd.cfg
+source /home/developer/Software/run/ngps-config
+source $TCSD_CONFIG
 
 command=""
 while [ $# -gt 0 ]

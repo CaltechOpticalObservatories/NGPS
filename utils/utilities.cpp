@@ -673,3 +673,21 @@ std::string zone="";   ///< time zone
     return 0;
   }
   /***** md5_file *************************************************************/
+
+  bool is_owner( const std::filesystem::path &filename ) {
+    struct stat fstat;
+    if ( stat( filename.c_str(), &fstat ) == 0 ) {
+      // Check if the effective user ID matches the file's owner ID
+      return geteuid() == fstat.st_uid;
+    }
+    return false;  // Error handling: Unable to get file information
+  }
+
+  bool has_write_permission( const std::filesystem::path &filename ) {
+    struct stat fstat;
+    if ( stat( filename.c_str(), &fstat ) == 0 ) {
+      // Check if the effective user ID has write permission
+      return fstat.st_mode & S_IWUSR;
+    }
+    return false;  // Error handling: Unable to get file information
+  }

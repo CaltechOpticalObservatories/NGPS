@@ -18,6 +18,7 @@ add_library(utilities STATIC
 add_library(logentry STATIC
         ${PROJECT_UTILS_DIR}/logentry.cpp
         )
+target_link_libraries( logentry stdc++fs )
 
 add_library(network STATIC
         ${PROJECT_UTILS_DIR}/network.cpp

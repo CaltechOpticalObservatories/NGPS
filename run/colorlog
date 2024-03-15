@@ -27,7 +27,9 @@ FILES="-f $DIR/acamd_$DATE.log \
        -f $DIR/thermald_$DATE.log \
        -f $DIR/sequencerd_$DATE.log "
 
-touch $FILES
+# temporarily change the umask and touch the log files
+#
+( umask 0002; touch $FILES )
 
 # tail them all here
 # look for various key words to set various colors

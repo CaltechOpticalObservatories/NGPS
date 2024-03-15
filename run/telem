@@ -4,7 +4,8 @@
 # @brief    provides a command line interface for telemd
 #
 
-source $HOME/Software/Config/telemd.cfg
+source /home/developer/Software/run/ngps-config
+source $TELEMD_CONFIG
 
 command=""
 while [ $# -gt 0 ]

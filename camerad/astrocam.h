@@ -592,13 +592,16 @@ namespace AstroCam {
 
     public:
       Interface();
-      ~Interface();
 
       // Class Objects
       //
       Config config;
       Camera::Camera camera;            /// instantiate a Camera object
       Camera::Information camera_info;  /// this is the main camera_info object
+
+// vector of pointers to Camera Information containers, one for each exposure number
+//
+std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       // The frameinfo structure holds frame information for each frame
       // received by the callback. This is used to keep track of all the 
@@ -627,6 +630,43 @@ namespace AstroCam {
       inline int get_framethread_count();
       inline void init_framethread_count();
 
+      inline bool camera_idle( int dev ) {
+        int num=0;
+        num += ( this->controller[dev].in_readout ? 1 : 0 );
+        num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+        std::lock_guard<std::mutex> lock( this->epend_mutex );
+        num += this->exposures_pending.size();
+        return ( num>0 ? false : true );
+      }
+
+      inline bool camera_idle() {
+        int num=0;
+        for ( auto dev : this->devlist ) {
+          num += ( this->controller[dev].in_readout ? 1 : 0 );
+          num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+        }
+        std::lock_guard<std::mutex> lock( this->epend_mutex );
+        num += this->exposures_pending.size();
+        return ( num>0 ? false : true );
+      }
+
+      inline bool in_readout() {
+        int num=0;
+        for ( auto dev : this->devlist ) {
+          num += ( this->controller[dev].in_readout ? 1 : 0 );
+          num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+        }
+        return( num==0 ? false : true );
+      }
+
+      inline bool in_frametransfer() {
+        int num=0;
+        for ( auto dev : this->devlist ) {
+          num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+        }
+        return( num==0 ? false : true );
+      }
+
       inline void inc_expbuf() {
         std::lock_guard<std::mutex> lock( _expbuf_mutex );
         _expbuf = ( ( ++_expbuf >= NUM_EXPBUF ) ? 0 : _expbuf );
@@ -637,6 +677,12 @@ namespace AstroCam {
         std::lock_guard<std::mutex> lock( _expbuf_mutex );
         return _expbuf;
       }
+
+      std::atomic<bool> state_monitor_thread_running;
+      std::condition_variable state_monitor_condition;
+      std::mutex state_lock;
+      static void state_monitor_thread( Interface &interface );
+
 
       /*
        * exposure pending stuff
@@ -783,16 +829,18 @@ namespace AstroCam {
         public:
           Controller();                 //!< class constructor
           ~Controller() { };            //!< no deconstructor
-          Camera::Information info;     //!< this is the main controller info object
-          Common::FitsKeys prikeys;     //!< create a FitsKeys object for system FITS keys for primary HDU
-          Common::FitsKeys extkeys;     //!< create a FitsKeys object for system FITS keys for extensions
-          FITS_file *pFits;             //!< FITS container object has to be a pointer here
+          Camera::Information info;     //!< camera info object for this controller
+//        FITS_file *pFits;             //!< FITS container object has to be a pointer here (OBSOLETE)
           void* workbuf;                //!< pointer to workspace for performing deinterlacing
 
           /**
            * @var     expinfo
            * @brief   vector of Camera::Information class, one for each exposure buffer
-           * @details this contains the camera
+           * @details This contains the camera information for each exposure buffer.
+           *          Note that since Camera::Information contains extkeys and prikeys objects,
+           *          expinfo will contain those objects, but prikeys should not be used.
+           *          Use only Controller::expinfo.extkeys because keys specific to a given
+           *          controller will be added to that controller's extension.
            */
           std::vector<Camera::Information> expinfo;
 
@@ -801,11 +849,13 @@ namespace AstroCam {
           int cols;                        //!< total number of columns read (includes overscan)
           int rows;                        //!< total number of rows read (includes overscan)
 
-          int imcols;                      //!< number of columns in image area
-          int imrows;                      //!< number of rows in image area
+          // These are detector image geometry values for each device,
+          // unaffected by binning.
+          //
+          int detcols;                     //!< number of detector columns (unchanged by binning)
+          int detrows;                     //!< number of detector rows (unchanged by binning)
           int oscols;                      //!< number of overscan rows
           int osrows;                      //!< number of overscan columns
-          int skiprows;                    //!< number of rows to skip before reading ROWS (not currently supported)
 
           arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
@@ -821,8 +871,8 @@ namespace AstroCam {
           uint32_t readout_arg;
 
           bool have_ft;                    //!< Do I have (and am I using) frame transfer?
-          bool in_readout;                 //!< Is the controller currently reading out/transmitting pixels?
-          bool in_frametransfer;           //!< Is the controller currently performing a frame transfer?
+          std::atomic<bool> in_readout;    //!< Is the controller currently reading out/transmitting pixels?
+          std::atomic<bool> in_frametransfer;  //!< Is the controller currently performing a frame transfer?
 
           // Functions
           //
@@ -878,10 +928,15 @@ namespace AstroCam {
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
       long test(std::string args, std::string &retstring);                 ///< test routines
       long interface(std::string &iface);                                  ///< returns the interface
+      long do_abort();                                                     ///< 
+      long abort();                                                        ///< 
+      long do_bin( std::string args, std::string &retstring );             ///< set/get binning factor
+      long bin( std::string args, std::string &retstring );                ///< set/get binning factor
       long do_connect_controller(std::string devices_in, std::string &retstring); ///< opens a connection to the PCI/e device(s)
       long connect_controller(std::string devices_in, std::string &help);  ///< wrapper for do_connect_controller
       long is_connected( std::string &retstring );                         ///< are all selected controllers connected?
-      long do_disconnect_controller();                                     ///< closes the connection to the PCI/e device(s)
+      long do_disconnect_controller( int dev );                            ///< closes the connection to the named PCI/e device
+      long do_disconnect_controller();                                     ///< closes the connection to all PCI/e devices
       long disconnect_controller();                                        ///< wrapper for do_disconnect_controller
       long do_configure_controller();                                      ///< perform initial configuration of controller from .cfg file
       long configure_controller();                                         ///< wrapper for do_configure_controller
@@ -898,6 +953,7 @@ namespace AstroCam {
       long modify_exptime( std::string exptime_in, std::string &retstring );
       long do_modify_exptime( std::string exptime_in, std::string &retstring );
       long shutter(std::string shutter_in, std::string& shutter_out);
+      long frame_transfer_mode( std::string args );
       long frame_transfer_mode( std::string args, std::string &retstring );
       long image_size( std::string args, std::string &retstring );
       long geometry(std::string args, std::string &retstring);

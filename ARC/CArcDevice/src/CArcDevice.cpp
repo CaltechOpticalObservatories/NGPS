@@ -1650,17 +1650,11 @@ namespace arc
 				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
 			}
 
-//			std::cerr << "[ARC_API] done reading image " << uiPCIFrameCount << " on dev " << devnum << "\n";
-
 			uiPCIFrameCount = getFrameCount();
 
 			// Call external deinterlace and fits file functions here
 			if ( pCooExpIFace != nullptr )
 			{
-//				std::cerr << "[ARC_API] calling frameCallback with devnum=" << devnum 
-//					  << " uiFPBCount=" << uiFPBCount 
-//					  << " uiPCIFrameCount=" << uiPCIFrameCount 
-//					  << " uiRows=" << uiRows << " uiCols=" << uiCols << "\n";
 				pCooExpIFace->frameCallback( 0, devnum, 
 							  uiFPBCount,
 							  uiPCIFrameCount,
@@ -1698,15 +1692,22 @@ namespace arc
 			std::uint32_t uiImageSize         	= uiRows * uiCols * sizeof( std::uint16_t );
 			std::uint32_t uiBoundedImageSize  	= getContinuousImageSize( uiImageSize );
 
+			std::cerr << "\n(arc::gen3::CArcDevice::readout) expbuf:" << expbuf << " devnum:" << devnum << "\n";
+
 			//
 			// Check for adequate buffer size
 			//
 			if ( ( static_cast<std::uint64_t>( uiRows ) * static_cast< std::uint64_t >( uiCols ) * sizeof( std::uint16_t ) ) > commonBufferSize() )
 			{
+				std::cerr << "(arc::gen3::CArcDevice::readout) devnum " << devnum
+					<< " Image [" << uiCols << "x" << uiRows << "] exceeds buffer size: " << commonBufferSize() << "\n";
 				THROW( "(arc::gen3::CArcDevice::readout) Image [ %u x %u ] exceeds buffer size: %u. Try ReMapCommonBuffer().", uiCols, uiRows, commonBufferSize() );
 			}
 
-			if ( isReadout() ) THROW( "(arc::gen3::CArcDevice::readout) already in readout" );
+			if ( isReadout() ) {
+				std::cerr << "(arc::gen3::CArcDevice::readout) devnum " << devnum << " already in readout\n";
+				THROW( "(arc::gen3::CArcDevice::readout) already in readout" );
+			}
 
 			//
 			// Start the readout
@@ -1715,8 +1716,11 @@ namespace arc
 
 			if ( uiRetVal != DON )
 			{
+				std::cerr << "(arc::gen3::CArcDevice::readout) devnum " << devnum << " start readout command failed\n";
 				THROW( "(arc::gen3::CArcDevice::readout) Start readout command failed. Reply: 0x%X", uiRetVal );
 			}
+
+			uiPixelCount     = getPixelCount();
 
 			while ( uiPixelCount < ( uiRows * uiCols ) )
 			{
@@ -1736,12 +1740,14 @@ namespace arc
 				if ( containsError( uiPixelCount ) )
 				{
 					stopExposure();
+					std::cerr << "(arc::gen3::CArcDevice::readout) devnum " << devnum << " failed to read pixel count\n";
 					THROW( "(arc::gen3::CArcDevice::readout) Failed to read pixel count!" );
 				}
 
 				if ( bAbort )
 				{
 					stopExposure();
+					std::cerr << "(arc::gen3::CArcDevice::readout) devnum " << devnum << " aborted\n";
 					THROW( "(arc::gen3::CArcDevice::readout) aborted" );
 				}
 
@@ -1765,23 +1771,18 @@ namespace arc
 				if ( uiTimeoutCounter >= READ_TIMEOUT )
 				{
 					stopExposure();
+					std::cerr << "(arc::gen3::CArcDevice::readout) devnum " << devnum << " read timeout\n";
 					THROW( "(arc::gen3::CArcDevice::readout) Read timeout!" );
 				}
 
 				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
 			}
 
-//			std::cerr << "[ARC_API] done reading image " << uiPCIFrameCount << " on dev " << devnum << "\n";
-
 			uiPCIFrameCount = getFrameCount();
 
 			// Call external deinterlace and fits file functions here
 			if ( pCooExpIFace != nullptr )
 			{
-//				std::cerr << "[ARC_API] calling frameCallback with devnum=" << devnum 
-//					  << " uiFPBCount=" << uiFPBCount 
-//					  << " uiPCIFrameCount=" << uiPCIFrameCount 
-//					  << " uiRows=" << uiRows << " uiCols=" << uiCols << "\n";
 				pCooExpIFace->frameCallback( expbuf,
 							  devnum,
 							  uiFPBCount,
@@ -1790,6 +1791,7 @@ namespace arc
 							  uiCols,
 							  commonBufferVA() );
 			}
+			return;
 		}
 
 
@@ -1809,6 +1811,7 @@ namespace arc
 
 			if ( uiRetVal != DON )
 			{
+				std::cerr << "\n(arc::gen3::CArcDevice::frame_transfer) Failed to set FrameTransferState for dev " << devnum << "\n";
 				THROW( "(arc::gen3::CArcDevice::frame_transfer) Failed to set FrameTransferState. reply: 0x%X", uiRetVal );
 			}
 
@@ -1818,6 +1821,7 @@ namespace arc
 
 			if ( uiRetVal != DON )
 			{
+				std::cerr << "\n(arc::gen3::CArcDevice::frame_transfer) Frame Transfer command (FRT) failed for dev " << devnum << "\n";
 				THROW( "(arc::gen3::CArcDevice::frame_transfer) Frame Transfer command (FRT) failed. Reply: 0x%X", uiRetVal );
 			}
 
@@ -1828,6 +1832,7 @@ namespace arc
 				FrameTransferState = command( { TIM_ID, RDM, ( Y_MEM | 0x25 ) } );
 				if ( FrameTransferState != 0 ) std::this_thread::sleep_for( std::chrono::microseconds( 1 ) );
 				if ( ++to > 10 ) {
+					std::cerr << "\n(arc::gen3::CArcDevice::frame_transfer) timeout exceeded waiting for Frame Transfer to end for dev " << devnum << "\n";
 					THROW( "(arc::gen3::CArcDevice::frame_transfer) timeout exceeded waiting for Frame Transfer to end" );
 				}
 			}
@@ -1841,6 +1846,9 @@ namespace arc
 
 				pCooExpIFace->ftCallback( expbuf, devnum );
 			}
+
+			std::cerr << "(arc::gen3::CArcDevice::frame_transfer) dev " << devnum << " returning\n";
+			return;
 		}
 
 

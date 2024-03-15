@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 #
-# @file     calib
-# @brief    provides a command line interface for calibd
+# @file     focus
+# @brief    provides a command line interface for focusd
 #
 
 source /home/developer/Software/run/ngps-config
-source $CALIBD_CONFIG
+source $FOCUSD_CONFIG
 
 command=""
 while [ $# -gt 0 ]

@@ -66,5 +66,6 @@ THERMALD_CONFIG="/home/developer/Software/Config/thermald.cfg"
 #
 PROCS=("$TELEMD" "$ACAMD" "$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$THERMALD" "$POWERD" "$SLITD" "$TCSD" "$SEQUENCERD")
 PROCNAMES=("telemd" "acamd" "calibd" "camerad" "flexured" "focusd" "thermald" "powerd" "slitd" "tcsd" "sequencerd")
+PROCSOCK=("" "acam" "calib" "camera" "" "" "thermal" "power" "slit" "tcs" "seq")
 CONFIGS=("$TELEMD_CONFIG" "$ACAMD_CONFIG" "$CALIBD_CONFIG" "$CAMERAD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" \
          "$THERMALD_CONFIG" "$POWERD_CONFIG" "$SLITD_CONFIG" "$TCSD_CONFIG" "$SEQUENCERD_CONFIG")

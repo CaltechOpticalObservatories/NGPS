@@ -4,7 +4,8 @@
 # @brief    provides a command line interface for acamd
 #
 
-source $HOME/Software/Config/acamd.cfg
+source /home/developer/Software/run/ngps-config
+source $ACAMD_CONFIG
 
 command=""
 while [ $# -gt 0 ]

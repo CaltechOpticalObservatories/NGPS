@@ -42,6 +42,7 @@ class FITS_file {
     std::atomic<int> framen;                        ///< internal frame counter for multi-extensions
     CCfits::ExtHDU* imageExt;                       ///< image extension header unit
     std::string fits_name;
+    enum class HDUTYPE { Primary, Extension };
 
   public:
     std::atomic<int> extension;
@@ -60,6 +61,8 @@ class FITS_file {
     };
 
 
+void foo ( HDUTYPE hdu ) { if ( hdu == HDUTYPE::Primary ); }
+
     /***** FITS_file::open_file ***********************************************/
     /**
      * @brief      opens a FITS file
@@ -72,6 +75,7 @@ class FITS_file {
      *
      */
     long open_file( bool writekeys, Camera::Information & info ) {
+this->foo(HDUTYPE::Primary);
       std::string function = "FITS_file::open_file";
       std::stringstream message;
 
@@ -129,23 +133,33 @@ class FITS_file {
 
         // Iterate through the system-defined FITS keyword databases and add them to the primary header.
         //
-        Common::FitsKeys::fits_key_t::iterator keyit;
-        for (keyit  = info.prikeys.keydb.begin();
-             keyit != info.prikeys.keydb.end();
-             keyit++) {
-          this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
+        logwrite( function, "writing systemkeys.primary() keys before exposure" );
+        for ( auto const &keydb : info.systemkeys.primary().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.systemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
+        logwrite( function, "writing telemkeys.primary() keys before exposure" );
+        for ( auto const &keydb : info.telemkeys.primary().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.telemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
+        logwrite( function, "writing userkeys.primary() keys before exposure" );
+        for ( auto const &keydb : info.userkeys.primary().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.userkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
         }
 
+/***
         // If specified, iterate through the user-defined FITS keyword databases and add them to the primary header.
         //
         if ( writekeys ) {
           logwrite( function, "writing user-defined keys before exposure" );
-          for (keyit  = info.userkeys.keydb.begin();
-               keyit != info.userkeys.keydb.end();
-               keyit++) {
-            this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
+          for ( auto const &keydb : info.userkeys.keydb ) {
+            message.str(""); message << "[DEBUG]: adding info.userkeys \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+            this->add_key( true, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
           }
         }
+***/
       }
       catch (CCfits::FITS::CantCreate){
         message.str(""); message << "ERROR: unable to open FITS file \"" << info.fits_name << "\"";
@@ -218,25 +232,26 @@ class FITS_file {
 
       // Iterate through the system-defined FITS keyword databases and add them to the primary header.
       //
-      Common::FitsKeys::fits_key_t::iterator keyit;
-      logwrite( function, "writing primary system keys after exposure" );
-      for (keyit  = info.prikeys.keydb.begin();
-           keyit != info.prikeys.keydb.end();
-           keyit++) {
-        this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
+      logwrite( function, "writing systemkeys.primary() keys after exposure" );
+      for ( auto const &keydb : info.systemkeys.primary().keydb ) {
+//      message.str(""); message << "[DEBUG]: adding info.systemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+        this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+      }
+      logwrite( function, "writing telemkeys.primary() keys after exposure" );
+      for ( auto const &keydb : info.telemkeys.primary().keydb ) {
+//      message.str(""); message << "[DEBUG]: adding info.telemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+        this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
       }
 
+/****
       // Write the user keys on close, if specified
       //
-      if ( true ) {
-        logwrite( function, "writing user-defined keys after exposure" );
-        Common::FitsKeys::fits_key_t::iterator keyit;
-        for (keyit  = info.userkeys.keydb.begin();
-             keyit != info.userkeys.keydb.end();
-             keyit++) {
-          this->add_key( true, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
-        }
+      logwrite( function, "writing user-defined keys after exposure" );
+      for ( auto const &keydb : info.userkeys.keydb ) {
+        message.str(""); message << "[DEBUG]: adding info.userkeys \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+        this->add_key( true, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
       }
+****/
 
       try {
         // Add a header keyword for the time the file was written (right now!)
@@ -536,7 +551,7 @@ class FITS_file {
 //      std::string extname = std::to_string( info.extension+1 );
 //      std::string extname = std::to_string( this->extension+1 );
 
-        std::string extname = info.extkeys.keydb["SPEC_ID"].keyvalue;
+        std::string extname = info.systemkeys.extension().keydb["SPEC_ID"].keyvalue;
 
         message.str(""); message << "adding " << axes[0] << " x " << axes[1] 
                                  << " frame to extension " << this->extension+1 << " (" << extname << ") in file " << self->fits_name;
@@ -553,11 +568,21 @@ class FITS_file {
           this->imageExt->addKey("BSCALE", 1, "scaling factor");
         }
 
-        Common::FitsKeys::fits_key_t::iterator keyit;
-        for ( keyit  = info.extkeys.keydb.begin();
-              keyit != info.extkeys.keydb.end();
-              keyit++ ) {
-          this->add_key( false, keyit->second.keyword, keyit->second.keytype, keyit->second.keyvalue, keyit->second.keycomment );
+        logwrite( function, "writing info.userkeys.extension");
+        for ( auto const &keydb : info.userkeys.extension().keydb ) {
+          this->add_key( HDUTYPE::Extension, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
+
+        logwrite( function, "writing info.telemkeys.extension");
+        for ( auto const &keydb : info.telemkeys.extension().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.telemkeys \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Extension, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
+
+        logwrite( function, "writing systemkeys.extension() keys" );
+        for ( auto const &keydb : info.systemkeys.extension().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.systemkeys.extension \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Extension, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
         }
 
         // Add AMPSEC keys
@@ -633,7 +658,7 @@ class FITS_file {
     /***** FITS_file::add_key *************************************************/
     /**
      * @brief      wrapper to write keywords to the FITS file header
-     * @param[in]  primary  boolean is true for primary, false for extension
+     * @param[in]  hdu      HDUTYPE enum specified Primary or Extension
      * @param[in]  keyword
      * @param[in]  type
      * @param[in]  value
@@ -642,12 +667,12 @@ class FITS_file {
      * Uses CCFits addKey template function, this wrapper ensures the correct type is passed.
      *
      */
-    void safe_add_key( bool primary, std::string keyword, std::string type, std::string value, std::string comment ) {
+    void safe_add_key( HDUTYPE hdu, std::string keyword, std::string type, std::string value, std::string comment ) {
       const std::lock_guard<std::mutex> lock(this->fits_mutex);
-      this->add_key( primary, keyword, type, value, comment );
+      this->add_key( hdu, keyword, type, value, comment );
       return;
     }
-    void add_key( bool primary, std::string keyword, std::string type, std::string value, std::string comment ) {
+    void add_key( HDUTYPE hdu, std::string keyword, std::string type, std::string value, std::string comment ) {
       std::string function = "FITS_file::add_key";
       std::stringstream message;
 
@@ -667,28 +692,28 @@ class FITS_file {
       try {
         if (type.compare("BOOL") == 0) {
           bool boolvalue = ( value == "T" ? true : false );
-          ( primary ? this->pFits->pHDU().addKey( keyword, boolvalue, comment )
-                    : this->imageExt->addKey( keyword, boolvalue, comment ) );
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey( keyword, boolvalue, comment )
+                                    : this->imageExt->addKey( keyword, boolvalue, comment ) );
         }
         else if (type.compare("INT") == 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, std::stoi(value), comment)
-                    : this->imageExt->addKey(keyword, std::stoi(value), comment) );
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, std::stoi(value), comment)
+                                    : this->imageExt->addKey(keyword, std::stoi(value), comment) );
         }
         else if (type.compare("LONG") == 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, std::stol(value), comment)
-                    : this->imageExt->addKey(keyword, std::stol(value), comment) );
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, std::stol(value), comment)
+                                    : this->imageExt->addKey(keyword, std::stol(value), comment) );
         }
         else if (type.compare("FLOAT") == 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, std::stof(value), comment)
-                    : this->imageExt->addKey(keyword, std::stof(value), comment) );
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, std::stof(value), comment)
+                                    : this->imageExt->addKey(keyword, std::stof(value), comment) );
         }
         else if (type.compare("DOUBLE") == 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, std::stod(value), comment)
-                    : this->imageExt->addKey(keyword, std::stod(value), comment) );
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, std::stod(value), comment)
+                                    : this->imageExt->addKey(keyword, std::stod(value), comment) );
         }
         else if (type.compare("STRING") == 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
-                    : this->imageExt->addKey(keyword, value, comment) );
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, value, comment)
+                                    : this->imageExt->addKey(keyword, value, comment) );
         }
         else {
           message.str(""); message << "ERROR unknown type: " << type << " for user keyword: " << keyword << "=" << value
@@ -703,7 +728,7 @@ class FITS_file {
         message.str(""); message << "ERROR: unable to convert value " << value;
         logwrite( function, message.str() );
         if (type.compare("STRING") != 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, value, comment)
                     : this->imageExt->addKey( keyword, value, comment ) );
         }
       }
@@ -711,13 +736,13 @@ class FITS_file {
         message.str(""); message << "ERROR: value " << value << " out of range";
         logwrite( function, message.str() );
         if (type.compare("STRING") != 0) {
-          ( primary ? this->pFits->pHDU().addKey(keyword, value, comment)
+          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, value, comment)
                     : this->imageExt->addKey( keyword, value, comment ) );
         }
       }
       catch (CCfits::FitsError & err) {
         message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << ")"
-                                 << " to " << ( primary ? "primary" : "extension" ) << " :"
+                                 << " to " << ( hdu == HDUTYPE::Primary ? "primary" : "extension" ) << " :"
                                  << err.message();
         logwrite(function, message.str());
       }

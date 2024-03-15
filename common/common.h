@@ -22,6 +22,7 @@ const long NO_ERROR = 0;
 const long ERROR = 1;
 const long BUSY = 2;
 const long TIMEOUT = 3;
+const long EXIT = 999;
 
 /***** Common *****************************************************************/
 /**
@@ -133,7 +134,6 @@ namespace Common {
       }
       /***** Common::FitsKeys::addkey *****************************************/
 
-
       /**
        * @typedef user_key_t
        * @brief   structure of FITS keyword internal database
@@ -152,6 +152,11 @@ namespace Common {
       typedef std::map<std::string, user_key_t> fits_key_t;
 
       fits_key_t keydb;                                      ///< keyword database
+
+void merge( Common::FitsKeys from ) {
+  this->keydb.insert( from.keydb.begin(), from.keydb.end() );
+  return;
+}
 
       // Find all entries in the keyword database which start with the search_for string,
       // return a vector of iterators.
@@ -193,6 +198,24 @@ namespace Common {
       }
   };
   /**************** Common::FitsKeys ******************************************/
+
+
+  /**************** Common::Header ********************************************/
+  /*
+   * @class  Header
+   * @brief  encapsulates two FitsKeys classes to hold primary & extension databases
+   *
+   */
+  class Header {
+    private:
+      FitsKeys _primary;
+      FitsKeys _extension;
+
+    public:
+      FitsKeys &primary()   { return _primary;   }
+      FitsKeys &extension() { return _extension; }
+  };
+  /**************** Common::Header ********************************************/
 
 
   /**************** Common::Queue *********************************************/

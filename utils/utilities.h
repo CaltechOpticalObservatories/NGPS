@@ -25,6 +25,7 @@
 #include <atomic>
 #include <filesystem>
 #include <cmath>
+#include <sys/stat.h>
 #include "md5.h"
 
 extern std::string zone;
@@ -79,6 +80,9 @@ inline double mjd_now() {                           /// modified Julian date now
 int compare_versions(std::string v1, std::string v2);
 
 long md5_file( const std::string &filename, std::string &hash );  /// compute md5 checksum of file
+
+bool is_owner( const std::filesystem::path &filename );
+bool has_write_permission( const std::filesystem::path &filename );
 
 static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );

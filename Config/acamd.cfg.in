@@ -73,12 +73,12 @@ MOTOR_CONTROLLER="2 cover  neg 0  504 0"
 # ID here refers to the numbered positions on the filter. Do not change
 # the position for a given ID. See orientation diagram below.
 #
-MOTOR_POS="filter 0    0 F0"
-MOTOR_POS="filter 1  477 F1"
-MOTOR_POS="filter 2  954 F2"
-MOTOR_POS="filter 3 1431 F3"
-MOTOR_POS="filter 4 1908 F4"
-MOTOR_POS="filter 5 2385 F5"
+MOTOR_POS="filter 0    0 BLOCK"
+MOTOR_POS="filter 1  477 G"
+MOTOR_POS="filter 2  954 R"
+MOTOR_POS="filter 3 1431 I"
+MOTOR_POS="filter 4 1908 OPEN"
+MOTOR_POS="filter 5 2385 CLEAR"
 
 # These are for the dust cover -- no need to ever change these!
 #

@@ -4,7 +4,8 @@
 # @brief    provides a command line interface for sequencerd
 #
 
-source $HOME/Software/Config/sequencerd.cfg
+source /home/developer/Software/run/ngps-config
+source $SEQUENCERD_CONFIG
 
 command=""
 while [ $# -gt 0 ]

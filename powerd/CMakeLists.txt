@@ -28,6 +28,9 @@ target_link_libraries(powerd
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
+# Set the setgid bit on the resulting executable
+add_custom_command( TARGET powerd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:powerd> )
+
 # -- Port/Address Definitions --------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and privatelan is the master

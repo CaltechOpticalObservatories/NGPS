@@ -143,14 +143,11 @@ namespace Common {
   long FitsKeys::listkeys() {
     std::string function = "Common::FitsKeys::listkeys";
     std::stringstream message;
-    fits_key_t::iterator keyit;
-    for (keyit  = this->keydb.begin();
-         keyit != this->keydb.end();
-         keyit++) {
+    for ( auto const &keydb : this->keydb ) {
       message.str("");
-      message << keyit->second.keyword << " = " << keyit->second.keyvalue;
-      if ( ! keyit->second.keycomment.empty() ) message << " // " << keyit->second.keycomment;
-      message << " (" << keyit->second.keytype << ")";
+      message << keydb.second.keyword << " = " << keydb.second.keyvalue;
+      if ( ! keydb.second.keycomment.empty() ) message << " // " << keydb.second.keycomment;
+      message << " (" << keydb.second.keytype << ")";
       logwrite(function, message.str());
     }
     return(NO_ERROR);

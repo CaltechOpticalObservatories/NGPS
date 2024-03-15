@@ -22,12 +22,15 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
+#include "telemetry.h"
 #include "common.h"
 #include "logentry.h"
 #include "utilities.h"
 
 // handy snprintf shortcut
 #define SNPRINTF(VAR, ...) { snprintf(VAR, sizeof(VAR), __VA_ARGS__); }
+#define _COL_ 0
+#define _ROW_ 1
 
 /***** Camera *****************************************************************/
 /**
@@ -92,8 +95,13 @@ namespace Camera {
         //
         if ( this->fd>=0 ) {
           error  = this->set_close();
+          if ( error != NO_ERROR ) {
+            std::stringstream message;
+            message << "ERROR closing shutter: " << std::strerror(errno);
+            logwrite( function, message.str() );
+          }
           std::this_thread::sleep_for( std::chrono::milliseconds( 200 ) );
-          error |= this->get_state( state );
+          if ( error==NO_ERROR ) error = this->get_state( state );
         }
         else logwrite( function, "ERROR: failed to open /dev/shutter USB device (check udev)" );
 
@@ -203,6 +211,13 @@ namespace Camera {
         //
         int err = ioctl( this->fd, TIOCMGET, &serial );
 
+        if ( err ) {
+          message.str(""); message << "ERROR: ioctl system call: " << std::strerror(errno);
+          logwrite( function, message.str() );
+          state = -1;
+          return( ERROR );
+        }
+
 #ifdef LOGLEVEL_DEBUG
         message.str(""); message << "[DEBUG] serial=0x" << std::hex << serial
                                  << " CAR=0x" << TIOCM_CAR 
@@ -219,13 +234,6 @@ namespace Camera {
                                  << ( (serial&TIOCM_CTS)==0 ? " <-- Blade B closed":"" );
         logwrite( function, message.str() );
 #endif
-
-        if ( err ) {
-          message.str(""); message << "ERROR: ioctl system call: " << std::strerror(errno);
-          logwrite( function, message.str() );
-          state = -1;
-          return( ERROR );
-        }
 
         if ( (serial & TIOCM_CAR) == 0 ) {
           logwrite( function, "ERROR: Bonn shutter fatal error" );
@@ -290,15 +298,18 @@ namespace Camera {
 
     public:
       Camera();
-      ~Camera() {}
 
+      std::string   axis_x, axis_y;          //!< labels for axes
       int32_t       exposure_time;           //!< exposure time in exposure_unit
+//    int           binning[2];              //!< bin factor. element 0=cols (serial), element 1=rows (parallel)
 
       bool          autodir_state;           //!< if true then images are saved in a date subdir below image_dir, i.e. image_dir/YYYYMMDD/
       bool          abortstate;              //!< set true to abort the current operation (exposure, readout, etc.)
       bool          bonn_shutter;            //!< set false if Bonn shutter is not connected (defaults true)
       bool          ext_shutter;             //!< set true if an external shutter is connected to an ARC controller (defaults false)
       std::string   writekeys_when;          //!< when to write fits keys "before" or "after" exposure
+
+      Telemetry::Sequencer seq_telem;
 
       Common::Queue async;                   /// message queue object
       Shutter shutter;                       /// Bonn Shutter object
@@ -418,11 +429,20 @@ namespace Camera {
 
       std::vector< std::vector<long> > amp_section;
 
-      Common::FitsKeys userkeys;     ///< create a FitsKeys object for FITS keys specified by the user
-      Common::FitsKeys prikeys;      ///< create a FitsKeys object for FITS keys imposed by the software
-      Common::FitsKeys extkeys;      ///< create a FitsKeys object for extension-only FITS keys imposed by the software
+//    Common::FitsKeys userkeys;     ///< create a FitsKeys object for FITS keys specified by the user
+//    Common::FitsKeys prikeys;      ///< create a FitsKeys object for FITS keys imposed by the software
+//    Common::FitsKeys extkeys;      ///< create a FitsKeys object for extension-only FITS keys imposed by the software
 
-  Information() {
+      Common::Header systemkeys;     ///< Header class object holds pri/ext FitsKeys for system use
+      Common::Header telemkeys;      ///< Header class object holds pri/ext FitsKeys for telemetry use
+      Common::Header userkeys;       ///< Header class object holds pri/ext FitsKeys for command line use
+
+      /***** Camera::Information:Information **********************************/
+      /**
+       * @brief   Information class constructor
+       *
+       */
+      Information() {
         this->axes[0] = 1;
         this->axes[1] = 1;
         this->axes[2] = 1;
@@ -437,9 +457,9 @@ namespace Camera {
         this->image_center[0] = 1;
         this->image_center[1] = 1;
         this->abortexposure = false;
-        this->ismex = false;
-        this->datatype = -1;
-        this->type_set = false;              // default is datatype undefined
+        this->ismex = true;                  ///< fixed for NGPS
+        this->datatype = USHORT_IMG;         ///< fixed for NGPS
+        this->type_set = true;               ///< fixed for NGPS
         this->arcsim = false;                // the ARC device is not simulated
         this->sim_et = 0;
         this->sim_modet = -1;
@@ -450,8 +470,11 @@ namespace Camera {
         this->num_pre_exposures = 0;         // default is no pre-exposures
         this->shutterenable = true;          // default is enabled shutter
       }
+      /***** Camera::Information:Information **********************************/
+
 
       long pre_exposures( std::string num_in, std::string &num_out );
+
 
       /***** Camera::Information:set_axes *************************************/
       /**
@@ -513,7 +536,9 @@ namespace Camera {
                 << " region_of_interest[3]=" << this->region_of_interest[3]
                 << " region_of_interest[2]=" << this->region_of_interest[2]
                 << " axes[0]=" << this->axes[0]
-                << " axes[1]=" << this->axes[1];
+                << " axes[1]=" << this->axes[1]
+                << " binning[0]=" << this->binning[0]
+                << " binning[1]=" << this->binning[1];
         logwrite( function, message.str() );
 #endif
 

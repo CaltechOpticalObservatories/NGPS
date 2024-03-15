@@ -40,6 +40,10 @@ namespace Camera {
     this->autodir_state = true;
     this->bonn_shutter = true;           // defaults to Bonn shutter is present
     this->ext_shutter = false;           // defaults to external shutter not present
+//  this->binning[_COL_]=1;
+//  this->binning[_ROW_]=1;
+    this->axis_x = "X";
+    this->axis_y = "Y";
   }
 
 

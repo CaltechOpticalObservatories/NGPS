@@ -4,7 +4,8 @@
 # @brief    provides a command line interface for thermald
 #
 
-source $HOME/Software/Config/thermald.cfg
+source /home/developer/Software/run/ngps-config
+source $THERMALD_CONFIG
 
 command=""
 while [ $# -gt 0 ]

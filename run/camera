@@ -1,10 +1,11 @@
 #!/usr/bin/bash
 #
-# @file     cam
+# @file     camera
 # @brief    provides a command line interface for camerad
 #
 
-source $HOME/Software/Config/camerad.cfg
+source /home/developer/Software/run/ngps-config
+source $CAMERAD_CONFIG
 
 command=""
 while [ $# -gt 0 ]
