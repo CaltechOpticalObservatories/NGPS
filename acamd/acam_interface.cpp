@@ -86,9 +86,556 @@ namespace Acam {
    * 
    */
   long Camera::get_status() {
-    return ERROR;
+    return this->andor.get_status();
   }
   /***** Acam::Camera::get_status *********************************************/
+
+
+  /***** Acam::Camera::bin ****************************************************/
+  /**
+   * @brief      set or get camera binning
+   * @param[in]  args       optionally contains <hbin> <vbin>
+   * @param[out] retstring  return string contains <hbin> <vbin>
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::bin( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::bin";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_BIN;
+      retstring.append( " [ <hbin> <vbin> ]\n" );
+      retstring.append( "   Set or get CCD binning.\n" );
+      retstring.append( "   <hbin> and <vbin> are the number of pixels to bin horizontally\n" );
+      retstring.append( "   and vertically, respectively. When setting either, both must\n" );
+      retstring.append( "   be supplied. If both omitted then the current binning is returned.\n" );
+      return( NO_ERROR );
+    }
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_initialized() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return( ERROR );
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      int hbin, vbin;
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There can be only one arg (the requested EM gain)
+      //
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <hbin> <vbin>" );
+        return( ERROR );
+      }
+
+      // Parse the gain from the token
+      //
+      try {
+        hbin = std::stoi( tokens.at(0) );
+        vbin = std::stoi( tokens.at(1) );
+      }
+      catch ( std::out_of_range &e ) {
+        message.str(""); message << "ERROR reading arguments: " << e.what();
+        error = ERROR;
+      }
+      catch ( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR reading arguments: " << e.what();
+        error = ERROR;
+      }
+
+      if (error==ERROR) logwrite( function, message.str() );
+
+      // Set the binning parameters now
+      //
+      if (error!=ERROR ) error = this->andor.set_binning( hbin, vbin );
+    }
+
+    // return the current binning parameters
+    //
+    message.str(""); message << this->andor.camera_info.hbin << " " << this->andor.camera_info.vbin;
+    retstring = message.str();
+
+    logwrite( function, retstring );
+
+    return( error );
+  }
+  /***** Acam::Camera::bin ****************************************************/
+
+
+  /***** Acam::Camera::imflip *************************************************/
+  /**
+   * @brief      set or get camera image flip
+   * @param[in]  args       optionally contains <hflip> <vflip> (0=false 1=true)
+   * @param[out] retstring  return string contains <hflip> <vflip>
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::imflip( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::imflip";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_IMFLIP;
+      retstring.append( " [ <hflip> <vflip> ]\n" );
+      retstring.append( "   Set or get CCD image flip.\n" );
+      retstring.append( "   <hflip> and <vflip> indicate to flip horizontally and\n" );
+      retstring.append( "   vertically, respectively. Set these =1 to enable flipping,\n" );
+      retstring.append( "   or =0 to disable flipping the indicated axis. When setting\n" );
+      retstring.append( "   either, both must be supplied. If both omitted then the\n" );
+      retstring.append( "   current flip states are returned.\n" );
+      return( NO_ERROR );
+    }
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_initialized() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return( ERROR );
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      int hflip, vflip;
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There can be only one arg (the requested EM gain)
+      //
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <hflip> <vflip>" );
+        return( ERROR );
+      }
+
+      // Parse the gain from the token
+      //
+      try {
+        hflip = std::stoi( tokens.at(0) );
+        vflip = std::stoi( tokens.at(1) );
+      }
+      catch ( std::out_of_range &e ) {
+        message.str(""); message << "ERROR reading arguments: " << e.what();
+        error = ERROR;
+      }
+      catch ( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR reading arguments: " << e.what();
+        error = ERROR;
+      }
+
+      if (error==ERROR) logwrite( function, message.str() );
+
+      // Set the flip parameters now
+      //
+      if (error!=ERROR ) error = this->andor.set_imflip( hflip, vflip );
+    }
+
+    // return the current image flip states
+    //
+    message.str(""); message << this->andor.camera_info.hflip << " " << this->andor.camera_info.vflip;
+    retstring = message.str();
+
+    logwrite( function, retstring );
+
+    return( error );
+  }
+  /***** Acam::Camera::imflip *************************************************/
+
+
+  /***** Acam::Camera::imrot **************************************************/
+  /**
+   * @brief      set camera image rotation
+   * @param[in]  args       optionally contains <rotdir> "cw" or "ccw"
+   * @param[out] retstring  return string contains <hrot> <vrot>
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::imrot( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::imrot";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_IMROT;
+      retstring.append( " [ <rotdir> ]\n" );
+      retstring.append( "   Set CCD image rotation where <rotdir> is { none cw ccw }\n" );
+      retstring.append( "   and \"cw\"   will rotate 90 degrees clockwise,\n" );
+      retstring.append( "       \"ccw\"  will rotate 90 degrees counter-clockwise,\n" );
+      retstring.append( "       \"none\" will set the rotation to none.\n" );
+      retstring.append( "   If used in conjuction with \"" + ACAMD_IMFLIP + "\" the rotation will\n" );
+      retstring.append( "   occur before the flip regardless of which order the commands are\n" );
+      retstring.append( "   sent. 180 degree rotation can be achieved using the \"" + ACAMD_IMFLIP + "\"\n" );
+      retstring.append( "   command by selecting both horizontal and vertical flipping.\n" );
+      return( NO_ERROR );
+    }
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_initialized() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return( ERROR );
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      int rotdir;
+
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
+
+      if ( args == "none" ) rotdir = 0;
+      else
+      if ( args == "cw" )   rotdir = 1;
+      else
+      if ( args == "ccw" )  rotdir = 2;
+      else {
+        message.str(""); message << "ERROR bad arg " << args << ": expected { none cw ccw }";
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+
+      // Set the rotation now
+      //
+      error = this->andor.set_imrot( rotdir );
+    }
+
+    return( error );
+  }
+  /***** Acam::Camera::imrot **************************************************/
+
+
+  /***** Acam::Camera::gain ***************************************************/
+  /**
+   * @brief      set or get the CCD gain
+   * @details    The output amplifier is automatically set based on gain.
+   *             If gain=1 then set to conventional amp and if gain > 1
+   *             then set the EMCCD gain register.
+   * @param[in]  args       optionally contains new gain
+   * @param[out] retstring  return string contains temp, setpoint, and status
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::gain( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::gain";
+    std::stringstream message;
+    long error = NO_ERROR;
+    int gain = -999;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_GAIN;
+      retstring.append( " [ <gain> ]\n" );
+      retstring.append( "   Set or get CCD Gain.\n" );
+      if ( this->andor.is_initialized() ) {
+        int low, high;
+        this->andor._GetEMGainRange( low, high );
+        retstring.append( "   Select <gain> = 1 for conventional or in range { " );
+        retstring.append( std::to_string( low ) );
+        retstring.append( " " );
+        retstring.append( std::to_string( high ) );
+        retstring.append( " } for EMCCD.\n" );
+      }
+      else {
+        retstring.append( "   Open connection to camera to see gain range.\n" );
+      }
+      retstring.append( "   If <gain> is omitted then the current gain is returned.\n" );
+      retstring.append( "   Output amplifier is automatically selected as conventional for unity gain,\n" );
+      retstring.append( "   or EM for non-unity gain.\n" );
+      return( NO_ERROR );
+    }
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_initialized() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return( ERROR );
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There can be only one arg (the requested EM gain)
+      //
+      if ( tokens.size() != 1 ) {
+        logwrite( function, "ERROR too many arguments" );
+        return( ERROR );
+      }
+
+      // Parse the gain from the token
+      //
+      try {
+        gain = std::stoi( tokens.at(0) );
+      }
+      catch ( std::out_of_range &e ) {
+        message.str(""); message << "ERROR setting gain: " << e.what();
+        error = ERROR;
+      }
+      catch ( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR setting gain: " << e.what();
+        error = ERROR;
+      }
+
+      if (error==ERROR) logwrite( function, message.str() );
+
+      int low, high;
+      this->andor._GetEMGainRange( low, high );
+
+      // set gain and output amplifier as necessary
+      //
+      message.str("");
+      if ( error==NO_ERROR && gain < 1 ) {
+        message << "ERROR: gain " << gain << " outside range { 1, " << low << ":" << high << " }";
+        error = ERROR;
+      }
+      else
+      if ( error==NO_ERROR && gain == 1 ) {
+        error = this->andor._SetOutputAmplifier( Andor::AMPTYPE_CONV );
+        if (error==NO_ERROR) this->andor.camera_info.gain = gain;
+        else { message << "ERROR gain not set"; }
+      }
+      else
+      if ( error==NO_ERROR && gain >= low && gain <= high ) {
+        error = this->andor._SetOutputAmplifier( Andor::AMPTYPE_EMCCD );
+        if (error==NO_ERROR) this->andor._SetEMCCDGain( gain );
+        if (error==NO_ERROR) this->andor.camera_info.gain = gain;
+        else { message << "ERROR gain not set"; }
+      }
+      else
+      if ( error==NO_ERROR ) {
+        message.str(""); message << "ERROR: gain " << gain << " outside range { 1, "
+                                 << low << ":" << high << " }";
+        error = ERROR;
+      }
+      if ( !message.str().empty() ) logwrite( function, message.str() );
+    }
+
+    // Regardless of setting the gain, always return it.
+    //
+    retstring = std::to_string( this->andor.camera_info.gain );
+
+    logwrite( function, retstring );
+
+    return error;
+  }
+  /***** Acam::Camera::gain ***************************************************/
+
+
+  /***** Acam::Camera::speed **************************************************/
+  /**
+   * @brief      set or get the CCD clocking speeds
+   * @param[in]  args       optionally contains new clocking speeds
+   * @param[out] retstring  return string contains clocking speeds
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::speed( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::speed";
+    std::stringstream message;
+    long error = NO_ERROR;
+    float hori=-1, vert=-1;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_SPEED;
+      retstring.append( " [ <hori> <vert> ]\n" );
+      retstring.append( "   Set or get CCD clocking speeds for horizontal <hori> and vertical <vert>\n" );
+      retstring.append( "   If speeds are omitted then the current speeds are returned.\n" );
+      if ( this->andor.is_initialized() ) {
+        retstring.append( "   Current amp type is " );
+        retstring.append( ( this->andor.camera_info.amptype == Andor::AMPTYPE_EMCCD ? "EMCCD\n" : "conventional\n" ) );
+        retstring.append( "   Select <hori> from {" );
+        for ( auto &hspeed : this->andor.camera_info.hsspeeds[ this->andor.camera_info.amptype] ) {
+          retstring.append( " " );
+          retstring.append( std::to_string( hspeed ) );
+        }
+        retstring.append( " }\n" );
+        retstring.append( "   Select <vert> from {" );
+        for ( auto &vspeed : this->andor.camera_info.vsspeeds ) {
+          retstring.append( " " );
+          retstring.append( std::to_string( vspeed ) );
+        }
+        retstring.append( " }\n" );
+        retstring.append( "   Units are MHz\n" );
+      }
+      else {
+        retstring.append( "   Open connection to camera to see possible speeds.\n" );
+      }
+      return( NO_ERROR );
+    }
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_initialized() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return( ERROR );
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There must be only two args (the <hori> <vert> speeds)
+      //
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <hori> <vert> speeds" );
+        return( ERROR );
+      }
+
+      // Parse the gain from the token
+      //
+      try {
+        hori = std::stof( tokens.at(0) );
+        vert = std::stof( tokens.at(1) );
+      }
+      catch ( std::out_of_range &e ) {
+        message.str(""); message << "ERROR reading speeds: " << e.what();
+        error = ERROR;
+      }
+      catch ( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR reading speeds: " << e.what();
+        error = ERROR;
+      }
+      if (error==ERROR) logwrite( function, message.str() );
+
+      if (error!=ERROR ) error = this->andor.set_hsspeed( hori );
+      if (error!=ERROR ) error = this->andor.set_vsspeed( vert );
+    }
+
+    if ( ( this->andor.camera_info.hspeed < 0 ) ||
+         ( this->andor.camera_info.vspeed < 0 ) ) {
+      logwrite( function, "ERROR speeds not set" );
+      error = ERROR;
+    }
+
+    retstring = std::to_string( this->andor.camera_info.hspeed ) + " "
+              + std::to_string( this->andor.camera_info.vspeed );
+
+    logwrite( function, retstring );
+
+    return error;
+  }
+  /***** Acam::Camera::speed **************************************************/
+
+
+  /***** Acam::Camera::temperature ********************************************/
+  /**
+   * @brief      set or get the camera temperature setpoint
+   * @param[in]  args       optionally contains new setpoint
+   * @param[out] retstring  return string contains <temp> <setpoint> <status>
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::temperature( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::temperature";
+    std::stringstream message;
+    long error = NO_ERROR;
+    int temp = 999;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_TEMP;
+      retstring.append( " [ <setpoint> ]\n" );
+      retstring.append( "  Set or get camera temperature in integer degrees C,\n" );
+      if ( this->andor.is_initialized() ) {
+        retstring.append( "  where <setpoint> is in range { " );
+        retstring.append( std::to_string( this->andor.camera_info.temp_min ) );
+        retstring.append( "  " );
+        retstring.append( std::to_string( this->andor.camera_info.temp_max ) );
+        retstring.append( " }.\n" );
+      }
+      else {
+        retstring.append( "  open connection to camera to see acceptable range.\n" );
+      }
+      retstring.append( "  If optional <setpoint> is provided then the camera setpoint is changed,\n" );
+      retstring.append( "  else the current temperature, setpoint, and status are returned.\n" );
+      retstring.append( "  Format of return value is <temp> <setpoint> <status>\n" );
+      retstring.append( "  Camera cooling is turned on/off automatically, as needed.\n" );
+      return( NO_ERROR );
+    }
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_initialized() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return( ERROR );
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There can be only one arg (the requested temperature)
+      //
+      if ( tokens.size() != 1 ) {
+        logwrite( function, "ERROR too many arguments" );
+        return( ERROR );
+      }
+
+      // Convert the temperature to int and set the temperature.
+      // Cooling will be automatically enabled/disabled as needed.
+      //
+      try {
+        temp = static_cast<int>( std::round( std::stof( tokens.at(0) ) ) );
+        error = this->andor.set_temperature( temp );
+      }
+      catch ( std::out_of_range &e ) {
+        message.str(""); message << "ERROR setting temperature: " << e.what();
+        error = ERROR;
+      }
+      catch ( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR setting temperature: " << e.what();
+        error = ERROR;
+      }
+      catch ( std::bad_alloc &e ) {
+        message.str(""); message << "ERROR setting temperature: " << e.what();
+        error = ERROR;
+      }
+    }
+    if (error==ERROR) logwrite( function, message.str() );
+
+    // Regardless of setting the temperature, always read it.
+    //
+    error |= this->andor.get_temperature( temp );
+
+    message.str(""); message << temp << " " << this->andor.camera_info.setpoint << " " << this->andor.camera_info.temp_status;
+    logwrite( function, message.str() );
+
+    retstring = message.str();
+
+    return error;
+  }
+  /***** Acam::Camera::temperature ********************************************/
 
 
   /***** Acam::Camera::get_frame **********************************************/
@@ -308,6 +855,7 @@ namespace Acam {
     std::string function = "Acam::CameraServer::coords";
     std::stringstream message;
 
+#ifdef ACAM_ANDOR_SOURCE_SERVER
     // Nothing to do if not connected
     //
     if ( !this->server.isconnected() ) {
@@ -330,6 +878,13 @@ namespace Acam {
     std::string reply;      // reply not used
     cmd << ACAMD_CAMERASERVER_COORDS << " " << coords_in;
     return this->send_command( cmd.str(), reply );
+#elif ACAM_ANDOR_SOURCE_ANDOR
+    logwrite( function, "not implemented for Andor" );
+    return( ERROR );
+#else
+    logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+    return( ERROR );
+#endif
   }
   /***** Acam::CameraServer::coords *******************************************/
 
@@ -894,9 +1449,12 @@ namespace Acam {
     //
     CameraServer s( this->cameraserver_host, this->cameraserver_port );
     this->camera_server = s;
-#endif
-
+#elif ACAM_ANDOR_SOURCE_ANDOR
     return( NO_ERROR );
+#else
+    logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+    return( ERROR );
+#endif
   }
   /***** Acam::Interface::initialize_class ************************************/
 
@@ -1048,9 +1606,11 @@ namespace Acam {
     if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
       error |= this->camera_server.open();   // get images from external server
-#endif
-#ifdef ACAM_ANDOR_SOURCE_ANDOR
+#elif ACAM_ANDOR_SOURCE_ANDOR
       error |= this->camera.open( camarg );  // get images from Andor directly
+#else
+      logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+      return( ERROR );
 #endif
     }
 
@@ -1107,10 +1667,11 @@ namespace Acam {
     if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
       state &= this->camera_server.isopen();
-#endif
-#ifdef ACAM_ANDOR_SOURCE_ANDOR
-//    state &= this->camera.isopen();
+#elif ACAM_ANDOR_SOURCE_ANDOR
       state &= this->camera.andor.is_initialized();
+#else
+      logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+      return( ERROR );
 #endif
     }
 
@@ -1164,10 +1725,11 @@ namespace Acam {
     if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
       error |= this->camera_server.close();
-#endif
-
-#ifdef ACAM_ANDOR_SOURCE_ANDOR
+#elif ACAM_ANDOR_SOURCE_ANDOR
       error |= this->camera.close();
+#else
+      logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+      return( ERROR );
 #endif
     }
 
@@ -1182,11 +1744,20 @@ namespace Acam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::acquire() {
+  long Interface::acquire( std::string args, std::string &retstring ) {
     std::string function = "Acam::Interface::acquire";
     std::stringstream message;
     long error = NO_ERROR;
     std::string _imagename = this->imagename;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_ACQUIRE;
+      retstring.append( "\n" );
+      retstring.append( "  Acquire a single ACAM image.\n" );
+      return( NO_ERROR );
+    }
 
     // Set this true for acquisition (false for guiding)
     //
@@ -1196,11 +1767,12 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
 #ifdef ACAM_ANDOR_SOURCE_SERVER
     this->camera_server.acquire( this->wcsname, _imagename );
     this->imagename = _imagename;
-#endif
-
-#ifdef ACAM_ANDOR_SOURCE_ANDOR
+#elif ACAM_ANDOR_SOURCE_ANDOR
     this->camera.andor.acquire_one();
     this->camera.andor.save_acquired( this->wcsname, _imagename );
+#else
+    logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+    return( ERROR );
 #endif
 
     message.str(""); message << "[DEBUG] this->wcsname=" << this->wcsname << " this->imagename=" << this->imagename;
@@ -1213,20 +1785,33 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
 
   /***** Acam::Interface::exptime *********************************************/
   /**
-   * @brief      wrapper to set exposure time
+   * @brief      wrapper to set/get exposure time
+   * @param[in]  exptime_in  optional requested exposure time
+   * @param[out] retstring   return string contains current exposure time
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::exptime( std::string exptime_in, std::string &retstring ) {
     std::string function = "Acam::Interface::exptime";
     std::stringstream message;
-#ifdef ACAM_ANDOR_SOURCE_SERVER
-    logwrite( function, "ERROR: not yet implemented" );
-    return( ERROR );
-#endif
 
-#ifdef ACAM_ANDOR_SOURCE_ANDOR
+    if ( exptime_in == "?" || exptime_in == "help" ) {
+      retstring = ACAMD_EXPTIME;
+      retstring.append( " [ <exptime> ]\n" );
+      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
+      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
+      retstring.append( "  else the current exposure time is returned.\n" );
+      return( NO_ERROR );
+    }
+
+#ifdef ACAM_ANDOR_SOURCE_SERVER
+    logwrite( function, "ERROR: not implemented for GUI server" );
+    return( ERROR );
+#elif ACAM_ANDOR_SOURCE_ANDOR
     return this->camera.andor.exptime( exptime_in, retstring );
+#else
+    logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+    return( ERROR );
 #endif
   }
   /***** Acam::Interface::exptime *********************************************/
@@ -1249,7 +1834,9 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     if ( args == "?" ) {
       retstring = ACAMD_QUALITY;
       retstring.append( "\n" );
-      retstring.append( "  Calls the (Python) astrometry image quality function\n" );
+      retstring.append( "  Calls the (Python) astrometry image quality function.\n" );
+      retstring.append( "  This should be called only after a solve and needs to be called only\n" );
+      retstring.append( "  once for each solve.\n" );
       return( NO_ERROR );
     }
 

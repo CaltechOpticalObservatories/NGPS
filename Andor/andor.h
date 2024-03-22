@@ -25,6 +25,9 @@
  */
 namespace Andor {
 
+  const int AMPTYPE_EMCCD = 0;
+  const int AMPTYPE_CONV  = 1;
+
   /***** Information **********************************************************/
   /**
    * @class   Information
@@ -36,10 +39,35 @@ namespace Andor {
     private:
     public:
       int serial_number;
-      int mode;
-      int temp;
+      int acqmode;                                 ///< acquisition mode
+      std::string acqmodestr;
+      int readmode;                                ///< read mode
+      std::string readmodestr;
+      int adchan;                                  ///< selected AD channel
+      int adchans;                                 ///< number of AD channels available
+      int setpoint;                                ///< temperature setpoint
+      int ccdtemp;                                 ///< ccd temperature
+      int temp_min;                                ///< minimum allowed temperature
+      int temp_max;                                ///< maximum allowed temperature
+      int amptype;                                 ///< amp type 0=EM 1=conventional
+      std::string amptypestr;                      ///< amp type string
+      std::map<int, std::vector<float>> hsspeeds;  ///< vector of hori shift speeds for each amp type
+      std::vector<float> vsspeeds;                 ///< vector of vert shift speeds
+      float hspeed;                                ///< horizontal pixel speed
+      float vspeed;                                ///< vertical pixel speed
+      int hbin;                                    ///< horizontal binning
+      int vbin;                                    ///< vertical binning
+      int hstart;                                  ///< horizontal start pixel
+      int vstart;                                  ///< vertical start pixel
+      int hend;                                    ///< horizontal end pixel
+      int vend;                                    ///< vertical end pixel
+      int gain;                                    ///< currently selected gain
+      int emgain;                                  ///< current EM gain (doesn't mean EM is selected)
+      int emgain_low;                              ///< EM gain low
+      int emgain_high;                             ///< EM gain high
+      int hflip;                                   ///< flipped horizontal? 1=yes 0=no
+      int vflip;                                   ///< flipped vertical? 1=yes 0=no
       std::string temp_status;
-      std::string modestr;
       int rows;
       int cols;
       int axes[2];
@@ -76,6 +104,7 @@ namespace Andor {
 
       long open_file();
       void close_file();
+      long create_header();
       long copy_header( std::string wcs_in );
       template <typename T> long write_image( T* data );
   };
@@ -115,16 +144,34 @@ namespace Andor {
       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize );
       long _GetAvailableCameras( int* number );
       long _GetCameraHandle( int index, int* handle );
-      long _GetCameraSerialNumber( int* number );
-      long _GetDetector( int* xpix, int* ypix );
+      long _GetCameraSerialNumber( int &number );
+      long _GetDetector( int &xpix, int &ypix );
+      long _GetStatus( std::string &status );
       long _GetStatus( int* status );
-      long _GetStatus( int* status, std::stringstream &status_msg );
-      long _GetTemperature();
+      long _GetStatus( int* status, std::string &status_msg );
+      long _GetNumberADChannels( int &channels );
+      long _GetNumberHSSpeeds( int chan, int type, int &speeds );
+      long _GetNumberVSSpeeds( int &speeds );
+      long _GetHSSpeed( int type, int index, float &speed );
+      long _SetHSSpeed( int type, int index );
+      long _GetVSSpeed( int index, float &speed );
+      long _SetVSSpeed( int index );
+      long _SetEMCCDGain( int gain );
+      long _GetEMCCDGain( int &gain );
+      long _GetEMGainRange( int &low, int &high );
+      long _SetOutputAmplifier( int type );
+      long _GetTemperature( int &temp );
+      long _GetTemperatureRange( int &min, int &max );
+      long _CoolerON();
+      long _CoolerOFF();
+      long _SetTemperature( int temp );
       long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len );
       long _Initialize( );
       long _SetAcquisitionMode( int mode );
       long _SetCurrentCamera( int handle );
       long _SetExposureTime( double exptime );
+      long _SetImageFlip( int hflip, int vflip );
+      long _SetImageRotate( int rotdir );
       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
       long _SetReadMode( int mode );
       long _SetShutter( int type, int mode, int closetime, int opentime );
@@ -140,7 +187,17 @@ namespace Andor {
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
       unsigned int start_acquisition();
-      long log_status();
+      long get_status();
+      long get_speeds();
+      long set_temperature( int temp );
+      long get_temperature( int &temp );
+      long get_temperature();
+      long set_emgain( int gain );
+      long set_hsspeed( float speed );
+      long set_vsspeed( float speed );
+      long set_binning( int hbin, int vbin );
+      long set_imflip( int hflip, int vflip );
+      long set_imrot( int rotdir );
 
       template <typename T>
       unsigned int get_last_frame( T* buf ) {
@@ -148,7 +205,7 @@ namespace Andor {
         std::stringstream message;
         unsigned long ret;
 
-        GetDetector( &this->camera_info.cols, &this->camera_info.rows );
+        _GetDetector( this->camera_info.cols, this->camera_info.rows );
         this->camera_info.npix = this->camera_info.cols * this->camera_info.rows;
 
         // Use the appropriate API call to get the acquired data

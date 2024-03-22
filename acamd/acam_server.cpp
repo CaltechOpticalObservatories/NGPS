@@ -502,16 +502,30 @@ namespace Acam {
 
       // commands for the Andor camera direct
       //
+      if ( cmd == "cameragain" ) {
+                      int gain;
+                      ret = this->interface.camera.andor._GetEMCCDGain( gain );
+                      retstring = std::to_string(gain);
+      }
+      else
+      if ( cmd == "cameragainrange" ) {
+                      int low,high;
+                      ret = this->interface.camera.andor._GetEMGainRange(low,high);
+                      retstring = std::to_string(low) + " " + std::to_string(high);
+      }
+      else
+      if ( cmd == "cameraadchans" ) {
+                      int chans;
+                      ret = this->interface.camera.andor._GetNumberADChannels(chans);
+                      retstring = std::to_string(chans);
+      }
+      else
       if ( cmd == "cameraopen" ) {
                       ret = this->interface.camera.open( args );
       }
       else
       if ( cmd == "cameraclose" ) {
                       ret = this->interface.camera.close( );
-      }
-      else
-      if ( cmd == "cameraexptime" ) {
-                      ret = this->interface.camera.andor.exptime( args, retstring );
       }
       else
       if ( cmd == "cameraacquire" ) {
@@ -548,12 +562,14 @@ namespace Acam {
       }
       else
 
+#ifdef ACAM_ANDOR_SOURCE_SERVER
       // commands for the external camera server
       //
       if ( cmd == ACAMD_CAMERASERVER_COORDS ) {
                       ret = this->interface.camera_server.coords( args );
       }
       else
+#endif
 
       // open connections to all devices, camera and motion
       //
@@ -575,6 +591,30 @@ namespace Acam {
       //
       if ( cmd == ACAMD_CLOSE ) {
                       ret = this->interface.close( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_BIN ) {
+                      ret = this->interface.camera.bin( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_IMFLIP ) {
+                      ret = this->interface.camera.imflip( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_IMROT ) {
+                      ret = this->interface.camera.imrot( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_GAIN ) {
+                      ret = this->interface.camera.gain( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_SPEED ) {
+                      ret = this->interface.camera.speed( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_TEMP ) {
+                      ret = this->interface.camera.temperature( args, retstring );
       }
       else
 
@@ -614,7 +654,7 @@ namespace Acam {
       // ACQUIRE
       //
       if ( cmd == ACAMD_ACQUIRE ) {
-                      ret = this->interface.acquire( );
+                      ret = this->interface.acquire( args, retstring );
       }
       else
       if ( cmd == ACAMD_INIT ) {
@@ -622,7 +662,7 @@ namespace Acam {
                       ret = NO_ERROR;  // acquire_init() returns void, never fails
       }
       else
-      if ( cmd == "exptime" ) {
+      if ( cmd == ACAMD_EXPTIME ) {
                       ret = this->interface.exptime( args, retstring );
       }
       else

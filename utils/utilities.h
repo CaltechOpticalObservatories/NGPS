@@ -27,6 +27,9 @@
 #include <cmath>
 #include <sys/stat.h>
 #include "md5.h"
+#include <string>
+#include <string_view>
+#include <cctype>
 
 extern std::string zone;
 
@@ -83,6 +86,8 @@ long md5_file( const std::string &filename, std::string &hash );  /// compute md
 
 bool is_owner( const std::filesystem::path &filename );
 bool has_write_permission( const std::filesystem::path &filename );
+std::string_view tchar( std::string_view str );
+std::string_view strip_control_characters( const std::string &str );
 
 static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );

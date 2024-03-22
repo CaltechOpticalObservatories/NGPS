@@ -691,3 +691,49 @@ std::string zone="";   ///< time zone
     }
     return false;  // Error handling: Unable to get file information
   }
+
+
+  /***** tchar ****************************************************************/
+  /**
+   * @brief      return a printable string of a non-printable terminating char
+   * @param[in]  str  input string
+   * @return     string
+   *
+   */
+  std::string_view tchar( std::string_view str ) {
+    if ( str.empty() ) return "??";
+    switch ( str.back() ) {
+      case '\n': return "\\n";
+      case '\r': return "\\r";
+      case '\0': return "\\0";
+      default  : return "??";
+    }
+  }
+  /***** tchar ****************************************************************/
+
+
+  /***** strip_control_characters *********************************************/
+  /**
+   * @brief      strip all leading and trailing control chars from a string
+   * @param[in]  str  input string
+   * @return     string
+   *
+   */
+  std::string_view strip_control_characters( const std::string &str ) {
+    // Strip leading control characters
+    //
+    size_t start = 0;
+    while ( start < str.length() && std::iscntrl( str[start] ) ) {
+      ++start;
+    }
+
+    // Strip trailing control characters
+    //
+    size_t end = str.length();
+    while ( end > start && std::iscntrl( str[end - 1] ) ) {
+      --end;
+    }
+
+    return std::string_view( str.data() + start, end - start );
+  }
+  /***** strip_control_characters *********************************************/

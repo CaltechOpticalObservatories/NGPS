@@ -825,8 +825,7 @@ namespace Network {
   int TcpSocket::Read( std::string &retstring, char term ) {
     std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
-    size_t nread, bytesread=0;
-    char charin;
+    size_t bytesread=0;
 
     retstring.clear();                   // make sure the return string starts empty
 
@@ -835,39 +834,41 @@ namespace Network {
     auto tstart = std::chrono::steady_clock::now();
 
     while ( true ) {
-      nread = read( this->fd, &charin, 1 );  // read a byte at a time
+      char charin;
+      size_t nread = read( this->fd, &charin, 1 );  // read a byte at a time
       if ( nread<0 ) {
         message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
         logwrite( function, message.str() );
-        break;
+        return -1;                       // indicates error
       }
       if ( nread == 0 ) {
         message << "no data on socket " << this->host << ":" << this->port << " fd " << this->fd << ". closing connection";
         logwrite( function, message.str() );
         this->Close();
-        break;
+        return -1;                       // indicates error
       }
       bytesread++;                       // keep count of total bytes read
+
+      if ( charin == term ) {            // check for terminating character
+        if ( bytesread > 1 ) {           // break only when terminated with that char
+          break;
+        }
+      }
       retstring.push_back( charin );     // append the read-in character to the return string
 
       // get time now and check for timeout
       //
       auto tnow = std::chrono::steady_clock::now();
-
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
       if ( elapsed > POLLTIMEOUT ) {
         message << "ERROR: timeout waiting for data on fd " << this->fd;
         logwrite( function, message.str() );
-        nread = -2;                      // indicates timeout
-        break;
+        return -2;                       // indicates timeout
       }
-
-      if ( charin == term ) break;       // break when the terminating character is found
     }
 
-    if ( nread <= 0 ) return( nread );   // return error
-    else return( bytesread );            // or bytes read
+    return( bytesread );                 // return bytes read
   }
   /***** Network::TcpSocket::Read *********************************************/
 
@@ -1194,6 +1195,10 @@ namespace Network {
                                  << ": reading from " << this->sock.gethost() << "/" << this->sock.getport();
         logwrite( function, message.str() );
       }
+
+      // send back just the reply, stripped of any leading/trailing control characters
+      //
+      reply = strip_control_characters( reply );
     }
 
     retstring = reply;

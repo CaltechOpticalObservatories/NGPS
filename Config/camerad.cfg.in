@@ -38,18 +38,18 @@ CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
 # -----------------------------------------------------------------------------
 # This defines the default image size and binning for each controller.
 #
-# IMAGE_SIZE=(CHAN COLS ROWS OSCOLS OSROWS BINROWS BINCOLS)
+# IMAGE_SIZE=(CHAN ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
 #
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
 #       ROWS      number of rows in image
 #       COLS      number of columns in image
 #       OSROWS    number of overscan rows
 #       OSCOLS    number of overscan columns
-#       BINROWS   binning rows
-#       BINCOLS   binning cols
+#       BINROWS   bin factor rows
+#       BINCOLS   bin factor cols
 #
-IMAGE_SIZE=(I 1020 4114 10 50 1 1)
-IMAGE_SIZE=(R 1020 4114 10 50 1 1)
+IMAGE_SIZE=(I 1020 4114 50 20 1 1)
+IMAGE_SIZE=(R 1020 4114 50 20 1 1)
 
 # -----------------------------------------------------------------------------
 # Detector orientation of ROWS/COLS with respect to X,Y axes

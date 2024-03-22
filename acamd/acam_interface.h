@@ -101,6 +101,12 @@ namespace Acam {
       long start_acquisition();
       long get_frame();
       long get_status();
+      long bin( std::string args, std::string &retstring );
+      long imflip( std::string args, std::string &retstring );
+      long imrot( std::string args, std::string &retstring );
+      long gain( std::string args, std::string &retstring );
+      long speed( std::string args, std::string &retstring );
+      long temperature( std::string args, std::string &retstring );
   };
   /***** Acam::Camera *********************************************************/
 
@@ -256,7 +262,7 @@ namespace Acam {
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
       long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components
       long close( std::string component, std::string &help );      /// wrapper to open all acam-related hardware components
-      long acquire();                          /// wrapper to acquire an Andor image
+      long acquire( std::string args, std::string &retstring );    /// wrapper to acquire an Andor image
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long exptime( std::string exptime_in, std::string &retstring );  /// wrapper to set exposure time
