@@ -30,6 +30,7 @@ const std::string ACAMD_ISOPEN   = "isopen";    ///< *** close connection to all
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
+const std::string ACAMD_SIMANDOR = "simandor";  ///< set/get Andor simulator state
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver
 const std::string ACAMD_TEMP     = "temp";      ///< set/get acam temperature
 const std::vector<std::string> ACAMD_SYNTAX = { 
@@ -58,6 +59,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_CAMERASERVER_COORDS+" <ra> <dec> <pa>",
 #endif
                                                 ACAMD_QUALITY+" [ ? ]",
+                                                ACAMD_SIMANDOR+" [ ? | true | false ]",
                                                 ACAMD_SOLVE+" [ ? | <filename>] [ <key>=<val> ... ]",
                                                 ACAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 ACAMD_TEMP+" [ ? | <setpoint> ]"

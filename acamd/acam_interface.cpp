@@ -13,24 +13,60 @@
 namespace Acam {
 
 
-  /***** Acam::Camera::Camera *************************************************/
+  /***** Acam::Camera::simandor ***********************************************/
   /**
-   * @brief      class constructor
+   * @brief      enable/disable Andor simulator
+   * @param[in]  args       optional state { ? help true false }
+   * @param[out] retstring  return status { true false }
+   * @return     ERROR or NO_ERROR
    *
    */
-  Camera::Camera() {
-  }
-  /***** Acam::Camera::Camera *************************************************/
+  long Camera::simandor( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Camera::simandor";
+    std::stringstream message;
 
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_SIMANDOR;
+      retstring.append( " [ true | false ]\n" );
+      retstring.append( "   Enable Andor simulator.\n" );
+      retstring.append( "   If the optional { true false } argument is omitted then the current\n" );
+      retstring.append( "   state is returned.\n" );
+      return( NO_ERROR );
+    }
 
-  /***** Acam::Camera::~Camera ************************************************/
-  /**
-   * @brief      class deconstructor
-   *
-   */
-  Camera::~Camera() {
+    // Set the Andor state
+    //
+    if ( args == "true" ) {
+      this->andor.sim_andor( true );
+    }
+    else
+    if ( args == "false" ) {
+      this->andor.sim_andor( false );
+    }
+    else
+    if ( ! args.empty() ) {
+      message.str(""); message << "ERROR unrecognized arg " << args << ": expected \"true\" or \"false\"";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    // Set the return string
+    //
+    std::string_view which_andor = this->andor.get_andor_object();
+
+    if ( which_andor == "sim" ) retstring="true";
+    else
+    if ( which_andor == "sdk" ) retstring="false";
+    else {
+      retstring="unknown";
+      return( ERROR );
+    }
+
+    return( NO_ERROR );
   }
-  /***** Acam::Camera::~Camera ************************************************/
+  /***** Acam::Camera::simandor ***********************************************/
 
 
   /***** Acam::Camera::open ***************************************************/
@@ -347,7 +383,7 @@ namespace Acam {
       retstring.append( "   Set or get CCD Gain.\n" );
       if ( this->andor.is_initialized() ) {
         int low, high;
-        this->andor._GetEMGainRange( low, high );
+        this->andor.get_emgain_range( low, high );
         retstring.append( "   Select <gain> = 1 for conventional or in range { " );
         retstring.append( std::to_string( low ) );
         retstring.append( " " );
@@ -401,7 +437,7 @@ namespace Acam {
       if (error==ERROR) logwrite( function, message.str() );
 
       int low, high;
-      this->andor._GetEMGainRange( low, high );
+      this->andor.get_emgain_range( low, high );
 
       // set gain and output amplifier as necessary
       //
@@ -412,14 +448,14 @@ namespace Acam {
       }
       else
       if ( error==NO_ERROR && gain == 1 ) {
-        error = this->andor._SetOutputAmplifier( Andor::AMPTYPE_CONV );
+        error = this->andor.set_output_amplifier( Andor::AMPTYPE_CONV );
         if (error==NO_ERROR) this->andor.camera_info.gain = gain;
         else { message << "ERROR gain not set"; }
       }
       else
       if ( error==NO_ERROR && gain >= low && gain <= high ) {
-        error = this->andor._SetOutputAmplifier( Andor::AMPTYPE_EMCCD );
-        if (error==NO_ERROR) this->andor._SetEMCCDGain( gain );
+        error = this->andor.set_output_amplifier( Andor::AMPTYPE_EMCCD );
+        if (error==NO_ERROR) this->andor.set_emgain( gain );
         if (error==NO_ERROR) this->andor.camera_info.gain = gain;
         else { message << "ERROR gain not set"; }
       }

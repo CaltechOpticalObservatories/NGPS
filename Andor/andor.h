@@ -19,8 +19,8 @@
 
 /***** Andor ******************************************************************/
 /**
- * @namespace Andor
- * @brief     namespace for Andor cameras
+ * @namespace  Andor
+ * @brief      namespace for Andor cameras
  *
  */
 namespace Andor {
@@ -30,9 +30,9 @@ namespace Andor {
 
   /***** Information **********************************************************/
   /**
-   * @class   Information
-   * @brief   information class for the Andor CCD
-   * @details contains information about the Andor camera
+   * @class     Information
+   * @brief     information class for the Andor CCD
+   * @details   contains information about the Andor camera
    *
    */
   class Information {
@@ -86,8 +86,8 @@ namespace Andor {
 
   /***** FITS_file ************************************************************/
   /**
-   * @class   FITS_file
-   * @brief   class for FITS I/O using CCfits
+   * @class     FITS_file
+   * @brief     class for FITS I/O using CCfits
    *
    */
   class FITS_file {
@@ -111,23 +111,216 @@ namespace Andor {
   /***** FITS_file ************************************************************/
 
 
+  /***** AndorBase ************************************************************/
+  /**
+   * @class     AndorBase
+   * @brief     Base class for the Andor CCD Software Development Kit
+   * @details   This class contains wrappers for all the SDK functions,
+   *            indicated by "_" prefix. What the wrappers provide is a check
+   *            of the return value. If not DRV_SUCCESS then the return value
+   *            is logged (and the wrappper returns ERROR). On DRV_SUCCESS the
+   *            wrapper returns NO_ERROR.
+   */
+  class AndorBase {
+    public:
+      virtual ~AndorBase() {}
+      virtual long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) = 0;
+      virtual long _GetAvailableCameras( int &number ) = 0;
+      virtual long _GetCameraHandle( int index, int* handle ) = 0;
+      virtual long _GetCameraSerialNumber( int &number ) = 0;
+      virtual long _GetDetector( int &xpix, int &ypix ) = 0;
+      virtual long _GetStatus( std::string &status ) = 0;
+      virtual long _GetStatus( int &status_id ) = 0;
+      virtual long _GetStatus( int &status_id, std::string &status_msg ) = 0;
+      virtual long _GetNumberADChannels( int &channels ) = 0;
+      virtual long _GetNumberHSSpeeds( int chan, int type, int &speeds ) = 0;
+      virtual long _GetNumberVSSpeeds( int &speeds ) = 0;
+      virtual long _GetHSSpeed( int chan, int type, int index, float &speed ) = 0;
+      virtual long _SetHSSpeed( int type, int index ) = 0;
+      virtual long _GetVSSpeed( int index, float &speed ) = 0;
+      virtual long _SetVSSpeed( int index ) = 0;
+      virtual long _SetEMCCDGain( int gain ) = 0;
+      virtual long _GetEMCCDGain( int &gain ) = 0;
+      virtual long _GetEMGainRange( int &low, int &high ) = 0;
+      virtual long _SetOutputAmplifier( int type ) = 0;
+      virtual long _GetTemperature( int &temp, std::string_view &status ) = 0;
+      virtual long _GetTemperatureRange( int &min, int &max ) = 0;
+      virtual long _CoolerON() = 0;
+      virtual long _CoolerOFF() = 0;
+      virtual long _SetTemperature( int temp ) = 0;
+      virtual long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) = 0;
+      virtual long _Initialize( ) = 0;
+      virtual long _SetAcquisitionMode( int mode ) = 0;
+      virtual long _SetCurrentCamera( int handle ) = 0;
+      virtual long _SetExposureTime( double exptime ) = 0;
+      virtual long _SetImageFlip( int hflip, int vflip ) = 0;
+      virtual long _SetImageRotate( int rotdir ) = 0;
+      virtual long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) = 0;
+      virtual long _SetReadMode( int mode ) = 0;
+      virtual long _SetShutter( int type, int mode, int closetime, int opentime ) = 0;
+      virtual long _StartAcquisition( ) = 0;
+  };
+  /***** AndorBase ************************************************************/
+
+
+  /***** SDK ******************************************************************/
+  /**
+   * @class     SDK
+   * @brief     Derived class for operating the Andor CCD Software Development Kit
+   * @details   This class inherits from AndorBase.
+   *
+   */
+  class SDK : public AndorBase {
+    private:
+      bool initialized;
+    public:
+      long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
+      long _GetAvailableCameras( int &number ) override;
+      long _GetCameraHandle( int index, int* handle ) override;
+      long _GetCameraSerialNumber( int &number ) override;
+      long _GetDetector( int &xpix, int &ypix ) override;
+      long _GetStatus( std::string &status ) override;
+      long _GetStatus( int &status_id ) override;
+      long _GetStatus( int &status_id, std::string &status_msg ) override;
+      long _GetNumberADChannels( int &channels ) override;
+      long _GetNumberHSSpeeds( int chan, int type, int &speeds ) override;
+      long _GetNumberVSSpeeds( int &speeds ) override;
+      long _GetHSSpeed( int chan, int type, int index, float &speed ) override;
+      long _SetHSSpeed( int type, int index ) override;
+      long _GetVSSpeed( int index, float &speed ) override;
+      long _SetVSSpeed( int index ) override;
+      long _SetEMCCDGain( int gain ) override;
+      long _GetEMCCDGain( int &gain ) override;
+      long _GetEMGainRange( int &low, int &high ) override;
+      long _SetOutputAmplifier( int type ) override;
+      long _GetTemperature( int &temp, std::string_view &status ) override;
+      long _GetTemperatureRange( int &min, int &max ) override;
+      long _CoolerON() override;
+      long _CoolerOFF() override;
+      long _SetTemperature( int temp ) override;
+      long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) override;
+      long _Initialize( ) override;
+      long _SetAcquisitionMode( int mode ) override;
+      long _SetCurrentCamera( int handle ) override;
+      long _SetExposureTime( double exptime ) override;
+      long _SetImageFlip( int hflip, int vflip ) override;
+      long _SetImageRotate( int rotdir ) override;
+      long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
+      long _SetReadMode( int mode ) override;
+      long _SetShutter( int type, int mode, int closetime, int opentime ) override;
+      long _StartAcquisition( ) override;
+  };
+  /***** SDK ******************************************************************/
+
+
+  /***** Sim ******************************************************************/
+  /**
+   * @class     Sim
+   * @brief     Derived class for simulating the Andor CCD Software Development Kit
+   * @details   This class inherits from AndorBase.
+   *
+   */
+  class Sim : public AndorBase {
+    private:
+      bool initialized;
+    public:
+      long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
+      long _GetAvailableCameras( int &number ) override;
+      long _GetCameraHandle( int index, int* handle ) override;
+      long _GetCameraSerialNumber( int &number ) override;
+      long _GetDetector( int &xpix, int &ypix ) override;
+      long _GetStatus( std::string &status ) override;
+      long _GetStatus( int &status_id ) override;
+      long _GetStatus( int &status_id, std::string &status_msg ) override;
+      long _GetNumberADChannels( int &channels ) override;
+      long _GetNumberHSSpeeds( int chan, int type, int &speeds ) override;
+      long _GetNumberVSSpeeds( int &speeds ) override;
+      long _GetHSSpeed( int chan, int type, int index, float &speed ) override;
+      long _SetHSSpeed( int type, int index ) override;
+      long _GetVSSpeed( int index, float &speed ) override;
+      long _SetVSSpeed( int index ) override;
+      long _SetEMCCDGain( int gain ) override;
+      long _GetEMCCDGain( int &gain ) override;
+      long _GetEMGainRange( int &low, int &high ) override;
+      long _SetOutputAmplifier( int type ) override;
+      long _GetTemperature( int &temp, std::string_view &status ) override;
+      long _GetTemperatureRange( int &min, int &max ) override;
+      long _CoolerON() override;
+      long _CoolerOFF() override;
+      long _SetTemperature( int temp ) override;
+      long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) override;
+      long _Initialize( ) override;
+      long _SetAcquisitionMode( int mode ) override;
+      long _SetCurrentCamera( int handle ) override;
+      long _SetExposureTime( double exptime ) override;
+      long _SetImageFlip( int hflip, int vflip ) override;
+      long _SetImageRotate( int rotdir ) override;
+      long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
+      long _SetReadMode( int mode ) override;
+      long _SetShutter( int type, int mode, int closetime, int opentime ) override;
+      long _StartAcquisition( ) override;
+  };
+  /***** Sim ******************************************************************/
+
+
   /***** Interface ************************************************************/
   /**
-   * @class   Interface
-   * @brief   class for control of the Andor CCD
-   * @details Control software for ths CCD, does all of the driver control
-   *          functions for the Andor library (open, close CCD driver),
-   *          communicates with the CCD, etc.
+   * @class     Interface
+   * @brief     class for control of the Andor CCD using the SDK wrappers
+   * @details   Control software for ths CCD, does all of the driver control
+   *            functions for the Andor library (open, close CCD driver),
+   *            communicates with the CCD, etc.
    *
    */
   class Interface {
     private:
-      char* sdk;
-      bool initialized;
-    public:
+      bool initialized;           ///< is the Andor SDK initialized?
+      bool andor_simulated;       ///< is the Andor simulated?
+      Andor::AndorBase* andor;    ///< pointer to the Andor class to use
 
-      Interface();
-      ~Interface();
+    public:
+      /***** Andor::Interface::Interface **************************************/
+      /**
+       * @brief      Interface constructor, defaults to Andor not simulated
+       *
+       */
+      Interface() : initialized( false ), andor_simulated( false ), andor( &sdk ) {
+        image_data = nullptr;
+      }
+      /***** Andor::Interface::Interface **************************************/
+
+      Andor::SDK sdk;             ///< object for the real Andor SDK
+
+      Andor::Sim sim;             ///< object for the simulated Andor
+
+      /***** Andor::Interface::sim_andor **************************************/
+      /**
+       * @brief      enable/disable simulating the Andor
+       * @param[in]  simandor  true=use simulator, false=use real Andor SDK
+       * @details    "sim" or "sdk" or "null"
+       *
+       */
+      inline void sim_andor( bool simandor ) {
+        this->andor = simandor ? static_cast<Andor::AndorBase*>(&sim) : static_cast<Andor::AndorBase*>(&sdk);
+        this->andor_simulated = simandor;
+        return;
+      }
+      /***** Andor::Interface::sim_andor **************************************/
+
+      /***** Andor::Interface::get_andor_object *******************************/
+      /**
+       * @brief      returns string indicating which object is in use
+       * @return     "sim" or "sdk" or "null"
+       *
+       */
+      inline std::string_view get_andor_object() {
+        if ( this->andor == &sim ) return "sim";
+        else
+        if ( this->andor == &sdk ) return "sdk";
+        else
+        return "null";
+      }
+      /***** Andor::Interface::get_andor_object *******************************/
 
       Andor::Information camera_info;
 
@@ -135,66 +328,33 @@ namespace Andor {
 
       uint16_t* image_data;
 
-      // The following functions wrap Andor SDK functions,
-      // indicated by "_" prefix. What the wrappers provide is a check
-      // of the return value. If not DRV_SUCCESS then the return value
-      // is logged (and the wrappper returns ERROR). On DRV_SUCCESS the
-      // wrapper returns NO_ERROR.
-      //
-      long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize );
-      long _GetAvailableCameras( int* number );
-      long _GetCameraHandle( int index, int* handle );
-      long _GetCameraSerialNumber( int &number );
-      long _GetDetector( int &xpix, int &ypix );
-      long _GetStatus( std::string &status );
-      long _GetStatus( int* status );
-      long _GetStatus( int* status, std::string &status_msg );
-      long _GetNumberADChannels( int &channels );
-      long _GetNumberHSSpeeds( int chan, int type, int &speeds );
-      long _GetNumberVSSpeeds( int &speeds );
-      long _GetHSSpeed( int type, int index, float &speed );
-      long _SetHSSpeed( int type, int index );
-      long _GetVSSpeed( int index, float &speed );
-      long _SetVSSpeed( int index );
-      long _SetEMCCDGain( int gain );
-      long _GetEMCCDGain( int &gain );
-      long _GetEMGainRange( int &low, int &high );
-      long _SetOutputAmplifier( int type );
-      long _GetTemperature( int &temp );
-      long _GetTemperatureRange( int &min, int &max );
-      long _CoolerON();
-      long _CoolerOFF();
-      long _SetTemperature( int temp );
-      long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len );
-      long _Initialize( );
-      long _SetAcquisitionMode( int mode );
-      long _SetCurrentCamera( int handle );
-      long _SetExposureTime( double exptime );
-      long _SetImageFlip( int hflip, int vflip );
-      long _SetImageRotate( int rotdir );
-      long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
-      long _SetReadMode( int mode );
-      long _SetShutter( int type, int mode, int closetime, int opentime );
-      long _StartAcquisition( );
-
       inline bool is_initialized() { return this->initialized; };
 
+      long simandor( std::string args, std::string &retstring );
       long open( std::string args );
       long close();
       long test();
       long shutter();
+      long exptime( int exptime_in );
       long exptime( std::string exptime_in, std::string &retstring );
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
       unsigned int start_acquisition();
+      long get_detector( int &x, int &y );
       long get_status();
       long get_speeds();
       long set_temperature( int temp );
       long get_temperature( int &temp );
       long get_temperature();
+      long set_read_mode( int mode );
+      long set_acquisition_mode( int mode );
+      long set_output_amplifier( int type );
       long set_emgain( int gain );
+      long get_emgain_range( int &low, int &high );
+      long get_emgain( int &gain );
       long set_hsspeed( float speed );
       long set_vsspeed( float speed );
+      long set_image( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
       long set_binning( int hbin, int vbin );
       long set_imflip( int hflip, int vflip );
       long set_imrot( int rotdir );
@@ -205,7 +365,7 @@ namespace Andor {
         std::stringstream message;
         unsigned long ret;
 
-        _GetDetector( this->camera_info.cols, this->camera_info.rows );
+        this->get_detector( this->camera_info.cols, this->camera_info.rows );
         this->camera_info.npix = this->camera_info.cols * this->camera_info.rows;
 
         // Use the appropriate API call to get the acquired data

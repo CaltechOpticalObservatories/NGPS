@@ -24,6 +24,7 @@ find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib )
 
 add_library( andor STATIC
         ${ANDOR_DIR}/andor.cpp
+        ${ANDOR_DIR}/sim.cpp
         )
 
 target_link_libraries( andor

@@ -504,19 +504,19 @@ namespace Acam {
       //
       if ( cmd == "cameragain" ) {
                       int gain;
-                      ret = this->interface.camera.andor._GetEMCCDGain( gain );
+                      ret = this->interface.camera.andor.get_emgain( gain );
                       retstring = std::to_string(gain);
       }
       else
       if ( cmd == "cameragainrange" ) {
                       int low,high;
-                      ret = this->interface.camera.andor._GetEMGainRange(low,high);
+                      ret = this->interface.camera.andor.get_emgain_range(low,high);
                       retstring = std::to_string(low) + " " + std::to_string(high);
       }
       else
       if ( cmd == "cameraadchans" ) {
                       int chans;
-                      ret = this->interface.camera.andor._GetNumberADChannels(chans);
+                      ret = this->interface.camera.andor.sdk._GetNumberADChannels(chans);
                       retstring = std::to_string(chans);
       }
       else
@@ -615,6 +615,10 @@ namespace Acam {
       else
       if ( cmd == ACAMD_TEMP ) {
                       ret = this->interface.camera.temperature( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_SIMANDOR ) {
+                      ret = this->interface.camera.simandor( args, retstring );
       }
       else
 

@@ -11,28 +11,6 @@
 
 namespace Andor {
 
-  /***** Andor::Interface::Interface ******************************************/
-  /**
-   * @brief      default Interface class constructor
-   *
-   */
-  Interface::Interface() {
-    this->initialized = false;
-    this->image_data = NULL;
-  }
-  /***** Andor::Interface::Interface ******************************************/
-
-
-  /***** Andor::Interface::~Interface *****************************************/
-  /**
-   * @brief      Interface class deconstructor
-   *
-   */
-  Interface::~Interface() {
-  };
-  /***** Andor::Interface::~Interface *****************************************/
-
-
   /***** Andor::Information::Information **************************************/
   /**
    * @brief      default Information class constructor
@@ -62,7 +40,7 @@ namespace Andor {
   /***** Andor::Interface::Interface ******************************************/
 
 
-  /***** Andor::Interface::_GetAcquiredData16 *********************************/
+  /***** Andor::SDK::_GetAcquiredData16 ***************************************/
   /**
    * @brief      wrapper for Andor SDK GetAcquiredData16
    * @details    16-bit version of GetAcquiredData. buf must be large enough
@@ -70,8 +48,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) {
-    std::string function = "Andor::Interface::_GetAcquiredData16";
+  long SDK::_GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) {
+    std::string function = "Andor::SDK::_GetAcquiredData16";
     std::stringstream message;
 
     unsigned int ret = GetAcquiredData16( buf, bufsize );
@@ -92,23 +70,23 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetAcquiredData16 *********************************/
+  /***** Andor::SDK::_GetAcquiredData16 ***************************************/
 
 
-  /***** Andor::Interface::_GetAvailableCameras *******************************/
+  /***** Andor::SDK::_GetAvailableCameras *************************************/
   /**
    * @brief      wrapper for Andor SDK GetAvailableCameras
    * @details    Returns the total number of installed Andor cameras.
    *             Can be called before any cameras are initialized.
-   * @param[out] number  pointer to return number of cameras
+   * @param[out] number  reference to integer to return number of cameras
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_GetAvailableCameras( int* number ) {
-    std::string function = "Andor::Interface::_GetAvailableCameras";
+  long SDK::_GetAvailableCameras( int &number ) {
+    std::string function = "Andor::SDK::_GetAvailableCameras";
     std::stringstream message;
 
-    unsigned int ret = GetAvailableCameras( number );
+    unsigned int ret = GetAvailableCameras( &number );
 
     switch ( ret ) {
       case DRV_SUCCESS:         message << number;                                    break;
@@ -120,10 +98,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetAvailableCameras *******************************/
+  /***** Andor::SDK::_GetAvailableCameras *************************************/
 
 
-  /***** Andor::Interface::_GetCameraHandle ***********************************/
+  /***** Andor::SDK::_GetCameraHandle *****************************************/
   /**
    * @brief      wrapper for Andor SDK GetCameraHandle
    * @details    Returns the handle for the camera specified by index. When
@@ -135,8 +113,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_GetCameraHandle( int index, int* handle ) {
-    std::string function = "Andor::Interface::_GetCameraHandle";
+  long SDK::_GetCameraHandle( int index, int* handle ) {
+    std::string function = "Andor::SDK::_GetCameraHandle";
     std::stringstream message;
 
     unsigned int ret = GetCameraHandle( index, handle );
@@ -151,10 +129,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetCameraHandle ***********************************/
+  /***** Andor::SDK::_GetCameraHandle *****************************************/
 
 
-  /***** Andor::Interface::_GetCameraSerialNumber *****************************/
+  /***** Andor::SDK::_GetCameraSerialNumber ***********************************/
   /**
    * @brief      wrapper for Andor SDK GetCameraSerialNumber
    * @details    checks return value
@@ -162,8 +140,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_GetCameraSerialNumber( int &number ) {
-    std::string function = "Andor::Interface::_GetCameraSerialNumber";
+  long SDK::_GetCameraSerialNumber( int &number ) {
+    std::string function = "Andor::SDK::_GetCameraSerialNumber";
     std::stringstream message;
 
     unsigned int ret = GetCameraSerialNumber( &number );
@@ -178,10 +156,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetCameraSerialNumber *****************************/
+  /***** Andor::SDK::_GetCameraSerialNumber ***********************************/
 
 
-  /***** Andor::Interface::_GetDetector ***************************************/
+  /***** Andor::SDK::_GetDetector *********************************************/
   /**
    * @brief      wrapper for Andor SDK GetDetector
    * @details    Returns the size of the detector in pixels
@@ -190,8 +168,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_GetDetector( int &xpix, int &ypix ) {
-    std::string function = "Andor::Interface::_GetDetector";
+  long SDK::_GetDetector( int &xpix, int &ypix ) {
+    std::string function = "Andor::SDK::_GetDetector";
     std::stringstream message;
 
     unsigned int ret = GetDetector( &xpix, &ypix );
@@ -206,10 +184,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetDetector ***************************************/
+  /***** Andor::SDK::_GetDetector *********************************************/
 
 
-  /***** Andor::Interface::_GetStatus *****************************************/
+  /***** Andor::SDK::_GetStatus ***********************************************/
   /**
    * @brief      wrapper for Andor SDK GetStatus
    * @details    checks return value
@@ -219,60 +197,60 @@ namespace Andor {
    * This function is overloaded. This version does not provide the status message string.
    *
    */
-  long Interface::_GetStatus( std::string &status ) {
-    std::string function = "Andor::Interface::_GetStatus";
+  long SDK::_GetStatus( std::string &status ) {
+    std::string function = "Andor::SDK::_GetStatus";
     int dontcare;
-    return this->_GetStatus( &dontcare, status );
+    return this->_GetStatus( dontcare, status );
   }
-  /***** Andor::Interface::_GetStatus *****************************************/
+  /***** Andor::SDK::_GetStatus ***********************************************/
 
 
-  /***** Andor::Interface::_GetStatus *****************************************/
+  /***** Andor::SDK::_GetStatus ***********************************************/
   /**
    * @brief      wrapper for Andor SDK GetStatus
    * @details    Return status of Andor SDK system. Should be called before an
    *             acquisition is started to ensure it is IDLE, and then call
    *             during acquisition to monitor progress.
-   * @param[out] status_id   pointer to int to contain the status ID code
+   * @param[out] status_id   reference to int to contain the status ID code
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    * This function is overloaded. This version does not provide the status message string.
    *
    */
-  long Interface::_GetStatus( int* status_id ) {
-    std::string function = "Andor::Interface::_GetStatus";
+  long SDK::_GetStatus( int &status_id ) {
+    std::string function = "Andor::SDK::_GetStatus";
     std::string dontcare;
-    return _GetStatus( status_id, dontcare );
+    return this->_GetStatus( status_id, dontcare );
   }
-  /***** Andor::Interface::_GetStatus *****************************************/
+  /***** Andor::SDK::_GetStatus ***********************************************/
 
 
-  /***** Andor::Interface::_GetStatus *****************************************/
+  /***** Andor::SDK::_GetStatus ***********************************************/
   /**
    * @brief      wrapper for Andor SDK GetStatus checks return value
    * @details    Return status of Andor SDK system. Should be called before an
    *             acquisition is started to ensure it is IDLE, and then call
    *             during acquisition to monitor progress.
-   * @param[out] status_id   pointer to int to contain the status ID code
+   * @param[out] status_id   reference to int to contain the status ID code
    * @param[out] status_msg  reference to string to contain the status message text
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    * This function is overloaded. This version provides the status message string.
    *
    */
-  long Interface::_GetStatus( int* status_id, std::string &status_msg ) {
-    std::string function = "Andor::Interface::_GetStatus";
+  long SDK::_GetStatus( int &status_id, std::string &status_msg ) {
+    std::string function = "Andor::SDK::_GetStatus";
     std::stringstream message;
 
-    unsigned int ret = GetStatus( status_id );
+    unsigned int ret = GetStatus( &status_id );
 
     switch ( ret ) {
       case DRV_SUCCESS:              /* silent on success */                                    break;
       case DRV_NOT_INITIALIZED:      status_msg = "ERROR not initialized";                      break;
       default:                       status_msg = "ERROR unrecognized return code " + std::to_string( ret );
     }
-    switch ( *status_id ) {
-      case DRV_IDLE:                 status_msg = "IDLE waiting on instructions";               break;
+    switch ( status_id ) {
+      case DRV_IDLE:                 status_msg = "IDLE";                                       break;
       case DRV_TEMPCYCLE:            status_msg = "executing temperature cycle";                break;
       case DRV_ACQUIRING:            status_msg = "acquisition in progress";                    break;
       case DRV_ACCUM_TIME_NOT_MET:   status_msg = "ERROR unable to meet accumulate cycle time"; break;
@@ -287,10 +265,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetStatus *****************************************/
+  /***** Andor::SDK::_GetStatus ***********************************************/
 
 
-  /***** Andor::Interface::_GetNumberADChannels *******************************/
+  /***** Andor::SDK::_GetNumberADChannels *************************************/
   /**
    * @brief      wrapper for Andor SDK GetNumberADChannels
    * @details    returns the number of AD converter channels available
@@ -298,8 +276,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetNumberADChannels( int &channels ) {
-    std::string function = "Andor::Interface::_GetNumberADChannels";
+  long SDK::_GetNumberADChannels( int &channels ) {
+    std::string function = "Andor::SDK::_GetNumberADChannels";
     std::stringstream message;
 
     unsigned int ret = GetNumberADChannels( &channels );
@@ -315,10 +293,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetNumberADChannels *******************************/
+  /***** Andor::SDK::_GetNumberADChannels *************************************/
 
 
-  /***** Andor::Interface::_GetNumberHSSpeeds *********************************/
+  /***** Andor::SDK::_GetNumberHSSpeeds ***************************************/
   /**
    * @brief      wrapper for Andor SDK GetNumberHSSpeeds
    * @details    returns the number of horizontal shift speeds available
@@ -328,8 +306,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetNumberHSSpeeds( int adchan, int type, int &speeds ) {
-    std::string function = "Andor::Interface::_GetNumberHSSpeeds";
+  long SDK::_GetNumberHSSpeeds( int adchan, int type, int &speeds ) {
+    std::string function = "Andor::SDK::_GetNumberHSSpeeds";
     std::stringstream message;
 
     unsigned int ret = GetNumberHSSpeeds( adchan, type, &speeds );
@@ -346,10 +324,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetNumberHSSpeeds *********************************/
+  /***** Andor::SDK::_GetNumberHSSpeeds ***************************************/
 
 
-  /***** Andor::Interface::_GetNumberVSSpeeds *********************************/
+  /***** Andor::SDK::_GetNumberVSSpeeds ***************************************/
   /**
    * @brief      wrapper for Andor SDK GetNumberVSSpeeds
    * @details    returns the number of vertical shift speeds available
@@ -357,8 +335,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetNumberVSSpeeds( int &speeds ) {
-    std::string function = "Andor::Interface::_GetNumberVSSpeeds";
+  long SDK::_GetNumberVSSpeeds( int &speeds ) {
+    std::string function = "Andor::SDK::_GetNumberVSSpeeds";
     std::stringstream message;
 
     unsigned int ret = GetNumberVSSpeeds( &speeds );
@@ -373,31 +351,30 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetNumberVSSpeeds *********************************/
+  /***** Andor::SDK::_GetNumberVSSpeeds ***************************************/
 
 
-  /***** Andor::Interface::_GetHSSpeed ****************************************/
+  /***** Andor::SDK::_GetHSSpeed **********************************************/
   /**
    * @brief      wrapper for Andor SDK GetHSSpeed
    * @details    returns the horizontal shift speed for specified amp and index
+   * @param[in]  chan   AD channel
    * @param[in]  type   output amplification type {0=EM 1=conventional}
    * @param[in]  index
    * @param[out] speed  reference to float to contain speed in MHz
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetHSSpeed( int type, int index, float &speed ) {
-    std::string function = "Andor::Interface::_GetHSSpeed";
+  long SDK::_GetHSSpeed( int chan, int type, int index, float &speed ) {
+    std::string function = "Andor::SDK::_GetHSSpeed";
     std::stringstream message;
 
-    int adchan = this->camera_info.adchan;
-
-    unsigned int ret = GetHSSpeed( adchan, type, index, &speed );
+    unsigned int ret = GetHSSpeed( chan, type, index, &speed );
 
     switch ( ret ) {
-      case DRV_SUCCESS:         message << adchan << " " << type << " " << speed;    break;
+      case DRV_SUCCESS:         message << chan << " " << type << " " << speed;      break;
       case DRV_NOT_INITIALIZED: message << "ERROR not initialized";                  break;
-      case DRV_P1INVALID:       message << "ERROR invalid AD chan " << adchan;       break;
+      case DRV_P1INVALID:       message << "ERROR invalid AD chan " << chan;         break;
       case DRV_P2INVALID:       message << "ERROR invalid amp type " << type;        break;
       case DRV_P3INVALID:       message << "ERROR invalid index " << index;          break;
       default:                  message << "ERROR unrecognized status code " << ret;
@@ -407,10 +384,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetHSSpeed ****************************************/
+  /***** Andor::SDK::_GetHSSpeed **********************************************/
 
 
-  /***** Andor::Interface::_SetHSSpeed ****************************************/
+  /***** Andor::SDK::_SetHSSpeed **********************************************/
   /**
    * @brief      wrapper for Andor SDK SetHSSpeed
    * @details    Set the speed at which pixels are shifted into output node
@@ -420,34 +397,14 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_SetHSSpeed( int type, int index ) {
-    std::string function = "Andor::Interface::_SetHSSpeed";
+  long SDK::_SetHSSpeed( int type, int index ) {
+    std::string function = "Andor::SDK::_SetHSSpeed";
     std::stringstream message;
-
-    // Check that the amp type is in the STL map
-    //
-    if ( this->camera_info.hsspeeds.count(type) <= 0 ) {
-      message.str(""); message << "ERROR invalid amp type " << type;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    // Check that the vector index is in range
-    //
-    if ( index < 0 || index >= (int)this->camera_info.hsspeeds[type].size() ) {
-      message.str(""); message << "ERROR invalid index " << index;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    float speed = this->camera_info.hsspeeds[type][index];
 
     unsigned int ret = SetHSSpeed( type, index );
 
     switch ( ret ) {
-      case DRV_SUCCESS:             message << speed << " MHz";
-                                    this->camera_info.hspeed = speed;
-                                    break;
+      case DRV_SUCCESS:             /* silent on success */                              break;
       case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                  break;
       case DRV_ACQUIRING:           message << "ERROR acquisition in progress";          break;
       case DRV_P1INVALID:           message << "ERROR invalid amp type " << type;        break;
@@ -455,14 +412,14 @@ namespace Andor {
       default:                      message << "ERROR unrecognized status code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetHSSpeed ****************************************/
+  /***** Andor::SDK::_SetHSSpeed **********************************************/
 
 
-  /***** Andor::Interface::_GetVSSpeed ****************************************/
+  /***** Andor::SDK::_GetVSSpeed **********************************************/
   /**
    * @brief      wrapper for Andor SDK GetVSSpeed
    * @details    returns the vertical shift speed for specified index
@@ -471,8 +428,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetVSSpeed( int index, float &speed ) {
-    std::string function = "Andor::Interface::_GetVSSpeed";
+  long SDK::_GetVSSpeed( int index, float &speed ) {
+    std::string function = "Andor::SDK::_GetVSSpeed";
     std::stringstream message;
 
     unsigned int ret = GetVSSpeed( index, &speed );
@@ -489,10 +446,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetVSSpeed ****************************************/
+  /***** Andor::SDK::_GetVSSpeed **********************************************/
 
 
-  /***** Andor::Interface::_SetVSSpeed ****************************************/
+  /***** Andor::SDK::_SetVSSpeed **********************************************/
   /**
    * @brief      wrapper for Andor SDK SetVSSpeed
    * @details    set the vertical speed used for subsequent acquisitions
@@ -500,40 +457,28 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_SetVSSpeed( int index ) {
-    std::string function = "Andor::Interface::_SetVSSpeed";
+  long SDK::_SetVSSpeed( int index ) {
+    std::string function = "Andor::SDK::_SetVSSpeed";
     std::stringstream message;
-
-    // Check that the vector index is in range
-    //
-    if ( index < 0 || index >= (int)this->camera_info.vsspeeds.size() ) {
-      message.str(""); message << "ERROR invalid index " << index;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    float speed = this->camera_info.vsspeeds[index];
 
     unsigned int ret = SetVSSpeed( index );
 
     switch ( ret ) {
-      case DRV_SUCCESS:             message << speed << " MHz";
-                                    this->camera_info.vspeed = speed;
-                                    break;
+      case DRV_SUCCESS:             /* silent on success */                              break;
       case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                  break;
       case DRV_ACQUIRING:           message << "ERROR acquisition in progress";          break;
       case DRV_P1INVALID:           message << "ERROR invalid index " << index;          break;
       default:                      message << "ERROR unrecognized status code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetVSSpeed ****************************************/
+  /***** Andor::SDK::_SetVSSpeed **********************************************/
 
 
-  /***** Andor::Interface::_SetEMCCDGain **************************************/
+  /***** Andor::SDK::_SetEMCCDGain ********************************************/
   /**
    * @brief      wrapper for Andor SDK SetEMCCDGain
    * @details    set gain value
@@ -541,16 +486,14 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_SetEMCCDGain( int gain ) {
-    std::string function = "Andor::Interface::_SetEMCCDGain";
+  long SDK::_SetEMCCDGain( int gain ) {
+    std::string function = "Andor::SDK::_SetEMCCDGain";
     std::stringstream message;
 
     unsigned int ret = SetEMCCDGain( gain );
 
     switch ( ret ) {
-      case DRV_SUCCESS:             message << gain;
-                                    this->camera_info.emgain = gain;
-                                    break;
+      case DRV_SUCCESS:             /* silent on success */                                         break;
       case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                             break;
       case DRV_ACQUIRING:           message << "ERROR acquisition in progress";                     break;
       case DRV_I2CTIMEOUT:          message << "ERROR I2C command timed out";                       break;
@@ -560,14 +503,14 @@ namespace Andor {
       default:                      message << "ERROR unrecognized status code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetEMCCDGain **************************************/
+  /***** Andor::SDK::_SetEMCCDGain ********************************************/
 
 
-  /***** Andor::Interface::_GetEMCCDGain **************************************/
+  /***** Andor::SDK::_GetEMCCDGain ********************************************/
   /**
    * @brief      wrapper for Andor SDK GetEMCCDGain
    * @details    return gain setting (by reference) and save in class
@@ -575,8 +518,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetEMCCDGain( int &gain ) {
-    std::string function = "Andor::Interface::_GetEMCCDGain";
+  long SDK::_GetEMCCDGain( int &gain ) {
+    std::string function = "Andor::SDK::_GetEMCCDGain";
     std::stringstream message;
 
     std::string status;
@@ -584,24 +527,20 @@ namespace Andor {
     unsigned int ret = GetEMCCDGain( &gain );
 
     switch ( ret ) {
-      case DRV_SUCCESS:             status = std::to_string( gain );
-                                    this->camera_info.emgain = gain;
-                                    break;
+      case DRV_SUCCESS:             /* silent on success */                     break;
       case DRV_NOT_INITIALIZED:     status = "ERROR not initialized";           break;
       case DRV_ERROR_ACK:           status = "ERROR communicating with device"; break;
       default:                      status = "ERROR unrecognized status code " + std::to_string( ret );
     }
 
-    logwrite( function, status );
-
-    this->camera_info.emgain = gain;
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetEMCCDGain **************************************/
+  /***** Andor::SDK::_GetEMCCDGain ********************************************/
 
 
-  /***** Andor::Interface::_GetEMGainRange ************************************/
+  /***** Andor::SDK::_GetEMGainRange ******************************************/
   /**
    * @brief      wrapper for Andor SDK GetEMGainRange
    * @details    return minimum and maximum values for selected EM gain mode
@@ -610,8 +549,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetEMGainRange( int &low, int &high ) {
-    std::string function = "Andor::Interface::_GetEMGainRange";
+  long SDK::_GetEMGainRange( int &low, int &high ) {
+    std::string function = "Andor::SDK::_GetEMGainRange";
     std::stringstream message;
 
     unsigned int ret = GetEMGainRange( &low, &high );
@@ -626,10 +565,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetEMGainRange ************************************/
+  /***** Andor::SDK::_GetEMGainRange ******************************************/
 
 
-  /***** Andor::Interface::_SetOutputAmplifier ********************************/
+  /***** Andor::SDK::_SetOutputAmplifier **************************************/
   /**
    * @brief      wrapper for Andor SDK SetOutputAmplifier
    * @details    set the type of amplifier to be used
@@ -637,37 +576,28 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_SetOutputAmplifier( int type ) {
-    std::string function = "Andor::Interface::_SetOutputAmplifier";
+  long SDK::_SetOutputAmplifier( int type ) {
+    std::string function = "Andor::SDK::_SetOutputAmplifier";
     std::stringstream message;
-
-    if ( type != 0 && type != 1 ) {
-      message.str(""); message << "ERROR invalid type " << type << ": expected { 0 1 }";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
 
     unsigned int ret = SetOutputAmplifier( type );
 
     switch ( ret ) {
-      case DRV_SUCCESS:          this->camera_info.amptype    = type;
-                                 this->camera_info.amptypestr = ( type == AMPTYPE_EMCCD ? "EMCCD" : "conventional" );
-                                 message << type << " (" << this->camera_info.amptypestr << ")";
-                                 break;
+      case DRV_SUCCESS:          /* silent on success */                              break;
       case DRV_NOT_INITIALIZED:  message << "ERROR not initialized";                  break;
       case DRV_ACQUIRING:        message << "ERROR acquisition in progress";          break;
       case DRV_P1INVALID:        message << "ERROR invalid type " << type;            break;
       default:                   message << "ERROR unrecognized status code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetOutputAmplifier ********************************/
+  /***** Andor::SDK::_SetOutputAmplifier **************************************/
 
 
-  /***** Andor::Interface::_GetTemperature ************************************/
+  /***** Andor::SDK::_GetTemperature ******************************************/
   /**
    * @brief      wrapper for Andor SDK GetTemperature
    * @details    returns temperature of detector to the nearest degree C
@@ -675,11 +605,9 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetTemperature( int &temp ) {
-    std::string function = "Andor::Interface::_GetTemperature";
+  long SDK::_GetTemperature( int &temp, std::string_view &status ) {
+    std::string function = "Andor::SDK::_GetTemperature";
     std::stringstream message;
-
-    std::string status;
 
     unsigned int ret = GetTemperature( &temp );
 
@@ -695,18 +623,14 @@ namespace Andor {
       default:                      status = "ERROR unrecognized status code " + std::to_string( ret );
     }
 
-    message << temp << ": " << status;
-    logwrite( function, message.str() );
-
-    this->camera_info.temp_status = status;
-    this->camera_info.ccdtemp     = temp;
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( status.substr(0,5)=="ERROR" ? ERROR : NO_ERROR );
   }
-  /***** Andor::Interface::_GetTemperature ************************************/
+  /***** Andor::SDK::_GetTemperature ******************************************/
 
 
-  /***** Andor::Interface::_GetTemperatureRange *******************************/
+  /***** Andor::SDK::_GetTemperatureRange *************************************/
   /**
    * @brief      wrapper for Andor SDK GetTemperature checks return value
    * @details    returns the valid range of temperatures
@@ -715,8 +639,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_GetTemperatureRange( int &min, int &max ) {
-    std::string function = "Andor::Interface::_GetTemperatureRange";
+  long SDK::_GetTemperatureRange( int &min, int &max ) {
+    std::string function = "Andor::SDK::_GetTemperatureRange";
     std::stringstream message;
 
     unsigned int ret = GetTemperatureRange( &min, &max );
@@ -732,10 +656,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetTemperatureRange *******************************/
+  /***** Andor::SDK::_GetTemperatureRange *************************************/
 
 
-  /***** Andor::Interface::_CoolerON ******************************************/
+  /***** Andor::SDK::_CoolerON ************************************************/
   /**
    * @brief      wrapper for Andor SDK CoolerON
    * @details    turns on the cooling
@@ -743,8 +667,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_CoolerON() {
-    std::string function = "Andor::Interface::_CoolerON";
+  long SDK::_CoolerON() {
+    std::string function = "Andor::SDK::_CoolerON";
     std::stringstream message;
 
     unsigned int ret = CoolerON();
@@ -761,10 +685,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_CoolerON ******************************************/
+  /***** Andor::SDK::_CoolerON ************************************************/
 
 
-  /***** Andor::Interface::_CoolerOFF *****************************************/
+  /***** Andor::SDK::_CoolerOFF ***********************************************/
   /**
    * @brief      wrapper for Andor SDK CoolerOFF
    * @details    turns off the cooling
@@ -772,8 +696,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_CoolerOFF() {
-    std::string function = "Andor::Interface::_CoolerOFF";
+  long SDK::_CoolerOFF() {
+    std::string function = "Andor::SDK::_CoolerOFF";
     std::stringstream message;
 
     unsigned int ret = CoolerOFF();
@@ -790,10 +714,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_CoolerOFF *****************************************/
+  /***** Andor::SDK::_CoolerOFF ***********************************************/
 
 
-  /***** Andor::Interface::_SetTemperature ************************************/
+  /***** Andor::SDK::_SetTemperature ******************************************/
   /**
    * @brief      wrapper for Andor SDK SetTemperature
    * @details    set the temperature of the detector (does NOT control cooling)
@@ -801,16 +725,14 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Interface::_SetTemperature( int temp ) {
-    std::string function = "Andor::Interface::_SetTemperature";
+  long SDK::_SetTemperature( int temp ) {
+    std::string function = "Andor::SDK::_SetTemperature";
     std::stringstream message;
 
     unsigned int ret = SetTemperature( temp );
 
     switch ( ret ) {
-      case DRV_SUCCESS:             message << "setpoint is " << temp << "C";
-                                    this->camera_info.setpoint = temp;
-                                    break;
+      case DRV_SUCCESS:             /* silent on success */                                         break;
       case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                             break;
       case DRV_ACQUIRING:           message << "ERROR acquisition in progress";                     break;
       case DRV_ERROR_ACK:           message << "ERROR Unable to communicate with device";           break;
@@ -819,14 +741,14 @@ namespace Andor {
       default:                      message << "ERROR unrecognized status code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetTemperature ************************************/
+  /***** Andor::SDK::_SetTemperature ******************************************/
 
 
-  /***** Andor::Interface::_GetVersionInfo ************************************/
+  /***** Andor::SDK::_GetVersionInfo ******************************************/
   /**
    * @brief      wrapper for Andor SDK GetVersionInfo
    * @details    Retrieves version information about different aspects of the
@@ -834,8 +756,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) {
-    std::string function = "Andor::Interface::_GetVersionInfo";
+  long SDK::_GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) {
+    std::string function = "Andor::SDK::_GetVersionInfo";
     std::stringstream message;
 
     unsigned int ret = GetVersionInfo( arr, info, len );
@@ -851,18 +773,18 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_GetVersionInfo ************************************/
+  /***** Andor::SDK::_GetVersionInfo ******************************************/
 
 
-  /***** Andor::Interface::_Initialize ****************************************/
+  /***** Andor::SDK::_Initialize **********************************************/
   /**
    * @brief      wrapper for Andor SDK Initialize
    * @details    initialize the Andor SDK system
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_Initialize() {
-    std::string function = "Andor::Interface::_Initialize";
+  long SDK::_Initialize() {
+    std::string function = "Andor::SDK::_Initialize";
     std::stringstream message;
 
     // Initialize the Andor SDK
@@ -887,10 +809,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_Initialize ****************************************/
+  /***** Andor::SDK::_Initialize **********************************************/
 
 
-  /***** Andor::Interface::_SetAcquisitionMode ********************************/
+  /***** Andor::SDK::_SetAcquisitionMode **************************************/
   /**
    * @brief      wrapper for Andor SDK SetAcquisitionMode
    * @details    set acquisitiion mode to be used on next StartAcquisition
@@ -907,38 +829,28 @@ namespace Andor {
    * Sets the class variable "mode" on success.
    *
    */
-  long Interface::_SetAcquisitionMode( int mode ) {
-    std::string function = "Andor::Interface::_SetAcquisitionMode";
+  long SDK::_SetAcquisitionMode( int mode ) {
+    std::string function = "Andor::SDK::_SetAcquisitionMode";
     std::stringstream message;
 
     unsigned int ret = SetAcquisitionMode( mode );
 
     switch ( ret ) {
-      case DRV_SUCCESS:         this->camera_info.acqmode = mode;
-                                switch ( mode ) {
-                                  case 1:  this->camera_info.acqmodestr = "SINGLE_SCAN";    break;
-                                  case 2:  this->camera_info.acqmodestr = "ACCUMULATE";     break;
-                                  case 3:  this->camera_info.acqmodestr = "KINETICS";       break;
-                                  case 4:  this->camera_info.acqmodestr = "FAST_KINETICS";  break;
-                                  case 5:  this->camera_info.acqmodestr = "RUN_TILL_ABORT"; break;
-                                  default: this->camera_info.acqmodestr = "UNKNOWN";        break;
-                                }
-                                message << mode << " (" << this->camera_info.acqmodestr << ")";
-                                break;
+      case DRV_SUCCESS:         /* silent on success */                                     break;
       case DRV_NOT_INITIALIZED: message << "ERROR system not initialized";                  break;
       case DRV_ACQUIRING:       message << "ERROR acquisition already in progress";         break;
       case DRV_P1INVALID:       message << "ERROR acquisition mode " << mode << " invalid"; break;
       default:                  message << "ERROR unrecognized return code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetAcquisitionMode ********************************/
+  /***** Andor::SDK::_SetAcquisitionMode **************************************/
 
 
-  /***** Andor::Interface::_SetCurrentCamera **********************************/
+  /***** Andor::SDK::_SetCurrentCamera ****************************************/
   /**
    * @brief      wrapper for Andor SDK SetCurrentCamera
    * @details    When multiple cameras are installed this allows selecting which
@@ -948,8 +860,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_SetCurrentCamera( int handle ) {
-    std::string function = "Andor::Interface::_SetCurrentCamera";
+  long SDK::_SetCurrentCamera( int handle ) {
+    std::string function = "Andor::SDK::_SetCurrentCamera";
     std::stringstream message;
 
     unsigned int ret = SetCurrentCamera( handle );
@@ -964,10 +876,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetCurrentCamera **********************************/
+  /***** Andor::SDK::_SetCurrentCamera ****************************************/
 
 
-  /***** Andor::Interface::_SetExposureTime ***********************************/
+  /***** Andor::SDK::_SetExposureTime *****************************************/
   /**
    * @brief      wrapper for Andor SDK SetExposureTime
    * @details    Set the exposure time to the nearest valid value not less
@@ -977,30 +889,28 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_SetExposureTime( double exptime ) {
-    std::string function = "Andor::Interface::_SetExposureTime";
+  long SDK::_SetExposureTime( double exptime ) {
+    std::string function = "Andor::SDK::_SetExposureTime";
     std::stringstream message;
 
     unsigned int ret = SetExposureTime( exptime );
 
     switch (ret) {
-      case DRV_SUCCESS:          message << "exposure time is " << exptime << " sec";
-                                 this->camera_info.exposure_time = exptime;
-                                 break;
-      case DRV_NOT_INITIALIZED:  message << "ERROR: system not initialized"; break;
-      case DRV_ACQUIRING:        message << "ERROR: acquisition in progress"; break;
+      case DRV_SUCCESS:          /* silent on success */                                      break;
+      case DRV_NOT_INITIALIZED:  message << "ERROR: system not initialized";                  break;
+      case DRV_ACQUIRING:        message << "ERROR: acquisition in progress";                 break;
       case DRV_P1INVALID:        message << "ERROR: exposure time " << exptime << " invalid"; break;
-      default:                   message << "ERROR: unknown error " << ret; break;
+      default:                   message << "ERROR: unknown error " << ret;                   break;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetExposureTime ***********************************/
+  /***** Andor::SDK::_SetExposureTime *****************************************/
 
 
-  /***** Andor::Interface::_SetImageFlip **************************************/
+  /***** Andor::SDK::_SetImageFlip ********************************************/
   /**
    * @brief      wrapper for Andor SDK SetImageFlip
    * @details    This causes data output from SDK to be flipped in one or both
@@ -1011,8 +921,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_SetImageFlip( int hflip, int vflip ) {
-    std::string function = "Andor::Interface::_SetImageFlip";
+  long SDK::_SetImageFlip( int hflip, int vflip ) {
+    std::string function = "Andor::SDK::_SetImageFlip";
     std::stringstream message;
 
     unsigned int ret = SetImageFlip( hflip, vflip );
@@ -1029,10 +939,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetImageFlip **************************************/
+  /***** Andor::SDK::_SetImageFlip ********************************************/
 
 
-  /***** Andor::Interface::_SetImageRotate ************************************/
+  /***** Andor::SDK::_SetImageRotate ******************************************/
   /**
    * @brief      wrapper for Andor SDK SetImageRotate
    * @details    This causes data output from SDK to be rotated in one or both
@@ -1042,8 +952,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_SetImageRotate( int rotdir ) {
-    std::string function = "Andor::Interface::_SetImageRotate";
+  long SDK::_SetImageRotate( int rotdir ) {
+    std::string function = "Andor::SDK::_SetImageRotate";
     std::stringstream message;
 
     unsigned int ret = SetImageRotate( rotdir );
@@ -1059,10 +969,10 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetImageRotate ************************************/
+  /***** Andor::SDK::_SetImageRotate ******************************************/
 
 
-  /***** Andor::Interface::_SetImage ******************************************/
+  /***** Andor::SDK::_SetImage ************************************************/
   /**
    * @brief      wrapper for Andor SDK SetImage checks return value
    * @details    sets the horizontal and vertical binning when taking a
@@ -1076,23 +986,14 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) {
-    std::string function = "Andor::Interface::_SetImage";
+  long SDK::_SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) {
+    std::string function = "Andor::SDK::_SetImage";
     std::stringstream message;
 
     unsigned int ret = SetImage( hbin, vbin, hstart, hend, vstart, vend );
 
     switch (ret) {
-      case DRV_SUCCESS:         message << hbin   << " " << vbin << " "
-                                        << hstart << " " << hend << " "
-                                        << vstart << " " << vend;
-                                this->camera_info.hbin   = hbin;
-                                this->camera_info.vbin   = vbin;
-                                this->camera_info.hstart = hstart;
-                                this->camera_info.hend   = hend;
-                                this->camera_info.vstart = vstart;
-                                this->camera_info.vend   = vend;
-                                break;
+      case DRV_SUCCESS:         /* silent on success */                        break;
       case DRV_NOT_INITIALIZED: message << "ERROR: system not initialized";    break;
       case DRV_ACQUIRING:       message << "ERROR: acquisition in progress";   break;
       case DRV_P1INVALID:
@@ -1104,14 +1005,14 @@ namespace Andor {
       default:                  message << "ERROR: unknown error " << ret;     break;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetImage ******************************************/
+  /***** Andor::SDK::_SetImage ************************************************/
 
 
-  /***** Andor::Interface::_SetReadMode ***************************************/
+  /***** Andor::SDK::_SetReadMode *********************************************/
   /**
    * @brief      wrapper for Andor SDK SetReadMode
    * @details    set the readout mode to be used on subsequent acquisitions
@@ -1126,37 +1027,28 @@ namespace Andor {
    *  4 = image
    *
    */
-  long Interface::_SetReadMode( int mode ) {
-    std::string function = "Andor::Interface::_SetReadMode";
+  long SDK::_SetReadMode( int mode ) {
+    std::string function = "Andor::SDK::_SetReadMode";
     std::stringstream message;
 
     unsigned int ret = SetReadMode( mode );
 
     switch (ret) {
-      case DRV_SUCCESS:         switch ( mode ) {
-                                  case 0:  this->camera_info.readmodestr = "FULL_VERTICAL_BINNING"; break;
-                                  case 1:  this->camera_info.readmodestr = "MULTI_TRACK";           break;
-                                  case 2:  this->camera_info.readmodestr = "RANDOM_TRACK";          break;
-                                  case 3:  this->camera_info.readmodestr = "SINGLE_TRACK";          break;
-                                  case 4:  this->camera_info.readmodestr = "IMAGE";                 break;
-                                  default: this->camera_info.readmodestr = "unknown";               break;
-                                }
-                                message << mode << " (" << this->camera_info.readmodestr << ")";
-                                break;
+      case DRV_SUCCESS:         /* silent on success */                         break;
       case DRV_NOT_INITIALIZED: message << "ERROR: system not initialized";     break;
       case DRV_ACQUIRING:       message << "ERROR: acquisition in progress";    break;
       case DRV_P1INVALID:       message << "ERROR: invalid read mode " << mode; break;
       default:                  message << "ERROR: unknown error " << ret;      break;
     }
 
-    logwrite( function, message.str() );
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetReadMode ***************************************/
+  /***** Andor::SDK::_SetReadMode *********************************************/
 
 
-  /***** Andor::Interface::_SetShutter ****************************************/
+  /***** Andor::SDK::_SetShutter **********************************************/
   /**
    * @brief      wrapper for Andor SDK SetShutter
    * @details    controls behavior of the shutter
@@ -1167,8 +1059,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_SetShutter( int type, int mode, int closetime, int opentime ) {
-    std::string function = "Andor::Interface::_SetShutter";
+  long SDK::_SetShutter( int type, int mode, int closetime, int opentime ) {
+    std::string function = "Andor::SDK::_SetShutter";
     std::stringstream message;
 
     unsigned int ret = SetShutter( type, mode, closetime, opentime );
@@ -1190,19 +1082,18 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_SetShutter ****************************************/
+  /***** Andor::SDK::_SetShutter **********************************************/
 
 
-  /***** Andor::Interface::_StartAcquisition **********************************/
+  /***** Andor::SDK::_StartAcquisition ****************************************/
   /**
    * @brief      wrapper for Andor SDK StartAcquisition
    * @details    starts the acquisition
-   * @details    this simply checks return value
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Interface::_StartAcquisition() {
-    std::string function = "Andor::Interface::_StartAcquisition";
+  long SDK::_StartAcquisition() {
+    std::string function = "Andor::SDK::_StartAcquisition";
     std::stringstream message;
 
     unsigned int ret = StartAcquisition();
@@ -1225,12 +1116,13 @@ namespace Andor {
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
-  /***** Andor::Interface::_StartAcquisition **********************************/
+  /***** Andor::SDK::_StartAcquisition ****************************************/
 
 
   /***** Andor::Interface::open ***********************************************/
   /**
    * @brief      open a connection to the Andor
+   * @param[in]  args  optional arg is the camera index to open { 0:ncameras-1 }
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1238,9 +1130,9 @@ namespace Andor {
     std::string function = "Andor::Interface::open";
     std::stringstream message;
     long error=NO_ERROR;
-    int ncameras;  // number of cameras
-    int index=0;   // camera index given to 
-    int handle=0;  // camera handle
+    int ncameras=0;  // number of cameras
+    int index=0;     // camera index given to
+    int handle=0;    // camera handle
 
     // If there was an argument then get the camera index from it
     //
@@ -1263,7 +1155,8 @@ namespace Andor {
     // This will be used to check the requested index and subsequently set
     // the active camera handle.
     //
-    if ( _GetAvailableCameras( &ncameras ) == NO_ERROR ) {
+    error = ( andor ? andor->_GetAvailableCameras( ncameras ) : ERROR );
+    if ( error == NO_ERROR ) {
       message.str(""); message << "detected " << ncameras << " cameras";
       logwrite( function, message.str() );
     }
@@ -1277,8 +1170,8 @@ namespace Andor {
 
     // Set the current camera handle
     //
-    if (error==NO_ERROR) error = _GetCameraHandle( index, &handle );
-    if (error==NO_ERROR) error = _SetCurrentCamera( handle );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( index, &handle ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );
     if (error!=NO_ERROR) {
       message.str(""); message << "ERROR setting camera handle for camera " << index;
       logwrite( function, message.str() );
@@ -1286,7 +1179,8 @@ namespace Andor {
     }
 
     char info[128];
-    if ( _GetVersionInfo( AT_SDKVersion, info, 128 ) == NO_ERROR ) {
+    error = ( andor ? andor->_GetVersionInfo( AT_SDKVersion, info, 128 ) : ERROR );
+    if ( error == NO_ERROR ) {
       this->camera_info.sdk_version = std::string(info);
       message.str(""); message << "SDK version " << this->camera_info.sdk_version;
       logwrite( function, message.str() );
@@ -1296,7 +1190,7 @@ namespace Andor {
     //
     logwrite( function, "initializing Andor SDK" );
 
-    if (error==NO_ERROR) error = _Initialize();
+    if (error==NO_ERROR) error = ( andor ? andor->_Initialize() : ERROR );
 
     if ( error != NO_ERROR ) {
       this->initialized = false;
@@ -1305,7 +1199,8 @@ namespace Andor {
       return error;
     }
 
-    if ( _GetVersionInfo( AT_DeviceDriverVersion, info, 128 ) == NO_ERROR ) {
+    error = ( andor ? andor->_GetVersionInfo( AT_DeviceDriverVersion, info, 128 ) : ERROR );
+    if ( error == NO_ERROR ) {
       this->camera_info.driver_version = std::string(info);
       message.str(""); message << "Device Driver version " << this->camera_info.driver_version;
       logwrite( function, message.str() );
@@ -1318,37 +1213,37 @@ namespace Andor {
 
     this->initialized = true;
 
-    error = _GetCameraSerialNumber( this->camera_info.serial_number );
+    error = ( andor ? andor->_GetCameraSerialNumber( this->camera_info.serial_number ) : ERROR );
 
     // collect camera information
     //
-//  if (error==NO_ERROR) error = _GetDetector( this->camera_info.axes[0], this->camera_info.axes[1] );
+//  if (error==NO_ERROR) error = sdk._GetDetector( this->camera_info.axes[0], this->camera_info.axes[1] );
 //  if (error==NO_ERROR) {
 //    this->camera_info.hend = this->camera_info.axes[0];
 //    this->camera_info.vend = this->camera_info.axes[1];
 //  }
-    if (error==NO_ERROR) error = _GetDetector( this->camera_info.hend, this->camera_info.vend );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetDetector( this->camera_info.hend, this->camera_info.vend ) : ERROR );
     if (error==NO_ERROR) {
       this->camera_info.axes[0] = this->camera_info.hend;
       this->camera_info.axes[1] = this->camera_info.vend;
     }
-    if (error==NO_ERROR) error = _SetImage( 1, 1, 1, this->camera_info.axes[0], 1, this->camera_info.axes[1] );  // no binning, full array
-    if (error==NO_ERROR) error = _GetNumberADChannels( this->camera_info.adchans );
+    if (error==NO_ERROR) error = set_image( 1, 1, 1, this->camera_info.axes[0], 1, this->camera_info.axes[1] );  // no binning, full array
+    if (error==NO_ERROR) error = ( andor ? andor->_GetNumberADChannels( this->camera_info.adchans ) : ERROR );
     if (error==NO_ERROR) error = get_speeds();
-    if (error==NO_ERROR) error = _SetOutputAmplifier( AMPTYPE_CONV );
+    if (error==NO_ERROR) error = set_output_amplifier( AMPTYPE_CONV );
     if (error==NO_ERROR)         this->camera_info.gain = 1;
-    if (error==NO_ERROR) error = _SetHSSpeed( this->camera_info.amptype, 0 );
-    if (error==NO_ERROR) error = _SetVSSpeed( 0 );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetHSSpeed( this->camera_info.amptype, 0 ) : ERROR );
+    if (error==NO_ERROR) error = set_vsspeed(0.6);
 
-    if (error==NO_ERROR) error = _GetTemperatureRange( this->camera_info.temp_min, this->camera_info.temp_max );
-    if (error==NO_ERROR) error = _SetTemperature( this->camera_info.setpoint );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperatureRange( this->camera_info.temp_min, this->camera_info.temp_max ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetTemperature( this->camera_info.setpoint ) : ERROR );
 
     // put a bunch of stuff here in open() just for now, to be moved later
     //
-    if (error==NO_ERROR) error = _SetReadMode( 4 );         // image mode
-    if (error==NO_ERROR) error = _SetAcquisitionMode( 1 );  // single scan mode
-    if (error==NO_ERROR) error = _SetExposureTime( 0 );
-    if (error==NO_ERROR) error = _SetShutter( 1, 0, 50, 50 );  // TTL high fully auto shutter
+    if (error==NO_ERROR) error = set_read_mode( 4 );        // image mode
+    if (error==NO_ERROR) error = set_acquisition_mode( 1 ); // single scan mode
+    if (error==NO_ERROR) error = exptime( 0 );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetShutter( 1, 0, 50, 50 ) : ERROR );  // TTL high fully auto shutter
 
     message.str(""); message << "camera s/n " << this->camera_info.serial_number << " initialized";
     logwrite( function, message.str() );
@@ -1378,7 +1273,7 @@ namespace Andor {
 
   /***** Andor::Interface::start_acquisition **********************************/
   /**
-   * @brief      start_acquisition
+   * @brief      start acquisition
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1386,7 +1281,7 @@ namespace Andor {
     std::string function = "Andor::Interface::start_acquisition";
     std::stringstream message;
 
-    long error = _StartAcquisition();
+    long error = ( andor ? andor->_StartAcquisition() : ERROR );
 
     message << ( error==NO_ERROR ? "acquisition started" : "ERROR starting acquisition" );
     logwrite( function, message.str() );
@@ -1398,7 +1293,7 @@ namespace Andor {
 
   /***** Andor::Interface::shutter ********************************************/
   /**
-   * @brief      
+   * @brief      right now this just closes the shutter
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1406,13 +1301,30 @@ namespace Andor {
     std::string function = "Andor::Interface::shutter";
     std::stringstream message;
 
-    long error = _SetShutter( 0, 2, 0, 0 );
+    long error = ( andor ? andor->_SetShutter( 0, 2, 0, 0 ) : ERROR );
 
     logwrite( function, "shutter closed" );
 
     return error;
   }
   /***** Andor::Interface::start_acquisition **********************************/
+
+
+  /***** Andor::Interface::get_detector ***************************************/
+  /**
+   * @brief      get the size of the detector in pixels
+   * @param[out] x  number of horizontal pixels
+   * @param[out] y  number of vertical pixels
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_detector( int &x, int &y ) {
+    std::string function = "Andor::Interface::get_detector";
+    std::stringstream message;
+
+    return ( andor ? andor->_GetDetector( x, y ) : ERROR );
+  }
+  /***** Andor::Interface::get_detector ***************************************/
 
 
   /***** Andor::Interface::get_status *****************************************/
@@ -1428,10 +1340,10 @@ namespace Andor {
     std::string status;
     long error = NO_ERROR;
 
-    error |= _GetStatus( status );  // current status of Andor SDK
+    error |= ( andor ? andor->_GetStatus( status ) : ERROR );  // current status of Andor SDK
 
     int temp;
-    error |= _GetTemperature(temp);
+    error |= get_temperature(temp);
 
     logwrite( function, status );
 
@@ -1442,7 +1354,9 @@ namespace Andor {
 
   /***** Andor::Interface::get_speeds *****************************************/
   /**
-   * @brief      get the current status from the Andor SDK
+   * @brief      get the horizontal and vertical shift speeds
+   * @details    This reads all allowed clocking speeds and stores them in
+   *             vectors in the class.
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1460,7 +1374,7 @@ namespace Andor {
     // Get Number of AD Chans and HS Speeds if needed
     //
     if ( error==NO_ERROR && this->camera_info.adchans < 0 ) {
-      error |= _GetNumberADChannels( this->camera_info.adchans );
+      error |= ( andor ? andor->_GetNumberADChannels( this->camera_info.adchans ) : ERROR );
     }
 
     this->camera_info.hsspeeds.clear();
@@ -1472,10 +1386,11 @@ namespace Andor {
     int num_vsspeeds=0;
     std::stringstream vmessage;
     vmessage << "           vert {";
-    if ( (error=_GetNumberVSSpeeds( num_vsspeeds ))==NO_ERROR ) {
+    if ( (error=( andor ? andor->_GetNumberVSSpeeds( num_vsspeeds ) : ERROR ))==NO_ERROR ) {
+      this->camera_info.vsspeeds.clear();
       for ( index = 0; index < num_vsspeeds; index++ ) {
         float speed;
-        error |= _GetVSSpeed( index, speed );
+        error |= ( andor ? andor->_GetVSSpeed( index, speed ) : ERROR );
         if ( error != NO_ERROR ) break;
         this->camera_info.vsspeeds.push_back( speed );
         vmessage << " " << std::to_string( speed );
@@ -1483,6 +1398,8 @@ namespace Andor {
     }
     vmessage << " }";
     logwrite( function, vmessage.str() );
+
+    int adchan = this->camera_info.adchan;
 
     // To get HS Speeds, loop through all (both) amp types
     //
@@ -1495,13 +1412,14 @@ namespace Andor {
       // must get Number of Speeds for this type
       //
       int num_hsspeeds=0;
-      if ( (error |= _GetNumberHSSpeeds( this->camera_info.adchan, type, num_hsspeeds ))==ERROR ) break;
+      if ( (error |= ( andor ? andor->_GetNumberHSSpeeds( this->camera_info.adchan, type, num_hsspeeds ) : ERROR ))==ERROR ) break;
 
       // loop through number of HS Speeds
       //
+      this->camera_info.hsspeeds[type].clear();
       for ( index = 0; index < num_hsspeeds; index++ ) {
         float speed;
-        error |= _GetHSSpeed( type, index, speed );
+        error |= ( andor ? andor->_GetHSSpeed( adchan, type, index, speed ) : ERROR );
         if ( error != NO_ERROR ) break;
         this->camera_info.hsspeeds[type].push_back( speed );
         hmessage << " " << std::to_string( speed );
@@ -1545,7 +1463,15 @@ namespace Andor {
     //
     int index = std::distance( vec.begin(), it );
 
-    return this->_SetHSSpeed( this->camera_info.amptype, index );
+    long error = ( andor ? andor->_SetHSSpeed( this->camera_info.amptype, index ) : ERROR );
+
+    if (error==NO_ERROR) {
+      message.str(""); message << speed << " MHz";
+      logwrite( function, message.str() );
+      this->camera_info.hspeed = speed;
+    }
+
+    return error;
   }
   /***** Andor::Interface::set_hsspeed ****************************************/
 
@@ -1557,7 +1483,7 @@ namespace Andor {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::set_vsspeed( float speed ) {
+  long Interface::set_vsspeed( float speed_in ) {
     std::string function = "Andor::Interface::set_vsspeed";
     std::stringstream message;
 
@@ -1567,9 +1493,9 @@ namespace Andor {
 
     // is requested speed in the vector of acceptable speeds?
     //
-    auto it = std::find( vec.begin(), vec.end(), speed );
+    auto it = std::find( vec.begin(), vec.end(), speed_in );
     if ( it == vec.end() ) {
-      message.str(""); message << "ERROR VS speed " << speed << " not in {";
+      message.str(""); message << "ERROR VS speed " << speed_in << " not in {";
       for ( auto &sp : vec ) message << " " << sp;
       message << " }";
       logwrite( function, message.str() );
@@ -1580,9 +1506,64 @@ namespace Andor {
     //
     int index = std::distance( vec.begin(), it );
 
-    return this->_SetVSSpeed( index );
+    // Check that the vector index is in range
+    //
+    if ( index < 0 || index >= (int)this->camera_info.vsspeeds.size() ) {
+      message.str(""); message << "ERROR invalid index " << index;
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    float speed = this->camera_info.vsspeeds[index];
+
+    long error = ( andor ? andor->_SetVSSpeed( index ) : ERROR );
+
+    if (error==NO_ERROR) {
+      message.str(""); message << speed << " MHz";
+      logwrite( function, message.str() );
+      this->camera_info.vspeed = speed;
+    }
+
+    return error;
   }
   /***** Andor::Interface::set_vsspeed ****************************************/
+
+
+  /***** Andor::Interface::set_image ******************************************/
+  /**
+   * @brief      set CCD image mode
+   * @param[in]  hbin  number of pixels to bin horizontally
+   * @param[in]  vbin  number of pixels to bin vertically
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_image( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) {
+    std::string function = "Andor::Interface::set_image";
+    std::stringstream message;
+
+    if ( hbin < 1 || vbin < 1 || hstart < 1 || hend < 1 || vstart < 1 || vend < 1 ) {
+      logwrite( function, "ERROR all image parameters must be >= 1" );
+      return( ERROR );
+    }
+
+    long error = ( andor ? andor->_SetImage( hbin, vbin, hstart, hend, vstart, vend ) : ERROR );
+
+    if ( error==NO_ERROR ) {
+      message << hbin   << " " << vbin << " "
+              << hstart << " " << hend << " "
+              << vstart << " " << vend;
+      logwrite( function, message.str() );
+      this->camera_info.hbin   = hbin;
+      this->camera_info.vbin   = vbin;
+      this->camera_info.hstart = hstart;
+      this->camera_info.hend   = hend;
+      this->camera_info.vstart = vstart;
+      this->camera_info.vend   = vend;
+    }
+
+    return error;
+  }
+  /***** Andor::Interface::set_image ******************************************/
 
 
   /***** Andor::Interface::set_binning ****************************************/
@@ -1612,7 +1593,7 @@ namespace Andor {
 
     // SetImage using new binning parameters
     //
-    return _SetImage( hbin, vbin, hstart, hend, vstart, vend );
+    return set_image( hbin, vbin, hstart, hend, vstart, vend );
   }
   /***** Andor::Interface::set_binning ****************************************/
 
@@ -1643,7 +1624,7 @@ namespace Andor {
       error = ERROR;
     }
 
-    if (error==NO_ERROR) error = _SetImageFlip( hflip, vflip );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetImageFlip( hflip, vflip ) : ERROR );
     if (error==NO_ERROR) {
       this->camera_info.hflip = hflip;
       this->camera_info.vflip = vflip;
@@ -1677,16 +1658,91 @@ namespace Andor {
     }
     logwrite( function, message.str() );
 
-    if (error==NO_ERROR) error = _SetImageRotate( rotdir );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetImageRotate( rotdir ) : ERROR );
 
     return error;
   }
   /***** Andor::Interface::set_imrot ******************************************/
 
 
+  /***** Andor::Interface::get_emgain_range ***********************************/
+  /**
+   * @brief      get EM CCD gain Range
+   * @param[out] low   reference to return lowest gain alloed
+   * @param[out] high  reference to return highest gain allowed
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_emgain_range( int &low, int &high ) {
+    std::string function = "Andor::Interface::get_emgain_range";
+    std::stringstream message;
+
+    return ( andor ? andor->_GetEMGainRange( low, high ) : ERROR );
+  }
+  /***** Andor::Interface::get_emgain_range ***********************************/
+
+
+  /***** Andor::Interface::get_emgain *****************************************/
+  /**
+   * @brief      get EM CCD gain
+   * @param[out] low   reference to return lowest gain alloed
+   * @param[out] high  reference to return highest gain allowed
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_emgain( int &gain ) {
+    std::string function = "Andor::Interface::get_emgain";
+    std::stringstream message;
+
+    long error = ( andor ? andor->_GetEMCCDGain( gain ) : ERROR );
+
+    if (error==NO_ERROR) {
+      message.str(""); message << gain;
+      logwrite( function, message.str() );
+      this->camera_info.emgain = gain;
+    }
+
+    return error;
+  }
+  /***** Andor::Interface::get_emgain *****************************************/
+
+
+  /***** Andor::Interface::set_output_amplifier *******************************/
+  /**
+   * @brief      set CCD output amplifier
+   * @param[in]  type  amplifier type 0=EMCCD 1=conventional
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_output_amplifier( int type ) {
+    std::string function = "Andor::Interface::set_output_amplifier";
+    std::stringstream message;
+
+    if ( type != 0 && type != 1 ) {
+      message.str(""); message << "ERROR invalid type " << type << ": expected { 0 1 }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    long error = ( andor ? andor->_SetOutputAmplifier( type ) : ERROR );
+
+    if (error==NO_ERROR) {
+      this->camera_info.amptype    = type;
+      this->camera_info.amptypestr = ( type == Andor::AMPTYPE_EMCCD ? "EMCCD" : "conventional" );
+      message.str(""); message << type << " (" << this->camera_info.amptypestr << ")";
+      logwrite( function, message.str() );
+    }
+
+    return error;
+  }
+  /***** Andor::Interface::set_output_amplifier *******************************/
+
+
   /***** Andor::Interface::set_emgain *****************************************/
   /**
    * @brief      set EM CCD gain
+   * @details    requested gain must be in allowable range from GetEMGainRange()
+   * @param[in]  gain  integer gain to set
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1697,7 +1753,7 @@ namespace Andor {
     long error = NO_ERROR;
 
     int low, high;
-    error = _GetEMGainRange( low, high );
+    error = get_emgain_range( low, high );
 
     if (error==ERROR) return error;
 
@@ -1708,7 +1764,13 @@ namespace Andor {
       return( ERROR );
     }
     else {
-      error = _SetEMCCDGain( gain );
+      error = ( andor ? andor->_SetEMCCDGain( gain ) : ERROR );
+    }
+
+    if (error==NO_ERROR) {
+      this->camera_info.emgain = gain;
+      message.str(""); message << gain;
+      logwrite( function, message.str() );
     }
 
     return ( error );
@@ -1731,13 +1793,20 @@ namespace Andor {
     long error = NO_ERROR;
 
     if ( temp >= this->camera_info.temp_max ) {
-      error = _CoolerOFF();
+      error = ( andor ? andor->_CoolerOFF() : ERROR );
     }
     else {
-      error = _CoolerON();
+      error = ( andor ? andor->_CoolerON() : ERROR );
     }
+
     if ( error==NO_ERROR ) {
-      error = _SetTemperature( temp );
+      error = ( andor ? andor->_SetTemperature( temp ) : ERROR );
+    }
+
+    if ( error==NO_ERROR ) {
+      message << "setpoint " << temp << " C";
+      logwrite( function, message.str() );
+      this->camera_info.setpoint = temp;
     }
 
     return ( error );
@@ -1745,17 +1814,129 @@ namespace Andor {
   /***** Andor::Interface::set_temperature ************************************/
 
 
+  /***** Andor::Interface::get_temperature ************************************/
+  /**
+   * @brief      read the CCD temperature into the class
+   * @details    This version will read the temperature and store it in the
+   *             class only; it does not return the temperature.
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   *
+   */
   long Interface::get_temperature() {
-    int temp;
-    long error = _GetTemperature( temp );
-    logwrite( "Andor::Interface::get_temperature", std::to_string( temp ) );
+    int dontcare;
+    return get_temperature( dontcare );
+  }
+  /***** Andor::Interface::get_temperature ************************************/
+
+
+  /***** Andor::Interface::get_temperature ************************************/
+  /**
+   * @brief      read and return the CCD temperature
+   * @details    This version will return the current temperature by reference,
+   *             as well as storing it in the class.
+   * @param[in]  temp  reference to return temperature in integer degrees C
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   *
+   */
+  long Interface::get_temperature( int &temp ) {
+    std::string function = "Andor::Interface::get_temperature";
+    std::stringstream message;
+
+    std::string_view status;
+
+    long error = ( andor ? andor->_GetTemperature( temp, status ) : ERROR );
+
+    if (error==NO_ERROR) {
+      message.str(""); message << temp << ": " << status;
+      logwrite( function, message.str() );
+      this->camera_info.temp_status = status;
+      this->camera_info.ccdtemp     = temp;
+    }
+
     return error;
   }
+  /***** Andor::Interface::get_temperature ************************************/
 
 
-  long Interface::get_temperature( int &temp ) {
-    return _GetTemperature( temp );
+  /***** Andor::Interface::set_read_mode **************************************/
+  /**
+   * @brief      set read mode
+   * @param[in]  mode  integer mode {1:5}
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_read_mode( int mode ) {
+    std::string function = "Andor::Interface::set_read_mode";
+    std::stringstream message;
+
+    if ( mode < 0 || mode > 4 ) {
+      message.str("");
+      message << "ERROR invalid mode " << mode << ": expected range { 0:4 }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    long error = ( andor ? andor->_SetReadMode( mode ) : ERROR );
+
+    if ( error == NO_ERROR ) {
+      switch ( mode ) {
+        case 0:  this->camera_info.readmodestr = "FULL_VERTICAL_BINNING"; break;
+        case 1:  this->camera_info.readmodestr = "MULTI_TRACK";           break;
+        case 2:  this->camera_info.readmodestr = "RANDOM_TRACK";          break;
+        case 3:  this->camera_info.readmodestr = "SINGLE_TRACK";          break;
+        case 4:  this->camera_info.readmodestr = "IMAGE";                 break;
+        default: this->camera_info.readmodestr = "unknown";               break;
+      }
+      this->camera_info.readmode = mode;
+    }
+
+    message << mode << " (" << this->camera_info.readmodestr << ")";
+
+    return error;
   }
+  /***** Andor::Interface::set_read_mode **************************************/
+
+
+  /***** Andor::Interface::set_acquisition_mode *******************************/
+  /**
+   * @brief      set acquisition mode to be used on next start_acquisition
+   * @param[in]  mode  integer mode {1:5}
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_acquisition_mode( int mode ) {
+    std::string function = "Andor::Interface::set_acquisition_mode";
+    std::stringstream message;
+
+    if ( mode < 0 || mode > 5 ) {
+      message.str(""); message << "ERROR invalid mode " << mode << ": expected { 1:5 }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    long error = ( andor ? andor->_SetAcquisitionMode( mode ) : ERROR );
+
+    if ( error==NO_ERROR ) {
+      this->camera_info.acqmode = mode;
+      switch ( mode ) {
+        case 1:  this->camera_info.acqmodestr = "SINGLE_SCAN";    break;
+        case 2:  this->camera_info.acqmodestr = "ACCUMULATE";     break;
+        case 3:  this->camera_info.acqmodestr = "KINETICS";       break;
+        case 4:  this->camera_info.acqmodestr = "FAST_KINETICS";  break;
+        case 5:  this->camera_info.acqmodestr = "RUN_TILL_ABORT"; break;
+        default: this->camera_info.acqmodestr = "UNKNOWN";        break;
+      }
+      message << mode << " (" << this->camera_info.acqmodestr << ")";
+      logwrite( function, message.str() );
+    }
+
+    return error;
+  }
+  /***** Andor::Interface::set_acquisition_mode *******************************/
 
 
   /***** Andor::Interface::get_last_frame *************************************/
@@ -1828,7 +2009,8 @@ namespace Andor {
 
   /***** Andor::Interface::acquire_one ****************************************/
   /**
-   * @brief      
+   * @brief      acquire a single scan single frame
+   * @details    the image is read here and stored in the class
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1839,7 +2021,7 @@ namespace Andor {
 
     // Make sure the camera is in single scan mode
     //
-    if ( this->camera_info.acqmode != 1 ) error = this->_SetAcquisitionMode( 1 );
+    if ( this->camera_info.acqmode != 1 ) error = this->set_acquisition_mode( 1 );
 
     // Start Acquisition
     //
@@ -1848,8 +2030,8 @@ namespace Andor {
     // Wait for acquisition
     //
     int status;
-    this->_GetStatus( &status );
-    while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = this->_GetStatus( &status ); 
+    error = ( andor ? andor->_GetStatus( status ) : ERROR );
+    while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = ( andor ? andor->_GetStatus( status ) : ERROR );
 
     // Get the acquired image
     //
@@ -1859,9 +2041,9 @@ namespace Andor {
     }
     this->image_data = new uint16_t[ this->camera_info.axes[0] * this->camera_info.axes[1] ];
 
-    if (error==NO_ERROR) error = _GetAcquiredData16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
 
-//  if (error==NO_ERROR) error = _GetTemperature();
+//  if (error==NO_ERROR) error = sdk._GetTemperature();
 
     return error;
   }
@@ -1871,6 +2053,7 @@ namespace Andor {
   /***** Andor::Interface::save_acquired **************************************/
   /**
    * @brief      save an acquired image to FITS file
+   * @details    This saves the image stored in the class. See also acquire_one().
    * @param[in]  wcs_in   optional input image contains WCS header info to re-use
    * @param[out] imgname  output filename
    * @return     ERROR or NO_ERROR
@@ -1946,13 +2129,13 @@ return NO_ERROR;
 ***/
 
     int status;
-    if (error==NO_ERROR) error = this->_SetExposureTime( this->camera_info.exposure_time );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetExposureTime( this->camera_info.exposure_time ) : ERROR );
     if (error==NO_ERROR) error = this->start_acquisition();
     uint16_t* image_data = new uint16_t[ this->camera_info.axes[0] * this->camera_info.axes[1] ];
     if (error==NO_ERROR) error = this->get_status( );
-    this->_GetStatus( &status );
-    while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = this->_GetStatus( &status ); 
-    if (error==NO_ERROR) error = _GetAcquiredData16( image_data, this->camera_info.axes[0] * this->camera_info.axes[1] );
+    error = ( andor ? andor->_GetStatus( status ) : ERROR );
+    while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = ( andor ? andor->_GetStatus( status ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
 
     SaveAsFITS( (char*)"/tmp/andor.fits", 2 );
     delete [] image_data;
@@ -1964,7 +2147,23 @@ return NO_ERROR;
 
   /***** Andor::Interface::exptime ********************************************/
   /**
-   * @brief      exptime
+   * @brief      set the exposure time
+   * @param[in]  exptime_in  integer exposure time
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::exptime( int exptime_in ) {
+    std::string dontcare;
+    return exptime( std::to_string( exptime_in ), dontcare );
+  }
+  /***** Andor::Interface::exptime ********************************************/
+
+
+  /***** Andor::Interface::exptime ********************************************/
+  /**
+   * @brief      set or get the exposure time
+   * @param[in]  exptime_in  string exposure time
+   * @param[out] retstring   reference to string return value
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1983,7 +2182,7 @@ return NO_ERROR;
           logwrite( function, "ERROR: exptime must be >= 0" );
         }
         else {
-          error = _SetExposureTime( exptime_try );
+          error = ( andor ? andor->_SetExposureTime( exptime_try ) : ERROR );
           if ( error==NO_ERROR && exptime_try != NAN ) this->camera_info.exposure_time = exptime_try;
         }
       }

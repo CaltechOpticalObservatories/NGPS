@@ -89,13 +89,13 @@ namespace Acam {
     private:
 
     public:
-      Camera();
-      ~Camera();
+      Camera() : image_data( nullptr ) { };
 
       uint16_t* image_data;
 
       Andor::Interface andor;     ///< create an Andor::Interface object for interfacing with the camera
 
+      long simandor( std::string args, std::string &retstring );
       long open( std::string args );
       long close();
       long start_acquisition();
