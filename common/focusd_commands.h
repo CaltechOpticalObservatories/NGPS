@@ -20,13 +20,13 @@ const std::string FOCUSD_SET  = "set";       const int FOCUSD_SET_TIMEOUT = 1500
 
 const std::vector<std::string> FOCUSD_SYNTAX = {
                                                  FOCUSD_CLOSE,
-                                                 FOCUSD_GET,
-                                                 FOCUSD_HOME,
-                                                 FOCUSD_ISHOME,
+                                                 FOCUSD_GET+" ? | <chan>",
+                                                 FOCUSD_HOME+" [ ? | <chan> ]",
+                                                 FOCUSD_ISHOME+" [ ? ]",
                                                  FOCUSD_ISOPEN,
-                                                 FOCUSD_NATIVE,
+                                                 FOCUSD_NATIVE+" ? | <chan> <cmd>",
                                                  FOCUSD_OPEN,
-                                                 FOCUSD_SET
+                                                 FOCUSD_SET+" ? | <chan> { <pos> | nominal }"
                                                };
 
 #endif

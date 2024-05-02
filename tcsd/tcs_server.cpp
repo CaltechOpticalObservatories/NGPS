@@ -518,6 +518,11 @@ namespace TCS {
       }
       else
 
+      if ( cmd.compare( TCSD_SET_FOCUS ) == 0 ) {
+                      ret = this->interface.set_focus( args, retstring );
+      }
+      else
+
       if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
                       ret = this->interface.get_weather_coords( args, retstring );
       }

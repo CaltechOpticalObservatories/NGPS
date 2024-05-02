@@ -6,13 +6,12 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
 
 set( TCSD_DIR ${PROJECT_BASE_DIR}/tcsd )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
-
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(tcsd 
@@ -28,6 +27,13 @@ target_link_libraries(tcsd
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+
+add_library(tcsd_client STATIC
+        ${TCSD_DIR}/tcsd_client.cpp
+        )
+
+# Set the setgid bit on the resulting executable
+add_custom_command( TARGET tcsd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:tcsd> )
 
 # -- Port Definitions ----------------------------------------------------------
 #

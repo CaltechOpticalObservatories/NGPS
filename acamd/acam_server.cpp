@@ -490,6 +490,7 @@ namespace Acam {
       //
       ret = NOTHING;
       std::string retstring="";
+      bool suppress_term_state=false;
 
       if ( cmd == "help" || cmd == "?" ) {
                       for ( auto s : ACAMD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
@@ -500,34 +501,31 @@ namespace Acam {
       }
       else
 
+      if ( cmd == ACAMD_TCSINIT ) {
+                      ret = this->interface.tcsd.init( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_TCSISOPEN ) {
+                      ret = this->interface.tcsd.client.is_open();
+                      retstring = ( ret ? "true" : "false" );
+                      ret = 0;
+      }
+      else
+      if ( cmd == ACAMD_TCSISCONNECTED ) {
+                      ret = this->interface.tcsd.client.is_connected(retstring);
+      }
+      else
+      if ( cmd == ACAMD_TCSGET ) {
+                      double foo;
+                      this->interface.tcsd.get_cass( foo );
+                      double ra_h, dec_d;
+                      this->interface.tcsd.get_coords( ra_h, dec_d );
+                      retstring = std::to_string(foo) + " " + std::to_string(ra_h) + " " + std::to_string(dec_d);
+                      ret = 0;
+      }
+      else
       // commands for the Andor camera direct
       //
-      if ( cmd == "cameragain" ) {
-                      int gain;
-                      ret = this->interface.camera.andor.get_emgain( gain );
-                      retstring = std::to_string(gain);
-      }
-      else
-      if ( cmd == "cameragainrange" ) {
-                      int low,high;
-                      ret = this->interface.camera.andor.get_emgain_range(low,high);
-                      retstring = std::to_string(low) + " " + std::to_string(high);
-      }
-      else
-      if ( cmd == "cameraadchans" ) {
-                      int chans;
-                      ret = this->interface.camera.andor.sdk._GetNumberADChannels(chans);
-                      retstring = std::to_string(chans);
-      }
-      else
-      if ( cmd == "cameraopen" ) {
-                      ret = this->interface.camera.open( args );
-      }
-      else
-      if ( cmd == "cameraclose" ) {
-                      ret = this->interface.camera.close( );
-      }
-      else
       if ( cmd == "cameraacquire" ) {
                       ret = this->interface.camera.start_acquisition( );
       }
@@ -605,8 +603,17 @@ namespace Acam {
                       ret = this->interface.camera.imrot( args, retstring );
       }
       else
+      if ( cmd == ACAMD_EXPTIME ) {
+                      ret = this->interface.camera.exptime( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_GAIN ) {
                       ret = this->interface.camera.gain( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_GUIDESET ) {
+                      ret = this->interface.guider_settings_control( args, retstring );
+                      suppress_term_state = true;  // suppress the terminating state message
       }
       else
       if ( cmd == ACAMD_SPEED ) {
@@ -661,13 +668,15 @@ namespace Acam {
                       ret = this->interface.acquire( args, retstring );
       }
       else
+      // ACQUIREFIX
+      //
+      if ( cmd == ACAMD_ACQUIREFIX ) {
+                      ret = this->interface.acquire_fix( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_INIT ) {
                       this->interface.acquire_init( );
                       ret = NO_ERROR;  // acquire_init() returns void, never fails
-      }
-      else
-      if ( cmd == ACAMD_EXPTIME ) {
-                      ret = this->interface.exptime( args, retstring );
       }
       else
 
@@ -702,6 +711,13 @@ namespace Acam {
       if ( cmd == ACAMD_COVER ) {
                       ret = this->interface.motion.cover( args, retstring );
       }
+      else
+
+      // test commands
+      //
+      if ( cmd == ACAMD_TEST ) {
+                      ret = this->interface.test( args, retstring );
+      }
 
       // unknown commands generate an error
       //
@@ -714,7 +730,7 @@ namespace Acam {
       if (ret != NOTHING) {
         if ( !retstring.empty() ) retstring.append( " " );
         std::string term=(ret==0?"DONE\n":"ERROR\n");
-        retstring.append( term );
+        retstring.append( suppress_term_state ? "\n" : term );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

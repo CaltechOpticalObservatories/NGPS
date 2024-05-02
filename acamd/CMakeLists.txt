@@ -40,6 +40,7 @@ include_directories( ${PROJECT_BASE_DIR}/PI )
 include_directories( ${PROJECT_BASE_DIR}/Andor )
 include_directories( ${PROJECT_BASE_DIR}/emulator )
 include_directories( ${PROJECT_BASE_DIR}/common )
+include_directories( ${PROJECT_BASE_DIR}/tcsd )
 include_directories( ${PYTHON_DEV} )
 
 set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
@@ -54,6 +55,7 @@ add_executable(acamd
         ${ACAMD_DIR}/acamd.cpp 
         ${ACAMD_DIR}/acam_server.cpp 
         ${ACAMD_DIR}/acam_interface.cpp 
+        ${ACAMD_DIR}/acam_fits.cpp
         ${ACAMD_DIR}/motion_interface.cpp 
         ${PYTHON_DEV}
         )
@@ -64,8 +66,10 @@ target_link_libraries(acamd
         physik_instrumente
         network
         common
+        tcsd_client
         logentry
         utilities
+        skyinfo
         ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}

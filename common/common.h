@@ -16,6 +16,7 @@
 #include <condition_variable>
 
 #include "logentry.h"
+#include "network.h"
 
 const long NOTHING = -1;
 const long NO_ERROR = 0;
@@ -127,7 +128,7 @@ namespace Common {
 #ifdef LOGLEVEL_DEBUG
         std::string function = "Common::FitsKeys::addkey";
         std::stringstream message;
-        message << "[DEBUG] added key: " << key << "=" << tval << " (" << this->keydb[key].keytype << ") // " << comment;
+        message << "[DEBUG] added key type " << type << ": " << key << "=" << tval << " (" << this->keydb[key].keytype << ") // " << comment;
         logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
@@ -152,6 +153,8 @@ namespace Common {
       typedef std::map<std::string, user_key_t> fits_key_t;
 
       fits_key_t keydb;                                      ///< keyword database
+
+      inline void erase_db() { this->keydb.clear(); return; }
 
 void merge( Common::FitsKeys from ) {
   this->keydb.insert( from.keydb.begin(), from.keydb.end() );
@@ -243,6 +246,58 @@ void merge( Common::FitsKeys from ) {
       std::string dequeue(void);                                       ///< pop an element from the queue
   };
   /**************** Common::Queue *********************************************/
+
+
+  /***** Common::DaemonClient *********************************************************/
+  /**
+   * @class   DaemonClient
+   * @brief   defines a daemon-object for communicating with a daemon
+   * @details This instantiates a Network::TcpSocket object for performing the
+   *          actual socket communication.
+   *
+   */
+  class DaemonClient {
+    private:
+      char term_write;            ///< send adds this char on Writes
+      char term_read;             ///< send looks for this char on Reads (if reply requested)
+      bool timedout;
+
+    public:
+      DaemonClient() : term_write('\n'), term_read('\n'), timedout(false), name("unconfigured_daemon"), port(-1), nbport(-1) {
+        this->socket.sethost( "localhost" );
+      };
+
+      DaemonClient( std::string name_in ) : term_write('\n'), term_read('\n'), timedout(false), name(name_in), port(-1), nbport(-1) {
+        this->socket.sethost( "localhost" );
+      };   ///< preferred constructor with name to identify daemon
+
+      DaemonClient( std::string name_in, char write_in, char read_in ) : term_write(write_in), term_read(read_in), timedout(false), name(name_in), port(-1), nbport(-1) {
+        this->socket.sethost( "localhost" );
+      };   ///< preferred constructor with name to identify daemon
+
+      std::string name;             ///< name of the daemon
+      std::string host;             ///< host where the daemon is running
+      int port;                     ///< blocking port that the daemon is listening on
+      int nbport;                   ///< non-blocking port that the daemon is listening on
+
+      Network::TcpSocket socket;    ///< socket object for communications with daemon
+
+      long async( std::string args );                              ///< async (non-blocking) commands to daemon that don't need a reply
+      long async( std::string args, std::string &retstring );      ///< async (non-blocking) commands to daemon that need a reply
+
+      static void dothread_command( Common::DaemonClient &daemon, std::string args );
+      long command( std::string args );                            ///< commands to daemon
+      long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
+      long send( std::string command, std::string &reply );        ///< for internal use only
+      long connect();                                              ///< initialize socket connection to daemon
+      long disconnect();                                           ///< close socket connection to daemon
+      void set_name( std::string name_in ) { this->name=name_in; } ///< name this daemon
+      void set_port( int port );                                   ///< set the port number
+
+      long is_connected( std::string &reply );
+      bool is_open();                                              ///< is device open?
+  };
+  /***** Common::DaemonClient *********************************************************/
 
 }
 /***** Common *****************************************************************/

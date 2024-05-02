@@ -596,6 +596,7 @@ namespace Network {
                                << "recevied: closing socket " << this->host << "/" << this->port << " on fd " << this->fd;
       logwrite( function, message.str() );
       this->Close();
+      ret = -1;
     }
 
     return( ret );
@@ -987,6 +988,8 @@ namespace Network {
     this->name = "";
     this->port = -1;
     this->host = "";
+    this->term_write = '\n';
+    this->term_read  = '\n';
     this->initialized = false;
   }
   /***** Network::Interface::Interface ****************************************/
@@ -1183,9 +1186,11 @@ namespace Network {
     if ( needs_reply ) {
       long retval=0;
       if ( ( retval=this->sock.Poll() ) <= 0 ) {
-        if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd() << ": " << strerror(errno);
+        if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd();
+                           if (errno) { message << ": " << strerror(errno); }
                            error = TIMEOUT; }
-        if ( retval <0 ) { message.str(""); message << "ERROR on fd " << this->sock.getfd() << ": " << strerror(errno);
+        if ( retval <0 ) { message.str(""); message << "ERROR on fd " << this->sock.getfd();
+                           if (errno) { message << ": " << strerror(errno); }
                            error = ERROR; }
         if ( error != NO_ERROR ) logwrite( function, message.str() );
       }

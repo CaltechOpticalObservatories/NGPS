@@ -15,6 +15,7 @@
 
 #include <string>
 #include <vector>
+#include <mutex>
 
 /***** Physik_Instrumente *****************************************************/
 /**
@@ -40,6 +41,7 @@ namespace Physik_Instrumente {
       std::string host;        ///< host name for the motor controller
       int port;                ///< port number for motor controller on host
       bool initialized;
+      std::unique_ptr<std::mutex> pi_mutex;
 
     public:
       bool is_initialized() { return this->initialized; };
@@ -65,9 +67,52 @@ namespace Physik_Instrumente {
 
       template <typename T> long parse_reply( int axis, std::string &reply, T &retval );
 
-      Interface() : name(""), host(""), port(-1), initialized(false) { }
-      Interface( std::string host, int port ) : name(""), host(host), port(port), initialized(true) { }
-      Interface( std::string name, std::string host, int port ) : name(name), host(host), port(port), initialized(true) { }
+      Interface() : name(""), host(""), port(-1), initialized(false), pi_mutex(std::make_unique<std::mutex>()) {}
+      Interface(std::string host, int port) : name(""), host(host), port(port), initialized(true), pi_mutex(std::make_unique<std::mutex>()) {}
+      Interface(std::string name, std::string host, int port) : name(name), host(host), port(port), initialized(true), pi_mutex(std::make_unique<std::mutex>()) {}
+
+      // Copy constructor
+      //
+      Interface( const Interface &other ) : name(other.name),
+                                            host(other.host),
+                                            port(other.port),
+                                            initialized(other.initialized),
+                                            pi_mutex(std::make_unique<std::mutex>()) {}
+
+      // Copy assignment operator
+      //
+      Interface &operator = ( const Interface &other ) {
+        if ( this != &other ) {
+          name = other.name;
+          host = other.host;
+          port = other.port;
+          initialized = other.initialized;
+          pi_mutex = std::make_unique<std::mutex>();  // Create a new mutex for the copy
+        }
+        return *this;
+      }
+
+      // Move constructor
+      //
+      Interface( Interface &&other ) noexcept : name(std::move(other.name)),
+                                                host(std::move(other.host)),
+                                                port(other.port),
+                                                initialized(other.initialized),
+                                                pi_mutex(std::move(other.pi_mutex)) { other.initialized = false; }
+
+      // Move assignment operator
+      //
+      Interface &operator = ( Interface &&other ) noexcept {
+        if ( this != &other ) {
+          name = std::move( other.name );
+          host = std::move( other.host );
+          port = other.port;
+          initialized = other.initialized;
+          pi_mutex = std::move( other.pi_mutex );
+          other.initialized = false;
+        }
+        return *this;
+      }
 
       Network::TcpSocket controller;                                 ///< TCP/IP socket object to communicate with controller
 
@@ -233,11 +278,20 @@ namespace Physik_Instrumente {
 
         int tryaddr;
         std::string tryname, tryreftype;
+        float trymin, trymax, tryzero;
 
         try {
           tryaddr    = std::stoi( tokens.at(0) );
           tryname    = tokens.at(1);
           tryreftype = tokens.at(2);
+          trymin     = std::stof( tokens.at(3) );
+          trymax     = std::stof( tokens.at(4) );
+          tryzero    = std::stof( tokens.at(5) );
+        }
+        catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR invalid argument parsing \"" << input << "\": " << e.what();
+          logwrite( function, message.str() );
+          return( ERROR );
         }
         catch ( std::exception &e ) {
           message.str(""); message << "ERROR invalid argument parsing \"" << input << "\": " << e.what();
@@ -269,13 +323,21 @@ namespace Physik_Instrumente {
         this->addr    = tryaddr;
         this->name    = tryname;
         this->reftype = tryreftype;
+        this->min     = trymin;
+        this->max     = trymax;
+        this->zeropos = tryzero;
 
-        // Remove the first three tokens used here: <addr> <name> <reftype>
-        // then rest to the specialized load_controller_info() function
-        // declared in the derived class.
-        //
-        tokens.erase( tokens.begin(), tokens.begin()+3 );
-        return T::load_controller_info( tokens );
+// Remove this section at least until after I see what is needed for Piezos.
+// At the moment, load_controller_info() is the same for Stepper and Servo.
+//
+//      // Remove the first three tokens used here: <addr> <name> <reftype>
+//      // then rest to the specialized load_controller_info() function
+//      // declared in the derived class.
+//      //
+//      tokens.erase( tokens.begin(), tokens.begin()+3 );
+//      return T::load_controller_info( tokens );
+
+        return( NO_ERROR );
       }
       /***** load_controller_info *********************************************/
 

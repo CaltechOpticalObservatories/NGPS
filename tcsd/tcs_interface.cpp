@@ -12,26 +12,6 @@
 
 namespace TCS {
 
-  /***** TCS::Interface::Interface ********************************************/
-  /**
-   * @brief      class constructor
-   *
-   */
-  Interface::Interface() {
-  }
-  /***** TCS::Interface::Interface ********************************************/
-
-
-  /***** TCS::Interface::~Interface *******************************************/
-  /**
-   * @brief      class destructor
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** TCS::Interface::~Interface *******************************************/
-
-
   /***** TCS::Interface::list *************************************************/
   /**
    * @brief      list configured TCS devices
@@ -120,7 +100,7 @@ namespace TCS {
     //
     for ( auto const &[key,val] : this->tcsmap ) {
       if ( val.isconnected() ) {
-        message.str(""); message << "ERROR:connection already open to " << val.name() << " "
+        message.str(""); message << "ERROR: connection already open to " << val.name() << " "
                                  << val.host() << ":" << val.port();
         logwrite( function, message.str() );
         retstring="already_open";
@@ -189,6 +169,11 @@ namespace TCS {
    * or false (if closed).
    *
    */
+  bool Interface::isopen() {
+    std::string ret;
+    this->isopen( ret );
+    return( ret == "false" ? false : true );
+  }
   long Interface::isopen( std::string &retstring ) {
     return this->isopen( "", retstring );
   }
@@ -207,10 +192,12 @@ namespace TCS {
 
     for ( auto const &[key,val] : this->tcsmap ) {
       if ( val.isconnected() ) {
-        message.str(""); message << "connection open to " << val.name() << " on "
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] connection open to " << val.name() << " on "
                                  << val.host() << ":" << val.port();
         logwrite( function, message.str() );
-        retstring=val.name();
+#endif
+        retstring="true " + val.name();
         return( NO_ERROR );
       }
     }
@@ -579,6 +566,91 @@ namespace TCS {
   /***** TCS::Interface::get_dome *********************************************/
 
 
+  /***** TCS::Interface::set_focus ********************************************/
+  /**
+   * @brief      set the focus position
+   * @details    uses the FOCUSGO command
+   * @param[in]  arg        requested focus value
+   * @param[out] retstring  reference to return string for the command sent to the TCS
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_focus( std::string arg, std::string &retstring ) {
+    std::string function = "TCS::Interface::set_focus";
+    std::stringstream message, asyncmsg;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( arg == "?" || arg == "help" ) {
+      retstring = TCSD_SET_FOCUS;
+      retstring.append( " <value>\n" );
+      retstring.append( "  Set the telescope focus position in mm within range {1:74}\n" );
+      return( NO_ERROR );
+    }
+
+    if ( arg.empty() ) { retstring="missing_argument"; return ERROR; }
+
+    double value;
+
+    try {
+      value = std::stod( arg );
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing focus value from \"" << arg << "\": " << e.what();
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR parsing focus value from \"" << arg << "\": " << e.what();
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    if ( std::isnan(value) ) {
+      logwrite( function, "ERROR: requested focus is NaN" );
+      retstring="bad_value";
+      return( ERROR );
+    }
+
+    if ( value < 1.0 || value > 74.0 ) {
+      message.str(""); message << "ERROR requested focus " << value << " outside range { 1:74 }";
+      logwrite( function, message.str() );
+      retstring="outside_range";
+      return( ERROR );
+    }
+
+    std::stringstream cmd;
+    std::string retcode;
+    cmd << "FOCUSGO " << std::fixed << std::setprecision(2) << value;
+
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retcode );
+
+    this->parse_reply_code( retcode, retstring );
+
+    asyncmsg << "TCSD:focusgo:" << retstring;
+    this->async.enqueue( asyncmsg.str() );
+
+    return error;
+  }
+  /***** TCS::Interface::set_focus ********************************************/
+
+
+  /***** TCS::Interface::get_focus ********************************************/
+  /**
+   * @brief      get the current focus position
+   * @details    uses this version internally, when help won't be requested
+   * @param[out] retstring  contains focus position
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_focus( std::string &retstring ) {
+    std::string notneeded;
+    return get_focus( notneeded, retstring );
+  }
+  /***** TCS::Interface::get_focus ********************************************/
+
+
   /***** TCS::Interface::get_focus ********************************************/
   /**
    * @brief      get the current focus position
@@ -713,7 +785,7 @@ namespace TCS {
     // Response will be a number that is converted to int here
     //
     try {
-      if ( error != ERROR ) motion_code = std::stoi( motion );
+      if ( error == NO_ERROR ) motion_code = std::stoi( motion );
     }
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR out of range parsing TCS reply \"" << motion << "\": " << e.what();
@@ -938,7 +1010,7 @@ namespace TCS {
 
     // TCS is good, send the command, read the reply
     //
-    if ( tcs_loc->second.send( cmd, reply ) == -1 ) {
+    if ( tcs_loc->second.send( cmd, reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS on fd " << tcs_loc->second.fd();
       logwrite( function, message.str() );
       return( ERROR );

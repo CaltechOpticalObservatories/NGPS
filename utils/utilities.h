@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef UTILITIES_H
-#define UTILITIES_H
+#pragma once
 
 #include <iomanip>
 #include <vector>
@@ -32,6 +31,7 @@
 #include <cctype>
 
 extern std::string zone;
+extern std::mutex generate_tmpfile_mtx;
 
 bool cmdOptionExists( char** begin, char** end, const std::string &option );
 char* getCmdOption( char** begin, char** end, const std::string &option );
@@ -88,6 +88,10 @@ bool is_owner( const std::filesystem::path &filename );
 bool has_write_permission( const std::filesystem::path &filename );
 std::string_view tchar( std::string_view str );
 std::string_view strip_control_characters( const std::string &str );
+bool starts_with( const std::string &str, std::string_view prefix );
+bool ends_with( const std::string &str, std::string_view suffix );
+std::string generate_temp_filename( const std::string &prefix );
+
 
 static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );
@@ -207,4 +211,3 @@ class Time {
 };
 /***** Time *****************************************************************/
 
-#endif

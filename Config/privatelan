@@ -20,6 +20,14 @@ set( IP_NPS3            10.0.0.13  )
 set( IP_NPS4            10.0.0.14  )
 
 set( IP_LAMP_MODULATOR  10.0.0.36  )
+
+#  flexure motor controllers
+#
+set( IP_FLEXURE_U       10.0.0.40  )
+set( IP_FLEXURE_G       10.0.0.41  )
+set( IP_FLEXURE_R       10.0.0.42  )
+set( IP_FLEXURE_I       10.0.0.43  )
+
 set( IP_CR1000X         10.0.0.100 )
 
 # Lakeshores

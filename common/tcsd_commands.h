@@ -21,6 +21,7 @@ const std::string TCSD_LIST = "list";
 const std::string TCSD_LLIST = "llist";
 const std::string TCSD_OPEN = "open";
 const std::string TCSD_RINGGO = "ringgo";
+const std::string TCSD_SET_FOCUS = "setfocus";
 const std::string TCSD_WEATHER_COORDS = "weathercoords";
 
 const std::vector<std::string> TCSD_SYNTAX = {
@@ -37,6 +38,7 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_LLIST,
                                                TCSD_OPEN+" ? | <name>",
                                                TCSD_RINGGO+" ? | <angle>",
+                                               TCSD_SET_FOCUS+" ? | <value>",
                                                TCSD_WEATHER_COORDS+" [ ? ]"
                                              };
 #endif

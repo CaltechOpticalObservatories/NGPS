@@ -8,6 +8,7 @@
 #include "utilities.h"
 
 std::string zone="";   ///< time zone
+std::mutex generate_tmpfile_mtx;
 
   /***** cmdOptionExists ******************************************************/
   /**
@@ -737,3 +738,64 @@ std::string zone="";   ///< time zone
     return std::string_view( str.data() + start, end - start );
   }
   /***** strip_control_characters *********************************************/
+
+
+  /***** starts_with **********************************************************/
+  /**
+   * @brief      check if a string starts with a string literal
+   * @details    this is here in case c++20 is not available
+   * @param[in]  str     reference to input string
+   * @param[in]  prefix  a read-only prefix string
+   * @return     true or false
+   *
+   */
+  bool starts_with( const std::string &str, std::string_view prefix ) {
+    return ( str.compare( 0, prefix.length(), prefix ) == 0 );
+  }
+  /***** starts_with **********************************************************/
+
+
+  /***** ends_with ************************************************************/
+  /**
+   * @brief      check if a string end with a string literal
+   * @details    this is here in case c++20 is not available
+   * @param[in]  str     reference to input string
+   * @param[in]  suffix  a read-only suffix string
+   * @return     true or false
+   *
+   */
+  bool ends_with( const std::string &str, std::string_view suffix ) {
+    if ( str.length() < suffix.length() ) return false;
+    return str.substr( str.length() - suffix.length() ) == suffix;
+  }
+  /***** ends_with ************************************************************/
+
+
+  /***** generate_temp_filename ***********************************************/
+  /**
+   * @brief      generates a temporary filename only, not a file
+   * @details    mimmics tmpnam to more safely create a temporary filename
+   * @param[in]  prefix  prefix for the filename, /tmp/prefix.XXXXXX
+   * @return     generated temporary filename
+   *
+   */
+  std::string generate_temp_filename( const std::string &prefix ) {
+    std::string pattern = "/tmp/" + prefix + "XXXXXX";
+    char* filename = strdup( pattern.c_str() );  // mkstemp requires a non-const pointer
+
+    generate_tmpfile_mtx.lock();
+    int fd = mkstemp( filename );                // create and open the file
+    generate_tmpfile_mtx.unlock();
+
+    if ( fd != -1 ) {
+      close(fd);                                 // close the file immediately
+      std::string temp_filename = filename;      // create a std::string
+      free( filename );                          // cleanup and
+      unlink( temp_filename.c_str() );           // delete the file.
+      return temp_filename;
+    } else {
+        free( filename );
+        return "";
+    }
+  }
+  /***** generate_temp_filename ***********************************************/

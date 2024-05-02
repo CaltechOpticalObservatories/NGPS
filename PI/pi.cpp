@@ -532,6 +532,8 @@ namespace Physik_Instrumente {
     std::string function = "Physik_Instrumente::Interface::send_command";
     std::stringstream message;
 
+    std::unique_lock<std::mutex> lock( *this->pi_mutex );
+
     logwrite( function, cmd );
 
     cmd.append( "\n" );                            // add the newline character
@@ -569,11 +571,17 @@ namespace Physik_Instrumente {
     long error=NO_ERROR;
     long retval=0;
 
+    std::unique_lock<std::mutex> lock( *this->pi_mutex );
+
     // send the command
     //
-    error = this->send_command( cmd );
+    logwrite( function, cmd );
 
-    if ( error == ERROR ) {
+    cmd.append( "\n" );                            // add the newline character
+
+    int written = this->controller.Write( cmd );   // write the command
+
+    if ( written <= 0 ) {                          // return error if error writing to socket
       message.str(""); message << "ERROR sending command: " << cmd;
       logwrite( function, message.str() );
     }

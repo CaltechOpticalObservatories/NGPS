@@ -6,9 +6,9 @@
  *
  */
 
-#ifndef ACAM_INTERFACE_H
-#define ACAM_INTERFACE_H
+#pragma once
 
+#include <cmath>
 #include <cpython.h>
 #include "motion_interface.h"
 #include "network.h"
@@ -18,9 +18,11 @@
 #include "atmcdLXd.h"
 #include <cstdlib>
 #include <iostream>
-#include "camera.h"
-#include "fits.h"
+#include "acam_fits.h"
 #include "config.h"
+#include "tcsd_commands.h"
+#include "tcsd_client.h"
+#include "skyinfo.h"
 
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
@@ -44,6 +46,8 @@ namespace Acam {
 
   const std::string DAEMON_NAME = "acamd";       ///< when run as a daemon, this is my name
 
+  constexpr double PI = 3.14159265358979323846;
+
   class CPyObject {
     private:
       PyObject *p;
@@ -63,20 +67,6 @@ namespace Acam {
   };
 
 
-  /***** Information **********************************************************/
-  /**
-   * @class   Information
-   * @brief   information class for the ACAM camera
-   * @details contains information about the Andor camera
-   *
-   */
-  class Information {
-    private:
-    public:
-  };
-  /***** Information **********************************************************/
-
-
   /***** Acam::Camera *********************************************************/
   /**
    * @class  Camera
@@ -87,24 +77,32 @@ namespace Acam {
    */
   class Camera {
     private:
+      uint16_t* image_data;
 
     public:
       Camera() : image_data( nullptr ) { };
 
-      uint16_t* image_data;
+      FITS_file fits_file;        /// instantiate a FITS container object
+      FitsInfo  fitsinfo;
 
       Andor::Interface andor;     ///< create an Andor::Interface object for interfacing with the camera
+
+      inline void copy_info() { fits_file.copy_info( fitsinfo ); }
 
       long simandor( std::string args, std::string &retstring );
       long open( std::string args );
       long close();
       long start_acquisition();
       long get_frame();
+      long write_frame( std::string source_file, std::string &outfile );
       long get_status();
       long bin( std::string args, std::string &retstring );
       long imflip( std::string args, std::string &retstring );
       long imrot( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
+      int gain();
+      long exptime( std::string exptime_in, std::string &retstring );
+      double exptime();
       long speed( std::string args, std::string &retstring );
       long temperature( std::string args, std::string &retstring );
   };
@@ -211,6 +209,102 @@ namespace Acam {
   /***** Acam::Telemetry ******************************************************/
 
 
+  /***** Acam::GuideManager ***************************************************/
+  /**
+   * @class  GuideManager
+   * @brief  defines functions and settings for the guider GUI
+   *
+   */
+  class GuideManager {
+    private:
+      std::string camera_name = "guider";
+      std::atomic<bool> update;  ///<! set if the menus need to be updated
+      std::string push_settings; ///<! name of script to push settings to GUI
+      std::string push_image;    ///<! name of script to push an image to GUI
+
+    public:
+      GuideManager() : update(false), exptime(NAN), gain(-1), filter("???"), focus(NAN) { }
+
+      // These are the GUIDER GUI settings
+      //
+      double exptime;
+      int gain;
+      std::string filter;
+      double focus;
+
+      // sets the private variable push_settings, call on config
+      inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
+
+      // sets the private variable push_image, call on config
+      inline void set_push_image( std::string sh ) { this->push_image=sh; }
+
+      // sets the update flag true
+      inline void set_update() { this->update.store( true ); return; }
+
+      /**
+       * @fn         get_update
+       * @brief      returns the update flag then clears it
+       * @return     boolean true|false
+       */
+      inline bool get_update() { return this->update.exchange( false ); }
+
+      /**
+       * @fn         get_message_string
+       * @brief      returns a formatted message of all guider settings
+       * @details    This message is the return string to guideset command.
+       * @return     string in form of <exptime> <gain> <filter> <focus>
+       */
+      std::string get_message_string() {
+        std::stringstream message;
+        if ( this->exptime < 0 ) message << "???"; else { message << std::fixed << std::setprecision(3) << this->exptime; }
+        message << " ";
+        if ( this->gain < 1 ) message << "???"; else { message << std::fixed << std::setprecision(3) << this->gain; }
+        message << " ";
+        message << ( this->filter.empty() ? "???" : this->filter );
+        message << " ";
+        if ( std::isnan( this->focus ) ) message << "???"; else { message << std::fixed << std::setprecision(2) << this->focus; };
+        return message.str();
+      }
+
+      /**
+       * @fn         push_guider_settings
+       * @brief      calls the push_settings script with the formatted message string
+       */
+      void push_guider_settings() {
+        std::string function = "Acam::GuideManager::push_guider_settings";
+        std::stringstream cmd;
+        cmd << push_settings << " "
+            << ( get_update() ? "true" : "false" ) << " "
+            << get_message_string();
+
+        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
+          logwrite( function, "ERROR updating GUI" );
+        }
+
+        return;
+      }
+
+      /**
+       * @fn         push_guider_image
+       * @brief      calls the push_image script with the formatted message string
+       */
+      void push_guider_image( std::string_view filename ) {
+        std::string function = "Acam::GuideManager::push_guider_image";
+        std::stringstream cmd;
+        cmd << push_image << " "
+            << camera_name << " "
+            << filename;
+
+        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
+          logwrite( function, "ERROR pushing image to GUI" );
+        }
+
+        return;
+      }
+  };
+  /***** Acam::GuideManager ***************************************************/
+
+
   /***** Acam::Interface ******************************************************/
   /**
    * @class  Interface
@@ -225,6 +319,8 @@ namespace Acam {
       bool class_initialized;
       std::string imagename;
       std::string wcsname;
+      std::chrono::steady_clock::time_point wcsfix_time;
+      std::chrono::steady_clock::time_point acquire_time;
 
     public:
       std::string cameraserver_host;
@@ -232,8 +328,9 @@ namespace Acam {
       int cameraserver_port;
       int motion_port;
 
-      Interface();
-      ~Interface();
+      GuideManager guide_manager;
+
+      Interface() : imagename(""), wcsname(""), cameraserver_host(""), motion_host(""), cameraserver_port(-1), motion_port(-1) { }
 
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
@@ -241,13 +338,13 @@ namespace Acam {
       inline void set_imagename( std::string name_in ) { this->imagename = name_in; return; }
       inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
 
-      Information info;
+      Acam::FitsInfo fitsinfo;
 
-      Telemetry telemetry;                     /// for collecting and writing telemetry data files
+//    Telemetry telemetry;                     /// for collecting and writing telemetry data files
 
       Common::Queue async;                     /// asynchronous message queue
 
-      Camera camera;                           /// provides a direct interface to the Andor A&G camera
+      Camera camera;                           /// 
 
       CameraServer camera_server;              /// provides an interface to the Andor A&G camera via an external server
 
@@ -257,22 +354,33 @@ namespace Acam {
 
       FITS_file fits_file;                     /// instantiate a FITS container object
 
+      TcsDaemonClient tcsd;                    /// for communicating with the TCS daemon
+
+      SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets
+
       long initialize_class();                 /// initialize the Interface class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
       long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components
       long close( std::string component, std::string &help );      /// wrapper to open all acam-related hardware components
       long acquire( std::string args, std::string &retstring );    /// wrapper to acquire an Andor image
+      long acquire_fix( std::string args, std::string &retstring );    /// wrapper to acquire an Andor image
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
-      long exptime( std::string exptime_in, std::string &retstring );  /// wrapper to set exposure time
+      long guider_settings_control( std::string args, std::string &retstring );
+      long test( std::string args, std::string &retstring );
+
+      long collect_header_info();
+      long save_acquired();
 
       inline void acquire_init() { imagename=""; wcsname=""; return; }
 
       long configure_interface( Config &config );
+
+      static void dothread_set_filter( Acam::Interface &iface, std::string filter_req );
+      static void dothread_set_focus( Acam::Interface &iface, double focus_req );
   };
   /***** Acam::Interface ******************************************************/
 
 }
 /***** Acam *******************************************************************/
-#endif

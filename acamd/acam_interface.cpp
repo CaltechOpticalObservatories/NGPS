@@ -358,6 +358,61 @@ namespace Acam {
   /***** Acam::Camera::imrot **************************************************/
 
 
+  /***** Acam::Camera::exptime ************************************************/
+  /**
+   * @brief      wrapper to set/get exposure time
+   * @param[in]  exptime_in  optional requested exposure time
+   * @param[out] retstring   return string contains current exposure time
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::exptime( std::string exptime_in, std::string &retstring ) {
+    std::string function = "Acam::Camera::exptime";
+    std::stringstream message;
+
+    if ( exptime_in == "?" || exptime_in == "help" ) {
+      retstring = ACAMD_EXPTIME;
+      retstring.append( " [ <exptime> ]\n" );
+      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
+      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
+      retstring.append( "  else the current exposure time is returned.\n" );
+      return( NO_ERROR );
+    }
+
+#ifdef ACAM_ANDOR_SOURCE_SERVER
+    logwrite( function, "ERROR: not implemented for GUI server" );
+    return( ERROR );
+#elif ACAM_ANDOR_SOURCE_ANDOR
+    return this->andor.exptime( exptime_in, retstring );
+#else
+    logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
+    return( ERROR );
+#endif
+  }
+  /***** Acam::Camera::exptime ************************************************/
+
+
+  /***** Acam::Camera::exptime ************************************************/
+  /**
+   * @brief      wrapper to get exposure time as a double
+   * @return     double exposure time
+   *
+   */
+  double Camera::exptime() {
+    std::string function = "Acam::Camera::exptime";
+    std::string svalue;
+    double dvalue=NAN;
+    this->exptime( "", svalue );
+    try {
+      dvalue=std::stod( svalue );
+    }
+    catch( std::out_of_range &e )     { logwrite( "Acam::Camera::exptime", "ERROR "+std::string(e.what()) ); }
+    catch( std::invalid_argument &e ) { logwrite( "Acam::Camera::exptime", "ERROR "+std::string(e.what()) ); }
+    return dvalue;
+  }
+  /***** Acam::Camera::exptime ************************************************/
+
+
   /***** Acam::Camera::gain ***************************************************/
   /**
    * @brief      set or get the CCD gain
@@ -403,6 +458,7 @@ namespace Acam {
     //
     if ( !this->andor.is_initialized() ) {
       logwrite( function, "ERROR no connection to camera" );
+      retstring="not_open";
       return( ERROR );
     }
 
@@ -417,6 +473,7 @@ namespace Acam {
       //
       if ( tokens.size() != 1 ) {
         logwrite( function, "ERROR too many arguments" );
+        retstring="invalid_argument";
         return( ERROR );
       }
 
@@ -470,11 +527,37 @@ namespace Acam {
 
     // Regardless of setting the gain, always return it.
     //
-    retstring = std::to_string( this->andor.camera_info.gain );
+    if ( this->andor.camera_info.gain < 1 ) {
+      retstring = "???";
+    }
+    else {
+      retstring = std::to_string( this->andor.camera_info.gain );
+    }
 
     logwrite( function, retstring );
 
     return error;
+  }
+  /***** Acam::Camera::gain ***************************************************/
+
+
+  /***** Acam::Camera::gain ***************************************************/
+  /**
+   * @brief      wrapper to get exposure time as a double
+   * @return     double exposure time
+   *
+   */
+  int Camera::gain() {
+    std::string function = "Acam::Camera::gain";
+    std::string svalue;
+    int ivalue=0;
+    this->gain( "", svalue );
+    try {
+      ivalue=std::stoi( svalue );
+    }
+    catch( std::out_of_range &e )     { logwrite( "Acam::Camera::gain", "ERROR "+std::string(e.what()) ); }
+    catch( std::invalid_argument &e ) { logwrite( "Acam::Camera::gain", "ERROR "+std::string(e.what()) ); }
+    return ivalue;
   }
   /***** Acam::Camera::gain ***************************************************/
 
@@ -685,17 +768,17 @@ namespace Acam {
 
     // Allocate storage if needed
     //
-    if ( this->image_data != NULL &&
+    if ( this->image_data != nullptr &&
          this->andor.camera_info.npix == framepix ) {
     }
     else
-    if ( this->image_data != NULL &&
+    if ( this->image_data != nullptr &&
          this->andor.camera_info.npix != framepix ) {
-      delete [] (uint16_t*)this->image_data;
-      this->image_data = NULL;
+      delete [] this->image_data;
+      this->image_data = nullptr;
     }
 
-    if ( this->image_data == NULL ) {
+    if ( this->image_data == nullptr ) {
       this->image_data = (uint16_t*)new int16_t[ framepix ];
     }
 
@@ -704,6 +787,67 @@ namespace Acam {
     if ( ret == DRV_SUCCESS ) return NO_ERROR; else return ERROR;
   }
   /***** Acam::Camera::get_frame **********************************************/
+
+
+  /***** Acam::Camera::write_frame ********************************************/
+  /**
+   * @brief      write the Andor image data to FITS file
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::write_frame( std::string source_file, std::string &outfile ) {
+    std::string function = "Acam::Camera::write_frame";
+    std::stringstream message;
+
+    long error = NO_ERROR;
+
+    // Nothing to do if not Andor image data
+    //
+    if ( andor.get_image_data() == nullptr ) {
+      logwrite( function, "ERROR no image data available" );
+      return( ERROR );
+    }
+
+    fitsinfo.fits_name = "/tmp/acam.fits";
+    fitsinfo.datatype = USHORT_IMG;
+    fitsinfo.section_size = andor.camera_info.axes[0] * andor.camera_info.axes[1];
+
+    fits_file.copy_info( fitsinfo );      // copy from fitsinfo to the fits_file
+
+    error = fits_file.open_file();        // open the fits file for writing
+
+    if ( !source_file.empty() ) {
+      if (error==NO_ERROR) error = fits_file.copy_header_from( source_file );
+    }
+    else {
+      if (error==NO_ERROR) error = fits_file.create_header();  // create basic header
+    }
+
+//  fits_file.copy_header( wcs_in );      // if supplied, copy the header from the input file
+//  fits_file.copy_header( "/home/developer/cshapiro/acam_skyinfo/skyheader.fits" );
+
+/*
+    std::unique_ptr<uint16_t[]> &data = andor.get_image_data();
+    if ( data == nullptr ) {
+      logwrite( function, "ERROR missing data buffer" );
+      return( ERROR );
+    }
+    fits_file.write_image( data.get() );  // write the image data
+*/
+
+    if (error==NO_ERROR) fits_file.write_image( andor.get_image_data() );  // write the image data
+
+    fits_file.close_file();                           // close the file
+
+    // This is the one extra call that is outside the normal workflow.
+    //
+    if ( andor.is_simulated() ) andor.simulate_frame( fitsinfo.fits_name );
+
+    outfile = fitsinfo.fits_name;
+
+    return( error );
+  }
+  /***** Acam::Camera::write_frame ********************************************/
 
 
   /***** Acam::Camera::test_image *********************************************/
@@ -1438,6 +1582,7 @@ namespace Acam {
    * @brief      class constructor
    * @details    The andor camera will be initialized upon construction
    */
+/*
   Interface::Interface() {
     this->cameraserver_host="";
     this->motion_host="";
@@ -1446,18 +1591,8 @@ namespace Acam {
     this->imagename="";
     this->wcsname="";
   }
+*/
   /***** Acam::Interface::Interface *******************************************/
-
-
-  /***** Acam::Interface::~Interface ******************************************/
-  /**
-   * @brief      class deconstructor
-   * @details    The andor camera will be closed upon de-construction
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** Acam::Interface::~Interface ******************************************/
 
 
   /***** Acam::Interface::initialize_class ************************************/
@@ -1520,7 +1655,7 @@ namespace Acam {
     //
     for (int entry=0; entry < config.n_entries; entry++) {
 
-      if ( config.param[entry].find( "SOLVER_ARGS" ) == 0 ) {
+      if ( starts_with( config.param[entry], "SOLVER_ARGS" ) ) {
         // tokenize each solverargs entry to check that it is of the format key=value
         //
         std::vector<std::string> tokens;
@@ -1529,7 +1664,7 @@ namespace Acam {
         if (size != 2) {
           message.str(""); message << "ERROR: bad entry for SOLVER_ARGS: " << config.arg[entry] << ": expected (key=value)";
           logwrite(function, message.str());
-          error = ERROR;
+          error |= ERROR;
           continue;
         }
         else {
@@ -1542,9 +1677,63 @@ namespace Acam {
           }
           catch(std::out_of_range &) {  // should be impossible but here for safety
             logwrite(function, "ERROR configuring SOLVER_ARGS: requested tokens out of range");
-            error = ERROR;
+            error |= ERROR;
           }
         }
+      }
+
+      if ( starts_with( config.param[entry], "PIXSCALE" ) ) {
+        try {
+          this->camera.andor.camera_info.pixel_scale = std::stod( config.arg[entry] );
+        }
+        catch( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR invalid pixel scale: " << e.what();
+          logwrite( function, message.str() );
+          error |= ERROR;
+        }
+        catch( std::out_of_range &e ) {
+          message.str(""); message << "ERROR invalid pixel scale: " << e.what();
+          logwrite( function, message.str() );
+          error |= ERROR;
+        }
+      }
+
+      if ( starts_with( config.param[entry], "PUSH_GUIDER_SETTINGS" ) ) {
+        this->guide_manager.set_push_settings( config.arg[entry] );
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( starts_with( config.param[entry], "PUSH_GUIDER_IMAGE" ) ) {
+        this->guide_manager.set_push_image( config.arg[entry] );
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( starts_with( config.param[entry], "ANDOR_SN" ) ) {
+      }
+
+      if ( starts_with( config.param[entry], "TCSD_PORT" ) ) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad TCSD_PORT " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad TCSD_PORT " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        this->tcsd.client.port =  port;
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
       }
     }
     message.str(""); message << "applied " << applied << " configuration lines to the acam interface";
@@ -1774,9 +1963,69 @@ namespace Acam {
   /***** Acam::Interface::close ***********************************************/
 
 
+  /***** Acam::Interface::acquire_fix *****************************************/
+  /**
+   * @brief      wrapper to acquire an Andor image
+   * @param[in]  args       only accepts "?|help" for help
+   * @param[out] retstring  return string for help or error status
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::acquire_fix( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::acquire_fix";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_ACQUIREFIX;
+      retstring.append( " \n" );
+      retstring.append( "   This is a convenience function to acquire a single ACAM image using\n" );
+      retstring.append( "   the WCSfix filename from the last solve. If a solve was not run in the\n" );
+      retstring.append( "   last 60 seconds then it is considered stale and \"" + ACAMD_ACQUIREFIX + "\" will return\n" );
+      retstring.append( "   an error.\n\n" );
+      retstring.append( "   This is equivalent to \"" + ACAMD_ACQUIRE + " /tmp/acam_WCSfix.fis\"\n" );
+      return( NO_ERROR );
+    }
+    else
+    if ( !args.empty() ) {
+      logwrite( function, "ERROR expected no argument" );
+      retstring="invalid_argument";
+      return( ERROR );
+    }
+
+    if ( wcsfix_time == std::chrono::steady_clock::time_point::min() ) {
+      logwrite( function, "ERROR must run solve first" );
+      retstring="missing_wcsfix";
+      return( ERROR );
+    }
+
+    if ( !this->wcsname.empty() ) {
+      auto time_now = std::chrono::steady_clock::now();
+      auto time_since_wcsfix = std::chrono::duration_cast<std::chrono::seconds>( time_now - wcsfix_time ).count();
+
+      if ( time_since_wcsfix > 60 ) {
+        message.str(""); message << "ERROR time since last solve is " << time_since_wcsfix << "s: must be within 60s";
+        logwrite( function, message.str() );
+        retstring="stale_wcsfix";
+        return( ERROR );
+      }
+      else return( acquire( this->wcsname, retstring ) );
+    }
+    else {
+      logwrite( function, "ERROR must run solve first" );
+      retstring="missing_wcsfix";
+      return( ERROR );
+    }
+  }
+  /***** Acam::Interface::acquire_fix *****************************************/
+
+
   /***** Acam::Interface::acquire *********************************************/
   /**
    * @brief      wrapper to acquire an Andor image
+   * @param[in]  args       optional filename as source for header info
+   * @param[out] retstring  return string
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1790,22 +2039,41 @@ namespace Acam {
     //
     if ( args == "?" ) {
       retstring = ACAMD_ACQUIRE;
-      retstring.append( "\n" );
-      retstring.append( "  Acquire a single ACAM image.\n" );
+      retstring.append( " [ <filename> ]\n" );
+      retstring.append( "   Acquire a single ACAM image.\n" );
+      retstring.append( "   If an optional <filename> is supplied then that file will be used\n" );
+      retstring.append( "   as a source for header information for the acquisition.\n" );
       return( NO_ERROR );
+    }
+
+    // If there's a space then there are too many arguments
+    //
+    if ( args.find(" ") != std::string::npos ) {
+      logwrite( function, "ERROR expected at most one argument" );
+      retstring="invalid_argument";
+      return( ERROR );
+    }
+
+    // If there's no argument then clear the class wcsname variable
+    //
+    if ( args.empty() ) {
+      this->wcsname.clear();
+      this->wcsfix_time = std::chrono::steady_clock::time_point::min();
     }
 
     // Set this true for acquisition (false for guiding)
     //
     this->astrometry.isacquire=true;
 
-message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, message.str() );
 #ifdef ACAM_ANDOR_SOURCE_SERVER
     this->camera_server.acquire( this->wcsname, _imagename );
     this->imagename = _imagename;
 #elif ACAM_ANDOR_SOURCE_ANDOR
-    this->camera.andor.acquire_one();
-    this->camera.andor.save_acquired( this->wcsname, _imagename );
+    if (error==NO_ERROR) error = this->camera.andor.acquire_one();  // acquire a frame from camera into memory
+    if (error==NO_ERROR) error = this->collect_header_info();       // collect header information
+    if (error==NO_ERROR) error = this->camera.write_frame( args, this->imagename );  // write to FITS file
+    this->acquire_time = std::chrono::steady_clock::time_point::min();
+    guide_manager.push_guider_image( this->imagename );
 #else
     logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
     return( ERROR );
@@ -1819,38 +2087,333 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
   /***** Acam::Interface::acquire *********************************************/
 
 
-  /***** Acam::Interface::exptime *********************************************/
+  /***** Acam::Interface::guider_settings_control *****************************/
   /**
-   * @brief      wrapper to set/get exposure time
-   * @param[in]  exptime_in  optional requested exposure time
-   * @param[out] retstring   return string contains current exposure time
+   * @brief      set or get the guider settings for the SAOImage GUIDER display
+   * @details    The guider uses SAOImage for display and control. When ds9 is
+   *             used to change any one (or more) parameter(s), it will call
+   *             this function to set the parameter(s). This function will
+   *             return the current parameters and it will call a shell
+   *             command which pushes the parameters to the ds9 display. If
+   *             no args are supplied then the parameters will only be returned
+   *             and pushed (not set).
+   * @param[in]  args       <empty> or contains all: <exptime> <gain> <filter> <focus>
+   * @param[out] retstring  return string contains <exptime> <gain> <filter> <focus>
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::exptime( std::string exptime_in, std::string &retstring ) {
-    std::string function = "Acam::Interface::exptime";
+  long Interface::guider_settings_control( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::guider_settings_control";
     std::stringstream message;
 
-    if ( exptime_in == "?" || exptime_in == "help" ) {
-      retstring = ACAMD_EXPTIME;
-      retstring.append( " [ <exptime> ]\n" );
-      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
-      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
-      retstring.append( "  else the current exposure time is returned.\n" );
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_GUIDESET;
+      retstring.append( " [ <exptime> <gain> <filter> <focus> ]\n" );
+      retstring.append( "   Set or get guider settings for SAOImage GUIDER display.\n" );
+      retstring.append( "   When all arguments are supplied they will be set and then pushed\n" );
+      retstring.append( "   back to the display. If no arguments are supplied then the current\n" );
+      retstring.append( "   settings are returned and pushed to the display.\n" );
+      retstring.append( "   The DONE|ERROR suffix on the return string is suppressed.\n" );
       return( NO_ERROR );
     }
 
-#ifdef ACAM_ANDOR_SOURCE_SERVER
-    logwrite( function, "ERROR: not implemented for GUI server" );
-    return( ERROR );
-#elif ACAM_ANDOR_SOURCE_ANDOR
-    return this->camera.andor.exptime( exptime_in, retstring );
-#else
-    logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
-    return( ERROR );
-#endif
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    // If something was supplied but not the correct number of args then that's an error
+    //
+    if ( !tokens.empty() && tokens.size() != 4 ) {
+      message.str(""); message << "ERROR received " << tokens.size() << " arguments "
+                               << "but expected <exptime> <gain> <filter> <focus>";
+      logwrite( function, message.str() );
+      retstring="invalid_argument_list";
+      return( ERROR );
+    }
+
+    // Get the original exptime and gain
+    //
+    double exptime_og = camera.exptime();
+    int gain_og = camera.gain();
+
+    long error = NO_ERROR;
+    bool set = false;
+
+    // If all args are supplied then set all parameters
+    //
+    if ( tokens.size() == 4 ) {
+      try {
+        std::string reply;
+
+        // set the exposure time here
+        error |= camera.exptime( tokens.at(0), reply );
+
+        // set the gain here
+        error |= camera.gain( tokens.at(1), reply );
+
+        // set the filter (always uppercase) via a thread
+        std::transform( tokens.at(2).begin(), tokens.at(2).end(), tokens.at(2).begin(), ::toupper );
+        std::thread( dothread_set_filter, std::ref( *this ), tokens.at(2) ).detach();
+
+        // set the focus via a thread
+        std::thread( dothread_set_focus, std::ref( *this ), std::stod( tokens.at(3) ) ).detach();
+
+        set=true;
+      }
+      catch( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        error = ERROR;
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        error = ERROR;
+      }
+    }
+
+    // Set or not, now read the current values and use the guide_manager
+    // to set them in the class.
+    //
+    guide_manager.exptime = camera.exptime();
+    guide_manager.gain = camera.gain();
+
+    // If read-only (not set) or either exptime or gain changed, then set the flag for updating the GUI.
+    //
+    if ( !set || guide_manager.exptime != exptime_og || guide_manager.gain != gain_og ) {
+      guide_manager.set_update();
+    }
+
+    if ( motion.filter( "", guide_manager.filter ) != NO_ERROR ) {
+      guide_manager.filter="???";
+      error=ERROR;
+    }
+
+    error |= tcsd.get_focus( guide_manager.focus );
+
+    retstring = guide_manager.get_message_string();
+
+    logwrite( function, retstring );
+
+    guide_manager.push_guider_settings();
+
+    return( error );
   }
-  /***** Acam::Interface::exptime *********************************************/
+  /***** Acam::Interface::guider_settings_control *****************************/
+
+
+  /***** Acam::Interface::dothread_set_filter *********************************/
+  /**
+   * @brief      sets the filter and updates GUIDER GUI
+   * @details    This should be spawned in a thread.
+   * @param[in]  iface       reference to Acam::Interface object
+   * @param[in]  filter_req  requested filter
+   *
+   */
+  void Interface::dothread_set_filter( Acam::Interface &iface, std::string filter_req ) {
+    std::string function = "Acam::Interface::dothread_set_filter";
+    std::stringstream message;
+
+    // get current filter, used to determine if it changed
+    //
+    std::string filter_og;
+    long error = iface.motion.filter( "", filter_og );
+
+    std::string filter;
+
+    error |= iface.motion.filter( filter_req, filter );
+
+/***
+    bool arrived = false;
+
+    // While the difference between the current and requested focus is greater
+    // than tolerance, the focus is still moving so keep updating the display.
+    //
+    do {
+      arrived = ( std::abs( focus - focus_req ) < tolerance ? true : false );
+      error = iface.tcsd.get_focus( focus );
+      iface.guide_settings_manager.set_value( "focus", std::to_string(focus), arrived );
+      std::this_thread::sleep_for( std::chrono::milliseconds( 250 ) );
+    } while ( error!=ERROR && !arrived );
+
+***/
+
+    if ( iface.guide_manager.filter != filter_og ) {
+      iface.guide_manager.set_update();
+      iface.guide_manager.push_guider_settings();
+    }
+
+    if ( error==ERROR ) {
+      logwrite( function, "ERROR reading filter" );
+      iface.guide_manager.filter="error";
+    }
+
+    return;
+  }
+  /***** Acam::Interface::dothread_set_filter *********************************/
+
+
+  /***** Acam::Interface::dothread_set_focus **********************************/
+  /**
+   * @brief      sets the telescope focus and updates GUIDER GUI
+   * @details    This should be spawned in a thread.
+   * @param[in]  iface      reference to Acam::Interface object
+   * @param[in]  focus_req  requested focus position
+   *
+   */
+  void Interface::dothread_set_focus( Acam::Interface &iface, double focus_req ) {
+    std::string function = "Acam::Interface::dothread_set_focus";
+    std::stringstream message;
+
+    // get current focus, used to determine if it changed
+    //
+    double focus_og;
+    long error = iface.tcsd.get_focus( focus_og );
+
+    double tolerance=0.01;
+    bool arrived = false;
+    int stalled = 0, stall_limit=240;
+
+    error |= iface.tcsd.set_focus( focus_req );
+
+    // While the difference between the current and requested focus is greater
+    // than tolerance, the focus is still moving so keep updating the display.
+    //
+    do {
+      double last_focus = iface.guide_manager.focus;
+      arrived = ( std::abs( iface.guide_manager.focus - focus_req ) < tolerance ? true : false );
+      error |= iface.tcsd.get_focus( iface.guide_manager.focus );
+      iface.guide_manager.push_guider_settings();
+      std::this_thread::sleep_for( std::chrono::milliseconds( 250 ) );
+      stalled = ( std::abs( iface.guide_manager.focus - last_focus ) < tolerance ? stalled+1 : 0 );
+    } while ( error!=ERROR && !arrived && stalled < stall_limit );
+
+    if ( stalled == stall_limit ) {
+      logwrite( function, "ERROR TCS focus position is not changing" );
+    }
+
+    if ( iface.guide_manager.focus != focus_og ) {
+      iface.guide_manager.set_update();
+      iface.guide_manager.push_guider_settings();
+    }
+
+    if ( error==ERROR ) {
+      logwrite( function, "ERROR reading TCS focus position" );
+      iface.guide_manager.focus=NAN;
+    }
+
+    return;
+  }
+  /***** Acam::Interface::dothread_set_focus **********************************/
+
+
+  /***** Acam::Interface::test ************************************************/
+  /**
+   * @brief      test routines
+   * @details    This is the place to put various debugging and system testing
+   *             tools. The server command is "test", the next parameter is
+   *             the test name, and any parameters needed for the particular
+   *             test are extracted as tokens from the args string.
+   * @param[in]  args       test name and arguments
+   * @param[out] retstring  reference to string for any return values
+   * @return     ERROR or NO_ERROR
+   *
+   * Valid test names are:
+   *
+   * fpoffsets <from> <to> <ra> <dec> <angle>
+   * adchans
+   * emgainrange
+   * getemgain
+   *
+   */
+  long Interface::test( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::test";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_TEST;
+      retstring.append( "\n" );
+      retstring.append( "  Test Routines\n" );
+      retstring.append( "   fpoffsets <from> <to> <ra> <dec> <angle> (in decimal hours, degrees)\n" );
+      return( NO_ERROR );
+    }
+
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() < 1 ) {
+      logwrite( function, "ERROR no test name provided" );
+      retstring="invalid_argument";
+      return( ERROR );
+    }
+
+    std::string testname = tokens[0];
+
+    if ( testname == "fpoffsets" ) {
+      if ( tokens.size() != 6 ) {
+        message.str(""); message << "ERROR received " << tokens.size() << " args but expected <from> <to> <ra> <dec> <angle>";
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+      try {
+        std::string from  = tokens.at(1);
+        std::string to    = tokens.at(2);
+        double ra_from    = std::stod( tokens.at(3) );
+        double dec_from   = std::stod( tokens.at(4) );
+        double angle_from = std::stod( tokens.at(5) );
+        double ra_to, dec_to, angle_to;
+        error             = this->fpoffsets.compute_offset( from, to, ra_from, dec_from, angle_from, ra_to, dec_to, angle_to );
+        message.str("");
+        message << ra_to << " " << dec_to << " " << angle_to;
+        retstring = message.str();
+      }
+      catch ( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR parsing \"" << args << "\" expected <from> <to> <ra> <dec> <angle> : " << e.what();
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+      catch ( std::out_of_range &e ) {
+        message.str(""); message << "ERROR parsing \"" << args << "\" expected <from> <to> <ra> <dec> <angle> : " << e.what();
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+    }
+    else
+    if ( testname == "adchans" ) {
+      int chans;
+      error = this->camera.andor.sdk._GetNumberADChannels( chans );
+      retstring = std::to_string(chans);
+    }
+    else
+    if ( testname == "emgainrange" ) {
+      int low, high;
+      error = this->camera.andor.get_emgain_range( low, high );
+      retstring = std::to_string(low) + " " + std::to_string(high);
+    }
+    else
+    if ( testname == "getemgain" ) {
+      int gain;
+      error = this->camera.andor.get_emgain( gain );
+      retstring = std::to_string( gain );
+    }
+    else {
+      message.str(""); message << "ERROR unknown testname \"" << testname << "\"";
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return( ERROR );
+    }
+
+    return error;
+
+  }
+  /***** Acam::Interface::test ************************************************/
 
 
   /***** Acam::Interface::image_quality ***************************************/
@@ -1953,7 +2516,17 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
     // If no .fits file was found then _imagename will be empty,
     // so get it from the class.
     //
-    if ( _imagename.empty() ) _imagename = this->get_imagename();
+    if ( _imagename.empty() ) {
+      _imagename = this->get_imagename();
+
+      auto time_now = std::chrono::steady_clock::now();
+      auto time_since_acquire = std::chrono::duration_cast<std::chrono::seconds>( time_now - acquire_time ).count();
+
+      if ( time_since_acquire > 60 ) {
+        message.str(""); message << "WARNING time since last acquire is " << time_since_acquire << " sec";
+        logwrite( function, message.str() );
+      }
+    }
 
     // They can't both be empty, need an image name from somewhere
     //
@@ -1997,11 +2570,112 @@ message << "[DEBUG] this->wcsnamne=" << this->wcsname; logwrite( function, messa
 
     // Save the wcsname to the class
     //
-    this->set_wcsname( _wcsname );
+    this->wcsname = _wcsname;
+    this->wcsfix_time = std::chrono::steady_clock::now();
+//  this->set_wcsname( _wcsname );
 
     return error;
   }
   /***** Acam::Interface::solve ***********************************************/
 
+
+  /***** Acam::Interface::collect_header_info *********************************/
+  /**
+   * @brief      gather information and add it to the internal keyword database
+   * @details    Some of the keys are fixed, some come from the Andor::Information
+   *             class (which is stored in the camera.andor.camera_info object),
+   *             and some has to be retrieved directly from the TCS. The keyword
+   *             database is erased and rebuilt each time through, so there is
+   *             no chance for stale keywords.
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::collect_header_info() {
+    std::string function = "Acam::Interface::collect_header_info";
+    std::stringstream message;
+
+    double angle_scope, ra_scope, dec_scope,
+           angle_acam,  ra_acam,  dec_acam;
+
+    message.str(""); message << " tcsd.client.is_open=" << this->tcsd.client.is_open();
+    logwrite( function, message.str() );
+
+    // If the TCS is not already open then initialize the connection
+    //
+    if ( ! this->tcsd.client.is_open() ) {
+      logwrite( function, "ERROR not connected to TCS" );
+      return( ERROR );
+      logwrite( function, "opening connection to TCS" );
+//    this->tcsd.init( "sim" );
+    }
+
+    // Get the current pointing from the TCS
+    //
+    this->tcsd.get_cass( angle_scope );
+    this->tcsd.get_coords( ra_scope, dec_scope );
+
+    this->fpoffsets.compute_offset( "SCOPE", "ACAM", ra_scope, dec_scope, angle_scope, ra_acam, dec_acam, angle_acam );
+
+    // Get some info from the Andor::Information class,
+    // which is stored in its camera_info object.
+    //
+    std::copy( std::begin( this->camera.andor.camera_info.axes ),
+                 std::end( this->camera.andor.camera_info.axes ),
+               std::begin( this->camera.fitsinfo.axes ) );
+
+    // Add information to the Camera::FitsInfo::FitsKeys database
+    // either a prioi or from the Andor::Information class
+    //
+    this->camera.fitsinfo.fitskeys.erase_db();
+
+    this->camera.fitsinfo.fitskeys.addkey( "CREATOR",  "acamd", "file creator" );
+    this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
+
+    this->camera.fitsinfo.fitskeys.addkey( "EXPSTART", this->camera.andor.camera_info.timestring, "exposure start time" );
+    this->camera.fitsinfo.fitskeys.addkey( "MJD0",     this->camera.andor.camera_info.mjd0, "exposure start time (modified Julian Date)" );
+    this->camera.fitsinfo.fitskeys.addkey( "EXPTIME",  this->camera.andor.camera_info.exposure_time, "exposure time (sec)" );
+    this->camera.fitsinfo.fitskeys.addkey( "SERNO",    this->camera.andor.camera_info.serial_number, "camera serial number" );
+    this->camera.fitsinfo.fitskeys.addkey( "ACQMODE",  this->camera.andor.camera_info.acqmodestr, "acquisition mode" );
+    this->camera.fitsinfo.fitskeys.addkey( "READMODE", this->camera.andor.camera_info.readmodestr, "read mode" );
+    this->camera.fitsinfo.fitskeys.addkey( "TEMPSETP", this->camera.andor.camera_info.setpoint, "detector temperature setpoint deg C" );
+    this->camera.fitsinfo.fitskeys.addkey( "TEMPREAD", this->camera.andor.camera_info.ccdtemp, "CCD temperature deg C" );
+    this->camera.fitsinfo.fitskeys.addkey( "TEMPSTAT", this->camera.andor.camera_info.temp_status, "CCD temperature status" );
+    this->camera.fitsinfo.fitskeys.addkey( "FITSNAME", this->camera.andor.camera_info.fits_name, "this filename" );
+    this->camera.fitsinfo.fitskeys.addkey( "HBIN",     this->camera.andor.camera_info.hbin, "horizontal binning pixels" );
+    this->camera.fitsinfo.fitskeys.addkey( "VBIN",     this->camera.andor.camera_info.vbin, "vertical binning pixels" );
+    this->camera.fitsinfo.fitskeys.addkey( "HSPEED",   this->camera.andor.camera_info.hspeed, "horizontal clocking speed MHz" );
+    this->camera.fitsinfo.fitskeys.addkey( "VSPEED",   this->camera.andor.camera_info.vspeed, "vertical clocking speed MHz" );
+    this->camera.fitsinfo.fitskeys.addkey( "AMPTYPE",  this->camera.andor.camera_info.amptypestr, "CCD amplifier type" );
+    this->camera.fitsinfo.fitskeys.addkey( "CCDGAIN",  this->camera.andor.camera_info.gain, "CCD amplifier gain" );
+
+    this->camera.fitsinfo.fitskeys.addkey( "GAIN",     1, "e-/ADU" );
+
+    this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE",  this->camera.andor.camera_info.pixel_scale, "arcsec per pixel" );
+    this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
+    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  angle_scope, "Cassegrain ring angle" );
+    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",   1, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CTYPE2",    "DEC--TAN", "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRPIX1",    this->camera.andor.camera_info.hend/2, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRPIX2",    this->camera.andor.camera_info.vend/2, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRVAL1",    ra_acam, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRVAL2",    dec_acam, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CUNIT1",    "deg", "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CUNIT2",    "deg", "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CDELT1",    this->camera.andor.camera_info.pixel_scale/3600., "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CDELT2",    this->camera.andor.camera_info.pixel_scale/3600., "" );
+    this->camera.fitsinfo.fitskeys.addkey( "PC1_1",     ( -1.0 * cos( angle_acam * PI / 180. ) ), "" );
+    this->camera.fitsinfo.fitskeys.addkey( "PC1_2",     (        sin( angle_acam * PI / 180. ) ), "" );
+    this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );
+    this->camera.fitsinfo.fitskeys.addkey( "PC2_2",     (        cos( angle_acam * PI / 180. ) ), "" );
+
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::collect_header_info *********************************/
 
 }

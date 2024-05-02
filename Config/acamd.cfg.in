@@ -10,6 +10,11 @@ STDERR=/tmp/acamd.stderr          # where to send stderr
 MESSAGEPORT=@MESSAGEPORT@
 MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
 
+# daemon ports
+# These are the ports for other daemons that acamd talks to
+#
+TCSD_PORT=@TCSD_BLK_PORT@
+
 # this is the port number that the emulator listens to
 #
 EMULATOR=@FILTERD_PI_PORT@
@@ -18,6 +23,27 @@ EMULATOR=@FILTERD_PI_PORT@
 #
 CAMERASERVER_HOST=localhost
 CAMERASERVER_PORT=@ACAM_CAMERA_SERVER_PORT@
+
+# Specify the pixel scale, arcsec per pixel
+#
+PIXSCALE=0.26
+
+# Specify the Andor serial number for the ACAM, required to identify the
+# correct camera when more than one is present.
+#
+ANDOR_SN=13452
+
+# PUSH_GUIDER_SETTINGS
+# This defines the shell script which pushes guider settings to the
+# SAOimage GUIDER display.
+#
+PUSH_GUIDER_SETTINGS=/home/developer/Software/GuiderGUI/push_settings_guider.sh
+
+# PUSH_GUIDER_IMAGE
+# This defines the shell script which pushes guider images to the
+# SAOimage GUIDER display.
+#
+PUSH_GUIDER_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 
 # ASTRONOMY SOLVER
 #
@@ -36,7 +62,7 @@ CAMERASERVER_PORT=@ACAM_CAMERA_SERVER_PORT@
 #
 PI_NAME=acam-motion     # for reporting purposes only
 PI_HOST=@IP_ETS8P@      # host to connect to PI
-PI_PORT=@ETS8P_FILTER@  # port to use on PI host
+PI_PORT=@ETS8P_ACAM_MOTION@  # port to use on PI host
 
 # For each actuator's controller specify:
 # MOTOR_CONTROLLER="<address> <name> <ref> <min> <max> <zero>"

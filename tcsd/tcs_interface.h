@@ -82,8 +82,16 @@ namespace TCS {
 
       std::map< std::string, TCS::TcsIO > tcsmap;  ///< STL map of TcsIO objects indexed by name
 
-      Interface();
-      ~Interface();
+      Interface() : publish_enable(false), collect_enable(false) { };
+
+      std::mutex publish_mutex;
+      std::mutex collect_mutex;
+
+      std::condition_variable publish_condition;
+      std::condition_variable collect_condition;
+
+      std::atomic<bool> publish_enable;
+      std::atomic<bool> collect_enable;
 
       /**
        * These are the functions for communicating with the TCS
@@ -91,6 +99,7 @@ namespace TCS {
       void list( std::string &retstring );
       void llist( std::string &retstring );
       long open( std::string arg, std::string &retstring );
+      bool isopen();
       long isopen( std::string &retstring );
       long isopen( std::string help, std::string &retstring );
       long close();
@@ -98,6 +107,8 @@ namespace TCS {
       long get_coords( std::string help, std::string &retstring );
       long get_cass( std::string help, std::string &retstring );
       long get_dome( std::string help, std::string &retstring );
+      long set_focus( std::string arg, std::string &retstring );
+      long get_focus( std::string &retstring );
       long get_focus( std::string help, std::string &retstring );
       long get_motion( std::string help, std::string &retstring );
       long ringgo( std::string arg, std::string &retstring );

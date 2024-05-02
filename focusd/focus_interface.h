@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef FOCUS_INTERFACE_H
-#define FOCUS_INTERFACE_H
+#pragma once
 
 #include "network.h"
 #include "pi.h"
@@ -19,8 +18,8 @@
 #include <condition_variable>
 #include <atomic>
 
-#define MOVE_TIMEOUT 25000  ///< number of milliseconds before a move fails
-#define HOME_TIMEOUT 25000  ///< number of milliseconds before a home fails
+#define MOVE_TIMEOUT 5000  ///< number of milliseconds before a move fails
+#define HOME_TIMEOUT 5000  ///< number of milliseconds before a home fails
 
 /***** Focus ******************************************************************/
 /**
@@ -58,25 +57,26 @@ namespace Focus {
       //
       std::map<std::string, Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo>> motormap;
 
-      bool isopen() { return this->pi.controller.isconnected(); }                   ///< is this interface connected to hardware?
+      bool isopen() { return this->pi.controller.isconnected(); }  ///< is this interface connected to hardware?
 
       long initialize_class();
-      long open();                               ///< opens the PI socket connection
-      long close();                              ///< closes the PI socket connection
-      long home( std::string args, std::string &help );            ///< home all daisy-chained motors
-      long is_home( std::string &retstring );    ///< return the home state of the motors
+      long open();                                              ///< opens the PI socket connection
+      long close();                                             ///< closes the PI socket connection
+      long home( std::string args, std::string &help );         ///< home all daisy-chained motors
+      long is_home( std::string arg, std::string &retstring );  ///< return the home state of the motors
 
-      long set( Focus::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
-      long get( std::string &retstring );                                           ///< get the current width and offset
+      long set( std::string args, std::string &retstring );     ///< set focus motor position
+      long get( std::string arg, std::string &retstring );      ///< get focus motor position
 
       static void dothread_move_abs( Focus::Interface &iface, int addr, float pos ); ///< threaded move_abs function
       static void dothread_home( Focus::Interface &iface, std::string name ); ///< threaded home function
 
-      long move_abs( int addr, float pos );      ///< send move-absolute command to specified controllers
-      long move_rel( std::string args );         ///< send move-relative command to specified controllers
+      long move_abs( int addr, float pos );      ///< send move-absolute command to specified controller
+      long move_rel( std::string args );         ///< send move-relative command to specified controller
+      long native( std::string args, std::string &retstring );  ///< send native command to a PI controller
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
-      long send_command( std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
+      long send_command( std::string cmd, std::string &retstring );  ///< writes command?, reads reply
 
       Physik_Instrumente::Interface pi;          ///< Object for communicating with the PI
 
@@ -92,4 +92,3 @@ namespace Focus {
 
 }
 /***** Focus ******************************************************************/
-#endif

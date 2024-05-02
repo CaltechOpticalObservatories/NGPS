@@ -579,6 +579,11 @@ namespace Andor {
     std::string function = "Andor::Sim::_SetAcquisitionMode";
     std::stringstream message;
 
+    if ( mode != 1 ) {
+      logwrite( function, "ERROR only mode 1 is supported" );
+      return( ERROR );
+    }
+
     return NO_ERROR;
   }
   /***** Andor::Sim::_SetAcquisitionMode **************************************/
@@ -743,6 +748,108 @@ namespace Andor {
     return NO_ERROR;
   }
   /***** Andor::Sim::_StartAcquisition ****************************************/
+
+
+  /***** Andor::SkySim::SkySim ************************************************/
+  /**
+   * @brief      SkySim class constructor
+   *
+   */
+  SkySim::SkySim() : python_initialized( false ), py_instance( PYTHON_PATH ) {
+    std::string function = "Andor::SkySim::SkySim";
+    std::stringstream message;
+
+    if ( !py_instance.is_initialized() ) {
+        logwrite( function, "ERROR could not initialize Python" );
+        return;
+    }
+
+    CPyObject pModuleName;
+
+    pModuleName   = PyUnicode_FromString( PYTHON_SKYSIM_MODULE );
+    pSkySimModule = PyImport_Import( pModuleName );
+
+    pModuleName.Release();
+
+    if ( pSkySimModule == nullptr ) {
+      PyErr_Print();
+      python_initialized = false;
+      return;
+    }
+    else python_initialized = true;
+
+    logwrite( function, "initialized" );
+
+    return;
+  }
+  /***** Andor::SkySim::SkySim ************************************************/
+
+
+  /***** Andor::SkySim::generate_image ****************************************/
+  /**
+   * @brief      SkySim class constructor
+   * @param[in]  imagename
+   *
+   */
+  long SkySim::generate_image( std::string_view headerfile, std::string_view outputfile ) {
+    std::string function = "Andor::SkySim::generate_image";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    if ( !python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return( ERROR );
+    }
+
+    if ( pSkySimModule == nullptr ) {
+      logwrite( function, "ERROR Python skysim module not imported" );
+      return( ERROR );
+    }
+
+    message.str(""); message << "read header from: " << headerfile;
+    logwrite( function, message.str() );
+
+    // Call the Python function here
+    //
+    PyObject* pFunction = PyObject_GetAttrString( pSkySimModule, PYTHON_SKYSIM_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      PyErr_Print();
+      logwrite( function, "ERROR Python skysim function not callable" );
+      return( ERROR );
+    }
+
+    PyObject* pHeaderfile = PyUnicode_FromString( headerfile.data() );
+    PyObject* pOutputfile = PyUnicode_FromString( outputfile.data() );
+    PyObject* pImageSize  = PyDict_New();
+
+    PyDict_SetItemString( pImageSize, "IMAGE_SIZE", PyLong_FromLong( 1024 ) );
+
+    PyObject* pArgs   = PyTuple_Pack( 2, pHeaderfile, pOutputfile );
+
+    PyObject* pReturn = PyObject_Call( pFunction, pArgs, pImageSize );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      PyErr_Print();
+      message.str(""); message << "ERROR calling Python function: " << PYTHON_SKYSIM_FUNCTION;
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    // clean up
+    //
+    Py_DECREF( pArgs );
+    Py_DECREF( pFunction );
+    Py_DECREF( pImageSize );
+    Py_DECREF( pHeaderfile );
+    Py_DECREF( pOutputfile );
+
+    message.str(""); message << "output: " << outputfile;
+    logwrite( function, message.str() );
+
+    return( error );
+  }
+  /***** Andor::SkySim::generate_image ****************************************/
 
 
 }

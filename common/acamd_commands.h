@@ -7,9 +7,10 @@
  *
  */
 
-#ifndef ACAMD_COMMANDS_H
-#define ACAMD_COMMANDS_H
+#pragma once
+
 const std::string ACAMD_ACQUIRE  = "acquire";   ///< *** the main acquire wrapper
+const std::string ACAMD_ACQUIREFIX= "acquirefix";   ///< acquire using the WCSfix file from solve
 const std::string ACAMD_BIN      = "bin";       ///< set/get camera binning
 const std::string ACAMD_CAMERASERVER_COORDS = "prepare";  ///< *** send coordinates to external camera server
 const std::string ACAMD_CLOSE    = "close";     ///< *** close connection to all devices
@@ -23,6 +24,7 @@ const std::string ACAMD_SPEED    = "speed";     ///< set/get CCD clocking speeds
 const std::string ACAMD_EXIT     = "exit";      ///< 
 const std::string ACAMD_EXPTIME  = "exptime";   ///< set/get camera exposure time
 const std::string ACAMD_FILTER   = "filter";    ///< filter [ name ] to set or get the filter
+const std::string ACAMD_GUIDESET = "guideset";  ///< set params for guider display
 const std::string ACAMD_HOME     = "home";      ///< home all motors
 const std::string ACAMD_INIT     = "init";      ///< ***
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?
@@ -32,7 +34,12 @@ const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all 
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
 const std::string ACAMD_SIMANDOR = "simandor";  ///< set/get Andor simulator state
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver
+const std::string ACAMD_TCSGET = "tcsget";      ///< 
+const std::string ACAMD_TCSINIT = "tcsinit";    ///< initialize acamd's connection to tcsd
+const std::string ACAMD_TCSISCONNECTED = "tcsisconnected";  ///< 
+const std::string ACAMD_TCSISOPEN = "tcsopen";  ///<
 const std::string ACAMD_TEMP     = "temp";      ///< set/get acam temperature
+const std::string ACAMD_TEST     = "test";      ///< test commands
 const std::vector<std::string> ACAMD_SYNTAX = { 
                                                 "  SERVER COMMANDS:",
                                                 ACAMD_CLOSE,
@@ -47,11 +54,18 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_HOME+" [ ? | <name> ]",
                                                 ACAMD_ISHOME+" [ ? | <name> ]",
                                                 ACAMD_MOTION+" [ ? | [ <name> [ native <cmd> | <posname> ] ] ]",
+                                                "  TCS COMMANDS:",
+                                                ACAMD_TCSGET+" [ ? ]",
+                                                ACAMD_TCSINIT+" [ ? | tcs | sim ]",
+                                                ACAMD_TCSISCONNECTED+" [ ? ]",
+                                                ACAMD_TCSISOPEN+" [ ? ]",
                                                 "  CAMERA COMMANDS:",
-                                                ACAMD_ACQUIRE+" [ ? ]",
+                                                ACAMD_ACQUIRE+" [ ? | <filename> ]",
+                                                ACAMD_ACQUIREFIX+" [ ? ]",
                                                 ACAMD_BIN+" [ ? | <hbin> <vbin> ]",
                                                 ACAMD_EXPTIME+" [ ? | <exptime> ]",
                                                 ACAMD_GAIN+" [ ? | <gain> ]",
+                                                ACAMD_GUIDESET+" [ ? | <exptime> <gain> <filter> <focus> ]",
                                                 ACAMD_IMFLIP+" [ ? | <hflip> <vflip> ]",
                                                 ACAMD_IMROT+" [ ? | <rotdir> ]",
                                                 ACAMD_INIT,
@@ -62,6 +76,10 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_SIMANDOR+" [ ? | true | false ]",
                                                 ACAMD_SOLVE+" [ ? | <filename>] [ <key>=<val> ... ]",
                                                 ACAMD_SPEED+" [ ? | <hori> <vert> ]",
-                                                ACAMD_TEMP+" [ ? | <setpoint> ]"
+                                                ACAMD_TEMP+" [ ? | <setpoint> ]",
+                                                ACAMD_TEST+" ? | <testname> ...",
+                                                "   fpoffsets <from> <to> <ra> <dec> <angle>",
+                                                "   adchans"
+                                                "   emgainrange"
+                                                "   getemgain"
                                               };
-#endif

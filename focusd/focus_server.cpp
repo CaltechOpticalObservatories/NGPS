@@ -172,6 +172,43 @@ namespace Focus {
         }
       }
 
+      // MOTOR_POS -- position info for nominal focus, the only named position
+      //
+      if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
+        // Create temporary object for parsing the config line. If no error
+        // and a matching name is already in the motormap, then relevant parts
+        // of this object get copied into the class map of objects.
+        //
+        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
+        if ( MOT.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+
+          // Make sure the MOTOR_POS's name has a matching name in controller_info
+          // which came from the MOTOR_CONTROLER configutation.
+          //
+          auto loc = interface.motormap.find( MOT.name );
+
+          // If found, then assign the motor map from the local object to the class object.
+          //
+          if ( loc != interface.motormap.end() ) {
+            std::string posname = MOT.posmap.begin()->first;  // mot is a local copy so there is only one entry
+            loc->second.posmap[ posname ].id       = MOT.posmap[posname].id;
+            loc->second.posmap[ posname ].position = MOT.posmap[posname].position;
+            loc->second.posmap[ posname ].posname  = MOT.posmap[posname].posname;
+          }
+          else {
+            message.str(""); message << "ERROR: MOTOR_POS name \"" << MOT.name << "\" "
+                                     << "has no matching name defined by MOTOR_CONTROLLER";
+            logwrite( function, message.str() );
+            error = ERROR;
+            break;
+          }
+
+          message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
+          interface.async.enqueue_and_log( function, message.str() );
+          applied++;
+        }
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -334,14 +371,8 @@ namespace Focus {
 
     bool connection_open=true;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] accepted connection on fd " << sock.getfd();
-    logwrite( function, message.str() );
-#endif
-
     while (connection_open) {
 
-message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwrite( function, message.str() );
       // Wait (poll) connected socket for incoming data...
       //
       int pollret;
@@ -435,7 +466,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd == "help" ) {
+      if ( cmd == "help" || cmd == "?" ) {
                       for ( auto s : FOCUSD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
       }
       else
@@ -487,28 +518,28 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       // is_home
       //
       if ( cmd == FOCUSD_ISHOME ) {
-                      ret = this->interface.is_home( retstring );
+                      ret = this->interface.is_home( args, retstring );
       }
       else
 
-      // set width and offset
+      // set position
       //
       if ( cmd == FOCUSD_SET ) {
-                      ret = this->interface.set( std::ref( this->interface ), args, retstring );
+                      ret = this->interface.set( args, retstring );
       }
       else
 
-      // get width and offset
+      // get position
       //
       if ( cmd == FOCUSD_GET ) {
-                      ret = this->interface.get( retstring );
+                      ret = this->interface.get( args, retstring );
       }
       else
 
       // native
       //
       if ( cmd == FOCUSD_NATIVE ) {
-                      ret = this->interface.send_command( args, retstring );
+                      ret = this->interface.native( args, retstring );
       }
 
       // unknown commands generate an error
@@ -518,11 +549,6 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
         logwrite( function, message.str() );
         ret = ERROR;
       }
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
-      logwrite( function, message.str() );
-#endif
 
       if (ret != NOTHING) {
         if ( not retstring.empty() ) retstring.append( " " );

@@ -21,7 +21,7 @@ namespace Andor {
     this->readmode=-1;
     this->adchan=0;
     this->adchans=-1;
-    this->exposure_time=0;
+    this->exposure_time=-1;
     this->setpoint=20;
     this->emgain_low=-999;
     this->emgain_high=-999;
@@ -36,6 +36,7 @@ namespace Andor {
     this->vend=1;
     this->hflip=0;
     this->vflip=0;
+    this->pixel_scale=-1;
   }
   /***** Andor::Interface::Interface ******************************************/
 
@@ -67,6 +68,10 @@ namespace Andor {
     }
 
     if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
+
+    if ( buf == nullptr ) {
+      logwrite( function, "ERROR buffer is empty" );
+    }
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
@@ -1130,9 +1135,11 @@ namespace Andor {
     std::string function = "Andor::Interface::open";
     std::stringstream message;
     long error=NO_ERROR;
-    int ncameras=0;  // number of cameras
-    int index=0;     // camera index given to
-    int handle=0;    // camera handle
+    int ncameras=0;            // number of cameras
+    int index=-1;              // camera index given to
+    int handle=0;              // camera handle
+    int serial=-1;             // camera serial number
+    std::vector<int> serials;  // vector of all serial numbers
 
     // If there was an argument then get the camera index from it
     //
@@ -1149,7 +1156,7 @@ namespace Andor {
         return( ERROR );
       }
     }
-    else index=0;
+    else index=-1;   // indicates a specific index was not requested
 
     // Get the number of installed cameras.
     // This will be used to check the requested index and subsequently set
@@ -1162,7 +1169,21 @@ namespace Andor {
     }
     else logwrite( function, "ERROR reading number of cameras" );
 
-    if ( index >= ncameras ) {
+    // Get the serial numbers of all installed cameras
+    //
+    for ( int idx=0; idx < ncameras-1; idx++ ) {
+      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( idx, &handle ) : ERROR );
+      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( serial ) : ERROR );
+      if (error==NO_ERROR) {
+        serials.push_back( serial );
+        message.str(""); message << "found s/n " << serial << " index " << idx;
+        logwrite( function, message.str() );
+      }
+    }
+
+    // If specific index was requested ( != -1 ) check that it's within range of ncameras.
+    //
+    if ( index != -1 && index > ncameras ) {
       message.str(""); message << "ERROR requested index " << index << " must be in range {0:" << (ncameras-1) << "}";
       logwrite( function, message.str() );
       return( ERROR );
@@ -1939,74 +1960,6 @@ namespace Andor {
   /***** Andor::Interface::set_acquisition_mode *******************************/
 
 
-  /***** Andor::Interface::get_last_frame *************************************/
-  /**
-   * @brief      get_last_frame
-   * @param[in]  buf   pointer to allocated buffer to hold the data
-   * @param[in]  size  size of buffer in pixels
-   * @return     ERROR or NO_ERROR
-   *
-   */
-/***
-  template <typename T>
-  unsigned int Interface::get_last_frame( T* buf ) {
-    std::string function = "Andor::Interface::get_last_frame";
-    std::stringstream message;
-    unsigned long ret;
-
-    GetDetector( this->camera_info.cols, this->camera_info.rows );
-    this->camera_info.npix = this->camera_info.cols * this->camera_info.rows;
-
-    // Use the appropriate API call to get the acquired data
-    // according to the type of pointer passed in.
-    //
-    if constexpr ( std::is_same_v<T, int32_t*> ) {
-      ret = GetAcquiredData( buf, this->camera_info.npix );
-    }
-    else
-    if constexpr ( std::is_same_v<T, int16_t*> ) {
-      ret = GetAcquiredData16( buf, this->camera_info.npix );
-    }
-    else {
-      ret = DRV_DATATYPE;
-    }
-
-    switch ( ret ) {
-      case DRV_SUCCESS:
-        message << "data acquired";
-        break;
-      case DRV_NOT_INITIALIZED:
-        message << "ERROR not initialized";
-        break;
-      case DRV_ACQUIRING:
-        message << "ERROR acquisition in progress";
-        break;
-      case DRV_ERROR_ACK:
-        message << "ERROR unable to communicate with device";
-        break;
-      case DRV_P1INVALID:
-        message << "ERROR invalid buffer pointer";
-        break;
-      case DRV_P2INVALID:
-        message << "ERROR buffer size incorrect";
-        break;
-      case DRV_NO_NEW_DATA:
-        message << "ERROR no acquisition";
-        break;
-      case DRV_DATATYPE:
-        message << "ERROR unrecognized datatype";
-        break;
-      default:
-        message << "ERROR unrecognized return code " << ret;
-    }
-
-    logwrite( function, message.str() );
-    return ret;
-  }
-****/
-  /***** Andor::Interface::get_last_frame *************************************/
-
-
   /***** Andor::Interface::acquire_one ****************************************/
   /**
    * @brief      acquire a single scan single frame
@@ -2035,13 +1988,27 @@ namespace Andor {
 
     // Get the acquired image
     //
-    if ( this->image_data != NULL ) {
+    if ( this->image_data != nullptr ) {
+//    this->image_data.reset();
       delete [] this->image_data;
-      this->image_data=NULL;
     }
+//  this->image_data = std::make_unique<uint16_t[]>( this->camera_info.axes[0] * this->camera_info.axes[1] );
     this->image_data = new uint16_t[ this->camera_info.axes[0] * this->camera_info.axes[1] ];
 
+//  if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data.get(), this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
+
+    // Store the exposure start time
+    //
+    timespec timenow             = Time::getTimeNow();         // get the time NOW
+    this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+    this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
+
+    logwrite( function, "data acquired" );
+
+    if ( this->image_data == nullptr ) {
+      logwrite( function, "ERROR image_data is null" );
+    }
 
 //  if (error==NO_ERROR) error = sdk._GetTemperature();
 
@@ -2064,7 +2031,12 @@ namespace Andor {
     std::stringstream message;
     long error = NO_ERROR;
 
-    if ( this->image_data == NULL ) {
+#ifdef LOGLEVEL_DEBUG
+    message << "[DEBUG] wcs_in=" << wcs_in;
+    logwrite( function, message.str() );
+#endif
+
+    if ( this->image_data == nullptr ) {
       logwrite( function, "ERROR no image data available" );
       return( ERROR );
     }
@@ -2079,9 +2051,10 @@ namespace Andor {
 
     get_temperature();
 
-    fits_file.create_header();                  //
+    fits_file.create_header();                  // create basic header
 
-    fits_file.copy_header( wcs_in );            // if supplied, copy the header from the input file
+//  fits_file.copy_header( wcs_in );            // if supplied, copy the header from the input file
+    fits_file.copy_header( "/home/developer/cshapiro/acam_skyinfo/skyheader.fits" );
 
     fits_file.write_image( this->image_data );  // write the image data
 
@@ -2089,9 +2062,44 @@ namespace Andor {
 
     imgname = this->camera_info.fits_name;      // return the name of the file created
 
+    // If Andor is simulated then the file just created is the input for the
+    // sky simulator, which is called now to generate the simulated image.
+    //
+    if ( is_simulated() ) error = sim.skysim.generate_image( imgname, "/tmp/andorout2.fits" );
+
     return error;
   }
   /***** Andor::Interface::save_acquired **************************************/
+
+
+  /***** Andor::Interface::simulate_frame *************************************/
+  /**
+   * @brief      calls the skysim generator to create a simulated image
+   * @param[in]  name_in  input to skysim, gets overwritten with simulated output
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::simulate_frame( std::string name_in ) {
+    std::string function = "Andor::Interface::simulate_frame";
+    std::stringstream message;
+
+    if ( is_simulated() ) {
+      std::string simfile = generate_temp_filename( "skysim" );    // create a temporary filename for skysim output
+      long error = sim.skysim.generate_image( name_in, simfile );  // generate simulated image with temp filename
+      if ( error == NO_ERROR ) {
+        std::filesystem::rename( simfile, name_in );               // rename this temp filename as input filename
+      }
+      else {
+        logwrite( function, "ERROR generating skysim image" );
+      }
+      return( error );
+    }
+    else {
+      logwrite( function, "ERROR Andor is not simulated" );
+      return(ERROR);
+    }
+  }
+  /***** Andor::Interface::simulate_frame *************************************/
 
 
   /***** Andor::Interface::test ***********************************************/
@@ -2101,11 +2109,11 @@ namespace Andor {
    *
    */
   long Interface::test() {
+/***
     std::string function = "Andor::Interface::test";
     std::stringstream message;
     long error = NO_ERROR;
 
-/***
 this->camera_info.fits_name = "/tmp/andor.fits";
 this->camera_info.datatype = USHORT_IMG;
 this->camera_info.axes[0]=1024;
@@ -2128,6 +2136,7 @@ fits_file.close_file();
 return NO_ERROR;
 ***/
 
+/*** 4/3/24
     int status;
     if (error==NO_ERROR) error = ( andor ? andor->_SetExposureTime( this->camera_info.exposure_time ) : ERROR );
     if (error==NO_ERROR) error = this->start_acquisition();
@@ -2140,6 +2149,7 @@ return NO_ERROR;
     SaveAsFITS( (char*)"/tmp/andor.fits", 2 );
     delete [] image_data;
 
+4/3/24 ***/
     return( NO_ERROR );
   }
   /***** Andor::Interface::test ***********************************************/
@@ -2186,14 +2196,16 @@ return NO_ERROR;
           if ( error==NO_ERROR && exptime_try != NAN ) this->camera_info.exposure_time = exptime_try;
         }
       }
-      catch ( std::invalid_argument & ) {
+      catch ( std::invalid_argument &e ) {
         message.str(""); message << "ERROR: unable to convert exposure time: " << exptime_in << " to double";
         logwrite( function, message.str() );
+        retstring="error_"+std::string( e.what() );
         return( ERROR );
       }
-      catch ( std::out_of_range & ) {
+      catch ( std::out_of_range &e ) {
         message.str(""); message << "ERROR: exposure time " << exptime_in << " outside double range";
         logwrite( function, message.str() );
+        retstring="error_"+std::string( e.what() );
         return( ERROR );
       }
     }
@@ -2210,30 +2222,12 @@ return NO_ERROR;
   /***** Andor::FITS_file::FITS_file ******************************************/
   /**
    * @brief      class constructor
-   *
-   */
-  FITS_file::FITS_file() {
-  }
-  /***** Andor::FITS_file::FITS_file ******************************************/
-
-
-  /***** Andor::FITS_file::FITS_file ******************************************/
-  /**
-   * @brief      class constructor
+   * @details    instantiated with existing Information object
+   * @param[in]  info  Information object
    *
    */
   FITS_file::FITS_file( Information info ) {
     this->info = info;
-  }
-  /***** Andor::FITS_file::FITS_file ******************************************/
-
-
-  /***** Andor::FITS_file::FITS_file ******************************************/
-  /**
-   * @brief      class deconstructor
-   *
-   */
-  FITS_file::~FITS_file() {
   }
   /***** Andor::FITS_file::FITS_file ******************************************/
 
@@ -2356,7 +2350,7 @@ return NO_ERROR;
     this->pFits->pHDU().addKey( "PC2_2", "TBD", "rotation matrix element" );
     this->pFits->pHDU().addKey( "CDELT1", "TBD", "pixel scale along axis" );
     this->pFits->pHDU().addKey( "CDELT2", "TBD", "pixel scale along axis" );
-    this->pFits->pHDU().addKey( "PIXSCALE", "TBD", "arcsec per pixel" );
+    this->pFits->pHDU().addKey( "PIXSCALE", this->info.pixel_scale, "arcsec per pixel" );
     this->pFits->pHDU().addKey( "POSANG", "TBD", "angle of image Y axis relative to North" );
 
     return( NO_ERROR );
@@ -2389,7 +2383,18 @@ return NO_ERROR;
 
     hdu->readAllKeys();
 
-    this->pFits->pHDU().copyAllKeys( hdu );
+#ifdef LOGLEVEL_DEBUG
+    std::map<std::string, std::string> keys;
+    for ( const auto &key : hdu->keyWord() ) {
+      std::string value;
+      message.str(""); message << "[DEBUG] " << key.first << " = " << key.second->value(value);
+      logwrite( function, message.str() );
+    }
+#endif
+
+    pInfile->pHDU().readAllKeys();
+
+    this->pFits->pHDU().copyAllKeys( &pInfile->pHDU(), { TYP_WCS_KEY, TYP_REFSYS_KEY, TYP_USER_KEY } );
 
     return( NO_ERROR );
   }

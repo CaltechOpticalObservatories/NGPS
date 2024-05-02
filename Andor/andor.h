@@ -10,10 +10,12 @@
 
 #include <CCfits/CCfits>           //!< needed here for types in set_axes()
 #include <type_traits>
+#include <string>
 #include "common.h"
 #include "network.h"
 #include "utilities.h"
 #include "atmcdLXd.h"
+#include "sim_andor.h"
 
 #define ANDOR_SDK "/usr/local/etc/andor"
 
@@ -28,7 +30,7 @@ namespace Andor {
   const int AMPTYPE_EMCCD = 0;
   const int AMPTYPE_CONV  = 1;
 
-  /***** Information **********************************************************/
+  /***** Andor::Information ***************************************************/
   /**
    * @class     Information
    * @brief     information class for the Andor CCD
@@ -74,17 +76,20 @@ namespace Andor {
       int datatype;
       unsigned long npix;
       unsigned long section_size;
-      double exposure_time;      ///< exposure time in seconds
+      double pixel_scale;                          ///< pixel scale
+      double exposure_time;                        ///< exposure time in seconds
       std::string fits_name;
-      std::string sdk_version;     ///< SDK version
-      std::string driver_version;  ///< device driver version
+      std::string sdk_version;                     ///< SDK version
+      std::string driver_version;                  ///< device driver version
+      std::string timestring;
+      double mjd0;
 
       Information();
   };
-  /***** Information **********************************************************/
+  /***** Andor::Information ***************************************************/
 
 
-  /***** FITS_file ************************************************************/
+  /***** Andor::FITS_file *****************************************************/
   /**
    * @class     FITS_file
    * @brief     class for FITS I/O using CCfits
@@ -96,9 +101,8 @@ namespace Andor {
       std::string fits_name;
 
     public:
-      FITS_file();
-      FITS_file(Information info);
-      ~FITS_file();
+      FITS_file() { };
+      FITS_file(Information info);                  ///< instantiated with existing info object
 
       Information info;
 
@@ -107,11 +111,37 @@ namespace Andor {
       long create_header();
       long copy_header( std::string wcs_in );
       template <typename T> long write_image( T* data );
+      template <typename T> long swrite_image( std::unique_ptr<T[]> &data ) {
+        std::string function = "Andor::FITS_file::write_image";
+        std::stringstream message;
+
+        // Set the FITS system to verbose mode so it writes error messages
+        //
+        CCfits::FITS::setVerboseMode( true );
+
+        // write the primary image into the FITS file
+        //
+        try {
+          std::valarray<T> array( this->info.section_size );
+          for ( unsigned long i=0; i < this->info.section_size; i++ ) array[i] = data[i];
+          long fpixel(1);        // start with the first pixel always
+          this->pFits->pHDU().write( fpixel, this->info.section_size, array );
+          this->pFits->flush();  // make sure the image is written to disk
+        }
+        catch ( CCfits::FitsError& error ) {
+          message.str(""); message << "FITS file error thrown: " << error.message();
+          logwrite(function, message.str());
+          return( ERROR );
+        }
+
+        return( NO_ERROR );
+      }
+
   };
-  /***** FITS_file ************************************************************/
+  /***** Andor::FITS_file *****************************************************/
 
 
-  /***** AndorBase ************************************************************/
+  /***** Andor::AndorBase *****************************************************/
   /**
    * @class     AndorBase
    * @brief     Base class for the Andor CCD Software Development Kit
@@ -160,10 +190,10 @@ namespace Andor {
       virtual long _SetShutter( int type, int mode, int closetime, int opentime ) = 0;
       virtual long _StartAcquisition( ) = 0;
   };
-  /***** AndorBase ************************************************************/
+  /***** Andor::AndorBase *****************************************************/
 
 
-  /***** SDK ******************************************************************/
+  /***** Andor::SDK ***********************************************************/
   /**
    * @class     SDK
    * @brief     Derived class for operating the Andor CCD Software Development Kit
@@ -210,10 +240,10 @@ namespace Andor {
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
       long _StartAcquisition( ) override;
   };
-  /***** SDK ******************************************************************/
+  /***** Andor::SDK ***********************************************************/
 
 
-  /***** Sim ******************************************************************/
+  /***** Andor::Sim ***********************************************************/
   /**
    * @class     Sim
    * @brief     Derived class for simulating the Andor CCD Software Development Kit
@@ -259,11 +289,13 @@ namespace Andor {
       long _SetReadMode( int mode ) override;
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
       long _StartAcquisition( ) override;
+
+      SkySim skysim;
   };
-  /***** Sim ******************************************************************/
+  /***** Andor::Sim ***********************************************************/
 
 
-  /***** Interface ************************************************************/
+  /***** Andor::Interface *****************************************************/
   /**
    * @class     Interface
    * @brief     class for control of the Andor CCD using the SDK wrappers
@@ -275,18 +307,27 @@ namespace Andor {
   class Interface {
     private:
       bool initialized;           ///< is the Andor SDK initialized?
+      int  serial;                ///< serial number to use
       bool andor_simulated;       ///< is the Andor simulated?
       Andor::AndorBase* andor;    ///< pointer to the Andor class to use
+//    std::unique_ptr<uint16_t[]> image_data;
+      uint16_t* image_data;
 
     public:
       /***** Andor::Interface::Interface **************************************/
       /**
-       * @brief      Interface constructor, defaults to Andor not simulated
+       * @brief      default Interface constructor
        *
        */
-      Interface() : initialized( false ), andor_simulated( false ), andor( &sdk ) {
-        image_data = nullptr;
-      }
+      Interface() : initialized( false ), serial( -1 ), andor_simulated( false ), andor( &sdk ), image_data( nullptr ) { }
+      /***** Andor::Interface::Interface **************************************/
+
+      /***** Andor::Interface::Interface **************************************/
+      /**
+       * @brief      Interface constructor accepts serial number
+       *
+       */
+      Interface( int sn ) : initialized( false ), serial( sn ), andor_simulated( false ), andor( &sdk ), image_data( nullptr ) { }
       /***** Andor::Interface::Interface **************************************/
 
       Andor::SDK sdk;             ///< object for the real Andor SDK
@@ -326,9 +367,15 @@ namespace Andor {
 
       FITS_file fits_file;
 
-      uint16_t* image_data;
+//    std::unique_ptr<uint16_t[]> get_image_data() { return std::move( this->image_data ); }
+//    std::unique_ptr<uint16_t[]>& get_image_data() { return this->image_data; }
+      inline uint16_t* get_image_data() { return this->image_data; }
+
+      inline bool is_simulated() { return this->andor_simulated; }
 
       inline bool is_initialized() { return this->initialized; };
+
+      long simulate_frame( std::string name_in );
 
       long simandor( std::string args, std::string &retstring );
       long open( std::string args );
@@ -371,14 +418,19 @@ namespace Andor {
         // Use the appropriate API call to get the acquired data
         // according to the type of pointer passed in.
         //
-        if constexpr ( std::is_same_v<T, int32_t*> ) {
+        if constexpr ( std::is_same_v<T, int32_t> ) {
+logwrite(function, "int32_t");
           ret = GetAcquiredData( buf, this->camera_info.npix );
         }
         else
-        if constexpr ( std::is_same_v<T, uint16_t*> ) {
+        if constexpr ( std::is_same_v<T, uint16_t> ) {
+logwrite(function, "uint16_t");
           ret = GetAcquiredData16( buf, this->camera_info.npix );
         }
         else {
+          message.str(""); message << "Unknown type: " << typeid(T).name();
+          logwrite(function, message.str());
+          message.str("");
           ret = DRV_DATATYPE;
         }
         switch ( ret ) {
@@ -414,7 +466,7 @@ namespace Andor {
         return ret;
       }
   };
-  /***** Interface ************************************************************/
+  /***** Andor::Interface *****************************************************/
 
 }
 /***** Andor ******************************************************************/
