@@ -38,7 +38,7 @@ namespace Focus {
 
     // Clear the motormap map before loading new information from the config file
     //
-    this->interface.motormap.clear();
+    this->interface.motorinterface.clear_motormap();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -116,96 +116,81 @@ namespace Focus {
         applied++;
       }
 
-      // PI_NAME -- this is the name of the PI motor controller subsystem
-      //
-      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
-        this->interface.name = config.arg[entry];
-        message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // PI_HOST -- hostname for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
-        this->interface.host = config.arg[entry];
-        message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // PI_PORT -- port number on PI_HOST for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad PI_PORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "PI_PORT number out of integer range");
-          return(ERROR);
-        }
-        this->interface.port = port;
-        message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
+      //                     Each CONTROLLER is stored in an STL map indexed by motorname
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // then this object gets copied into the class map of objects.
-        //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
-
-        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motormap[ MOT.name ] = MOT;
+        if ( this->interface.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
           message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
-          logwrite( function, message.str() );
-          this->interface.async.enqueue( message.str() );
+          this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
+        }
+      }
+
+      // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
+      //
+      if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+
+        Physik_Instrumente::AxisInfo AXIS;
+
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // Each AXIS is associated with a CONTROLLER by name, so a controller
+        // of this name must have already been configured.
+        //
+        // loc checks if the motorname for this AXIS is found in the motormap
+        //
+        auto _motormap = this->interface.motorinterface.get_motormap();
+        auto loc = _motormap.find( AXIS.motorname );
+        if ( loc != _motormap.end() ) {
+          this->interface.motorinterface.add_axis( AXIS );
+          message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->interface.async.enqueue_and_log( function, message.str() );
+          applied++;
+        }
+        else {
+          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          message.str(""); message << "valid names are:";
+          for ( auto mot : _motormap ) { message << " " << mot.first; }
+          logwrite( function, message.str() );
+          error = ERROR;
+          break;
         }
       }
 
       // MOTOR_POS -- position info for nominal focus, the only named position
       //
       if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // and a matching name is already in the motormap, then relevant parts
-        // of this object get copied into the class map of objects.
+
+        // Create a local PosInfo object,
+        // then use the PosInfo::load_pos_info() function to parse and load it.
         //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
-        if ( MOT.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+        Physik_Instrumente::PosInfo POS;
 
-          // Make sure the MOTOR_POS's name has a matching name in controller_info
-          // which came from the MOTOR_CONTROLER configutation.
-          //
-          auto loc = interface.motormap.find( MOT.name );
+        if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) break;
 
-          // If found, then assign the motor map from the local object to the class object.
-          //
-          if ( loc != interface.motormap.end() ) {
-            std::string posname = MOT.posmap.begin()->first;  // mot is a local copy so there is only one entry
-            loc->second.posmap[ posname ].id       = MOT.posmap[posname].id;
-            loc->second.posmap[ posname ].position = MOT.posmap[posname].position;
-            loc->second.posmap[ posname ].posname  = MOT.posmap[posname].posname;
-          }
-          else {
-            message.str(""); message << "ERROR: MOTOR_POS name \"" << MOT.name << "\" "
-                                     << "has no matching name defined by MOTOR_CONTROLLER";
-            logwrite( function, message.str() );
-            error = ERROR;
-            break;
-          }
+        // Check that the motorname associated with the position has already been
+        // defined in the motormap. If so, then add the PosInfo to the motorinterface.
+        //
+        auto _motormap = this->interface.motorinterface.get_motormap();
+        auto loc = _motormap.find( POS.motorname );
 
+        if ( loc != _motormap.end() ) {
+          this->interface.motorinterface.add_posmap( POS );  // add the PosInfo to the class here
           message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
           interface.async.enqueue_and_log( function, message.str() );
           applied++;
+        }
+        else {
+          message.str(""); message << "ERROR motor name \"" << POS.motorname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          logwrite( function, "valid names are:" );
+          for ( auto mot : _motormap ) { logwrite( function, mot.first); }
+          error = ERROR;
+          break;
         }
       }
 
@@ -467,7 +452,8 @@ namespace Focus {
       std::string retstring="";
 
       if ( cmd == "help" || cmd == "?" ) {
-                      for ( auto s : FOCUSD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                      for ( auto s : FOCUSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = NO_ERROR;
       }
       else
 
@@ -479,9 +465,7 @@ namespace Focus {
       // isopen
       //
       if ( cmd == FOCUSD_ISOPEN ) {
-                      bool isopen = this->interface.isopen( );
-                      if ( isopen ) retstring = "true"; else retstring = "false";
-                      ret = NO_ERROR;
+                      ret = this->interface.is_open( args, retstring );
       }
       else
 
@@ -540,6 +524,13 @@ namespace Focus {
       //
       if ( cmd == FOCUSD_NATIVE ) {
                       ret = this->interface.native( args, retstring );
+      }
+      else
+
+      // test routines
+      //
+      if ( cmd == FOCUSD_TEST ) {
+                      ret = this->interface.test( args, retstring );
       }
 
       // unknown commands generate an error

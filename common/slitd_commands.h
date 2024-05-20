@@ -19,13 +19,13 @@ const std::string SLITD_SET  = "set";       const int SLITD_SET_TIMEOUT = 15000;
 
 const std::vector<std::string> SLITD_SYNTAX = {
                                                  SLITD_CLOSE,
-                                                 SLITD_GET,
-                                                 SLITD_HOME,
-                                                 SLITD_ISHOME,
-                                                 SLITD_ISOPEN,
-                                                 SLITD_NATIVE,
-                                                 SLITD_OPEN,
-                                                 SLITD_SET
+                                                 SLITD_GET+" [ ? ]",
+                                                 SLITD_HOME+" [ ? ]",
+                                                 SLITD_ISHOME+" [ ? ]",
+                                                 SLITD_ISOPEN+" [ ? ]",
+                                                 SLITD_NATIVE+" ? | <name> <cmd>",
+                                                 SLITD_OPEN+" [ ? ]",
+                                                 SLITD_SET+" ? | <width> [ <offset> ]"
                                                };
 
 #endif

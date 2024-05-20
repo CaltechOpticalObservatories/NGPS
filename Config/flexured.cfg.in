@@ -12,3 +12,45 @@ ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 #
 EMULATOR_PORT=@FLEXURED_EMULATOR@
 
+# For each actuator's controller specify:
+# MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
+#   <name>  name of controller
+#   <host>  hostname of controller
+#   <port>  port on hostname
+#   <addr>  address is DIP-switch assigned PI address.
+#   <axes>  number of axes for this controller's actuator
+#
+MOTOR_CONTROLLER="U @IP_FLEXURE_U@ 50000 1 3"
+MOTOR_CONTROLLER="G @IP_FLEXURE_G@ 50000 1 3"
+MOTOR_CONTROLLER="R @IP_FLEXURE_R@ 50000 1 3"
+MOTOR_CONTROLLER="I @IP_FLEXURE_I@ 50000 1 3"
+
+# For each actuator's controller specify:
+# MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref>"
+# valid <ref> types are { neg pos ref na }
+#       (use "na" if axis does not support referencing)
+#
+MOTOR_AXIS="U 1    25  225 0 na"
+MOTOR_AXIS="U 2 -1000 1000 0 na"
+MOTOR_AXIS="U 3 -1000 1000 0 na"
+
+MOTOR_AXIS="G 1    25  225 0 na"
+MOTOR_AXIS="G 2 -1000 1000 0 na"
+MOTOR_AXIS="G 3 -1000 1000 0 na"
+
+MOTOR_AXIS="R 1    25  225 0 na"
+MOTOR_AXIS="R 2 -1000 1000 0 na"
+MOTOR_AXIS="R 3 -1000 1000 0 na"
+
+MOTOR_AXIS="I 1    25  225 0 na"
+MOTOR_AXIS="I 2 -1000 1000 0 na"
+MOTOR_AXIS="I 3 -1000 1000 0 na"
+
+# Specify nominal focus positions for each actuator
+# MOTOR_POS="<name> <ID> <pos> <posname>"
+#   <name>     name of controller, must have a corresponding MOTOR_CONTROLLER above
+#   <axis>     motor axis number
+#   <ID>       0-based incremental number {0,1,2,...}
+#   <pos>      real actuator position
+#   <posname>  name of that position, what the user will use
+#

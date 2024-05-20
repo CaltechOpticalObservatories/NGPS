@@ -364,7 +364,7 @@ namespace Network {
     this->fd = -1;
     this->listenfd = -1;
     this->host = "";
-    this->addrs = NULL;
+    this->addrs = nullptr;
     this->connection_open = false;
   };
   /***** Network::TcpSocket::TcpSocket ****************************************/
@@ -391,7 +391,7 @@ namespace Network {
     this->fd = -1;
     this->listenfd = -1;
     this->host = "";
-    this->addrs = NULL;
+    this->addrs = nullptr;
     this->connection_open = false;
   };
   /***** Network::TcpSocket::TcpSocket ****************************************/
@@ -411,7 +411,7 @@ namespace Network {
     this->port = port;
     this->totime = POLLTIMEOUT;    /// default Poll timeout in msec
     this->fd = -1;
-    this->addrs = NULL;
+    this->addrs = nullptr;
     this->connection_open = false;
   }
   /***** Network::TcpSocket::TcpSocket ****************************************/
@@ -431,7 +431,7 @@ namespace Network {
     this->fd = -1;
     this->listenfd = -1;
     this->host = "";
-    this->addrs = NULL;
+    this->addrs = nullptr;
     this->connection_open = false;
   };
   /***** Network::TcpSocket::TcpSocket ****************************************/
@@ -452,8 +452,49 @@ namespace Network {
     fd = obj.fd;
     listenfd = obj.listenfd;
     host = obj.host;
-    addrs = obj.addrs;
     connection_open = obj.connection_open;
+
+    // Perform a deep copy of addrs
+    //
+    if ( obj.addrs != nullptr ) {
+      struct addrinfo *addrCopy = nullptr;
+      struct addrinfo *current = nullptr;
+      struct addrinfo *prev = nullptr;
+      try {
+        for ( struct addrinfo *p = obj.addrs; p != nullptr; p = p->ai_next ) {
+          current = new struct addrinfo;
+          if ( current == nullptr ) {
+            // Clean up previous allocations before throwing an exception
+            while ( addrCopy != nullptr ) {
+              struct addrinfo *temp = addrCopy;
+              addrCopy = addrCopy->ai_next;
+              delete temp;
+            }
+            throw std::bad_alloc(); // or another appropriate exception
+          }
+          memcpy( current, p, sizeof( struct addrinfo ) );
+          if ( prev != nullptr ) {
+            prev->ai_next = current;
+          }
+          else {
+            addrCopy = current;
+          }
+          prev = current;
+        }
+      }
+      catch ( ... ) { // Clean up in case of exception
+        while ( addrCopy != nullptr ) {
+          struct addrinfo *temp = addrCopy;
+          addrCopy = addrCopy->ai_next;
+          delete temp;
+        }
+        throw; // Re-throw the exception
+      }
+      addrs = addrCopy;
+    }
+    else {
+      addrs = nullptr;
+    }
   };
   /***** Network::TcpSocket::TcpSocket ****************************************/
 
@@ -690,6 +731,8 @@ namespace Network {
     int oldfd = this->fd;
 #endif
 
+    if ( !this->connection_open ) return 0;
+
     if (this->fd >= 0) {               // if the file descriptor is valid
       if (close(this->fd) == 0) {      // then close it
         error = 0;
@@ -703,16 +746,16 @@ namespace Network {
       error = 0;                       // didn't start with a valid file descriptor
     }
 
-    if (this->addrs != NULL) {         // free memory allocated by getaddrinfo()
+    if (this->addrs != nullptr) {      // free memory allocated by getaddrinfo()
       freeaddrinfo(this->addrs);
-      this->addrs = NULL;
+      this->addrs = nullptr;
     }
 
     this->connection_open = false;     // clear the connection_open flag
 
 #ifdef LOGLEVEL_DEBUG
     std::stringstream message;
-    message << "[DEBUG] closed socket " << this->host << "/" << this->port << " connection to fd " << oldfd;
+    message.str(""); message << "[DEBUG] closed socket " << this->host << "/" << this->port << " connection to fd " << oldfd;
     if ( oldfd >= 0 ) logwrite( "Network::TcpSocket::Close", message.str() );
 #endif
 

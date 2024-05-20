@@ -79,7 +79,7 @@ namespace Focus {
 
       Config config;
 
-      Interface interface;                  ///< the Interface class connects to the hardware
+      Focus::Interface interface;                  ///< the Interface class connects to the hardware
 
       std::mutex conn_mutex;                ///< mutex to protect against simultaneous access to Accept()
 

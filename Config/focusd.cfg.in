@@ -12,35 +12,35 @@ ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 #
 EMULATOR_PORT=@FOCUSD_EMULATOR@
 
-# there is a single host:port for the "master" PI controller
-# at the front of the daisy-chain
+# For each actuator's controller specify:
+# MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
+#   <name>  name of controller
+#   <host>  hostname of controller
+#   <port>  port on hostname
+#   <addr>  address is DIP-switch assigned PI address.
+#   <axes>  number of axes for this controller's actuator
 #
-PI_NAME=focus                     # the name of this PI controller
-PI_HOST=@IP_ETS8P@                # terminal server
-PI_PORT=@ETS8P_FOCUS@             # terminal server port
-#PI_HOST=localhost                # emulator host
-#PI_PORT=@FOCUSD_PI_PORT@         # emulator service port
+MOTOR_CONTROLLER="I @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
+MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
+MOTOR_CONTROLLER="R @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
 
 # For each actuator's controller specify:
-# MOTOR_CONTROLLER="<address> <name> <ref> <min> <max> <zero>"
-#   <addr>  Address is PI address.
-#   <name>  name of controller
-#   <ref>   reference type: {neg|pos|ref}
-#   <min>   min allowed motion
-#   <max>   max allowed motion
-#   <zero>  not supported by focus motors
+# MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref>"
+# valid <ref> types are { neg pos ref na }
+#       (use "na" if axis does not support referencing)
 #
-MOTOR_CONTROLLER="1 I ref 0 7.6 0"
-MOTOR_CONTROLLER="2 R ref 0 6.7 0"
-MOTOR_CONTROLLER="3 G ref 0 7.8 0"
+MOTOR_AXIS="I 1 0 7.6 0 ref"
+MOTOR_AXIS="R 1 0 6.7 0 ref"
+MOTOR_AXIS="G 1 0 7.8 0 ref"
 
 # Specify nominal focus positions for each actuator
 # MOTOR_POS="<name> <ID> <pos> <posname>"
 #   <name>     name of controller, must have a corresponding MOTOR_CONTROLLER above
+#   <axis>     motor axis number
 #   <ID>       0-based incremental number {0,1,2,...}
 #   <pos>      real actuator position
 #   <posname>  name of that position, what the user will use
 #
-MOTOR_POS="I 0 5.887 nominal"
-MOTOR_POS="R 0 3.947 nominal"
-MOTOR_POS="G 0 4.610 nominal"
+MOTOR_POS="I 1 0 5.887 nominal"
+MOTOR_POS="R 1 0 3.947 nominal"
+MOTOR_POS="G 1 0 4.610 nominal"

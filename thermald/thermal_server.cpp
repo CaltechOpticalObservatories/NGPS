@@ -860,7 +860,8 @@ namespace Thermal {
       std::string retstring="";
 
       if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
-                      for ( auto s : THERMALD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                      for ( auto s : THERMALD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret= NO_ERROR;
       }
       else
       if ( cmd.compare( THERMALD_EXIT ) == 0 ) {

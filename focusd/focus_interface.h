@@ -18,8 +18,9 @@
 #include <condition_variable>
 #include <atomic>
 
-#define MOVE_TIMEOUT 5000  ///< number of milliseconds before a move fails
-#define HOME_TIMEOUT 5000  ///< number of milliseconds before a home fails
+#define FOCUS_MOVE_TIMEOUT      5000      ///< timeout in msec for moves
+#define FOCUS_HOME_TIMEOUT      5000      ///< timeout in msec for home
+#define FOCUS_POSNAME_TOLERANCE    0.001  ///< tolerance to determine posname from position
 
 /***** Focus ******************************************************************/
 /**
@@ -45,47 +46,39 @@ namespace Focus {
       size_t numdev;
       bool class_initialized;
     public:
-      std::string name;
-      std::string host;
-      int port;
-
-      Interface() : numdev(-1) {}
+      Interface() : numdev(-1), motorinterface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ) {}
 
       Common::Queue async;
 
-      // map of all daisy-chain connected motor controllers, indexed by name
+      // PI Interface class for the Stepper type
       //
-      std::map<std::string, Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo>> motormap;
-
-      bool isopen() { return this->pi.controller.isconnected(); }  ///< is this interface connected to hardware?
+      Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo> motorinterface;
 
       long initialize_class();
       long open();                                              ///< opens the PI socket connection
       long close();                                             ///< closes the PI socket connection
-      long home( std::string args, std::string &help );         ///< home all daisy-chained motors
+      long is_open( std::string arg, std::string &retstring );  ///< are motor controllers connected?
+      long home( std::string name_in, std::string &retstring ); ///< home all daisy-chained motors
       long is_home( std::string arg, std::string &retstring );  ///< return the home state of the motors
 
       long set( std::string args, std::string &retstring );     ///< set focus motor position
-      long get( std::string arg, std::string &retstring );      ///< get focus motor position
+      long get( std::string name, std::string &retstring );     ///< get focus motor position
 
       static void dothread_move_abs( Focus::Interface &iface, int addr, float pos ); ///< threaded move_abs function
-      static void dothread_home( Focus::Interface &iface, std::string name ); ///< threaded home function
 
       long move_abs( int addr, float pos );      ///< send move-absolute command to specified controller
       long move_rel( std::string args );         ///< send move-relative command to specified controller
       long native( std::string args, std::string &retstring );  ///< send native command to a PI controller
       long stop();                               ///< send the stop-all-motion command to all controllers
-      long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
-      long send_command( std::string cmd, std::string &retstring );  ///< writes command?, reads reply
+      long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
+      long send_command( const std::string &name, std::string cmd, std::string &retstring );  ///< writes command?, reads reply
 
-      Physik_Instrumente::Interface pi;          ///< Object for communicating with the PI
+      long test( std::string args, std::string &retstring );
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 
       volatile std::atomic<int> motors_running;  ///< number of motors that are running in threads
       volatile std::atomic<long> thr_error;      ///< error state of threads
-      std::mutex wait_mtx;                       ///< mutex object for waiting for threads
-      std::condition_variable cv;                ///< condition variable for waiting for threads
 
   };
   /***** Focus::Interface *****************************************************/

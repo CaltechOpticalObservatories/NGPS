@@ -36,16 +36,9 @@ namespace Calib {
     std::stringstream message;
     long error = ERROR;
 
-    if ( this->port < 0 || this->host.empty() ) {
-      message.str(""); message << "ERROR: host (" << this->host << ") or port (" << this->port << ") invalid";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
+    auto _motormap = this->motorinterface.get_motormap();
 
-    Physik_Instrumente::Interface s( this->name, this->host, this->port );
-    this->pi = s;
-
-    this->numdev = this->motormap.size();
+    this->numdev = _motormap.size();
 
     if ( this->numdev == 2 ) {
       logwrite( function, "motion interface configured ok" );
@@ -67,7 +60,7 @@ namespace Calib {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    for ( auto const &mot : this->motormap ) {
+    for ( auto const &mot : _motormap ) {
       message.str(""); message << "[DEBUG] motion controller " << mot.first
                                << " addr=" << mot.second.addr;
       for ( auto const &pos : mot.second.posmap ) {
@@ -84,38 +77,20 @@ namespace Calib {
 
   /***** Calib::Motion::open **************************************************/
   /**
-   * @fn         open
    * @brief      opens the PI socket connection
    * @return     ERROR or NO_ERROR
    *
    */
   long Motion::open() {
-    std::string function = "Calib::Motion::open";
-    std::stringstream message;
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Calib::Server::configure_calibd).
-    //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
-    }
+    long error = NO_ERROR;
 
-    // open a connection
+    // open the sockets,
+    // clear any error codes,
+    // enable servos.
     //
-    long error = this->pi.open();
-
-    if ( error != NO_ERROR ) return( error );
-
-    // clear any error codes on startup, and
-    // enable the servo for each address in motormap
-    //
-    for ( auto const &mot : this->motormap ) {
-      int axis=1;
-      int errcode;
-      error |= this->pi.get_error( mot.second.addr, errcode );     // read error to clear, don't care the value
-      error |= this->pi.set_servo( mot.second.addr, axis, true );  // turn the servos on
-    }
+    error |= this->motorinterface.open();
+    error |= this->motorinterface.clear_errors();
+    error |= this->motorinterface.set_servo( true );
 
     return( error );
   }
@@ -129,256 +104,132 @@ namespace Calib {
    *
    */
   long Motion::close( ) {
-    std::string function = "Calib::Motion::close";
-    std::stringstream message;
+    return this->motorinterface.close();
+  }
+  /***** Calib::Motion::close *************************************************/
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "not connected" );
+
+  /***** Calib::Motion::is_open ***********************************************/
+  /**
+   * @brief       return the connected state of the motor controllers
+   * @param[in]   arg        used only for help
+   * @param[out]  retstring  contains the connected state "true" | "false"
+   * @return      ERROR or NO_ERROR
+   *
+   * All motors must be connected for this to return "true".
+   *
+   */
+  long Motion::is_open( std::string arg, std::string &retstring ) {
+    std::string function = "Calib::Motion::is_open";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
+    // Help
+    //
+    if ( arg == "?" ) {
+      retstring = CALIBD_ISOPEN;
+      retstring.append( " \n" );
+      retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
       return( NO_ERROR );
     }
 
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Calib::Server::configure_calibd).
+    // Loop through all motor controllers, checking each if connected,
+    // and keeping count of the number that are connected.
     //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
+    size_t num_open=0;
+    std::string unconnected, connected;
+
+    for ( auto &mot : _motormap ) {
+
+      bool _isopen = this->motorinterface.is_connected( mot.second.name );
+
+      num_open += ( _isopen ? 1 : 0 );
+
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
     }
 
-    return( this->pi.close() );
+    // Set the retstring true or false, true only if all controllers are homed.
+    //
+    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false"+unconnected;
+
+    // Log who's connected and not
+    //
+    if ( !connected.empty() ) {
+      message.str(""); message << "connected to" << connected;
+      logwrite( function, message.str() );
+    }
+    if ( !unconnected.empty() ) {
+      message.str(""); message << "not connected to" << unconnected;
+      logwrite( function, message.str() );
+    }
+
+    return( error );
   }
-  /***** Calib::Motion::close *************************************************/
+  /***** Calib::Motion::is_open ***********************************************/
 
 
   /***** Calib::Motion::home **************************************************/
   /**
    * @brief      home all calib actuators
-   * @param[in]  arg   input arg, currently only needed to request help
-   * @param[out] help  return string contains help message if requested
+   * @param[in]  name_in    optional list of motors to home
+   * @param[out] retstring  reference to return string
    * @return     ERROR or NO_ERROR
    *
    */
-  long Motion::home( std::string arg, std::string &help ) {
-    std::string function = "Calib::Motion::home";
-    std::stringstream message;
-    long error = NO_ERROR;
+  long Motion::home( std::string name_in, std::string &retstring ) {
 
     // Help
     //
-    if ( arg == "?" ) {
-      help = CALIBD_HOME;
-      help.append( "\n" );
-      help.append( "  homes all actuators simultaneously using the indicated references:\n" );
-      help.append( "  " );
-      for ( auto const &mot : this->motormap ) {
-        help.append( mot.first );
-        help.append( ":" );
-        help.append( mot.second.reftype );
-        help.append( " " );
-      }
-      help.append( "\n" );
+    if ( name_in == "?" || name_in == "help" ) {
+      retstring = CALIBD_HOME;
+      retstring.append( " [ " );
+      auto _motormap = this->motorinterface.get_motormap();
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      retstring.append( "]\n" );
+      retstring.append( "  Home all calib motors or single motor indicated by optional <name>.\n" );
+      retstring.append( "  If no argument is supplied then all are homed simultaneously.\n" );
       return( NO_ERROR );
     }
 
-    // connection must be open
+    // All the work is done by the PI motor interface class
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    this->thr_error.store( NO_ERROR );                         // clear thread error state (threads can set this)
-
-    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
-
-    // loop through every motor in the class
-    //
-    for ( auto mot : this->motormap ) {
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] spawning thread to home " << mot.first;
-      logwrite( function, message.str() );
-#endif
-
-      // spawn a thread to perform the home
-      //
-      std::thread( dothread_home, std::ref( *this ), mot.first ).detach();
-      this->motors_running++;
-    }
-
-    // Wait for the threads to finish
-    //
-    bool motors_homed = false;
-    while ( this->motors_running != 0 ) {
-      motors_homed = true;
-      message.str(""); message << "waiting for " << this->motors_running << " motor"
-                               << ( this->motors_running > 1 ? "s" : "" );
-      logwrite( function, message.str() );
-      this->cv.wait( wait_lock );
-    }
-
-    if ( motors_homed ) logwrite( function, "home complete" );
-
-    // get any errors from the threads
-    //
-    error |= this->thr_error.load();
-
-    return( error );
+    return this->motorinterface.home( name_in, retstring );
   }
   /***** Calib::Motion::home **************************************************/
 
 
-  /***** Calib::Motion::dothread_home *****************************************/
-  /**
-   * @brief      threaded function to home and apply zeropos
-   * @param[in]  motion  reference to interface object
-   * @param[in]  name     name of motor to home
-   *
-   * This is the work function to call home() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by functions
-   * called in here are set in the thr_error class variable.
-   *
-   */
-  void Motion::dothread_home( Calib::Motion &motion, std::string name ) {
-    std::string function = "Calib::Motion::dothread_home";
-    std::stringstream message;
-    int axis=1;
-    long error=NO_ERROR;
-    int addr = -1;
-    std::string reftype;
-
-    try {
-      addr    = motion.motormap.at(name).addr;
-      reftype = motion.motormap.at(name).reftype;
-    }
-    catch ( const std::out_of_range &e ) {
-      message.str(""); message << "ERROR: name \"" << name << "\" not in motormap: " << e.what();
-      logwrite( function, message.str() );
-      motion.thr_error.fetch_or( ERROR );         // preserve this error
-      --motion.motors_running;                    // atomically decrement the number of motors waiting
-      motion.cv.notify_all();                     // notify parent that I'm done
-      return;
-    }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending home_axis( "
-                             << addr << ", " << axis << ", " << reftype << " ) for " << name;
-    logwrite( function, message.str() );
-#endif
-
-    // send the home command by calling home_axis()
-    //
-    motion.pi_mutex.lock();
-    motion.pi.home_axis( addr, axis, reftype );
-    motion.pi_mutex.unlock();
-    motion.motormap[name].ishome   = false;
-    motion.motormap[name].ontarget = false;
-
-    // Loop sending the is_home command until homed or timeout.
-    //
-
-    // get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    bool is_home=false;
-
-    do {
-      bool state;
-      motion.pi_mutex.lock();
-      motion.pi.is_home( addr, axis, state );
-      motion.pi_mutex.unlock();
-      motion.motormap[name].ishome = state;
-      motion.motormap[name].ontarget = state;
-      is_home = motion.motormap[name].ishome;
-
-      if ( is_home ) break;
-      else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
-        usleep( 1000000 );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > MOVE_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
-        logwrite( function, message.str() );
-        error = TIMEOUT;
-        break;
-      }
-
-    } while ( 1 );
-
-    motion.thr_error.fetch_or( error );           // preserve any error returned
-
-    --motion.motors_running;                      // atomically decrement the number of motors waiting
-
-    motion.cv.notify_all();                       // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
-                             << " with error=" << error;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Calib::Motion::dothread_home *****************************************/
-
-
   /***** Calib::Motion::is_home ***********************************************/
   /**
-   * @brief      are all calib actuators homed?
-   * @param[out] retstring  contains "true" | "false"
-   * @return     ERROR or NO_ERROR
+   * @brief       return the home state of the motors
+   * @param[in]   name_in    optionally contains one or more motors to check
+   * @param[out]  retstring  contains the home state "true" | "false"
+   * @return      ERROR or NO_ERROR
+   *
+   * All motors must be homed for this to return "true".
    *
    */
-  long Motion::is_home( std::string &retstring ) {
-    std::string function = "Calib::Motion::is_home";
-    std::stringstream message, homestream;
-    long error = NO_ERROR;
-    size_t num_home = 0;
+  long Motion::is_home( std::string name_in, std::string &retstring ) {
 
-    // Requires an open connection
+    // Help
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
+    if ( name_in == "?" ) {
+      retstring = CALIBD_ISHOME;
+      retstring.append( " [ " );
+      auto _motormap = this->motorinterface.get_motormap();
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      retstring.append( "]\n" );
+      retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
+      retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
+      retstring.append( "  homed, false if any one is not homed.\n" );
+      return( NO_ERROR );
     }
 
-    // loop through every motor in the class
-    // OK to do them serially (instead of threads) because it's quick to query
+    // All the work is done by the PI motor interface class
     //
-    for ( auto mot : this->motormap ) {
-
-      error |= this->pi.is_home( mot.second.addr, 1, mot.second.ishome );
-      homestream << mot.first << ":" << ( mot.second.ishome ? "true" : "false" );
-      if ( mot.second.ishome ) num_home++;
-    }
-
-    // Set the retstring true or false, true only if all requested controllers are the same
-    //
-    if ( num_home == this->motormap.size() ) retstring = "true";
-    else
-    if ( num_home == 0 )                            retstring = "false";
-    else
-
-    // If not all are the same state then log that but report false
-    //
-    if ( num_home > 0 && num_home < this->motormap.size() ) {
-      logwrite( function, homestream.str() );
-      retstring = "false";
-    }
-
-    return( error );
+    return this->motorinterface.is_home( name_in, retstring );
   }
   /***** Calib::Motion::is_home ***********************************************/
 
@@ -398,7 +249,8 @@ namespace Calib {
   long Motion::set( std::string input, std::string &retstring ) {
     std::string function = "Calib::Motion::set";
     std::stringstream message;
-    long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -406,7 +258,7 @@ namespace Calib {
       retstring = CALIBD_SET;
       retstring.append( " <actuator>=<posname> [ <actuator>=<posname> ]\n" );
       retstring.append( "  where <posname> is\n" );
-      for ( auto const &mot : this->motormap ) {
+      for ( auto const &mot : _motormap ) {
         retstring.append( "                     { " );
         for ( auto const &pos : mot.second.posmap ) {
           retstring.append( pos.second.posname ); retstring.append( " " );
@@ -420,227 +272,51 @@ namespace Calib {
       return( NO_ERROR );
     }
 
-    if ( ! this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
+    std::stringstream namelist;                      // list of actuator names used for getting position after move
 
-    std::stringstream valid_names;  // list of validated actuator names used for getting position after move
-
-    if ( ! this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
+    std::vector<std::string> input_list;             // vector of each "actuator=state"
+    std::vector<std::string> motornames;             // vector of all "actuator" (motor names)
+    std::vector<std::string> posnames;               // vector of all "state" (position names)
+    std::vector<int>         axisnums;               // vector of all axis nums, all 1 in this case
 
     // Tokenize on comma to see if more than one actuator
     //
-    std::vector<std::string> input_list;             // vector of each "actuator=state"
     Tokenize( input, input_list, " ," );
 
-    // Iterate through each requested actuator
+    // Iterate through each requested actuator, and
+    // build the motornames, posnames vectors to pass to moveto().
     //
     for ( auto actuator : input_list ) {
-
-      std::string name, posname;
 
       // Tokenize each item in above vector on "=" to get
       // the actuator name and the desired posname.
       //
       std::vector<std::string> actuator_tokens;      // vector of individual actuator, posname for each actuator entry
       Tokenize( actuator, actuator_tokens, "=" );
+
       if ( actuator_tokens.size() != 2 ) {
         message.str(""); message << "ERROR: bad input \"" << actuator << "\". expected actuator=state";
         logwrite( function, message.str() );
-        error = ERROR;
+        retstring="invalid_argument";
+        return( ERROR );
       }
       else {
-        name    = actuator_tokens[0];
-        posname = actuator_tokens[1];
-      }
-
-      // requested named actuator must have been defined
-      //
-      bool actuator_found = ( ( this->motormap.find( name ) != this->motormap.end() ) ? true : false );
-
-      if ( !actuator_found ) {
-        message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-
-      // If the actuator was found then the
-      // requested posname must be defined for that actuator.
-      //
-      bool posname_found = ( ( actuator_found &&
-                               (this->motormap[name].posmap.find( posname ) != this->motormap[name].posmap.end()) )
-                             ? true : false );
-
-      if ( !posname_found ) {
-        message.str(""); message << "ERROR: position \"" << posname << "\" not found. Check configuration.";
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-
-      // If both are found then get the position from the posmap
-      // and spawn a thread to move to that position.
-      //
-      if ( actuator_found && posname_found ) {
-        valid_names << name << " ";
-        float reqpos = this->motormap[name].posmap[posname].position;
-        std::thread( dothread_move_abs, std::ref( *this ), name, reqpos).detach();
-        this->motors_running++;
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] spawning thread to move " << name << " to " << posname;
-        logwrite( function, message.str() );
-#endif
+        namelist << actuator_tokens[0] << " ";
+        motornames.push_back( actuator_tokens[0] );
+        posnames.push_back( actuator_tokens[1] );
+        axisnums.push_back( 1 );  // these all have axis=1
       }
     }
 
-    // wait for the threads to finish
-    //
-    bool motors_moved = false;
-    while ( this->motors_running != 0 ) {
-      motors_moved = true;
-      message.str(""); message << "waiting for " << this->motors_running << " motor" << ( this->motors_running > 1 ? "s":"" );
-      logwrite( function, message.str() );
-      this->cv.wait( wait_lock );
-    }
+    long error = this->motorinterface.moveto( motornames, axisnums, posnames, retstring );
 
-    if ( motors_moved ) logwrite( function, "calib motor moves complete" );
-
-    // get any errors from the threads
+    // read and return the position(s) after successful move
     //
-    error |= this->thr_error.load();
-
-    // after all the moves, read and return the position(s)
-    //
-    error |= this->get( valid_names.str(), retstring );
+    if ( error == NO_ERROR ) error = this->get( namelist.str(), retstring );
 
     return( error );
   }
   /***** Calib::Motion::set ***************************************************/
-
-
-  /***** Calib::Motion::dothread_move_abs *************************************/
-  /**
-   * @brief      threaded move_abs function
-   * @param[in]  motion  reference to interface object
-   * @param[in]  name    name of controller
-   * @param[in]  pos     motor position
-   *
-   * This is the work function to call move_abs() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by the move_abs()
-   * function are set in the thr_error class variable.
-   *
-   */
-  void Motion::dothread_move_abs( Calib::Motion &motion, std::string name, float pos ) {
-    std::string function = "Calib::Motion::dothread_move_abs";
-    std::stringstream message;
-    long error;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending mov_abs( " << name << ", " << pos << " )";
-    logwrite( function, message.str() );
-#endif
-
-    error = motion.move_abs( name, pos ); // send the move_abs command here
-
-    motion.thr_error.fetch_or( error );   // preserve any error returned
-
-    --motion.motors_running;              // atomically decrement the number of motors waiting
-
-    motion.cv.notify_all();               // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed mov_abs( " << name << ", " << pos << " ) "
-                             << " *** motors_running = "<< motion.motors_running;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Calib::Motion::dothread_move_abs *************************************/
-
-
-  /***** Calib::Motion::move_abs **********************************************/
-  /**
-   * @brief      send move-absolute command to specified controllers
-   * @param[in]  name  controller name
-   * @param[in]  pos   motor position
-   * @return     ERROR or NO_ERROR
-   *
-   * This could be called by a thread, so hardware interactions with the PI
-   * controller are protected by a mutex.
-   *
-   */
-  long Motion::move_abs( std::string name, float pos ) {
-    std::string function = "Calib::Motion::move_abs";
-    std::stringstream message;
-    long error=NO_ERROR;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    if ( this->motormap.find( name ) == this->motormap.end() ) {
-      message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    int addr = this->motormap[ name ].addr;
-    int axis = 1;
-
-    // send the move command
-    //
-    this->pi_mutex.lock();
-    error = this->pi.move_abs( addr, axis, pos );
-    this->pi_mutex.unlock();
-
-    // Loop sending the on_target command for this address
-    // until on target or timeout.
-    //
-
-    // first get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    do {
-      bool state;
-      this->pi_mutex.lock();
-      error = this->pi.on_target( addr, axis, state );
-      this->pi_mutex.unlock();
-      this->motormap[ name ].ontarget = state;
-
-      if ( this->motormap[ name ].ontarget ) break;
-      else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for cal " << name;
-        logwrite( function, message.str() );
-#endif
-        usleep( 1000000 );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > MOVE_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for cal " << name;
-        logwrite( function, message.str() );
-        error = TIMEOUT;
-        break;
-      }
-    } while ( 1 );
-
-    return( error );
-  }
-  /***** Calib::Motion::move_abs **********************************************/
 
 
   /***** Calib::Motion::get ***************************************************/
@@ -658,28 +334,25 @@ namespace Calib {
     long error = NO_ERROR;
     std::vector<std::string> name_list;
 
+    auto _motormap = this->motorinterface.get_motormap();  // get a copy of the motormap
+
     // Help
     //
     if ( name_in == "?" ) {
       retstring = CALIBD_GET;
       retstring.append( " [ <actuator> ]\n" );
       retstring.append( "  where <actuator> is { " );
-      for ( auto const &mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
       retstring.append( "  If no arg is supplied then the position of both is returned.\n" );
       retstring.append( "  Supplying an actuator name returns the position of only the specified actuator.\n" );
       return( NO_ERROR );
     }
 
-    if ( ! this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
     // If no name(s) supplied then create a vector of all defined actuator names
     //
     if ( name_in.empty() ) {
-      for ( auto const &mot : this->motormap ) {
+      for ( auto const &mot : _motormap ) {
         name_list.push_back( mot.first );
       }
     }
@@ -687,40 +360,30 @@ namespace Calib {
       Tokenize( name_in, name_list, " " );  // otherwise create a vector of the supplied name(s)
     }
 
-    for ( auto name : name_list ) {
-      std::string thisposname;
+    for ( auto const &name : name_list ) {
+      std::string posname;
 
-      if ( this->motormap.find( name ) == this->motormap.end() ) {
+      if ( _motormap.find( name ) == _motormap.end() ) {
         message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
-        thisposname = "error";
+        posname = "error";
         error = ERROR;
       }
       else {
         // and then get the current position of this actuator.
         //
-        int addr = this->motormap[ name ].addr;
+        int addr = _motormap[ name ].addr;
         int axis = 1;
-        float thispos = -1;
-        float tolerance = 0.001;
+        float position = NAN;
 
-        error = this->pi.get_pos( addr, axis, thispos );
+        error = this->motorinterface.get_pos( name, axis, addr, position, posname );
 
         if ( error == ERROR ) {
           message.str(""); message << "ERROR reading position of actuator \"" << name << "\"";
           logwrite( function, message.str() );
-          thisposname = "error";
-        }
-        // Check thispos against the positions in the posmap and if one
-        // is found within tolerance then that is the current position.
-        //
-        else for ( auto const &pos : this->motormap[ name ].posmap ) {
-          if ( std::abs( pos.second.position - thispos ) < tolerance ) {
-            thisposname = pos.second.posname;
-          }
         }
       }
-      retstream << name << "=" << thisposname << " ";
+      retstream << name << "=" << posname << " ";
     }
 
     retstring = retstream.str();
@@ -733,23 +396,16 @@ namespace Calib {
   /***** Calib::Motion::send_command ******************************************/
   /**
    * @brief      writes the raw command as received to the master controller
-   * @param[in]  cmd  command to send
+   * @param[in]  name  controller name
+   * @param[in]  cmd   command to send
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
    * This version writes a command that expects no reply.
    *
    */
-  long Motion::send_command( std::string cmd ) {
-    std::string function = "Calib::Motion::send_command";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    return( this->pi.send_command( cmd ) );
+  long Motion::send_command( const std::string &name, std::string cmd ) {
+    return( this->motorinterface.send_command( name, cmd ) );
   }
   /***** Calib::Motion::send_command ******************************************/
 
@@ -766,17 +422,13 @@ namespace Calib {
    * a question mark, "?".
    *
    */
-  long Motion::send_command( std::string cmd, std::string &retstring ) {
-    std::string function = "Calib::Motion::send_command";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
+  long Motion::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
+    if ( cmd.find( "?" ) != std::string::npos ) {
+      return( this->motorinterface.send_command( name, cmd, retstring ) );
     }
-
-    if ( cmd.find( "?" ) != std::string::npos ) return( this->pi.send_command( cmd, retstring ) );
-    else return( this->pi.send_command( cmd ) );
+    else {
+      return( this->motorinterface.send_command( name, cmd ) );
+    }
   }
   /***** Calib::Motion::send_command ******************************************/
 

@@ -101,27 +101,21 @@ namespace Calib {
 
       long configure_class();
 
-      bool isopen() { return this->pi.controller.isconnected(); }    ///< is this interface connected to hardware?
       long open();                               ///< opens the PI socket connection
       long close();                              ///< closes the PI socket connection
+      long is_open( std::string arg, std::string &retstring );
       long home( std::string arg, std::string &help );    ///< home all daisy-chained motors
       static void dothread_home( Calib::Motion &motion, std::string name );
-      long is_home( std::string &retstring );    ///< return the home state of the motors
+      long is_home( std::string name_in, std::string &retstring );    ///< return the home state of the motors
 
       long get( std::string name_in, std::string &retstring );  ///< get state of named actuator(s)
       long set( std::string input, std::string &retstring );    ///< set state(s) of named actuator(s)
-      long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
-      long send_command( std::string cmd, std::string &retstring );  ///< writes command?, reads reply
+      long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
+      long send_command( const std::string &name, std::string cmd, std::string &retstring );  ///< writes command?, reads reply
 
-      static void dothread_move_abs( Calib::Motion &motion, std::string name, float pos ); ///< threaded move_abs function
-      long move_abs( std::string name, float pos );
-
-      // map of all daisy-chain connected motor controllers,
-      // indexed by name.
+      // PI Interface class of the Servo type
       //
-      std::map<std::string, Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo>> motormap;
-
-      Physik_Instrumente::Interface pi;          ///< object for communicating with the PI
+      Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 

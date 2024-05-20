@@ -38,53 +38,11 @@ namespace Acam {
 
     // Clear the motormap map before loading new information from the config file
     //
-    this->interface.motion.motormap.clear();
+    this->interface.motion.motorinterface.clear_motormap();
 
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
-
-      // PI_NAME -- this is the name of the PI motor controller subsystem
-      //
-      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
-        this->interface.motion.name = config.arg[entry];
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
-      }
-
-      // PI_HOST -- hostname for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
-        this->interface.motion.host = config.arg[entry];
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
-      }
-
-      // PI_PORT -- port number on PI_HOST for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad PI_PORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "PI_PORT number out of integer range");
-          return(ERROR);
-        }
-        this->interface.motion.port = port;
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
-      }
 
       // CAMERASERVER_HOST -- hostname for the external camera server
       //
@@ -120,13 +78,10 @@ namespace Acam {
 
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
+      // Each CONTROLLER is stored in an STL map indexed by motorname
+      //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // then this object gets copied into the class map of objects.
-        //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
-        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motion.motormap[ MOT.name ] = MOT;
+        if ( this->interface.motion.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
           message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
           logwrite( function, message.str() );
           this->interface.async.enqueue( message.str() );
@@ -134,40 +89,73 @@ namespace Acam {
         }
       }
 
+      // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
+      //
+      if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+
+        // Create a temporary local AxisInfo object for parsing the config line.
+        //
+        Physik_Instrumente::AxisInfo AXIS;
+
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // Each AXIS is associated with a CONTROLLER by name, so a controller
+        // of this name must have already been configured.
+        //
+        // loc checks if the motorname for this AXIS is found in the motormap
+        //
+        auto _motormap = this->interface.motion.motorinterface.get_motormap();  // get a local copy of motormap
+        auto loc = _motormap.find( AXIS.motorname );                            // find motorname in motormap
+        if ( loc != _motormap.end() ) {
+          this->interface.motion.motorinterface.add_axis( AXIS );
+          message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          this->interface.async.enqueue( message.str() );
+          applied++;
+        }
+        else {
+          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          message.str(""); message << "valid names are:";
+          for ( const auto &mot : _motormap ) { message << " " << mot.first; }
+          logwrite( function, message.str() );
+          error = ERROR;
+          break;
+        }
+      }
+
       // MOTOR_POS -- detailed position info for each named motor controller
       //
       if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // and a matching name is already in the motormap, then relevant parts
-        // of this object gets copied into the class map of objects.
+        // Create a local PosInfo object for parsing the config line
         //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo> MOT;
-        if ( MOT.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+        Physik_Instrumente::PosInfo POS;
 
-          // Make sure the MOTOR_POS's name has a matching name in controller_info
-          // which came from the MOTOR_CONTROLLER configuration.
-          //
-          auto loc = this->interface.motion.motormap.find( MOT.name );
+        if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) break;
 
-          // If found, then assign the motor map from the local object to the class object.
-          //
-          if ( loc != this->interface.motion.motormap.end() ) {
-            std::string posname = MOT.posmap.begin()->first;  // mot is a local copy so there is only one entry
-            loc->second.posmap[ posname ].id       = MOT.posmap[posname].id;
-            loc->second.posmap[ posname ].position = MOT.posmap[posname].position;
-            loc->second.posmap[ posname ].posname  = MOT.posmap[posname].posname;
-          }
-          else {
-            message.str(""); message << "ERROR: MOTOR_POS name \"" << MOT.name << "\" "
-                                     << "has no matching name defined by MOTOR_CONTROLLER";
-            logwrite( function, message.str() );
-            error = ERROR;
-            break;
-          }
+        // Check that the motorname associated with the position has already been
+        // defined in the motormap and if so, add the PosInfo to the motorinterface.
+        //
+        auto _motormap = this->interface.motion.motorinterface.get_motormap();  // get a local copy of motormap
+        auto loc = _motormap.find( POS.motorname );                             // find motorname in motormap
 
+        if ( loc != _motormap.end() ) {
+          this->interface.motion.motorinterface.add_posmap( POS );              // add the PosInfo to the class
           message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
+          this->interface.async.enqueue( message.str() );
           applied++;
+        }
+        else {
+          message.str(""); message << "ERROR motor name \"" << POS.motorname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          message.str(""); message << "valid names are:";
+          for ( const auto &mot : _motormap ) { message << " " << mot.first; }
+          logwrite( function, message.str() );
+          error = ERROR;
+          break;
         }
       }
 
@@ -493,7 +481,8 @@ namespace Acam {
       bool suppress_term_state=false;
 
       if ( cmd == "help" || cmd == "?" ) {
-                      for ( auto s : ACAMD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                      for ( auto s : ACAMD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = NO_ERROR;
       }
       else
       if ( cmd == ACAMD_EXIT ) {
@@ -581,7 +570,7 @@ namespace Acam {
       if ( cmd == ACAMD_ISOPEN ) {
                       bool isopen;
                       ret = this->interface.isopen( args, isopen, retstring );
-                      if ( retstring.empty() ) { if ( isopen ) retstring = "true"; else retstring = "false"; }
+//                    if ( retstring.empty() ) { if ( isopen ) retstring = "true"; else retstring = "false"; }
       }
       else
 

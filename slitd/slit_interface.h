@@ -48,9 +48,6 @@ namespace Slit {
       float maxwidth;
       float minwidth;
     public:
-      std::string name;
-      std::string host;
-      int port;
       size_t con_A;
       size_t con_B;
 
@@ -59,31 +56,27 @@ namespace Slit {
 
       Common::Queue async;
 
-      // map of all daisy-chain connected motor controllers, indexed by name
+      // PI Interface class for Servo type
       //
-      std::map<std::string, Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo>> motormap;
-
-      bool isopen() { return this->pi.controller.isconnected(); }                   ///< is this interface connected to hardware?
+      Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
       long close();                              ///< closes the PI socket connection
+      long is_open( std::string arg, std::string &retstring );     ///< are motor controllers connected?
       long home( std::string args, std::string &help );            ///< home all daisy-chained motors
-      long is_home( std::string &retstring );    ///< return the home state of the motors
+      long is_home( std::string arg, std::string &retstring );    ///< return the home state of the motors
 
       long set( Slit::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
+      long get( std::string args, std::string &retstring );                         ///< get the current width and offset
       long get( std::string &retstring );                                           ///< get the current width and offset
 
       static void dothread_move_abs( Slit::Interface &iface, int addr, float pos ); ///< threaded move_abs function
-      static void dothread_home( Slit::Interface &iface, std::string name ); ///< threaded home function
 
       long move_abs( int addr, float pos );      ///< send move-absolute command to specified controllers
       long move_rel( std::string args );         ///< send move-relative command to specified controllers
       long stop();                               ///< send the stop-all-motion command to all controllers
-      long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
-      long send_command( std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
-
-      Physik_Instrumente::Interface pi;          ///< Object for communicating with the PI
+      long send_command( std::string args, std::string &retstring );      ///< writes the raw command as received to the master controller
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 

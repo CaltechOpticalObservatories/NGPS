@@ -12,27 +12,6 @@
 
 namespace Acam {
 
-  /***** Acam::MotionInterface::MotionInterface *******************************/
-  /**
-   * @brief      class constructor
-   *
-   */
-  MotionInterface::MotionInterface() {
-    this->numdev=-1;
-  }
-  /***** Acam::MotionInterface::MotionInterface *******************************/
-
-
-  /***** Acam::MotionInterface::~MotionInterface ******************************/
-  /**
-   * @brief      class deconstructor
-   *
-   */
-  MotionInterface::~MotionInterface() {
-  }
-  /***** Acam::MotionInterface::~MotionInterface ******************************/
-
-
   /***** Acam::MotionInterface::initialize_class ******************************/
   /**
    * @brief      initializes the MotionInterface class from configure_acam()
@@ -45,81 +24,34 @@ namespace Acam {
   long MotionInterface::initialize_class() {
     std::string function = "Acam::MotionInterface::initialize_class";
     std::stringstream message;
-    long error = ERROR;
 
-    if ( this->port < 0 || this->host.empty() ) {
-      logwrite( function, "ERROR: host or port invalid" );
-      return( ERROR );
-    }
+    auto _motormap = this->motorinterface.get_motormap();
 
-    Physik_Instrumente::Interface s( this->name, this->host, this->port );
-    this->pi = s;
+    this->numdev = _motormap.size();
 
-    this->numdev = this->motormap.size();
-
-    if ( this->numdev == 2 ) {
-      logwrite( function, "interface initialized ok" );
-      error = NO_ERROR;
-    }
-    else if ( this->numdev > 2 ) {
-      message.str(""); message << "ERROR: too many motor controllers: " << this->numdev << ". expected 2";
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-    else {
-      message.str(""); message << "ERROR: insufficient motor controllers: " << this->numdev << ". expected 2";
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-
-#ifdef LOGLEVEL_DEBUG
-    for ( auto const& con : this->motormap ) {
-      message.str(""); message << "[DEBUG] controller " << con.first
-                               << " addr=" << con.second.addr
-                               << " reftype=" << con.second.reftype;
-      logwrite( function, message.str() );
-    }
-#endif
-
-    return( error );
+    return( NO_ERROR );
   }
   /***** Acam::MotionInterface::initialize_class ******************************/
 
 
   /***** Acam::Interface::open ************************************************/
   /**
-   * @brief      opens the PI socket connection
+   * @brief      opens the sockets to all motors
    * @return     ERROR or NO_ERROR
    *
    */
   long MotionInterface::open( ) {
     std::string function = "Acam::MotionInterface::open";
     std::stringstream message;
+    long error = NO_ERROR;
 
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Acam::Server::configure_acam).
-    //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
-    }
-
-    // open a connection
-    //
-    long error = this->pi.open();
-
-    if ( error != NO_ERROR ) return( error );
-
+    // Open the sockets,
     // clear any error codes on startup, and
-    // enable the servo for each address in motormap
+    // enable the servo for each address in controller_info.
     //
-    for ( auto const& mot : this->motormap ) {
-      int axis=1;
-      int errcode;
-      error |= this->pi.get_error( mot.second.addr, errcode );     // read error to clear, don't care the value
-      error |= this->pi.set_servo( mot.second.addr, axis, true );  // turn the servos on
-    }
+    error |= this->motorinterface.open();
+    error |= this->motorinterface.clear_errors();
+    error |= this->motorinterface.set_servo( true );
 
     return( error );
   }
@@ -133,219 +65,108 @@ namespace Acam {
    *
    */
   long MotionInterface::close( ) {
-    std::string function = "Acam::MotionInterface::close";
-    std::stringstream message;
+    return this->motorinterface.close();
+  }
+  /***** Acam::MotionInterface::close *****************************************/
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "not connected" );
+
+  /***** Acam::Interface::is_open *********************************************/
+  /**
+   * @brief       return the connected state of the motor controllers
+   * @param[in]   arg        used only for help
+   * @param[out]  retstring  contains the connected state "true" | "false"
+   * @return      ERROR or NO_ERROR
+   *
+   * All motors must be connected for this to return "true".
+   *
+   */
+  bool MotionInterface::is_open() {
+    std::string state;
+    this->is_open( "", state );
+    return ( state=="true" ? true : false );
+  }
+  long MotionInterface::is_open( std::string arg, std::string &retstring ) {
+    std::string function = "Acam::MotionInterface::is_open";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
+    // Help
+    //
+    if ( arg == "?" ) {
+      retstring = ACAMD_ISOPEN;
+      retstring.append( " \n" );
+      retstring.append( "  Returns true if all motor controllers are connected, false if any one is not connected.\n" );
       return( NO_ERROR );
     }
 
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Acam::Server::configure_acam).
+    // Loop through all motor controllers, checking each if connected,
+    // and keeping count of the number that are connected.
     //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
+    size_t num_open=0;
+    std::string unconnected, connected;
+
+    for ( auto &mot : _motormap ) {
+
+      bool _isopen = this->motorinterface.is_connected( mot.second.name );
+
+      num_open += ( _isopen ? 1 : 0 );
+
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
     }
 
-    return( this->pi.close() );
+    // Set the retstring true or false, true only if all controllers are homed.
+    //
+    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false"+unconnected;
+
+    // Log who's connected and not
+    //
+    if ( !connected.empty() ) {
+      message.str(""); message << "connected to" << connected;
+      logwrite( function, message.str() );
+    }
+    if ( !unconnected.empty() ) {
+      message.str(""); message << "not connected to" << unconnected;
+      logwrite( function, message.str() );
+    }
+
+    return( error );
   }
-  /***** Acam::MotionInterface::close *****************************************/
+  /***** Acam::Interface::is_open *********************************************/
 
 
   /***** Acam::MotionInterface::home ******************************************/
   /**
    * @brief      home all daisy-chained motors using the neg limit switch
-   * @param[in]  name_in  optional list of motors to home
-   * @param[out] help     return string containing help on request
+   * @param[in]  name_in    optional list of motors to home
+   * @param[out] retstring  reference to return string
    * @return     ERROR or NO_ERROR
    *
    */
-  long MotionInterface::home( std::string name_in, std::string &help ) {
-    std::string function = "Acam::MotionInterface::home";
-    std::stringstream message;
-    long error = NO_ERROR;
-    std::vector<std::string> name_list;                        // vector of input names
-    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
+  long MotionInterface::home( std::string name_in, std::string &retstring ) {
 
     // Help
     //
     if ( name_in == "?" ) {
-      help = ACAMD_HOME;
-      help.append( " [ " );
-      for ( auto const& mot : this->motormap ) {
-        help.append( mot.first );
-        help.append( " " );
+      retstring = ACAMD_HOME;
+      retstring.append( " [ " );
+      for ( auto const& mot : this->motorinterface.get_motormap() ) {
+        retstring.append( mot.first );
+        retstring.append( " " );
       }
-      help.append( "]\n" );
-      help.append( "  no arg will home all motors simultaneously\n" );
-      help.append( "  or provide name of motor to home only that motor\n" );
+      retstring.append( "]\n" );
+      retstring.append( "  no arg will home all motors simultaneously\n" );
+      retstring.append( "  or provide name of motor to home only that motor\n" );
       return( NO_ERROR );
     }
 
-    // Anything else requires an open connection
+    // All the work is done by the PI motor interface class
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    // If name_in is empty then build up a vector of each motor name
-    //
-    if ( name_in.empty() ) {
-      for ( auto mot : this->motormap ) { name_list.push_back( mot.first ); }
-    }
-    else {
-      std::transform( name_in.begin(), name_in.end(), name_in.begin(), ::tolower );
-      Tokenize( name_in, name_list, " " );
-      if ( name_list.size() > this->numdev ) {
-        message.str(""); message << "ERROR: too many names specified: " << name_in.size() << " "
-                                 << "(max " << this->numdev << ")";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
-    }
-
-    this->thr_error.store( NO_ERROR );    // clear thread error state (threads can set this)
-
-    // Now loop through the built up list of motor names
-    //
-    for ( auto name : name_list ) {
-
-      auto name_found = this->motormap.find( name );
-
-      if ( name_found == this->motormap.end() ) {
-        message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
-
-      // Spawn a thread to performm the home move.
-      // If there is more than one then they can be done in parallel.
-      //
-      std::thread( dothread_home, std::ref( *this ), name ).detach();
-      this->motors_running++;
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] spawning thread to home " << name;
-      logwrite( function, message.str() );
-#endif
-    }
-
-    // Wait for the threads to finish
-    //
-    bool motors_homed = false;
-    while ( this->motors_running != 0 ) {
-      motors_homed = true;
-      message.str(""); message << "waiting for " << this->motors_running << " motor"
-                               << ( this->motors_running > 1 ? "s" : "" );
-      logwrite( function, message.str() );
-      this->cv.wait( wait_lock );
-    }
-
-    if ( motors_homed ) logwrite( function, "home complete" );
-
-    // get any errors from the threads
-    //
-    error |= this->thr_error.load();
-
-    return( error );
+    return this->motorinterface.home( name_in, retstring );
   }
   /***** Acam::MotionInterface::home ******************************************/
-
-
-  /***** Acam::MotionInterface::dothread_home *********************************/
-  /**
-   * @brief      threaded function to home and apply zeropos
-   * @param[in]  iface  reference to interface object
-   * @param[in]  name   name of motor to home
-   *
-   * This is the work function to call home() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by functions
-   * called in here are set in the thr_error class variable.
-   *
-   */
-  void MotionInterface::dothread_home( Acam::MotionInterface &iface, std::string name ) {
-    std::string function = "Acam::MotionInterface::dothread_home";
-    std::stringstream message;
-    int axis=1;
-    int addr = iface.motormap[name].addr;
-    std::string reftype = iface.motormap[name].reftype;
-    long error=NO_ERROR;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending home_axis( " 
-                             << addr << ", " << axis << ", " << reftype << " ) for " << name;
-    logwrite( function, message.str() );
-#endif
-
-    // send the home command by calling home_axis()
-    //
-    iface.pi_mutex.lock();
-    iface.pi.home_axis( addr, axis, reftype );
-    iface.pi_mutex.unlock();
-    iface.motormap[name].ishome   = false;
-    iface.motormap[name].ontarget = false;
-
-    // Loop sending the is_home command until homed or timeout.
-    //
-
-    // get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    bool is_home=false;
-
-    do {
-      bool state;
-      iface.pi_mutex.lock();
-      iface.pi.is_home( addr, axis, state );
-      iface.pi_mutex.unlock();
-      iface.motormap[name].ishome = state;
-      iface.motormap[name].ontarget = state;
-      is_home = iface.motormap[name].ishome;
-
-      if ( is_home ) break;
-      else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
-        usleep( 1000000 );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > HOME_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
-        logwrite( function, message.str() );
-        error = TIMEOUT;
-        break;
-      }
-
-    } while ( 1 );
-
-    iface.thr_error.fetch_or( error );           // preserve any error returned
-
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
-
-    iface.cv.notify_all();                       // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
-                             << " with error=" << error;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Acam::MotionInterface::dothread_home *********************************/
 
 
   /***** Acam::MotionInterface::is_home ***************************************/
@@ -361,35 +182,29 @@ namespace Acam {
   long MotionInterface::is_home( std::string name_in, std::string &retstring ) {
     std::string function = "Acam::MotionInterface::is_home";
     std::stringstream message;
-    std::stringstream homestream;
     long error = NO_ERROR;
-    std::vector<std::string> name_list;
-    size_t num_home=0;
+
+    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
     if ( name_in == "?" ) {
       retstring = ACAMD_ISHOME;
-      retstring.append( " [ <name> ]\n" );
-      retstring.append( "  where <name> = { " );
-      for ( auto mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
-      retstring.append( "}\n" );
-      retstring.append( "  if no arg provided then both must be true to return true\n" );
+      retstring.append( " [ " );
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      retstring.append( "]\n" );
+      retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
+      retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
+      retstring.append( "  homed, false if any one is not homed.\n" );
       return( NO_ERROR );
     }
 
-    // Requires an open connection
+    // Build a vector of all selected motor controllers, or all motor controllers
+    // if name_in was empty.
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motion component" );
-      retstring="not_open";
-      return( ERROR );
-    }
-
-    // If name_in is empty then build up a vector of each motor name
-    //
+    std::vector<std::string> name_list;
     if ( name_in.empty() ) {
-      for ( auto mot : this->motormap ) { name_list.push_back( mot.first ); }
+      for ( auto mot : _motormap ) { name_list.push_back( mot.first ); }
     }
     else {
       std::transform( name_in.begin(), name_in.end(), name_in.begin(), ::tolower );
@@ -403,33 +218,34 @@ namespace Acam {
       }
     }
 
+    // Loop through that vector of names, asking each if homed,
+    // and keeping count of the number that are homed.
+    //
+    size_t num_home=0;
+    std::stringstream homestream;
     for ( auto name : name_list ) {
 
-      auto name_found = this->motormap.find( name );
-
-      if ( name_found == this->motormap.end() ) {
-        message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
+      // requires an open connection
+      //
+      if ( ! this->motorinterface.is_connected( name ) ) {
+        message.str(""); message << "ERROR not connected to motor " << name;
         logwrite( function, message.str() );
-        retstring="not_found";
+        retstring="not_connected";
         return( ERROR );
       }
 
+      auto addr = _motormap[name].addr;
       int axis = 1;
+      bool _ishome;
 
-      error |= this->pi.is_home( this->motormap[name].addr,
-                                 axis,
-                                 this->motormap[name].ishome );  // error is OR'd so any error is preserved
-      homestream << name << ":"
-                 << ( this->motormap[name].ishome ? "true" : "false" ) << " ";
-      if ( this->motormap[name].ishome ) num_home++;
+      error |= this->motorinterface.is_home( name, addr, axis, _ishome );  // error is OR'd so any error is preserved
+      homestream << name << ":" << ( _ishome ? "true" : "false" ) << " ";
+      if ( _ishome ) num_home++;
     }
 
     // Set the retstring true or false, true only if all requested controllers are the same
     //
-    if ( num_home == name_list.size() ) retstring = "true";
-    else
-    if ( num_home == 0 )                retstring = "false";
-    else
+    if ( num_home == name_list.size() ) retstring = "true"; else retstring = "false";
 
     // If not all are the same state then log that but report false
     //
@@ -441,81 +257,6 @@ namespace Acam {
     return( error );
   }
   /***** Acam::MotionInterface::is_home ***************************************/
-
-
-  /***** Acam::MotionInterface::move_abs **************************************/
-  /**
-   * @brief      send move-absolute command to specified controllers
-   * @param[in]  name  controller name
-   * @param[in]  pos   motor position
-   * @return     ERROR or NO_ERROR
-   *
-   * This could be called by a thread, so hardware interactions with the PI
-   * controller are protected by a mutex.
-   *
-   */
-  long MotionInterface::move_abs( std::string name, float pos ) {
-    std::string function = "Acam::MotionInterface::move_abs";
-    std::stringstream message;
-    long error=NO_ERROR;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    if ( this->motormap.find( name ) == this->motormap.end() ) {
-      message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    int addr = this->motormap[ name ].addr;
-    int axis = 1;
-
-    // send the move command
-    //
-    this->pi_mutex.lock();
-    error = this->pi.move_abs( addr, axis, pos );
-    this->pi_mutex.unlock();
-
-    // Loop sending the on_target command for this address
-    // until on target or timeout.
-    //
-
-    // first get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    do {
-      bool state;
-      this->pi_mutex.lock();
-      error = this->pi.on_target( addr, axis, state );
-      this->pi_mutex.unlock();
-      this->motormap[ name ].ontarget = state;
-
-      if ( this->motormap[ name ].ontarget ) break;
-      else {
-        usleep( 1000000 );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > MOVE_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for move " << name;
-        logwrite( function, message.str() );
-        error = TIMEOUT;
-        break;
-      }
-    } while ( 1 );
-
-    return( error );
-  }
-  /***** Acam::MotionInterface::move_abs **************************************/
 
 
   /***** Acam::MotionInterface::motion ****************************************/
@@ -548,12 +289,14 @@ namespace Acam {
       return( NO_ERROR );
     }
 
+    auto _motormap = this->motorinterface.get_motormap();
+
     // No args, print all of the indices of the motormap STL map,
     // which will be a list of the STEPPER_CONTROLLER names.
     //
     if ( args.empty() ) {
       retstream << "{ ";
-      for ( auto mot : this->motormap ) { retstream << mot.first << " "; }
+      for ( auto const &mot : _motormap ) { retstream << mot.first << " "; }
       retstream << "}";
       retstring = retstream.str();
       logwrite( function, retstring );
@@ -580,7 +323,7 @@ namespace Acam {
 
       // Check that name is found in the motormap map
       //
-      if ( this->motormap.find( name ) == this->motormap.end() ) {
+      if ( _motormap.find( name ) == _motormap.end() ) {
         message.str(""); message << "ERROR: motor name \"" << name << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="motor_not_found";
@@ -589,7 +332,7 @@ namespace Acam {
 
       if ( arglist.size() == 1 ) {
         retstream << "{ ";
-        for ( auto const &pos : this->motormap[ name ].posmap ) { retstream << pos.first << " "; }
+        for ( auto const &pos : _motormap[ name ].posmap ) { retstream << pos.first << " "; }
         retstream << "}";
         retstring = retstream.str();
         logwrite( function, retstring );
@@ -603,16 +346,16 @@ namespace Acam {
 
       // Check that posname is found in the motormap.posmap map
       //
-      if ( this->motormap[name].posmap.find( posname ) == this->motormap[name].posmap.end() ) {
+      if ( _motormap[name].posmap.find( posname ) == _motormap[name].posmap.end() ) {
         message.str(""); message << "ERROR: position name \"" << posname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="posname_not_found";
         return( ERROR );
       }
 
-      retstream << this->motormap[ name ].posmap[ posname ].posname << ": "
-                << "id="       << this->motormap[ name ].posmap[ posname ].id << " "
-                << "position=" << this->motormap[ name ].posmap[ posname ].position;
+      retstream << _motormap[ name ].posmap[ posname ].posname << ": "
+                << "posid="    << _motormap[ name ].posmap[ posname ].posid << " "
+                << "position=" << _motormap[ name ].posmap[ posname ].position;
       retstring = retstream.str();
       logwrite( function, retstring );
     }
@@ -634,16 +377,8 @@ namespace Acam {
       }
       else {
 
-        // This requires an open connection (nothing else so far in this function does)
-        //
-        if ( !this->isopen() ) {
-          logwrite( function, "ERROR: not connected to motion component" );
-          retstring="not_open";
-          return( ERROR );
-        }
-
-        int addr = this->motormap[ name ].addr;  // Get the address from the class,
-        std::stringstream cmdstream;                // then build the command from the arglist.
+        int addr = _motormap[ name ].addr;  // Get the address from the class,
+        std::stringstream cmdstream;        // then build the command from the arglist.
         cmdstream << addr;
         for ( int i=2; i<(int)arglist.size(); i++ ) cmdstream << " " << arglist[i];
         error = this->send_command( cmdstream.str(), retstring );
@@ -659,23 +394,19 @@ namespace Acam {
   /***** Acam::MotionInterface::send_command **********************************/
   /**
    * @brief      writes the raw command as received to the master controller
-   * @param[in]  cmd
+   * @param[in]  name  controller name
+   * @param[in]  cmd   command to send
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
    * This version writes a command that expects no reply.
    *
    */
-  long MotionInterface::send_command( std::string cmd ) {
+  long MotionInterface::send_command( const std::string &name, std::string cmd ) {
     std::string function = "Acam::MotionInterface::send_command";
     std::stringstream message;
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    return( this->pi.send_command( cmd ) );
+    return( this->motorinterface.send_command( name, cmd ) );
   }
   /***** Acam::MotionInterface::send_command **********************************/
 
@@ -683,8 +414,9 @@ namespace Acam {
   /***** Acam::MotionInterface::send_command **********************************/
   /**
    * @brief      writes the raw command to the master controller, reads back reply
-   * @param[in]  cmd
-   * @param[in]  retstring
+   * @param[in]  name       controller name
+   * @param[in]  cmd        command to send
+   * @param[out] retstring  reference to reply
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
@@ -692,18 +424,16 @@ namespace Acam {
    * a question mark, "?".
    *
    */
-  long MotionInterface::send_command( std::string cmd, std::string &retstring ) {
+  long MotionInterface::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
     std::string function = "Acam::MotionInterface::send_command";
     std::stringstream message;
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motion component" );
-      retstring="not_open";
-      return( ERROR );
+    if ( cmd.find( "?" ) != std::string::npos ) {
+      return ( this->motorinterface.send_command( name, cmd, retstring ) );
     }
-
-    if ( cmd.find( "?" ) != std::string::npos ) return( this->pi.send_command( cmd, retstring ) );
-    else return( this->pi.send_command( cmd ) );
+    else {
+      return( this->motorinterface.send_command( name, cmd ) );
+    }
   }
   /***** Acam::MotionInterface::send_command **********************************/
 
@@ -720,11 +450,9 @@ namespace Acam {
     std::string function = "Acam::MotionInterface::filter";
     std::string filter = "filter";
     std::stringstream message;
-    std::string currname;
-    int axis = 1;
-    int currid;
-    float currpos;
     long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -733,7 +461,7 @@ namespace Acam {
       retstring.append( " [ <filtername> | home | ishome ]\n" );
       retstring.append( "  Move filterwheel to filter <filtername> \n" );
       retstring.append( "  where <filtername> = { " );
-      for ( auto const &pos : this->motormap[ filter ].posmap ) {
+      for ( auto const &pos : _motormap[ filter ].posmap ) {
         retstring.append( pos.first );
         retstring.append( " " );
       }
@@ -742,14 +470,6 @@ namespace Acam {
       retstring.append( "  Optionally home the filterwheel or check if homed, return true|false.\n" );
       retstring.append( "  If no arg provided, return only the current <filtername>.\n" );
       return( NO_ERROR );
-    }
-
-    // Connection must be open to motion component
-    //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motion component" );
-      retstring = "not_open";
-      return( ERROR );
     }
 
     // Option to home the filter or check if homed
@@ -778,10 +498,14 @@ namespace Acam {
     // If destname is supplied then move wheel to that position.
     //
     if ( !destname.empty() ) {
+      int currid;
+      std::string currname;
+      float currpos;
+      int axis = 1;
 
       // Check that destname is found in the motormap.posmap map
       //
-      if ( this->motormap[filter].posmap.find( destname ) == this->motormap[filter].posmap.end() ) {
+      if ( _motormap[filter].posmap.find( destname ) == _motormap[filter].posmap.end() ) {
         message.str(""); message << "ERROR: position \"" << destname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="filter_not_found";
@@ -789,9 +513,9 @@ namespace Acam {
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] dest=" << this->motormap[filter].posmap[destname].posname << " "
-                               << "id="       << this->motormap[filter].posmap[destname].id << " "
-                               << "position=" << this->motormap[filter].posmap[destname].position;
+      message.str(""); message << "[DEBUG] dest=" << _motormap[filter].posmap[destname].posname << " "
+                               << "posid="        << _motormap[filter].posmap[destname].posid << " "
+                               << "position="     << _motormap[filter].posmap[destname].position;
       logwrite( function, message.str() );
 #endif
 
@@ -801,8 +525,8 @@ namespace Acam {
 
       // Where do we want to go?
       //
-      int destid = this->motormap[ filter ].posmap[ destname ].id;
-      float destpos = this->motormap[ filter ].posmap[ destname ].position;
+      int destid = _motormap[ filter ].posmap[ destname ].posid;
+      float destpos = _motormap[ filter ].posmap[ destname ].position;
       int newid = mod( ( destid + ( 2 - currid ) ) , 6 );
 
 #ifdef LOGLEVEL_DEBUG
@@ -818,22 +542,22 @@ namespace Acam {
       //
       std::stringstream cmd;
       float remap;
-      for ( auto fit = this->motormap[filter].posmap.begin(); 
-                 fit != this->motormap[filter].posmap.end(); ++fit) {
-        if ( fit->second.id == 2 ) remap = fit->second.position;          // remap = (position for id=2)
+      for ( auto fit  = _motormap[filter].posmap.begin();
+                 fit != _motormap[filter].posmap.end(); ++fit) {
+        if ( fit->second.posid == 2 ) remap = fit->second.position;       // remap = (position for posid=2)
       }
-      cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( cmd.str() );
-      cmd.str(""); cmd << "POS " << axis << " " << remap;  this->send_command( cmd.str() );
-      cmd.str(""); cmd << "RON " << axis << " 1";          this->send_command( cmd.str() );
+      cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( filter, cmd.str() );
+      cmd.str(""); cmd << "POS " << axis << " " << remap;  this->send_command( filter, cmd.str() );
+      cmd.str(""); cmd << "RON " << axis << " 1";          this->send_command( filter, cmd.str() );
 
       // Now move to the position with the calculated "newid"
       //
       float newpos=NAN;
-      for ( auto fit = this->motormap[filter].posmap.begin(); 
-                 fit != this->motormap[filter].posmap.end(); ++fit) {
-        if ( fit->second.id == newid ) newpos = fit->second.position;     // newpos = (position for id=newid)
+      for ( auto fit  = _motormap[filter].posmap.begin();
+                 fit != _motormap[filter].posmap.end(); ++fit) {
+        if ( fit->second.posid == newid ) newpos = fit->second.position;  // newpos = (position for posid=newid)
       }
-      if ( ! std::isnan( newpos ) ) error = this->move_abs( filter, newpos );
+      if ( ! std::isnan( newpos ) ) error = this->motorinterface.moveto( filter, axis, newpos, retstring );
       else {
         message.str(""); message << "ERROR: no position found for filter ID " << newid;
         logwrite( function, message.str() );
@@ -845,18 +569,25 @@ namespace Acam {
       //
       remap = ( !std::isnan(newpos) ? destpos : currpos );
 
-      cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( cmd.str() );
-      cmd.str(""); cmd << "POS " << axis << " " << remap;  this->send_command( cmd.str() );
-      cmd.str(""); cmd << "RON " << axis << " 1";          this->send_command( cmd.str() );
+      cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( filter, cmd.str() );
+      cmd.str(""); cmd << "POS " << axis << " " << remap;  this->send_command( filter, cmd.str() );
+      cmd.str(""); cmd << "RON " << axis << " 1";          this->send_command( filter, cmd.str() );
     }
+#ifdef LOGLEVEL_DEBUG
+    else {
+      logwrite( function, "[DEBUG] destname empty, query-only" );
+    }
+#endif
 
     // Whether or not a filter was supplied, read the current position now.
     //
-//  int addr = this->motormap[ filter ].addr;
+//  int addr = _motormap[ filter ].addr;
 //  float pos;
 //  error = this->pi.get_pos( addr, axis, pos );
 
+logwrite( function, "[DEBUG] query current filter" );
     error = this->current_filter( retstring );
+message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( function, message.str() );
 
     return( error );
   }
@@ -900,39 +631,21 @@ namespace Acam {
     long error = NO_ERROR;
     float tolerance = 2;
 
-    // Connection must be open to motion component
+    // get the position for the requested channel
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
+    std::string posstring;
+    int axis=1;
+    auto addr=this->motorinterface.get_motormap()[currname].addr;
+    currpos=NAN;
+    std::string posname;
 
-    // Read the current position now.
+    error = this->motorinterface.get_pos( filter, axis, addr, currpos, posname, tolerance );
+
+    // form the return value
     //
-    int addr = this->motormap[ filter ].addr;
-    int axis = 1;
-    float pos;
-
-    error = this->pi.get_pos( addr, axis, pos );
-
-    currname="";
-    currid=-1;
-    currpos=-1;
-
-    for ( auto fit = this->motormap[filter].posmap.begin(); 
-               fit != this->motormap[filter].posmap.end(); ++fit) {
-      if ( std::abs( fit->second.position - pos < tolerance ) ) {
-        currname = fit->second.posname;
-        currid   = fit->second.id;
-        currpos  = fit->second.position;
-      }
-    }
-
-    if ( currname.empty() ) {
-      message.str(""); message << "ERROR: no matching filter found for position=" << pos;
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
+    message.str(""); message << currname << " " << std::fixed << std::setprecision(3) << currpos;
+    if ( ! posname.empty() ) { message << " (" << posname << ")"; }
+    logwrite( function, message.str() );
 
     return( error );
   }
@@ -966,14 +679,6 @@ namespace Acam {
       return( NO_ERROR );
     }
 
-    // Connection must be open to motion component
-    //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motion component" );
-      retstring = "not_open";
-      return( ERROR );
-    }
-    else
     // Option to home the cover
     //
     if ( posname == "home" ) {
@@ -997,13 +702,16 @@ namespace Acam {
       return( ERROR );
     }
 
+    int axis = 1;
+    auto _motormap = this->motorinterface.get_motormap();
+
     // If posname is supplied then move cover to that position.
     //
     if ( !posname.empty() ) {
 
       // Check that posname is found in the motormap.posmap map
       //
-      if ( this->motormap[cover].posmap.find( posname ) == this->motormap[cover].posmap.end() ) {
+      if ( _motormap[cover].posmap.find( posname ) == _motormap[cover].posmap.end() ) {
         message.str(""); message << "ERROR: position \"" << posname << "\" not found. Check configuration.";
         logwrite( function, message.str() );
         retstring="not_found";
@@ -1011,29 +719,30 @@ namespace Acam {
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] dest=" << this->motormap[cover].posmap[posname].posname << " "
-                               << "id="       << this->motormap[cover].posmap[posname].id << " "
-                               << "position=" << this->motormap[cover].posmap[posname].position;
+      message.str(""); message << "[DEBUG] dest=" << _motormap[cover].posmap[posname].posname << " "
+                               << "posid="        << _motormap[cover].posmap[posname].posid << " "
+                               << "position="     << _motormap[cover].posmap[posname].position;
       logwrite( function, message.str() );
 #endif
 
-      this->move_abs( cover, this->motormap[cover].posmap[posname].position );
+      this->motorinterface.moveto( cover, axis, _motormap[cover].posmap[posname].position, retstring );
 
     }
 
-    // Whether or not a filter was supplied, read the current position now.
+    // get the position
     //
-    float pos;
-    error = this->pi.get_pos( this->motormap[cover].addr, 1, pos );
+    auto addr=this->motorinterface.get_motormap()[cover].addr;
+    float position=NAN;
 
-    // Loop through all cover positions to see if <pos> matches a known position
+    error = this->motorinterface.get_pos( cover, axis, addr, position, posname, tolerance );
+
+    // form the return value
     //
-    for ( auto cit = this->motormap[ cover ].posmap.begin();
-               cit != this->motormap[ cover ].posmap.end(); ++cit ) {
-      if ( std::abs( cit->second.position - pos ) < tolerance ) {
-        retstring = cit->second.posname;
-      }
-    }
+    message.str(""); message << posname << " " << std::fixed << std::setprecision(3) << position;
+    if ( ! posname.empty() ) { message << " (" << posname << ")"; }
+    logwrite( function, message.str() );
+
+    retstring=message.str();
 
     return( error );
   }

@@ -38,7 +38,7 @@ namespace Slit {
 
     // Clear the motormap map before loading new information from the config file
     //
-    this->interface.motormap.clear();
+    this->interface.motorinterface.clear_motormap();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -116,59 +116,46 @@ namespace Slit {
         applied++;
       }
 
-      // PI_NAME -- this is the name of the PI motor controller subsystem
-      //
-      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
-        this->interface.name = config.arg[entry];
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // PI_HOST -- hostname for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
-        this->interface.host = config.arg[entry];
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // PI_PORT -- port number on PI_HOST for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad PI_PORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "PI_PORT number out of integer range");
-          return(ERROR);
-        }
-        this->interface.port = port;
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // then this object gets copied into the class map of objects.
-        //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo> MOT;
-
-        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motormap[ MOT.name ] = MOT;
+        if ( this->interface.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
           message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-          logwrite( function, message.str() );
-          this->interface.async.enqueue( message.str() );
+          this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
+        }
+      }
+
+      // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
+      //
+      if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+
+        Physik_Instrumente::AxisInfo AXIS;
+
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // Each AXIS is associated with a CONTROLLER by name, so a controller
+        // of this name must have already been configured.
+        //
+        // loc checks if the motorname for this AXIS is found in the motormap
+        //
+        auto _motormap = this->interface.motorinterface.get_motormap();
+        auto loc = _motormap.find( AXIS.motorname );
+        if ( loc != _motormap.end() ) {
+          this->interface.motorinterface.add_axis( AXIS );
+          message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->interface.async.enqueue_and_log( function, message.str() );
+          applied++;
+        }
+        else {
+          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          message.str(""); message << "valid names are:";
+          for ( auto mot : _motormap ) { message << " " << mot.first; }
+          logwrite( function, message.str() );
+          error = ERROR;
+          break;
         }
       }
 
@@ -435,8 +422,9 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       ret = NOTHING;
       std::string retstring="";
 
-      if ( cmd == "help" ) {
-                      for ( auto s : SLITD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+      if ( cmd == "help" || cmd == "?" ) {
+                      for ( auto s : SLITD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = NO_ERROR;
       }
       else
 
@@ -448,9 +436,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       // isopen
       //
       if ( cmd == SLITD_ISOPEN ) {
-                      bool isopen = this->interface.isopen( );
-                      if ( isopen ) retstring = "true"; else retstring = "false";
-                      ret = NO_ERROR;
+                      ret = this->interface.is_open( args, retstring );
       }
       else
 
@@ -487,7 +473,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       // is_home
       //
       if ( cmd == SLITD_ISHOME ) {
-                      ret = this->interface.is_home( retstring );
+                      ret = this->interface.is_home( args, retstring );
       }
       else
 
@@ -501,7 +487,7 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
       // get width and offset
       //
       if ( cmd == SLITD_GET ) {
-                      ret = this->interface.get( retstring );
+                      ret = this->interface.get( args, retstring );
       }
       else
 
@@ -518,11 +504,6 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
         logwrite( function, message.str() );
         ret = ERROR;
       }
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
-      logwrite( function, message.str() );
-#endif
 
       if (ret != NOTHING) {
         if ( not retstring.empty() ) retstring.append( " " );

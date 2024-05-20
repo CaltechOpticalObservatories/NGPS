@@ -454,7 +454,8 @@ void doit(Network::TcpSocket sock) {
     }
 
     if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
-                    for ( auto s : POWERD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                    for ( auto s : POWERD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                    ret = NO_ERROR;
     }
     else
 

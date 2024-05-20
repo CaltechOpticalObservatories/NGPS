@@ -25,16 +25,7 @@ namespace Focus {
     std::string function = "Focus::Interface::initialize_class";
     std::stringstream message;
 
-    if ( this->port < 0 || this->host.empty() ) {
-      message.str(""); message << "ERROR: host (" << this->host << ") or port (" << this->port << ") invalid";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    Physik_Instrumente::Interface s( this->name, this->host, this->port );
-    this->pi = s;
-
-    this->numdev = this->motormap.size();
+    this->numdev = this->motorinterface.get_motormap().size();
 
     // I don't want to prevent the system from working with a subset of controllers,
     // but the user should be warned, in case it wasn't intentional.
@@ -57,33 +48,15 @@ namespace Focus {
    *
    */
   long Interface::open( ) {
-    std::string function = "Focus::Interface::open";
-    std::stringstream message;
+    long error = NO_ERROR;
 
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Focus::Server::configure_focusd).
-    //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
-    }
-
-    // open a connection
-    //
-    long error = this->pi.open();
-
-    if ( error != NO_ERROR ) return( error );
-
+    // Open the sockets,
     // clear any error codes on startup, and
-    // enable the servo for each address in controller_info
+    // enable the servo for each address in controller_info.
     //
-    for ( auto const &con : this->motormap ) {
-      int axis=1;
-      int errcode;
-      error |= this->pi.get_error( con.second.addr, errcode );     // read error to clear, don't care the value
-      error |= this->pi.set_servo( con.second.addr, axis, true );  // turn the servos on
-    }
+    error |= this->motorinterface.open();
+    error |= this->motorinterface.clear_errors();
+    error |= this->motorinterface.set_servo( true );
 
     return( error );
   }
@@ -97,26 +70,71 @@ namespace Focus {
    *
    */
   long Interface::close( ) {
-    std::string function = "Focus::Interface::close";
-    std::stringstream message;
+    return this->motorinterface.close();
+  }
+  /***** Focus::Interface::close **********************************************/
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "not connected" );
+
+  /***** Focus::Interface::is_open ********************************************/
+  /**
+   * @brief       return the connected state of the motor controllers
+   * @param[in]   arg        used only for help
+   * @param[out]  retstring  contains the connected state "true" | "false"
+   * @return      ERROR or NO_ERROR
+   *
+   * All motors must be connected for this to return "true".
+   *
+   */
+  long Interface::is_open( std::string arg, std::string &retstring ) {
+    std::string function = "Focus::Interface::is_open";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
+    // Help
+    //
+    if ( arg == "?" ) {
+      retstring = FOCUSD_ISOPEN;
+      retstring.append( " \n" );
+      retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
       return( NO_ERROR );
     }
 
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Focus::Server::configure_focusd).
+    // Loop through all motor controllers, checking each if connected,
+    // and keeping count of the number that are connected.
     //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
+    size_t num_open=0;
+    std::string unconnected, connected;
+
+    for ( auto &mot : _motormap ) {
+
+      bool _isopen = this->motorinterface.is_connected( mot.second.name );
+
+      num_open += ( _isopen ? 1 : 0 );
+
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
     }
 
-    return( this->pi.close() );
+    // Set the retstring true or false, true only if all controllers are homed.
+    //
+    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false"+unconnected;
+
+    // Log who's connected and not
+    //
+    if ( !connected.empty() ) {
+      message.str(""); message << "connected to" << connected;
+      logwrite( function, message.str() );
+    }
+    if ( !unconnected.empty() ) {
+      message.str(""); message << "not connected to" << unconnected;
+      logwrite( function, message.str() );
+    }
+
+    return( error );
   }
-  /***** Focus::Interface::close **********************************************/
+  /***** Focus::Interface::is_open ********************************************/
 
 
   /***** Focus::Interface::native *********************************************/
@@ -132,6 +150,8 @@ namespace Focus {
     std::stringstream message;
     std::string chan, cmd;
 
+    auto _motormap = this->motorinterface.get_motormap();
+
     // Help
     //
     if ( args == "?" ) {
@@ -139,18 +159,10 @@ namespace Focus {
       retstring.append( " <chan> <cmd>\n" );
       retstring.append( "  Send native command <cmd> to controller indicated by channel name,\n" );
       retstring.append( "  where <chan> is one of { " );
-      for ( auto const &mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "} and <cmd> is any PI-native command and args. This command blocks;\n" );
       retstring.append( "native commands are not run in a separate thread.\n" );
       return( NO_ERROR );
-    }
-
-    // Anything else requires an open connection
-    //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      retstring="not_connected";
-      return( ERROR );
     }
 
     // Need something, anything
@@ -175,19 +187,27 @@ namespace Focus {
       cmd  = args.substr( cmd_sep+1  );                     // <cmad> is everything after the space
     }
 
-    if ( motormap.find( chan ) == motormap.end() ) {
+    if ( _motormap.find( chan ) == _motormap.end() ) {
       message.str(""); message << "ERROR motor \"" << chan << "\" not found";
       logwrite( function, message.str() );
       retstring="unknown_motor";
       return( ERROR );
     }
 
+    // requires an open connection
+    //
+    if ( ! this->motorinterface.is_connected( chan ) ) {
+      logwrite( function, "ERROR not connected to motor controller" );
+      retstring="not_connected";
+      return( ERROR );
+    }
+
     message.str("");
-    message << motormap.at(chan).addr << " " << cmd;
+    message << _motormap.at(chan).addr << " " << cmd;
 
     logwrite( function, message.str() );
 
-    return send_command( message.str(), retstring );
+    return send_command( chan, message.str(), retstring );
   }
   /***** Focus::Interface::native *********************************************/
 
@@ -195,90 +215,30 @@ namespace Focus {
   /***** Focus::Interface::home ***********************************************/
   /**
    * @brief      home all or indicated daisy-chained motors
-   * @param[in]  arg        optional arg for help only
+   * @param[in]  name_in    optional list of motors to home
    * @param[out] retstring  return string
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::home( std::string arg, std::string &retstring ) {
-    std::string function = "Focus::Interface::home";
-    std::stringstream message;
-    int axis=1;
-    long error = NO_ERROR;
+  long Interface::home( std::string name_in, std::string &retstring ) {
 
     // Help
     //
-    if ( arg == "?" ) {
+    if ( name_in == "?" || name_in == "help" ) {
       retstring = FOCUSD_HOME;
       retstring.append( " [ <axis> ]\n" );
       retstring.append( "  Home all focus motors or single motor indicated by optional <axis>.\n" );
       retstring.append( "  If no argument is supplied then all axes are homed simultaneously,\n" );
       retstring.append( "  or a single axis may be supplied from { " );
-      for ( auto const &mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      auto _motormap = this->motorinterface.get_motormap();
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}.\n" );
       return( NO_ERROR );
     }
 
-    // Anything else requires an open connection
+    // All the work is done by the PI motor interface class
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      retstring="not_connected";
-      return( ERROR );
-    }
-
-    // Spawn a thread to home motor(s)
-    //
-
-    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
-    this->thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
-
-    // If arg supplied then try to home just that home
-    //
-    if ( !arg.empty() ) {
-      std::transform( arg.begin(), arg.end(), arg.begin(), ::toupper );
-      if ( motormap.find( arg ) == motormap.end() ) {
-        message.str(""); message << "ERROR motor \"" << arg << "\" not found";
-        logwrite( function, message.str() );
-        retstring="unknown_motor";
-        return( ERROR );
-      }
-      std::thread( dothread_home, std::ref( *this ), arg ).detach();
-      motors_running++;
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] spawning thread to home " << arg;
-        logwrite( function, message.str() );
-#endif
-    }
-
-    // otherwise home all motors in the motormap
-    //
-    else {
-      for ( auto const &mot : this->motormap ) {
-        std::thread( dothread_home, std::ref( *this ), mot.first ).detach();
-        this->motors_running++;
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] spawning thread to home " << name;
-        logwrite( function, message.str() );
-#endif
-      }
-    }
-
-    // wait for the threads to finish
-    //
-    while ( motors_running != 0 ) {
-      message.str(""); message << "waiting for " << motors_running << " motor" << ( motors_running > 1 ? "s":"" );
-      logwrite( function, message.str() );
-      cv.wait( wait_lock );
-    }
-
-    logwrite( function, "home complete" );
-
-    // get any errors from the threads
-    //
-    error = this->thr_error.load();
-
-    return( error );
+    return this->motorinterface.home( name_in, retstring );
   }
   /***** Focus::Interface::home ***********************************************/
 
@@ -286,61 +246,32 @@ namespace Focus {
   /***** Focus::Interface::is_home ********************************************/
   /**
    * @brief       return the home state of the motors
-   * @param[in]   arg        used only for help
+   * @param[in]   name_in    optionally contains one or more motors to check
    * @param[out]  retstring  contains the home state "true" | "false"
    * @return      ERROR or NO_ERROR
    *
    * All motors must be homed for this to return "true".
    *
    */
-  long Interface::is_home( std::string arg, std::string &retstring ) {
-    std::string function = "Focus::Interface::is_home";
-    std::stringstream message;
-    std::stringstream homestream;
-    long error = NO_ERROR;
+  long Interface::is_home( std::string name_in, std::string &retstring ) {
 
     // Help
     //
-    if ( arg == "?" ) {
+    if ( name_in == "?" ) {
       retstring = FOCUSD_ISHOME;
-      retstring.append( " \n" );
-      retstring.append( "  Reads the referencing state from each of the controllers.\n" );
-      retstring.append( "  Returns true if all are homed, false if any one is not homed.\n" );
+      retstring.append( " [ " );
+      auto _motormap = this->motorinterface.get_motormap();
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      retstring.append( "]\n" );
+      retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
+      retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
+      retstring.append( "  homed, false if any one is not homed.\n" );
       return( NO_ERROR );
     }
 
-    // Anything else requires an open connection
+    // All the work is done by the PI motor interface class
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      retstring="not_connected";
-      return( ERROR );
-    }
-
-    // Loop through all motor controllers, asking each if homed,
-    // setting each controller's .ishome flag, and keeping count 
-    // of the number that are homed.
-    //
-    size_t num_home=0;
-    for ( auto &con : this->motormap ) {
-      int axis=1;
-      error |= this->pi.is_home( con.second.addr, axis, con.second.ishome );  // error is OR'd so any error is preserved
-      homestream << con.second.addr << ":" << ( con.second.ishome ? "true" : "false" ) << " ";
-      if ( con.second.ishome ) num_home++;
-    }
-
-    // Set the retstring true or false, true only if all controllers are homed.
-    //
-    if ( num_home == this->numdev ) retstring = "true"; else retstring = "false";
-
-    // If not all are the same state then log that
-    //
-    if ( num_home > 0 && num_home < this->numdev ) {
-      message.str(""); message << "NOTICE: " << homestream.str();
-      logwrite( function, message.str() );
-    }
-
-    return( error );
+    return this->motorinterface.is_home( name_in, retstring );
   }
   /***** Focus::Interface::is_home ********************************************/
 
@@ -356,6 +287,9 @@ namespace Focus {
   long Interface::set( std::string args, std::string &retstring ) {
     std::string function = "Focus::Interface::set";
     std::stringstream message;
+    int axis=1;
+
+    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -364,31 +298,34 @@ namespace Focus {
       retstring.append( " <chan> { <pos> | nominal }\n" );
       retstring.append( "  Set focus position of indicated channel to <pos> or to the nominal best focus.\n" );
       retstring.append( "  where <chan> <min> <nominal> <max> are as follows:\n" );
-      for ( auto const &mot : motormap ) {
-        retstring.append( "     " );
-        retstring.append( mot.first ); retstring.append( " " );
-        message.str(""); message << std::fixed << std::setprecision(3) << mot.second.min << " ";
-        retstring.append( message.str() );
-        message.str(""); message << std::fixed << std::setprecision(3) << mot.second.posmap.at("nominal").position << " ";
-        retstring.append( message.str() );
-        message.str(""); message << std::fixed << std::setprecision(3) << mot.second.max << " ";
-        retstring.append( message.str() );
-        retstring.append( "\n" );
+      try {
+        for ( auto &mot : _motormap ) {
+          retstring.append( "     " );
+          retstring.append( mot.first ); retstring.append( " " );
+          message.str(""); message << std::fixed << std::setprecision(3) << mot.second.axes[axis].min << " ";
+          retstring.append( message.str() );
+          message.str(""); message << std::fixed << std::setprecision(3) << mot.second.posmap.at("nominal").position << " ";
+          retstring.append( message.str() );
+          message.str(""); message << std::fixed << std::setprecision(3) << mot.second.axes[axis].max << " ";
+          retstring.append( message.str() );
+          retstring.append( "\n" );
+        }
+      }
+      catch( std::invalid_argument &e ) {
+        message.str(""); message << "ERROR invalid argument: " << e.what();
+        logwrite( function, message.str() );
+        return( ERROR );
+      }
+      catch( std::out_of_range &e ) {
+        message.str(""); message << "ERROR out of range: " << e.what();
+        logwrite( function, message.str() );
+        return( ERROR );
       }
       return( NO_ERROR );
     }
 
-    // Anything else requires an open connection
-    //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      retstring="not_connected";
-      return( ERROR );
-    }
-
     // Tokenize the arg string. Need two tokens: <chan> and either <pos> or "nominal"
     //
-    std::transform( args.begin(), args.end(), args.begin(), ::toupper );
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
@@ -398,52 +335,14 @@ namespace Focus {
       return( ERROR );
     }
 
-    float pos=NAN;
-    int addr=-1;
-    std::string chan, posstr;
+    std::string chan   = tokens[0];
+    std::string posstr = tokens[1];
 
-    // Extract the address and position from the arg string tokens
-    //
-    try {
-      chan   = tokens.at(0);
-      posstr = tokens.at(1);
-
-      if ( motormap.find( chan ) == motormap.end() ) {
-        message.str(""); message << "ERROR motor \"" << chan << "\" not found";
-        logwrite( function, message.str() );
-        retstring="unknown_motor";
-        return( ERROR );
-      }
-
-      addr = motormap.at( chan ).addr;
-
-      if ( posstr == "NOMINAL" ) {  // args string was capitalized
-        pos = motormap.at(chan).posmap.at("nominal").position;
-      }
-      else {
-        pos = std::stof( posstr );
-      }
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing " << args << ": " << e.what();
-      logwrite( function, message.str() );
-      retstring="argument_exception";
-      return( ERROR );
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR parsing " << args << ": " << e.what();
-      logwrite( function, message.str() );
-      retstring="argument_exception";
-      return( ERROR );
-    }
-
-    // Perform the move
-    //
-    long error = move_abs( addr, pos );
+    long error = this->motorinterface.moveto( chan, axis, posstr, retstring );
 
     message.str("");
     message << ( error==NO_ERROR ? "success" : "failed" )
-            << " moving " << chan << " focus to " << pos;
+            << " moving " << chan << " focus to " << posstr;
     logwrite( function, message.str() );
 
     return error;
@@ -454,50 +353,34 @@ namespace Focus {
   /***** Focus::Interface::get ************************************************/
   /**
    * @brief      get the current position of channel indicated by arg
-   * @param[in]  arg        string contains the channel name
+   * @param[in]  name       string contains the channel name
    * @param[out] retstring  reference to string contains focus position
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::get( std::string arg, std::string &retstring ) {
+  long Interface::get( std::string name, std::string &retstring ) {
     std::string function = "Focus::Interface::get";
     std::stringstream message;
     long error  = NO_ERROR;
 
     // Help
     //
-    if ( arg == "?" ) {
+    if ( name == "?" ) {
       retstring = FOCUSD_GET;
       retstring.append( " <chan>\n" );
       retstring.append( "  Get the focus position of the indicated channel\n" );
       retstring.append( "  where <chan> is one of { " );
-      for ( auto const &mot : this->motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      auto _motormap = this->motorinterface.get_motormap();
+      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}.\n" );
       return( NO_ERROR );
     }
 
-    // Anything else requires an open connection
-    //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      retstring="not_connected";
-      return( ERROR );
-    }
-
     // Need something, anything
     //
-    if ( arg.empty() ) {
+    if ( name.empty() ) {
       logwrite( function, "ERROR expected <chan>" );
       retstring="invalid_argument";
-      return( ERROR );
-    }
-
-    std::transform( arg.begin(), arg.end(), arg.begin(), ::toupper );
-
-    if ( motormap.find( arg ) == motormap.end() ) {
-      message.str(""); message << "ERROR motor \"" << arg << "\" not found";
-      logwrite( function, message.str() );
-      retstring="unknown_motor";
       return( ERROR );
     }
 
@@ -505,13 +388,15 @@ namespace Focus {
     //
     std::string posstring;
     int axis=1;
-    float pos=NAN;
-    error = pi.get_pos( motormap.at(arg).addr, axis, pos );
+    auto addr=this->motorinterface.get_motormap()[name].addr;
+    float position=NAN;
+    std::string posname;
+    error = this->motorinterface.get_pos( name, axis, addr, position, posname );
 
     // form the return value
     //
-    std::stringstream s;
-    message.str(""); message << arg << " " << std::fixed << std::setprecision(3) << pos;
+    message.str(""); message << name << " " << std::fixed << std::setprecision(3) << position;
+    if ( ! posname.empty() ) { message << " (" << posname << ")"; }
     retstring = message.str();
     logwrite( function, message.str() );
 
@@ -521,157 +406,6 @@ namespace Focus {
     return( error );
   }
   /***** Focus::Interface::get ************************************************/
-
-
-  /***** Focus::Interface::dothread_home **************************************/
-  /**
-   * @brief      threaded function to home a motor
-   * @param[in]  iface   reference to interface object
-   * @param[in]  name    reference to name of motor to home
-   *
-   * This is the work function to call home() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by functions
-   * called in here are set in the thr_error class variable.
-   *
-   */
-  void Interface::dothread_home( Focus::Interface &iface, std::string name ) {
-    std::string function = "Focus::Interface::dothread_home";
-    std::stringstream message;
-    int axis=1;
-    long error=NO_ERROR;
-    int addr=-1;
-    std::string reftype;
-
-    try {
-      addr    = iface.motormap.at(name).addr;
-      reftype = iface.motormap.at(name).reftype;
-    }
-    catch ( const std::out_of_range &e ) {
-      message.str(""); message << "ERROR: name \"" << name << "\" not in motormap: " << e.what();
-      logwrite( function, message.str() );
-      iface.thr_error.fetch_or( ERROR );         // preserve this error
-      --iface.motors_running;                    // atomically decrement the number of motors waiting
-      iface.cv.notify_all();                     // notify parent that I'm done
-      return;
-    }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending home_axis( " << addr << ", " << axis << ", neg )";
-    logwrite( function, message.str() );
-#endif
-
-    // send the home command by calling home_axis()
-    //
-    iface.pi_mutex.lock();
-    iface.pi.home_axis( addr, axis, reftype );
-    iface.pi_mutex.unlock();
-    iface.motormap[name].ishome   = false;
-    iface.motormap[name].ontarget = false;
-
-    // Loop sending the is_home command until homed or timeout.
-    //
-
-    // get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    bool is_home=false;
-
-    do {
-      bool state;
-      iface.pi_mutex.lock();
-      iface.pi.is_home( addr, axis, state );
-      iface.pi_mutex.unlock();
-      iface.motormap[name].ishome = state;
-      iface.motormap[name].ontarget = state;
-      is_home = iface.motormap[name].ishome;
-
-      if ( is_home ) break;
-      else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > HOME_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
-        logwrite( function, message.str() );
-        error = TIMEOUT;
-        break;
-      }
-
-    } while ( 1 );
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
-                             << " with error=" << error;
-    logwrite( function, message.str() );
-#endif
-
-    iface.thr_error.fetch_or( error );           // preserve any error returned
-
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
-
-    iface.cv.notify_all();                       // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed home_axis( " << addr << ", " << axis << ", neg )"
-                             << " with error=" << error;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Focus::Interface::dothread_home **************************************/
-
-
-  /***** Focus::Interface::dothread_move_abs **********************************/
-  /**
-   * @brief      threaded move_abs function
-   * @param[in]  iface   reference to interface object
-   * @param[in]  addr    controller address
-   * @param[in]  pos     motor position
-   *
-   * This is the work function to call move_abs() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by the move_abs()
-   * function are set in the thr_error class variable.
-   *
-   */
-  void Interface::dothread_move_abs( Focus::Interface &iface, int addr, float pos ) {
-    std::string function = "Focus::Interface::dothread_move_abs";
-    std::stringstream message;
-    long error;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending mov_abs( " << addr << ", " << pos << " )";
-    logwrite( function, message.str() );
-#endif
-
-    error = iface.move_abs( addr, pos ); // send the move_abs command here
-
-    iface.thr_error.fetch_or( error );   // preserve any error returned
-
-    --iface.motors_running;              // atomically decrement the number of motors waiting
-
-    iface.cv.notify_all();               // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed mov_abs( " << addr << ", " << pos << " ) "
-                             << " *** motors_running = "<< iface.motors_running;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Focus::Interface::dothread_move_abs **********************************/
 
 
   /***** Focus::Interface::move_abs *******************************************/
@@ -690,147 +424,44 @@ namespace Focus {
     std::stringstream message;
     long error=NO_ERROR;
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
+    auto _motormap = this->motorinterface.get_motormap();
 
-    try {
-      int axis=1;
+    int axis=1;
 
-      // send the move command
-      //
-      this->pi_mutex.lock();
-      error = this->pi.move_abs( addr, axis, pos );
-      this->pi_mutex.unlock();
-
-      // which controller has this addr?
-      //
-      std::string myname;
-      for ( auto &con : this->motormap ) {
-        if ( con.second.addr = addr ) {
-          myname = con.second.name;
-          break;
-        }
+    // which controller has this addr?
+    //
+    std::string name;
+    for ( auto const &mot : _motormap ) {
+      if ( mot.second.addr == addr ) {
+        name = mot.second.name;
+        break;
       }
-
-      if ( myname.empty() ) {
-        logwrite( function, "ERROR: no motor controllers defined" );
-        return( ERROR );
-      }
-
-      if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR moving " << myname << " to " << pos;
-        logwrite( function, message.str() );
-        return error;
-      }
-
-      // Loop sending the on_target command for this address
-      // until on target or timeout.
-      //
-
-      // first get the time now for timeout purposes
-      //
-      std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-      do {
-        bool state;
-        this->pi_mutex.lock();
-        error = this->pi.on_target( addr, axis, state );
-        this->pi_mutex.unlock();
-        this->motormap.at(myname).ontarget = state;
-        
-        if ( this->motormap.at(myname).ontarget ) break;
-        else {
-#ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] waiting for " << this->motormap.at(myname).name;
-          logwrite( function, message.str() );
-#endif
-          std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-        }
-
-        // get time now and check for timeout
-        //
-        std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-        if ( elapsed > MOVE_TIMEOUT ) {
-          message.str(""); message << "TIMEOUT waiting for " << this->motormap.at(myname).name;
-          logwrite( function, message.str() );
-          error = TIMEOUT;
-          break;
-        }
-      } while ( 1 );
     }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert one or more values: " << e.what();
-      logwrite( function, message.str() );
+
+    if ( name.empty() ) {
+      logwrite( function, "ERROR: no motor controllers defined" );
       return( ERROR );
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "one or more values out of range: " << e.what();
+
+    // send the move command
+    //
+//  error = this->motorinterface.move_abs( name, addr, axis, pos );
+
+    if ( error != NO_ERROR ) {
+      message.str(""); message << "ERROR moving " << name << " to " << pos;
       logwrite( function, message.str() );
-      return( ERROR );
+      return error;
     }
-    catch( std::exception &e ) {
-      message.str(""); message << "ERROR: other exception: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
+
+    // Wait for motor to be on target
+    //
+    message.str(""); message << "waiting for " << name;
+    logwrite( function, message.str() );
+//  error = this->motorinterface.move_axis_wait( name, addr, axis );
 
     return( error );
   }
   /***** Focus::Interface::move_abs *******************************************/
-
-
-  /***** Focus::Interface::move_rel *******************************************/
-  /**
-   * @brief      send move-relative command to specified controllers
-   * @param[in]  args  string containing addr and offset
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  long Interface::move_rel( std::string args ) {
-    std::string function = "Focus::Interface::move_rel";
-    std::stringstream message;
-    int axis=1;
-    int addr;
-    float pos;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
-
-    if ( tokens.size() != 2 ) {
-      message.str(""); message << "ERROR: bad number of tokens: " << tokens.size()
-                               << ". expected 2 (addr pos)";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    try {
-      addr = std::stoi( tokens.at(0) );
-      pos  = std::stof( tokens.at(1) );
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert one or more values: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "one or more values out of range: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-
-    return( this->pi.move_rel( addr, axis, pos ) );
-  }
-  /***** Focus::Interface::move_rel *******************************************/
 
 
   /***** Focus::Interface::stop ***********************************************/
@@ -843,15 +474,12 @@ namespace Focus {
     std::string function = "Focus::Interface::stop";
     std::stringstream message;
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
     // send the stop_motion command for each address in controller_info
     //
-    for ( auto const &mot : this->motormap ) {
-      this->pi.stop_motion( mot.second.addr );
+    auto _motormap = this->motorinterface.get_motormap();
+
+    for ( auto const &mot : _motormap ) {
+      this->motorinterface.stop_motion( mot.second.name, mot.second.addr );
     }
 
     return( NO_ERROR );
@@ -862,23 +490,16 @@ namespace Focus {
   /***** Focus::Interface::send_command ***************************************/
   /**
    * @brief      writes the raw command as received to the master controller
-   * @param[in]  cmd  command to send
+   * @param[in]  name  string contains the controller name
+   * @param[in]  cmd   command to send
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
    * This version writes a command that expects no reply.
    *
    */
-  long Interface::send_command( std::string cmd ) {
-    std::string function = "Focus::Interface::send_command";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    return( this->pi.send_command( cmd ) );
+  long Interface::send_command( const std::string &name, std::string cmd ) {
+    return( this->motorinterface.send_command( name, cmd ) );
   }
   /***** Focus::Interface::send_command ***************************************/
 
@@ -886,6 +507,7 @@ namespace Focus {
   /***** Focus::Interface::send_command ***************************************/
   /**
    * @brief      writes the raw command to the master controller, reads back reply
+   * @param[in]  name       string contains the controller name
    * @param[in]  cmd        command to send
    * @param[out] retstring  reply received
    * @return     ERROR or NO_ERROR
@@ -895,18 +517,110 @@ namespace Focus {
    * a question mark, "?".
    *
    */
-  long Interface::send_command( std::string cmd, std::string &retstring ) {
-    std::string function = "Focus::Interface::send_command";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
+  long Interface::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
+    if ( cmd.find( "?" ) != std::string::npos ) {
+      return( this->motorinterface.send_command( name, cmd, retstring ) );
     }
-
-    if ( cmd.find( "?" ) != std::string::npos ) return( this->pi.send_command( cmd, retstring ) );
-    else return( this->pi.send_command( cmd ) );
+    else {
+      return( this->motorinterface.send_command( name, cmd ) );
+    }
   }
   /***** Focus::Interface::send_command ***************************************/
+
+
+  /***** Focus::Interface::test ***********************************************/
+  /**
+   * @brief      test commands
+   * @param[in]  args
+   * @param[out] retstring  reference to any reply
+   * @return     ERROR or NO_ERROR
+   *
+   * This is the place to put various debugging and system testing tools.
+   *
+   * The server command is "test", the next parameter is the test name,
+   * and any parameters needed for the particular test are extracted as
+   * tokens from the args string passed in.
+   *
+   * The input args string is tokenized and tests are separated by a simple
+   * series of if..else.. conditionals.
+   *
+   * Valid test names are:
+   *   motormap
+   *   posmap
+   *
+   */
+  long Interface::test( std::string args, std::string &retstring ) {
+    std::string function = "Focus::Interface::test";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() < 1 ) {
+      logwrite( function, "no test name provided" );
+      return ERROR;
+    }
+
+    std::string testname = tokens[0];                                // the first token is the test name
+
+    if ( testname == "?" || testname == "help" ) {
+      retstring.clear();
+      retstring.append( "  motormap  return definition of motormap\n" );
+      retstring.append( "  posmap    return definition of posmap\n" );
+      return( NO_ERROR );
+    }
+    else
+
+    // motormap
+    //
+    if ( testname == "motormap" ) {
+      retstring="name host:port addr naxes axisnum min max reftype";
+      logwrite( function, retstring );
+      for ( auto const &mot : _motormap ) {
+        retstring.append("\n");
+        message.str(""); message << mot.first << " "
+                                 << mot.second.host << ":"
+                                 << mot.second.port << " "
+                                 << mot.second.addr << " "
+                                 << mot.second.naxes;
+        for ( auto const &axis : mot.second.axes ) {
+          message << " " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " " << axis.second.reftype;
+        }
+        retstring.append( message.str() );
+        logwrite( function, message.str() );
+      }
+      retstring.append("\n");
+    }
+    else
+
+    // posmap
+    //
+    if ( testname == "posmap" ) {
+      retstring="motorname axis posid pos posname";
+      logwrite( function, retstring );
+      for ( auto const &mot : _motormap ) {
+        retstring.append("\n");
+        message.str(""); message << mot.first << " ";
+        for ( auto const &pos : mot.second.posmap ) {
+          message << " " << pos.second.axis << " " << pos.second.posid << " " << pos.second.position << " " << pos.second.posname;
+        }
+        retstring.append( message.str() );
+        logwrite( function, message.str() );
+      }
+      retstring.append("\n");
+    }
+
+    else {
+      message.str(""); message << "ERROR: test " << testname << " unknown";;
+      logwrite(function, message.str());
+      error = ERROR;
+    }
+
+    return( error );
+  }
+  /***** Focus::Interface::test ***********************************************/
 
 }

@@ -57,39 +57,35 @@ PUSH_GUIDER_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 
 # MOTION CONTROL
 #
-# there is a single host:port for the "master" PI controller
-# at the front of the daisy-chain
-#
-PI_NAME=acam-motion     # for reporting purposes only
-PI_HOST=@IP_ETS8P@      # host to connect to PI
-PI_PORT=@ETS8P_ACAM_MOTION@  # port to use on PI host
-
 # For each actuator's controller specify:
-# MOTOR_CONTROLLER="<address> <name> <ref> <min> <max> <zero>"
-#   <addr>  Address is DIP-switch assigned PI address.
+# MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
 #   <name>  name of controller
-#   <ref>   reference type: {neg|pos|ref}
-#   <min>   min allowed motion
-#   <max>   max allowed motion
-#   <zero>  value to add to home position (max is reduced by this amount)
+#   <host>  hostname of controller
+#   <port>  port on hostname
+#   <addr>  address is DIP-switch assigned PI address.
+#   <axes>  number of axes for this controller's actuator
 #
 # For acamd, one controller must be named "filter" and the other must be named "cover"
 #
-MOTOR_CONTROLLER="1 filter pos 0 2385 0"
-MOTOR_CONTROLLER="2 cover  neg 0  504 0"
+MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
+MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
 
-# For each motor controller, assign possible positions with MOTOR_POS
-# MOTOR_POS="name ID position positionname"
-# name must have a corresponding name in MOTOR_CONTROLLER above, which must be defined first
-# ID is a 0-based incremental internal ID number {0,1,2,...}
-# position is the real actuator position required to reach location ID
-# positionname is the name of that position (what the user will use)
-#
+# For each actuator's controller specify:
+# MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"
+#  <name>  name of controller
+#  <axis>  axis number
+#  <min>   minimum allowed position
+#  <max>   maxumum allowed position
+#  <zero>  value to add to home position (max will be reduced by this amount)
+#  <ref>   reference type {neg|pos|ref}
+MOTOR_AXIS="filter 1 0 2385 0 pos"
+MOTOR_AXIS="cover  1 0  504 0 neg"
 
 # Specify named positions for each actuator
-# MOTOR_POS="<name> <ID> <pos> <posname>"
+# MOTOR_POS="<name> <axis> <posid> <pos> <posname>"
 #   <name>     name of controller, must have a corresponding MOTOR_CONTROLLER above
-#   <ID>       0-based incremental number {0,1,2,...}
+#   <axis>     axis number
+#   <posid>    0-based incremental number {0,1,2,...}
 #   <pos>      real actuator position
 #   <posname>  name of that position, what the user will use
 #
@@ -99,17 +95,17 @@ MOTOR_CONTROLLER="2 cover  neg 0  504 0"
 # ID here refers to the numbered positions on the filter. Do not change
 # the position for a given ID. See orientation diagram below.
 #
-MOTOR_POS="filter 0    0 BLOCK"
-MOTOR_POS="filter 1  477 G"
-MOTOR_POS="filter 2  954 R"
-MOTOR_POS="filter 3 1431 I"
-MOTOR_POS="filter 4 1908 OPEN"
-MOTOR_POS="filter 5 2385 CLEAR"
+MOTOR_POS="filter 1 0    0 BLOCK"
+MOTOR_POS="filter 1 1  477 G"
+MOTOR_POS="filter 1 2  954 R"
+MOTOR_POS="filter 1 3 1431 I"
+MOTOR_POS="filter 1 4 1908 OPEN"
+MOTOR_POS="filter 1 5 2385 CLEAR"
 
 # These are for the dust cover -- no need to ever change these!
 #
-MOTOR_POS="cover 0   0 open"
-MOTOR_POS="cover 1 504 close"
+MOTOR_POS="cover 1 0   0 open"
+MOTOR_POS="cover 1 1 504 close"
 
 # Filter orientation, looking away from the sky, facing the camera.
 # Shown in the "home" position. Numbers are the IDs used above.

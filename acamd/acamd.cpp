@@ -212,7 +212,10 @@ void signal_handler(int signo) {
       acamd.exit_cleanly();                      // shutdown the daemon
       break;
     case SIGHUP:
-      acamd.interface.configure_interface( acamd.config );
+      if ( acamd.interface.configure_interface( acamd.config ) != NO_ERROR ) {
+        logwrite( function, "ERROR unable to configure interface" );
+        acamd.interface.async.enqueue_and_log( function, message.str() );
+      }
       break;
     case SIGPIPE:
       logwrite(function, "ignored SIGPIPE");

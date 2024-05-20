@@ -1851,22 +1851,21 @@ namespace Acam {
    * @brief      wrapper for acam hardware components to check if connection open
    * @param[in]  component  optional string contains which component to check { camera | motion }
    * @param[out] state      reference to bool to indicate open {true} or not {false}
-   * @param[out] help       reference to return string (used just for help)
+   * @param[out] retstring  reference to return string
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::isopen( std::string component, bool &state, std::string &help ) {
+  long Interface::isopen( std::string component, bool &state, std::string &retstring ) {
     std::string function = "Acam::Interface::isopen";
     std::stringstream message;
-    state = true;               // default True, then "and" will make false if any one is false
 
     // Help
     //
     if ( component == "?" ) {
-      help = ACAMD_ISOPEN;
-      help.append( " [ camera | motion ]\n" );
-      help.append( "  optionally supply the component name to check only that component\n" );
-      help.append( "  checks all components if no arg supplied\n" );
+      retstring = ACAMD_ISOPEN;
+      retstring.append( " [ camera | motion ]\n" );
+      retstring.append( "  optionally supply the component name to check only that component\n" );
+      retstring.append( "  checks all components if no arg supplied\n" );
       return( NO_ERROR );
     }
 
@@ -1877,27 +1876,42 @@ namespace Acam {
       std::transform( component.begin(), component.end(), component.begin(), ::tolower );
     }
 
+    state = true;               // default True, then "and" will make false if any one is false
+
+    bool motion_open=state, camera_open=state;
+    std::string motion_retstring, camera_retstring;
+
     if ( component != "all" && component != "motion" && component != "camera" ) {
       message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
                                << "Expected { motion | camera }";
       logwrite( function, message.str() );
       state = false;
+      retstring="invalid_argument";
       return( ERROR );
     }
 
     if ( component == "all" || component == "motion" ) {
-      state &= this->motion.isopen();
+      motion_open = this->motion.is_open( std::string(""), motion_retstring );
     }
 
     if ( component == "all" || component == "camera" ) {
 #ifdef ACAM_ANDOR_SOURCE_SERVER
       state &= this->camera_server.isopen();
 #elif ACAM_ANDOR_SOURCE_ANDOR
-      state &= this->camera.andor.is_initialized();
+      camera_open = this->camera.andor.is_initialized();
 #else
       logwrite( function, "ERROR: ACAM source not defined in CMakeLists.txt" );
       return( ERROR );
 #endif
+    }
+
+    if ( motion_open && camera_open ) {
+      state     = true;
+      retstring = "true";
+    }
+    else {
+      state = motion_open && camera_open;
+      retstring = motion_retstring+" "+camera_retstring;
     }
 
     return( NO_ERROR );

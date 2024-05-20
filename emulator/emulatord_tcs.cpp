@@ -267,6 +267,8 @@ void doit( Network::TcpSocket sock ) {
                                   // to accept CLOSE and give the LAST_ACK.
     }
 
+    std::cerr << get_timestamp() << function << "[DEBUG] incomming command is terminated with " << tchar(sbuf) << "\n";
+
     // convert the input buffer into a string and remove any trailing linefeed
     // and carriage return
     //
@@ -332,6 +334,7 @@ void doit( Network::TcpSocket sock ) {
 
 #ifdef LOGLEVEL_DEBUG
     std::cerr << get_timestamp() << function << "[DEBUG] ret=" << ret << " retstring=" << retstring << "\n";
+    std::cerr << get_timestamp() << function << "[DEBUG] retstring is terminated with " << tchar(retstring) << "\n";
 #endif
 
     if ( ret != NOTHING && !retstring.empty() ) {

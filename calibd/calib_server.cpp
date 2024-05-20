@@ -118,95 +118,81 @@ namespace Calib {
         applied++;
       }
 
-      // PI_NAME -- this is the name of the PI motor controller subsystem
-      //
-      if ( config.param[entry].find( "PI_NAME" ) == 0 ) {
-        this->interface.motion.name = config.arg[entry];
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // PI_HOST -- hostname for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_HOST" ) == 0 ) {
-        this->interface.motion.host = config.arg[entry];
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // PI_PORT -- port number on PI_HOST for the master PI motor controller
-      //
-      if ( config.param[entry].find( "PI_PORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad PI_PORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "PI_PORT number out of integer range");
-          return(ERROR);
-        }
-        this->interface.motion.port = port;
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
+      //                     Each controller is stored in STL map indexed by motorname
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // then this object gets copied into the class map of objects.
-        //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo> MOT;
-        if ( MOT.load_controller_info( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.motion.motormap[ MOT.name ] = MOT;
+        if ( this->interface.motion.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
           message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-          logwrite( function, message.str() );
-          this->interface.async.enqueue( message.str() );
+          this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
+        }
+      }
+
+      // MOTOR_AXIS -- axis infor for specified MOTOR_CONTROLLER
+      //
+      if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+
+        Physik_Instrumente::AxisInfo AXIS;
+
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // Each AXIS is associated with a CONTROLLER by name, so a controller
+        // of this name must have already been configured.
+        //
+        // loc checks if the motorname for this AXIS is found in the motormap
+        //
+        auto _motormap = this->interface.motion.motorinterface.get_motormap();
+        auto loc = _motormap.find( AXIS.motorname );
+        if ( loc != _motormap.end() ) {
+          this->interface.motion.motorinterface.add_axis( AXIS );
+          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->interface.async.enqueue_and_log( function, message.str() );
+          applied++;
+        }
+        else {
+          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          message.str(""); message << "valid names are:";
+          for ( auto const &mot : _motormap ) { message << " " << mot.first; }
+          logwrite( function, message.str() );
+          error = ERROR;
+          break;
         }
       }
 
       // MOTOR_POS -- detailed position info for each named motor controller
       //
       if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
-        // Create temporary object for parsing the config line. If no error
-        // and a matching name is already in the motormap, then relevant parts
-        // of this object gets copied into the class map of objects.
+
+        // Create temporary local PosInfo object to load and parse config line
         //
-        Physik_Instrumente::ControllerInfo<Physik_Instrumente::ServoInfo> MOT;
-        if ( MOT.load_pos_info( config.arg[entry] ) == NO_ERROR ) {
+        Physik_Instrumente::PosInfo POS;
 
-          // Make sure the MOTOR_POS's name has a matching name in controller_info
-          // which came from the MOTOR_CONTROLLER configuration.
-          //
-          auto loc = this->interface.motion.motormap.find( MOT.name );
+        if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) break;
 
-          // If found, then assign the motor map from the local object to the class object.
-          //
-          if ( loc != this->interface.motion.motormap.end() ) {
-            std::string posname = MOT.posmap.begin()->first;  // mot is a local copy so there is only one entry
-            loc->second.posmap[ posname ].id       = MOT.posmap[posname].id;
-            loc->second.posmap[ posname ].position = MOT.posmap[posname].position;
-            loc->second.posmap[ posname ].posname  = MOT.posmap[posname].posname;
-          }
-          else {
-            message.str(""); message << "ERROR: MOTOR_POS name \"" << MOT.name << "\" "
-                                     << "has no matching name defined by MOTOR_CONTROLLER";
-            logwrite( function, message.str() );
-            error = ERROR;
-            break;
-          }
+        // Check that motorname associated with position has already been defined
+        // in the motormap and if so, add PosInfo to the motorinterface.
+        //
+        auto _motormap = this->interface.motion.motorinterface.get_motormap();
+        auto loc = _motormap.find( POS.motorname );
 
+        if ( loc != _motormap.end() ) {
+          this->interface.motion.motorinterface.add_posmap( POS );  // add the PosInfo to the class herre
           message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
+        }
+        else {
+          message.str(""); message << "ERROR: MOTOR_POS name \"" << POS.posname << "\" "
+                                   << "has no matching name defined by MOTOR_CONTROLLER";
+          logwrite( function, message.str() );
+          message.str(""); message << "valid names are:";
+          for ( auto const &mot : _motormap ) { message << " " << mot.first; }
+          logwrite( function, message.str() );
+          error = ERROR;
+          break;
         }
       }
 
@@ -492,7 +478,8 @@ namespace Calib {
       std::string retstring="";
 
       if ( cmd == "help" || cmd == "?" ) {
-                      for ( auto s : CALIBD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                      for ( auto s : CALIBD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = NO_ERROR;
       }
       else
 
@@ -506,9 +493,7 @@ namespace Calib {
       // isopen
       //
       if ( cmd == CALIBD_ISOPEN ) {
-                      bool isopen = this->interface.motion.isopen( );
-                      if ( isopen ) retstring = "true"; else retstring = "false";
-                      ret = NO_ERROR;
+                      ret = this->interface.motion.is_open( args, retstring );
       }
       else
 
@@ -522,7 +507,7 @@ namespace Calib {
       // close
       //
       if ( cmd == CALIBD_CLOSE ) {
-                      ret  = this->interface.motion.send_command( "close" );
+//                    ret  = this->interface.motion.send_command( "close" );
                       ret |= this->interface.motion.close();
       }
       else
@@ -537,7 +522,7 @@ namespace Calib {
       // ishome
       //
       if ( cmd == CALIBD_ISHOME ) {
-                      ret = this->interface.motion.is_home( retstring );
+                      ret = this->interface.motion.is_home( args, retstring );
       }
       else
 

@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef FLEXURE_INTERFACE_H
-#define FLEXURE_INTERFACE_H
+#pragma once
 
 #include "network.h"
 #include "pi.h"
@@ -19,8 +18,8 @@
 #include <condition_variable>
 #include <atomic>
 
-#define MOVE_TIMEOUT 25000  ///< number of milliseconds before a move fails
-#define HOME_TIMEOUT 25000  ///< number of milliseconds before a home fails
+#define FLEXURE_MOVE_TIMEOUT      1000       ///< timeout in msec for moves
+#define FLEXURE_POSNAME_TOLERANCE    0.0001  ///< tolerance to determine posname from position
 
 /***** Flexure ****************************************************************/
 /**
@@ -46,39 +45,27 @@ namespace Flexure {
       size_t numdev;
       bool class_initialized;
     public:
-      std::string name;
-      std::string host;
-      int port;
 
-      Interface() : numdev(-1) {}
+      Interface() : numdev(-1), motorinterface( FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE ) {}
 
       Common::Queue async;
 
-      // map of all daisy-chain connected motor controllers, indexed by name
+      // PI Interface class for the Piezo type
       //
-      std::map<std::string, Physik_Instrumente::ControllerInfo<Physik_Instrumente::StepperInfo>> motormap;
-
-      bool isopen() { return this->pi.controller.isconnected(); }                   ///< is this interface connected to hardware?
+      Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo> motorinterface;
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
       long close();                              ///< closes the PI socket connection
-      long home( std::string args, std::string &help );            ///< home all daisy-chained motors
-      long is_home( std::string &retstring );    ///< return the home state of the motors
+      long is_open( std::string arg, std::string &retstring );     ///< are motor controllers connected?
 
-      long set( Flexure::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
-      long get( std::string &retstring );                                           ///< get the current width and offset
+      long set( std::string args, std::string &retstring ); ///< set the slit width and offset
+      long get( std::string args, std::string &retstring ); ///< get the current width and offset
 
-      static void dothread_move_abs( Flexure::Interface &iface, int addr, float pos ); ///< threaded move_abs function
-      static void dothread_home( Flexure::Interface &iface, std::string name ); ///< threaded home function
-
-      long move_abs( int addr, float pos );      ///< send move-absolute command to specified controllers
-      long move_rel( std::string args );         ///< send move-relative command to specified controllers
       long stop();                               ///< send the stop-all-motion command to all controllers
-      long send_command( std::string cmd );      ///< writes the raw command as received to the master controller, no reply
-      long send_command( std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
-
-      Physik_Instrumente::Interface pi;          ///< Object for communicating with the PI
+      long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
+      long send_command( const std::string &name, std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
+      long test( std::string args, std::string &retstring );                 ///< test routines
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 
@@ -92,4 +79,3 @@ namespace Flexure {
 
 }
 /***** Flexure ****************************************************************/
-#endif

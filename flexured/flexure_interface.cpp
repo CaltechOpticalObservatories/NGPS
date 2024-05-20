@@ -25,23 +25,16 @@ namespace Flexure {
     std::string function = "Flexure::Interface::initialize_class";
     std::stringstream message;
 
-    if ( this->port < 0 || this->host.empty() ) {
-      message.str(""); message << "ERROR: host (" << this->host << ") or port (" << this->port << ") invalid";
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
+    auto _motormap = this->motorinterface.get_motormap();
 
-    Physik_Instrumente::Interface s( this->name, this->host, this->port );
-    this->pi = s;
-
-    this->numdev = this->motormap.size();
+    this->numdev = _motormap.size();
 
     // I don't want to prevent the system from working with a subset of controllers,
     // but the user should be warned, in case it wasn't intentional.
     //
-    if ( this->numdev != 3 ) {
+    if ( this->numdev != 4 ) {
       message.str(""); message << "WARNING: " << this->numdev << " PI motor controller"
-                               << ( this->numdev == 1 ? "" : "s" ) << " defined!";
+                               << ( this->numdev == 1 ? "" : "s" ) << " defined! (expected 4)";
       logwrite( function, message.str() );
     }
 
@@ -53,37 +46,20 @@ namespace Flexure {
   /***** Flexure::Interface::open *********************************************/
   /**
    * @brief      opens the PI socket connection
+   * @details    the motor interface does all the work
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::open( ) {
-    std::string function = "Flexure::Interface::open";
-    std::stringstream message;
+    long error = NO_ERROR;
 
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Flexure::Server::configure_flexured).
-    //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
-    }
-
-    // open a connection
-    //
-    long error = this->pi.open();
-
-    if ( error != NO_ERROR ) return( error );
-
+    // Open the sockets,
     // clear any error codes on startup, and
-    // enable the servo for each address in controller_info
+    // enable servo mode.
     //
-    for ( auto const &con : this->motormap ) {
-      int axis=1;
-      int errcode;
-      error |= this->pi.get_error( con.second.addr, errcode );     // read error to clear, don't care the value
-      error |= this->pi.set_servo( con.second.addr, axis, true );  // turn the servos on
-    }
+    error |= this->motorinterface.open();
+    error |= this->motorinterface.clear_errors();
+    error |= this->motorinterface.set_servo( true );
 
     return( error );
   }
@@ -93,645 +69,236 @@ namespace Flexure {
   /***** Flexure::Interface::close ********************************************/
   /**
    * @brief      closes the PI socket connection
+   * @details    the motor interface does all the work
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::close( ) {
-    std::string function = "Flexure::Interface::close";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "not connected" );
-      return( NO_ERROR );
-    }
-
-    // Should be impossible --
-    // The initialization should have been called automatically at start up
-    // (called in Flexure::Server::configure_flexured).
-    //
-    if ( !this->pi.is_initialized() ) {
-      logwrite( function, "ERROR: pi interface not initialized" );
-      return( ERROR );
-    }
-
-    return( this->pi.close() );
+    return this->motorinterface.close();
   }
   /***** Flexure::Interface::close ********************************************/
 
 
-  /***** Flexure::Interface::home *********************************************/
+  /***** Flexure::Interface::is_open ******************************************/
   /**
-   * @brief      home all daisy-chained motors
-   * @details    Both motors are homed simultaneously by spawning a thread for
-   *             each. This will also apply any zeropos, after homing.
-   * @param[in]  arg   optional arg for help only
-   * @param[out] help  return string containing help
-   * @return     ERROR or NO_ERROR
+   * @brief       return the connected state of the motor controllers
+   * @param[in]   arg        used only for help
+   * @param[out]  retstring  contains the connected state "true" | "false"
+   * @return      ERROR or NO_ERROR
+   *
+   * All motors must be connected for this to return "true".
    *
    */
-  long Interface::home( std::string arg, std::string &help ) {
-    std::string function = "Flexure::Interface::home";
+  long Interface::is_open( std::string arg, std::string &retstring ) {
+    std::string function = "Flexure::Interface::is_open";
     std::stringstream message;
-    int axis=1;
     long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
     if ( arg == "?" ) {
-      help = FLEXURED_HOME;
-      help.append( "  home both flexure motors simultaneously\n" );
+      retstring = FLEXURED_ISOPEN;
+      retstring.append( " \n" );
+      retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
       return( NO_ERROR );
     }
 
-    // Anything else requires an open connection
+    // Loop through all motor controllers, checking each if connected,
+    // and keeping count of the number that are connected.
     //
-    if ( !this->isopen() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
+    size_t num_open=0;
+    std::string unconnected, connected;
 
-    // Loop through map of motors, spawn a thread to home each one
-    //
+    for ( auto &mot : _motormap ) {
 
-    std::unique_lock<std::mutex> wait_lock( this->wait_mtx );  // create a mutex object for waiting for threads
-    this->thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
+      bool _isopen = this->motorinterface.is_connected( mot.second.name );
 
-    for ( auto mot : this->motormap ) {
-      std::thread( dothread_home, std::ref( *this ), mot.first ).detach();
-      this->motors_running++;
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] spawning thread to home " << name;
-      logwrite( function, message.str() );
-#endif
-    }
+      num_open += ( _isopen ? 1 : 0 );
 
-    // wait for the threads to finish
-    //
-    while ( this->motors_running != 0 ) {
-      message.str(""); message << "waiting for " << this->motors_running << " motor" << ( this->motors_running > 1 ? "s":"" );
-      logwrite( function, message.str() );
-      this->cv.wait( wait_lock );
-    }
-
-    logwrite( function, "home complete" );
-
-    // get any errors from the threads
-    //
-    error = this->thr_error.load();
-
-    return( error );
-  }
-  /***** Flexure::Interface::home *********************************************/
-
-
-  /***** Flexure::Interface::is_home ******************************************/
-  /**
-   * @brief       return the home state of the motors
-   * @param[out]  retstring  contains the home state "true" | "false"
-   * @return      ERROR or NO_ERROR
-   *
-   * All motors must be homed for this to return "true".
-   *
-   */
-  long Interface::is_home( std::string &retstring ) {
-    std::string function = "Flexure::Interface::is_home";
-    std::stringstream message;
-    std::stringstream homestream;
-    long error = NO_ERROR;
-
-    // Loop through all motor controllers, asking each if homed,
-    // setting each controller's .ishome flag, and keeping count 
-    // of the number that are homed.
-    //
-    size_t num_home=0;
-    for ( auto &con : this->motormap ) {
-      int axis=1;
-      error |= this->pi.is_home( con.second.addr, axis, con.second.ishome );  // error is OR'd so any error is preserved
-      homestream << con.second.addr << ":" << ( con.second.ishome ? "true" : "false" ) << " ";
-      if ( con.second.ishome ) num_home++;
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
     }
 
     // Set the retstring true or false, true only if all controllers are homed.
     //
-    if ( num_home == this->numdev ) retstring = "true"; else retstring = "false";
+    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false"+unconnected;
 
-    // If not all are the same state then log that
+    // Log who's connected and not
     //
-    if ( num_home > 0 && num_home < this->numdev ) {
-      message.str(""); message << "NOTICE: " << homestream.str();
+    if ( !connected.empty() ) {
+      message.str(""); message << "connected to" << connected;
+      logwrite( function, message.str() );
+    }
+    if ( !unconnected.empty() ) {
+      message.str(""); message << "not connected to" << unconnected;
       logwrite( function, message.str() );
     }
 
     return( error );
   }
-  /***** Flexure::Interface::is_home ******************************************/
+  /***** Flexure::Interface::is_open ******************************************/
 
 
   /***** Flexure::Interface::set **********************************************/
   /**
-   * @brief      set the slit width and offset
-   * @param[in]  iface      reference to main Flexure::Interface object
-   * @param[in]  args       string containing width, or width and offset
-   * @param[out] retstring  string contains the width and offset after move
+   * @brief      set the position of the indicated channel and axis
+   * @param[in]  args       string containing <name> <axis> <pos>
+   * @param[out] retstring  reference to return string
    * @return     ERROR or NO_ERROR
    *
-   * This function moves the "A" and "B" motors to achieve the requested
-   * width (and offset, if specified, default 0). Each motor is commanded in its
-   * own thread so that they can be moved in parallel.
-   *
-   * This function requires a reference to the slit interface object because it's
-   * going to spawn threads for each motor and the threads, being static, would
-   * not otherwise have access to this-> object.
-   *
    */
-  long Interface::set( Flexure::Interface &iface, std::string args, std::string &retstring ) {
+  long Interface::set( std::string args, std::string &retstring ) {
     std::string function = "Flexure::Interface::set";
     std::stringstream message;
-    long error = NO_ERROR;
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
+    auto _motormap = this->motorinterface.get_motormap();
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = FLEXURED_SET;
+      retstring.append( " <chan> <axis> <pos>\n" );
+      retstring.append( "  Set position of indicated <chan> and <axis> to <pos>,\n" );
+      retstring.append( "  where <chan> <axis> <min> <max> are as follows:\n" );
+      for ( auto &mot : _motormap ) {
+        for ( auto &axis : mot.second.axes ) {
+          retstring.append( "     " );
+          retstring.append( mot.first ); retstring.append( " " );
+          message.str(""); message << axis.first << " ";
+          retstring.append( message.str() );
+          message.str(""); message << std::fixed << std::setprecision(3) << axis.second.min << " " << axis.second.max;
+          retstring.append( message.str() );
+          retstring.append( "\n" );
+        }
+      }
+      return( NO_ERROR );
     }
 
-    // Tokenize the input arg list.
-    // Expecting either 1 token <width> for default zero offset
-    // or 2 tokens <width> <offset>
+    // Tokenize the input arg list,
+    // expecting <chan> <axis> <pos>
     //
+    std::transform( args.begin(), args.end(), args.begin(), ::toupper );
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
-    if ( tokens.size() > 2 || tokens.size() < 1 ) {
-      message.str(""); message << "bad number of arguments: " << tokens.size() 
-                               << ". expected <width> or <width> <offset>";
-      logwrite( function, message.str() );
+    if ( tokens.size() != 3 ) {
+      logwrite( function, "ERROR invalid arguments. expected <chan> <axis> <pos>" );
+      retstring="invalid_argument";
       return( ERROR );
     }
 
-    float setwidth  = 0.0;  // slit width
-    float setoffset = 0.0;  // default offset unless otherwise set below
+    std::string chan, pos;
+    int axis;
 
-    // tokens.size() is guaranteed to be either 1 OR 2 at this point
-    //
     try {
-      switch ( tokens.size() ) {
-
-        case 2:    // the 2nd arg is the setoffset (and if not set here then use default above)
-          setoffset = std::stof( tokens.at(1) );
-
-          // do not break!
-          // let this case drop through because if there is a 2nd arg then there's a 1st
-
-        case 1:    // the 1st arg is the setwidth
-          setwidth = std::stof( tokens.at(0) );
-          break;
-
-        default:   // impossible! because I already checked that tokens.size was 1 or 2
-          message.str(""); message << "ERROR: impossible! num args=" << tokens.size() << ": " << args;
-          logwrite( function, message.str() );
-          return( ERROR );
-      }
+      chan = tokens[0];
+      axis = std::stoi( tokens[1] );
+      pos  = std::stof( tokens[2] );
     }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert offset from args " << args << " : " << e.what();
+    catch ( const std::invalid_argument &e ) {
+      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
       logwrite( function, message.str() );
+      retstring="invalid_argument";
       return( ERROR );
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "one or more values out of range " << args << " : " << e.what();
+    catch ( const std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
       logwrite( function, message.str() );
+      retstring="out_of_range";
       return( ERROR );
     }
 
-    // move the A and B motors now,
-    // simultaneously, each in its own thread.
-    //
-    try {
-      std::unique_lock<std::mutex> wait_lock( iface.wait_mtx );  // create a mutex object for waiting for threads
-
-      iface.motors_running = 2;                                  // set both motors running (number of threads to wait for)
-
-      iface.thr_error.store( NO_ERROR );                         // clear the thread error state (threads can set this)
-
-      // spawn threads to move each motor, A and B
-      //
-//    std::thread( dothread_move_abs, std::ref( iface ), this->motormap.at("A").addr, pos_A).detach();
-//    std::thread( dothread_move_abs, std::ref( iface ), this->motormap.at("B").addr, pos_B).detach();
-
-      // wait for the threads to finish
-      //
-      while ( iface.motors_running != 0 ) {
-        message.str(""); message << "waiting for " << iface.motors_running << " motor" << ( iface.motors_running > 1 ? "s":"" );
-        logwrite( function, message.str() );
-        iface.cv.wait( wait_lock );
-      }
-      logwrite( function, "slit motor moves complete" );
-
-      error = iface.thr_error.load();                            // get any errors from the threads
-    }
-    catch ( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: unknown motor: " << e.what();
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-    catch ( std::exception &e ) {
-      message.str(""); message << "ERROR: other exception: " << e.what();
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-
-    // after all the moves, read and return the position
-    //
-    if ( error == NO_ERROR ) error = this->get( retstring );
-
-    return( error );
+    return this->motorinterface.moveto( chan, axis, pos, retstring );
   }
   /***** Flexure::Interface::set **********************************************/
 
 
   /***** Flexure::Interface::get **********************************************/
   /**
-   * @brief      get the current width and offset
-   * @param[out] retstring  string contains the current width and offset
+   * @brief      get the position of the indicated channel and axis
+   * @param[in]  args       string containing <name> <axis> <pos>
+   * @param[out] retstring  reference to return string
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::get( std::string &retstring ) {
+  long Interface::get( std::string args, std::string &retstring ) {
     std::string function = "Flexure::Interface::get";
     std::stringstream message;
-    long error  = NO_ERROR;
-/***
-    float pos_A = 0.0;
-    float pos_B = 0.0;
-    float width = 0.0;
-    float offs  = 0.0;
 
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
+    auto _motormap = this->motorinterface.get_motormap();
 
-    // get the position for each address in controller_info
+    // Help
     //
-    std::string posstring;
-    int axis=1;
-    try {
-      error = this->pi.get_pos( this->motormap.at("A").addr, axis, pos_A );
-      error = this->pi.get_pos( this->motormap.at("B").addr, axis, pos_B );
-    }
-    catch ( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: unknown motor: " << e.what();
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-
-    // calculate width and offset
-    //
-    width = pos_A + pos_B;
-    offs = ( pos_B - pos_A ) / this->numdev;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " numdev=" << this->numdev
-                             << " width=" << width << " offset=" << offs
-                             << " con_A=" << this->con_A << " con_B=" << this->con_B;
-    logwrite( function, message.str() );
-#endif
-
-    // form the return value
-    //
-    std::stringstream s;
-    s << width << " " << offs;
-    retstring = s.str();
-
-    message.str(""); message << "NOTICE:" << Flexure::DAEMON_NAME << " " << retstring;
-    this->async.enqueue( message.str() );
-****/
-
-    return( error );
-  }
-  /***** Flexure::Interface::get **********************************************/
-
-
-  /***** Flexure::Interface::dothread_home ************************************/
-  /**
-   * @brief      threaded function to home and apply zeropos
-   * @param[in]  iface   reference to interface object
-   * @param[in]  name    reference to name of motor to home
-   *
-   * This is the work function to call home() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by functions
-   * called in here are set in the thr_error class variable.
-   *
-   */
-  void Interface::dothread_home( Flexure::Interface &iface, std::string name ) {
-    std::string function = "Flexure::Interface::dothread_home";
-    std::stringstream message;
-    int axis=1;
-    long error=NO_ERROR;
-    int addr=-1;
-    float zeropos=NAN;
-    std::string reftype;
-
-    try {
-      addr    = iface.motormap.at(name).addr;
-      zeropos = iface.motormap.at(name).zeropos;
-      reftype = iface.motormap.at(name).reftype;
-    }
-    catch ( const std::out_of_range &e ) {
-      message.str(""); message << "ERROR: name \"" << name << "\" not in motormap: " << e.what();
-      logwrite( function, message.str() );
-      iface.thr_error.fetch_or( ERROR );         // preserve this error
-      --iface.motors_running;                    // atomically decrement the number of motors waiting
-      iface.cv.notify_all();                     // notify parent that I'm done
-      return;
-    }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending home_axis( " << addr << ", " << axis << ", neg )";
-    logwrite( function, message.str() );
-#endif
-
-    // send the home command by calling home_axis()
-    //
-    iface.pi_mutex.lock();
-    iface.pi.home_axis( addr, axis, reftype );
-    iface.pi_mutex.unlock();
-    iface.motormap[name].ishome   = false;
-    iface.motormap[name].ontarget = false;
-
-    // Loop sending the is_home command until homed or timeout.
-    //
-
-    // get the time now for timeout purposes
-    //
-    std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-    bool is_home=false;
-
-    do {
-      bool state;
-      iface.pi_mutex.lock();
-      iface.pi.is_home( addr, axis, state );
-      iface.pi_mutex.unlock();
-      iface.motormap[name].ishome = state;
-      iface.motormap[name].ontarget = state;
-      is_home = iface.motormap[name].ishome;
-
-      if ( is_home ) break;
-      else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-      }
-
-      // get time now and check for timeout
-      //
-      std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-      if ( elapsed > HOME_TIMEOUT ) {
-        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
-        logwrite( function, message.str() );
-        error = TIMEOUT;
-        break;
-      }
-
-    } while ( 1 );
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed  homing " << name << " addr " << addr
-                             << " with error=" << error;
-    logwrite( function, message.str() );
-#endif
-
-    // If homed OK then apply the zeropos
-    //
-    if ( error == NO_ERROR ) {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] setting zeropos " << zeropos << " for " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
-      std::stringstream cmd;
-      error  = iface.move_abs( addr, zeropos );  // move to zeropos position
-      cmd << addr << " DFH " << axis;
-      error |= iface.send_command( cmd.str() );  // define this as the home position
-    }
-
-    iface.thr_error.fetch_or( error );           // preserve any error returned
-
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
-
-    iface.cv.notify_all();                       // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed home_axis( " << addr << ", " << axis << ", neg )"
-                             << " with error=" << error;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Flexure::Interface::dothread_home ************************************/
-
-
-  /***** Flexure::Interface::dothread_move_abs ********************************/
-  /**
-   * @brief      threaded move_abs function
-   * @param[in]  iface   reference to interface object
-   * @param[in]  addr    controller address
-   * @param[in]  pos     motor position
-   *
-   * This is the work function to call move_abs() in a thread, intended
-   * to be spawned in a detached thread. Any errors returned by the move_abs()
-   * function are set in the thr_error class variable.
-   *
-   */
-  void Interface::dothread_move_abs( Flexure::Interface &iface, int addr, float pos ) {
-    std::string function = "Flexure::Interface::dothread_move_abs";
-    std::stringstream message;
-    long error;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread sending mov_abs( " << addr << ", " << pos << " )";
-    logwrite( function, message.str() );
-#endif
-
-    error = iface.move_abs( addr, pos ); // send the move_abs command here
-
-    iface.thr_error.fetch_or( error );   // preserve any error returned
-
-    --iface.motors_running;              // atomically decrement the number of motors waiting
-
-    iface.cv.notify_all();               // notify parent that I'm done
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] thread completed mov_abs( " << addr << ", " << pos << " ) "
-                             << " *** motors_running = "<< iface.motors_running;
-    logwrite( function, message.str() );
-#endif
-
-    return;
-  }
-  /***** Flexure::Interface::dothread_move_abs ********************************/
-
-
-  /***** Flexure::Interface::move_abs *****************************************/
-  /**
-   * @brief      send move-absolute command to specified controllers
-   * @param[in]  addr  controller address
-   * @param[in]  pos   motor position
-   * @return     ERROR or NO_ERROR
-   *
-   * The single string parameter must contain two space-delimited tokens,
-   * for the address and the position to move that address.
-   *
-   * This could be called by a thread, so hardware interactions with the PI
-   * controller are protected by a mutex.
-   *
-   */
-  long Interface::move_abs( int addr, float pos ) {
-    std::string function = "Flexure::Interface::move_abs";
-    std::stringstream message;
-    long error=NO_ERROR;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    try {
-      int axis=1;
-
-      // send the move command
-      //
-      this->pi_mutex.lock();
-      error = this->pi.move_abs( addr, axis, pos );
-      this->pi_mutex.unlock();
-
-      // which controller has this addr?
-      //
-      std::string myname;
-      for ( auto &con : this->motormap ) {
-        if ( con.second.addr = addr ) {
-          myname = con.second.name;
-          break;
+    if ( args == "?" ) {
+      retstring = FLEXURED_SET;
+      retstring.append( " <chan> <axis> <pos>\n" );
+      retstring.append( "  Get position of indicated <chan> and <axis>,n" );
+      retstring.append( "  where <chan> <axis> are as follows:\n" );
+      for ( auto &mot : _motormap ) {
+        for ( auto &axis : mot.second.axes ) {
+          message.str(""); message << "     " << mot.first << " " << axis.first << "\n";
+          retstring.append( message.str() );
         }
       }
-
-      if ( myname.empty() ) {
-        logwrite( function, "ERROR: no motor controllers defined" );
-        return( ERROR );
-      }
-
-      // Loop sending the on_target command for this address
-      // until on target or timeout.
-      //
-
-      // first get the time now for timeout purposes
-      //
-      std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
-
-      do {
-        bool state;
-        this->pi_mutex.lock();
-        error = this->pi.on_target( addr, axis, state );
-        this->pi_mutex.unlock();
-        this->motormap.at(myname).ontarget = state;
-        
-        if ( this->motormap.at(myname).ontarget ) break;
-        else {
-#ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] waiting for " << this->motormap.at(myname).name;
-          logwrite( function, message.str() );
-#endif
-          std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-        }
-
-        // get time now and check for timeout
-        //
-        std::chrono::steady_clock::time_point tnow = std::chrono::steady_clock::now();
-
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
-
-        if ( elapsed > MOVE_TIMEOUT ) {
-          message.str(""); message << "TIMEOUT waiting for " << this->motormap.at(myname).name;
-          logwrite( function, message.str() );
-          error = TIMEOUT;
-          break;
-        }
-      } while ( 1 );
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert one or more values: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "one or more values out of range: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch( std::exception &e ) {
-      message.str(""); message << "ERROR: other exception: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+      return( NO_ERROR );
     }
 
-    return( error );
-  }
-  /***** Flexure::Interface::move_abs *****************************************/
-
-
-  /***** Flexure::Interface::move_rel *****************************************/
-  /**
-   * @brief      send move-relative command to specified controllers
-   * @param[in]  args  string containing addr and offset
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  long Interface::move_rel( std::string args ) {
-    std::string function = "Flexure::Interface::move_rel";
-    std::stringstream message;
-    int axis=1;
-    int addr;
-    float pos;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
+    // Tokenize the input arg list,
+    // expecting <chan> <axis>
+    //
+    std::transform( args.begin(), args.end(), args.begin(), ::toupper );
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
     if ( tokens.size() != 2 ) {
-      message.str(""); message << "ERROR: bad number of tokens: " << tokens.size()
-                               << ". expected 2 (addr pos)";
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR invalid arguments. expected <chan> <axis>" );
+      retstring="invalid_argument";
       return( ERROR );
     }
+
+    std::string chan;
+    int axis;
 
     try {
-      addr = std::stoi( tokens.at(0) );
-      pos  = std::stof( tokens.at(1) );
+      chan = tokens[0];
+      axis = std::stoi( tokens[1] );
     }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert one or more values: " << e.what();
+    catch ( const std::invalid_argument &e ) {
+      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
       logwrite( function, message.str() );
+      retstring="invalid_argument";
       return( ERROR );
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "one or more values out of range: " << e.what();
+    catch ( const std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
       logwrite( function, message.str() );
+      retstring="out_of_range";
       return( ERROR );
     }
 
-    return( this->pi.move_rel( addr, axis, pos ) );
+    // get the position
+    //
+    std::string posstring;
+    auto addr=this->motorinterface.get_motormap()[chan].addr;
+    float position=NAN;
+    std::string posname;
+    long error = this->motorinterface.get_pos( chan, axis, addr, position, posname );
+
+    // form the return value
+    //
+    message.str(""); message << chan << " " << axis << " " << std::fixed << std::setprecision(6) << position;
+    if ( ! posname.empty() ) { message << " (" << posname << ")"; }
+    retstring = message.str();
+    logwrite( function, message.str() );
+
+    message.str(""); message << "NOTICE:" << Flexure::DAEMON_NAME << " " << retstring;
+    this->async.enqueue( message.str() );
+
+    return( error );
   }
-  /***** Flexure::Interface::move_rel *****************************************/
+  /***** Flexure::Interface::get **********************************************/
 
 
   /***** Flexure::Interface::stop *********************************************/
@@ -743,19 +310,7 @@ namespace Flexure {
   long Interface::stop( ) {
     std::string function = "Flexure::Interface::stop";
     std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    // send the stop_motion command for each address in controller_info
-    //
-    for ( auto const &mot : this->motormap ) {
-      this->pi.stop_motion( mot.second.addr );
-    }
-
-    return( NO_ERROR );
+    return( ERROR );
   }
   /***** Flexure::Interface::stop *********************************************/
 
@@ -763,23 +318,16 @@ namespace Flexure {
   /***** Flexure::Interface::send_command *************************************/
   /**
    * @brief      writes the raw command as received to the master controller
-   * @param[in]  cmd  command to send
+   * @param[in]  name  controller name
+   * @param[in]  cmd   command to send
    * @return     ERROR or NO_ERROR
    *
    * This function is overloaded.
    * This version writes a command that expects no reply.
    *
    */
-  long Interface::send_command( std::string cmd ) {
-    std::string function = "Flexure::Interface::send_command";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
-    }
-
-    return( this->pi.send_command( cmd ) );
+  long Interface::send_command( const std::string &name, std::string cmd ) {
+    return this->motorinterface.send_command( name, cmd );
   }
   /***** Flexure::Interface::send_command *************************************/
 
@@ -787,6 +335,7 @@ namespace Flexure {
   /***** Flexure::Interface::send_command *************************************/
   /**
    * @brief      writes the raw command to the master controller, reads back reply
+   * @param[in]  name       controller name
    * @param[in]  cmd        command to send
    * @param[out] retstring  reply received
    * @return     ERROR or NO_ERROR
@@ -796,18 +345,108 @@ namespace Flexure {
    * a question mark, "?".
    *
    */
-  long Interface::send_command( std::string cmd, std::string &retstring ) {
-    std::string function = "Flexure::Interface::send_command";
-    std::stringstream message;
-
-    if ( !this->pi.controller.isconnected() ) {
-      logwrite( function, "ERROR: not connected to motor controller" );
-      return( ERROR );
+  long Interface::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
+    if ( cmd.find( "?" ) != std::string::npos ) {
+      return( this->motorinterface.send_command( name, cmd, retstring ) );
     }
-
-    if ( cmd.find( "?" ) != std::string::npos ) return( this->pi.send_command( cmd, retstring ) );
-    else return( this->pi.send_command( cmd ) );
+    else {
+      return( this->motorinterface.send_command( name, cmd ) );
+    }
   }
   /***** Flexure::Interface::send_command *************************************/
+
+
+  /***** Flexure::Interface::test *********************************************/
+  /**
+   * @brief      test commands
+   * @param[in]  args
+   * @param[out] retstring  reference to any reply
+   * @return     ERROR or NO_ERROR
+   *
+   * This is the place to put various debugging and system testing tools.
+   *
+   * The server command is "test", the next parameter is the test name,
+   * and any parameters needed for the particular test are extracted as
+   * tokens from the args string passed in.
+   *
+   * The input args string is tokenized and tests are separated by a simple
+   * series of if..else.. conditionals.
+   *
+   * Valid test names are:
+   *   motormap
+   *   posmap
+   *
+   */
+  long Interface::test( std::string args, std::string &retstring ) {
+    std::string function = "Flexure::Interface::test";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    long error = NO_ERROR;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() < 1 ) {
+      logwrite( function, "no test name provided" );
+      return ERROR;
+    }
+
+    std::string testname = tokens[0];                                // the first token is the test name
+
+    if ( testname == "?" || testname == "help" ) {
+      retstring.clear();
+      retstring.append( "  motormap  return definition of motormap\n" );
+      retstring.append( "  posmap    return definition of posmap\n" );
+      return( NO_ERROR );
+    }
+    else
+
+    // motormap
+    //
+    if ( testname == "motormap" ) {
+      retstring="name host:port addr naxes \n      axisnum min max reftype";
+      for ( auto const &mot : _motormap ) {
+        retstring.append("\n");
+        message.str(""); message << mot.first << " "
+                                 << mot.second.host << ":"
+                                 << mot.second.port << " "
+                                 << mot.second.addr << " "
+                                 << mot.second.naxes;
+        for ( auto const &axis : mot.second.axes ) {
+          message << "\n      " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " " << axis.second.reftype;
+        }
+        retstring.append( message.str() );
+      }
+      retstring.append("\n");
+    }
+    else
+
+    // posmap
+    //
+    if ( testname == "posmap" ) {
+      retstring="motorname axis posid pos posname";
+      logwrite( function, retstring );
+      for ( auto const &mot : _motormap ) {
+        retstring.append("\n");
+        message.str(""); message << mot.first << " ";
+        for ( auto const &pos : mot.second.posmap ) {
+          message << " " << pos.second.axis << " " << pos.second.posid << " " << pos.second.position << " " << pos.second.posname;
+        }
+        retstring.append( message.str() );
+        logwrite( function, message.str() );
+      }
+      retstring.append("\n");
+    }
+
+    else {
+      message.str(""); message << "ERROR: test " << testname << " unknown";;
+      logwrite(function, message.str());
+      error = ERROR;
+    }
+
+    return( error );
+  }
+  /***** Flexure::Interface::test *********************************************/
 
 }
