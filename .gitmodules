@@ -1,0 +1,3 @@
+[submodule "Python/MUCHOSpec-OTM"]
+	path = Python/OTM
+	url = git@github.com:chazshapiro/MUCHOSpec-OTM.git
