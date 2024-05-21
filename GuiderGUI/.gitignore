@@ -1,0 +1,9 @@
+# gitignore file
+buttons_guider.ans
+buttons_slicev.ans
+
+# OSX garbage
+._*
+*sublime*
+*.swp
+

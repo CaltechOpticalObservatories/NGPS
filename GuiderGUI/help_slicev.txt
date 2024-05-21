@@ -1,0 +1,22 @@
+NGPS Guider DS9 Display
+-----------------------
+
+Most DS9 features will work as usual, but the user is limited to the
+crosshairs tool in the Edit menu.   Creating new frames and regions in 
+this DS9 window is discouraged and may lead to weird effects.
+To work with regions, frames, and so on, use the
+[grab fits] button to copy to a new DS9 session.  
+
+Buttons:
+
+[sync display] -- Update displayed parameters with the current camera settings
+
+[camera settings] -- Update the camera with new settings
+
+[grab fits] -- Copy current FITS frame to a separate DS9 window for analysis
+  (also saves in /data/sliceview/grab/)
+
+[put on slit] -- NOT IMPLEMENTED.  Move the spectrograph slit to the coordinates of the
+  crosshairs. User can zoom in first for more precision.
+
+[gui help] -- This message
