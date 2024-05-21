@@ -22,7 +22,6 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#include "telemetry.h"
 #include "common.h"
 #include "logentry.h"
 #include "utilities.h"
@@ -308,8 +307,6 @@ namespace Camera {
       bool          bonn_shutter;            //!< set false if Bonn shutter is not connected (defaults true)
       bool          ext_shutter;             //!< set true if an external shutter is connected to an ARC controller (defaults false)
       std::string   writekeys_when;          //!< when to write fits keys "before" or "after" exposure
-
-      Telemetry::Sequencer seq_telem;
 
       Common::Queue async;                   /// message queue object
       Shutter shutter;                       /// Bonn Shutter object

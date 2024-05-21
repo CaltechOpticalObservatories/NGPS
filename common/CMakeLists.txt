@@ -18,9 +18,6 @@ include_directories( ${PYTHON_DEV} )
 add_library(common STATIC
         ${PROJECT_UTILS_DIR}/common.cpp
         )
-add_library(telemetry STATIC
-        ${PROJECT_UTILS_DIR}/telemetry.cpp
-        )
 add_library(skyinfo STATIC
         ${PROJECT_UTILS_DIR}/skyinfo.cpp
         ${PYTHON_LIB}

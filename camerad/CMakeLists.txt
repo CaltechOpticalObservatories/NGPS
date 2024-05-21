@@ -112,7 +112,6 @@ target_link_libraries(camerad
         network
         logentry
         common
-        telemetry
         utilities
         md5
         CArcBase
