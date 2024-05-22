@@ -1,0 +1,18 @@
+package edu.jhu.htmIndex.test;
+
+import junit.framework.*;
+
+public class AllTests extends TestCase {
+
+  public AllTests(String s) {
+	super(s);
+  }
+
+  public static Test suite() {
+	TestSuite suite = new TestSuite();
+	suite.addTest(TestHtmRange.suite());
+	suite.addTest(TestHtmRangeIterator.suite());
+	suite.addTest(TestSpatialIndex.suite());
+	return suite;
+  }
+}

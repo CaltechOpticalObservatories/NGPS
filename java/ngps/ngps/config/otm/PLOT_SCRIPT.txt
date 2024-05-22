@@ -1,0 +1,3 @@
+cd /home/developer/Software/java/ngps/ngps/python/otm/OTM
+export PYTHONPATH=/home/developer/Software/java/ngps/ngps/python/etc
+~/.conda/envs/ngpsdev/bin/python ./OTM_plot.py /home/developer/Software/java/ngps/ngps/config/otm/OTM_JAVA_OUTPUT.csv /home/developer/Software/java/ngps/ngps/config/otm/PLOT.html

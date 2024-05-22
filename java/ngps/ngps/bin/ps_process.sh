@@ -1,0 +1,1 @@
+ps -feal | grep $1

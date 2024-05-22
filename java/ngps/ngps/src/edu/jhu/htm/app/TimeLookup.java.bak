@@ -1,0 +1,62 @@
+package edu.jhu.htmExamples;
+
+import java.util.*;
+import edu.jhu.htm.core.*;
+import edu.jhu.htm.core.*;
+import edu.jhu.util.*;
+
+/**
+ * <p> Time lookup for a set of random points for differnt depths of HTM </p>
+ * @author wil
+ * @version $revision: $
+ */
+
+public class TimeLookup {
+	double[] ras,decs;
+	int numlooks = 1000;
+
+	public void initRaDec() {
+		 Random ran = new Random(38989898989898L);
+		ras = new double[numlooks];
+		decs = new double[numlooks];
+		for (int i = 0 ; i < numlooks; i++) {
+			ras[i] =ran.nextDouble()*360;
+			decs[i] =ran.nextDouble()*180 - 90;
+		}
+
+	}
+
+	public void timeLookup(int level) throws Exception{
+		//HTMindexImp si = new HTMindexImp(level,5);
+		long st = 0,dur=0;
+		st = System.currentTimeMillis();
+		String id = null;
+		for (int rep = 0; rep < ras.length; rep++) {
+			//name = si.nameByPoint(ras[rep],decs[rep]);
+			id = HTMfunc.lookup(ras[rep],decs[rep],level);
+		}
+		dur =  System.currentTimeMillis() - st;
+		System.out.print(ras.length +" lookups  to level "+level+ " took "+ dur +" milis " );
+		float ave = (float)(dur) / ras.length;
+		System.out.print(" Ave "+ave);
+		float persec = Float.POSITIVE_INFINITY;
+		if (ave > 0) persec = 1000/ave;
+		System.out.println(" "+persec+" lookups/second");
+	}
+
+	public void run() throws Exception{
+		initRaDec();
+		for (int i = 3; i < 26; i++) {
+			timeLookup(i);
+		}
+	}
+
+	public TimeLookup(int numlooks) {
+		this.numlooks = numlooks;
+	}
+
+	public static void main(String[] args) throws Exception {
+		TimeLookup tl = new TimeLookup(10000);
+		tl.run();
+	}
+}

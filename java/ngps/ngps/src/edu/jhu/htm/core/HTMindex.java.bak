@@ -1,0 +1,42 @@
+package edu.jhu.htm.core;
+/**********************************************************************
+* Current Version
+* ===============
+* ID:	$Id: $
+*
+* Revision: 	$Revision:  $
+* Date/time:	$Date: $
+**********************************************************************
+ *
+ * The HTMindex is the main interface for the HTM implementation.
+ * It provides the functionality called for in "Redesiging the HTM interface".
+ * The HTMindexImp provides an implementation of this.
+ * HTMfunc provides some of this funtionality albeit with different signatures.
+ * HTMindexImp uses HTMfunc where appropriate haence answers from the two should
+ * not differ.
+*
+**/
+
+
+public interface HTMindex {
+
+	public int getMaxLevel() ;
+	public int getBuildLevel();
+	public long lookup(Vector3d point);
+	public Vector3d idToPoint(long htmId);
+	public Domain simplify(Domain d);
+	public Domain intersection(Domain d1, Domain d2);
+	public Domain union(Domain d1, Domain d2);
+	public Domain compliment(Domain d);
+	public boolean conatins (Domain d, Vector3d p);
+	public double distance(long htmId1, long htmId2);
+	public HTMrange intersect(Domain d);
+
+}
+/**********************************************************************
+* Revision History
+* ================
+*
+* $Log: $
+*
+***/

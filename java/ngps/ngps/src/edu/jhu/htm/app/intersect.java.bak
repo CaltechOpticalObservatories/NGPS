@@ -1,0 +1,394 @@
+package edu.jhu.htmExamples;
+/*	 Filename:	   intersect.java
+
+	 Intersect a domain with the index, returning the full and partial nodes
+
+
+	 Author:		 Peter Z. Kunszt
+
+	 Date:		   October 15, 1999
+
+
+
+ (c) Copyright The Johns Hopkins University 1999
+ All Rights Reserved
+
+ The software and information contained herein are proprietary to The
+ Johns Hopkins University, Copyright 1999.  This software is furnished
+ pursuant to a written license agreement and may be used, copied,
+ transmitted, and stored only in accordance with the terms of such
+ license and with the inclusion of the above copyright notice.  This
+ software and information or any other copies thereof may not be
+ provided or otherwise made available to any other person.
+
+*/
+
+import edu.jhu.htm.core.*;
+import java.io.*;
+import java.util.*;
+
+/**
+   This example code demonstrates the intersection functionality of
+  the HTMindexImp.
+  It can be invoked by
+
+ <pre>
+ java edu.jhu.htmExamples.intersect level savelevel domainfile [-b]
+ </pre>
+
+<p>
+  where
+<pre>
+	 level	 : the level depth to build the index
+	 domainfile: file containing a domain
+	 [-nranges n]  : number of ranges to keep
+</pre>
+
+<p>
+  The level and savelevel just indicate the index depth.  The <tt>-b</tt>
+  switch might speed up things for depths up to 7 with large-area
+  domains.
+
+  <b>Domain files:</b><br>
+
+<p>
+  A domain is a set of convexes, connected by logical OR.
+  A convex is a set of constraints, connected by logical AND.
+  A constraint specifies a cap on the unit sphere by specifying
+  a vector 'a' and a distance 'd' from the origin. 's' is the
+  opening angle defining the cap.
+
+<p>  Example: positive distance  a = (1,0,0), d = 0.5, s = 60 degrees
+
+<pre>
+.				   ____
+.				---	---
+.			   /		/|\
+.			  /		/ |=\
+.			 |		/  |==|	 this side is in the convex.
+.			|		/\s |===|
+.			|------------|---| -> direction a
+.			|		\   |===|
+.			 |		\  |==|
+.			  \		\ |=/
+.			   \		\|/
+.				---____---
+.
+.
+.					 <-d-> is positive (s < 90)
+</pre>
+
+<p>
+ Example: negative distance  a = (-1,0,0), d = -0.5, s = 120 degrees
+
+<pre>
+.				   ____
+.				---====---
+.  this side is /========/|\
+.  in the	  /========/=| \
+.  convex	 |==== s__/==|  |
+.			|===== / /===|   |
+.  dir. a <- |------------|---|  'hole' in the sphere
+.			|========\===|   |
+.			 |========\==|  |
+.			  \========\=| /
+.			   \========\|/
+.				---____---
+.
+</pre>
+
+<p>
+  A constraint is represented in the file as a set of 4 floatingpoint numbers
+  <tt>x y z d</tt>  where <tt>a=(x,y,z)</tt>. Example:
+
+<pre>
+  1 0 0 0.5
+</pre>
+
+<p>
+  A convex is the area defined by several constraints on the sphere
+  that is common to all constraints. Of course such an area has to be convex.
+
+<p>
+  A convex in the file is defined by a number (number of constraints
+  in the convex) followed by as many convexes (each on one line.) Example:
+
+<pre>
+  4
+  0.5 0.707107 0.5 0.58077530122080200
+  0.5 0.707107 0.5 0.84077530122080200
+  -0.5 -0.907107 0.3  -0.87530122080200
+  0.2 -0.907107 0.3  -0.77530122080200
+</pre>
+
+<p>
+  A domain is an accumulation of convexes. A domain in the domainfile
+  is represented by a number (number of convexes) followed by that many
+  convexes. A domainfile may only contain one domain. It may contain
+  comment lines, starting with #.
+
+
+
+  <b>Special Identifiers</b><br>
+
+<p>
+  The domain file accepts several special convex identifiers to
+  read in special formats. These identifiers must come as a single
+  comment line before the data, and no additional comments are allowed
+  These are
+
+<pre>
+	#TRIANGLE			- the next three lines are triangle corners
+	#TRIANGLE_RADEC		- same, given in ra/dec
+	#RECTANGLE			- the next four lines are rectangle corners
+	#RECTANGLE_RADEC		- same, given in ra/dec
+	#CONVEX			- read convex in default format
+	#CONVEX_RADEC		- read the convex in ra/dec format
+</pre>
+
+  Examples of a domain files:
+
+<hr>
+
+<p>
+<b>Example 1</b>:
+
+<pre>
+#DOMAIN
+1
+#CONVEX
+3
+ 0.5 0.707107 0.5 0.58077530122080200
+ 0.5 0.5 0.707107 0.63480775301220802
+ 0.707107 -0.5 0.5 0.8480775301220802
+</pre>
+
+<hr>
+
+<p>
+<b>Example 2</b>:
+
+<pre>
+#DOMAIN
+2
+#CONVEX
+4
+ 0 0 1 0.3
+ -1 -3 -5 -0.97
+ 5 -3 -10 -0.97
+ 2 2 -5 -0.97
+#CONVEX_RADEC
+1
+25.23 -55.9 0.99
+</pre>
+
+<hr>
+
+<p>
+<b>Example 3</b>:
+
+<pre>
+#DOMAIN
+1
+#RECTANGLE_RADEC
+54 29
+54 30
+55 29
+55 30
+</pre>
+
+<hr>
+
+<p>
+<b>Example 4</b>:
+
+<pre>
+#DOMAIN
+1
+#TRIANGLE
+0 0 1
+0 0.9 0.9
+0.9 0 0.9
+</pre>
+
+<hr>
+
+<p>
+Example of a run of intersect:
+
+<pre>
+%intersect 4 2 example1
+</pre>
+
+OUTPUT:
+<pre>
+#DOMAIN
+1
+#CONVEX
+3
+0.707107 -0.5 0.5 0.848078
+0.5 0.5 0.707107 0.634808
+0.5 0.707107 0.5 0.580775
+intersection done in 0.01 sec
+List of full nodes :
+3088:N00100  0,45 -8.04156,40.3737 0,39.375
+3090:N00102  0,33.75 0,39.375 -7.43146,34.7373
+3091:N00103  -7.43146,34.7373 0,39.375 -8.04156,40.3737
+3097:N00121  0,33.75 -6.91598,28.9693 0,28.125
+3101:N00131  0,33.75 -7.43146,34.7373 -6.91598,28.9693
+3296:N03200  0,45 -9.34287,48.9681 -8.04156,40.3737
+List of partial nodes :
+3076:N00010 0,22.5 -6.02366,17.0658 0,16.875
+3079:N00013 -5.84825,11.415 0,16.875 -6.02366,17.0658
+3089:N00101 -15,35.2644 -7.43146,34.7373 -8.04156,40.3737
+3096:N00120 0,22.5 0,28.125 -6.56686,23.3217
+3098:N00122 -13.2015,23.867 -6.56686,23.3217 -6.91598,28.9693
+3099:N00123 -6.91598,28.9693 -6.56686,23.3217 0,28.125
+3100:N00130 -13.2015,23.867 -6.91598,28.9693 -14.0498,29.5687
+3102:N00132 -15,35.2644 -14.0498,29.5687 -7.43146,34.7373
+3103:N00133 -7.43146,34.7373 -14.0498,29.5687 -6.91598,28.9693
+3128:N00320 0,22.5 -6.56686,23.3217 -6.02366,17.0658
+3168:N01200 0,45 0,50.625 -9.34287,48.9681
+3169:N01201 0,56.25 -10.566,54.5745 0,50.625
+3170:N01202 -20.1039,52.0619 -9.34287,48.9681 -10.566,54.5745
+3171:N01203 -10.566,54.5745 -9.34287,48.9681 0,50.625
+3180:N01230 -27.301,62.9135 -23.1655,57.5378 -12.2711,60.2863
+3181:N01231 -20.1039,52.0619 -10.566,54.5745 -23.1655,57.5378
+3182:N01232 0,56.25 -12.2711,60.2863 -10.566,54.5745
+3183:N01233 -10.566,54.5745 -12.2711,60.2863 -23.1655,57.5378
+3297:N03201 -20.1039,52.0619 -17.1921,43.691 -9.34287,48.9681
+3298:N03202 -15,35.2644 -8.04156,40.3737 -17.1921,43.691
+3299:N03203 -17.1921,43.691 -8.04156,40.3737 -9.34287,48.9681
+3920:N31100 0,45 9.34287,48.9681 0,50.625
+4000:N32200 0,45 0,39.375 8.04156,40.3737
+4001:N32201 0,33.75 7.43146,34.7373 0,39.375
+4003:N32203 7.43146,34.7373 8.04156,40.3737 0,39.375
+4004:N32210 0,22.5 6.56686,23.3217 0,28.125
+4006:N32212 0,33.75 0,28.125 6.91598,28.9693
+4007:N32213 6.91598,28.9693 0,28.125 6.56686,23.3217
+4014:N32232 0,33.75 6.91598,28.9693 7.43146,34.7373
+4032:N33000 0,45 8.04156,40.3737 9.34287,48.9681
+</pre>
+
+@author Peter Kunszt
+@version 1.0
+*/
+
+public class intersect {
+
+   public static void main (String[] argv) throws Exception{
+
+	   //
+	   // Initialization
+	   //
+
+	  String usage="Usage: intersect [-expand] [-symbolic] [-nranges n] [-olevel o] [-varlength] [-save s] level domainfile ";
+
+	  // initialize
+	  if (argv.length < 2) {
+		 throw new Exception(usage);
+	  }
+
+
+		int argc = 0;
+		int savelevel = 5;
+		int nranges = 100;
+		int olevel = 20;
+		boolean varlen = false;
+		boolean compress = false;
+		boolean symb = false;
+		boolean expand = false;
+
+		while (argv[argc] != null && argv[argc].startsWith("-")) {
+				boolean handled = false;
+			   if (argv[argc].equalsIgnoreCase("-save")) {
+				   savelevel = Integer.parseInt(argv[++argc]);
+				   if (savelevel >8 || savelevel < 1) {
+					   System.err.println("Save should be between 1 and 8.");
+					   System.exit(2);
+				   }
+				   argc++;
+				   handled = true;
+			   }
+			   if (argv[argc].equalsIgnoreCase("-olevel")) {
+				   olevel = Integer.parseInt(argv[++argc]);
+				   argc++;
+				   handled = true;
+			   }
+			   if (argv[argc].equalsIgnoreCase("-nranges")) {
+				   nranges = Integer.parseInt(argv[++argc]);
+				   compress = true;
+				   argc++;
+				   handled = true;
+			   }
+			   if (argv[argc].equalsIgnoreCase("-varlength")) {
+				   varlen=true;
+				   argc++;
+				   handled = true;
+			   }
+			   if (argv[argc].equalsIgnoreCase("-symbolic")) {
+				   symb=true;
+				   argc++;
+				   handled = true;
+			   }
+			   if (argv[argc].equalsIgnoreCase("-expand")) {
+				   expand=true;
+				   argc++;
+				   handled = true;
+			   }
+			   if (!handled) {
+				   System.err.println(" Dont know how to "+argv[argc++]);
+			   }
+		}
+
+	  Domain domain = new Domain();
+
+	  // construct index with level=argv[0], savelevel=argv[1]
+	  // beware: there is no checking whether argv[0] or argv[1] make sense
+	  int level = Integer.parseInt(argv[argc++]);
+	  FileReader domainFile = new FileReader(argv[argc++]);
+	  HTMindexImp index = new HTMindexImp(level,savelevel); // generate index
+
+	  // Read in domain and echo it to screen
+	  domain.read(domainFile);
+	  if (olevel > level ) olevel = level;
+	  domain.setOlevel(olevel);
+
+	  System.out.println(domain.toString());
+	  System.out.println("level is		 :"+level);
+	  System.out.println("olevel is		:"+olevel);
+	  System.out.println("savelevel		:"+savelevel);
+	  System.out.println("nranges is	   :"+nranges);
+	  System.out.println("varlength		:"+varlen);
+	  System.out.println("expand		   :"+expand);
+
+		HTMrange htmRange = new HTMrange();
+		long tstart = System.currentTimeMillis();
+		domain.intersect(index,htmRange,varlen)	;
+		long t = (System.currentTimeMillis() - tstart) ;
+		System.out.println(" Intersect  took "+ t +" milis");
+
+		if (!varlen) {
+			htmRange.defrag();
+			if (compress) {
+				htmRange.defrag(nranges);
+			}
+			if (expand) {
+				expandList(System.out,htmRange,symb);
+			} else {
+				System.out.println(htmRange.toString(symb));
+			}
+		} else {
+				System.out.println(htmRange.toString(HTMrange.LOWS,symb));
+		}
+   }
+
+   static public void expandList(PrintStream out, HTMrange range , boolean symbolic) {
+	   HTMrangeIterator iter = new HTMrangeIterator(range,symbolic);
+	   while (iter.hasNext()) {
+		   out.println(iter.next());
+	   }
+   }
+
+
+}

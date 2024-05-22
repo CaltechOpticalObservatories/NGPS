@@ -1,0 +1,5 @@
+#!/bin/bash
+
+guioption=$1  # OBSERVE or PLAN
+
+java14 -jar ~/Software/java/ngps/ngps/dist/ngps.jar ${guioption^^}  # force uppercase

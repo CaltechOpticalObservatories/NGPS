@@ -1,0 +1,55 @@
+package edu.jhu.htm.core;
+
+/**********************************************************************
+* Current Version
+* ===============
+* ID:	$Id: ErrorHandler.java,v 1.1 2003/02/07 23:02:51 womullan Exp $
+*
+* Revision: 	$Revision: 1.1 $
+* Date/time:	$Date: 2003/02/07 23:02:51 $
+**********************************************************************
+* It is intended that all core ERRORS are reported through this class thus
+* making them uniform and allowing the possibility of redirecting them or whatever
+* later.
+* Also all erros need to have a number assigned to them. All this are here as statics.
+* This is not necessarily the best java way to do this but it works and can easily
+* be mapped to C.
+* All error numbers are to be negative and status numbers positive
+*
+* @revision $Revision: 1.1 $
+* @author wil
+ */
+
+import java.util.*;
+public class ErrorHandler {
+	public static final int PANIC = -1;
+	public static final int INVALIDID = -2;
+
+	public static Map messages = new HashMap();
+	static {
+		messages.put(new Integer(PANIC),
+								"PANIC - the laws of geometry have failed.");
+		messages.put(new Integer(INVALIDID),"Invalid HTM Id");
+	}
+
+  public ErrorHandler() {
+  }
+
+	public static void handleError (int errorNo) throws HTMException {
+		String msg = (String)messages.get(new Integer(errorNo));
+		System.err.println(new Date()+" Error **********************");
+		System.err.println("#"+errorNo+" "+msg);
+		System.err.println("******************************************");
+		throw new HTMException(errorNo,msg);
+	}
+
+}
+/**********************************************************************
+* Revision History
+* ================
+*
+* $Log: ErrorHandler.java,v $
+* Revision 1.1  2003/02/07 23:02:51  womullan
+* Major tidy up of HTM to HTMfunc addition of exceptions and error handler
+*
+* *********************************************************************/

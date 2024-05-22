@@ -1,0 +1,3 @@
+cd /Users/jennifermilburn/Desktop/NGPS/python/git/OTM
+export PYTHONPATH=/Users/jennifermilburn/Desktop/NGPS/python/git
+/Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python ./OTM.py /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_INPUT.csv 2022-01-01T03:00:00.000 -seeing 1.25 500 -out /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_OUTPUT.csv

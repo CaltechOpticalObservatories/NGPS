@@ -1,0 +1,40 @@
+package edu.jhu.htm.core;
+
+/**********************************************************************
+* Current Version
+* ===============
+* ID:	$Id: HTMException.java,v 1.1 2003/02/07 23:02:51 womullan Exp $
+*
+* Revision: 	$Revision: 1.1 $
+* Date/time:	$Date: 2003/02/07 23:02:51 $
+**********************************************************************
+* Exception thron by erroHandler when an error is reported
+*
+* @revision $Revision: 1.1 $
+* @author wil
+ */
+
+public class HTMException extends Exception {
+
+  public int errorNum;
+
+   public HTMException(int errorNum, String message) {
+	super(message);
+	this.errorNum = errorNum;
+  }
+
+  public int getErrorNum() {
+	return errorNum;
+  }
+
+}
+
+/**********************************************************************
+* Revision History
+* ================
+*
+* $Log: HTMException.java,v $
+* Revision 1.1  2003/02/07 23:02:51  womullan
+* Major tidy up of HTM to HTMfunc addition of exceptions and error handler
+*
+* *********************************************************************/

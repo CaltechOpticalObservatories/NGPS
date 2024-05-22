@@ -1,0 +1,255 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+package edu.caltech.palomar.instruments.ngps.object;
+
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import javax.swing.tree.DefaultMutableTreeNode;
+
+/**
+ *
+ * @author jennifermilburn
+ */
+public class Instrument extends java.lang.Object{
+  transient protected PropertyChangeSupport propertyChangeListeners = new PropertyChangeSupport(this);
+  public java.lang.String exposuretime; 
+  public double           EXPTIME;
+  public java.lang.String EXPTIME_CODE;
+  public int              nexp;
+  public double           slitwidth;
+  public java.lang.String slitwidth_string;
+  public java.lang.String slitwidth_code;
+  public double           slitoffset;
+  public java.lang.String ccdmode;
+  public int              bin_spec;
+  public int              bin_space;
+  public java.lang.String requestedSlitAngle;
+  public double           slitangle;
+  public  DefaultMutableTreeNode  instrument_node;
+  public  DefaultMutableTreeNode  exposuretime_node;
+  public  DefaultMutableTreeNode  nexp_node;
+  public  DefaultMutableTreeNode  slit_node;
+  public  DefaultMutableTreeNode  slitwidth_node;
+  public  DefaultMutableTreeNode  slitoffset_node;
+  public  DefaultMutableTreeNode  ccdmode_node;
+  public  DefaultMutableTreeNode  binning_node; 
+  public  DefaultMutableTreeNode  bin_spec_node;
+  public  DefaultMutableTreeNode  bin_space_node;
+  public  DefaultMutableTreeNode  cassangle_node;
+/*================================================================================================
+/      Instrument() CONSTRUCTOR
+/=================================================================================================*/
+public Instrument(){
+  initializeValues();  
+}
+private void initializeValues(){
+    setNEXP(1);
+    setSlitwidth(1.0);
+    setSlitOffset(0.0);
+    setOBSMODE("default");
+    setBIN_SPEC(1);
+    setBIN_SPACE(1);
+    setExposuretime("SET 1"); 
+    setSlitwidth_string("SET 1");
+}
+/*================================================================================================
+/          DefaultMutableTreeNode constructTreeNode()
+/=================================================================================================*/
+public DefaultMutableTreeNode constructTreeNode(){
+    instrument_node     = new DefaultMutableTreeNode("INSTRUMENT");
+    slit_node           = new DefaultMutableTreeNode("SLIT");
+    binning_node        = new DefaultMutableTreeNode("BINNING");
+    exposuretime_node   = new DefaultMutableTreeNode("EXPTIME = "+exposuretime);
+    nexp_node           = new DefaultMutableTreeNode("NEXP = "+nexp);
+    slitwidth_node      = new DefaultMutableTreeNode("SLIT WIDTH = "+slitwidth_string);
+    slitoffset_node     = new DefaultMutableTreeNode("SLIT OFFSET = "+slitoffset);
+    ccdmode_node        = new DefaultMutableTreeNode("CCDMODE = "+ccdmode);
+    bin_spec_node       = new DefaultMutableTreeNode("BIN SPATIAL = "+bin_spec);
+    bin_space_node      = new DefaultMutableTreeNode("BIN SPECTRAL = "+bin_space);
+    cassangle_node      = new DefaultMutableTreeNode("SLIT ANGLE = "+requestedSlitAngle);
+    instrument_node.add(exposuretime_node);
+    instrument_node.add(nexp_node);
+    slit_node.add(slitwidth_node);
+    slit_node.add(slitoffset_node);
+    instrument_node.add(slit_node);
+    instrument_node.add(ccdmode_node);
+    binning_node.add(bin_spec_node);
+    binning_node.add(bin_space_node);
+    instrument_node.add(binning_node);
+    instrument_node.add(cassangle_node);
+  return instrument_node;
+}
+/*================================================================================================
+/      setExposuretime(double new)
+/=================================================================================================*/
+  public void setExposuretime(java.lang.String new_exposuretime) {
+    java.lang.String  old_exposuretime = this.exposuretime;
+    exposuretime = new_exposuretime;
+   propertyChangeListeners.firePropertyChange("exposuretime_string", old_exposuretime, new_exposuretime);
+  }
+  public java.lang.String getExposuretime() {
+    return exposuretime;
+  }
+ /*================================================================================================
+/      setExposuretime(double new)
+/=================================================================================================*/
+  public void setEXPTIME_CODE(java.lang.String new_EXPTIME_CODE) {
+    java.lang.String  old_EXPTIME_CODE = this.EXPTIME_CODE;
+    EXPTIME_CODE = new_EXPTIME_CODE;
+   propertyChangeListeners.firePropertyChange("EXPTIME_CODE", old_EXPTIME_CODE, new_EXPTIME_CODE);
+  }
+  public java.lang.String getEXPTIME_CODE() {
+    return EXPTIME_CODE;
+  } 
+ /*================================================================================================
+/      setEXPTIME(double new_EXPTIME) 
+/=================================================================================================*/
+  public void setEXPTIME(double new_EXPTIME) {
+    double  old_EXPTIME = this.EXPTIME;
+    EXPTIME = new_EXPTIME;
+   propertyChangeListeners.firePropertyChange("EXPTIME", Double.valueOf(old_EXPTIME), Double.valueOf(new_EXPTIME));
+  }
+  public double getEXPTIME() {
+    return EXPTIME;
+  } 
+/*================================================================================================
+/      setNEXP(int new_nexp)
+/=================================================================================================*/
+  public void setNEXP(int new_nexp) {
+    int  old_nexp = this.nexp;
+    this.nexp = new_nexp;
+   propertyChangeListeners.firePropertyChange("nexp", Integer.valueOf(old_nexp), Integer.valueOf(new_nexp));
+  }
+  public int getNEXP() {
+    return nexp;
+  }  
+ /*================================================================================================
+/      setSlitwidth(double new)
+/=================================================================================================*/
+  public void setSlitwidth_string(java.lang.String new_slitwidth) {
+    java.lang.String  old_slitwidth = this.slitwidth_string;
+    slitwidth_string = new_slitwidth;
+    propertyChangeListeners.firePropertyChange("slitwidth", old_slitwidth, new_slitwidth);
+  }
+  public java.lang.String getSlitwidth_string() {
+    return slitwidth_string;
+  } 
+  /*================================================================================================
+/      setSlitwidth(double new)
+/=================================================================================================*/
+  public void setSlitwidth_code(java.lang.String new_slitwidth_code) {
+    java.lang.String  old_slitwidth_code = this.slitwidth_code;
+    slitwidth_code = new_slitwidth_code;
+    propertyChangeListeners.firePropertyChange("slitwidth_code", old_slitwidth_code, new_slitwidth_code);
+  }
+  public java.lang.String getSlitwidth_code() {
+    return slitwidth_code;
+  }
+/*================================================================================================
+/      setSlitwidth(double new)
+/=================================================================================================*/
+  public void setSlitwidth(double new_slitwidth) {
+    double  old_slitwidth = this.slitwidth;
+    slitwidth = new_slitwidth;
+    propertyChangeListeners.firePropertyChange("slitwidth", Double.valueOf(old_slitwidth), Double.valueOf(new_slitwidth));
+  }
+  public double getSlitwidth() {
+    return slitwidth;
+  }
+ /*================================================================================================
+/      setSlitwidth(double new)
+/=================================================================================================*/
+  public void setSlitOffset(Double new_slitoffset) {
+    double  old_slitoffset = this.slitoffset;
+    slitoffset = new_slitoffset;
+    propertyChangeListeners.firePropertyChange("slitoffset", Double.valueOf(old_slitoffset), Double.valueOf(new_slitoffset));
+  }
+  public double getSlitOffset() {
+    return slitoffset;
+  } 
+/*================================================================================================
+/      setReadmode(java.lang.String new_Readmode)
+/=================================================================================================*/
+  public void setOBSMODE(java.lang.String new_ccdmode) {
+    java.lang.String  old_ccdmode = this.ccdmode;
+    this.ccdmode = new_ccdmode;
+   propertyChangeListeners.firePropertyChange("ccdmode", (old_ccdmode), (new_ccdmode));
+  }
+  public java.lang.String getOBSMODE() {
+    return ccdmode;
+  }
+/*================================================================================================
+/      setBIN_SPEC(int new_bin_spec)
+/=================================================================================================*/
+  public void setBIN_SPEC(int new_bin_spec) {
+    int  old_bin_spec = this.bin_spec;
+    this.bin_spec = new_bin_spec;
+   propertyChangeListeners.firePropertyChange("bin_spec", Integer.valueOf(old_bin_spec), Integer.valueOf(new_bin_spec));
+  }
+  public int getBIN_SPEC() {
+    return bin_spec;
+  }
+/*================================================================================================
+/      setBIN_SPEC(int new_bin_spec)
+/=================================================================================================*/
+  public void setBIN_SPACE(int new_bin_space) {
+    int  old_bin_space = this.bin_space;
+    this.bin_space = new_bin_space;
+   propertyChangeListeners.firePropertyChange("bin_space", Integer.valueOf(old_bin_space), Integer.valueOf(new_bin_space));
+  }
+  public int getBIN_SPACE() {
+    return bin_space;
+  }  
+/*================================================================================================
+/      setCASS_RING_ANGLE(double newCASS_RING_ANGLE)
+/=================================================================================================*/
+  public void setRequestedSlitAngle(java.lang.String newCASS_RING_ANGLE) {
+    java.lang.String  oldCASS_RING_ANGLE = this.requestedSlitAngle;
+    this.requestedSlitAngle = newCASS_RING_ANGLE;
+    propertyChangeListeners.firePropertyChange("cass_ring_angle", oldCASS_RING_ANGLE, newCASS_RING_ANGLE);
+  }
+  public java.lang.String getRequestedSlitAngle() {
+    return requestedSlitAngle;
+  } 
+/*================================================================================================
+/      setCASS_RING_ANGLE(double newCASS_RING_ANGLE)
+/=================================================================================================*/
+  public void setSLITANGLE(double newCASS_RING_ANGLE) {
+    double  oldCASS_RING_ANGLE = this.slitangle;
+    this.slitangle = newCASS_RING_ANGLE;
+    propertyChangeListeners.firePropertyChange("casangle", oldCASS_RING_ANGLE, newCASS_RING_ANGLE);
+  }
+  public double getSLITANGLE() {
+    return slitangle;
+  }   
+/*================================================================================================
+/      add and remove Property Change Listeners
+/=================================================================================================*/
+  public synchronized void removePropertyChangeListener(PropertyChangeListener l) {
+    propertyChangeListeners.removePropertyChangeListener(l);
+  }
+  public synchronized void addPropertyChangeListener(PropertyChangeListener l) {
+    propertyChangeListeners.addPropertyChangeListener(l);
+  }   
+/*================================================================================================
+/      add and remove Property Change Listeners
+/=================================================================================================*/
+public Instrument clone(){
+    Instrument current = new Instrument();
+    current.setBIN_SPACE(this.getBIN_SPACE());
+    current.setBIN_SPEC(this.getBIN_SPEC());
+    current.setRequestedSlitAngle(this.getRequestedSlitAngle());
+    current.setEXPTIME(this.getEXPTIME());
+    current.setEXPTIME_CODE(this.getEXPTIME_CODE());
+    current.setExposuretime(this.getExposuretime());
+    current.setNEXP(this.getNEXP());
+    current.setOBSMODE(this.getOBSMODE());
+    current.setSlitOffset(this.getSlitOffset());
+    current.setSlitwidth(this.getSlitwidth());
+    current.setSlitwidth_code(this.getSlitwidth_code());
+    current.setSlitwidth_string(this.getSlitwidth_string());
+  return current;  
+}
+}
