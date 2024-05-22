@@ -2,10 +2,24 @@
 
 dest=/usr/local/palomar/deployment/NGPS_GUI/
 
-echo ''
-echo 'SYNCING EXTERNAL FILES AND FOLDERS'
-rsync -arv . $dest --files-from=DEPLOY.TXT
+read -p "Do you wish to deploy to $dest ? [y/N]:  " yn
+case $yn in
+    [Yy]* ) 
+	echo ''
+	echo 'SYNCING EXTERNAL FILES AND FOLDERS'
+	rsync -arv . $dest --files-from=DEPLOY.TXT
 
-echo ''
-echo 'SYNCING JAR FILE AND LIB'
-rsync -arv ./dist/ $dest
+	echo ''
+	echo 'SYNCING JAR FILE AND LIB'
+	rsync -arv ./dist/ $dest
+	;;
+    * ) echo "Canceled"; exit;;
+esac
+
+#echo ''
+#echo 'SYNCING EXTERNAL FILES AND FOLDERS'
+#rsync -arv . $dest --files-from=DEPLOY.TXT
+#
+#echo ''
+#echo 'SYNCING JAR FILE AND LIB'
+#rsync -arv ./dist/ $dest
