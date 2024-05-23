@@ -1,3 +1,0 @@
-cd /home/developer/Software/java/ngps/ngps/python/otm/OTM
-export PYTHONPATH=/home/developer/Software/java/ngps/ngps/python/etc
-/usr/bin/python3 ./OTM.py /home/developer/Software/java/ngps/ngps/config/otm/OTM_JAVA_INPUT.csv 2023-01-25T03:00:38.194 -seeing 1.25 600 -out /home/developer/Software/java/ngps/ngps/config/otm/OTM_JAVA_OUTPUT.csv -alt_twilight -12.0
