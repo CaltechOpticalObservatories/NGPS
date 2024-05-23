@@ -113,7 +113,10 @@ public class OTMlauncher {
    public java.lang.String USERDIR           = System.getProperty("user.dir");
    public java.lang.String USERDIR_PYTHON    = System.getProperty("user.dir");
    public java.lang.String SEP               = System.getProperty("file.separator");
-   
+   public java.lang.String TEMPDIR           = SEP+"tmp";
+   public java.lang.String OTM_EXEC          = USERDIR+SEP+"python"+SEP+"otm"+SEP+"OTM"+SEP+"OTM.py";
+   public java.lang.String ETC_PATH          = USERDIR_PYTHON+SEP+"python"+SEP+"etc";
+
    public java.lang.String DIR               = new java.lang.String();
    private PumpStreamHandler psh;
    private PumpStreamHandler plot_psh;
@@ -141,7 +144,7 @@ public class OTMlauncher {
    private java.lang.String             OTM             = new java.lang.String("otm"); 
    public OTMTableModel                 myOTMTableModel = new OTMTableModel();
    private  TimelineChart               myTimelineChart;   
-   private java.lang.String             PLOT_OUTPUT_FILE   = USERDIR+SEP+"config"+SEP+"otm"+SEP+"PLOT.html";
+   private java.lang.String             PLOT_OUTPUT_FILE   = TEMPDIR+SEP+"PLOT.html";
    public  JFrame                       timeline_graph_frame;
    private double                       seeing;
    private int                          wavelength;
@@ -186,7 +189,7 @@ public void bootstrap(){
       bootstrap_properties.load(bootstrap_properties_file);
       bootstrap_properties_file.close();
       USERDIR        = bootstrap_properties.getProperty("USERDIR");
-      PLOT_OUTPUT_FILE   = USERDIR+SEP+"config"+SEP+"otm"+SEP+"PLOT.html";
+      PLOT_OUTPUT_FILE   = TEMPDIR+SEP+"PLOT.html";
     }catch(Exception e){
         System.out.println(e.toString());
     }
@@ -270,7 +273,7 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
    constructScriptFile(start_time,seeing,wavelength); 
    myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "Creating OTM input file."); 
    createOTMInputFile();
-       String line = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_SCRIPT.txt";
+       String line = TEMPDIR+SEP+"OTM_SCRIPT.txt";
  //      String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_SCRIPT.txt";
        setProcessingState(RUNNING);
        myOTMErrorsLog.clearList();
@@ -290,6 +293,7 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
            }                     
        }catch(Exception e){                      
          setProcessingState(IDLE);
+         logMessage(INFO,"EXCEPTION IN OTM EXECUTION  "+e.toString());
        }
        setProcessingState(IDLE);
        logMessage(INFO,"OTM program complete ");
@@ -313,7 +317,7 @@ public void PLOT(){
    myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "Constructing plot execution script."); 
    constructPlotScriptFile(); 
    myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "Creating OTM input file."); 
-       String line = USERDIR+SEP+"config"+SEP+"otm"+SEP+"PLOT_SCRIPT.txt";
+       String line = TEMPDIR+SEP+"PLOT_SCRIPT.txt";
        setProcessingState(RUNNING);
        logMessage(INFO,"Starting OTM_plot.py Program ");
        try{
@@ -344,7 +348,6 @@ public void PLOT(){
 /      constructScriptFile(java.sql.Timestamp start_time,double seeing,int wavelength)
 /=================================================================================================*/
    public void display_timeline_image(java.lang.String image_name){
-//       java.lang.String OTM_INSTALL_DIR    = "/Users/jennifermilburn/Desktop/NGPS/python/git/OTM/";
 //       java.lang.String IMAGE_NAME = "timeline.png";
        BufferedImage img = null;
       try {
@@ -362,18 +365,11 @@ public void constructScriptFile(java.sql.Timestamp start_time,double seeing,int 
 //export PYTHONPATH=/Users/jennifermilburn/Desktop/NGPS/python/git
 ///Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python ./OTM.py /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_INPUT.csv 2022-01-01T03:00:00.000 -seeing 1.25 500 -out /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_OUTPUT.csv
 // BACKUP OF THE PREVIOUS PATHS
-// java.lang.String OTM_INSTALL_DIR    = "/Users/jennifermilburn/Desktop/NGPS/python/git/OTM";
-// java.lang.String ETC_PATH           = "/Users/jennifermilburn/Desktop/NGPS/python/git";
 // java.lang.String PYTHON_INSTALL_DIR = "/Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python";
-
-
- java.lang.String OTM_INSTALL_DIR    = USERDIR_PYTHON+SEP+"python"+SEP+"otm"+SEP+"OTM";
- java.lang.String ETC_PATH           = USERDIR_PYTHON+SEP+"python"+SEP+"etc";
-// java.lang.String PYTHON_INSTALL_DIR = "/Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python"; 
  java.lang.String PYTHON_INSTALL_DIR = dbms.PYTHON_INSTALL_DIR;
- java.lang.String OTM_INPUT_FILE     = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_JAVA_INPUT.csv";
- java.lang.String OTM_OUTPUT_FILE    = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_JAVA_OUTPUT.csv";
- java.lang.String SCRIPT_FILENAME    = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_SCRIPT.txt";
+ java.lang.String OTM_INPUT_FILE     = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
+ java.lang.String OTM_OUTPUT_FILE    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
+ java.lang.String SCRIPT_FILENAME    = TEMPDIR+SEP+"OTM_SCRIPT.txt";
  double           ALT_TWILIGHT       = -12.0;
  try{
     java.lang.String start_time_string = timestamp_to_string(start_time);
@@ -381,13 +377,13 @@ public void constructScriptFile(java.sql.Timestamp start_time,double seeing,int 
  //   start_time_string = start_time_string.replaceAll(" ","T");
     java.io.File current = new java.io.File(SCRIPT_FILENAME);
     java.io.PrintWriter pw = new java.io.PrintWriter(current);
-    pw.println("cd "+OTM_INSTALL_DIR);
     pw.println("export PYTHONPATH="+ETC_PATH);
-    pw.println(PYTHON_INSTALL_DIR+" "+"./OTM.py"+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -alt_twilight "+ALT_TWILIGHT+" -forceSNR"+" -airmass_max "+airmass_limit);
+    pw.println(PYTHON_INSTALL_DIR+" "+OTM_EXEC+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -alt_twilight "+ALT_TWILIGHT+" -forceSNR"+" -airmass_max "+airmass_limit);
 //    pw.println("./OTM.py"+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -alt_twilight "+ALT_TWILIGHT);
 //    pw.println(PYTHON_INSTALL_DIR+" "+"./OTM.py"+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -timeline timeline.png");
     pw.flush();
     pw.close();
+    current.setExecutable(true);
  }catch(Exception e){
     System.out.println(""+e.toString());
  }
@@ -400,26 +396,18 @@ public void constructPlotScriptFile(){
 //cd /Users/jennifermilburn/Desktop/NGPS/python/git/OTM
 //export PYTHONPATH=/Users/jennifermilburn/Desktop/NGPS/python/git
 ///Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python ./OTM.py /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_INPUT.csv 2022-01-01T03:00:00.000 -seeing 1.25 500 -out /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_OUTPUT.csv
-//
-// java.lang.String OTM_INSTALL_DIR    = "/Users/jennifermilburn/Desktop/NGPS/python/git/OTM";
-// java.lang.String ETC_PATH           = "/Users/jennifermilburn/Desktop/NGPS/python/git";
-//
- java.lang.String OTM_INSTALL_DIR    = USERDIR_PYTHON+SEP+"python"+SEP+"otm"+SEP+"OTM";
- java.lang.String ETC_PATH           = USERDIR_PYTHON+SEP+"python"+SEP+"etc";
-//
 // java.lang.String PYTHON_INSTALL_DIR = "/Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python";
 //
  java.lang.String PYTHON_INSTALL_DIR = dbms.PYTHON_INSTALL_DIR;
- java.lang.String OTM_INPUT_FILE     = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_JAVA_INPUT.csv";
- java.lang.String OTM_OUTPUT_FILE    = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_JAVA_OUTPUT.csv";
- java.lang.String PLOT_OUTPUT_FILE   = USERDIR+SEP+"config"+SEP+"otm"+SEP+"PLOT.html";
- java.lang.String SCRIPT_FILENAME    = USERDIR+SEP+"config"+SEP+"otm"+SEP+"PLOT_SCRIPT.txt";
+ java.lang.String OTM_INPUT_FILE     = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
+ java.lang.String OTM_OUTPUT_FILE    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
+ java.lang.String PLOT_OUTPUT_FILE   = TEMPDIR+SEP+"PLOT.html";
+ java.lang.String SCRIPT_FILENAME    = TEMPDIR+SEP+"PLOT_SCRIPT.txt";
  try{
     java.io.File current = new java.io.File(SCRIPT_FILENAME);
     java.io.PrintWriter pw = new java.io.PrintWriter(current);
-    pw.println("cd "+OTM_INSTALL_DIR);
     pw.println("export PYTHONPATH="+ETC_PATH);
-    pw.println(PYTHON_INSTALL_DIR+" "+"./OTM_plot.py"+" "+OTM_OUTPUT_FILE+" "+PLOT_OUTPUT_FILE);
+    pw.println(PYTHON_INSTALL_DIR+" "+OTM_EXEC+" "+OTM_OUTPUT_FILE+" "+PLOT_OUTPUT_FILE);
 //    pw.println(PYTHON_INSTALL_DIR+" "+"./OTM.py"+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -timeline timeline.png");
     pw.flush();
     pw.close();
@@ -432,7 +420,7 @@ public void constructPlotScriptFile(){
 /=============================================================================================*/
 public void createOTMInputFile(){
    try{
-      java.lang.String output_file_name = USERDIR+SEP+CONFIG+SEP+OTM+SEP+"OTM_JAVA_INPUT.csv";
+      java.lang.String output_file_name = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
       FileWriter   output_file = new FileWriter(output_file_name); 
       PrintWriter  pw          = new PrintWriter(output_file);
       pw.println("name,	RA,DECL,binspect,binspat,ccdmode,slitangle,slitwidth,exptime,wrange,channel,mag,magsystem,magfilter,airmass_max,notbefore,pointmode,srcmodel");
@@ -505,7 +493,7 @@ public void readOTMoutput(){
        myXYSeriesCollection       = new XYSeriesCollection();
       java.lang.String reference_time = new java.lang.String();       
        
-       java.lang.String OTM_OUTPUT_FILE_STRING    = USERDIR+SEP+"config"+SEP+"otm"+SEP+"OTM_JAVA_OUTPUT.csv";
+       java.lang.String OTM_OUTPUT_FILE_STRING    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
        java.io.File OTM_OUTPUT_FILE = new java.io.File(OTM_OUTPUT_FILE_STRING);
        java.io.FileReader fr = new java.io.FileReader(OTM_OUTPUT_FILE);
        java.io.BufferedReader br = new java.io.BufferedReader(fr);
@@ -1035,7 +1023,8 @@ public java.sql.Timestamp getStartTimestamp(){
  public CommandLine start_OTM(){
 //    String line = "/Users/jennifermilburn/Desktop/NGPS/python/git/OTM/start_OTM.txt";
 //    String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/start_OTM.txt";
-    String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_SCRIPT.txt";
+//    String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_SCRIPT.txt";
+    String line = "/tmp/OTM_SCRIPT.txt";
       setProcessingState(RUNNING);
        CommandLine commandLine = CommandLine.parse(line);
  //       commandLine.addArgument("/Users/jennifermilburn/Desktop/NGPS/python/git/OTM/OTM.py");
