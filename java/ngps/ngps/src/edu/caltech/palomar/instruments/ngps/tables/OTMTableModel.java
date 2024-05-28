@@ -356,20 +356,19 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
        returnObject = selectedRow.otm.getOTMwait();
     }
     if(col == 14){
-        java.lang.String flag = selectedRow.otm.getOTMflag();
-        if(flag.contains("ALT")){
-           returnObject = "Target's altitude is out of range" ;
-        }else if(flag.contains("AIR")){
-            returnObject = "Target's airmass is out of range" ;
-        }else if(flag.contains("HA")){
-            returnObject = "Target's hour angle is out of range" ;
-        }else if(flag.contains("DAY")){
-            returnObject = "Obervation is happening during daylight" ;
-        }else{
-            returnObject = selectedRow.otm.getOTMflag();
-        }
-//        
-//       returnObject = selectedRow.otm.getOTMflag();
+//        java.lang.String flag = selectedRow.otm.getOTMflag();
+//        if(flag.contains("ALT")){
+//           returnObject = "Target's altitude is out of range" ;
+//        }else if(flag.contains("AIR")){
+//            returnObject = "Target's airmass is out of range" ;
+//        }else if(flag.contains("HA")){
+//            returnObject = "Target's hour angle is out of range" ;
+//        }else if(flag.contains("DAY")){
+//            returnObject = "Obervation is happening during daylight" ;
+//        }else{
+//            returnObject = selectedRow.otm.getOTMflag();
+//        }        
+       returnObject = selectedRow.otm.getOTMflag();
     }
     if(col == 15){
        returnObject = selectedRow.otm.getOTMlast();

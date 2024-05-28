@@ -456,6 +456,9 @@ public void createOTMInputFile(){
          if(current.sky.getDeclination() == null){
             current.sky.setDeclination("");
          }
+         if(current.otm.getOTMpointmode() == null){
+            current.otm.setOTMpointmode("");
+         }
          current_line = current.getName()+","+
                         current.sky.getRightAscension()+","+
                         current.sky.getDeclination()+","+                
