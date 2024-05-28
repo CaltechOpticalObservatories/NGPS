@@ -116,6 +116,10 @@ public class OTMlauncher {
    public java.lang.String TEMPDIR           = SEP+"tmp";
    public java.lang.String OTM_EXEC          = USERDIR+SEP+"python"+SEP+"otm"+SEP+"OTM"+SEP+"OTM.py";
    public java.lang.String ETC_PATH          = USERDIR_PYTHON+SEP+"python"+SEP+"etc";
+   public java.lang.String OTM_INFILE        = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
+   public java.lang.String OTM_OUTFILE        = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
+   public java.lang.String OTM_SCRIPT        = TEMPDIR+SEP+"OTM_JAVA_SCRIPT.txt";
+   
 
    public java.lang.String DIR               = new java.lang.String();
    private PumpStreamHandler psh;
@@ -273,8 +277,8 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
    constructScriptFile(start_time,seeing,wavelength); 
    myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "Creating OTM input file."); 
    createOTMInputFile();
-       String line = TEMPDIR+SEP+"OTM_SCRIPT.txt";
- //      String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_SCRIPT.txt";
+   
+       String line = OTM_SCRIPT;
        setProcessingState(RUNNING);
        myOTMErrorsLog.clearList();
        myOTMErrorsLog.setVisible(false);
@@ -297,6 +301,12 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
        }
        setProcessingState(IDLE);
        logMessage(INFO,"OTM program complete ");
+       try{
+           Runtime.getRuntime().exec("chmod a+w "+OTM_OUTFILE);  //make writable by all
+       }catch(Exception e){                      
+         logMessage(INFO, "COULD NOT CHMOD OUTPUT:  "+e.toString());
+       }
+
 //       java.lang.String OTM_TIMELINE_IMAGE    = "/Users/jennifermilburn/Desktop/NGPS/python/git/OTM/timeline.png";       
 //       myTimelineChart.loadImage(OTM_TIMELINE_IMAGE);
 //       myTimelineChart.setVisible(true);
@@ -360,30 +370,26 @@ public void PLOT(){
 /      constructScriptFile(java.sql.Timestamp start_time,double seeing,int wavelength)
 /=================================================================================================*/
 public void constructScriptFile(java.sql.Timestamp start_time,double seeing,int wavelength){
-    //  EXAMPLE SCRIPT FILE 
-//cd /Users/jennifermilburn/Desktop/NGPS/python/git/OTM
-//export PYTHONPATH=/Users/jennifermilburn/Desktop/NGPS/python/git
-///Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python ./OTM.py /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_INPUT.csv 2022-01-01T03:00:00.000 -seeing 1.25 500 -out /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_OUTPUT.csv
-// BACKUP OF THE PREVIOUS PATHS
-// java.lang.String PYTHON_INSTALL_DIR = "/Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python";
+
  java.lang.String PYTHON_INSTALL_DIR = dbms.PYTHON_INSTALL_DIR;
- java.lang.String OTM_INPUT_FILE     = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
- java.lang.String OTM_OUTPUT_FILE    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
- java.lang.String SCRIPT_FILENAME    = TEMPDIR+SEP+"OTM_SCRIPT.txt";
+ //java.lang.String OTM_INPUT_FILE     = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
+ //java.lang.String OTM_OUTPUT_FILE    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
+ //java.lang.String SCRIPT_FILENAME    = TEMPDIR+SEP+"OTM_SCRIPT.txt";
  double           ALT_TWILIGHT       = -12.0;
  try{
     java.lang.String start_time_string = timestamp_to_string(start_time);
  //   start_time_string = start_time_string.trim();
  //   start_time_string = start_time_string.replaceAll(" ","T");
-    java.io.File current = new java.io.File(SCRIPT_FILENAME);
+    java.io.File current = new java.io.File(OTM_SCRIPT);
     java.io.PrintWriter pw = new java.io.PrintWriter(current);
     pw.println("export PYTHONPATH="+ETC_PATH);
-    pw.println(PYTHON_INSTALL_DIR+" "+OTM_EXEC+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -alt_twilight "+ALT_TWILIGHT+" -forceSNR"+" -airmass_max "+airmass_limit);
+    pw.println(PYTHON_INSTALL_DIR+" "+OTM_EXEC+" "+OTM_INFILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTFILE+" -alt_twilight "+ALT_TWILIGHT+" -forceSNR"+" -airmass_max "+airmass_limit);
 //    pw.println("./OTM.py"+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -alt_twilight "+ALT_TWILIGHT);
 //    pw.println(PYTHON_INSTALL_DIR+" "+"./OTM.py"+" "+OTM_INPUT_FILE+" "+start_time_string+" -seeing "+seeing+" "+wavelength+" -out "+OTM_OUTPUT_FILE+" -timeline timeline.png");
     pw.flush();
     pw.close();
-    current.setExecutable(true);
+    //current.setExecutable(true);
+    Runtime.getRuntime().exec("chmod 777 "+OTM_SCRIPT);  //make executable and writable by all
  }catch(Exception e){
     System.out.println(""+e.toString());
  }
@@ -420,8 +426,7 @@ public void constructPlotScriptFile(){
 /=============================================================================================*/
 public void createOTMInputFile(){
    try{
-      java.lang.String output_file_name = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
-      FileWriter   output_file = new FileWriter(output_file_name); 
+      FileWriter   output_file = new FileWriter(OTM_INFILE); 
       PrintWriter  pw          = new PrintWriter(output_file);
       pw.println("name,	RA,DECL,binspect,binspat,ccdmode,slitangle,slitwidth,exptime,wrange,channel,mag,magsystem,magfilter,airmass_max,notbefore,pointmode,srcmodel");
 //      pw.println("name,RA,DECL,epoch,ccdmode,casangle,slitwidth,exptime,wrange,channel,mag,magref,srcmodel");
@@ -475,6 +480,7 @@ public void createOTMInputFile(){
       } 
       pw.flush();
       pw.close();
+      Runtime.getRuntime().exec("chmod a+w "+OTM_INFILE);  //make writable by all
    }catch(Exception e){
       System.out.println(e.toString());
    }
