@@ -1053,12 +1053,12 @@ public void parseAsyncMessage(java.lang.String message){
      if(message.contains("TCSD")){
         String[] messages = message.split(":"); 
            boolean isopen = false;
-        if(messages[1].matches("isopen")){
-           if(messages[2].matches("sim")){
+        if(messages[1].matches("open")){
+           if(messages[2].contains("sim")){
               isopen = true;
               setActiveTCSAddress(getSimulatorAddress());
               setActiveTCSname(messages[2]);
-           }else if(messages[2].matches("real")){
+           }else if(messages[2].contains("real")){
               isopen = true;
               setActiveTCSAddress(getTCSAddress());
               setActiveTCSname(messages[2]);

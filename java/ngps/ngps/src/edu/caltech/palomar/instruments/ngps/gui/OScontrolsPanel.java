@@ -65,6 +65,7 @@ public class OScontrolsPanel extends javax.swing.JPanel {
              state_propertyChange(e);
           }
      });  
+    myObservationSequencerController.setSTATE("OFFLINE");
     messagesTextPane.setDocument(myObservationSequencerController.myCommandLogModel.getDocument());
 }
 /*================================================================================================
@@ -680,13 +681,14 @@ public void initializeActionButtons(){
                     .addGroup(sequencerPanelLayout.createSequentialGroup()
                         .addComponent(totalTimeLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 9, Short.MAX_VALUE)
-                        .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(jLabel5)
-                            .addComponent(tcs_Label)
-                            .addComponent(active_tcs_Label1)
+                        .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(active_tcs_ip_Label)
-                            .addComponent(jLabel1)
-                            .addComponent(jLabel2))
+                            .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                .addComponent(jLabel5)
+                                .addComponent(tcs_Label)
+                                .addComponent(active_tcs_Label1)
+                                .addComponent(jLabel1)
+                                .addComponent(jLabel2)))
                         .addGap(3, 3, 3)
                         .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(sequencerPanelLayout.createSequentialGroup()
