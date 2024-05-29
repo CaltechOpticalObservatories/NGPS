@@ -166,8 +166,11 @@ namespace Acam {
       bool python_initialized;
 
     public:
-      Astrometry();
-      ~Astrometry();
+      Astrometry() : pAstrometryModule(nullptr), pQualityModule(nullptr) {  /// class constructor
+        initialize_python();
+      }
+
+      void initialize_python();                          /// initializes the Python module
 
       bool isacquire;
       inline bool is_initialized() { return this->python_initialized; };
@@ -358,6 +361,7 @@ namespace Acam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets
 
+      void initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long initialize_class();                 /// initialize the Interface class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components

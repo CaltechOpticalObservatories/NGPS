@@ -21,20 +21,39 @@
 int main(int argc, char **argv) {
   std::string function = "Acam::main";
   std::stringstream message;
-  std::string logpath; 
+  bool start_daemon = true;
+
+  // Allow running in the foreground
+  //
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
+  }
+
+  // TODO make configurable
+  //
+  std::string daemon_stdout="/dev/null";                          // where daemon sends stdout
+  std::string daemon_stderr="/tmp/"+Acam::DAEMON_NAME+".stderr";  // where daemon sends stderr
+
+  // daemonize, but don't close all file descriptors, required for the Andor camera
+  //
+  if ( start_daemon ) {
+    logwrite( function, "starting daemon" );
+    Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
+  }
+
+  // Now the child process instantiates a Server object
+  //
+  Acam::Server acamd;
+
+  // Python should not be started by the parent. Initialize the Python objects
+  // only by the child process, after daemonizing.
+  //
+  acamd.initialize_python_objects();
+
+  std::string logpath;
   long ret=NO_ERROR;
-  std::string daemon_in;     // daemon setting read from config file
-  std::string daemon_stdout; // where daemon sends stdout
-  std::string daemon_stderr; // where daemon sends stderr
-  bool start_daemon = false; // don't start as daemon unless specifically requested
 
   Py_BEGIN_ALLOW_THREADS
-
-  // capture these signals
-  //
-  signal(SIGINT, signal_handler);
-  signal(SIGPIPE, signal_handler);
-  signal(SIGHUP, signal_handler);
 
   // check for "-f <filename>" command line option to specify config file
   //
@@ -80,36 +99,10 @@ int main(int argc, char **argv) {
 
     if ( configkey == "LOGPATH") logpath = configval;
     if ( configkey == "TM_ZONE") zone = configval;
-    if ( configkey == "DAEMON")  daemon_in = configval;
-    if ( configkey == "STDOUT")  daemon_stdout = configval;
-    if ( configkey == "STDERR")  daemon_stderr = configval;
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     acamd.exit_cleanly();
-  }
-
-  if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
-  else
-  if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
-    message.str(""); message << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }";
-    logwrite( function, message.str() );
-    acamd.exit_cleanly();
-  }
-
-  // check for "-d" command line option last so that the command line
-  // can override the config file to start as daemon
-  //
-  if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
-    start_daemon = true;
-  }
-
-  // daemonize, but don't close all file descriptors, required for the Andor camera
-  //
-  if ( start_daemon ) {
-    logwrite( function, "starting daemon" );
-    Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
   }
 
   if ( ( init_log( logpath, Acam::DAEMON_NAME ) != 0 ) ) {           // initialize the logging system
@@ -117,7 +110,7 @@ int main(int argc, char **argv) {
     acamd.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
   logwrite(function, message.str());
 
   message.str(""); message << acamd.config.n_entries << " lines read from " << acamd.config.filename;
@@ -150,7 +143,10 @@ int main(int argc, char **argv) {
   socklist.reserve(N_THREADS);
 
   Network::TcpSocket s(acamd.blkport, true, -1, 0);  // instantiate TcpSocket object with blocking port
-  s.Listen();                                        // create a listening socket
+  if ( s.Listen() < 0 ) {                            // create a listening socket
+    logwrite( function, "ERROR could not create listening socket" );
+    acamd.exit_cleanly();
+  }
   socklist.push_back(s);                             // add it to the socklist vector
   std::thread( std::ref(Acam::Server::block_main),
                std::ref(acamd),
@@ -162,7 +158,10 @@ int main(int argc, char **argv) {
   for (int i=1; i<N_THREADS; i++) {                  // create N_THREADS-1 non-blocking socket objects
     if (i==1) {                                      // first one only
       Network::TcpSocket s(acamd.nbport, false, CONN_TIMEOUT, i);   // TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
-      s.Listen();                                    // create a listening socket
+      if ( s.Listen() < 0 ) {                        // create a listening socket
+        logwrite( function, "ERROR could not create listening socket" );
+        acamd.exit_cleanly();
+      }
       socklist.push_back(s);
     }
     else {                                           // subsequent socket objects are copies of the first
@@ -191,43 +190,3 @@ int main(int argc, char **argv) {
   return 0;
 }
 /***** main *******************************************************************/
-
-
-/***** signal_handler *********************************************************/
-/**
- * @brief      handles ctrl-C
- * @param[in]  int signo
- *
- */
-void signal_handler(int signo) {
-  std::string function = "Acam::signal_handler";
-  std::stringstream message;
-
-  switch (signo) {
-    case SIGTERM:
-    case SIGINT:
-      logwrite(function, "received termination signal");
-      message << "NOTICE:" << Acam::DAEMON_NAME << " exit";
-      acamd.interface.async.enqueue( message.str() );
-      acamd.exit_cleanly();                      // shutdown the daemon
-      break;
-    case SIGHUP:
-      if ( acamd.interface.configure_interface( acamd.config ) != NO_ERROR ) {
-        logwrite( function, "ERROR unable to configure interface" );
-        acamd.interface.async.enqueue_and_log( function, message.str() );
-      }
-      break;
-    case SIGPIPE:
-      logwrite(function, "ignored SIGPIPE");
-      break;
-    default:
-      message << "received unknown signal " << strsignal(signo);
-      logwrite( function, message.str() );
-      message.str(""); message << "NOTICE:" << Acam::DAEMON_NAME << " exit";
-      acamd.interface.async.enqueue( message.str() );
-      break;
-  }
-  return;
-}
-/***** signal_handler *********************************************************/
-

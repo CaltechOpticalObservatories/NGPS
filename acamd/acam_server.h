@@ -52,6 +52,8 @@ namespace Acam {
     private:
     public:
 
+      static Server* instance;
+
       /***** Acam::Server::Server *********************************************/
       /**
        * @brief      class constructor
@@ -62,6 +64,14 @@ namespace Acam {
         this->blkport=-1;
         this->asyncport=-1;
         this->cmd_num.store( 0 );
+        instance=this;
+
+        // Register these signals
+        //
+        signal( SIGINT,  signal_handler );
+        signal( SIGPIPE, signal_handler );
+        signal( SIGHUP,  signal_handler );
+
       }
       /***** Acam::Server::Server *********************************************/
 
@@ -98,6 +108,17 @@ namespace Acam {
       void doit(Network::TcpSocket sock);                                      ///< the workhorse of each thread connetion
       void exit_cleanly();                                                     ///< exit
       long configure_acamd();                                                  ///< read and apply the configuration file
+
+      inline void initialize_python_objects() {                                ///< allows for initializing Python objects by the child process
+        this->interface.initialize_python_objects();
+      }
+
+      void handle_signal( int signo );
+
+      static inline void signal_handler( int signo ) {
+        if ( instance ) { instance->handle_signal( signo ); }
+        return;
+      }
   };
   /***** Acam::Server *********************************************************/
 

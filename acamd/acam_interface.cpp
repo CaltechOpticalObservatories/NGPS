@@ -1168,13 +1168,15 @@ namespace Acam {
   /***** Acam::CameraServer::send_command *************************************/
 
 
-  /***** Acam::Astrometry::Astrometry *****************************************/
+  /***** Acam::Astrometry::initialize_python **********************************/
   /**
-   * @brief      class constructor
+   * @brief      Initializes the Python astrometry module
+   * @details    If daemonized, this should not be called by a parent process.
+   *             Ensure this is called only by a child process.
    *
    */
-  Astrometry::Astrometry() {
-    std::string function = "Astrometry::Astrometry";
+  void Astrometry::initialize_python() {
+    std::string function = "Acam::Astrometry::initialize_python";
     std::stringstream message;
 
     if ( !this->py_instance.is_initialized() ) {
@@ -1204,19 +1206,10 @@ namespace Acam {
     this->isacquire=true;
 
     logwrite( "Astrometry::Astrometry", "initialized Python astrometry module" );
+
     return;
   }
-  /***** Acam::Astrometry::Astrometry *****************************************/
-
-
-  /***** Acam::Astrometry::~Astrometry ****************************************/
-  /**
-   * @brief      class deconstructor
-   *
-   */
-  Astrometry::~Astrometry() {
-  }
-  /***** Acam::Astrometry::~Astrometry ****************************************/
+  /***** Acam::Astrometry::initialize_python **********************************/
 
 
   /***** Acam::Astrometry::image_quality **************************************/
@@ -1593,6 +1586,21 @@ namespace Acam {
   }
 */
   /***** Acam::Interface::Interface *******************************************/
+
+
+  /***** Acam::Interface::initialize_python_objects ***************************/
+  /**
+   * @brief      provides interface to initialize Python objects in the class
+   * @details    This provides an interface (to the Acam Server) to initialize
+   *             any Python modules in objects in the class. Allows Daemons to
+   *             ensure Python initialization is done by the child process.
+   *
+   */
+  void Interface::initialize_python_objects() {
+    this->astrometry.initialize_python();
+    return;
+  }
+  /***** Acam::Interface::initialize_python_objects ***************************/
 
 
   /***** Acam::Interface::initialize_class ************************************/
