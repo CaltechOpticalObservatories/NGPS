@@ -6,3 +6,4 @@
 /java/ngps/ngps/nbproject/private/
 /Python/
 *__pycache__*
+Config/*.py
