@@ -106,7 +106,7 @@ public class NGPSdatabase {
 /      NGPSdatabase()    
 /=================================================================================================*/
 public NGPSdatabase(){
-  bootstrap();
+  //bootstrap();
   setTablePopulated(false);  
   setProcessingState(IDLE);
   boolean test = false;

@@ -177,7 +177,7 @@ public class OTMlauncher {
 /         AstrometryPipelineLauncherr Class Declaration
 /=============================================================================================*/
     public OTMlauncher(){ 
-        bootstrap();
+        //bootstrap();
         initialize();
         initializeTimelineFrame();
         setAirmass_limit(DEFAULT_AIRMASS_LIMIT);

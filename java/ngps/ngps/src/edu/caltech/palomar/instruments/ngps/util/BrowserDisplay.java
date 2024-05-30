@@ -42,7 +42,7 @@ public class BrowserDisplay {
 /     BrowserDisplay()
 /=================================================================================================*/   
     public BrowserDisplay(){
-       bootstrap();
+       //bootstrap();
        initialize(); 
        boolean test = false;
        if(test){

@@ -36,7 +36,7 @@ public class IniReader {
 /        IniReader() constructor
 /=================================================================================================*/
     public IniReader(){
-       bootstrap();
+       //bootstrap();
        INIFILE = USERDIR + SEP + CONFIG + SEP + DHE;
        setIniFileName(INIFILE);
        initializeINIFile();
