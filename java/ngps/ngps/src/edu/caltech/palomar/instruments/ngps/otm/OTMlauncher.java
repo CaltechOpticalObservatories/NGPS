@@ -109,13 +109,13 @@ public class OTMlauncher {
    private DefaultExecutor              plot_executor;
    private ShutdownHookProcessDestroyer plot_processDestroyer;
    private ExecuteWatchdog              plot_watchdog;
-  
+      
    public java.lang.String USERDIR           = System.getProperty("user.dir");
    public java.lang.String USERDIR_PYTHON    = System.getProperty("user.dir");
    public java.lang.String SEP               = System.getProperty("file.separator");
    public java.lang.String TEMPDIR           = SEP+"tmp";
-   public java.lang.String OTM_EXEC          = USERDIR+SEP+"python"+SEP+"otm"+SEP+"OTM"+SEP+"OTM.py";
-   public java.lang.String ETC_PATH          = USERDIR_PYTHON+SEP+"python"+SEP+"etc";
+   public java.lang.String OTM_EXEC          = "/home/developer/Software/Python/OTM/OTM.py";
+   public java.lang.String ETC_PATH          = "/home/developer/Software/Python";
    public java.lang.String OTM_INFILE        = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
    public java.lang.String OTM_OUTFILE        = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
    public java.lang.String OTM_SCRIPT        = TEMPDIR+SEP+"OTM_JAVA_SCRIPT.txt";
