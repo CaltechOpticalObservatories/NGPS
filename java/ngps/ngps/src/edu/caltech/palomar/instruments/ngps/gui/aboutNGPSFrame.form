@@ -65,7 +65,7 @@
     <Component class="javax.swing.JLabel" name="OpticsLabel">
       <Properties>
         <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-          <Image iconType="2" name="/home/developer/Software/java/ngps/ngps/images/Optics.png"/>
+          <Image iconType="3" name="/edu/caltech/palomar/instruments/ngps/gui/Optics.png"/>
         </Property>
       </Properties>
     </Component>
@@ -83,7 +83,7 @@
         <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
           <Font name="DejaVu Sans" size="14" style="1"/>
         </Property>
-        <Property name="text" type="java.lang.String" value="Builde NGPS_1_00_01  February 16, 2023"/>
+        <Property name="text" type="java.lang.String" value="Build 2024-05-31"/>
       </Properties>
     </Component>
     <Component class="javax.swing.JButton" name="OKButton">

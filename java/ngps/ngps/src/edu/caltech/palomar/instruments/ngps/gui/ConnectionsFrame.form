@@ -105,7 +105,7 @@
         <Component class="javax.swing.JButton" name="dbmsButton">
           <Properties>
             <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-              <Image iconType="2" name="/home/developer/Software/java/ngps/ngps/images/OFF.png"/>
+              <Image iconType="3" name="/edu/caltech/palomar/instruments/ngps/gui/OFF.png"/>
             </Property>
           </Properties>
           <Events>
@@ -120,7 +120,7 @@
         <Component class="javax.swing.JButton" name="OSButton">
           <Properties>
             <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-              <Image iconType="2" name="/home/developer/Software/java/ngps/ngps/images/OFF.png"/>
+              <Image iconType="3" name="/edu/caltech/palomar/instruments/ngps/gui/OFF.png"/>
             </Property>
           </Properties>
           <Events>
@@ -217,7 +217,7 @@
         <Component class="javax.swing.JButton" name="TCSButton">
           <Properties>
             <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-              <Image iconType="2" name="/home/developer/Software/java/ngps/ngps/images/OFF.png"/>
+              <Image iconType="3" name="/edu/caltech/palomar/instruments/ngps/gui/OFF.png"/>
             </Property>
           </Properties>
           <Events>

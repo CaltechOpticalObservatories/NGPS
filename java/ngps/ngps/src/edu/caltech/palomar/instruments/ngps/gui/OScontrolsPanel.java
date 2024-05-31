@@ -35,6 +35,7 @@ public class OScontrolsPanel extends javax.swing.JPanel {
  public java.lang.String          SEP             = System.getProperty("file.separator");
  public java.lang.String          CONFIG          = new java.lang.String("config");
  public java.lang.String          IMAGE_CACHE     = new java.lang.String("images");
+ public java.lang.String          IMAGE_DIR     = USERDIR+SEP+IMAGE_CACHE;
 /*=============================================================================================
 /     OScontrolsPanel(ObservationSequencerController newObservationSequencerController)
 /=============================================================================================*/ 
@@ -613,7 +614,7 @@ public void initializeActionButtons(){
         totalTimeLabel.setFont(new java.awt.Font("DejaVu Sans", 1, 14)); // NOI18N
         totalTimeLabel.setForeground(new java.awt.Color(8, 159, 41));
 
-        tcs_Label.setIcon(new javax.swing.ImageIcon("/home/developer/Software/java/ngps/ngps/images/OFF.png")); // NOI18N
+        tcs_Label.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
         tcs_Label.setText("  ");
 
         active_tcs_ip_Label.setFont(new java.awt.Font("Cantarell", 1, 15)); // NOI18N

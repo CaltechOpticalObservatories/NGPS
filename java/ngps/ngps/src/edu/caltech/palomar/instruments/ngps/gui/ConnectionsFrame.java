@@ -182,7 +182,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 
         jPanel1.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 2, true));
 
-        dbmsButton.setIcon(new javax.swing.ImageIcon("/home/developer/Software/java/ngps/ngps/images/OFF.png")); // NOI18N
+        dbmsButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
         dbmsButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 dbmsButtonActionPerformed(evt);
@@ -191,7 +191,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 
         jLabel2.setText("mySQL Database connection");
 
-        OSButton.setIcon(new javax.swing.ImageIcon("/home/developer/Software/java/ngps/ngps/images/OFF.png")); // NOI18N
+        OSButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
         OSButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 OSButtonActionPerformed(evt);
@@ -239,7 +239,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 
         jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0), 2));
 
-        TCSButton.setIcon(new javax.swing.ImageIcon("/home/developer/Software/java/ngps/ngps/images/OFF.png")); // NOI18N
+        TCSButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
         TCSButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 TCSButtonActionPerformed(evt);

@@ -56,14 +56,14 @@ public class aboutNGPSFrame extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
-        OpticsLabel.setIcon(new javax.swing.ImageIcon("/home/developer/Software/java/ngps/ngps/images/Optics.png")); // NOI18N
+        OpticsLabel.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/Optics.png"))); // NOI18N
 
         jLabel2.setFont(new java.awt.Font("DejaVu Sans", 1, 18)); // NOI18N
         jLabel2.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel2.setText("NGPS \"Observe\" Software");
 
         jLabel3.setFont(new java.awt.Font("DejaVu Sans", 1, 14)); // NOI18N
-        jLabel3.setText("Builde NGPS_1_00_01  February 16, 2023");
+        jLabel3.setText("Build 2024-05-31");
 
         OKButton.setText("OK");
         OKButton.addActionListener(new java.awt.event.ActionListener() {

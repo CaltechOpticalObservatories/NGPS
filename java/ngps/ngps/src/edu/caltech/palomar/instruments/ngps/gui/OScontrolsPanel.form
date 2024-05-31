@@ -237,7 +237,7 @@
         <Component class="javax.swing.JLabel" name="tcs_Label">
           <Properties>
             <Property name="icon" type="javax.swing.Icon" editor="org.netbeans.modules.form.editors2.IconEditor">
-              <Image iconType="2" name="/home/developer/Software/java/ngps/ngps/images/OFF.png"/>
+              <Image iconType="3" name="/edu/caltech/palomar/instruments/ngps/gui/OFF.png"/>
             </Property>
             <Property name="text" type="java.lang.String" value="  "/>
           </Properties>
