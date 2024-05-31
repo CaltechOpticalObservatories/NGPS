@@ -114,8 +114,8 @@ public class OTMlauncher {
    public java.lang.String USERDIR_PYTHON    = System.getProperty("user.dir");
    public java.lang.String SEP               = System.getProperty("file.separator");
    public java.lang.String TEMPDIR           = SEP+"tmp";
-   public java.lang.String OTM_EXEC          = "/home/developer/Software/Python/OTM/OTM.py";
-   public java.lang.String ETC_PATH          = "/home/developer/Software/Python";
+   public java.lang.String OTM_EXEC;         // from config file
+   public java.lang.String ETC_PATH;         // from config file
    public java.lang.String OTM_INFILE        = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
    public java.lang.String OTM_OUTFILE        = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
    public java.lang.String OTM_SCRIPT        = TEMPDIR+SEP+"OTM_JAVA_SCRIPT.txt";
@@ -181,19 +181,23 @@ public class OTMlauncher {
         initialize();
         initializeTimelineFrame();
         setAirmass_limit(DEFAULT_AIRMASS_LIMIT);
+        
+        loadconfig();
     }
 /*================================================================================================
 /      bootstrap()
 /=================================================================================================*/
-public void bootstrap(){
+public void loadconfig(){
     try{
-      java.lang.String BOOTSTRAP_FILE = USERDIR + SEP +"bootstrap.ini";
+      java.lang.String BOOTSTRAP_FILE = USERDIR+SEP+"config"+SEP+"ngps.ini";
       FileInputStream  bootstrap_properties_file            = new FileInputStream(BOOTSTRAP_FILE);
       Properties       bootstrap_properties                 = new Properties();
       bootstrap_properties.load(bootstrap_properties_file);
       bootstrap_properties_file.close();
-      USERDIR        = bootstrap_properties.getProperty("USERDIR");
-      PLOT_OUTPUT_FILE   = TEMPDIR+SEP+"PLOT.html";
+      this.OTM_EXEC = bootstrap_properties.getProperty("OTM_EXEC");
+      this.ETC_PATH = bootstrap_properties.getProperty("ETC_PATH");
+      //USERDIR        = bootstrap_properties.getProperty("USERDIR");
+      //PLOT_OUTPUT_FILE   = TEMPDIR+SEP+"PLOT.html";
     }catch(Exception e){
         System.out.println(e.toString());
     }
@@ -372,9 +376,6 @@ public void PLOT(){
 public void constructScriptFile(java.sql.Timestamp start_time,double seeing,int wavelength){
 
  java.lang.String PYTHON_INSTALL_DIR = dbms.PYTHON_INSTALL_DIR;
- //java.lang.String OTM_INPUT_FILE     = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
- //java.lang.String OTM_OUTPUT_FILE    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
- //java.lang.String SCRIPT_FILENAME    = TEMPDIR+SEP+"OTM_SCRIPT.txt";
  double           ALT_TWILIGHT       = -12.0;
  try{
     java.lang.String start_time_string = timestamp_to_string(start_time);
@@ -399,11 +400,6 @@ public void constructScriptFile(java.sql.Timestamp start_time,double seeing,int 
 /=================================================================================================*/
 public void constructPlotScriptFile(){
     //  EXAMPLE SCRIPT FILE 
-//cd /Users/jennifermilburn/Desktop/NGPS/python/git/OTM
-//export PYTHONPATH=/Users/jennifermilburn/Desktop/NGPS/python/git
-///Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python ./OTM.py /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_INPUT.csv 2022-01-01T03:00:00.000 -seeing 1.25 500 -out /Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_JAVA_OUTPUT.csv
-// java.lang.String PYTHON_INSTALL_DIR = "/Users/jennifermilburn/opt/anaconda3/envs/astro/bin/python";
-//
  java.lang.String PYTHON_INSTALL_DIR = dbms.PYTHON_INSTALL_DIR;
  java.lang.String OTM_INPUT_FILE     = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
  java.lang.String OTM_OUTPUT_FILE    = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
