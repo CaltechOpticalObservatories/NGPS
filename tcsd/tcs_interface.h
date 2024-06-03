@@ -96,22 +96,22 @@ namespace TCS {
       /**
        * These are the functions for communicating with the TCS
        */
-      void list( std::string &retstring );
-      void llist( std::string &retstring );
-      long open( std::string arg, std::string &retstring );
+      void list( const std::string &arg, std::string &retstring );
+      void llist( const std::string &arg, std::string &retstring );
+      long open( const std::string &arg, std::string &retstring );
       bool isopen();
       long isopen( std::string &retstring );
-      long isopen( std::string help, std::string &retstring );
+      long isopen( const std::string &arg, std::string &retstring );
       long close();
-      long get_weather_coords( std::string help, std::string &retstring );
-      long get_coords( std::string help, std::string &retstring );
-      long get_cass( std::string help, std::string &retstring );
-      long get_dome( std::string help, std::string &retstring );
-      long set_focus( std::string arg, std::string &retstring );
+      long get_weather_coords( const std::string &arg, std::string &retstring );
+      long get_coords( const std::string &arg, std::string &retstring );
+      long get_cass( const std::string &arg, std::string &retstring );
+      long get_dome( const std::string &arg, std::string &retstring );
+      long set_focus( const std::string &arg, std::string &retstring );
       long get_focus( std::string &retstring );
-      long get_focus( std::string help, std::string &retstring );
-      long get_motion( std::string help, std::string &retstring );
-      long ringgo( std::string arg, std::string &retstring );
+      long get_focus( const std::string &arg, std::string &retstring );
+      long get_motion( const std::string &arg, std::string &retstring );
+      long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
       long send_command( std::string cmd, std::string &reply );
       void parse_reply_code( std::string codein, std::string &reply );

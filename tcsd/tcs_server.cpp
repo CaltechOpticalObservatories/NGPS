@@ -350,11 +350,6 @@ namespace TCS {
 
     bool connection_open=true;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] accepted connection on fd " << sock.getfd();
-    logwrite( function, message.str() );
-#endif
-
     while (connection_open) {
 
       // Wait (poll) connected socket for incoming data...
@@ -399,6 +394,8 @@ namespace TCS {
 
       if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
 
+      bool polling = false;
+
       try {
         std::size_t cmd_sep = buf.find_first_of(" ");  // find the first space, which separates command from argument list
 
@@ -408,7 +405,6 @@ namespace TCS {
         // Then shift the buf to the next part of the string after "poll" and look again
         // for a command.
         //
-        bool polling = false;
         if ( cmd == "poll" ) {
           buf = buf.substr( cmd_sep+1 );               // shift buf to start after the space
           cmd_sep = buf.find_first_of(" ");            // find again the first space, which separates command from argument list
@@ -449,7 +445,7 @@ namespace TCS {
        * process commands here
        */
       ret = NOTHING;
-      std::string retstring="";
+      std::string retstring;
 
       if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                       for ( auto s : TCSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
@@ -478,7 +474,7 @@ namespace TCS {
       // list
       //
       if ( cmd.compare( TCSD_LIST ) == 0 ) {
-                      this->interface.list( retstring );
+                      this->interface.list( args, retstring );
                       ret = NO_ERROR;
       }
       else
@@ -486,7 +482,7 @@ namespace TCS {
       // llist
       //
       if ( cmd.compare( TCSD_LLIST ) == 0 ) {
-                      this->interface.llist( retstring );
+                      this->interface.llist( args, retstring );
                       ret = NO_ERROR;
       }
       else
@@ -514,6 +510,7 @@ namespace TCS {
       else
 
       if ( cmd.compare( TCSD_GET_FOCUS ) == 0 ) {
+                      args.insert( 0, ( polling ? "poll " : "" ) );  // insert polling arg
                       ret = this->interface.get_focus( args, retstring );
       }
       else
@@ -557,11 +554,6 @@ namespace TCS {
         //
         std::replace( retstring.begin(), retstring.end(), '\n', ',');
       }
-
-#ifdef LOGLEVEL_DEBUG  // this can be a little much when polling
-//    message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
-//    logwrite( function, message.str() );
-#endif
 
       if (ret != NOTHING) {
         if ( !retstring.empty() ) retstring.append( " " );

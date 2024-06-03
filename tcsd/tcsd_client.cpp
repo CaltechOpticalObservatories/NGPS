@@ -247,19 +247,58 @@
   /***** TcsDaemonClient::set_focus *******************************************/
 
 
-  /***** TcsDaemonClient::get_focus *******************************************/
+  /***** TcsDaemonClient::poll_focus ******************************************/
   /**
-   * @brief      send command to tcsd to read current TCS cass angle
-   * @param[out] cass  cass angle in degrees
+   * @brief      poll TCS for focus value
+   * @detauls    This calls get_focus with the polling arg=true for no logging.
+   * @param[out] value  reference to return value
    * @return     ERROR or NO_ERROR
    *
    */
+  long TcsDaemonClient::poll_focus( double &value ) {
+    return this->get_focus( value, true );
+  }
+  /***** TcsDaemonClient::poll_focus ******************************************/
+
+
+  /***** TcsDaemonClient::get_focus *******************************************/
+  /**
+   * @brief      send command to tcsd to read current telescope focus value
+   * @detauls    This calls get_focus with the polling arg=false to allow logging
+   * @param[out] value  reference to return value
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   *
+   */
   long TcsDaemonClient::get_focus( double &value ) {
+    return this->get_focus( value, false );
+  }
+  /***** TcsDaemonClient::get_focus *******************************************/
+
+
+  /***** TcsDaemonClient::get_focus *******************************************/
+  /**
+   * @brief      send command to tcsd to read current telescope focus value
+   * @param[out] value  reference to return value
+   * @param[in]  poll   set true to suppress logging for polling purposes
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   *
+   */
+  long TcsDaemonClient::get_focus( double &value, bool poll ) {
     std::string function = "TcsDaemonClient::get_focus";
     std::stringstream message;
     std::string tcsreply;
 
-    if ( this->client.send( TCSD_GET_FOCUS, tcsreply ) != NO_ERROR ) {
+    // Prepending "poll" onto the command will prevent the server from logging the command
+    //
+    std::stringstream command; command << ( poll ? "poll " : "" ) << TCSD_GET_FOCUS;
+
+    // Send the command to tcsd to read the focus into tcsreply
+    //
+    if ( this->client.send( command.str(), tcsreply ) != NO_ERROR ) {
       logwrite( function, "ERROR reading TCS focus value" );
       value = NAN;
       return ERROR;
@@ -277,6 +316,8 @@
       return ERROR;
     }
 
+    // convert the value to double
+    //
     try {
       value = std::stod( tokens.at(0) );
     }
@@ -292,7 +333,7 @@
     }
 
     message.str(""); message << "currrent focus = " << value;
-    logwrite( function, message.str() );
+    if ( ! poll ) logwrite( function, message.str() );
 
     return NO_ERROR;
   }
@@ -432,27 +473,61 @@
   /***** TcsDaemonClient::parse_generic_reply *********************************/
 
 
-  /***** Sequencer::Sequence::get_dome_position *******************************/
+  /***** Sequencer::Sequence::poll_dome_position ******************************/
   /**
-   * @brief      read the dome and telescope positions
-   * @param[out] domeazi
-   * @param[out] telazi
+   * @brief      poll the TCS dome and telescope positions
+   * @detauls    This calls get_dome_position with poll=true to prevent logging
+   * @param[out] domeazi  reference to dome azimuth
+   * @param[out] telazi   reference to telescope azumuth
    * @return     ERROR or NO_ERROR
    *
    */
   long TcsDaemonClient::poll_dome_position( double &domeazi, double &telazi ) {
     return this->get_dome_position( true, domeazi, telazi );
   }
+  /***** Sequencer::Sequence::poll_dome_position ******************************/
+
+
+  /***** Sequencer::Sequence::get_dome_position *******************************/
+  /**
+   * @brief      read the dome and telescope positions
+   * @detauls    This calls get_dome_position with poll=false to allow logging
+   * @param[out] domeazi  reference to dome azimuth
+   * @param[out] telazi   reference to telescope azumuth
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   *
+   */
   long TcsDaemonClient::get_dome_position( double &domeazi, double &telazi ) {
     return this->get_dome_position( false, domeazi, telazi );
   }
+  /***** Sequencer::Sequence::get_dome_position *******************************/
+
+
+  /***** Sequencer::Sequence::get_dome_position *******************************/
+  /**
+   * @brief      read the dome and telescope positions
+   * @param[in]  poll     set true to suppress logging for polling purposes
+   * @param[out] domeazi  reference to dome azimuth
+   * @param[out] telazi   reference to telescope azumuth
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded.
+   *
+   */
   long TcsDaemonClient::get_dome_position( bool poll, double &domeazi, double &telazi ) {
     std::string function = "TcsDaemonClient::get_dome_position";
     std::stringstream message;
-
     std::string tcsreply;
     std::stringstream tcscmd;
+
+    // Prepending "poll" onto the command will prevent the server from logging the command
+    //
     tcscmd << ( poll ? "poll " : "" ) << TCSD_GET_DOME;  // optional "poll" prevents excessive logging by tcsd
+
+    // Send the command to tcsd to read the focus into tcsreply
+    //
     if ( this->client.send( tcscmd.str(), tcsreply ) != NO_ERROR ) {
       logwrite( function, "ERROR getting dome position from tcsd" );
       return( ERROR );
@@ -476,6 +551,8 @@
       return( ERROR );
     }
 
+    // convert the values to doubles
+    //
     try {
       domeazi = std::stod( tcstokens.at(0) );
       telazi  = std::stod( tcstokens.at(1) );
@@ -496,26 +573,51 @@
   /***** Sequencer::Sequence::get_dome_position *******************************/
 
 
-  /***** Sequencer::Sequence::get_tcs_coords **********************************/
+  /***** Sequencer::Sequence::get_coords **************************************/
   /**
-   * @brief      read the current TCS ra, dec
-   * @param[in]  ra   RA in decimal hours
-   * @param[in]  dec  DEC in decimal degrees
+   * @brief      get coords from TCS using TCSD_GET_COORDS
+   * @param[in]  ra_h   reference to RA in decimal hours
+   * @param[in]  dec_d  reference to DEC in decimal degrees
    * @return     ERROR or NO_ERROR
    *
    */
   long TcsDaemonClient::get_coords( double &ra_h, double &dec_d ) {
     return this->get_coords_type( TCSD_GET_COORDS, ra_h, dec_d );
   }
+  /***** Sequencer::Sequence::get_coords **************************************/
+
+
+  /***** Sequencer::Sequence::get_weather_coords ******************************/
+  /**
+   * @brief      get coords from TCS using TCSD_WEATHER_COORDS
+   * @param[in]  ra_h   reference to RA in decimal hours
+   * @param[in]  dec_d  reference to DEC in decimal degrees
+   * @return     ERROR or NO_ERROR
+   *
+   */
   long TcsDaemonClient::get_weather_coords( double &ra_h, double &dec_d ) {
     return this->get_coords_type( TCSD_WEATHER_COORDS, ra_h, dec_d );
   }
+  /***** Sequencer::Sequence::get_weather_coords ******************************/
+
+
+  /***** Sequencer::Sequence::get_coords_type *********************************/
+  /**
+   * @brief      get the coords from the TCS using the specified command
+   * @param[in]  cmd    command to send to TCS { TCSD_GET_COORDS | TCSD_WEATHER_COORDS }
+   * @param[in]  ra_h   reference to RA in decimal hours
+   * @param[in]  dec_d  reference to DEC in decimal degrees
+   * @return     ERROR or NO_ERROR
+   *
+   */
   long TcsDaemonClient::get_coords_type( std::string cmd, double &ra_h, double &dec_d ) {
     std::string function = "TcsDaemonClient::get_coords";
     std::stringstream message;
 
     std::string coordstring;
 
+    // immediately send the specified command to the tcsd
+    //
     if ( this->client.send( cmd, coordstring ) != NO_ERROR ) {
       logwrite( function, "ERROR reading TCS coordinates" );
       return ERROR;
@@ -553,7 +655,7 @@
 
     return NO_ERROR;
   }
-  /***** Sequencer::Sequence::get_tcs_coords **********************************/
+  /***** Sequencer::Sequence::get_coords_type *********************************/
 
 
   /***** Sequencer::TargetInfo::radec_to_decimal ******************************/
@@ -651,4 +753,3 @@
     return( dec );
   }
   /***** Sequencer::TargetInfo::radec_to_decimal ******************************/
-

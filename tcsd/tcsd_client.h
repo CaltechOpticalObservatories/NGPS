@@ -26,7 +26,9 @@
       long init( std::string_view which, std::string &retstring );
       long get_cass( double &cass );
       long set_focus( double &value );
+      long poll_focus( double &value );
       long get_focus( double &value );
+      long get_focus( double &value, bool poll );
       long extract_value( std::string tcs_message, int &value );
       long parse_generic_reply( int value );
       long poll_dome_position( double &domeazi, double &telazi );
