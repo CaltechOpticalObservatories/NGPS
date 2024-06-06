@@ -437,18 +437,18 @@ public void start_AsynchronousMonitor(){
        if(socket == COMMAND){
 //         myCommandSocket.startConnection(ClientSocket.USE_HOSTNAME);
            if(myCommandSocket.isConnected()){
-              myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
               response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR);
-              myCommandLogModel.insertMessage(CommandLogModel.RESPONSE,response.trim());               
            }
 //        myCommandSocket.closeConnection();
        }
        if(socket == BLOCKING){
-        myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
         response = myBlockingSocket.sendReceiveCommand(command+TERMINATOR,delay);
-        myCommandLogModel.insertMessage(CommandLogModel.RESPONSE,response.trim());
        }
        logMessage(INFO,response);
+      if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
+        //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
+        myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
+       }
     return response;
   } 
 /*================================================================================================
@@ -458,9 +458,11 @@ public void start_AsynchronousMonitor(){
       java.lang.String response = new java.lang.String();
         logMessage(INFO,command);
            if(myCommandSocket.isConnected()){
-              myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
               response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR);
-              myCommandLogModel.insertMessage(CommandLogModel.RESPONSE,response.trim());               
+              if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
+                //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
+                myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
+               }
            }
        logMessage(INFO,response);
     return response;
@@ -472,9 +474,11 @@ public void start_AsynchronousMonitor(){
       java.lang.String response = new java.lang.String();
         logMessage(INFO,command);
            if(myBlockingSocket.isConnected()){
-              myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
               response = myBlockingSocket.sendReceiveCommandARCHON(command+TERMINATOR);
-              myCommandLogModel.insertMessage(CommandLogModel.RESPONSE,response.trim());               
+              if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
+                //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
+                myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
+               }
            }
        logMessage(INFO,response);
     return response;
@@ -1042,13 +1046,11 @@ public void parseAsyncMessage(java.lang.String message){
  java.util.ArrayList     runstate_arraylist = new java.util.ArrayList();
    myAsyncLogModel.insertMessage(message);
    try{
-     if(message.contains("ERROR")){
-//        message = message.replace("ERROR", "");
-        if(message.contains("ERROR")){
-            myCommandLogModel.insertMessage(CommandLogModel.ERROR, message);
-        }else{
-            myCommandLogModel.insertMessage(CommandLogModel.COMMAND, message);
-        }       
+     if(message.trim().startsWith("ERROR")){
+        myCommandLogModel.insertMessage(CommandLogModel.ERROR, message);
+     }
+     else if(message.trim().startsWith("NOTICE")){
+        myCommandLogModel.insertMessage(CommandLogModel.COMMAND, message);
      }
      if(message.contains("TCSD")){
         String[] messages = message.split(":"); 
