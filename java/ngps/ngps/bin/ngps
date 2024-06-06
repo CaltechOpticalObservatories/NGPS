@@ -2,4 +2,6 @@
 
 guioption=$1  # OBSERVE or PLAN
 
-java14 -jar ~/Software/java/ngps/ngps/dist/ngps.jar ${guioption^^}  # force uppercase
+cd /home/developer/Software/java/ngps/ngps
+java14 -jar ./dist/ngps.jar ${guioption^^}  # force uppercase
+cd -
