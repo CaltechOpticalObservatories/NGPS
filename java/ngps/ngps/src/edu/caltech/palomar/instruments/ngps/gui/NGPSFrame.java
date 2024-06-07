@@ -804,11 +804,6 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(6).setHeaderRenderer(my_renderer_green);
   main_editor_table.getColumnModel().getColumn(7).setHeaderRenderer(my_renderer_blue);
   main_editor_table.getColumnModel().getColumn(8).setHeaderRenderer(my_renderer_green);
-/*  main_editor_table.getColumnModel().getColumn(9).setHeaderRenderer(my_renderer_blue);  //remove
-  main_editor_table.getColumnModel().getColumn(10).setHeaderRenderer(my_renderer_green);//remove
-  main_editor_table.getColumnModel().getColumn(11).setHeaderRenderer(my_renderer_green);
-  main_editor_table.getColumnModel().getColumn(12).setHeaderRenderer(my_renderer_green);
-  main_editor_table.getColumnModel().getColumn(13).setHeaderRenderer(my_renderer_blue);  */
   main_editor_table.getColumnModel().getColumn(9).setHeaderRenderer(my_renderer_green);
   main_editor_table.getColumnModel().getColumn(10).setHeaderRenderer(my_renderer_green);
   main_editor_table.getColumnModel().getColumn(11).setHeaderRenderer(my_renderer_blue);
@@ -838,10 +833,8 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(6).setCellRenderer(centerRenderer);
   main_editor_table.getColumnModel().getColumn(7).setCellRenderer(centerRenderer);
   main_editor_table.getColumnModel().getColumn(8).setCellRenderer(centerRenderer);
-  main_editor_table.getColumnModel().getColumn(9).setCellRenderer(centerRenderer); //remove
-  main_editor_table.getColumnModel().getColumn(10).setCellRenderer(centerRenderer);//remove
-//  main_editor_table.getColumnModel().getColumn(11).setCellRenderer(centerRenderer);
-//  main_editor_table.getColumnModel().getColumn(12).setCellRenderer(centerRenderer);
+  main_editor_table.getColumnModel().getColumn(9).setCellRenderer(centerRenderer);
+  main_editor_table.getColumnModel().getColumn(10).setCellRenderer(centerRenderer);
   
   main_editor_table.getColumnModel().getColumn(0).setMinWidth(20);
   main_editor_table.getColumnModel().getColumn(0).setMaxWidth(20);
@@ -854,11 +847,6 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(6).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(7).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(8).setMinWidth(100);
-/*  main_editor_table.getColumnModel().getColumn(9).setMinWidth(100);  //remove
-  main_editor_table.getColumnModel().getColumn(10).setMinWidth(100); //remove
-  main_editor_table.getColumnModel().getColumn(11).setMinWidth(100);
-  main_editor_table.getColumnModel().getColumn(12).setMinWidth(100);
-  main_editor_table.getColumnModel().getColumn(13).setMinWidth(160);  */
   main_editor_table.getColumnModel().getColumn(9).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(10).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(11).setMinWidth(160);
