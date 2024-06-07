@@ -726,15 +726,16 @@ namespace Network {
    *
    */
   int TcpSocket::Close() {
+    std::stringstream message;
+    std::string function = "Network::TcpSocket::Close";
     int error = -1;
-#ifdef LOGLEVEL_DEBUG
-    int oldfd = this->fd;
-#endif
 
     if ( !this->connection_open ) return 0;
 
     if (this->fd >= 0) {               // if the file descriptor is valid
       if (close(this->fd) == 0) {      // then close it
+        message.str(""); message << "connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
+        logwrite( function, message.str() );
         error = 0;
         this->fd = -1;
       }
@@ -752,12 +753,6 @@ namespace Network {
     }
 
     this->connection_open = false;     // clear the connection_open flag
-
-#ifdef LOGLEVEL_DEBUG
-    std::stringstream message;
-    message.str(""); message << "[DEBUG] closed socket " << this->host << "/" << this->port << " connection to fd " << oldfd;
-    if ( oldfd >= 0 ) logwrite( "Network::TcpSocket::Close", message.str() );
-#endif
 
     return (error);
   }
@@ -803,7 +798,7 @@ namespace Network {
    * buffer and the number of bytes to read.
    *
    */
-  int TcpSocket::Read(void* buf, size_t count) {
+  int TcpSocket::Read(void* buf, const size_t count) {
     std::string function = "Network::TcpSocket::Read[cbuf]";
     std::stringstream message;
     int nread;
@@ -811,6 +806,8 @@ namespace Network {
     // get the time now for timeout purposes
     //
     std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
+
+    errno = 0;  // ensure errno is initialized before calling read()
 
     while ( ( nread = read( this->fd, buf, count ) ) < 0 ) {
       if ( errno != EAGAIN ) {
@@ -866,7 +863,7 @@ namespace Network {
    * in the string.
    *
    */
-  int TcpSocket::Read( std::string &retstring, char term ) {
+  int TcpSocket::Read( std::string &retstring, const char term ) {
     std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
     size_t bytesread=0;
@@ -930,7 +927,7 @@ namespace Network {
    * and an end string to read until.
    *
    */
-  int TcpSocket::Read(std::string &retstring, std::string endstr) {
+  int TcpSocket::Read( std::string &retstring, const std::string &endstr ) {
     std::string function = "Network::TcpSocket::Read[endstr]";
     std::stringstream message;
     std::stringstream bufstream;

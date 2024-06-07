@@ -105,10 +105,10 @@ namespace Network {
       int Poll( int timeout );           ///< polls a single file descriptor with specified timeout
       int Connect();                     ///< connect to this->host on this->port
       int Close();                       ///< close a socket connection
-      int Read(void* buf, size_t count); ///< read data from connected socket
+      int Read( void* buf, const size_t count ); ///< read data from connected socket
       int Read(std::string &retstring);  ///< read data from connected socket until newline
-      int Read(std::string &retstring, char term); ///< read data from connected socket until terminating char found
-      int Read(std::string &retstring, std::string endstr);  ///< read data from connected socket until endstr
+      int Read( std::string &retstring, const char term ); ///< read data from connected socket until terminating char found
+      int Read( std::string &retstring, const std::string &endstr );  ///< read data from connected socket until endstr
       int Bytes_ready();                 ///< get the number of bytes available on the socket descriptor this->fd
       void Flush();                      ///< flush a socket by reading until it's empty
 

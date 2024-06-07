@@ -191,7 +191,7 @@ namespace Slit {
 
     // Set the retstring true or false, true only if all controllers are homed.
     //
-    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false"+unconnected;
+    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false";
 
     // Log who's connected and not
     //

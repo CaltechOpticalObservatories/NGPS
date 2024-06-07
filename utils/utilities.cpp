@@ -198,7 +198,7 @@ std::mutex generate_tmpfile_mtx;
       std::string dev_str = str.substr( 0, str.find( ":" ) );
       std::vector<std::string> tokens;
       Tokenize( dev_str, tokens, "," );          // Tokenize the dev string on the comma ","
-      for ( auto tok : tokens ) {
+      for ( const auto &tok : tokens ) {
         try {
           devlist.push_back( std::stoi( tok ) );
         }
@@ -219,7 +219,7 @@ std::mutex generate_tmpfile_mtx;
     std::string arg_str = str.substr( devdelim+1 );
     std::vector<std::string> tokens;
     Tokenize( arg_str, tokens, " " );            // Tokenize the arg string on the space " "
-    for ( auto tok : tokens ) {
+    for ( const auto &tok : tokens ) {
       arglist.push_back( tok );
     }
     narg = arglist.size();
@@ -711,6 +711,23 @@ std::mutex generate_tmpfile_mtx;
     }
   }
   /***** tchar ****************************************************************/
+
+
+  /***** strip_newline ********************************************************/
+  /**
+   * @brief      strip newline and cr chars from a string
+   * @details    this makes a local copy of the original string which is not changed
+   * @param[in]  str_in  reference to input string
+   * @return     string
+   *
+   */
+  const std::string strip_newline( const std::string &str_in ) {
+    std::string str = str_in;
+    str.erase( std::remove( str.begin(), str.end(), '\n' ), str.end() );
+    str.erase( std::remove( str.begin(), str.end(), '\r' ), str.end() );
+    return str;
+  }
+  /***** strip_newline ********************************************************/
 
 
   /***** strip_control_characters *********************************************/
