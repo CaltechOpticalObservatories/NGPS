@@ -279,7 +279,7 @@ public void initializeActionButtons(){
             actionButtonsPanel.add(GO);
             GO.setEnabled(false);
             GO.setBackground(new Color(0,125,0));
-            GO.setForeground(new Color(255,255,255));
+            GO.setForeground(new Color(0,0,0));
           }catch(Exception e2){
              System.out.println("STATE = READY_NO_TARGETS"+e2.toString());
           }        }
@@ -597,6 +597,7 @@ public void initializeActionButtons(){
         jScrollPane2.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         jScrollPane2.setViewportView(messagesTextPane);
 
+        actionButtonsPanel.setBackground(new java.awt.Color(190, 190, 190));
         actionButtonsPanel.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 1, true));
 
         mod_exptimeTextField.addActionListener(new java.awt.event.ActionListener() {
