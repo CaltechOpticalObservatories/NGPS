@@ -383,42 +383,18 @@
           <SubComponents>
             <MenuItem class="javax.swing.JMenuItem" name="quick_startMenuItem">
               <Properties>
-                <Property name="text" type="java.lang.String" value="Quick start guide"/>
+                <Property name="text" type="java.lang.String" value="This GUI manual"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="quick_startMenuItemActionPerformed"/>
               </Events>
             </MenuItem>
-            <MenuItem class="javax.swing.JMenuItem" name="faqMenuItem">
-              <Properties>
-                <Property name="text" type="java.lang.String" value="FAQ"/>
-              </Properties>
-              <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="faqMenuItemActionPerformed"/>
-              </Events>
-            </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="etcMenuItem">
               <Properties>
-                <Property name="text" type="java.lang.String" value="Exposure time calculator"/>
+                <Property name="text" type="java.lang.String" value="OTM and ETC"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="etcMenuItemActionPerformed"/>
-              </Events>
-            </MenuItem>
-            <MenuItem class="javax.swing.JMenuItem" name="tutorialMenuItem">
-              <Properties>
-                <Property name="text" type="java.lang.String" value="Tutorial"/>
-              </Properties>
-              <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="tutorialMenuItemActionPerformed"/>
-              </Events>
-            </MenuItem>
-            <MenuItem class="javax.swing.JMenuItem" name="help_optimize_orderMenuItem">
-              <Properties>
-                <Property name="text" type="java.lang.String" value="Optimizing observing order"/>
-              </Properties>
-              <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="help_optimize_orderMenuItemActionPerformed"/>
               </Events>
             </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="data_reductionMenuItem">

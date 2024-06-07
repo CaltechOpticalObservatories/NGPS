@@ -24,25 +24,26 @@ public class BrowserDisplay {
    private ExecuteWatchdog              watchdog;
    public java.lang.String USERDIR           = System.getProperty("user.dir");
    public java.lang.String SEP               = System.getProperty("file.separator");
-   public java.lang.String HOURLY_WEATHER    = new java.lang.String();
-   public java.lang.String DAY10_WEATHER     = new java.lang.String();
-   public java.lang.String BUG_REPORT        = new java.lang.String();   
-   public java.lang.String QUICKSTART_GUIDE           = new java.lang.String();
-   public java.lang.String FAQ                        = new java.lang.String();
-   public java.lang.String EXPOSURE_TIME_CALCULATOR   = new java.lang.String();
-   public java.lang.String TUTORIAL                   = new java.lang.String();
-   public java.lang.String OPTIMIZING_OBSERVING_ORDER = new java.lang.String();
-   public java.lang.String DATA_REDUCTION             = new java.lang.String();
-   public java.lang.String CALIBRATION                = new java.lang.String();
-   public java.lang.String LINELIST                   = new java.lang.String();
-   public java.lang.String EXAMPLE_SPECTRA            = new java.lang.String();
-   public java.lang.String NGPS_INSTRUMENT_MANUAL     = new java.lang.String();
-   public java.lang.String ERRORS_AND_DIAGNOSTICS     = new java.lang.String();
+   
+   public java.lang.String URL_FILE = USERDIR+SEP+"config"+SEP+"url.ini";  
+   public Properties       URLMAP                 = new Properties();
+   
 /*================================================================================================
 /     BrowserDisplay()
 /=================================================================================================*/   
     public BrowserDisplay(){
        //bootstrap();
+       System.out.println(URL_FILE);
+       try{
+       FileInputStream  url_properties_file          = new FileInputStream(URL_FILE);
+       URLMAP.load(url_properties_file);
+       url_properties_file.close();
+       } catch(Exception e){
+        System.out.println(e.toString());
+        }
+       
+       System.out.println(URLMAP.getProperty("LINELIST"));
+
        initialize(); 
        boolean test = false;
        if(test){
@@ -74,22 +75,8 @@ public void bootstrap(){
       java.lang.String URL_FILE = USERDIR+SEP+"config"+SEP+"url.ini";
       FileInputStream  url_properties_file            = new FileInputStream(URL_FILE);
       Properties       url_properties                 = new Properties();
-      url_properties.load(url_properties_file);
+      URLMAP.load(url_properties_file);
       url_properties_file.close();
-      HOURLY_WEATHER = url_properties.getProperty("HOURLY_WEATHER");
-      DAY10_WEATHER  = url_properties.getProperty("DAY10_WEATHER");
-      BUG_REPORT     = url_properties.getProperty("BUG_REPORT");     
-      QUICKSTART_GUIDE           = url_properties.getProperty("QUICKSTART_GUIDE");
-      FAQ                        = url_properties.getProperty("FAQ");
-      EXPOSURE_TIME_CALCULATOR   = url_properties.getProperty("EXPOSURE_TIME_CALCULATOR");
-      TUTORIAL                   = url_properties.getProperty("TUTORIAL");
-      OPTIMIZING_OBSERVING_ORDER = url_properties.getProperty("OPTIMIZING_OBSERVING_ORDER");
-      DATA_REDUCTION             = url_properties.getProperty("DATA_REDUCTION");
-      CALIBRATION                = url_properties.getProperty("CALIBRATION");
-      LINELIST                   = url_properties.getProperty("LINELIST");
-      EXAMPLE_SPECTRA            = url_properties.getProperty("EXAMPLE_SPECTRA");
-      NGPS_INSTRUMENT_MANUAL     = url_properties.getProperty("NGPS_INSTRUMENT_MANUAL");
-      ERRORS_AND_DIAGNOSTICS     = url_properties.getProperty("ERRORS_AND_DIAGNOSTICS");     
     }catch(Exception e){
         System.out.println(e.toString());
     }

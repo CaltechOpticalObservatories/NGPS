@@ -1417,10 +1417,7 @@ public static JTable constructTable(){
         connectionsMenuItem = new javax.swing.JMenuItem();
         helpMenu = new javax.swing.JMenu();
         quick_startMenuItem = new javax.swing.JMenuItem();
-        faqMenuItem = new javax.swing.JMenuItem();
         etcMenuItem = new javax.swing.JMenuItem();
-        tutorialMenuItem = new javax.swing.JMenuItem();
-        help_optimize_orderMenuItem = new javax.swing.JMenuItem();
         data_reductionMenuItem = new javax.swing.JMenuItem();
         calibrationMenuItem = new javax.swing.JMenuItem();
         line_listMenuItem = new javax.swing.JMenuItem();
@@ -2172,7 +2169,7 @@ public static JTable constructTable(){
 
         helpMenu.setText("Help");
 
-        quick_startMenuItem.setText("Quick start guide");
+        quick_startMenuItem.setText("This GUI manual");
         quick_startMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 quick_startMenuItemActionPerformed(evt);
@@ -2180,37 +2177,13 @@ public static JTable constructTable(){
         });
         helpMenu.add(quick_startMenuItem);
 
-        faqMenuItem.setText("FAQ");
-        faqMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                faqMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(faqMenuItem);
-
-        etcMenuItem.setText("Exposure time calculator");
+        etcMenuItem.setText("OTM and ETC");
         etcMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 etcMenuItemActionPerformed(evt);
             }
         });
         helpMenu.add(etcMenuItem);
-
-        tutorialMenuItem.setText("Tutorial");
-        tutorialMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                tutorialMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(tutorialMenuItem);
-
-        help_optimize_orderMenuItem.setText("Optimizing observing order");
-        help_optimize_orderMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                help_optimize_orderMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(help_optimize_orderMenuItem);
 
         data_reductionMenuItem.setText("Data reduction");
         data_reductionMenuItem.addActionListener(new java.awt.event.ActionListener() {
@@ -2307,10 +2280,6 @@ public static JTable constructTable(){
 //        mainTabbedPane.addTab("Import CSV file editing",myimportCSVPanel); 
     }//GEN-LAST:event_importMenuItemActionPerformed
 
-    private void faqMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_faqMenuItemActionPerformed
-       myBrowserDisplay.executeFirefox(myBrowserDisplay.FAQ);
-    }//GEN-LAST:event_faqMenuItemActionPerformed
-
     private void copyMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_copyMenuItemActionPerformed
         // TODO add your handling code here:
     }//GEN-LAST:event_copyMenuItemActionPerformed
@@ -2324,7 +2293,7 @@ public static JTable constructTable(){
     }//GEN-LAST:event_zoomOutMenuItemActionPerformed
 
     private void line_listMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_line_listMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.LINELIST);
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("LINELIST"));
     }//GEN-LAST:event_line_listMenuItemActionPerformed
 
     private void saveMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveMenuItemActionPerformed
@@ -2490,15 +2459,15 @@ public static JTable constructTable(){
     }//GEN-LAST:event_aboutNGPSMenuItemActionPerformed
 
     private void hourly_weatherMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_hourly_weatherMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.HOURLY_WEATHER);// TODO add your handling code here:
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("HOURLY_WEATHER"));
     }//GEN-LAST:event_hourly_weatherMenuItemActionPerformed
 
     private void ten_day_weatherMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ten_day_weatherMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.DAY10_WEATHER);
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("DAY10_WEATHER"));
     }//GEN-LAST:event_ten_day_weatherMenuItemActionPerformed
 
     private void reportBugMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_reportBugMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.BUG_REPORT);
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("BUG_REPORT"));
     }//GEN-LAST:event_reportBugMenuItemActionPerformed
 
     private void airmass_limitTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_airmass_limitTextFieldActionPerformed
@@ -2517,39 +2486,31 @@ public static JTable constructTable(){
     }//GEN-LAST:event_mainTableKeyPressed
 
     private void quick_startMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_quick_startMenuItemActionPerformed
-       myBrowserDisplay.executeFirefox(myBrowserDisplay.QUICKSTART_GUIDE);
+       myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("GUI_MANUAL"));
     }//GEN-LAST:event_quick_startMenuItemActionPerformed
 
     private void etcMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_etcMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.QUICKSTART_GUIDE); // TODO add your handling code here:
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("OTM_ETC_MANUAL"));
     }//GEN-LAST:event_etcMenuItemActionPerformed
 
-    private void tutorialMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_tutorialMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.TUTORIAL);
-    }//GEN-LAST:event_tutorialMenuItemActionPerformed
-
-    private void help_optimize_orderMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_help_optimize_orderMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.OPTIMIZING_OBSERVING_ORDER);
-    }//GEN-LAST:event_help_optimize_orderMenuItemActionPerformed
-
     private void data_reductionMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_data_reductionMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.DATA_REDUCTION);
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("DATA_REDUCTION"));
     }//GEN-LAST:event_data_reductionMenuItemActionPerformed
 
     private void calibrationMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_calibrationMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.CALIBRATION);
+         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("CALIBRATION"));
     }//GEN-LAST:event_calibrationMenuItemActionPerformed
 
     private void example_spectraMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_example_spectraMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.EXAMPLE_SPECTRA);
+        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("EXAMPLE_SPECTRA"));
     }//GEN-LAST:event_example_spectraMenuItemActionPerformed
 
     private void ngps_instrument_manualMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ngps_instrument_manualMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.NGPS_INSTRUMENT_MANUAL);
+         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("NGPS_INSTRUMENT_MANUAL"));
     }//GEN-LAST:event_ngps_instrument_manualMenuItemActionPerformed
 
     private void errors_diagnosticsMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_errors_diagnosticsMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.ERRORS_AND_DIAGNOSTICS);
+         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("ERRORS_AND_DIAGNOSTICS"));
     }//GEN-LAST:event_errors_diagnosticsMenuItemActionPerformed
 
     private void connectionsMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_connectionsMenuItemActionPerformed
@@ -2657,10 +2618,8 @@ public static JTable constructTable(){
     private javax.swing.JTable etcTable;
     private javax.swing.JMenuItem example_spectraMenuItem;
     private javax.swing.JMenuItem exportMenuItem;
-    private javax.swing.JMenuItem faqMenuItem;
     private javax.swing.JButton fetchLiveButton;
     private javax.swing.JMenu helpMenu;
-    private javax.swing.JMenuItem help_optimize_orderMenuItem;
     private javax.swing.JMenuItem hourly_weatherMenuItem;
     private javax.swing.JMenuItem importMenuItem;
     private javax.swing.JMenuItem insert_copiedMenuItem;
@@ -2723,7 +2682,6 @@ public static JTable constructTable(){
     private javax.swing.JMenuItem shutdownMenuItem;
     private javax.swing.JMenuItem ten_day_weatherMenuItem;
     private javax.swing.JMenu toolsMenu;
-    private javax.swing.JMenuItem tutorialMenuItem;
     private javax.swing.JButton twilightButton;
     private javax.swing.JMenu viewMenu;
     private javax.swing.JMenuItem zoomInMenuItem;
