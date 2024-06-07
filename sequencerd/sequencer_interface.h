@@ -73,47 +73,6 @@ namespace Sequencer {
   const std::string TARGET_COMPLETE="completed";     ///< target status complete
   const std::string TARGET_UNASSIGNED="inactive";    ///< target status unassigned
 
-  /***** Sequencer::Daemon ****************************************************/
-  /**
-   * @class  Daemon
-   * @brief  defines a daemon-object for each daemon that the Sequencer connects to
-   *
-   */
-  class Daemon {
-    private:
-      bool isopen;                  ///< is a connection to the daemon open?
-      bool timedout;
-
-    public:
-      Daemon();
-      Daemon( std::string name );   ///< preferred constructor with name to identify daemon
-      ~Daemon();
-
-      std::string name;             ///< name of the daemon
-      std::string host;             ///< host where the daemon is running
-      int port;                     ///< blocking port that the daemon is listening on
-      int nbport;                   ///< non-blocking port that the daemon is listening on
-
-      Network::TcpSocket socket;    ///< socket object for communications with daemon
-
-      long async( std::string args );                              ///< async (non-blocking) commands to daemon that don't need a reply
-      long async( std::string args, std::string &retstring );      ///< async (non-blocking) commands to daemon that need a reply
-
-      static void foo( );
-      static void dothread_command( Sequencer::Daemon &daemon, std::string args );
-      long command( std::string args );                            ///< commands to daemon
-      long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
-      long send( std::string command, std::string &reply );        ///< for internal use only
-      long connect();                                              ///< initialize socket connection to daemon
-      long disconnect();                                           ///< close socket connection to daemon
-      void set_name( std::string name_in ) { this->name=name_in; } ///< name this daemon
-      void set_port( int port );                                   ///< set the port number
-
-      bool is_open() { return this->isopen; }
-      long is_connected( std::string &reply );
-  };
-  /***** Sequencer::Daemon ****************************************************/
-
 
   /***** Sequencer::PowerSwitch ***********************************************/
   /**
@@ -141,8 +100,7 @@ namespace Sequencer {
   class PowerSwitch {
     private:
     public:
-      PowerSwitch();
-      ~PowerSwitch();
+      PowerSwitch() = default;
 
       std::vector<std::string> plugname;      ///< vector of plug names required for this hardware subsystem
 
@@ -165,7 +123,6 @@ namespace Sequencer {
 
     public:
       FPOffsets();
-      ~FPOffsets();
 
       inline bool is_initialized() { return this->python_initialized; };
 
@@ -239,7 +196,6 @@ namespace Sequencer {
 
     public:
       TargetInfo();
-      ~TargetInfo();
 
       FPOffsets fpoffsets;
 

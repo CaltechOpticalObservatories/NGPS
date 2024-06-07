@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
     if (sequencerd.config.param[entry] == "TM_ZONE") zone = sequencerd.config.arg[entry];
     if (sequencerd.config.param[entry] == "DAEMON")  daemon_in = sequencerd.config.arg[entry];
   }
+
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     sequencerd.exit_cleanly();
@@ -136,7 +137,10 @@ int main(int argc, char **argv) {
   socklist.reserve(N_THREADS);
 
   Network::TcpSocket s(sequencerd.blkport, true, -1, 0); // instantiate TcpSocket object with blocking port
-  s.Listen();                                        // create a listening socket
+  if ( s.Listen() < 0 ) {                            // create a listening socket
+    logwrite( function, "ERROR could not create listening socket" );
+    sequencerd.exit_cleanly();
+  }
   socklist.push_back(s);                             // add it to the socklist vector
   std::thread( std::ref(Sequencer::Server::block_main),
                std::ref(sequencerd),
@@ -149,7 +153,10 @@ int main(int argc, char **argv) {
   for (thrid=1; thrid<N_THREADS-1; thrid++) {        // create N_THREADS-1 non-blocking socket objects
     if (thrid==1) {                                  // first one only
       Network::TcpSocket s(sequencerd.nbport, false, 0, thrid); // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
-      s.Listen();                                    // create a listening socket
+      if ( s.Listen() < 0 ) {                        // create a listening socket
+        logwrite( function, "ERROR could not create listening socket" );
+        sequencerd.exit_cleanly();
+      }
       socklist.push_back(s);
     }
     else {                                           // subsequent socket objects are copies of the first

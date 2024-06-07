@@ -33,7 +33,6 @@ public class BrowserDisplay {
 /=================================================================================================*/   
     public BrowserDisplay(){
        //bootstrap();
-       System.out.println(URL_FILE);
        try{
        FileInputStream  url_properties_file          = new FileInputStream(URL_FILE);
        URLMAP.load(url_properties_file);
@@ -42,13 +41,11 @@ public class BrowserDisplay {
         System.out.println(e.toString());
         }
        
-       System.out.println(URLMAP.getProperty("LINELIST"));
-
        initialize(); 
        boolean test = false;
        if(test){
 //          executeFirefox("https://weather.com/weather/hourbyhour/l/Palomar+Mountain+CA?canonicalCityId=e7b3768d25eeb5f6f9b943def2136fb5b65865ba22e8e1954f006fedbe29d5db"); 
-            executeFirefox(HOURLY_WEATHER);
+            executeFirefox(URLMAP.getProperty("HOURLY_WEATHER"));
        }
     }
 /*================================================================================================

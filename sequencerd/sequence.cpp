@@ -46,6 +46,8 @@ namespace Sequencer {
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_ACAM );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_CALIB );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_CAMERA );
+    this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_FLEXURE );
+    this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_FOCUS );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_POWER );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_SLIT );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_TCS );
@@ -159,26 +161,6 @@ namespace Sequencer {
     return;
   }
   /***** Sequencer::Sequence::dothread_monitor_ready_state ********************/
-
-
-  /***** Sequencer::Sequence::dothread_daemon_command *************************/
-  /**
-   * @brief      sends a command to a daemon in a thread
-   * @param[in]  daemon  reference to Sequencer::Daemon object
-   * @param[in]  args    string containing command and any arguments
-   *
-   * This thread is spawned in response to the sequencer receiving a command
-   * for any daemon. The sequencer returns immediately and this thread sends
-   * the command to the daemon. Since there is no waiting for this command to
-   * complete, the caller must monitor the UDP broadcast message port for any
-   * potential status.
-   *
-   */
-  void Sequence::dothread_daemon_command( Sequencer::Daemon &daemon, std::string args ) {
-    daemon.command( args );
-    return;
-  }
-  /***** Sequencer::Sequence::dothread_daemon_command *************************/
 
 
   /***** Sequencer::Sequence::set_seqstate_bit ********************************/
@@ -520,7 +502,7 @@ namespace Sequencer {
       //
       targetstate = seq.target.get_next( targetstatus );
 
-      message.str(""); message << "NOTICE:" << targetstatus;
+      message.str(""); message << "NOTICE: " << targetstatus;
       seq.async.enqueue( message.str() );                                 // broadcast target status
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                    // target found, get the threads going
@@ -557,7 +539,7 @@ namespace Sequencer {
       }
       else
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
-        logwrite( function, "NOTICE:no targets found. stopping" );
+        logwrite( function, "NOTICE: no targets found. stopping" );
         seq.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
         seq.set_seqstate_bit( Sequencer::SEQ_STOPREQ );
         break;
@@ -909,20 +891,19 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: closing connection to power hardware" );
     }
 
-    // disconnect me from powerd
+    // disconnect me from powerd irrespectively of any previous error
     //
-    if ( error==NO_ERROR ) {
-      logwrite( function, "disconnecting from powerd" );
-      error = seq.powerd.disconnect();
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: disconnecting from powerd" );
-    }
+    logwrite( function, "disconnecting from powerd" );
+    seq.powerd.disconnect();
 
-    // If shutdown successful then set this system as not ready
+    // set this system as not ready
     //
-    if (error==NO_ERROR) seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_POWER );
-    else {
-      seq.thr_error.fetch_or( THR_POWER_SHUTDOWN );     // otherwise mark this thread as reporting an error
-    }
+    seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_POWER );
+
+    // set this thread's error status
+    //
+    seq.thr_error.fetch_or( error==NO_ERROR ? THR_NONE : THR_POWER_SHUTDOWN );
+
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_POWER );
     seq.clr_thrstate_bit( THR_POWER_SHUTDOWN );
     return;
@@ -1111,13 +1092,10 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: closing connection to acam hardware" );
     }
 
-    // disconnect me from acamd
+    // disconnect me from acamd, irrespective of any previous error
     //
-    if ( error==NO_ERROR ) {
-      logwrite( function, "disconnecting from acamd" );
-      error = seq.acamd.disconnect();
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: disconnecting from acamd" );
-    }
+    logwrite( function, "disconnecting from acamd" );
+    seq.acamd.disconnect();
 
     // Turn off power to acam hardware.
     // Any error here is added to thr_error.
@@ -1134,12 +1112,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       }
     }
 
-    // If shutdown successful then set this system as not ready
+    // set this system as not ready
     //
-    if (error==NO_ERROR) seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_ACAM );
-    else {
-      seq.thr_error.fetch_or( THR_ACAM_SHUTDOWN );      // otherwise mark this thread as reporting an error
-    }
+    seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_ACAM );
+
+    // set this thread's error status
+    //
+    seq.thr_error.fetch_or( error==NO_ERROR ? THR_NONE : THR_ACAM_SHUTDOWN );
+
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_ACAM );
     seq.clr_thrstate_bit( THR_ACAM_SHUTDOWN );
     return;
@@ -1247,13 +1227,10 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: closing connection to calib hardware" );
     }
 
-    // disconnect me from calibd
+    // disconnect me from calibd, irrespective of any previous error
     //
-    if ( error==NO_ERROR ) {
-      logwrite( function, "disconnecting from calibd" );
-      error = seq.calibd.disconnect();
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: disconnecting from calibd" );
-    }
+    logwrite( function, "disconnecting from calibd" );
+    seq.calibd.disconnect();
 
     // Turn off power to calib hardware.
     // Any error here is added to thr_error.
@@ -1270,12 +1247,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       }
     }
 
-    // If shutdown successful then set this system as not ready
+    // set this system as not ready
     //
-    if (error==NO_ERROR) seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_CALIB );
-    else {
-      seq.thr_error.fetch_or( THR_CALIB_SHUTDOWN );     // otherwise mark this thread as reporting an error
-    }
+    seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_CALIB );
+
+    // set this thread's error status
+    //
+    seq.thr_error.fetch_or( error==NO_ERROR ? THR_NONE : THR_CALIB_SHUTDOWN );
+
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );
     seq.clr_thrstate_bit( THR_CALIB_SHUTDOWN );
     return;
@@ -1807,7 +1786,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
                                                                          : seq.target.fpoffsets.coords_out.angle         );
 
       if ( std::abs(_solved_angle) - std::abs(seq.target.casangle) > 0.01 ) {
-        message.str(""); message << "NOTICE:Calculated angle " << seq.target.fpoffsets.coords_out.angle 
+        message.str(""); message << "NOTICE: Calculated angle " << seq.target.fpoffsets.coords_out.angle
                                  << " is not equivalent to casangle " << seq.target.casangle;
         seq.async.enqueue_and_log( function, message.str() );
       }
@@ -1816,7 +1795,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       //
       std::stringstream ringgo_cmd;
       std::string       ringgo_reply;
-      int               ringgo_reply_value;
+//    int               ringgo_reply_value;
       ringgo_cmd << TCSD_RINGGO << " " << seq.target.fpoffsets.coords_out.angle;                                 // this is calculated cass angle
       error = seq.tcsd.send( ringgo_cmd.str(), ringgo_reply );
       if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
@@ -1834,7 +1813,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       //
       std::stringstream coords_cmd;
       std::string       coords_reply;
-      int               coords_reply_value;
+//    int               coords_reply_value;
 
       coords_cmd << "COORDS " << ( seq.target.fpoffsets.coords_out.ra * TO_HOURS )  << " "                       // RA in decimal hours
                               <<   seq.target.fpoffsets.coords_out.dec << " "                                    // DEC in decimal degrees
@@ -2027,7 +2006,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     }
 //  }  // end if ( ra_delta > 0.01 || dec_delta > 0.01 ) 
 //  else {
-//    seq.async.enqueue_and_log( function, "NOTICE:Telescope already pointed at target, no TCS move requested" );
+//    seq.async.enqueue_and_log( function, "NOTICE: Telescope already pointed at target, no TCS move requested" );
 //  }
 
 /***
@@ -2932,7 +2911,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     seq.set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_init, std::ref(seq) ).detach();
     seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_init, std::ref(seq) ).detach();
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );     std::thread( dothread_tcs_init, std::ref(seq), "" ).detach();
-    seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(seq) ).detach();
+//  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(seq) ).detach();
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_init, std::ref(seq) ).detach();
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_init, std::ref(seq) ).detach();
 
@@ -3109,21 +3088,17 @@ logwrite( function, "[DEBUG] setting READY bit" );
     }
     logwrite( function, "[DEBUG] (6) DONE waiting for power daemon to shut down" );
 
-    // if any thread returned an error then we are not ready
+    // Note the error(s) but shutdown will always close the daemon connections
+    // so return success.
     //
     uint32_t thr_error = seq.thr_error.load(std::memory_order_relaxed);
     if ( thr_error != THR_NONE ) {
-      message.str(""); message << "ERROR: shutdown failed because the following thread(s) had an error: " << this->thrstate_string( thr_error );
+      message.str(""); message << "NOTICE: the following thread(s) had an error during shutdown: " << this->thrstate_string( thr_error );
       seq.async.enqueue_and_log( function, message.str() );
-//    seq.set_clr_seqstate_bit( Sequencer::SEQ_READY, Sequencer::SEQ_SHUTTING );  // set and clear seqstate bits  //TODO why did I do this?
-//    seq.set_reqstate_bit( Sequencer::SEQ_READY );                                                               //TODO why did I do this?
-      seq.clr_seqstate_bit( Sequencer::SEQ_SHUTTING );
-      seq.clr_reqstate_bit( Sequencer::SEQ_SHUTTING );
       seq.thr_error.store( THR_NONE );  // clear the thread error state
-      return( ERROR );
     }
 
-    // otherwise we are now offline
+    // we are now offline
     //
     seq.set_clr_seqstate_bit( Sequencer::SEQ_OFFLINE, Sequencer::SEQ_SHUTTING );  // set and clear seqstate
     seq.set_reqstate_bit( Sequencer::SEQ_OFFLINE );                               // set the requested state
@@ -3869,14 +3844,55 @@ logwrite( function, "[DEBUG] setting READY bit" );
     std::string testname = tokens[0];                                // the first token is the test name
 
     // ----------------------------------------------------
+    // help -- list testnames
+    // ----------------------------------------------------
+    //
+    if ( testname == "?" || testname == "help" ) {
+      retstring = "test <testname> ...\n";
+      retstring.append( "   addrow ? | <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\n" );
+      retstring.append( "   async [ ? | <message> ]\n" );
+      retstring.append( "   acquire [ ? ]\n" );
+      retstring.append( "   cameraset [ ? ]\n" );
+      retstring.append( "   clearlasttarget\n" );
+      retstring.append( "   completed [ ? ]\n" );
+      retstring.append( "   expose [ ? ]\n" );
+      retstring.append( "   fpoffset ? | <from> <to>\n" );
+      retstring.append( "   getnext [ ? ]\n" );
+      retstring.append( "   isready [ ? ]\n" );
+      retstring.append( "   moveto [ ? | <solverargs> ]\n" );
+      retstring.append( "   notify [ ? ]\n" );
+      retstring.append( "   pause [ ? ]\n" );
+      retstring.append( "   preamble [ ? ]\n" );
+      retstring.append( "   radec [ ? ]\n" );
+      retstring.append( "   resume [ ? ]\n" );
+      retstring.append( "   single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>\n" );
+      retstring.append( "   start ? | <module>\n" );
+      retstring.append( "   states [ ? ]\n" );
+      retstring.append( "   tablenames [ ? ]\n" );
+      retstring.append( "   update ? | { pending | complete | unassigned }\n" );
+    }
+    else
+
+    // ----------------------------------------------------
     // async -- queue an asynchronous message
     // ----------------------------------------------------
     //
     if ( testname == "async" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test async [ <message> ]\n";
+        retstring.append( "  Queue and broadcast optional <message>. If <message> not supplied\n" );
+        retstring.append( "  then broadcast \"test\".\n" );
+        return( NO_ERROR );
+      }
       if ( tokens.size() > 1 ) {
-        if ( tokens.size() > 2 ) logwrite( function, "NOTICE multiple strings ignored, only the first will be queued" );
-        logwrite( function, tokens[1] );
-        this->async.enqueue( tokens[1] );
+        bool first=true;
+        message.str("");
+        for ( const auto &word : tokens ) {
+          if ( first ) { first=false; continue; }  // skip the testname
+          message << word << " ";
+        }
+        logwrite( function, message.str() );
+        this->async.enqueue( message.str() );
       }
       else {
         logwrite( function, "test" );
@@ -3909,13 +3925,18 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "isready" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test isready\n";
+        retstring.append( "  Report which systems are not ready\n" );
+        return( NO_ERROR );
+      }
       message.str("");
       uint32_t ss = this->system_not_ready.load(std::memory_order_relaxed);
       message << ss << " ";
 
       // but now I'm going to write to the log (textually) which bits are set
       //
-      message.str(""); message << "NOTICE:systems not ready: " << this->seqstate_string( ss );
+      message.str(""); message << "NOTICE: systems not ready: " << this->seqstate_string( ss );
       this->async.enqueue( message.str() );
       logwrite( function, message.str() );
       retstring = message.str();
@@ -3929,6 +3950,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "cameraset" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test cameraset\n";
+        retstring.append( "  Set only the camera according to the parameters in the target row.\n" );
+        return( NO_ERROR );
+      }
       this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
       std::thread( dothread_camera_set, std::ref(*this) ).detach();        // set camera in a thread
     }
@@ -3939,6 +3965,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "expose" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test expose\n";
+        retstring.append( "  Trigger an exposure.\n" );
+        return( NO_ERROR );
+      }
       this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
       std::thread( dothread_trigger_exposure, std::ref(*this) ).detach();  // trigger exposure in a thread
     }
@@ -3995,6 +4026,12 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "single" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>\n";
+        retstring.append( "  Get command line info for a single observation without the database.\n" );
+        retstring.append( "  Arguments must be comma delimited in the order shown.\n" );
+        return( NO_ERROR );
+      }
       std::string::size_type pos = args.find( "single " );         // note space at end of test name!
       std::string arglist = args.substr( pos+strlen("single ") );  // arglist is the rest of the args string after "single "
 
@@ -4074,7 +4111,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       }
       error = NO_ERROR;
 
-      message.str(""); message << "NOTICE:" << targetstatus;
+      message.str(""); message << "NOTICE: " << targetstatus;
       this->async.enqueue( message.str() );                      // broadcast target status
 
       if ( ret == TargetInfo::TargetState::TARGET_FOUND )     { rts << this->target.name  << " " 
@@ -4098,6 +4135,12 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ----------------------------------------------------
     //
     if ( testname == "addrow" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test addrow <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\n";
+        retstring.append( "  Insert a fixed row into the database. Arguments are space delimited\n" );
+        retstring.append( "  in the order shown.\n" );
+        return( NO_ERROR );
+      }
       int number=0;
       std::string name="", ra="", dec="";
       double etime=0., slitw=1., slita=18.;
@@ -4181,7 +4224,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     else
 
     // ----------------------------------------------------
-    // radec -- 
+    // radec -- convert RA,DEC from HH:MM:SS to decimal
     // ----------------------------------------------------
     //
     if ( testname == "radec" ) {
@@ -4234,6 +4277,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // -------------------------------------------------------
     //
     if ( testname == "pause" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test pause\n";
+        retstring.append( "  Send an asynchronous command to camerad to pause exposure.\n" );
+        return( NO_ERROR );
+      }
       error = this->camerad.async( "PEX" );
     }
     else
@@ -4243,6 +4291,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // ---------------------------------------------------------
     //
     if ( testname == "resume" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test resume\n";
+        retstring.append( "  Send an asynchronous command to camerad to resume exposure.\n" );
+        return( NO_ERROR );
+      }
       error = this->camerad.async( "REX" );
     }
     else
@@ -4369,7 +4422,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     else
 
     // ---------------------------------------------------------
-    // fpoffset -- 
+    // fpoffset -- convert coordinates of current target
     // ---------------------------------------------------------
     //
     if ( testname == "fpoffset" ) {
@@ -4404,14 +4457,14 @@ logwrite( function, "[DEBUG] setting READY bit" );
     else
 
     // ---------------------------------------------------------
-    // script -- 
+    // script -- run a script -- experimental
     // ---------------------------------------------------------
     //
     if ( testname == "script" ) {
 
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test script <file>\n";
-        retstring.append( "  Run <file> as a script\n" );
+        retstring.append( "  Run <file> as a script. EXPERIMENTAL!\n" );
         return( NO_ERROR );
       }
 
@@ -4423,12 +4476,117 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
 //    if (error==NO_ERROR) std::thread( dothread_runscript, std::ref(*this) ).detach();
     }
+    else
+
+    // ---------------------------------------------------------
+    // start -- startup a single specified module
+    // ---------------------------------------------------------
+    //
+    if ( testname == "start" ) {
+
+      if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" ) ) {
+        retstring = "test start <module>\n";
+        retstring.append( "  Startup only a single specified module in a manner similar\n" );
+        retstring.append( "  to the startup command, but only the specified module.\n" );
+        retstring.append( "  Valid modules are:\n" );
+        retstring.append( "    power | acam | slit | calib | camera | focus | flexure | tcs <which>.\n" );
+        retstring.append( "  Note that power must be running before any other module.\n" );
+        retstring.append( "  Module tcs requires an additional argument <which> = sim | tcs\n" );
+        return( NO_ERROR );
+      }
+
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected start <module>" );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+
+      bool ispower = false;
+      std::string reply;
+
+      // power module must be initialized before any others. If this is not
+      // a request for starting power, then check that the power module is
+      // initialized. If not connected then it can't be initialized.
+      //
+      if ( tokens[1] != "power" && ! this->powerd.socket.isconnected() ) {
+        logwrite( function, "ERROR power module must be initialized first" );
+        retstring = "power_not_initialized";
+        return( ERROR );
+      }
+      else
+      if ( tokens[1] != "power" && this->powerd.socket.isconnected() ) {
+
+        // Connected, so ask if it's open to the hardware
+        //
+        error  = this->powerd.send( POWERD_ISOPEN, reply );
+        error |= this->parse_state( function, reply, ispower );
+
+        if ( error != NO_ERROR ) {
+          logwrite( function, "ERROR communicating with power module" );
+          retstring = "power_not_initialized";
+          return( ERROR );
+        }
+
+        if ( ! ispower ) {
+          logwrite( function, "ERROR power module must be initialized first" );
+          retstring = "power_not_initialized";
+          return( ERROR );
+        }
+      }
+
+      if ( tokens[1] == "power" ) {
+        if ( this->powerd.socket.isconnected() ) {
+          std::string reply;
+          error  = this->powerd.send( POWERD_ISOPEN, reply );
+          error |= this->parse_state( function, reply, ispower );
+        }
+        if ( ! ispower ) std::thread( dothread_power_init, std::ref(*this) ).detach();
+      }
+      else
+      if ( tokens[1] == "acam" ) {
+        this->set_seqstate_bit( Sequencer::SEQ_WAIT_ACAM );    std::thread( dothread_acam_init, std::ref(*this) ).detach();
+      }
+      else
+      if ( tokens[1] == "slit" ) {
+        this->set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_init, std::ref(*this) ).detach();
+      }
+      else
+      if ( tokens[1] == "calib" ) {
+        this->set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_init, std::ref(*this) ).detach();
+
+      }
+      else
+      if ( tokens[1] == "camera" ) {
+        this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(*this) ).detach();
+      }
+      else
+      if ( tokens[1] == "flexure" ) {
+        this->set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_init, std::ref(*this) ).detach();
+      }
+      else
+      if ( tokens[1] == "focus" ) {
+        this->set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_init, std::ref(*this) ).detach();
+      }
+      else
+      if ( tokens[1] == "tcs" && tokens.size()==3 ) {
+        this->tcs_init( tokens[2] );
+      }
+      else {
+        message.str(""); message << "ERROR invalid module \"" << tokens[1] << "\". expected power|acam|slit|calib|camera|focus|flexure|tcs <which>";
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+
+      message.str(""); message << "started " << tokens[1] << " module";
+      logwrite( function, message.str() );
+    }
+    else {
 
     // ----------------------------------------------------
     // invalid test name
     // ----------------------------------------------------
     //
-    else {
       message.str(""); message << "ERROR: test " << testname << " unknown";;
       logwrite(function, message.str());
       error = ERROR;

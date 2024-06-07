@@ -38,6 +38,7 @@
  */
 namespace Sequencer {
 
+const int foo=2;
   /**
    * @enum  SequenceStateBits
    * @brief assigns each subsystem a bit in the seqstate word
@@ -224,18 +225,17 @@ namespace Sequencer {
 
       Common::Queue async;            ///< asynchronous message queue
 
-      // Here are all the daemon objects that the Sequencer connects to.
-      // The Sequencer::Daemon class is defined in sequencer_interface.h
+      // Here are all the daemon client objects that the Sequencer connects to.
       //
-      Daemon acamd { "acamd" };
-      Daemon calibd { "calibd" };
-      Daemon camerad { "camerad" };
-      Daemon filterd { "filterd" };
-      Daemon flexured { "flexured" };
-      Daemon focusd { "focusd" };
-      Daemon powerd { "powerd" };
-      Daemon slitd { "slitd" };
-      Daemon tcsd { "tcsd" };
+      Common::DaemonClient acamd { "acamd" };
+      Common::DaemonClient calibd { "calibd" };
+      Common::DaemonClient camerad { "camerad" };
+      Common::DaemonClient filterd { "filterd" };
+      Common::DaemonClient flexured { "flexured" };
+      Common::DaemonClient focusd { "focusd" };
+      Common::DaemonClient powerd { "powerd" };
+      Common::DaemonClient slitd { "slitd" };
+      Common::DaemonClient tcsd { "tcsd" };
 
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
@@ -298,8 +298,6 @@ namespace Sequencer {
 
       // These are various jobs that are done in their own threads
       //
-      static void dothread_daemon_command( Sequencer::Daemon &daemon, std::string args );  ///< sends a command to a daemon in a thread
-
       static void dothread_trigger_exposure( Sequencer::Sequence &seq );       ///< trigger and wait for exposure
       static void dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in );  ///< modify exptime while exposure running
       static void dothread_acquisition( Sequencer::Sequence &seq );            /// performs the acquisition sequence when signalled
