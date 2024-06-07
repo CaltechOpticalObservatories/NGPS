@@ -240,8 +240,8 @@ public void setEdited(boolean new_edited){
      addColumn("Calculated"+ '\n'+  "EXPTIME"); //6
      addColumn("Requested" + '\n'+ "SLIT width");
      addColumn("Calculated"+ '\n'+ "SLIT width");//8
-     addColumn("Requested"+ '\n'+"Slit Angle");
-     addColumn("Calculated"+ '\n'+ "Sit Angle");//10
+//     addColumn("Requested"+ '\n'+"Slit Angle");       //remove
+//     addColumn("Calculated"+ '\n'+ "Sit Angle");//10  //remove
      addColumn("AIRMASS");//11
      addColumn("OTMSNR");//12
      addColumn("NOTE");
@@ -254,12 +254,16 @@ public void setEdited(boolean new_edited){
      minimal_editable_array[6] = false;
      minimal_editable_array[7] = true;
      minimal_editable_array[8] = false;
-     minimal_editable_array[9] = true;
-     minimal_editable_array[10] = false;
+/*     minimal_editable_array[9] = true;  //remove
+     minimal_editable_array[10] = false;//remove
      minimal_editable_array[11] = false;
      minimal_editable_array[12] = false;
      minimal_editable_array[13] = true;
-     minimal_editable_array[14] = true;
+     minimal_editable_array[14] = true; */
+     minimal_editable_array[9] = false;
+     minimal_editable_array[10] = false;
+     minimal_editable_array[11] = true;
+     minimal_editable_array[12] = true;
   }    
     
     
@@ -1163,11 +1167,11 @@ return timestamp;
         if(col == 8){
            returnObject = selectedRow.otm.getOTMslitwidth();
         } 
-        if(col == 9){
-           returnObject = selectedRow.instrument.getRequestedSlitAngle();
+/*        if(col == 9){
+           returnObject = selectedRow.instrument.getRequestedSlitAngle();  //remove
         }
         if(col == 10){
-           returnObject = selectedRow.otm.getOTMslitangle();
+           returnObject = selectedRow.otm.getOTMslitangle();               //remove
         } 
         if(col == 11){
            returnObject = selectedRow.otm.getOTMAirmass_start();
@@ -1177,7 +1181,16 @@ return timestamp;
         }         
         if(col == 13){
            returnObject = selectedRow.getNOTE();
+        } */
+        if(col == 9){
+           returnObject = selectedRow.otm.getOTMAirmass_start();
         } 
+        if(col == 10){
+           returnObject = selectedRow.otm.getOTMSNR();
+        }         
+        if(col == 11){
+           returnObject = selectedRow.getNOTE();
+        }
     }
     return returnObject;
   } 
@@ -1355,11 +1368,11 @@ return timestamp;
         if(col == 8){
            selectedTarget.otm.setOTMslitwidth(((java.lang.Double)value).doubleValue());
         }     
-        if(col == 9){
-           selectedTarget.instrument.setRequestedSlitAngle((java.lang.String)value);
+/*        if(col == 9){
+           selectedTarget.instrument.setRequestedSlitAngle((java.lang.String)value);     //remove
         } 
         if(col == 10){
-           selectedTarget.otm.setOTMslitangle(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMslitangle(((java.lang.Double)value).doubleValue());  //remove
         }
         if(col == 11){
            selectedTarget.otm.setOTMAirmass_start(((java.lang.Double)value).doubleValue());
@@ -1369,7 +1382,16 @@ return timestamp;
         }      
         if(col == 13){
            selectedTarget.setNOTE(((java.lang.String)value));
+        }    */  
+        if(col == 9){
+           selectedTarget.otm.setOTMAirmass_start(((java.lang.Double)value).doubleValue());
         }      
+        if(col == 10){
+           selectedTarget.otm.setOTMSNR(((java.lang.String)value));
+        }      
+        if(col == 11){
+           selectedTarget.setNOTE(((java.lang.String)value));
+        }
     }
     getDataVector().setElementAt(selectedTarget,row);
     fireTableCellUpdated(row, col);
@@ -1608,12 +1630,12 @@ return timestamp;
              myClass =  (Double.valueOf(0)).getClass(); // OTMslit
             return myClass;
          }
-        if(c == 9){
-            myClass =  (new java.lang.String()).getClass(); // CASS_RING_ANGLE
+/*        if(c == 9){
+            myClass =  (new java.lang.String()).getClass(); // slitangle
             return myClass;
          }
         if(c == 10){
-           myClass =  (Double.valueOf(0)).getClass(); // OTMcass
+           myClass =  (Double.valueOf(0)).getClass(); // OTMslitangle
             return myClass;
          }
          if(c == 11){
@@ -1621,10 +1643,22 @@ return timestamp;
             return myClass;
          }
          if(c == 12){
-          myClass = (new String()).getClass(); // Airmass_start
+          myClass = (new String()).getClass(); // SNR
             return myClass;
          }
          if(c == 13){
+          myClass =  (new String()).getClass(); // note
+            return myClass;
+         }  */
+         if(c == 9){
+          myClass =  (Double.valueOf(0)).getClass(); // Airmass_start
+            return myClass;
+         }
+         if(c == 10){
+          myClass = (new String()).getClass(); // SNR
+            return myClass;
+         }
+         if(c == 11){
           myClass =  (new String()).getClass(); // note
             return myClass;
          }

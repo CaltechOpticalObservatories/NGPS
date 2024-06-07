@@ -804,12 +804,15 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(6).setHeaderRenderer(my_renderer_green);
   main_editor_table.getColumnModel().getColumn(7).setHeaderRenderer(my_renderer_blue);
   main_editor_table.getColumnModel().getColumn(8).setHeaderRenderer(my_renderer_green);
-  main_editor_table.getColumnModel().getColumn(9).setHeaderRenderer(my_renderer_blue);
-  main_editor_table.getColumnModel().getColumn(10).setHeaderRenderer(my_renderer_green);
+/*  main_editor_table.getColumnModel().getColumn(9).setHeaderRenderer(my_renderer_blue);  //remove
+  main_editor_table.getColumnModel().getColumn(10).setHeaderRenderer(my_renderer_green);//remove
   main_editor_table.getColumnModel().getColumn(11).setHeaderRenderer(my_renderer_green);
   main_editor_table.getColumnModel().getColumn(12).setHeaderRenderer(my_renderer_green);
-  main_editor_table.getColumnModel().getColumn(13).setHeaderRenderer(my_renderer_blue);
-  
+  main_editor_table.getColumnModel().getColumn(13).setHeaderRenderer(my_renderer_blue);  */
+  main_editor_table.getColumnModel().getColumn(9).setHeaderRenderer(my_renderer_green);
+  main_editor_table.getColumnModel().getColumn(10).setHeaderRenderer(my_renderer_green);
+  main_editor_table.getColumnModel().getColumn(11).setHeaderRenderer(my_renderer_blue);
+          
   for(int i=0;i<count;i++){
 //     main_editor_table.getColumnModel().getColumn(i).setHeaderRenderer(my_renderer_blue);
   }
@@ -835,26 +838,30 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(6).setCellRenderer(centerRenderer);
   main_editor_table.getColumnModel().getColumn(7).setCellRenderer(centerRenderer);
   main_editor_table.getColumnModel().getColumn(8).setCellRenderer(centerRenderer);
-  main_editor_table.getColumnModel().getColumn(9).setCellRenderer(centerRenderer);
-  main_editor_table.getColumnModel().getColumn(10).setCellRenderer(centerRenderer);
-  main_editor_table.getColumnModel().getColumn(11).setCellRenderer(centerRenderer);
-  main_editor_table.getColumnModel().getColumn(12).setCellRenderer(centerRenderer);
+  main_editor_table.getColumnModel().getColumn(9).setCellRenderer(centerRenderer); //remove
+  main_editor_table.getColumnModel().getColumn(10).setCellRenderer(centerRenderer);//remove
+//  main_editor_table.getColumnModel().getColumn(11).setCellRenderer(centerRenderer);
+//  main_editor_table.getColumnModel().getColumn(12).setCellRenderer(centerRenderer);
+  
   main_editor_table.getColumnModel().getColumn(0).setMinWidth(20);
   main_editor_table.getColumnModel().getColumn(0).setMaxWidth(20);
   main_editor_table.getColumnModel().getColumn(1).setMinWidth(0);
   main_editor_table.getColumnModel().getColumn(1).setMaxWidth(0);  
   main_editor_table.getColumnModel().getColumn(2).setMinWidth(120);
-  main_editor_table.getColumnModel().getColumn(3).setMinWidth(150);
-  main_editor_table.getColumnModel().getColumn(4).setMinWidth(100);
+  main_editor_table.getColumnModel().getColumn(3).setMinWidth(120);
+  main_editor_table.getColumnModel().getColumn(4).setMinWidth(120);
   main_editor_table.getColumnModel().getColumn(5).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(6).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(7).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(8).setMinWidth(100);
-  main_editor_table.getColumnModel().getColumn(9).setMinWidth(100);
-  main_editor_table.getColumnModel().getColumn(10).setMinWidth(100);
+/*  main_editor_table.getColumnModel().getColumn(9).setMinWidth(100);  //remove
+  main_editor_table.getColumnModel().getColumn(10).setMinWidth(100); //remove
   main_editor_table.getColumnModel().getColumn(11).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(12).setMinWidth(100);
-  main_editor_table.getColumnModel().getColumn(13).setMinWidth(160);
+  main_editor_table.getColumnModel().getColumn(13).setMinWidth(160);  */
+  main_editor_table.getColumnModel().getColumn(9).setMinWidth(100);
+  main_editor_table.getColumnModel().getColumn(10).setMinWidth(100);
+  main_editor_table.getColumnModel().getColumn(11).setMinWidth(160);
 //  TableColumn tColumn_otm16 = main_editor_table.getColumnModel().getColumn(0);
 //              tColumn_otm16.setCellRenderer(new ColumnColorRenderer(java.awt.Color.lightGray, java.awt.Color.BLACK));     
 }
@@ -892,15 +899,15 @@ public static JTable constructPlanTable(){
                 if(rowIndex == FLAG_ROW){
                   if(current_target != null){
                     java.lang.String flags = (current_target.otm.getOTMflag());
-                    if (flags.contains("-1")) {
+                    if (flags.contains("DAY")) {
                         c.setBackground(super.getBackground());
                         c.setForeground(Color.red);
                         jc.setBorder(super.getBorder());                   
-                    } else if(flags.contains("-0")){
+                    } else if( !flags.trim().isEmpty() ){
                         c.setBackground(super.getBackground());
                         c.setForeground(Color.BLUE);
                         jc.setBorder(super.getBorder());
-                    } else if(flags == null | flags.matches("")){
+                    } else if(flags == null | flags.trim().isEmpty()){
                         c.setBackground(super.getBackground());
                         c.setForeground(super.getForeground()); 
                         jc.setBorder(super.getBorder());     
@@ -940,8 +947,10 @@ public static JTable constructTable(){
                     c.setForeground(Color.black);
                     jc.setBorder(new MatteBorder(1, 0, 1, 0, Color.BLACK));                   
                 } else if("PENDING".matches(state)){
-                    c.setBackground(super.getBackground());
-                    c.setForeground(super.getForeground());
+//                    c.setBackground(super.getBackground());
+//                    c.setForeground(super.getForeground());
+                    c.setBackground(Color.white);
+                    c.setForeground(Color.black);
                     jc.setBorder(super.getBorder());
                 }
                 else if("completed".matches(state)){
@@ -962,6 +971,11 @@ public static JTable constructTable(){
                 else if("ERROR-OTM".matches(state) | "error-otm".matches(state)){
                     c.setBackground(Color.white);
                     c.setForeground(Color.RED);
+                    jc.setBorder(super.getBorder());   
+                }
+                else if("WARN-OTM".matches(state) | "warn-otm".matches(state)){
+                    c.setBackground(Color.white);
+                    c.setForeground(Color.BLUE);
                     jc.setBorder(super.getBorder());   
                 }
                 if((columnIndex > 17)&(columnIndex < 25)){
@@ -1906,10 +1920,10 @@ public static JTable constructTable(){
             left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(left_mainPanelLayout.createSequentialGroup()
                 .addGap(5, 5, 5)
-                .addGroup(left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(myOScontrolsPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 1421, Short.MAX_VALUE)
-                    .addComponent(main_tableScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addContainerGap())
+                .addGroup(left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(main_tableScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(myOScontrolsPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         left_mainPanelLayout.setVerticalGroup(
             left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)

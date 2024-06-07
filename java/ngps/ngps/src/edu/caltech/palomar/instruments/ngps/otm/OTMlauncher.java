@@ -514,30 +514,38 @@ public void readOTMoutput(){
              myOTMTableModel.addRecord(current);
              java.lang.String flags = current.otm.getOTMflag();
 //             System.out.println(flags);
-             if(!flags.contains("-1")){
-                 if(current.getSTATE().matches("ERROR-OTM"))
-                 current.setSTATE("PENDING");
-                 dbms.myTargetDBMSTableModel.fireTableDataChanged();
-             }             
-             if(flags.contains("-1")){
+             current.setSTATE("PENDING");
+             dbms.myTargetDBMSTableModel.fireTableDataChanged();
+
+             if(flags.contains("DAY")){
                  current.setSTATE("ERROR-OTM");
                  dbms.myTargetDBMSTableModel.fireTableDataChanged();
+                 continue;
              }
-             else if(!flags.contains("-1")){
-                 if(first_image){
-                     first_image = false;
-                     long first_image_start = current.otm.getOTMstart().getTime();
-                     reference_time = current.otm.getOTMstart().toString();
-                     setSlewgoStart_FirstExposure(first_image_start);
-                     constructChartData(i,current);
-                 }else
-                 if(current.otm.getOTMstart().getTime() <= current.otm.getOTMend().getTime()){
-                     constructChartData(i,current);
-                    // addXIntervalXYDataset(current);
-                    // constructXYSeries(i,current);
-                 }                    
-             }        
-         } 
+             if(!flags.trim().isEmpty()){
+                 current.setSTATE("WARN-OTM");
+                 dbms.myTargetDBMSTableModel.fireTableDataChanged();
+             }
+//             else if(current.getSTATE().matches("OTM")){
+//                 current.setSTATE("PENDING");
+//                 dbms.myTargetDBMSTableModel.fireTableDataChanged();
+//             }
+             // if state matches OTM
+             if(first_image){
+                 first_image = false;
+                 long first_image_start = current.otm.getOTMstart().getTime();
+                 reference_time = current.otm.getOTMstart().toString();
+                 setSlewgoStart_FirstExposure(first_image_start);
+                 constructChartData(i,current);
+             }else
+             if(current.otm.getOTMstart().getTime() <= current.otm.getOTMend().getTime()){
+                 constructChartData(i,current);
+                // addXIntervalXYDataset(current);
+                // constructXYSeries(i,current);
+             }   
+             
+             
+         } //for loop 
    java.lang.String cal_reference_time = reference_time.replace("-", " ");
    InstantInTime i = new InstantInTime(cal_reference_time,palomar.stdz,palomar.use_dst,true);              
    WhenWhere     w = new WhenWhere(i,palomar);               
