@@ -1831,14 +1831,12 @@ public static JTable constructTable(){
         detailsPanelLayout.setHorizontalGroup(
             detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(detailsPanelLayout.createSequentialGroup()
-                .addGap(38, 38, 38)
                 .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jLabel2)
                     .addGroup(detailsPanelLayout.createSequentialGroup()
-                        .addComponent(jLabel3)
-                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
-            .addGroup(detailsPanelLayout.createSequentialGroup()
-                .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addGap(38, 38, 38)
+                        .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel2)
+                            .addComponent(jLabel3)))
                     .addGroup(detailsPanelLayout.createSequentialGroup()
                         .addGap(8, 8, 8)
                         .addComponent(jLabel9)
@@ -2231,7 +2229,7 @@ public static JTable constructTable(){
         });
         helpMenu.add(ngps_instrument_manualMenuItem);
 
-        errors_diagnosticsMenuItem.setText("Errors and diagnostics");
+        errors_diagnosticsMenuItem.setText("OTMflag codes");
         errors_diagnosticsMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 errors_diagnosticsMenuItemActionPerformed(evt);
@@ -2516,7 +2514,7 @@ public static JTable constructTable(){
     }//GEN-LAST:event_ngps_instrument_manualMenuItemActionPerformed
 
     private void errors_diagnosticsMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_errors_diagnosticsMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("ERRORS_AND_DIAGNOSTICS"));
+         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("OTMFLAGS"));
     }//GEN-LAST:event_errors_diagnosticsMenuItemActionPerformed
 
     private void connectionsMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_connectionsMenuItemActionPerformed
