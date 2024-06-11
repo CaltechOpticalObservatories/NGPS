@@ -79,11 +79,17 @@ public void bootstrap(){
     }
 } 
 /*================================================================================================
-/     executeOTM(java.sql.Timestamp start_time,double seeing,int wavelength)
+/     executeFirefox(java.lang.String target_url)
 /=================================================================================================*/
  public void executeFirefox(java.lang.String target_url){
    ExecuteProcessThread myExecuteProcessThread = new ExecuteProcessThread(target_url);
    myExecuteProcessThread.start();
+ }
+/*================================================================================================
+/     openURLkey(String URLkey)
+/=================================================================================================*/
+ public void openURLkey(String URLkey){
+   executeFirefox(URLMAP.getProperty(URLkey));
  }
 /*================================================================================================
 /      OTM(java.sql.Timestamp start_time,double seeing,int wavelength)

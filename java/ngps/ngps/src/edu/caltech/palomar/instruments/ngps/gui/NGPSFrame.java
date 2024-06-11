@@ -1460,6 +1460,7 @@ public static JTable constructTable(){
         );
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setResizable(false);
 
         planningPanel.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 1, true));
 
@@ -1582,7 +1583,7 @@ public static JTable constructTable(){
                                     .addComponent(jLabel13))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                                 .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                                    .addComponent(seeingTextField, javax.swing.GroupLayout.DEFAULT_SIZE, 169, Short.MAX_VALUE)
+                                    .addComponent(seeingTextField)
                                     .addComponent(airmass_limitTextField))
                                 .addGap(0, 0, Short.MAX_VALUE)))
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1689,7 +1690,7 @@ public static JTable constructTable(){
             jPanel6Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel6Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 410, Short.MAX_VALUE)
+                .addComponent(jScrollPane3)
                 .addContainerGap())
         );
         jPanel6Layout.setVerticalGroup(
@@ -1697,7 +1698,7 @@ public static JTable constructTable(){
             .addGroup(jPanel6Layout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 289, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(77, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         detailedTabbedPane.addTab("Observation", jPanel6);
@@ -1739,21 +1740,20 @@ public static JTable constructTable(){
             jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel7Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane4, javax.swing.GroupLayout.DEFAULT_SIZE, 426, Short.MAX_VALUE)
+                .addComponent(jScrollPane4)
                 .addContainerGap())
         );
         jPanel7Layout.setVerticalGroup(
             jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel7Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane4, javax.swing.GroupLayout.DEFAULT_SIZE, 354, Short.MAX_VALUE)
+                .addComponent(jScrollPane4)
                 .addContainerGap())
         );
 
         detailedTabbedPane.addTab("ETC", jPanel7);
 
         jScrollPane5.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        jScrollPane5.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 
         planTable.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
@@ -1789,14 +1789,14 @@ public static JTable constructTable(){
             jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel8Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane5, javax.swing.GroupLayout.DEFAULT_SIZE, 426, Short.MAX_VALUE)
+                .addComponent(jScrollPane5)
                 .addContainerGap())
         );
         jPanel8Layout.setVerticalGroup(
             jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel8Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane5, javax.swing.GroupLayout.DEFAULT_SIZE, 354, Short.MAX_VALUE)
+                .addComponent(jScrollPane5)
                 .addContainerGap())
         );
 
@@ -1854,7 +1854,7 @@ public static JTable constructTable(){
                         .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel6)
                             .addComponent(jLabel4))))
-                .addContainerGap(17, Short.MAX_VALUE))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         detailsPanelLayout.setVerticalGroup(
             detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1863,7 +1863,7 @@ public static JTable constructTable(){
                 .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(selectedTargetNameTextField, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabel9))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(detailedTabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 412, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
@@ -1883,7 +1883,8 @@ public static JTable constructTable(){
 
         main_tableScrollPane.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 2, true));
         main_tableScrollPane.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-        main_tableScrollPane.setPreferredSize(new java.awt.Dimension(476, 1200));
+        main_tableScrollPane.setMinimumSize(new java.awt.Dimension(1200, 1200));
+        main_tableScrollPane.setPreferredSize(new java.awt.Dimension(1200, 1200));
 
         mainTable.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
@@ -1909,19 +1910,19 @@ public static JTable constructTable(){
             left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(left_mainPanelLayout.createSequentialGroup()
                 .addGap(5, 5, 5)
-                .addGroup(left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                .addGroup(left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(main_tableScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(myOScontrolsPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
         );
         left_mainPanelLayout.setVerticalGroup(
             left_mainPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(left_mainPanelLayout.createSequentialGroup()
                 .addGap(5, 5, 5)
                 .addComponent(myOScontrolsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(5, 5, 5)
-                .addComponent(main_tableScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
-                .addContainerGap())
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(main_tableScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 638, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(137, 137, 137))
         );
 
         NGPSMenu.setText("NGPS");
@@ -2245,9 +2246,9 @@ public static JTable constructTable(){
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
-                .addComponent(left_mainPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(left_mainPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(planningPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -2258,15 +2259,13 @@ public static JTable constructTable(){
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(left_mainPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(left_mainPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addContainerGap())
-                    .addGroup(layout.createSequentialGroup()
-                        .addComponent(planningPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 207, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(planningPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(detailsPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addGap(6, 6, 6))))
+                        .addComponent(detailsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap())
         );
 
         pack();
@@ -2463,15 +2462,15 @@ public static JTable constructTable(){
     }//GEN-LAST:event_aboutNGPSMenuItemActionPerformed
 
     private void hourly_weatherMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_hourly_weatherMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("HOURLY_WEATHER"));
+        myBrowserDisplay.openURLkey("HOURLY_WEATHER");
     }//GEN-LAST:event_hourly_weatherMenuItemActionPerformed
 
     private void ten_day_weatherMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ten_day_weatherMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("DAY10_WEATHER"));
+        myBrowserDisplay.openURLkey("DAY10_WEATHER");
     }//GEN-LAST:event_ten_day_weatherMenuItemActionPerformed
 
     private void reportBugMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_reportBugMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("BUG_REPORT"));
+        myBrowserDisplay.openURLkey("BUG_REPORT");
     }//GEN-LAST:event_reportBugMenuItemActionPerformed
 
     private void airmass_limitTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_airmass_limitTextFieldActionPerformed
@@ -2485,41 +2484,41 @@ public static JTable constructTable(){
        }
     }//GEN-LAST:event_airmass_limitTextFieldActionPerformed
 
-    private void mainTableKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_mainTableKeyPressed
-   
-    }//GEN-LAST:event_mainTableKeyPressed
-
     private void quick_startMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_quick_startMenuItemActionPerformed
-       myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("GUI_MANUAL"));
+       myBrowserDisplay.openURLkey("GUI_MANUAL");
     }//GEN-LAST:event_quick_startMenuItemActionPerformed
 
     private void etcMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_etcMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("OTM_ETC_MANUAL"));
+        myBrowserDisplay.openURLkey("OTM_ETC_MANUAL");
     }//GEN-LAST:event_etcMenuItemActionPerformed
 
     private void data_reductionMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_data_reductionMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("DATA_REDUCTION"));
+        myBrowserDisplay.openURLkey("DATA_REDUCTION");
     }//GEN-LAST:event_data_reductionMenuItemActionPerformed
 
     private void calibrationMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_calibrationMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("CALIBRATION"));
+         myBrowserDisplay.openURLkey("CALIBRATION");
     }//GEN-LAST:event_calibrationMenuItemActionPerformed
 
     private void example_spectraMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_example_spectraMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("EXAMPLE_SPECTRA"));
+        myBrowserDisplay.openURLkey("EXAMPLE_SPECTRA");
     }//GEN-LAST:event_example_spectraMenuItemActionPerformed
 
     private void ngps_instrument_manualMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ngps_instrument_manualMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("NGPS_INSTRUMENT_MANUAL"));
+         myBrowserDisplay.openURLkey("NGPS_INSTRUMENT_MANUAL");
     }//GEN-LAST:event_ngps_instrument_manualMenuItemActionPerformed
 
     private void errors_diagnosticsMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_errors_diagnosticsMenuItemActionPerformed
-         myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("OTMFLAGS"));
+         myBrowserDisplay.openURLkey("OTMFLAGS");
     }//GEN-LAST:event_errors_diagnosticsMenuItemActionPerformed
 
     private void connectionsMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_connectionsMenuItemActionPerformed
        myConnectionsFrame.setVisible(true);
     }//GEN-LAST:event_connectionsMenuItemActionPerformed
+
+    private void mainTableKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_mainTableKeyPressed
+
+    }//GEN-LAST:event_mainTableKeyPressed
 
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
