@@ -265,14 +265,8 @@ public void setPublicDocumentModel(CommandLogModel new_CommandLogModel){
    plot_executor.setStreamHandler(plot_psh);
    myOTMErrorsLog = new OTMErrorsLog();
 ; }
-/*================================================================================================
-/     executeOTM(java.sql.Timestamp start_time,double seeing,int wavelength)
-/=================================================================================================*/
- public void executeOTM(java.sql.Timestamp start_time,double seeing,int wavelength){
-   ExecuteProcessThread myExecuteProcessThread = new ExecuteProcessThread(start_time,seeing,wavelength);
-   myExecuteProcessThread.start();
- }
-/*================================================================================================
+
+ /*================================================================================================
 /      OTM(java.sql.Timestamp start_time,double seeing,int wavelength)
 /=================================================================================================*/
 public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
@@ -316,13 +310,7 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
 //       myTimelineChart.setVisible(true);
 //       display_timeline_image(OTM_TIMELINE_IMAGE);
 } 
-/*================================================================================================
-/    executePLOT()
-/=================================================================================================*/
- public void executePLOT(java.sql.Timestamp start_time,double seeing,int wavelength){
-   ExecutePlotThread myExecutePlotThread = new ExecutePlotThread(start_time,seeing,wavelength);
-   myExecutePlotThread.start();
- }
+
 /*================================================================================================
 /      OTM(java.sql.Timestamp start_time,double seeing,int wavelength)
 /=================================================================================================*/
@@ -359,7 +347,6 @@ public void PLOT(){
 //       timeline_graph_frame = BrowserFactory.createFrame("Timeline Model","file:"+PLOT_OUTPUT_FILE, 0);
 }  
 /*================================================================================================
-/      constructScriptFile(java.sql.Timestamp start_time,double seeing,int wavelength)
 /=================================================================================================*/
    public void display_timeline_image(java.lang.String image_name){
 //       java.lang.String IMAGE_NAME = "timeline.png";

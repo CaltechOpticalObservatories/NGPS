@@ -229,23 +229,23 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
     }
     if(col == 0){
 
-        if(row == 0){
-           returnObject = "Exposure Time Calculator (ETC) parameters";
-        }                 
+//        if(row == 0){
+//           returnObject = "Exposure Time Calculator (ETC) parameters";
+//        }                 
         if(row == 1){
-           returnObject = "Wavelength Range LOW (nanometers)";
+           returnObject = "Wavelength Min (nm)";
         }           
         if(row == 2){
-           returnObject = "Wavelength Range HIGH (nanometers)";
+           returnObject = "Wavelength Max (nm)";
         }  
         if(row == 3){
-           returnObject = "Channel (filter)";
+           returnObject = "Spectrograph Channel";
         }  
         if(row == 4){
            returnObject = "Magnitude";
         }  
         if(row == 5){
-           returnObject = "Magnitude Reference System";
+           returnObject = "Magnitude System";
         }  
         if(row == 6){
            returnObject = "Magnitude Filter";

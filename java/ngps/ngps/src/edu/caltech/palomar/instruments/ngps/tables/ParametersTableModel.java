@@ -219,34 +219,34 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "DEC (dd:mm:ss.s)";
         }        
         if(row == 2){
-           returnObject = "RA offset (arcseconds)";
+           returnObject = "RA offset (arcsec)";
         } 
         if(row == 3){
-           returnObject = "DEC offset (arcseconds)";
+           returnObject = "DEC offset (arcsec)";
         }        
         if(row == 4){
-           returnObject = "Exposure Time";
+           returnObject = "Exposure Time (s)";
         }        
         if(row == 5){
-           returnObject = "Slit Width (arcseconds)";
+           returnObject = "Slit Width (arcsec)";
         }        
         if(row == 6){
-           returnObject = "Slit offset (arcseconds)";
+           returnObject = "Slit offset (arcsec)";
         }        
         if(row == 7){
            returnObject = "CCD Mode";
         }        
         if(row == 8){
-           returnObject = "Bin Spectral (integer)";
+           returnObject = "Bin Spectral (int)";
         }        
         if(row == 9){
-           returnObject =  "Bin Spatial (integer)";
+           returnObject =  "Bin Spatial (int)";
         }  
         if(row == 10){
-           returnObject =  "Cassegrain Angle (degrees)";
+           returnObject =  "Slit Angle Request (deg)";
         } 
         if(row == 11){
-           returnObject =  "AIRMASS_MAX";
+           returnObject =  "Airmass limit";
         } 
         if(row == 12){
            returnObject =  "Comment";

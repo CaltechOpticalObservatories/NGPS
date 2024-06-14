@@ -284,10 +284,10 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "Slit Angle";
         } 
         if(row == 3){
-           returnObject = "AIRMASS start of exposure";
+           returnObject = "Airmass start";
         }        
         if(row == 4){
-           returnObject = "AIRMASS end of exposure";
+           returnObject = "Airmass end";
         }  
         if(row == 5){
            returnObject = "Sky Magnitude";
@@ -308,10 +308,10 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "OTMwait";
         }        
         if(row == 11){
-           returnObject =  "OTMflag";
+           returnObject = "OTMflag";
         }  
         if(row == 12){
-           returnObject =  "OTMlast";
+           returnObject = "OTMlast";
         }   
         if(row == 13){
            returnObject = "OTMslew";

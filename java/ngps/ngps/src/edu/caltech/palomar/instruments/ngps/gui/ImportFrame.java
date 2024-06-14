@@ -106,7 +106,6 @@ public void save_to_database(){
            myObservationSequencerController.setSTATE("READY");
         }
     }
-//        dbms.myOTMlauncher.executePLOT();
 }       
 /*=============================================================================================
 /     initializeDatabase()
