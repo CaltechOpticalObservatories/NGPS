@@ -155,6 +155,9 @@ namespace Calib {
     //
     if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false";
 
+message.str(""); message << "[DEBUG] num_open=" << num_open << " _motormap.size()=" << _motormap.size();
+logwrite( function, message.str() );
+
     // Log who's connected and not
     //
     if ( !connected.empty() ) {
@@ -757,7 +760,7 @@ namespace Calib {
       error = control( n, D, T );
     }
 
-    retstring = ( error==NO_ERROR ? args : "arduino_error" );
+    if (error==ERROR) retstring="arduino_error";
 
     return( error );
   }
@@ -949,6 +952,57 @@ namespace Calib {
   /***** Calib::Modulator::reopen_arduino *************************************/
 
 
+  /***** Calib::Modulator::send_command ***************************************/
+  /**
+   * @brief      wrapper to send command to Arduino
+   * @details    this wraps the wrapper, used when no reply is to be read
+   * @param[in]  cmd    formatted command to send
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded
+   *
+   */
+  long Modulator::send_command( std::string cmd ) {
+    std::string reply("noreply");
+    return send_command( cmd, reply );
+  }
+  /***** Calib::Modulator::send_command ***************************************/
+
+
+  /***** Calib::Modulator::send_command ***************************************/
+  /**
+   * @brief      wrapper to send command to Arduino
+   * @details    this will add the necessary linefeed
+   * @param[in]  cmd    formatted command to send
+   * @param[out] reply  reference to string to return reply
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded
+   *
+   */
+  long Modulator::send_command( std::string cmd, std::string &reply ) {
+    std::string function = "Calib::Modulator::send_command";
+    std::stringstream message;
+    long error;
+
+    // The Arduino is literally looking for these two separate characters
+    // to terminate the command, a backslash and an n. Weird.
+    //
+    cmd.append( "\\" );
+    cmd.append( "n" );
+
+    if ( reply=="noreply" ) {
+      error = this->arduino->send_command( cmd );
+    }
+    else {
+      error = this->arduino->send_command( cmd, reply );
+    }
+
+    return error;
+  }
+  /***** Calib::Modulator::send_command ***************************************/
+
+
   /***** Calib::Modulator::mod ************************************************/
   /**
    * @brief      send command to change duty cycle and period of requested modulator
@@ -971,7 +1025,7 @@ namespace Calib {
     //
     cmd.str(""); cmd << "mod," << num << "," << dut << "," << per;
 
-    if ( this->arduino->send_command( cmd.str(), reply ) != NO_ERROR ) {
+    if ( this->send_command( cmd.str(), reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending " << cmd.str();
       logwrite( function, message.str() );
       return( ERROR );
@@ -1013,16 +1067,15 @@ namespace Calib {
 
     // Finally, set the power state based on the duty cycle and period:
     // if either duty cycle or period are zero, then the power is set off.
-
+    //
     int pow;
-
     if ( dut==0 || per==0 ) pow=0; else pow=1;
 
     // Form and send command to Arduino: "power,<num>,<pow>"
     //
     cmd.str(""); cmd << "power," << num << "," << pow;
 
-    if ( this->arduino->send_command( cmd.str() ) != NO_ERROR ) {
+    if ( this->send_command( cmd.str() ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending " << cmd.str();
       logwrite( function, message.str() );
       return( ERROR );
@@ -1049,21 +1102,39 @@ namespace Calib {
     std::string function = "Calib::Modulator::power";
     std::stringstream message;
     std::stringstream cmd;
+    std::string reply;
+    long error = NO_ERROR;
 
     // Form and send command to Arduino: "power,<num>,<pow>".
     // There is no reply.
     //
     cmd.str(""); cmd << "power," << num << "," << pow;
 
-    if ( this->arduino->send_command( cmd.str() ) != NO_ERROR ) {
+    if ( this->send_command( cmd.str(), reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending " << cmd.str();
       logwrite( function, message.str() );
       return( ERROR );
     }
 
+    // Reply from the power command should match what it was set to.
+    //
+    try {
+      if ( pow != std::stoi(reply) ) {
+        message.str(""); message << "ERROR return value " << reply << " doesn't match expected value " << pow;
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR bad return value in \"" << reply << "\" for modulator " << num
+                               << ": " << e.what() << ": expected integer for <pow>";
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
     message.str(""); message << "modulator " << num << " set to [" << ( pow ? "on" : "off" ) << "]";
     logwrite( function, message.str() );
-    return( NO_ERROR );
+    return( error );
   }
   /***** Calib::Modulator::power **********************************************/
 
@@ -1092,7 +1163,7 @@ namespace Calib {
     //
     cmd.str(""); cmd << "power," << num;
 
-    if ( this->arduino->send_command( cmd.str(), reply ) != NO_ERROR ) {
+    if ( this->send_command( cmd.str(), reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending " << cmd.str();
       logwrite( function, message.str() );
       return( ERROR );
@@ -1115,7 +1186,7 @@ namespace Calib {
     //
     cmd.str(""); cmd << "mod," << num;
 
-    if ( this->arduino->send_command( cmd.str(), reply ) != NO_ERROR ) {
+    if ( this->send_command( cmd.str(), reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending " << cmd.str();
       logwrite( function, message.str() );
       return( ERROR );

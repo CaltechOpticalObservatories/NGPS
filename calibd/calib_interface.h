@@ -41,8 +41,7 @@ namespace Calib {
    */
   class Modulator {
     public:
-      Modulator()  { this->arduino = nullptr; };                   ///< no default constructor
-      ~Modulator() { };
+      Modulator() : arduino(nullptr) { }                           ///< no default constructor
 
       std::unique_ptr< Network::Interface > arduino;               ///< communcate with Arduino through this interface
 
@@ -65,6 +64,8 @@ namespace Calib {
       long open_arduino();
       long close_arduino();
       long reopen_arduino();
+      long send_command( std::string cmd );                        ///< writes commands to Arduino
+      long send_command( std::string cmd, std::string &reply );    ///< writes commands to, reads reply from Arduino
       long control( std::string args, std::string &retstring );    ///< lamp modulator control main parser
       long control( int num, std::string &status );                ///< lamp modulator control return status
       long control( int num, int power );                          ///< lamp modulator control set power

@@ -507,8 +507,7 @@ namespace Calib {
       // close
       //
       if ( cmd == CALIBD_CLOSE ) {
-//                    ret  = this->interface.motion.send_command( "close" );
-                      ret |= this->interface.motion.close();
+                      ret = this->interface.motion.close();
       }
       else
 
@@ -562,15 +561,16 @@ namespace Calib {
         ret = ERROR;
       }
 
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] cmd=" << cmd << " ret=" << ret << " retstring=" << retstring;
-      logwrite( function, message.str() );
-#endif
-
       if (ret != NOTHING) {
-        if ( not retstring.empty() ) retstring.append( " " );
-        std::string term=(ret==NO_ERROR?"DONE\n":"ERROR\n");
-        retstring.append( term );
+        if ( ! retstring.empty() ) retstring.append( " " );
+        retstring.append( ret == 0 ? "DONE" : "ERROR" );
+
+        if ( ! retstring.empty() && cmd != "help" && buf.find("?") == std::string::npos ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
+          logwrite( function, message.str() );
+        }
+
+        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
