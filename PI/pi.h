@@ -555,12 +555,14 @@ namespace Physik_Instrumente {
       // Default constructor
       //
       Interface() : initialized(false), name(""), pi_mutex(std::make_unique<std::mutex>()),
-                    move_timeout(60000), home_timeout(60000), tolerance(0.001) {}
+                    move_timeout(60000), home_timeout(60000), tolerance(0.001),
+                    motors_running(0), thread_error(NO_ERROR) { }
 
       // Constructor initializes move and home timeouts
       //
       Interface( int TO_move, int TO_home, float tol ) : initialized(false), name(""), pi_mutex(std::make_unique<std::mutex>()),
-                     move_timeout(TO_move), home_timeout(TO_home), tolerance(tol) {}
+                     move_timeout(TO_move), home_timeout(TO_home), tolerance(tol),
+                     motors_running(0), thread_error(NO_ERROR) { }
 
       // Copy constructor
       //
@@ -570,6 +572,8 @@ namespace Physik_Instrumente {
                                             move_timeout(other.move_timeout),
                                             home_timeout(other.home_timeout),
                                             tolerance(other.tolerance),
+                                            motors_running(other.motors_running),
+                                            thread_error(other.thread_error),
                                             socketmap(other.socketmap),
                                             motormap(other.motormap) {}
 
@@ -583,6 +587,8 @@ namespace Physik_Instrumente {
           move_timeout = other.move_timeout;
           home_timeout = other.home_timeout;
           tolerance = other.tolerance;
+          motors_running = other.motors_running;
+          thread_error = other.thread_error;
           socketmap = other.socketmap;
           motormap = other.motormap;
         }
@@ -597,6 +603,8 @@ namespace Physik_Instrumente {
                                                 move_timeout(std::move(other.move_timeout)),
                                                 home_timeout(std::move(other.home_timeout)),
                                                 tolerance(std::move(other.tolerance)),
+                                                motors_running(std::move(other.motors_running)),
+                                                thread_error(std::move(other.thread_error)),
                                                 socketmap(std::move(other.socketmap)),
                                                 motormap(std::move(other.motormap)) { other.initialized = false; }
 
@@ -610,9 +618,13 @@ namespace Physik_Instrumente {
           move_timeout = std::move( other.move_timeout );
           home_timeout = std::move( other.home_timeout );
           tolerance = std::move( other.tolerance );
+          motors_running = std::move( other.motors_running );
+          thread_error = std::move( other.thread_error );
           socketmap = std::move( other.socketmap );
           motormap = std::move( other.motormap );
           other.initialized = false;
+          other.motors_running = 0;
+          other.thread_error = NO_ERROR;
         }
         return *this;
       }

@@ -46,7 +46,7 @@ namespace Physik_Instrumente {
   template <typename ControllerType>
   long Interface<ControllerType>::open() {
     long error=NO_ERROR;
-    for ( auto &pair : this->motormap ) {
+    for ( const auto &pair : this->motormap ) {
       const std::string &motorname = pair.first;
       error |= this->_open( motorname );
     }
@@ -75,14 +75,14 @@ namespace Physik_Instrumente {
                                  << " on " << socket.gethost() << ":" << socket.getport()
                                  << " with fd " << socket.getfd();
         logwrite( function, message.str() );
-        return( NO_ERROR );
+        return NO_ERROR;
       }
 
       if ( socket.Connect() != 0 ) {
         message.str(""); message << "ERROR connecting to " << motorname
                                  << " on " << socket.gethost() << ":" << socket.getport();
         logwrite( function, message.str() );
-        return( ERROR );
+        return ERROR;
       }
 
       message.str(""); message << "connection to " << motorname
@@ -93,7 +93,7 @@ namespace Physik_Instrumente {
     catch ( std::runtime_error &e ) {
       message.str(""); message << "ERROR: " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     return NO_ERROR;
@@ -111,11 +111,11 @@ namespace Physik_Instrumente {
   long Interface<ControllerType>::close() {
     std::string function = "Physik_Instrumente::Interface::close";
     long error=NO_ERROR;
-    for ( auto &pair : this->motormap ) {
+    for ( const auto &pair : this->motormap ) {
       const std::string &motorname = pair.first;
       error |= this->close( motorname );
     }
-    return( error );
+    return error;
   }
   template <typename ControllerType>
   long Interface<ControllerType>::close( const std::string &motorname ) {
@@ -143,7 +143,7 @@ namespace Physik_Instrumente {
     catch ( std::runtime_error &e ) {
       message.str(""); message << "ERROR: " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
   }
   /***** Physik_Instrumente::Interface::close *********************************/
@@ -159,7 +159,7 @@ namespace Physik_Instrumente {
   long Interface<ControllerType>::clear_errors( ) {
     long error = NO_ERROR;
 
-    for ( auto &pair : this->motormap ) {
+    for ( const auto &pair : this->motormap ) {
       const std::string &motorname = pair.first;
       int addr = pair.second.addr;
       int dontcare;
@@ -203,9 +203,9 @@ namespace Physik_Instrumente {
       Tokenize( reply, tokens, " " );
       if ( tokens.size() != 3 ) {
         errcode = -1;
-        message.str(""); message << "ERROR bad reply: received " << tokens.size() << " but expected 3";
+        message.str(""); message << "ERROR bad reply \"" << reply << "\": expected 3 tokens";
         logwrite( function, message.str() );
-        return( ERROR );
+        return ERROR;
       }
       try {
         reply = tokens.at(2);                    // set the reply string to the last token
@@ -213,7 +213,7 @@ namespace Physik_Instrumente {
       catch ( std::out_of_range & ) {
         errcode = -1;
         logwrite( function, "ERROR reply token out of range" );
-        return( ERROR );
+        return ERROR;
       }
     }
 
@@ -224,15 +224,16 @@ namespace Physik_Instrumente {
     try {
       errcode = std::stoi( reply );
     }
-    catch ( std::invalid_argument & ) {
+    catch ( std::invalid_argument &e ) {
       errcode = -1;
-      logwrite( function, "ERROR bad reply: unable to convert to integer" );
-      return( ERROR );
+      message.str(""); message << "ERROR bad reply \"" << reply << "\": unable to convert to integer: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
     }
     catch ( std::out_of_range & ) {
       errcode = -1;
       logwrite( function, "ERROR reply out of integer range" );
-      return( ERROR );
+      return ERROR;
     }
 
     return error;
@@ -252,10 +253,10 @@ namespace Physik_Instrumente {
   long Interface<ControllerType>::set_servo( bool state ) {
     long error = NO_ERROR;
 
-    for ( auto &pair : this->motormap ) {
+    for ( const auto &pair : this->motormap ) {
       const std::string &motorname = pair.first;
       int addr = pair.second.addr;
-      for ( auto const &axes : pair.second.axes ) {
+      for ( const auto &axes : pair.second.axes ) {
         int axis = axes.second.axisnum;
         error |= this->set_servo( motorname, addr, axis, state );
       }
@@ -342,21 +343,21 @@ namespace Physik_Instrumente {
                                << " and axes " << axisnums.size();
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     // Check that requested motornames are defined in the motormap,
     // and that they are connected.
     //
-    for ( auto const &name : motornames ) {
+    for ( const auto &name : motornames ) {
       auto name_found = this->motormap.find( name );
       if ( name_found == this->motormap.end() ) {
         message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
-        for ( auto const &mot : this->motormap ) message << " " << mot.first;
+        for ( const auto &mot : this->motormap ) message << " " << mot.first;
         message << " }";
         logwrite( function, message.str() );
         retstring="unknown_motor";
-        return( ERROR );
+        return ERROR;
       }
 
       // Even though _dothread_moveto checks this (it must, for safety, in case it's used elsewhere),
@@ -366,7 +367,7 @@ namespace Physik_Instrumente {
         message.str(""); message << "ERROR not connected to motor controller " << name;
         logwrite( function, message.str() );
         retstring="not_connected";
-        return( ERROR );
+        return ERROR;
       }
     }
 
@@ -405,11 +406,11 @@ namespace Physik_Instrumente {
         //
         if ( !is_number ) {
           message.str(""); message << "ERROR position \"" << posname << "\" not in list {";
-          for ( auto const &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
+          for ( const auto &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
           message << " } for actuator << " << motorname << " and can't be converted to a float";
           logwrite( function, message.str() );
           retstring="invalid_position";
-          return( ERROR );
+          return ERROR;
         }
       }
     }
@@ -474,11 +475,11 @@ namespace Physik_Instrumente {
     auto name_found = this->motormap.find( motorname );
     if ( name_found == this->motormap.end() ) {
       message.str(""); message << "ERROR actuator \"" << motorname << "\" not found in motormap: {";
-      for ( auto const &mot : this->motormap ) message << " " << mot.first;
+      for ( const auto &mot : this->motormap ) message << " " << mot.first;
       message << " }";
       logwrite( function, message.str() );
       retstring="unknown_motor";
-      return( ERROR );
+      return ERROR;
     }
 
     // If the requested posname is defined in the posmap for this motor, then
@@ -503,11 +504,11 @@ namespace Physik_Instrumente {
 
       if ( !is_number ) {
         message.str(""); message << "ERROR position \"" << posname << "\" not in list {";
-        for ( auto const &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
+        for ( const auto &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
         message << " } for actuator << " << motorname << " and can't be converted to a float";
         logwrite( function, message.str() );
         retstring="invalid_position";
-        return( ERROR );
+        return ERROR;
       }
     }
 
@@ -539,11 +540,11 @@ namespace Physik_Instrumente {
     auto name_found = this->motormap.find( motorname );
     if ( name_found == this->motormap.end() ) {
       message.str(""); message << "ERROR actuator \"" << motorname << "\" not found in motormap: {";
-      for ( auto const &mot : this->motormap ) message << " " << mot.first;
+      for ( const auto &mot : this->motormap ) message << " " << mot.first;
       message << " }";
       logwrite( function, message.str() );
       retstring="unknown_motor";
-      return( ERROR );
+      return ERROR;
     }
     auto addr = this->motormap[motorname].addr;
 
@@ -559,14 +560,14 @@ namespace Physik_Instrumente {
                                  << "for axis " << axisnum << " actuator " << motorname;
         logwrite( function, message.str() );
         retstring="invalid_position";
-        return( ERROR );
+        return ERROR;
       }
     }
     else {
       message.str(""); message << "ERROR axisnum " << axisnum << " not defined for actuator " << motorname;
       logwrite( function, message.str() );
       retstring="invalid_axis";
-      return( ERROR );
+      return ERROR;
     }
 
     // send the move_abs command and wait for move
@@ -575,7 +576,7 @@ namespace Physik_Instrumente {
 
     if ( error==NO_ERROR ) error = this->_move_axis_wait( motorname, addr, axisnum );
 
-    return( error );
+    return error;
   }
   /***** Physik_Instrumente::Interface::moveto ********************************/
 
@@ -619,11 +620,11 @@ namespace Physik_Instrumente {
     if ( addr < 0 ) {
       message.str(""); message << "ERROR: bad address " << addr;
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
     if ( std::isnan( pos ) ) {
       logwrite( function, "ERROR: position is NaN" );
-      return( ERROR );
+      return ERROR;
     }
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "MOV";
@@ -728,11 +729,11 @@ namespace Physik_Instrumente {
     if ( addr < 0 ) {
       message.str(""); message << "ERROR: bad address " << addr;
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
     if ( std::isnan( pos ) ) {
       logwrite( function, "ERROR: position is NaN" );
-      return( ERROR );
+      return ERROR;
     }
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "MVR";
@@ -767,10 +768,9 @@ namespace Physik_Instrumente {
     // If input is empty then build up a vector of each motor name
     //
     if ( input.empty() ) {
-      for ( auto const &mot : this->motormap ) { name_list.push_back( mot.first ); }
+      for ( const auto &mot : this->motormap ) { name_list.push_back( mot.first ); }
     }
     else {
-      std::transform( input.begin(), input.end(), input.begin(), ::toupper );
       Tokenize( input, name_list, " " );
     }
 
@@ -781,18 +781,17 @@ namespace Physik_Instrumente {
 
     // Now loop through the built up list of motor names
     //
-    for ( auto &name : name_list ) {
+    for ( const auto &name : name_list ) {
 
-      std::transform( name.begin(), name.end(), name.begin(), ::toupper );
       auto name_found = this->motormap.find( name );
 
       if ( name_found == this->motormap.end() ) {
         message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
-        for ( auto const &mot : this->motormap ) message << " " << mot.first;
+        for ( const auto &mot : this->motormap ) message << " " << mot.first;
         message << " }";
         logwrite( function, message.str() );
         retstring="unknown_motor";
-        return( ERROR );
+        return ERROR;
       }
 
       // Spawn a thread to performm the home move.
@@ -948,7 +947,7 @@ namespace Physik_Instrumente {
     if ( addr > 0 ) {
       if ( addr > 0 ) cmd << addr << " ";
       cmd << "RON " << axis << " 1";
-      if ( this->send_command( name, cmd.str() ) != NO_ERROR ) return( ERROR );
+      if ( this->send_command( name, cmd.str() ) != NO_ERROR ) return ERROR;
     }
 
     // start building the reference command
@@ -966,7 +965,7 @@ namespace Physik_Instrumente {
     else {
       message.str(""); message << "ERROR: unknown homing reference " << ref << ". expected { ref | pos | neg }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // then add the axis, if specified
@@ -1110,10 +1109,9 @@ namespace Physik_Instrumente {
     // If input is empty then build up a vector of each motor name
     //
     if ( input.empty() ) {
-      for ( auto const &mot : this->motormap ) { name_list.push_back( mot.first ); }
+      for ( const auto &mot : this->motormap ) { name_list.push_back( mot.first ); }
     }
     else {
-      std::transform( input.begin(), input.end(), input.begin(), ::toupper );
       Tokenize( input, name_list, " " );
     }
 
@@ -1126,7 +1124,7 @@ namespace Physik_Instrumente {
     long error = NO_ERROR;
     retstring.clear();
 
-    for ( auto name : name_list ) {
+    for ( const auto &name : name_list ) {
       // requires an open connection
       //
       if ( this->is_connected( name ) ) {
@@ -1154,7 +1152,7 @@ namespace Physik_Instrumente {
     //
     if ( ! retstring.empty() ) { /* preserve any error */ }
     else
-    if ( num_home == name_list.size() ) retstring = "true"; else retstring = "false "+nothomed;
+    if ( num_home == name_list.size() ) retstring = "true"; else retstring = "false ";
 
     // Log all, which are homed and which are not, if any
     //
@@ -1163,11 +1161,11 @@ namespace Physik_Instrumente {
       logwrite( function, message.str() );
     }
     if ( ! nothomed.empty() ) {
-      message.str(""); message << nothomed << "not homed";
+      message.str(""); message << "NOTICE: " << nothomed << "not homed";
       logwrite( function, message.str() );
     }
 
-    return( error );
+    return error;
   }
   /***** Physik_Instrumente::Interface::is_home *******************************/
 
@@ -1317,11 +1315,11 @@ namespace Physik_Instrumente {
     auto name_found = this->motormap.find( name );
     if ( name_found == this->motormap.end() ) {
       message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
-      for ( auto const &mot : this->motormap ) message << " " << mot.first;
+      for ( const auto &mot : this->motormap ) message << " " << mot.first;
       message << " }";
       logwrite( function, message.str() );
       posname="unknown_motor";
-      return( ERROR );
+      return ERROR;
     }
 
     // Get the addr
@@ -1341,11 +1339,11 @@ namespace Physik_Instrumente {
     auto name_found = this->motormap.find( name );
     if ( name_found == this->motormap.end() ) {
       message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
-      for ( auto const &mot : this->motormap ) message << " " << mot.first;
+      for ( const auto &mot : this->motormap ) message << " " << mot.first;
       message << " }";
       logwrite( function, message.str() );
       posname="unknown_motor";
-      return( ERROR );
+      return ERROR;
     }
 
     // Check the axisnum
@@ -1355,7 +1353,7 @@ namespace Physik_Instrumente {
       message.str(""); message << "ERROR axisnum " << axisnum << " not defined for actuator " << name;
       logwrite( function, message.str() );
       posname="invalid_axis";
-      return( ERROR );
+      return ERROR;
     }
 
     // Is this controller connected?
@@ -1364,7 +1362,7 @@ namespace Physik_Instrumente {
       message.str(""); message << "ERROR not connected to motor controller " << name;
       logwrite( function, message.str() );
       posname="not_connected";
-      return( ERROR );
+      return ERROR;
     }
 
     // motorname and axisnum are good and connected, so read the position
@@ -1375,14 +1373,14 @@ namespace Physik_Instrumente {
     // does this position have a corresponding name in the posmap for this actuator?
     //
     posname.clear();
-    for ( auto const &pos : this->motormap[name].posmap ) {
+    for ( const auto &pos : this->motormap[name].posmap ) {
       if ( std::abs( pos.second.position - position ) < tol_in ) {
         posname = pos.second.posname;
         break;
       }
     }
 
-    return( error );
+    return error;
   }
   /***** Physik_Instrumente::Interface::get_pos *******************************/
 
@@ -1483,7 +1481,7 @@ namespace Physik_Instrumente {
       if ( !socket.isconnected() ) {
         message.str(""); message << "ERROR no socket connection to motor " << motorname;
         logwrite( function, message.str() );
-        return( ERROR );
+        return ERROR;
       }
 
       message.str(""); message << "sending \"" << cmd << "\" to motor " << motorname;
@@ -1493,15 +1491,15 @@ namespace Physik_Instrumente {
 
       int written = socket.Write( cmd );    // write the command
 
-      if ( written <= 0 ) return( ERROR );  // return error if error writing to socket
+      if ( written <= 0 ) return ERROR;     // return error if error writing to socket
     }
     catch ( const std::runtime_error &e ) {
       message.str(""); message << "ERROR: " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Physik_Instrumente::Interface::send_command **************************/
 
@@ -1542,14 +1540,14 @@ namespace Physik_Instrumente {
       message.str(""); message << "ERROR: " << e.what();
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     if ( !socket.isconnected() ) {
       message.str(""); message << "ERROR no socket connection to motor " << motorname;
       logwrite( function, message.str() );
       retstring="not_connected";
-      return( ERROR );
+      return ERROR;
     }
 
     message.str(""); message << "sending \"" << cmd << "\" to motor " << motorname;
@@ -1559,7 +1557,7 @@ namespace Physik_Instrumente {
 
     int written = socket.Write( cmd );    // write the command
 
-    if ( written <= 0 ) return( ERROR );  // return error if error writing to socket
+    if ( written <= 0 ) return ERROR;     // return error if error writing to socket
 
     // read the reply
     //
@@ -1590,7 +1588,7 @@ namespace Physik_Instrumente {
 
     retstring = reply;
 
-    return( error );
+    return error;
   }
   /***** Physik_Instrumente::Interface::send_command **************************/
 
@@ -1620,7 +1618,7 @@ namespace Physik_Instrumente {
 
     if ( reply.empty() ) {
       logwrite( function, "ERROR: empty message" );
-      return( ERROR );
+      return ERROR;
     }
 
 #ifdef LOGLEVEL_DEBUG
@@ -1633,9 +1631,9 @@ namespace Physik_Instrumente {
     // and this is an error.
     //
     if ( tokens.size() != 2 ) {
-      message.str(""); message << "ERROR bad reply \"" << reply << "\" contains " << tokens.size() << " tokens but expected 2";
+      message.str(""); message << "ERROR bad reply \"" << reply << "\": expected 2 tokens";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // The second token, tokens[1], contains the return value, R
@@ -1660,21 +1658,22 @@ namespace Physik_Instrumente {
           retval = false;
           message.str(""); message << "ERROR bad boolean " << tokens.at(1) << ": expected 1 or 0";
           logwrite( function, message.str() );
-          return( ERROR );
+          return ERROR;
         }
       }
       else {
         logwrite( function, "ERROR unrecognized type: expected <int> or <float>" );
-        return( ERROR );
+        return ERROR;
       }
     }
-    catch ( std::invalid_argument & ) {
-      logwrite( function, "ERROR bad reply: unable to convert to integer" );
-      return( ERROR );
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR bad reply \"" << reply << "\": unable to convert to integer: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
     }
     catch ( std::out_of_range & ) {
       logwrite( function, "ERROR reply or token out of range" );
-      return( ERROR );
+      return ERROR;
     }
 
     return NO_ERROR;
@@ -1725,7 +1724,7 @@ namespace Physik_Instrumente {
    * @details    This is the derived class version which will parse the ServoInfo
    *             specific arguments not handled by the template.
    * @param[in]  tokens  vector passed by ControllerInfo::load_controller_info()
-   * @return     ERROR or NO_ERROR
+   * @return     NO_ERROR
    *
    * Not currently used
    *
@@ -1734,7 +1733,7 @@ namespace Physik_Instrumente {
     std::string function = "Physik_Instrumente::ServoInfo::load_controller_info";
     std::stringstream message;
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Physik_Instrumente::ServoInfo::load_controller_info ******************/
 
