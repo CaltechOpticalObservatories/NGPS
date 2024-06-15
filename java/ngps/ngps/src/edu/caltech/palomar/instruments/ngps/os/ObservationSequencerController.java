@@ -431,29 +431,6 @@ public void start_AsynchronousMonitor(){
 /*================================================================================================
 /      executeCommand(int socket,java.lang.String command,double delay)
 /=================================================================================================*/
-  public java.lang.String executeCommand(int socket,java.lang.String command,double delay){
-      java.lang.String response = new java.lang.String();
-        logMessage(INFO,command);
-       if(socket == COMMAND){
-//         myCommandSocket.startConnection(ClientSocket.USE_HOSTNAME);
-           if(myCommandSocket.isConnected()){
-              response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR);
-           }
-//        myCommandSocket.closeConnection();
-       }
-       if(socket == BLOCKING){
-        response = myBlockingSocket.sendReceiveCommand(command+TERMINATOR,delay);
-       }
-       logMessage(INFO,response);
-      if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
-        //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
-        myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
-       }
-    return response;
-  } 
-/*================================================================================================
-/      executeCommand(int socket,java.lang.String command,double delay)
-/=================================================================================================*/
   public java.lang.String executeCommand(java.lang.String command){
       java.lang.String response = new java.lang.String();
         logMessage(INFO,command);
@@ -480,56 +457,15 @@ public void start_AsynchronousMonitor(){
                 myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
                }
            }
-       logMessage(INFO,response);
+        logMessage(INFO,response);
+       
+        if(response.matches("DONE")){
+            setERROR(false); 
+        }else{
+            setERROR(true);                
+        }
+
     return response;
-  }  
-/*================================================================================================
-/      executeCommand(int socket,java.lang.String command,double delay)
-/=================================================================================================*/
-  public java.lang.String executeCommand_local(java.lang.String command){
-      java.lang.String response = new java.lang.String();      
-       logMessage(INFO,command);
-           OutputStream       outputStream;
-           OutputStreamWriter outputStreamWriter;
-           InputStream        inputStream;
-           InputStreamReader  inputStreamReader;
-           String host    = myIniReader.SERVERNAME;
-           int port       = myIniReader.COMMAND_SERVERPORT;
-           char term      = '\n';
-
-            command.trim();    // strip the last space
-            command += term;   // add the terminating character
-            try {
-              // connect to the host socket
-              //
-              Socket socket = new Socket( host, port );
-
-              outputStream       = socket.getOutputStream();
-              outputStreamWriter = new OutputStreamWriter( outputStream );
-
-              outputStreamWriter.write(command);  // send command
-              outputStreamWriter.flush();
-
-              inputStream         = socket.getInputStream();
-              inputStreamReader   = new InputStreamReader( inputStream );
-              StringBuilder reply = new StringBuilder();
-
-              // read reply until terminating character received from host
-              //
-              int chin;
-              while ( ( chin = inputStreamReader.read() ) != term ) {
-                reply.append( (char)chin );
-              }
-              response = reply.toString();
-
-              System.out.println( reply );   // print the reply
-              socket.close();                // close the connection
-            }
-            catch ( Exception exception ) {
-              System.out.println( exception );
-            } 
-       logMessage(INFO,response);
-     return response;
   }  
 /*=============================================================================================
 /        logMessage(int code,java.lang.String message)
@@ -551,33 +487,21 @@ public void logMessage(int code,java.lang.String message){
 /      abort()
 /=================================================================================================*/
 public boolean abort(){
-    java.lang.String command = new java.lang.String();
-    command = "abort";
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    java.lang.String response = executeCommandB("abort");
+
     return isERROR();
 } 
 /*================================================================================================
-/      abort()
-/=================================================================================================*/
+ /      airmass(double airmass_limit)
+ /=================================================================================================*/
 public boolean airmass(double airmass_limit){
-    java.lang.String command = new java.lang.String();
-    command = "airmass "+Double.toString(airmass_limit);
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
+    String command = "airmass "+Double.toString(airmass_limit);
     java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+
     return isERROR();
 }
 /*================================================================================================
-/      abort()
+/      do_one_all(int code){
 /=================================================================================================*/
 public boolean do_one_all(int code){
     java.lang.String command = new java.lang.String();
@@ -587,126 +511,75 @@ public boolean do_one_all(int code){
     if(code == DO_ALL){
         command = "do all";
     }
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+
+    java.lang.String response = executeCommandB(command);
+
     return isERROR();
 }
 /*================================================================================================
-/      abort()
+/      modexptime()
 /=================================================================================================*/
 public boolean modexptime(double mod_exptime){
-    java.lang.String command = new java.lang.String();
-    command = "modexptime "+Double.toString(mod_exptime);
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    String command = "modexptime "+Double.toString(mod_exptime);
+    java.lang.String response = executeCommandB(command);
+
     return isERROR();
 }
 /*================================================================================================
 /      pause()
 /=================================================================================================*/
 public boolean pause(){
-    java.lang.String command = new java.lang.String();
-    command = "pause";
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-     java.lang.String response = executeCommand(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-    return isERROR();
+    java.lang.String response = executeCommandB("pause");
+
+     return isERROR();
 } 
 /*================================================================================================
 /     resume()
 /=================================================================================================*/
 public boolean resume(){
-    java.lang.String command = new java.lang.String();
-    command = "resume";
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    java.lang.String response = executeCommandB("resume");
+
     return isERROR();
 } 
 /*================================================================================================
 /     shutdown()
 /=================================================================================================*/
 public boolean shutdown(){
-    java.lang.String command = new java.lang.String();
-    command = "shutdown";
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    java.lang.String response = executeCommandB("shutdown");
+
     return isERROR();
 } 
 /*================================================================================================
 /     start()
 /=================================================================================================*/
 public boolean start(){
-    java.lang.String command = new java.lang.String();
-    command = "start";
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    java.lang.String response = executeCommandB("start");
+
     return isERROR();
 } 
 /*================================================================================================
 /     startup()
 /=================================================================================================*/
 public boolean startup(){
-    java.lang.String command = new java.lang.String();
-    command = "startup";
- //   java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-    java.lang.String response = executeCommand(command);
-    if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    String command = "startup";
+    java.lang.String response = executeCommandB(command);
+
     return isERROR();
 } 
 /*================================================================================================
 /     stop()
 /=================================================================================================*/
 public boolean stop(){
-    java.lang.String command = new java.lang.String();
-    command = "stop";
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-   java.lang.String response = executeCommand(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-    return isERROR();
+    String command = "stop";
+   java.lang.String response = executeCommandB(command);
+
+   return isERROR();
 } 
 /*================================================================================================
 /    state()
 /=================================================================================================*/
 public boolean state(){
-    java.lang.String command = new java.lang.String();
-    command = "state";
+    String command = "state";
     java.lang.String response = executeCommandB(command); 
 //   java.lang.String response = executeCommand_local(command);
    System.out.println(response);
@@ -830,64 +703,17 @@ public void tcs_list(){
     return tcs_connected_in_progress;
   }
 /*================================================================================================
-/   tcs_connect(
+/   tcs_connect( 
 /=================================================================================================*/
 public boolean tcs_connect(){
     java.lang.String command = new java.lang.String();
     command = "tcs connect";
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-   java.lang.String response = executeCommandB(command);
-   if(response.matches("CDONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    java.lang.String response = executeCommandB(command);
     return isERROR();
 } 
 /*================================================================================================
-/  tcs_open_sim()
-/=================================================================================================*/
-public boolean tcs_open_sim(){
-    java.lang.String command = new java.lang.String();
-    command = "tcs open sim";
-   java.lang.String response = executeCommandB(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-    return isERROR();
-} 
-/*================================================================================================
-/  tcs_open_sim()
-/=================================================================================================*/
-public boolean tcs_open_real(){
-    java.lang.String command = new java.lang.String();
-    command = "tcs open real";
-   java.lang.String response = executeCommandB(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-    return isERROR();
-} 
-/*================================================================================================
-/   tcs_close()
-/=================================================================================================*/
-public boolean tcs_close(){
-    java.lang.String command = new java.lang.String();
-    command = "tcs close";
-   java.lang.String response = executeCommandB(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-    return isERROR();
-} 
-/*================================================================================================
-/   tcs_close()
+/   tcs_isOpen()
+/     Ask if sequencer is connected to tcsd (TCS daemon)
 /=================================================================================================*/
 public boolean tcs_isOpen(){
    boolean isopen = false;
@@ -913,7 +739,8 @@ public boolean tcs_isOpen(){
    return isopen;
 } 
 /*================================================================================================
-/   tcs_close()
+/   tcs_isConnected()
+      Ask if TCS daemon is connected to TCS
 /=================================================================================================*/
 public boolean tcs_isConnected(){
    boolean isconnected = false;
@@ -930,57 +757,17 @@ public boolean tcs_isConnected(){
    return isconnected; 
 } 
 /*================================================================================================
-/   connect_real_tcs()
+/   tcsinit(String realOrSim)
+/     Tell TCS daemon to connect to TCS
 /=================================================================================================*/
-public void connect_real_tcs2(){
-    java.lang.String command = new java.lang.String();
-    command = "tcsinit real";
-   java.lang.String response = executeCommandB(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
+public void tcsinit(String realOrSim){
+    if( !(realOrSim.equalsIgnoreCase("sim") || realOrSim.equalsIgnoreCase("real")  ) ){
+        throw new IllegalArgumentException("tcsinit() argument must be 'real' or 'sim' ");
     }
-//    tcs_isOpen();
+    String command = "tcsinit " + realOrSim;
+    String response = executeCommandB(command);
 }
-/*================================================================================================
-/   connect_real_tcs()
-/=================================================================================================*/
-public void connect_sim_tcs2(){
-    java.lang.String command = new java.lang.String();
-    command = "tcsinit sim";
-   java.lang.String response = executeCommandB(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-//    tcs_isOpen();
-}
-/*================================================================================================
-/   connect_real_tcs()
-/=================================================================================================*/
-public void connect_real_tcs(){
-     boolean connected = tcs_isConnected();
-     if(!connected){
-        tcs_connect(); 
-     }     
-     tcs_close();
-     tcs_open_real();
-     tcs_isOpen();
-}
-/*================================================================================================
-/   connect_real_tcs()
-/=================================================================================================*/
-public void connect_sim_tcs(){
-     boolean connected = tcs_isConnected();
-     if(!connected){
-        tcs_connect(); 
-     }  
-     tcs_close();
-     tcs_open_sim();
-     tcs_isOpen();
-}
+
 /*================================================================================================
 /    targetset(int id)
 /=================================================================================================*/
@@ -1052,29 +839,37 @@ public void parseAsyncMessage(java.lang.String message){
      else if(message.trim().startsWith("NOTICE")){
         myCommandLogModel.insertMessage(CommandLogModel.COMMAND, message);
      }
-     if(message.contains("TCSD")){
-        String[] messages = message.split(":"); 
-           boolean isopen = false;
-        if(messages[1].matches("open")){
-           if(messages[2].contains("sim")){
-              isopen = true;
-              setActiveTCSAddress(getSimulatorAddress());
-              setActiveTCSname(messages[2]);
-           }else if(messages[2].contains("real")){
-              isopen = true;
-              setActiveTCSAddress(getTCSAddress());
-              setActiveTCSname(messages[2]);
-           }
-        setTCSConnectedInProgress(false);
-        setTCSConnected(isopen);
-        }else if(messages[1].matches("close")){
-            if(messages[2].matches("DONE")){                
-                setTCSConnected(false);
-                setActiveTCSAddress("NOT CONNECTED");
-                setActiveTCSname("NOT CONNECTED");
-            }            
+
+     // Refresh connection to sequencerd
+     if(message.contains("SEQUENCERD:started")){
+        System.out.println("DO SOMETHING");  
+     }
+          
+     if(message.contains("TCSD:open")){
+        String[] messages = message.split(":"); // e.g. TCSD:open:true
+        if(messages[2].contains("true")){
+            setTCSConnectedInProgress(false);
+            setTCSConnected(true);
+        }else if(messages[2].contains("false")){
+            setTCSConnected(false);
+            setActiveTCSAddress("NOT CONNECTED");
+            setActiveTCSname("NOT CONNECTED");
         }
      }
+
+     if(message.contains("TCSD:name")){
+        String[] messages = message.split(":"); // e.g. TCSD:name:real or sim
+        setActiveTCSname(messages[2]);
+        if(messages[2].contains("sim")){
+            setActiveTCSAddress(simulator_address);
+        }else if(messages[2].contains("real")){
+            setActiveTCSAddress(tcs_address);
+        }else{
+            setActiveTCSAddress("UNKNOWN");
+        }
+         
+     }     
+
      if(message.contains("TARGETSTATE")){
         // Example TARGETSTATE:active TARGET:ZTF20ackgfep OBSID:187
         String[] messages = message.split(" ");
@@ -1254,30 +1049,18 @@ public void parseAsyncMessage(java.lang.String message){
 /    targetset(int id)
 /=================================================================================================*/
 public boolean targetset(int id){
-    java.lang.String command = new java.lang.String();
-    command = "targetset "+Integer.toString(id);
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-   java.lang.String response = executeCommand(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
-    return isERROR();
+    String command = "targetset "+Integer.toString(id);
+   java.lang.String response = executeCommandB(command);
+
+   return isERROR();
 } 
 /*================================================================================================
 /    targetset(java.lang.String target_set_name)
 /=================================================================================================*/
 public boolean targetset(java.lang.String target_set_name){
-    java.lang.String command = new java.lang.String();
-    command = "targetset "+target_set_name;
-//    java.lang.String response = executeCommand(COMMAND,command,DEfAULT_DELAY);
-     java.lang.String response = executeCommand(command);
-   if(response.matches("DONE")){
-       setERROR(false); 
-    }else if(response.matches("ERROR")){
-       setERROR(true);         
-    }
+    String command = "targetset "+target_set_name;
+     java.lang.String response = executeCommandB(command);
+
     return isERROR();
 } 
 /*================================================================================================
@@ -1291,28 +1074,6 @@ public boolean targetset(java.lang.String target_set_name){
   public java.lang.String getSTATE() {
     return state;
   }
-/*================================================================================================
-/      setReadmode(java.lang.String new_Readmode)
-/=================================================================================================*/
-  public void setRUNSTATE(java.lang.String new_runstate) {
-    java.lang.String  old_runstate = this.runstate;
-    this.runstate = new_runstate;
-   propertyChangeListeners.firePropertyChange("RUNSTATE", (old_runstate), (new_runstate));
-  }
-  public java.lang.String getRUNSTATE() {
-    return runstate;
-  }  
- /*================================================================================================
-/      setReadmode(java.lang.String new_Readmode)
-/=================================================================================================*/
-  public void setREQSTATE(java.lang.String new_reqstate) {
-    java.lang.String  old_reqstate = this.reqstate;
-    this.reqstate = new_reqstate;
-   propertyChangeListeners.firePropertyChange("REQSTATE", (old_reqstate), (new_reqstate));
-  }
-  public java.lang.String getREQSTATE() {
-    return reqstate;
-  }   
 
 /*================================================================================================
 /      add and remove Property Change Listeners
@@ -1346,15 +1107,6 @@ public boolean targetset(java.lang.String target_set_name){
 //        async_port = 1300;
 //        async_host = "239.1.1.234";
    }
-/*================================================================================================
-/      waitForResponse(int newDelay)
-/=================================================================================================*/
-private void waitForResponseMilliseconds(int newDelay){
-     try{
-        Thread.currentThread().sleep(newDelay);} // sleep for awhile to let the messages pile up
-      catch (Exception e){
-    }
-}
 /*=============================================================================================
 /       )initialize()
 /===========================================================================crsw==================*/

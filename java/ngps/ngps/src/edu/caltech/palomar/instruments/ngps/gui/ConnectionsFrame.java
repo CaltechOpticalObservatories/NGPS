@@ -339,11 +339,11 @@ public void setDBMS(NGPSdatabase new_dbms){
     private void TCSButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_TCSButtonActionPerformed
        if(simulatorRadioButton.isSelected()){
            myObservationSequencerController.setTCSConnectedInProgress(true);
-           myObservationSequencerController.connect_sim_tcs2();
+           myObservationSequencerController.tcsinit("sim");
        }
        if(P200RadioButton.isSelected()){
            myObservationSequencerController.setTCSConnectedInProgress(true);
-           myObservationSequencerController.connect_real_tcs2();
+           myObservationSequencerController.tcsinit("real");
        }
     }//GEN-LAST:event_TCSButtonActionPerformed
 
