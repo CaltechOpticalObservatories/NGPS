@@ -29,8 +29,10 @@
 #include <string>
 #include <string_view>
 #include <cctype>
+#include <set>
+#include <limits>
 
-extern std::string zone;
+extern std::string tmzone_cfg;                      /// time zone if set in cfg file
 extern std::mutex generate_tmpfile_mtx;
 
 bool cmdOptionExists( char** begin, char** end, const std::string &option );
@@ -56,17 +58,27 @@ void chrrep(char *str, char oldchr, char newchr);   /// replace one character wi
 void string_replace_char(std::string &str, const char *oldchar, const char *newchar);
 
 long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
+long get_time( const std::string &tmzone_in, int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
 
 std::string timestamp_from( struct timespec &time_n );  /// return time from input timespec struct in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
+std::string timestamp_from( const std::string &tmzone_in, struct timespec &time_in );
 
-inline std::string get_timestamp() {                /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
+
+inline std::string get_timestamp(const std::string &tz) {  /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
   struct timespec timenow;
   clock_gettime( CLOCK_REALTIME, &timenow );
-  return timestamp_from( timenow );
+  return timestamp_from( tz, timenow );
+}
+inline std::string get_timestamp() {                /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
+  return get_timestamp(tmzone_cfg);
 }
 
 std::string get_system_date();                      /// return current date in formatted string "YYYYMMDD"
+std::string get_system_date( const std::string &tmzone_in );
+
 std::string get_file_time();                        /// return current time in formatted string "YYYYMMDDHHMMSS" used for filenames
+std::string get_file_time( const std::string &tmzone_in );
+
 
 double get_clock_time();
 
@@ -80,7 +92,7 @@ inline double mjd_now() {                           /// modified Julian date now
   return( mjd_from( timenow ) );
 }
 
-int compare_versions(std::string v1, std::string v2);
+int compare_versions(const std::string &v1, const std::string &v2);
 
 long md5_file( const std::string &filename, std::string &hash );  /// compute md5 checksum of file
 
@@ -212,3 +224,65 @@ class Time {
 };
 /***** Time *****************************************************************/
 
+
+/***** NumberPool ***********************************************************/
+/**
+ * @class   NumberPool
+ * @brief   manages a pool of numbers
+ * @details Provides function of getting the lowest available number out
+ *          of a pool of numbers, and the ability to return a number back
+ *          to the pool. The pool grows as needed. The pool is meant to
+ *          contain positive integers and if the number would exceed the
+ *          max value for int, then -1 is returned.
+ *
+ */
+class NumberPool {
+  private:
+    std::mutex pool_lock;        /// protects pool access from multiple threads
+    int next_number;             /// next number available
+    std::set<int> used_numbers;  /// The pool is a set (for automatic sorting) which
+                                 /// represents the numbers that are being used, so
+                                 /// missing numbers are the available numbers.
+  public:
+
+    /**
+     * Constructed with the starting number of the pool
+     */
+    NumberPool( int starting_number ) : next_number(starting_number) { }
+
+
+    /***** NumberPool::get_next_number ****************************************/
+    /**
+     * @brief      gets the lowest available number from the pool
+     * @details    This returns the lowest missing value in the set and works
+     *             because a std::set is auto-sorted.
+     * @return     positive int or -1 if pool exceeds max allowed by an int
+     *
+     */
+    int get_next_number() {
+      std::lock_guard<std::mutex> lock( pool_lock );
+      int number = next_number;
+      used_numbers.insert( number );
+      if ( next_number < std::numeric_limits<int>::max() ) ++next_number;
+      else return -1;
+      return number;
+    }
+    /***** NumberPool::get_next_number ****************************************/
+
+
+    /***** NumberPool::release_number *****************************************/
+    /**
+     * @brief      returns indicated number back to the pool
+     * @details    numbers are "returned" by removing them from the set of used numbers
+     * @param[in]  number  number to put back into pool
+     *
+     */
+    void release_number( int number ) {
+      std::lock_guard<std::mutex> lock( pool_lock );
+      used_numbers.erase( number );
+      if ( number < next_number ) next_number = number;
+      return;
+    }
+    /***** NumberPool::release_number *****************************************/
+};
+/***** NumberPool ***********************************************************/

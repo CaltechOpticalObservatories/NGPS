@@ -58,8 +58,19 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < focusd.config.n_entries; entry++) {
     if (focusd.config.param[entry] == "LOGPATH") logpath = focusd.config.arg[entry];
-    if (focusd.config.param[entry] == "TM_ZONE") zone = focusd.config.arg[entry];
     if (focusd.config.param[entry] == "DAEMON")  daemon_in = focusd.config.arg[entry];
+
+    if (focusd.config.param[entry] == "TM_ZONE") {
+      if ( focusd.config.arg[entry] != "UTC" && focusd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << focusd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        focusd.exit_cleanly();
+      }
+      tmzone_cfg = focusd.config.arg[entry];
+      message.str(""); message << "config:" << focusd.config.param[entry] << "=" << focusd.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

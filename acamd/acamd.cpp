@@ -98,7 +98,19 @@ int main(int argc, char **argv) {
     }
 
     if ( configkey == "LOGPATH") logpath = configval;
-    if ( configkey == "TM_ZONE") zone = configval;
+
+    if (acamd.config.param[entry] == "TM_ZONE") {
+      if ( acamd.config.arg[entry] != "UTC" && acamd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << acamd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        acamd.exit_cleanly();
+      }
+      tmzone_cfg = acamd.config.arg[entry];
+      message.str(""); message << "config:" << acamd.config.param[entry] << "=" << acamd.config.arg[entry];
+      logwrite( function, message.str() );
+      acamd.interface.async.enqueue( message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

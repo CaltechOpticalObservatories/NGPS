@@ -51,7 +51,7 @@ long init_log( std::string logpath, std::string name ) {
  *
  */
 long init_log( std::string logpath, std::string name, bool stderr_in ) {
-  std::string function = "init_log";
+  const std::string function = "init_log";
   std::stringstream filename;
   std::stringstream message;
   int year, mon, mday, hour, min, sec, usec;
@@ -83,6 +83,12 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
   }
   catch(...) {
     message.str(""); message << "ERROR: opening log file " << filename.str() << ": " << std::strerror(errno);
+    logwrite(function, message.str());
+    return 1;
+  }
+
+  if ( ! filestream.is_open() ) {
+    message.str(""); message << "ERROR: log file " << filename.str() << " not open";
     logwrite(function, message.str());
     return 1;
   }
@@ -157,7 +163,7 @@ void close_log() {
 /***** logwrite ***************************************************************/
 /**
  * @brief      create a log file entry
- * @param[in]  function  string containing the Namespace::Class::function
+ * @param[in]  function  string containing Namespace::Class::function
  * @param[in]  message   string to log
  *
  * Create a time-stamped entry in the log file in the form of:
@@ -167,7 +173,7 @@ void close_log() {
  * log filestream isn't open.
  *
  */
-void logwrite(std::string function, std::string message) {
+void logwrite( const std::string &function, std::string message ) {
   std::stringstream logmsg;
   std::string timestamp = get_timestamp();       // get the current time (defined in utilities.h)
 

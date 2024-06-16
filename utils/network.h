@@ -80,9 +80,9 @@ namespace Network {
       TcpSocket();                       ///< basic class constructor
       TcpSocket(int port_in, bool block_in, int totime_in, int id_in);  ///< useful constructor for a server
       TcpSocket(int port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
+      TcpSocket( std::string host, int port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
       TcpSocket( std::string host, int port );                          ///< client constructor
       TcpSocket(const TcpSocket &obj);   ///< copy constructor
-      ~TcpSocket();                      ///< class destructor
 
       struct addrinfo *addrs;            ///< dynamically allocated linked list returned by getaddrinfo()
 
@@ -107,8 +107,8 @@ namespace Network {
       int Close();                       ///< close a socket connection
       int Read( void* buf, const size_t count ); ///< read data from connected socket
       int Read(std::string &retstring);  ///< read data from connected socket until newline
-      int Read( std::string &retstring, const char term ); ///< read data from connected socket until terminating char found
-      int Read( std::string &retstring, const std::string &endstr );  ///< read data from connected socket until endstr
+      int Read( std::string &retstring, const char &term); ///< read data from connected socket until terminating char found
+      int Read( std::string &retstring, const std::string &endstr);  ///< read data from connected socket until endstr
       int Bytes_ready();                 ///< get the number of bytes available on the socket descriptor this->fd
       void Flush();                      ///< flush a socket by reading until it's empty
 

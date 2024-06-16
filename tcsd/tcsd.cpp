@@ -58,8 +58,20 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < tcsd.config.n_entries; entry++) {
     if (tcsd.config.param[entry] == "LOGPATH") logpath = tcsd.config.arg[entry];
-    if (tcsd.config.param[entry] == "TM_ZONE") zone = tcsd.config.arg[entry];
     if (tcsd.config.param[entry] == "DAEMON")  daemon_in = tcsd.config.arg[entry];
+
+    if (tcsd.config.param[entry] == "TM_ZONE") {
+      if ( tcsd.config.arg[entry] != "UTC" && tcsd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << tcsd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        tcsd.exit_cleanly();
+      }
+      tmzone_cfg = tcsd.config.arg[entry];
+      message.str(""); message << "config:" << tcsd.config.param[entry] << "=" << tcsd.config.arg[entry];
+      logwrite( function, message.str() );
+      tcsd.interface.async.enqueue( message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

@@ -7,7 +7,7 @@
 
 #include "utilities.h"
 
-std::string zone="";   ///< time zone
+std::string tmzone_cfg;      ///< time zone if set in cfg file
 std::mutex generate_tmpfile_mtx;
 
   /***** cmdOptionExists ******************************************************/
@@ -139,7 +139,7 @@ std::mutex generate_tmpfile_mtx;
     }
 
     while (std::string::npos != pos || std::string::npos != lastPos) {
-      if (quotes_found == true) {
+      if (quotes_found) {
         tokens.push_back(str.substr(lastPos + 1, pos - lastPos - 2));
         pos++;
         lastPos = str.find_first_not_of(delimiters, pos);
@@ -278,6 +278,8 @@ std::mutex generate_tmpfile_mtx;
   /***** get_time *************************************************************/
   /**
    * @brief      gets the current time and returns values by reference
+   * @details    call get_time with tmzone_cfg, which is the optional time zone
+   *             set by config file. If not set then UTC is used.
    * @param[out] year  int reference for year
    * @param[out] mon   int reference for month
    * @param[out] mday  int reference for day
@@ -287,12 +289,36 @@ std::mutex generate_tmpfile_mtx;
    * @param[out] usec  int reference for microsecond
    * @return     1=error, 0=okay
    *
+   * This function is overloaded
+   *
    */
   long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec ) {
-    std::stringstream current_time;  // String to contain the time
-    time_t t;                        // Container for system time
-    struct timespec timenow;         // Time of day container
-    struct tm mytime;                // GMT time container
+    return get_time( tmzone_cfg, year, mon, mday, hour, min, sec, usec );
+  }
+  /***** get_time *************************************************************/
+
+
+  /***** get_time *************************************************************/
+  /**
+   * @brief      gets the current time and returns values by reference
+   * @param[in]  tmzone_in  optional time zone {local|UTC|<empty>}
+   * @param[out] year       reference to year
+   * @param[out] mon        reference to month
+   * @param[out] mday       reference to day
+   * @param[out] hour       reference to hour
+   * @param[out] min        reference to minute
+   * @param[out] sec        reference to second
+   * @param[out] usec       reference to microsecond
+   * @return     1=error, 0=okay
+   *
+   * This function is overloaded
+   *
+   */
+  long get_time( const std::string &tmzone_in, int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec ) {
+    std::stringstream current_time;      // String to contain the time
+    std::time_t t = std::time(nullptr);  // Container for system time
+    struct timespec timenow;             // Time of day container
+    struct tm mytime;                    // GMT time container
     long error = 0;
 
     // Get the system time, return a bad timestamp on error
@@ -303,9 +329,9 @@ std::mutex generate_tmpfile_mtx;
     //
     if ( !error ) {
       t = timenow.tv_sec;
-      if ( zone == "local" )  { if ( localtime_r( &t, &mytime ) == NULL ) error = 1; }
+      if ( tmzone_in == "local" )  { if ( localtime_r( &t, &mytime ) == nullptr ) error = 1; }
       else {
-        if ( gmtime_r( &t, &mytime ) == NULL ) error = 1;
+        if ( gmtime_r( &t, &mytime ) == nullptr ) error = 1;
       }
     }
 
@@ -338,7 +364,9 @@ std::mutex generate_tmpfile_mtx;
   /***** timestamp_from *******************************************************/
   /**
    * @brief      get a human-readable timestamp from a timespec struct
-   * @details    The timespec struct must have been filled before calling
+   * @details    call timestamp_from with tmzone_cfg, which is the optional time zone
+   *             set by config file. If not set then UTC is used.
+   *             The timespec struct must have been filled before calling
    *             this function. This function only gets the time from it. This
    *             is used when multiple functions might need to do things all
    *             with the same time and you don't want the time to differ by
@@ -346,17 +374,40 @@ std::mutex generate_tmpfile_mtx;
    * @param[in]  time_in  reference to a filled timespec struct
    * @return     string   YYYY-MM-DDTHH:MM:SS.sss
    *
+   * This function is overloaded
+   *
    */
   std::string timestamp_from( struct timespec &time_in ) {
-    std::stringstream current_time;  // String to contain the time
-    time_t t;                        // Container for system time
-    struct tm time;                  // time container
+    return timestamp_from( tmzone_cfg, time_in );
+  }
+  /***** timestamp_from *******************************************************/
+
+
+  /***** timestamp_from *******************************************************/
+  /**
+   * @brief      get a human-readable timestamp from a timespec struct
+   * @details    The timespec struct must have been filled before calling
+   *             this function. This function only gets the time from it. This
+   *             is used when multiple functions might need to do things all
+   *             with the same time and you don't want the time to differ by
+   *             even a fraction of a second between those operations.
+   * @param[in]  tmzone_in  optional time zone {local|UTC|<empty>}
+   * @param[in]  time_in    reference to a filled timespec struct
+   * @return     string     YYYY-MM-DDTHH:MM:SS.sss
+   *
+   * This function is overloaded
+   *
+   */
+  std::string timestamp_from( const std::string &tmzone_in, struct timespec &time_in ) {
+    std::stringstream current_time;    // String to contain the time
+    std::time_t t=std::time(nullptr);  // Container for system time
+    struct tm time;                    // time container
 
     // Convert the input time to local or GMT
     //
     t = time_in.tv_sec;
-    if ( zone == "local" ) { if ( localtime_r( &t, &time ) == NULL ) return( "9999-99-99T99:99:99.999" ); }
-    else                   { if ( gmtime_r( &t, &time ) == NULL )    return( "9999-99-99T99:99:99.999" ); }
+    if ( tmzone_in == "local" ) { if ( localtime_r( &t, &time ) == nullptr ) return( "9999-99-99T99:99:99.999" ); }
+    else                        { if ( gmtime_r( &t, &time ) == nullptr )    return( "9999-99-99T99:99:99.999" ); }
 
     current_time.setf(std::ios_base::right);
     current_time << std::setfill('0') << std::setprecision(0)
@@ -376,24 +427,43 @@ std::mutex generate_tmpfile_mtx;
   /***** get_system_date ******************************************************/
   /**
    * @brief      return current date in formatted string "YYYYMMDD"
+   * @details    call get_system_date with tmzone_cfg, which is the optional time zone
+   *             set by config file. If not set then UTC is used.
    * @return     string  YYYYMMDD
+   *
+   * This function is overloaded
    *
    */
   std::string get_system_date() {
-    std::stringstream current_date;  // String to contain the return value
-    time_t t;                        // Container for system time
-    struct timespec timenow;;        // Time of day container
+    return get_system_date( tmzone_cfg );
+  }
+  /***** get_system_date ******************************************************/
+
+
+  /***** get_system_date ******************************************************/
+  /**
+   * @brief      return current date in formatted string "YYYYMMDD"
+   * @param[in]  tmzone_in  optional time zone {local|UTC|<empty>}
+   * @return     string  YYYYMMDD
+   *
+   * This function is overloaded
+   *
+   */
+  std::string get_system_date( const std::string &tmzone_in ) {
+    std::stringstream current_date;    // String to contain the return value
+    std::time_t t=std::time(nullptr);  // Container for system time
+    struct timespec timenow;;          // Time of day container
     struct tm mytime;                // time container
 
     // Get the system time, return a bad datestamp on error
     //
     if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return( "99999999" );
 
-    // Convert the time of day to GMT
+    // Convert the time of day to local or GMT
     //
     t = timenow.tv_sec;
-    if ( zone == "local" ) { if ( localtime_r( &t, &mytime ) == NULL ) return( "9999-99-99T99:99:99.999999" ); }
-    else                   { if ( gmtime_r( &t, &mytime ) == NULL )    return( "9999-99-99T99:99:99.999999" ); }
+    if ( tmzone_in == "local" ) { if ( localtime_r( &t, &mytime ) == nullptr ) return( "9999-99-99T99:99:99.999999" ); }
+    else                        { if ( gmtime_r( &t, &mytime ) == nullptr )    return( "9999-99-99T99:99:99.999999" ); }
 
     current_date.setf(std::ios_base::right);
     current_date << std::setfill('0') << std::setprecision(0)
@@ -415,10 +485,25 @@ std::mutex generate_tmpfile_mtx;
    *
    */
   std::string get_file_time() {
-    std::stringstream current_time;  // String to contain the time
-    time_t t;                        // Container for system time
-    struct timespec timenow;         // Time of day container
-    struct tm mytime;                // time container
+    return get_file_time( tmzone_cfg );
+  }
+  /***** get_file_time ********************************************************/
+
+
+  /***** get_file_time ********************************************************/
+  /**
+   * @brief      return current time in formatted string "YYYYMMDDHHMMSS"
+   * @param[in]  tmzone_in  optional time zone {local|UTC|<empty>}
+   * @return     string  YYYYMMDDHHMMSS
+   *
+   * Used for filenames
+   *
+   */
+  std::string get_file_time( const std::string &tmzone_in ) {
+    std::stringstream current_time;    // String to contain the time
+    std::time_t t=std::time(nullptr);  // Container for system time
+    struct timespec timenow;           // Time of day container
+    struct tm mytime;                  // time container
 
     // Get the system time, return a bad timestamp on error
     //
@@ -427,8 +512,8 @@ std::mutex generate_tmpfile_mtx;
     // Convert the time of day to local or GMT
     //
     t = timenow.tv_sec;
-    if ( zone == "local" ) { if ( localtime_r( &t, &mytime ) == NULL ) return( "99999999999999" ); }
-    else                   { if ( gmtime_r( &t, &mytime ) == NULL )    return( "99999999999999" ); }
+    if ( tmzone_in == "local" ) { if ( localtime_r( &t, &mytime ) == nullptr ) return( "99999999999999" ); }
+    else                        { if ( gmtime_r( &t, &mytime ) == nullptr )    return( "99999999999999" ); }
 
     current_time.setf(std::ios_base::right);
     current_time << std::setfill('0') << std::setprecision(0)
@@ -468,9 +553,9 @@ std::mutex generate_tmpfile_mtx;
    */
   long timeout( int wholesec, std::string next ) {
 
-    time_t t;                        // Container for system time
-    struct timespec timenow;         // Time of day container
-    struct tm mytime;                // GMT time container
+    std::time_t t=std::time(nullptr);  // Container for system time
+    struct timespec timenow;           // Time of day container
+    struct tm mytime;                  // GMT time container
     long error=0;
     int nsec, sec;
 
@@ -486,7 +571,7 @@ std::mutex generate_tmpfile_mtx;
     //
     if ( !error ) {
       t = timenow.tv_sec;
-      if ( gmtime_r( &t, &mytime ) == NULL ) error = 1;
+      if ( gmtime_r( &t, &mytime ) == nullptr ) error = 1;
       sec  = mytime.tm_sec;    // current second
       nsec = timenow.tv_nsec;  // current nanosecond
     }
@@ -531,15 +616,15 @@ std::mutex generate_tmpfile_mtx;
    *
    */
   double mjd_from( struct timespec &time_in ) {
-    time_t t;                        // Container for system time
-    struct tm time;                  // GMT time container
+    std::time_t t=std::time(nullptr);  // Container for system time
+    struct tm time;                    // GMT time container
     double a, y, m;
     double jdn, jd;
 
     // Convert the input time to GMT
     //
     t = time_in.tv_sec;
-    if ( gmtime_r( &t, &time ) == NULL ) return 0.;
+    if ( gmtime_r( &t, &time ) == nullptr ) return 0.;
 
     a = std::floor((14 - (time.tm_mon + 1)) / 12);
     y = (time.tm_year + 1900) +4800 - a;
@@ -580,7 +665,7 @@ std::mutex generate_tmpfile_mtx;
    * but must be numbers.
    *
    */
-  int compare_versions(std::string v1, std::string v2) {
+  int compare_versions(const std::string &v1, const std::string &v2) {
     std::vector<std::string> tokens1;
     std::vector<std::string> tokens2;
 

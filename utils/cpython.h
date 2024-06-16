@@ -60,36 +60,48 @@ namespace CPython {
   class CPyInstance {
 
     private:
-      char* restore_path;  /// save the PYTHONPATH env variable
-      bool initialized;    /// set when the Python interpreter is successfully initialized
+      char* _restore_path;  /// save the PYTHONPATH env variable
+      bool _initialized;    /// set when the Python interpreter is successfully initialized
+
+      void initialize( const char* pythonpath ) {
+        _restore_path = std::getenv( "PYTHONPATH" ); // Save the original PYTHONPATH
+
+        if (pythonpath) {                            // Set PYTHONPATH if provided
+          setenv( "PYTHONPATH", pythonpath, 1 );
+        }
+
+        Py_Initialize();                             // Initialize the Python interpreter
+
+        _initialized = (Py_IsInitialized() ? true : false);
+      }
+
+    void finalize() {
+      if ( _initialized && Py_IsInitialized() ) {
+        setenv( "PYTHONPATH", (_restore_path ? _restore_path : "") , 1 );    // Restore the original PYTHONPATH
+        Py_Finalize();                               // Finalize the Python interpreter
+        _initialized = false;
+      }
+    }
 
     public:
 
       /** @brief      class constructor
        *  @details    default constructor initializes interpreter
        */
-      CPyInstance() {
-        Py_Initialize();
-        initialized = ( Py_IsInitialized() ? true : false );
-      }
+      CPyInstance() { initialize( nullptr ); }
 
       /** @brief      class constructor
        *  @param[in]  pythonpath  path to set PYTHONPATH environment variable
        *  @details    sets PYTHONPATH and initializes interpreter
        */
-      CPyInstance( const char* pythonpath ) {
-        this->restore_path = std::getenv( "PYTHONPATH" );
-        setenv( "PYTHONPATH", pythonpath, 1 );
-        Py_Initialize();
-        initialized = ( Py_IsInitialized() ? true : false );
-      }
+      CPyInstance( const char* pythonpath ) { initialize( pythonpath ); }
 
       /** @brief      class de-constructor
        *  @details    restores original PYTHONPATH on destruction
        */
-      ~CPyInstance() { Py_Finalize(); setenv( "PYTHONPATH", this->restore_path, 1 ); initialized=false; }
+      ~CPyInstance() { finalize(); }
 
-      inline bool is_initialized() { return this->initialized; }
+      inline bool is_initialized() { return _initialized; }
   };
 
 }

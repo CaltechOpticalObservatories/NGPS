@@ -110,8 +110,19 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < powerd.config.n_entries; entry++) {
     if (powerd.config.param[entry] == "LOGPATH") logpath = powerd.config.arg[entry];
-    if (powerd.config.param[entry] == "TM_ZONE") zone = powerd.config.arg[entry];
     if (powerd.config.param[entry] == "DAEMON")  daemon_in = powerd.config.arg[entry];
+
+    if (powerd.config.param[entry] == "TM_ZONE") {
+      if ( powerd.config.arg[entry] != "UTC" && powerd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << powerd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        powerd.exit_cleanly();
+      }
+      tmzone_cfg = powerd.config.arg[entry];
+      message.str(""); message << "config:" << powerd.config.param[entry] << "=" << powerd.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

@@ -58,8 +58,19 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < flexured.config.n_entries; entry++) {
     if (flexured.config.param[entry] == "LOGPATH") logpath = flexured.config.arg[entry];
-    if (flexured.config.param[entry] == "TM_ZONE") zone = flexured.config.arg[entry];
     if (flexured.config.param[entry] == "DAEMON")  daemon_in = flexured.config.arg[entry];
+
+    if (flexured.config.param[entry] == "TM_ZONE") {
+      if ( flexured.config.arg[entry] != "UTC" && flexured.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << flexured.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        flexured.exit_cleanly();
+      }
+      tmzone_cfg = flexured.config.arg[entry];
+      message.str(""); message << "config:" << flexured.config.param[entry] << "=" << flexured.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

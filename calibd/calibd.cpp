@@ -58,8 +58,19 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < calibd.config.n_entries; entry++) {
     if (calibd.config.param[entry] == "LOGPATH") logpath = calibd.config.arg[entry];
-    if (calibd.config.param[entry] == "TM_ZONE") zone = calibd.config.arg[entry];
     if (calibd.config.param[entry] == "DAEMON")  daemon_in = calibd.config.arg[entry];
+
+    if (calibd.config.param[entry] == "TM_ZONE") {
+      if ( calibd.config.arg[entry] != "UTC" && calibd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << calibd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        calibd.exit_cleanly();
+      }
+      tmzone_cfg = calibd.config.arg[entry];
+      message.str(""); message << "config:" << calibd.config.param[entry] << "=" << calibd.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

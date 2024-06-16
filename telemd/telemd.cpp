@@ -76,10 +76,21 @@ int main(int argc, char **argv) {
     }
 
     if ( configkey == "LOGPATH") logpath = configval;
-    if ( configkey == "TM_ZONE") zone = configval;
     if ( configkey == "DAEMON")  daemon_in = configval;
     if ( configkey == "STDOUT")  daemon_stdout = configval;
     if ( configkey == "STDERR")  daemon_stderr = configval;
+
+    if (telemd.config.param[entry] == "TM_ZONE") {
+      if ( telemd.config.arg[entry] != "UTC" && telemd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << telemd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        telemd.exit_cleanly();
+      }
+      tmzone_cfg = telemd.config.arg[entry];
+      message.str(""); message << "config:" << telemd.config.param[entry] << "=" << telemd.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

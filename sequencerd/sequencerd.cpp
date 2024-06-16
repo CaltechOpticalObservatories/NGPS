@@ -63,22 +63,25 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < sequencerd.config.n_entries; entry++) {
     if (sequencerd.config.param[entry] == "LOGPATH") logpath = sequencerd.config.arg[entry];
-    if (sequencerd.config.param[entry] == "TM_ZONE") zone = sequencerd.config.arg[entry];
     if (sequencerd.config.param[entry] == "DAEMON")  daemon_in = sequencerd.config.arg[entry];
+
+    if (sequencerd.config.param[entry] == "TM_ZONE") {
+      if ( sequencerd.config.arg[entry] != "UTC" && sequencerd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << sequencerd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        sequencerd.exit_cleanly();
+      }
+      tmzone_cfg = sequencerd.config.arg[entry];
+      message.str(""); message << "config:" << sequencerd.config.param[entry] << "=" << sequencerd.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
 
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     sequencerd.exit_cleanly();
   }
-//if ( zone == "local" ) {
-//  logwrite( function, "using local time zone" );
-//  sequencerd.systemkeys.addkey( "TM_ZONE=local//time zone" );
-//}
-//else {
-//  logwrite( function, "using GMT time zone" );
-//  sequencerd.systemkeys.addkey( "TM_ZONE=GMT//time zone" );
-//}
 
   if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
   else

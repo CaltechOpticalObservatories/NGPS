@@ -10,6 +10,7 @@
 #include<string.h>
 #include<errno.h>
 #include<netdb.h>
+#include <iostream>
 
 #define SEND_LEN	0
 
@@ -124,7 +125,8 @@ int main(int argc, char *argv[])
    if (mode == 0) {
   	while ((nread = read (sock, response, bufsize)) < 0) {
 		if (errno != EAGAIN) {
-			printf ("ERROR %d reading\n", errno);
+			printf ("(sendcmd) ERROR %d reading\n", errno);
+			std::cerr << "(sendcmd) nread:" << nread << " response:" << response << "\n";
 			close (sock);
 			return (-errno);
 		}

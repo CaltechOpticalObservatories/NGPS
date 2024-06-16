@@ -58,8 +58,19 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < slitd.config.n_entries; entry++) {
     if (slitd.config.param[entry] == "LOGPATH") logpath = slitd.config.arg[entry];
-    if (slitd.config.param[entry] == "TM_ZONE") zone = slitd.config.arg[entry];
     if (slitd.config.param[entry] == "DAEMON")  daemon_in = slitd.config.arg[entry];
+
+    if (slitd.config.param[entry] == "TM_ZONE") {
+      if ( slitd.config.arg[entry] != "UTC" && slitd.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << slitd.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        slitd.exit_cleanly();
+      }
+      tmzone_cfg = slitd.config.arg[entry];
+      message.str(""); message << "config:" << slitd.config.param[entry] << "=" << slitd.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

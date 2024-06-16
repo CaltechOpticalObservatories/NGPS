@@ -58,8 +58,19 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < thermald.config.n_entries; entry++) {
     if (thermald.config.param[entry] == "LOGPATH") logpath = thermald.config.arg[entry];
-    if (thermald.config.param[entry] == "TM_ZONE") zone = thermald.config.arg[entry];
     if (thermald.config.param[entry] == "DAEMON")  daemon_in = thermald.config.arg[entry];
+
+    if (thermald.config.param[entry] == "TM_ZONE") {
+      if ( thermald.config.arg[entry] != "UTC" && thermald.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << thermald.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        thermald.exit_cleanly();
+      }
+      tmzone_cfg = thermald.config.arg[entry];
+      message.str(""); message << "config:" << thermald.config.param[entry] << "=" << thermald.config.arg[entry];
+      logwrite( function, message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");

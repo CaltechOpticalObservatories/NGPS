@@ -54,7 +54,7 @@ namespace Network {
   UdpSocket::UdpSocket() {
     this->fd = -1;
     this->port = -1;
-    this->group = "";
+    this->group.clear();
     this->service_running = false;
   }
   /***** Network::UdpSocket::UdpSocket ****************************************/
@@ -363,7 +363,6 @@ namespace Network {
     this->id = id_in;
     this->fd = -1;
     this->listenfd = -1;
-    this->host = "";
     this->addrs = nullptr;
     this->connection_open = false;
   };
@@ -390,7 +389,34 @@ namespace Network {
     this->id = id_in;
     this->fd = -1;
     this->listenfd = -1;
-    this->host = "";
+    this->addrs = nullptr;
+    this->connection_open = false;
+  };
+  /***** Network::TcpSocket::TcpSocket ****************************************/
+
+
+  /***** Network::TcpSocket::TcpSocket ****************************************/
+  /**
+   * @brief      TcpSocket class constructor
+   * @param[in]  host_in    host name
+   * @param[in]  port_in    port which server will listen on
+   * @param[in]  block_in   true|false -- will the connection be blocking?
+   * @param[in]  async_in   true|false -- will the connection be asynchronous?
+   * @param[in]  totime_in  timeout time for poll, in msec
+   * @param[in]  id_in      ID number (for keeping track of threads)
+   *
+   * Use this to construct a server's listening socket object
+   *
+   */
+  TcpSocket::TcpSocket( std::string host_in, int port_in, bool block_in, bool async_in, int totime_in, int id_in) {
+    this->host = host_in;
+    this->port = port_in;
+    this->blocking = block_in;
+    this->asyncflag = async_in;
+    this->totime = totime_in;
+    this->id = id_in;
+    this->fd = -1;
+    this->listenfd = -1;
     this->addrs = nullptr;
     this->connection_open = false;
   };
@@ -430,7 +456,6 @@ namespace Network {
     this->id = -1;
     this->fd = -1;
     this->listenfd = -1;
-    this->host = "";
     this->addrs = nullptr;
     this->connection_open = false;
   };
@@ -497,16 +522,6 @@ namespace Network {
     }
   };
   /***** Network::TcpSocket::TcpSocket ****************************************/
-
-
-  /***** Network::TcpSocket::~TcpSocket ***************************************/
-  /**
-   * @brief      TcpSocket class destructor
-   *
-   */
-  TcpSocket::~TcpSocket() {
-  };
-  /***** Network::TcpSocket::~TcpSocket ***************************************/
 
 
   /***** Network::TcpSocket::Accept *******************************************/
@@ -726,8 +741,8 @@ namespace Network {
    *
    */
   int TcpSocket::Close() {
-    std::stringstream message;
     std::string function = "Network::TcpSocket::Close";
+    std::stringstream message;
     int error = -1;
 
     if ( !this->connection_open ) return 0;
@@ -807,8 +822,6 @@ namespace Network {
     //
     std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
 
-    errno = 0;  // ensure errno is initialized before calling read()
-
     while ( ( nread = read( this->fd, buf, count ) ) < 0 ) {
       if ( errno != EAGAIN ) {
         message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
@@ -863,7 +876,7 @@ namespace Network {
    * in the string.
    *
    */
-  int TcpSocket::Read( std::string &retstring, const char term ) {
+  int TcpSocket::Read( std::string &retstring, const char &term ) {
     std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
     size_t bytesread=0;
@@ -1025,9 +1038,8 @@ namespace Network {
    *
    */
   Interface::Interface( ) {
-    this->name = "";
+    this->name.clear();
     this->port = -1;
-    this->host = "";
     this->term_write = '\n';
     this->term_read  = '\n';
     this->initialized = false;

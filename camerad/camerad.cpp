@@ -103,23 +103,25 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < server.config.n_entries; entry++) {
     if (server.config.param[entry] == "LOGPATH") logpath = server.config.arg[entry];    // where to write log files
-    if (server.config.param[entry] == "TM_ZONE") zone = server.config.arg[entry];       // time zone for time stamps
     if (server.config.param[entry] == "DAEMON")  daemon_in = server.config.arg[entry];  // am I starting as a daemon or not?
+
+    if (server.config.param[entry] == "TM_ZONE") {
+      if ( server.config.arg[entry] != "UTC" && server.config.arg[entry] != "local" ) {
+        message.str(""); message << "ERROR invalid TM_ZONE=" << server.config.arg[entry] << ": expected UTC|local";
+        logwrite( function, message.str() );
+        server.exit_cleanly();
+      }
+      tmzone_cfg = server.config.arg[entry];
+      server.camera_info.systemkeys.primary().addkey( "TM_ZONE", tmzone_cfg, "time zone" );  // add to primary system keys database
+      message.str(""); message << "config:" << server.config.param[entry] << "=" << server.config.arg[entry];
+      logwrite( function, message.str() );
+      server.camera.async.enqueue( message.str() );
+    }
+
   }
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     server.exit_cleanly();
-  }
-
-  // add the time zone to the primary system keys database
-  //
-  if ( zone == "local" ) {
-    logwrite( function, "using local time zone" );
-    server.camera_info.systemkeys.primary().addkey( "TM_ZONE", "local", "time zone" );
-  }
-  else {
-    logwrite( function, "using GMT time zone" );
-    server.camera_info.systemkeys.primary().addkey( "TM_ZONE", "GMT", "time zone" );
   }
 
   if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
