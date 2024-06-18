@@ -6,23 +6,16 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
+set( ACAMD_DIR ${PROJECT_BASE_DIR}/acamd )
+
+set( CMAKE_CXX_STANDARD 17 )
+
 # Uncomment _one_ of these to select the source of real Andor images,
 # either direct from the camera (ACAM_ANDOR_SOURCE_ANDOR) or via an
 # external server (ACAM_ANDOR_SOURCE_SERVER) aka "the gui".
 #
 #add_definitions(-DACAM_ANDOR_SOURCE_SERVER)
 add_definitions(-DACAM_ANDOR_SOURCE_ANDOR)
-
-# Uncmoment this to use the Andor simulator
-#
-#add_definitions(-DANDORSIM)
-
-
-#add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
-#add_definitions( -I/usr/include/python3.9 -I/usr/include/python3.9  -Wno-unused-result -Wsign-compare  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv  -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG  -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches   -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -D_GNU_SOURCE -fPIC -fwrapv )
-
-
-set( ACAMD_DIR ${PROJECT_BASE_DIR}/acamd )
 
 # C-Python API Development libraries and headers
 #
@@ -76,7 +69,7 @@ target_link_libraries(acamd
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
-target_compile_options(acamd PRIVATE -g -Wall -O0 -Wno-variadic-macros -ggdb)
+target_compile_options(acamd PRIVATE -g -Wall -O1 -Wno-variadic-macros -ggdb)
 
 # Set the setgid bit on the resulting executable
 add_custom_command( TARGET acamd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:acamd> )

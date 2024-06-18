@@ -31,6 +31,10 @@ namespace SkyInfo {
       char* restore_path;       /// if the PYTHONPATH env variable is changed then remember the original
       bool python_initialized;  /// set true when the Python interpreter has been initialized
 
+      CPython::CPyInstance py_instance { PYTHON_SKYINFO_PATH };  /// initialize the Python interpreter
+      PyObject* pModuleName;
+      PyObject* pModule;
+
     public:
       FPOffsets();
 
@@ -46,10 +50,6 @@ namespace SkyInfo {
 
       coords_t coords_in { 0, 0, 0 };
       coords_t coords_out { 0, 0, 0 };
-
-      CPython::CPyInstance py_instance { PYTHON_SKYINFO_PATH };  /// initialize the Python interpreter
-      PyObject* pModuleName;
-      PyObject* pModule;
 
       inline void set_inputs( double dec, double ra, double angle ) {
         this->coords_in.ra=ra;

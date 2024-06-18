@@ -8,6 +8,8 @@ cmake_minimum_required( VERSION 3.12 )
 
 set( SLITD_DIR ${PROJECT_BASE_DIR}/slitd )
 
+set( CMAKE_CXX_STANDARD 17 )
+
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/PI )
 include_directories( ${PROJECT_BASE_DIR}/common )

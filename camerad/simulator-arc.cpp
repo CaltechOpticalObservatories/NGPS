@@ -18,7 +18,7 @@ namespace AstroCam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::connect_controller(std::string devices_in="") {
+  long Interface::connect_controller( std::string devices_in, std::string &retstring ) {
     std::string function = "AstroCam::Interface::connect_controller";
     std::stringstream message;
 
@@ -135,12 +135,13 @@ namespace AstroCam {
         }
         catch ( std::invalid_argument & ) {
           this->camera.log_error( function, "unable to convert ARCSIM_NUMDEV to integer" );
-          error = ERROR;
+          error |= ERROR;
         }
         catch ( std::out_of_range & ) {
           this->camera.log_error( function, "ARCSIM_NUMDEV out of integer range" );
-          error = ERROR;
+          error |= ERROR;
         }
+
         this->numdev = num;
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
@@ -148,9 +149,42 @@ namespace AstroCam {
         applied++;
       }
     }
+
+    error |= this->do_configure_controller();
+
     return error;
   }
   /***** AstroCam::Interface::configure_controller ****************************/
+
+
+  /***** AstroCam::Interface::abort *******************************************/
+  /**
+   * @brief      wrapper for abort
+   * @details    does nothing
+   * @return     NO_ERROR
+   *
+   */
+  long Interface::abort() {
+    return( NO_ERROR );
+  }
+  /***** AstroCam::Interface::abort *******************************************/
+
+
+  /***** AstroCam::Interface::bin *********************************************/
+  /**
+   * @brief      wrapper for do_bin
+   * @details    does nothing
+   * @param[in]  args       argument string contains <chan> <axis> [ <factor> ]
+   * @param[out] retstring  return string
+   * @return     NO_ERROR
+   *
+   * The bindir string can be implementation-specific.
+   *
+   */
+  long Interface::bin( std::string args, std::string &retstring ) {
+    return( NO_ERROR );
+  }
+  /***** AstroCam::Interface::bin *********************************************/
 
 
   /***** AstroCam::Interface::geometry ****************************************/
@@ -160,8 +194,6 @@ namespace AstroCam {
    *
    */
   long Interface::geometry( std::string args, std::string &retstring ) {
-    std::string function = "AstroCam::Interface::geometry";
-    std::stringstream message;
     return( NO_ERROR );
   }
   /***** AstroCam::Interface::geometry ****************************************/

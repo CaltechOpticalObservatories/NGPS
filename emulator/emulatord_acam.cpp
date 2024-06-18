@@ -1,15 +1,15 @@
 /**
- * @file    emulatord_acam_pi.cpp
- * @brief   this is the main emulator daemon for acam PI
+ * @file    emulatord_acam.cpp
+ * @brief   this is the acam emulator daemon
  * @details 
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
 
-#include "emulatord_acam_pi.h"
+#include "emulatord_acam.h"
 #include "daemonize.h"
 
-AcamPIEmulator::Server emulator;
+AcamEmulator::Server emulator;
 
 /***** signal_handler *********************************************************/
 /**
@@ -20,7 +20,7 @@ AcamPIEmulator::Server emulator;
  *
  */
 void signal_handler( int signo ) {
-  std::string function = "  (AcamPIEmulator::signal_handler) ";
+  std::string function = "  (AcamEmulator::signal_handler) ";
   switch ( signo ) {
     case SIGTERM:
     case SIGINT:
@@ -44,9 +44,9 @@ void signal_handler( int signo ) {
 /***** signal_handler *********************************************************/
 
 
-int  main( int argc, char **argv );                 ///< main thread (just gets things started)
-void block_main( Network::TcpSocket sock );         ///< this thread handles requests on blocking port
-void doit( Network::TcpSocket sock );               ///< the worker thread
+int  main( int argc, char **argv );                 // main thread (just gets things started)
+void block_main( Network::TcpSocket sock );         // this thread handles requests on blocking port
+void doit( Network::TcpSocket sock );               // the worker thread
 
 
 /***** main *******************************************************************/
@@ -58,7 +58,7 @@ void doit( Network::TcpSocket sock );               ///< the worker thread
  *
  */
 int main( int argc, char **argv ) {
-  std::string function = "  (AcamPIEmulator::main) ";
+  std::string function = "  (AcamEmulator::main) ";
   std::stringstream message;
   long ret=NO_ERROR;
   std::string daemon_in;     // daemon setting read from config file
@@ -102,7 +102,7 @@ int main( int argc, char **argv ) {
 
     std::string configkey;          // the current configuration key read from file
     std::string configval;          // the current configuration value read from file
-
+    
     try {
       configkey = emulator.config.param.at(entry);
       configval = emulator.config.arg.at(entry);
@@ -111,10 +111,11 @@ int main( int argc, char **argv ) {
       message.str(""); message << "ERROR: entry " << entry
                                << " out of range in config parameters (" << emulator.config.n_entries << ")";
       logwrite( function, message.str() );
-      return(-1);
+      return(ERROR);
     }
 
     if ( configkey == "DAEMON")  daemon_in = configval;
+
   }
 
   if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
@@ -149,11 +150,19 @@ int main( int argc, char **argv ) {
     emulator.exit_cleanly();
   }
 
+  if ( emulator.port < 1 ) {
+    std::cerr << get_timestamp() << function << "ERROR: no port configured\n";
+    emulator.exit_cleanly();
+  }
+
   // create a thread for a single listening port
   // The TcpSocket object is instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
 
   Network::TcpSocket s(emulator.port, true, -1, 0);    // instantiate TcpSocket object
-  s.Listen();                                                      // create listening socket
+  if ( s.Listen() < 0 ) {                                          // create listening socket
+    std::cerr << get_timestamp() << function << "ERROR cannot create listening socket on port " << emulator.port << "\n";
+    emulator.exit_cleanly();
+  }
   std::thread( block_main, s ).detach();                           // spawn thread to handle requests
 
   for (;;) pause();                                                // main thread suspends
@@ -162,7 +171,7 @@ int main( int argc, char **argv ) {
 /***** main *******************************************************************/
 
 
-/***** block_main *************************************************************/
+/**** block_main **************************************************************/
 /**
  * @fn         block_main
  * @brief      main function for blocking connection thread
@@ -178,13 +187,13 @@ int main( int argc, char **argv ) {
 void block_main( Network::TcpSocket sock ) {
   while(1) {
     int fd = sock.Accept();
-    std::cerr << get_timestamp() << "  (AcamPIEmulator::block_main) Accept returns connection on fd = " << fd << "\n";
+    std::cerr << get_timestamp() << "  (AcamEmulator::block_main) Accept returns connection on fd = " << fd << "\n";
     doit( sock );                  // call function to do the work
     sock.Close();
   }
   return;
 }
-/***** block_main *************************************************************/
+/**** block_main **************************************************************/
 
 
 /***** doit *******************************************************************/
@@ -201,7 +210,7 @@ void block_main( Network::TcpSocket sock ) {
  *
  */
 void doit( Network::TcpSocket sock ) {
-  std::string function = "  (AcamPIEmulator::doit) ";
+  std::string function = "  (AcamEmulator::doit) ";
   long  ret;
   std::stringstream message;
   std::string cmd, args;        // arg string is everything after command
@@ -216,10 +225,12 @@ void doit( Network::TcpSocket sock ) {
     int pollret;
     if ( ( pollret=sock.Poll() ) <= 0 ) {
       if (pollret==0) {
-        std::cerr << function << emulator.subsystem << " Poll timeout on thread " << sock.id << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem << " Poll timeout on fd " << sock.getfd()
+                  << " thread " << sock.id << "\n";
       }
       if (pollret <0) {
-        std::cerr << function << emulator.subsystem << " Poll error on thread " << sock.id << ": " << strerror(errno) << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem << " Poll error on fd " << sock.getfd()
+                  << " thread " << sock.id << ": " << strerror(errno) << "\n";
       }
       break;                      // this will close the connection
     }
@@ -230,10 +241,11 @@ void doit( Network::TcpSocket sock ) {
     char delim='\n';
     if ( (ret=sock.Read( sbuf, delim )) <= 0 ) {     // read until newline delimiter
       if (ret<0) {                // could be an actual read error
-        std::cerr << function << emulator.subsystem 
-                  << " Read error: " << strerror(errno) << "\n";
+        std::cerr << get_timestamp() << function << emulator.subsystem 
+                  << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
       }
-      if (ret==-2) std::cerr << function << emulator.subsystem << " timeout reading from socket\n";
+      if (ret==-2) std::cerr << get_timestamp() << function << emulator.subsystem << " timeout reading from fd " 
+                             << sock.getfd() << "\n";
       break;                      // Breaking out of the while loop will close the connection.
                                   // This probably means that the client has terminated abruptly, 
                                   // having sent FIN but not stuck around long enough
@@ -263,16 +275,17 @@ void doit( Network::TcpSocket sock ) {
       sock.id = ++emulator.cmd_num;
       if ( emulator.cmd_num == INT_MAX ) emulator.cmd_num = 0;
 
-      std::cerr << function << emulator.subsystem << " received command (" << sock.id << "): " << cmd << " " << args << "\n";
+      std::cerr << get_timestamp() << function << emulator.subsystem << " received command on fd "
+                << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args << "\n";
     }
     catch ( std::runtime_error &e ) {
       std::stringstream errstream; errstream << e.what();
-      std::cerr << function << emulator.subsystem 
+      std::cerr << get_timestamp() << function << emulator.subsystem 
                 << " error parsing arguments: " << errstream.str() << "\n";
       ret = -1;
     }
     catch ( ... ) {
-      std::cerr << function << emulator.subsystem << " unknown error parsing arguments: " << args << "\n";
+      std::cerr << get_timestamp() << function << emulator.subsystem << " unknown error parsing arguments: " << args << "\n";
       ret = -1;
     }
 
@@ -298,7 +311,7 @@ void doit( Network::TcpSocket sock ) {
         std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );    // make uppercase
       }
       catch (...) {
-        std::cerr << function << "error converting command to uppercase\n";
+        std::cerr << get_timestamp() << function << "error converting command to uppercase\n";
         ret=ERROR;
       }
       ret = emulator.interface.parse_command( sbuf, retstring );
@@ -315,8 +328,7 @@ void doit( Network::TcpSocket sock ) {
 
   connection_open = false;
   sock.Close();
-  std::cerr << "connection closed\n";
+  std::cerr << get_timestamp() << function << "connection closed\n";
   return;
 }
 /***** doit *******************************************************************/
-

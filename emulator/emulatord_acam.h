@@ -1,12 +1,12 @@
 /** ---------------------------------------------------------------------------
- * @file     emulatord_slit.h
+ * @file     emulatord_acam.h
  * @brief    
  * @author   David Hale <dhale@astro.caltech.edu>
  *
  */
 
-#ifndef EMULATORD_SLIT_H
-#define EMULATORD_SLIT_H
+#ifndef EMULATORD_ACAM_H
+#define EMULATORD_ACAM_H
 
 #include <fstream>
 #include <iostream>
@@ -24,67 +24,43 @@
 #include "config.h"
 #include "network.h"
 #include "common.h"
-#include "slit.h"
+#include "acam.h"
 
 #define  BUFSIZE      1024  ///< size of the input command buffer
 
-/***** SlitEmulator ***********************************************************/
+/***** AcamEmulator ***********************************************************/
 /**
- * @namespace SlitEmulator
- * @brief     this namespace contains everything for the slit emulator
+ * @namespace AcamEmulator
+ * @brief     this namespace contains everything for the acam emulator
  *
  */
-namespace SlitEmulator {
+namespace AcamEmulator {
 
 
-  /***** SlitEmulator::Server *************************************************/
+  /***** AcamEmulator::Server *************************************************/
   /**
    * @class  Server
    * @brief  emulator server class
    *
    * This class contains everything needed to run the emulator server,
-   * the server which responds as the slit controller.
+   * the server which responds as the acam controller.
    *
    */
   class Server {
     private:
     public:
       int port;
-      std::string subsystem;             ///< subsystem name
+      const std::string subsystem;       ///< subsystem name
       std::atomic<int> cmd_num;
+
       Config config;
       std::mutex conn_mutex;             ///< mutex to protect against simultaneous access to Accept()
 
-      SlitEmulator::Interface interface;
+      AcamEmulator::Interface interface;
 
-      /***** SlitEmulator::Server *************************************************/
-      /**
-       * @fn         Server
-       * @brief      class constructor
-       * @param[in]  none
-       * @return     none
-       */
-      Server() {
-        this->port=-1;
-        this->subsystem="slit";
-        this->cmd_num=0;
-      }
-      /***** SlitEmulator::Server *************************************************/
+      Server() : port(-1), subsystem("acam"), cmd_num(0) { }
 
-
-      /***** SlitEmulator::~Server ************************************************/
-      /**
-       * @fn         ~Server
-       * @brief      class deconstructor cleans up on exit
-       * @param[in]  none
-       * @return     none
-       */
-      ~Server() {
-      }
-      /***** SlitEmulator::~Server ************************************************/
-
-
-      /***** SlitEmulator::Server::exit_cleanly ***********************************/
+      /***** AcamEmulator::Server::exit_cleanly ***********************************/
       /**
        * @fn         exit_cleanly
        * @brief      closes things nicely and exits
@@ -93,7 +69,7 @@ namespace SlitEmulator {
        *
        */
       void exit_cleanly(void) {
-        std::string function = "  (SlitEmulator::Server::exit_cleanly) ";
+        std::string function = "  (AcamEmulator::Server::exit_cleanly) ";
         std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
 
         // close connection
@@ -101,10 +77,10 @@ namespace SlitEmulator {
         if ( this->port > 0 ) close( this->port );
         exit( EXIT_SUCCESS );
       }
-      /***** SlitEmulator::Server::exit_cleanly ***********************************/
+      /***** AcamEmulator::Server::exit_cleanly ***********************************/
 
 
-      /***** SlitEmulator::Server::configure_emulator *****************************/
+      /***** AcamEmulator::Server::configure_emulator *****************************/
       /**
        * @fn         configure_emulator
        * @brief      
@@ -113,7 +89,7 @@ namespace SlitEmulator {
        *
        */
       long configure_emulator() {
-        std::string function = "  (SlitEmulator::Server::configure_emulator) ";
+        std::string function = "  (AcamEmulator::Server::configure_emulator) ";
         std::stringstream message;
         int applied=0;
         long error;
@@ -124,7 +100,7 @@ namespace SlitEmulator {
 
           // MOTOR_CONTROLLER
           if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
-            SlitEmulator::ControllerInfo c;
+            AcamEmulator::ControllerInfo c;
             if ( c.load_info( config.arg[entry] ) == NO_ERROR ) {
               this->interface.controller_info.push_back( c );
               std::cerr << get_timestamp() << function << "loaded config: " << config.param[entry] << "=" << config.arg[entry] << "\n";
@@ -155,11 +131,11 @@ namespace SlitEmulator {
 
         return error;
       }
-      /***** SlitEmulator::Server::configure_emulator *****************************/
+      /***** AcamEmulator::Server::configure_emulator *****************************/
 
   };
-  /***** SlitEmulator::Server *************************************************/
+  /***** AcamEmulator::Server *************************************************/
 
 }
-/***** SlitEmulator ***********************************************************/
+/***** AcamEmulator ***********************************************************/
 #endif

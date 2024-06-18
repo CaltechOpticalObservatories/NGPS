@@ -152,7 +152,7 @@ namespace Slit {
    * @brief       return the connected state of the motor controllers
    * @param[in]   arg        used only for help
    * @param[out]  retstring  contains the connected state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be connected for this to return "true".
    *
@@ -170,7 +170,7 @@ namespace Slit {
       retstring = SLITD_ISOPEN;
       retstring.append( " \n" );
       retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Loop through all motor controllers, checking each if connected,
@@ -179,7 +179,7 @@ namespace Slit {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( auto &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
 
       bool _isopen = this->motorinterface.is_connected( mot.second.name );
 
@@ -216,7 +216,7 @@ namespace Slit {
    *             each. This will also apply any zeropos, after homing.
    * @param[in]  arg        optional arg for help only
    * @param[out] retstring  reference to return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::home( std::string arg, std::string &retstring ) {
@@ -227,7 +227,7 @@ namespace Slit {
       retstring = SLITD_HOME;
       retstring.append( " \n" );
       retstring.append( "  home both slit motors simultaneously\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     if ( ! arg.empty() ) {
@@ -248,7 +248,7 @@ namespace Slit {
    * @brief       return the home state of the motors
    * @param[in]  arg        optional arg for help only
    * @param[out]  retstring  contains the home state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be homed for this to return "true".
    *
@@ -261,7 +261,7 @@ namespace Slit {
       retstring = SLITD_ISHOME;
       retstring.append( " \n" );
       retstring.append( "  returns referencing state of both slit motors\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     if ( ! arg.empty() ) {
@@ -283,7 +283,7 @@ namespace Slit {
    * @param[in]  iface      reference to main Slit::Interface object
    * @param[in]  args       string containing width, or width and offset
    * @param[out] retstring  string contains the width and offset after move
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * This function moves the "A" and "B" motors to achieve the requested
    * width (and offset, if specified, default 0). Each motor is commanded in its
@@ -307,7 +307,7 @@ namespace Slit {
       retstring.append( "  Set <width> and optionally <offset>. If offset is omitted then\n" );
       retstring.append( "  both motors are moved symmetrically to achieve the requested width.\n" );
       retstring.append( "  Using an offset will reduce the maximum width available.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Tokenize the input arg list.
@@ -443,7 +443,7 @@ namespace Slit {
    * @brief      get the current width and offset
    * @param[in]  args       input args (currently just for help)
    * @param[out] retstring  string contains the current width and offset
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get( std::string args, std::string &retstring ) {
@@ -461,7 +461,7 @@ namespace Slit {
       retstring = SLITD_GET;
       retstring.append( " \n" );
       retstring.append( "  returns the current slit width and offset\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // check here to guard against divide-by-zero
@@ -521,7 +521,7 @@ namespace Slit {
     //
     auto _motormap = this->motorinterface.get_motormap();
 
-    for ( auto const &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
       this->motorinterface.stop_motion( mot.second.name, mot.second.addr );
     }
 
@@ -535,7 +535,7 @@ namespace Slit {
    * @brief      writes the raw command as received to the master controller
    * @param[in]  args       contains <name> <cmd>
    * @param[out] retstring  reference to contain any return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * This function is overloaded.
    * This version writes a command that expects no reply.
@@ -551,11 +551,11 @@ namespace Slit {
       retstring.append( "  sends <cmd> directly to the controller named <name>,\n" );
       retstring.append( "  where <name> is in { " );
       auto _motormap = this->motorinterface.get_motormap();
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
       retstring.append( "}\n" );
       retstring.append( "  No checks are made as to the validity of the command string.\n" );
       retstring.append( "  If <cmd> does not contain a \"?\" then there is no return string.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     std::vector<std::string> tokens;

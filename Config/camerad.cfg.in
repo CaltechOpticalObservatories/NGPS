@@ -16,7 +16,7 @@ DAEMON=no                        # run as a daemon? {yes,no}
 
 # -----------------------------------------------------------------------------
 # The following are for simulated ARC controllers
-#ARCSIM_NUMDEV=4
+ARCSIM_NUMDEV=2
 
 # -----------------------------------------------------------------------------
 # Each camera controller is defined by

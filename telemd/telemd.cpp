@@ -92,6 +92,7 @@ int main(int argc, char **argv) {
     }
 
   }
+
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     telemd.exit_cleanly();

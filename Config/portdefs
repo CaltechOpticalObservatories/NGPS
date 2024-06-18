@@ -9,6 +9,7 @@
 set( MESSAGEPORT                 1300 )
 
 set( SLITCAM_CAMERA_SERVER_PORT  6666 )
+set( CR1000X_PORT                6785 )
 
 set( SEQUENCERD_ASYNC_PORT       8000 )
 
@@ -43,8 +44,7 @@ set( CAMERAD_EMULATOR           30002 )
 set( FLEXURED_EMULATOR          30003 )
 set( FOCUSD_EMULATOR            30004 )
 set( SLITD_PI_PORT              30006 )
-set( FILTERD_PI_PORT            30008 )
-set( ACAMD_PI_PORT              30009 )
+set( ACAMD_EMULATOR             30008 )
 
 set( ACAM_CAMERA_SERVER_PORT    31000 )
 set( DB_PORT                    33060 )

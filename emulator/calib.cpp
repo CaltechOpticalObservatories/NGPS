@@ -10,64 +10,10 @@
 
 namespace CalibEmulator {
 
-  /***** CalibEmulator::ControllerInfo::ControllerInfo ************************/
-  /**
-   * @fn         ControllerInfo
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  ControllerInfo::ControllerInfo() {
-    this->homed    = false;
-    this->ontarget = false;
-    this->pos      = -1;
-  }
-  /***** CalibEmulator::ControllerInfo::ControllerInfo ************************/
-
-
-  /***** CalibEmulator::ControllerInfo::~ControllerInfo ***********************/
-  /**
-   * @fn         ~ControllerInfo
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  ControllerInfo::~ControllerInfo() {
-  }
-  /***** CalibEmulator::ControllerInfo::~ControllerInfo ***********************/
-
-
-  /***** CalibEmulator::Interface::Interface **********************************/
-  /**
-   * @fn         Interface
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::Interface() {
-  }
-  /***** CalibEmulator::Interface::Interface **********************************/
-
-
-  /***** CalibEmulator::Interface::~Interface *********************************/
-  /**
-   * @fn         ~Interface
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** CalibEmulator::Interface::~Interface *********************************/
-
 
   long Interface::test() {
     std::string function = "  (CalibEmulator::Interface::test) ";
-    std::cerr << get_timestamp() << function << "controller_info.size() = " << this->controller_info.size() << "\n";
+    std::cout << get_timestamp() << function << "controller_info.size() = " << this->controller_info.size() << "\n";
     return( NO_ERROR );
   }
 
@@ -87,7 +33,7 @@ namespace CalibEmulator {
     // sleep here
     //
     for ( int i = 0; i < 15; i++ ) {
-      std::cerr << get_timestamp() << function << "homing " << info.name << "... \n";
+      std::cout << get_timestamp() << function << "homing " << info.name << "... \n";
       usleep( 500000 );
     }
 
@@ -99,7 +45,7 @@ namespace CalibEmulator {
     info.pos      = 0.0;
     mlock.unlock();
 
-    std::cerr << get_timestamp() << function << "home " << info.name << " complete!\n";
+    std::cout << get_timestamp() << function << "home " << info.name << " complete!\n";
   }
   /***** CalibEmulator::Interface::do_home ************************************/
 
@@ -121,7 +67,7 @@ namespace CalibEmulator {
     // sleep here
     //
     for ( int i = 0; i < distance; i++ ) {
-      std::cerr << get_timestamp() << function << "moving " << info.name << "... \n";
+      std::cout << get_timestamp() << function << "moving " << info.name << "... \n";
       usleep( 500000 );
     }
 
@@ -132,7 +78,7 @@ namespace CalibEmulator {
     info.pos      = pos;
     mlock.unlock();
 
-    std::cerr << get_timestamp() << function << "move " << info.name << " complete!\n";
+    std::cout << get_timestamp() << function << "move " << info.name << " complete!\n";
   }
   /***** CalibEmulator::Interface::do_move ************************************/
 
@@ -150,10 +96,11 @@ namespace CalibEmulator {
     std::string function = "  (CalibEmulator::Interface::parse_command) ";
     int myaddr=-1;
     int mydev=-1;
-    std::string mycmd="";
+    int myaxis=1;
+    std::string mycmd;
     float mypos=0.0;
 
-    std::cerr << get_timestamp() << function << "received command: " << cmd << "\n";
+    std::cout << get_timestamp() << function << "received command: " << cmd << "\n";
 
     std::vector<std::string> tokens;
     Tokenize( cmd, tokens, " " );
@@ -166,10 +113,13 @@ namespace CalibEmulator {
         mycmd = tokens.at(1);
       }
       if ( tokens.size() > 2 ) {
-        mypos = std::stof( tokens.at(2) );
+        myaxis = std::stof( tokens.at(2) );
       }
-      if ( tokens.size() < 1 || tokens.size() > 3 ) {
-        std::cerr << get_timestamp() << function << "ERROR: received " << tokens.size() << " args but expected 1, 2, or 3\n";
+      if ( tokens.size() > 3 ) {
+        mypos = std::stof( tokens.at(3) );
+      }
+      if ( tokens.size() < 1 || tokens.size() > 4 ) {
+        std::cerr << get_timestamp() << function << "ERROR: received " << tokens.size() << " args but expected 1, 2, 3, or 4\n";
         return( ERROR );
       }
     }
@@ -191,7 +141,7 @@ namespace CalibEmulator {
     for ( size_t dev = 0; dev < this->controller_info.size(); dev++ ) {
       if ( this->controller_info.at(dev).addr == myaddr ) {
         mydev  = dev;
-        std::cerr << get_timestamp() << function << "myaddr=" << myaddr << " mydev=" << mydev << "\n";
+        std::cout << get_timestamp() << function << "myaddr=" << myaddr << " mydev=" << mydev << " myaxis=" << myaxis << "\n";
         break;
       }
     }
@@ -215,7 +165,7 @@ namespace CalibEmulator {
       this->controller_info.at( mydev ).ontarget = false;
       this->pos_mutex.unlock();
 
-      std::cerr << get_timestamp() << function << "spawning do_home thread for " << this->controller_info.at( mydev).name << "\n";
+      std::cout << get_timestamp() << function << "spawning do_home thread for " << this->controller_info.at( mydev).name << "\n";
 
       std::thread( std::ref(CalibEmulator::Interface::do_home), 
                    std::ref(this->controller_info.at( mydev )),
@@ -230,18 +180,18 @@ namespace CalibEmulator {
       this->pos_mutex.lock();
       retstring = this->controller_info.at( mydev ).homed ? "1" : "0";
       this->pos_mutex.unlock();
-      std::cerr << get_timestamp() << function << "homed = " << retstring << "\n";
+      std::cout << get_timestamp() << function << "homed = " << retstring << "\n";
     }
     else
 
     // POS?
     //
     if ( mycmd == "POS?" ) {
-      std::cerr << get_timestamp() << function << "got POS? command. mydev=" << mydev << "\n";
+      std::cout << get_timestamp() << function << "got POS? command. mydev=" << mydev << "\n";
       this->pos_mutex.lock();
       retstring = std::to_string( this->controller_info.at( mydev ).pos );
       this->pos_mutex.unlock();
-      std::cerr << get_timestamp() << function << "pos = " << retstring << "\n";
+      std::cout << get_timestamp() << function << "pos = " << retstring << "\n";
     }
     else
 
@@ -253,7 +203,7 @@ namespace CalibEmulator {
       int distance = (int) ( std::abs( this->controller_info.at( mydev ).pos - mypos ) );
       this->pos_mutex.unlock();
 
-      std::cerr << get_timestamp() << function << "spawning do_move thread for " << this->controller_info.at( mydev).name << "\n";
+      std::cout << get_timestamp() << function << "spawning do_move thread for " << this->controller_info.at( mydev).name << "\n";
 
       std::thread( std::ref(CalibEmulator::Interface::do_move),
                    std::ref(this->controller_info.at( mydev )),
@@ -269,13 +219,33 @@ namespace CalibEmulator {
       this->pos_mutex.lock();
       retstring = this->controller_info.at( mydev ).ontarget ? "1" : "0";
       this->pos_mutex.unlock();
-      std::cerr << get_timestamp() << function << "ontarget = " << retstring << "\n";
+      std::cout << get_timestamp() << function << "ontarget = " << retstring << "\n";
+    }
+    else
+
+    // SVO
+    //
+    if ( mycmd == "SVO" ) {
+      std::cout << get_timestamp() << function << "servo on\n";
+    }
+    else
+
+    // ERR?
+    //
+    if ( mycmd == "ERR?" ) {
+      this->pos_mutex.lock();
+      std::stringstream ss;
+      ss << "0 " << myaddr << " " << myaxis << "=0";  // always return no error
+      retstring = ss.str();
+      this->pos_mutex.unlock();
+      std::cout << get_timestamp() << function << retstring << "\n";
     }
 
     // unknown command
     //
     else {
       std::cerr << get_timestamp() << function << "ignored unknown command: " << mycmd << "\n";
+      retstring="unknown_command";
     }
 
     return ( NO_ERROR );

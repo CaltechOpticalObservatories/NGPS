@@ -109,15 +109,26 @@ namespace SkyInfo {
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
-      return( ERROR );
+      return ERROR;
     }
 
-    if ( this->pModule==NULL ) {
+    if ( this->pModule == nullptr ) {
       logwrite( function, "ERROR: Python module not imported" );
-      return( ERROR );
+      return ERROR;
     }
+
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
     PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_FPOFFSETS_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      logwrite( function, "ERROR: Python function not callable" );
+      Py_XDECREF( pFunction );
+      PyGILState_Release(gstate);
+      return ERROR;
+    }
 
     const char* _fromc = from.c_str();
     const char* _toc   = to.c_str();
@@ -132,18 +143,26 @@ namespace SkyInfo {
 
     // Call the Python function here
     //
-    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
-      logwrite( function, "ERROR: Python function not callable" );
-      return( ERROR );
-    }
-
     PyObject* pReturn = PyObject_CallObject( pFunction, pArgList );
+
+    Py_XDECREF( pFunction );
+    Py_DECREF( pArgList );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      message.str(""); message << "ERROR calling Python function: " << PYTHON_FPOFFSETS_FUNCTION;
+      logwrite( function, message.str() );
+      PyErr_Print();
+      PyGILState_Release(gstate);
+      return ERROR;
+    }
 
     // Expected back a tuple
     //
     if ( !PyTuple_Check( pReturn ) ) {
       logwrite( function, "ERROR: did not receive a tuple" );
-      return( ERROR );
+      Py_DECREF( pReturn );
+      PyGILState_Release(gstate);
+      return ERROR;
     }
 
     int tuple_size = PyTuple_Size( pReturn );
@@ -154,24 +173,38 @@ namespace SkyInfo {
       PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
       if ( PyFloat_Check( pItem ) ) {
         switch ( tuplen ) {
-          case 0: this->coords_out.ra    = PyFloat_AsDouble( pItem ); break;
-          case 1: this->coords_out.dec   = PyFloat_AsDouble( pItem ); break;
-          case 2: this->coords_out.angle = PyFloat_AsDouble( pItem ); break;
+          case 0: this->coords_out.ra    = PyFloat_AsDouble( pItem );
+                  break;
+          case 1: this->coords_out.dec   = PyFloat_AsDouble( pItem );
+                  break;
+          case 2: this->coords_out.angle = PyFloat_AsDouble( pItem );
+                  break;
           default:
             message.str(""); message << "ERROR unexpected tuple item " << tuplen << ": expected {0,1,2}";
             logwrite( function, message.str() );
-            return( ERROR );
-            break;
+            Py_DECREF( pReturn );
+            PyGILState_Release( gstate );
+            return ERROR;
         }
       }
+      else {
+        message.str(""); message << "ERROR tuple item " << tuplen << " not a float";
+        logwrite( function, message.str() );
+        Py_DECREF( pReturn );
+        PyGILState_Release( gstate );
+        return ERROR;
+      }
     }
+
+    Py_DECREF( pReturn );
 
     // Checking after extracting, because it may allow for partial extraction
     //
     if ( tuple_size != 3 ) {
       message.str(""); message << "ERROR unexpected 3 tuple items but received " << tuple_size;
       logwrite( function, message.str() );
-      return( ERROR );
+      PyGILState_Release( gstate );
+      return ERROR;
     }
 
 //#ifdef LOGLEVEL_DEBUG
@@ -180,6 +213,8 @@ namespace SkyInfo {
                              << " .angle=" << this->coords_out.angle << " deg";
     logwrite( function, message.str() );
 //#endif
+
+    PyGILState_Release( gstate );
 
     return NO_ERROR;
   }
@@ -215,15 +250,27 @@ namespace SkyInfo {
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
-      return( ERROR );
+      return ERROR;
     }
 
-    if ( this->pModule==NULL ) {
+    if ( this->pModule == nullptr ) {
       logwrite( function, "ERROR: Python module not imported" );
-      return( ERROR );
+      return ERROR;
     }
+
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
     PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_SOLVEOFFSETDEG_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      message.str(""); message << "ERROR Python function " << PYTHON_SOLVEOFFSETDEG_FUNCTION << " not callable";;
+      logwrite( function, message.str() );
+      Py_XDECREF( pFunction );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
 
     // Build up the PyObject argument list that will be passed to the function
     //
@@ -231,18 +278,26 @@ namespace SkyInfo {
 
     // Call the Python function here
     //
-    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
-      logwrite( function, "ERROR: Python function not callable" );
-      return( ERROR );
-    }
-
     PyObject* pReturn = PyObject_CallObject( pFunction, pArgList );
+
+    Py_XDECREF( pFunction );
+    Py_DECREF( pArgList );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      message.str(""); message << "ERROR calling Python function: " << PYTHON_SOLVEOFFSETDEG_FUNCTION;
+      logwrite( function, message.str() );
+      PyErr_Print();
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
 
     // Expected back a tuple
     //
     if ( !PyTuple_Check( pReturn ) ) {
       logwrite( function, "ERROR: did not receive a tuple" );
-      return( ERROR );
+      Py_DECREF( pReturn );
+      PyGILState_Release( gstate );
+      return ERROR;
     }
 
     int tuple_size = PyTuple_Size( pReturn );
@@ -253,23 +308,36 @@ namespace SkyInfo {
       PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
       if ( PyFloat_Check( pItem ) ) {
         switch ( tuplen ) {
-          case 0: ra_off  = PyFloat_AsDouble( pItem ); break;
-          case 1: dec_off = PyFloat_AsDouble( pItem ); break;
+          case 0: ra_off  = PyFloat_AsDouble( pItem );
+                  break;
+          case 1: dec_off = PyFloat_AsDouble( pItem );
+                  break;
           default:
             message.str(""); message << "ERROR unexpected tuple item " << tuplen << ": expected {0,1}";
             logwrite( function, message.str() );
-            return( ERROR );
-            break;
+            Py_DECREF( pReturn );
+            PyGILState_Release( gstate );
+            return ERROR;
         }
       }
+      else {
+        message.str(""); message << "ERROR tuple item " << tuplen << " not a float";
+        logwrite( function, message.str() );
+        Py_DECREF( pReturn );
+        PyGILState_Release( gstate );
+        return ERROR;
+      }
     }
+
+    Py_DECREF( pReturn );
+    PyGILState_Release( gstate );
 
     // Checking after extracting, because it may allow for partial extraction
     //
     if ( tuple_size != 2 ) {
       message.str(""); message << "ERROR expected 2 tuple items but received " << tuple_size;
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
 #ifdef LOGLEVEL_DEBUG

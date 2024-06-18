@@ -17,9 +17,10 @@ namespace TCS {
    * @brief      list configured TCS devices
    * @param[in]  arg        arg used only for requesting help
    * @param[out] retstring  reference to string to contain the list of devices
+   * @return     NO_ERROR | HELP
    *
    */
-  void Interface::list( const std::string &arg, std::string &retstring ) {
+  long Interface::list( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::list";
     std::stringstream message;
 
@@ -30,12 +31,12 @@ namespace TCS {
       retstring.append( " \n" );
       retstring.append( "  List configured TCS devices.\n" );
       retstring.append( "  Format will be <name> <host>:<port> <connected>, one per line.\n" );
-      return;
+      return HELP;
     }
 
     message << "name host:port connected\n";
 
-    for ( auto const &[key,val] : this->tcsmap ) {
+    for ( const auto &[key,val] : this->tcsmap ) {
       message << val.name() << " " 
               << val.host() << ":" 
               << val.port() << " "
@@ -44,7 +45,7 @@ namespace TCS {
 
     retstring = message.str();
 
-    return;
+    return NO_ERROR;
   }
   /***** TCS::Interface::list *************************************************/
 
@@ -55,9 +56,10 @@ namespace TCS {
    * @details    same as list except all results come out on a single line
    * @param[in]  arg        arg used only for requesting help
    * @param[out] retstring  reference to string to contain the list of devices
+   * @return     NO_ERROR | HELP
    *
    */
-  void Interface::llist( const std::string &arg, std::string &retstring ) {
+  long Interface::llist( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::llist";
     std::stringstream message, asyncmsg;
 
@@ -69,11 +71,11 @@ namespace TCS {
       retstring.append( "  List configured TCS devices.\n" );
       retstring.append( "  Format will be <name> <host>:<port> <connected>, for each device,\n" );
       retstring.append( "  separated by a comma (all on a single line, including the DONE|ERROR).\n" );
-      return;
+      return HELP;
     }
 
     int count=0;
-    for ( auto const &[key,val] : this->tcsmap ) {
+    for ( const auto &[key,val] : this->tcsmap ) {
       if ( count++ > 0 ) message << ",";  // add a comma separator if coming through here again
       message << val.name() << " " 
               << val.host() << ":" 
@@ -86,7 +88,7 @@ namespace TCS {
     asyncmsg << "TCSD:llist:" << retstring;
     this->async.enqueue( asyncmsg.str() );
 
-    return;
+    return NO_ERROR;
   }
   /***** TCS::Interface::llist ************************************************/
 
@@ -95,7 +97,7 @@ namespace TCS {
   /**
    * @brief      opens the TCS socket connection
    * @param[in]  arg  contains what to open, real or sim
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::open( const std::string &arg, std::string &retstring ) {
@@ -111,23 +113,23 @@ namespace TCS {
       retstring.append( "  Open a connection to the specified TCS device, where\n" );
       retstring.append( "  <name> = { " );
       message.str("");
-      for ( auto const &[key,val] : this->tcsmap ) message << val.name() << " ";
+      for ( const auto &[key,val] : this->tcsmap ) message << val.name() << " ";
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Typically, a second call to open might not return an error but this function returns an error
     // on a second call to open because the user might be trying to open a different TCS, e.g.
     // opening the real while the sim is already open, so returning an error will catch that.
     //
-    for ( auto const &[key,val] : this->tcsmap ) {
+    for ( const auto &[key,val] : this->tcsmap ) {
       if ( val.isconnected() ) {
         message.str(""); message << "ERROR: connection already open to " << val.name() << " "
                                  << val.host() << ":" << val.port();
         logwrite( function, message.str() );
         retstring="already_open";
-        return( ERROR );
+        return ERROR;
       }
     }
 
@@ -137,7 +139,7 @@ namespace TCS {
       message.str(""); message << "ERROR: must specify a valid TCS name";
       logwrite( function, message.str() );
       retstring="missing_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     // Find the requested name in the tcsmap
@@ -148,7 +150,7 @@ namespace TCS {
       message.str(""); message << "ERROR: requested TCS name \"" << arg << "\" not found in configured list";
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     // initialize connection to the TCS
@@ -161,7 +163,7 @@ namespace TCS {
       message.str(""); message << "ERROR connecting to TCS " << tcsloc->first << " on "
                                << tcsloc->second.host() << ":" << tcsloc->second.port();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     message.str(""); message << "connected to " << tcsloc->second.name() << " "
@@ -173,10 +175,17 @@ namespace TCS {
 
     error = this->isopen( retstring );
 
-    asyncmsg << "TCSD:open:" << ( !retstring.empty() ? retstring : "ERROR" );
+    asyncmsg.str(""); asyncmsg << "TCSD:open:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
 
-    return( error );
+    // After opening, broadcast the name for the GUI
+    //
+    std::string tcsname;
+    this->get_name( "", tcsname );
+    asyncmsg.str(""); asyncmsg << "TCSD:name:" << tcsname;
+    this->async.enqueue( asyncmsg.str() );
+
+    return error;
   }
   /***** TCS::Interface::open *************************************************/
 
@@ -215,7 +224,7 @@ namespace TCS {
    * @brief      return the open status of the TCS
    * @param[in]  arg        input arg used for help
    * @param[out] retstring  reference to string contains open status
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * status string is either "false" or the name of the TCS if open.
    *
@@ -229,26 +238,19 @@ namespace TCS {
     if ( arg == "?" || arg == "help" ) {
       retstring = TCSD_ISOPEN;
       retstring.append( " \n" );
-      retstring.append( "  Returns the open status of the TCS. Response will\n" );
-      retstring.append( "  either be \"false\" if closed, or the name of the TCS\n" );
-      retstring.append( "  if open { real | sim }.\n" );
-      return( NO_ERROR );
+      retstring.append( "  Returns the open status of the TCS, true | false\n" );
+      return HELP;
     }
 
-    for ( auto const &[key,val] : this->tcsmap ) {
+    for ( const auto &[key,val] : this->tcsmap ) {
       if ( val.isconnected() ) {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] connection open to " << val.name() << " on "
-                                 << val.host() << ":" << val.port();
-        logwrite( function, message.str() );
-#endif
-        retstring = val.name();
-        return( NO_ERROR );
+        retstring = "true";       // Found a connected TCS
+        return NO_ERROR;          // so get out now.
       }
     }
 
     retstring = "false";
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** TCS::Interface::isopen ***********************************************/
 
@@ -264,7 +266,7 @@ namespace TCS {
     std::stringstream message, asyncmsg;
     long error = NO_ERROR;
 
-    for ( auto const &[key,val] : this->tcsmap ) {
+    for ( const auto &[key,val] : this->tcsmap ) {
       if ( val.isconnected() ) {
         message.str(""); message << "closing connection to " << val.name() << " "
                                  << val.host() << ":" << val.port();
@@ -274,9 +276,49 @@ namespace TCS {
       }
     }
 
-    return( error );
+    return error;
   }
   /***** TCS::Interface::close ************************************************/
+
+
+  /***** TCS::Interface::get_name *********************************************/
+  /**
+   * @brief      get the name of the currently connected TCS
+   * @param[in]  arg        used only to request help
+   * @param[out] retstring  contains name of tcs { tcs | sim } or not_connected
+   * @return     NO_ERROR | HELP
+   *
+   */
+  long Interface::get_name( const std::string &arg, std::string &retstring ) {
+    std::string function = "TCS::Interface::get_name";
+    std::stringstream message, asyncmsg;
+
+    // Help
+    //
+    if ( arg == "?" || arg == "help" ) {
+      retstring = TCSD_GET_NAME;
+      retstring.append( " \n" );
+      retstring.append( "  Returns the name of the connected TCS: sim | tcs | not_connected\n" );
+      return HELP;
+    }
+
+    for ( const auto &[key,val] : this->tcsmap ) {
+      if ( val.isconnected() ) {
+        message.str(""); message << "connection open to " << val.name() << " on "
+                                 << val.host() << ":" << val.port();
+        logwrite( function, message.str() );
+        retstring = val.name();  // Found the connected TCS
+        break;                   // so get out now!
+      }
+    }
+    if ( retstring.empty() ) retstring="not_connected";
+
+    asyncmsg << "TCSD:name:" << ( !retstring.empty() ? retstring : "ERROR" );
+    this->async.enqueue( asyncmsg.str() );
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_name *********************************************/
 
 
   /***** TCS::Interface::get_weather_coords ***********************************/
@@ -285,7 +327,7 @@ namespace TCS {
    * @details    uses the ?WEATHER command, pulls out just the RA and DEC
    * @param[in]  arg        used only to request help
    * @param[out] retstring  contains space-delimited ra dec
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get_weather_coords( const std::string &arg, std::string &retstring ) {
@@ -300,7 +342,7 @@ namespace TCS {
       retstring = TCSD_WEATHER_COORDS;
       retstring.append( " \n" );
       retstring.append( "  Return the current decimal RA DEC as h.hhhhhhhh d.dddddddd\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Send the WEATHER command to the TCS. This returns a string of key=val pairs
@@ -358,7 +400,7 @@ namespace TCS {
    *             returns them as "hh:mm:ss.ss dd:mm:ss.ss"
    * @param[in]  arg        used only to request help
    * @param[out] retstring  contains space-delimited ra dec
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get_coords( const std::string &arg, std::string &retstring ) {
@@ -372,7 +414,7 @@ namespace TCS {
       retstring = TCSD_GET_COORDS;
       retstring.append( " \n" );
       retstring.append( "  Return the current RA DEC as hh:mm:ss.ss dd:mm:ss.ss\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Send the REQPOS command to the TCS. This returns a string that looks like:
@@ -434,7 +476,7 @@ namespace TCS {
 
     if ( !retstring.empty() ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:getcoords:" << ( !retstring.empty() ? retstring : "ERROR" );
+    asyncmsg << "TCSD:coords:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
 
     return error;
@@ -449,7 +491,7 @@ namespace TCS {
    *             returns as "ddd.dd"
    * @param[in]  arg        used only to request help
    * @param[out] retstring  contains cass ring angle
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get_cass( const std::string &arg, std::string &retstring ) {
@@ -464,7 +506,7 @@ namespace TCS {
       retstring = TCSD_GET_CASS;
       retstring.append( " \n" );
       retstring.append( "  Return the current cass ring angle\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Send the REQSTAT command to the TCS. This returns a string that looks like:
@@ -531,7 +573,7 @@ namespace TCS {
 
     if ( !retstring.empty() ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:getcass:" << ( !retstring.empty() ? retstring : "ERROR" );
+    asyncmsg << "TCSD:cassangle:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
 
     return error;
@@ -546,7 +588,7 @@ namespace TCS {
    *             returns them as "<domeazi> <telazi>"
    * @param[in]  arg        used only to request help
    * @param[out] retstring  contains space-delimited ra dec
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get_dome( const std::string &arg, std::string &retstring ) {
@@ -561,7 +603,7 @@ namespace TCS {
       retstring = TCSD_GET_DOME;
       retstring.append( " \n" );
       retstring.append( "  Return the dome and telescope azimuth positions.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Send the WEATHER command to the TCS. This returns a string of key=val pairs
@@ -603,7 +645,7 @@ namespace TCS {
 
     if ( !retstring.empty() ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:getdome:" << ( !retstring.empty() ? retstring : "ERROR" );
+    asyncmsg << "TCSD:dome:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
 
     return error;
@@ -617,7 +659,7 @@ namespace TCS {
    * @details    uses the FOCUSGO command
    * @param[in]  arg        requested focus value
    * @param[out] retstring  reference to return string for the command sent to the TCS
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::set_focus( const std::string &arg, std::string &retstring ) {
@@ -631,7 +673,7 @@ namespace TCS {
       retstring = TCSD_SET_FOCUS;
       retstring.append( " <value>\n" );
       retstring.append( "  Set the telescope focus position in mm within range {1:74}\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     if ( arg.empty() ) { retstring="missing_argument"; return ERROR; }
@@ -655,14 +697,14 @@ namespace TCS {
     if ( std::isnan(value) ) {
       logwrite( function, "ERROR: requested focus is NaN" );
       retstring="bad_value";
-      return( ERROR );
+      return ERROR;
     }
 
     if ( value < 1.0 || value > 74.0 ) {
       message.str(""); message << "ERROR requested focus " << value << " outside range { 1:74 }";
       logwrite( function, message.str() );
       retstring="outside_range";
-      return( ERROR );
+      return ERROR;
     }
 
     std::stringstream cmd;
@@ -672,9 +714,6 @@ namespace TCS {
     if ( error != ERROR ) error = this->send_command( cmd.str(), retcode );
 
     this->parse_reply_code( retcode, retstring );
-
-    asyncmsg << "TCSD:focusgo:" << retstring;
-    this->async.enqueue( asyncmsg.str() );
 
     return error;
   }
@@ -703,7 +742,7 @@ namespace TCS {
    *             returns as "dd.dd". Set arg="poll" to suppress logging.
    * @param[in]  arg        input arg { help | poll }
    * @param[out] retstring  contains focus position.
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get_focus( const std::string &arg, std::string &retstring ) {
@@ -718,7 +757,7 @@ namespace TCS {
       retstring = TCSD_GET_FOCUS;
       retstring.append( " \n" );
       retstring.append( "  Return the current telescope focus position in mm\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     bool silent = false;                 // logging enabled by default
@@ -793,7 +832,7 @@ namespace TCS {
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:getfocus:" << ( !retstring.empty() ? retstring : "ERROR" );
+    asyncmsg << "TCSD:focus:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
 
     return error;
@@ -807,7 +846,7 @@ namespace TCS {
    * @details    uses the ?MOTION command, returns a string instead of a code
    * @param[in]  arg        used only to request help
    * @param[out] retstring  contains the motion state string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get_motion( const std::string &arg, std::string &retstring ) {
@@ -822,7 +861,7 @@ namespace TCS {
       retstring = TCSD_GET_MOTION;
       retstring.append( " \n" );
       retstring.append( "  Return the current motion state of the TCS\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     std::string motion;
@@ -869,7 +908,7 @@ namespace TCS {
                                   break;
     }
 
-    asyncmsg << "TCSD:getmotion:" << ( !retstring.empty() ? retstring : "ERROR" );
+    asyncmsg << "TCSD:motion:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
 
     return error;
@@ -883,7 +922,7 @@ namespace TCS {
    * @details    wraps the RINGGO command to ensure the value is within range
    * @param[in]  arg        requested angle string
    * @param[out] retstring  reference to return string for the command sent to the TCS
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::ringgo( const std::string &arg, std::string &retstring ) {
@@ -902,7 +941,7 @@ namespace TCS {
       retstring.append( "  Rotate the cass ring to the specified angle in degrees.\n" );
       retstring.append( "  If the angle is available in more than one turn of the ring,\n" );
       retstring.append( "  the shortest move will be taken.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     if ( arg.empty() ) { retstring="missing_argument"; return ERROR; }
@@ -957,9 +996,6 @@ namespace TCS {
 
     this->parse_reply_code( retcode, retstring );
 
-    asyncmsg << "TCSD:ringgo:" << retstring;
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::ringgo ***********************************************/
@@ -971,7 +1007,7 @@ namespace TCS {
    * @details    wraps the COORDS command to provide a friendly reply
    * @param[in]  args       requested angle string
    * @param[out] retstring  reference to return string for the command sent to the TCS
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::coords( std::string args, std::string &retstring ) {
@@ -992,7 +1028,7 @@ namespace TCS {
       retstring.append( "  1: offset tracking rates in arcsec/hr\n" );
       retstring.append( "  2: offset tracking rates in sec/hr, arcsec/hr\n" );
       retstring.append( "  Optional targetname must be in double quotes, if supplied.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // check minimum/maximum number of arguments
@@ -1032,7 +1068,7 @@ namespace TCS {
     if ( this->name.empty() ) {
       message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to the TCS" ;
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // Find the currently opened TCS (this->name) in the tcsmap.
@@ -1045,7 +1081,7 @@ namespace TCS {
     if ( tcs_loc == tcsmap.end() ) {
       message.str(""); message << "ERROR sending \"" << cmd << "\": no TCS " << this->name << " not configured";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // Is it connected?
@@ -1054,7 +1090,7 @@ namespace TCS {
       message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to TCS " << this->name;
       logwrite( function, message.str() );
       tcs_loc->second.close();
-      return( ERROR );
+      return ERROR;
     }
 
     // TCS is good, send the command, read the reply
@@ -1062,10 +1098,10 @@ namespace TCS {
     if ( tcs_loc->second.send( cmd, reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS on fd " << tcs_loc->second.fd();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** TCS::Interface::send_command *****************************************/
 

@@ -365,7 +365,7 @@ bool Camera::get_abortstate() {
     // Loop through each requested subdirectory to check if they exist.
     // Try to create them if they don't exist.
     //
-    for ( auto tok : tokens ) {
+    for ( const auto &tok : tokens ) {
 
       // The next directory to create --
       // start from the bottom and append each successive token.

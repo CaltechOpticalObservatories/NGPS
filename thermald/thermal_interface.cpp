@@ -82,7 +82,7 @@ namespace Thermal {
   long Interface::close_lakeshores() {
     std::string function = "Thermal::Interface::close_lakeshores";
     std::stringstream message;
-    for ( auto const &lakeshore : this->lakeshore ) {
+    for ( const auto &lakeshore : this->lakeshore ) {
       if ( lakeshore.second.lks->close() == ERROR ) {
         message.str(""); message << "ERROR: closing Lakeshore " << lakeshore.second.lks->get_name();
         logwrite( function, message.str() );
@@ -208,20 +208,20 @@ namespace Thermal {
       retstream << THERMALD_GET << " <label> | <unit> <chan>\n"  // usage
                 << "  Returns temperature of channel specified by <label> or <unit> <chan> using...\n";
 
-      for ( auto lakeshore_it : this->lakeshore ) {              // loop through all lakeshores
+      for ( const auto &lakeshore_it : this->lakeshore ) {          // loop through all lakeshores
         retstream << "\n";
         retstream << "    unit: ";
         retstream << lakeshore_it.first << " (" << lakeshore_it.second.lks->get_name() << ")\n";  // unit and name
         retstream << "   chans: ";
 
-        for ( auto &temp : lakeshore_it.second.temp_info ) {     // loop through all tempchans for this lakeshore
-          retstream << temp.first << " ";                        // temp chan
+        for ( const auto &temp : lakeshore_it.second.temp_info ) {  // loop through all tempchans for this lakeshore
+          retstream << temp.first << " ";                           // temp chan
         }
         retstream << "\n";
         retstream << "  labels: ";
 
-        for ( auto &temp : lakeshore_it.second.temp_info ) {     // loop through all tempchans for this lakeshore
-          retstream << temp.second << " ";                       // temp label
+        for ( const auto &temp : lakeshore_it.second.temp_info ) {  // loop through all tempchans for this lakeshore
+          retstream << temp.second << " ";                          // temp label
         }
       }
       retstream << "\n";
@@ -273,7 +273,7 @@ namespace Thermal {
       retstream << THERMALD_SETPOINT << " <unit> <output> [ <temp> ]\n\n";  // usage
 
       retstream << "  known <unit>: ";
-      for ( auto lks_it : this->lakeshore ) {             // loop through all lakeshores
+      for ( const auto &lks_it : this->lakeshore ) {             // loop through all lakeshores
         retstream << lks_it.first << " (" << lks_it.second.lks->get_name() << ")\n";  // unit and name
         retstream << "                ";
       }
@@ -377,7 +377,7 @@ namespace Thermal {
       retstream << " <unit> <cmd> [ <args> ]\n";
       retstream << "  Sends <cmd> and optional <args> to Lakeshore designated by <unit>\n";
       retstream << "  where <unit>: ";
-      for ( auto lks_it : this->lakeshore ) {          // loop through all lakeshores
+      for ( const auto &lks_it : this->lakeshore ) {   // loop through all lakeshores
         retstream << lks_it.first;
         retstream << " (" << lks_it.second.lks->get_name() << ")\n";
         retstream << "                ";
@@ -426,7 +426,7 @@ namespace Thermal {
 
       // Loop through all configured temperature channels for this Lakeshore.
       //
-      for ( auto & temp : lakeshore_it->second.temp_info ) {
+      for ( const auto &temp : lakeshore_it->second.temp_info ) {
         float fvalue = NAN;
         if ( lakeshore_it->second.read_temp( temp.first, fvalue ) == ERROR ) {
           message.str(""); message << "ERROR reading from Lakeshore " 
@@ -443,7 +443,7 @@ namespace Thermal {
 
       // Loop through all configured heater channels for this Lakeshore.
       //
-      for ( auto & heat : lakeshore_it->second.heat_info ) {
+      for ( const auto &heat : lakeshore_it->second.heat_info ) {
         float fvalue = NAN;
         if ( lakeshore_it->second.read_heat( heat.first, fvalue ) == ERROR ) {
           message.str(""); message << "ERROR reading from Lakeshore " 

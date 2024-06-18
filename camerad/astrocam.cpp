@@ -16,6 +16,11 @@ extern Camera::Server server;
 
 namespace AstroCam {
 
+  long NewAstroCam::new_expose( std::string nseq_in ) {
+    logwrite( "NewAstroCam::new_expose", nseq_in );
+    return( NO_ERROR );
+  }
+
   /***** AstroCam::Callback::exposeCallback ***********************************/
   /**
    * @brief      called by CArcDevice::expose() during the exposure
@@ -327,7 +332,7 @@ namespace AstroCam {
 
     // Check that READOUT has a match in the list of known readout amps.
     //
-    for ( auto source : this->readout_source ) {
+    for ( const auto &source : this->readout_source ) {
       if ( source.first.compare( amp ) == 0 ) {     // found a match
         readout_valid = true;
         readout_arg  = source.second.readout_arg;   // get the arg associated with this match
@@ -336,7 +341,7 @@ namespace AstroCam {
     }
     if ( !readout_valid || readout_type==-1 || readout_arg==0xBAD ) {
       message.str(""); message << "ERROR: bad READOUT " << amp << " for CHAN " << chan << ". Expected { ";
-      for ( auto source : this->readout_source ) message << source.first << " ";
+      for ( const auto &source : this->readout_source ) message << source.first << " ";
       message << "}";
       logwrite( function, message.str() );
       return( ERROR );
@@ -467,7 +472,7 @@ namespace AstroCam {
     // If it succeeded then all we have is a number >= 0.
     // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
-    for ( auto &con : this->controller ) {
+    for ( const auto &con : this->controller ) {
       if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
         chan = tryme;
@@ -497,7 +502,7 @@ namespace AstroCam {
     std::string function = "AstroCam::Interface::do_abort";
     std::stringstream message;
 //  int this_expbuf = this->get_expbuf();
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       this->exposure_pending( dev, false );
       for ( int buf=0; buf < NUM_EXPBUF; ++buf ) this->write_pending( buf, dev, false );
     }
@@ -508,13 +513,13 @@ namespace AstroCam {
 
   /***** AstroCam::Interface::do_bin ******************************************/
   /**
-   * @brief      opens a connection to the PCI/e device(s)
+   * @brief      set/get binning factor
    * @details    Since binning is set together with all image parameters, this
    *             function will call image_size(), and using this function is
    *             a convenience so that the user can change only binning.
    * @param[in]  args        argument string contains <axis> [<factor>]
    * @param[out] retstring   reference to string to return error or help
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::do_bin( std::string args, std::string &retstring ) {
@@ -533,12 +538,12 @@ namespace AstroCam {
       retstring.append( "  Specify <axis> from { " );
       message.str("");
       message << "row col ";
-//    for ( auto &con : this->controller ) {
+//    for ( const auto &con : this->controller ) {
 //      message << con.second.channel << " ";
 //    }
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // If no connected devices then nothing to do here
@@ -555,7 +560,7 @@ namespace AstroCam {
       std::vector<int> pending = this->exposure_pending_list();
       message.str(""); message << "ERROR: cannot change binning while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
-      for ( auto dev : pending ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : pending ) message << this->controller[dev].channel << " ";
       this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
       retstring="exposure_in_progress";
       return(ERROR);
@@ -593,7 +598,7 @@ namespace AstroCam {
           return( ERROR );
         }
 
-        // Make a copy of the class binning and override that with the
+        // Make a copy of the class binning and update that with the
         // axis being set here. The class is not updated here because
         // that is done in image_size().
         //
@@ -606,7 +611,7 @@ namespace AstroCam {
         // must be resized for binning, set the image size for each device.
         // This uses the existing image size parameters and the new binning.
         //
-        for ( auto dev : this->devlist ) {
+        for ( const auto &dev : this->devlist ) {
           message.str("");
           message << dev << " "
                   << this->controller[dev].detrows << " "
@@ -647,7 +652,7 @@ namespace AstroCam {
    * @brief      opens a connection to the PCI/e device(s)
    * @param[in]  devices_in  optional string containing space-delimited list of devices
    * @param[out] retstring   reference to string to return error or help
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * Input parameter devices_in defaults to empty string which will attempt to
    * connect to all detected devices.
@@ -678,7 +683,7 @@ namespace AstroCam {
       retstring.append( "  e.g. \"0 1\" to open PCI devices 0 and 1\n" );
       retstring.append( "  If no list is provided then all detected devices will be opened.\n" );
       retstring.append( "  Opening an ARC device requires that the controller is present and powered on.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Find the installed devices
@@ -716,7 +721,7 @@ namespace AstroCam {
       return( ERROR );
     }
 
-    for ( auto dev : this->configdev ) {
+    for ( const auto &dev : this->configdev ) {
       message.str(""); message << "device " << dev << " configured";
       logwrite( function, message.str() );
     }
@@ -735,7 +740,7 @@ namespace AstroCam {
     else {
       std::vector<std::string> tokens;
       Tokenize(devices_in, tokens, " ");
-      for ( auto n : tokens ) {                       // For each token in the devices_in string,
+      for ( const auto &n : tokens ) {                // For each token in the devices_in string,
         try {
           int dev = std::stoi( n );                   // convert to int
           if ( std::find( this->devlist.begin(), this->devlist.end(), dev ) == this->devlist.end() ) { // If it's not already in the vector,
@@ -761,7 +766,7 @@ namespace AstroCam {
     // For each requested dev in devlist, if there is a matching controller in the config file,
     // then get the devname and store it in the controller map.
     //
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       if ( this->controller.find( dev ) != this->controller.end() ) {
         this->controller[ dev ].devname = devNames[dev];
       }
@@ -793,17 +798,27 @@ namespace AstroCam {
         // (otherwise just reset and test connection)
         //
         if ( ! this->controller[dev].connected ) {
-          message.str(""); message << "opening " << this->controller[dev].devname; logwrite(function, message.str());
+          message.str(""); message << "opening " << this->controller[dev].devname;
+          logwrite(function, message.str());
           this->controller[dev].pArcDev->open(dev);
         }
         else {
-          message.str(""); message << this->controller[dev].devname << " already open"; logwrite(function, message.str());
+          message.str(""); message << this->controller[dev].devname << " already open";
+          logwrite(function, message.str());
         }
 
         // Reset the PCI device
         //
-        message.str(""); message << "resetting " << this->controller[dev].devname; logwrite(function, message.str());
-        this->controller[dev].pArcDev->reset();
+        message.str(""); message << "resetting " << this->controller[dev].devname;
+        logwrite(function, message.str());
+        try {
+          this->controller[dev].pArcDev->reset();
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR resetting " << this->controller[dev].devname << ": " << e.what();
+          logwrite(function, message.str());
+          error = ERROR;
+        }
 
         // Is Controller Connected?  (tested with a TDL command)
         //
@@ -859,7 +874,7 @@ namespace AstroCam {
     // Log the list of connected devices
     //
     message.str(""); message << "connected devices { ";
-    for (auto devcheck : this->devlist) { message << devcheck << " "; } message << "}";
+    for (const auto &devcheck : this->devlist) { message << devcheck << " "; } message << "}";
     logwrite(function, message.str());
 
     // check the size of the devlist now, against the size requested
@@ -994,7 +1009,7 @@ namespace AstroCam {
 
     // look through all connected devices
     //
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       if ( this->controller.find( dev ) != this->controller.end() ) nopen++;
 #ifdef LOGLEVEL_DEBUG
         message.str(""); message << "[DEBUG] " << this->controller[dev].devname << " is " << ( this->controller[dev].connected ? "connected" : "disconnected" );
@@ -1168,7 +1183,7 @@ namespace AstroCam {
   long Interface::do_native( std::string cmdstr ) {
     std::string retstring;
     std::vector<uint32_t> selectdev;
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
     }
     return this->do_native( selectdev, cmdstr, retstring );
@@ -1218,7 +1233,7 @@ namespace AstroCam {
    */
   long Interface::do_native( std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
     }
     return this->do_native( selectdev, cmdstr, retstring );
@@ -1232,7 +1247,7 @@ namespace AstroCam {
    * @param[in]  selectdev  vector of devices to use
    * @param[in]  cmdstr     string containing command and arguments
    * @param[out] retstring  reference to string to contain reply
-   * @return     NO_ERROR on success, ERROR on error
+   * @return     NO_ERROR | ERROR | HELP
    *
    */
   long Interface::do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring ) {
@@ -1262,7 +1277,7 @@ namespace AstroCam {
       retstring.append( "  send 3-letter command <CMD> with up to four optional args to all open ARC controllers\n" );
       retstring.append( "  Input <CMD> is not case-sensitive and any values default to base-10\n" );
       retstring.append( "  unless preceeded by 0x to indicate base-16 (e.g. rdm 0x400001).\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Ensure command and args are uppercase
@@ -1313,7 +1328,7 @@ namespace AstroCam {
       // convert each arg into a number and push into cmd vector
       //
       tokens.erase( tokens.begin() );                 // first, erase the command from the tokens
-      for ( auto tok : tokens ) {
+      for ( const auto &tok : tokens ) {
         cmd.push_back( (uint32_t)parse_val( tok ) );  // then push each converted arg into cmd vector
       }
 
@@ -1321,12 +1336,12 @@ namespace AstroCam {
       //
       message.str("");   message << "sending command:"
                                  << std::setfill('0') << std::setw(2) << std::hex << std::uppercase;
-      for (auto arg : cmd) message << " 0x" << arg;
+      for (const auto &arg : cmd) message << " 0x" << arg;
       logwrite(function, message.str());
     }
     catch(std::out_of_range &) {  // should be impossible but here for safety
       message.str(""); message << "ERROR: unable to parse command ";
-      for (auto check : tokens) message << check << " ";
+      for (const auto &check : tokens) message << check << " ";
       message << ": out of range";
       logwrite(function, message.str());
       retstring="out_of_range";
@@ -1344,7 +1359,7 @@ namespace AstroCam {
     //
     {                                       // start local scope for this stuff
     std::vector<std::thread> threads;       // local scope vector stores all of the threads created here
-    for ( auto dev : selectdev ) {          // spawn a thread for each device in selectdev
+    for ( const auto &dev : selectdev ) {   // spawn a thread for each device in selectdev
       std::thread thr( std::ref(AstroCam::Interface::dothread_native), std::ref(this->controller[dev]), cmd );
       threads.push_back(std::move(thr));    // push the thread into a vector
     }
@@ -1376,7 +1391,7 @@ namespace AstroCam {
     }
 
     bool allsame = true;
-    for ( auto dev : selectdev ) { if (this->controller[dev].retval != check_retval) { allsame = false; } }
+    for ( const auto &dev : selectdev ) { if (this->controller[dev].retval != check_retval) { allsame = false; } }
 
     // If all the return values are equal then return only one value...
     //
@@ -1388,7 +1403,7 @@ namespace AstroCam {
     //
     else {
       std::stringstream rs;
-      for ( auto dev : selectdev ) {
+      for ( const auto &dev : selectdev ) {
         this->retval_to_string( this->controller[dev].retval, retstring );          // this sets retstring = to_string( retval )
         rs << std::dec << this->controller[dev].devnum << ":" << retstring << " ";  // build up a stringstream of each controller's reply
       }
@@ -1398,7 +1413,7 @@ namespace AstroCam {
     // Log the return values
     ///< TODO @todo need a way to send these back to the calling function
     //
-    for ( auto dev : selectdev ) {
+    for ( const auto &dev : selectdev ) {
       message.str(""); message << this->controller[dev].devname << " returns " << std::dec << this->controller[dev].retval
                                << " (0x" << std::hex << std::uppercase << this->controller[dev].retval << ")";
       logwrite(function, message.str());
@@ -1951,7 +1966,7 @@ namespace AstroCam {
       logwrite(function, message.str());
       return(ERROR);
     }
-    for (auto dev : this->devlist) {        // spawn a thread for each device in devlist
+    for (const auto &dev : this->devlist) {        // spawn a thread for each device in devlist
       try {
         int rows = this->controller[dev].rows;
         int cols = this->controller[dev].cols;
@@ -2015,7 +2030,7 @@ namespace AstroCam {
       }
       catch( std::out_of_range & ) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for ( auto check : this->devlist ) message << check << " ";
+        for ( const auto &check : this->devlist ) message << check << " ";
         message << "}";
         logwrite( function, message.str() );
         return( ERROR );
@@ -2098,7 +2113,7 @@ namespace AstroCam {
       std::vector<int> pending = this->exposure_pending_list();
       message.str(""); message << "ERROR: cannot start new exposure while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
-      for ( auto dev : pending ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : pending ) message << this->controller[dev].channel << " ";
       this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
       return(ERROR);
     }
@@ -2151,7 +2166,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
     // check readout type
     //
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       if ( this->controller[ dev ].info.readout_name.empty() ) {
         message.str(""); message << "ERROR: readout undefined";
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
@@ -2185,7 +2200,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
       // Set the extension = 0 for each controller
       //
-      for ( auto dev : this->devlist ) { this->controller[ dev ].info.extension = 0; }
+      for ( const auto &dev : this->devlist ) { this->controller[ dev ].info.extension = 0; }
     }
 
     if ( nseq > 1 ) {
@@ -2224,7 +2239,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // Each thread gets the exposure buffer number for the current exposure,
     // and a reference to "this" Interface object.
     //
-    for ( auto dev : this->devlist ) this->write_pending( this_expbuf, dev, true );
+    for ( const auto &dev : this->devlist ) this->write_pending( this_expbuf, dev, true );
     std::thread( std::ref(AstroCam::Interface::FITS_handler), this_expbuf, std::ref(*this) ).detach();
 
     {
@@ -2233,7 +2248,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // If it IS in frame transfer then only clear the CCD if the cameras are idle.
     //
     std::string retstr;
-    for ( auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       if ( this->camera_idle( dev ) ) {
         error = this->do_native( dev, "CLR", retstr );  // send the clear command here to this dev
         if ( error != NO_ERROR ) {
@@ -2289,13 +2304,13 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // and spawn a thread to monitor it, which will provide a notification
     // when ready for the next exposure.
     //
-    for ( auto dev : this->devlist ) this->exposure_pending( dev, true );
+    for ( const auto &dev : this->devlist ) this->exposure_pending( dev, true );
     this->state_monitor_condition.notify_all();
     std::thread( std::ref(AstroCam::Interface::dothread_monitor_exposure_pending), std::ref(*this) ).detach();
 
     // prepare the camera info class object for each controller
     //
-    for (auto dev : this->devlist) {        // spawn a thread for each device in devlist
+    for (const auto &dev : this->devlist) {        // spawn a thread for each device in devlist
       try {
 
         // Initialize a frame counter for each device. 
@@ -2339,7 +2354,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for (auto check : this->devlist) message << check << " ";
+        for (const auto &check : this->devlist) message << check << " ";
         message << "}";
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
@@ -2365,7 +2380,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "CUNIT1A", "Angstrom", "" );
     this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "CUNIT2A", "arcsec", "" );
 
-    for (auto dev : this->devlist) {        // spawn a thread for each device in devlist
+    for (const auto &dev : this->devlist) {        // spawn a thread for each device in devlist
       try {
         // copy the info class from controller[dev] to controller[dev].expinfo[expbuf]  -- kludge for now
         //
@@ -2401,7 +2416,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for (auto check : this->devlist) message << check << " ";
+        for (const auto &check : this->devlist) message << check << " ";
         message << "}";
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
@@ -2420,7 +2435,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
     logwrite( function, "[DEBUG] expose is done now!" );
 
-    for (auto dev : this->devlist) {
+    for (const auto &dev : this->devlist) {
       message.str(""); 
       message << std::dec
               << "** dev=" << dev << " type_set=" << this->controller[dev].info.type_set << " frame_type=" << this->controller[dev].info.frame_type
@@ -2437,7 +2452,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       logwrite( function, message.str() );
     }
 
-    for (auto dev : this->devlist) {
+    for (const auto &dev : this->devlist) {
       for ( int ii=0; ii<NUM_EXPBUF; ii++ ) {
         message.str(""); 
         message << std::dec
@@ -2470,7 +2485,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // That error would have been logged, but not returned here, since the thread functions
     // are necessarily static void.
     //
-    for (auto dev : this->devlist) {
+    for (const auto &dev : this->devlist) {
       try {
         if ( ( error = this->controller[dev].error ) != NO_ERROR ) break;
       }
@@ -2495,14 +2510,14 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
     // close the FITS file
     //
-    for (auto dev : this->devlist) {
+    for (const auto &dev : this->devlist) {
       try {
         this->controller[dev].close_file( this->camera.writekeys_when );
         if ( this->controller[dev].pFits->iserror() ) error = ERROR;   // allow error to be set (but not cleared)
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR closing FITS file: unable to find device " << dev << " in list: { ";
-        for (auto check : this->devlist) message << check << " ";
+        for (const auto &check : this->devlist) message << check << " ";
         message << "}";
         logwrite(function, message.str());
         error = ERROR;
@@ -2551,7 +2566,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // the form "<dev> <filename>" to pass to the do_load_firmware() function
     // to load each controller with the specified file.
     //
-    for ( auto &con : this->controller ) {
+    for ( const auto &con : this->controller ) {
       // But only use it if the device is open
       //
       if ( con.second.connected ) {
@@ -2638,7 +2653,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // into all controllers in the devlist.
     //
     if (tokens.size() == 1) {
-      for (auto dev : this->devlist) {
+      for (const auto &dev : this->devlist) {
         selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
       }
     }
@@ -2665,7 +2680,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       //
       std::vector<std::thread> threads;               // create a local scope vector for the threads
       int firstdev = -1;                              // first device in the list of connected controllers
-      for (auto dev : selectdev) {                    // spawn a thread for each device in the selectdev list
+      for (const auto &dev : selectdev) {             // spawn a thread for each device in the selectdev list
         if ( firstdev == -1 ) firstdev = dev;         // save the first device from the list of connected controllers
         try {
           if ( this->controller[dev].connected ) {    // but only if connected
@@ -2675,7 +2690,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
         }
         catch(std::out_of_range &) {
           message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-          for (auto check : selectdev) message << check << " ";
+          for (const auto &check : selectdev) message << check << " ";
           message << "}";
           logwrite(function, message.str());
           retstring="out_of_range";
@@ -2711,7 +2726,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       check_retval = this->controller[firstdev].retval;    // save the first one in the controller vector
 
       bool allsame = true;
-      for ( auto dev : selectdev ) { if ( this->controller[dev].retval != check_retval ) { allsame = false; } }
+      for ( const auto &dev : selectdev ) { if ( this->controller[dev].retval != check_retval ) { allsame = false; } }
 
       // If all the return values are equal then report only NO_ERROR (if "DON") or ERROR (anything else)
       //
@@ -2727,7 +2742,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       else {
         std::stringstream rss;
         std::string rs;
-        for (auto dev : selectdev) {
+        for (const auto &dev : selectdev) {
           this->retval_to_string( this->controller[dev].retval, rs );      // convert the retval to string (DON, ERR, etc.)
           rss << this->controller[dev].devnum << ":" << rs << " ";
         }
@@ -2738,7 +2753,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
 /***
 logwrite( function, "NOTICE: firmware loaded" );
-for ( auto dev : selectdev ) {
+for ( const auto &dev : selectdev ) {
   for ( auto it = this->controller[dev].extkeys.keydb.begin();
              it != this->controller[dev].extkeys.keydb.end(); it++ ) {
   message.str(""); message << "NOTICE: dev=" << dev << "key=" << it->second.keyword << " val=" << it->second.keyvalue;
@@ -2820,7 +2835,7 @@ for ( auto dev : selectdev ) {
    *             for doing the DMA transfers.
    * @param[in]  args      string containing <dev>|<chan> [ <bytes> | <rows> <cols> ]
    * @param[out] retstring reference to a string for return values
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * Function returns only ERROR or NO_ERROR on error or success. The 
    * reference to retstring is used to return the size of the allocated
@@ -2842,22 +2857,22 @@ for ( auto dev : selectdev ) {
       retstring.append( " <chan> | <dev#> [ <bytes> | <rows> <cols> ]\n" );
       retstring.append( "  Allocate PCI buffer space for performing DMA transfers for specified device.\n" );
       retstring.append( "  Provide either a single value in <bytes> or two values as <rows> <cols>.\n" );
-      retstring.append( "  If no args are supplied then the buffer size for dev#|chan is returned (in Bytes).\n" );
+      retstring.append( "  If no args supplied then buffer size for dev#|chan is returned (in Bytes).\n" );
       retstring.append( "  Specify <chan> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.channel << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
       retstring.append( "       or <dev#> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.devnum << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // If no connected devices then nothing to do here
@@ -2872,6 +2887,8 @@ for ( auto dev : selectdev ) {
     std::string chan;
 
     long error = this->extract_dev_chan( args, dev, chan, retstring );
+
+    if ( chan.empty() ) chan = "(empty)";
 
     auto it = this->controller.find( dev );
 
@@ -2919,12 +2936,17 @@ for ( auto dev : selectdev ) {
         con.pArcDev->reMapCommonBuffer( try_bufsize );
       }
       catch( const std::exception &e ) {
-        message.str(""); message << "ERROR: for dev " << dev << " chan " << chan << ": " << e.what();
+        message.str(""); message << "ERROR mapping buffer for dev " << dev << " chan " << chan << ": " << e.what();
         logwrite(function, message.str());
         retstring="arc_exception";
         return( ERROR );
       }
-      catch(...) { logwrite( function, "ERROR: unknown exception mapping memory" ); retstring="exception"; return( ERROR ); }
+      catch(...) {
+        message.str(""); message << "ERROR unknown exception mapping buffer for dev " << dev << " chan " << chan;
+        logwrite(function, message.str());
+        retstring="exception";
+        return( ERROR );
+      }
 
       con.set_bufsize( try_bufsize );  // save the new buffer size to the controller map for this dev
     }  // end if ! retstring.empty()
@@ -2941,7 +2963,7 @@ for ( auto dev : selectdev ) {
    * @brief      set or get type of readout
    * @param[in]  args       string containing <dev>|<chan> [ <amp> ]
    * @param[out] retstring  reference to a string for return values
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * Frame transfer mode is set here, based on the first two characters
    * of the readout name ("FT*" enables it).
@@ -2963,24 +2985,24 @@ for ( auto dev : selectdev ) {
       retstring.append( "  If optional amp is omitted then current amp is returned.\n" );
       retstring.append( "  Specify <chan> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.channel << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
       retstring.append( "       or <dev#> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.devnum << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
       message.str("");
       retstring.append( "  Specify <amp> from { " );
-      for ( auto type : this->readout_source ) message << type.first << " ";
+      for ( const auto &type : this->readout_source ) message << type.first << " ";
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     int dev;
@@ -3003,7 +3025,7 @@ for ( auto dev : selectdev ) {
       // readout amps. This list is an STL map. this->readout_source.first is the amplifier name,
       // and .second is the argument for the Arc 3-letter command.
       //
-      for ( auto source : this->readout_source ) {
+      for ( const auto &source : this->readout_source ) {
         if ( source.first.compare( readout_name ) == 0 ) {  // found a match
           readout_name_valid = true;
           readout_arg  = source.second.readout_arg;         // get the arg associated with this match
@@ -3158,7 +3180,7 @@ logwrite(function, message.str());
     }
     catch (std::out_of_range &) {
       message.str(""); message << "ERROR: unable to find device " << devnum << " in list: { ";
-      for (auto check : this->devlist) message << check << " ";
+      for (const auto &check : this->devlist) message << check << " ";
       message << "}";
       logwrite(function, message.str());
       error = ERROR;
@@ -3208,7 +3230,7 @@ logwrite(function, message.str());
       //
       if ( this->in_readout() ) {
         message.str(""); message << "ERROR: cannot change exposure time while reading out chan ";
-        for ( auto &con : this->controller ) {
+        for ( const auto &con : this->controller ) {
           if ( con.second.in_readout || con.second.in_frametransfer ) message << con.second.channel << " ";
         }
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
@@ -3421,7 +3443,7 @@ logwrite(function, message.str());
    *             the ARC API whether or not to open the shutter on expose.
    * @param[in]  shutter_in   requested shutter state
    * @param[out] shutter_out  reference to string for return status
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::shutter(std::string shutter_in, std::string& shutter_out) {
@@ -3445,7 +3467,7 @@ logwrite(function, message.str());
       shutter_out.append( "  state can be set or read.\n" );
       shutter_out.append( "\n" );
       shutter_out.append( "  See also \""+CAMERAD_TEST+" shutter\" for manual shutter operation.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Process an input argument to set the shutter enable/disable state
@@ -3469,14 +3491,14 @@ logwrite(function, message.str());
 
       // Set shutterenable the same for all devices
       //
-      if ( error == NO_ERROR ) for ( auto dev : this->devlist ) {
+      if ( error == NO_ERROR ) for ( const auto &dev : this->devlist ) {
         this->controller[dev].info.shutterenable = shutten;
       }
     }
 
     // Get shutterenable state from the controller class
     //
-    for ( auto dev : this->devlist ) {
+    for ( const auto &dev : this->devlist ) {
       this->camera_info.shutterenable = this->controller[dev].info.shutterenable;
       shutter_out = this->camera_info.shutterenable ? "enabled" : "disabled";
       break;  // just need one since they're all the same
@@ -3519,7 +3541,7 @@ logwrite(function, message.str());
    * @brief      set/get frame transfer mode
    * @param[in]  args       contains: <dev> | <chan> [ yes | no ]
    * @param[out] retstring  reference to string for return value
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * args contains the device# or channel and optionally yes|no
    * If yes|no is omitted then the current state for that chan/dev is returned.
@@ -3538,19 +3560,19 @@ logwrite(function, message.str());
       retstring.append( "  If optional yes|no is omitted then current state is returned.\n" );
       retstring.append( "  Specify <chan> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.channel << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
       retstring.append( "       or <dev#> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.devnum << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Get the devnum and channel from args.
@@ -3589,12 +3611,12 @@ logwrite(function, message.str());
   /***** AstroCam::Interface::image_size **************************************/
   /**
    * @brief      set/get image size parameters and allocate PCI memory
-   * @details    Sets/gets ROWS COLS OSROWS OSCOLS for a
+   * @details    Sets/gets ROWS COLS OSROWS OSCOLS BINROWS BINCOLS for a
    *             given device|channel. This calls geometry() and buffer() to
    *             set the image geometry on the controller and allocate a PCI buffer.
-   * @param[in]  args       contains DEV|CHAN [ [ ROWS COLS OSROWS OSCOLS ]
+   * @param[in]  args       contains DEV|CHAN [ [ ROWS COLS OSROWS OSCOLS BINROWS BINCOLS ]
    * @param[out] retstring  reference to string for return value
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::image_size( std::string args, std::string &retstring ) {
@@ -3608,23 +3630,24 @@ logwrite(function, message.str());
       retstring.append( " <chan> | <dev#> [ [ <rows> <cols> <osrows> <oscols> <binrows> <bincols> ]\n" );
       retstring.append( "  Configures image parameters used to set image size in the controller,\n" );
       retstring.append( "  allocate needed PCI buffer space and for FITS header keywords.\n" );
+      retstring.append( "  <bin____> represents the binning factor for each axis.\n" );
       retstring.append( "  Camera controller connection must first be open.\n" );
       retstring.append( "  If no args are supplied then the current parameters for dev|chan are returned.\n" );
       retstring.append( "  Specify <chan> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.channel << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
       retstring.append( "       or <dev#> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.devnum << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Don't allow any changes while any exposure activity is running.
@@ -3835,7 +3858,7 @@ logwrite(function, message.str());
    * @brief      set/get geometry
    * @param[in]  args       contains <dev>|<chan> [ <rows> <cols> ]
    * @param[out] retstring  reference to string for return value
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * The <rows> <cols> set here is the total number of rows and cols that
    * will be read, therefore this includes any pre/overscan pixels.
@@ -3856,19 +3879,19 @@ logwrite(function, message.str());
       retstring.append( "  If no args are supplied then the current geometry is returned.\n" );
       retstring.append( "  Specify <chan> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.channel << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
       retstring.append( "       or <dev#> from { " );
       message.str("");
-      for ( auto &con : this->controller ) {
+      for ( const auto &con : this->controller ) {
         message << con.second.devnum << " ";
       }
       message << "}\n";
       retstring.append( message.str() );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // If no connected devices then nothing to do here
@@ -4186,7 +4209,7 @@ logwrite(function, message.str());
 
       message.str(""); message << "NOTICE:exposure buffer " << expbuf << " waiting for frames from ";
       std::vector<int> pending = interface.writes_pending[ expbuf ];
-      for ( auto dev : pending ) message << interface.controller[dev].channel << " ";
+      for ( const auto &dev : pending ) message << interface.controller[dev].channel << " ";
       logwrite( function, message.str() );
 
       // wait() will repeatedly call this lambda function before actually entering
@@ -4560,6 +4583,11 @@ logwrite(function, message.str());
 
     std::string testname = tokens[0];                                // the first token is the test name
 
+    if ( testname == "newexpose" ) {
+      error = server.new_expose( "nseq" );
+    }
+    else
+
     // ----------------------------------------------------
     // fitsname
     // ----------------------------------------------------
@@ -4572,7 +4600,7 @@ logwrite(function, message.str());
       std::string msg;
       this->camera.set_fitstime( get_timestamp( ) );                 // must set camera.fitstime first
       if ( this->devlist.size() > 1 ) {
-        for (auto dev : this->devlist) {
+        for (const auto &dev : this->devlist) {
           this->camera.get_fitsname( std::to_string(dev), msg );     // get the fitsname (by reference)
           this->camera.async.enqueue( msg );                         // queue the fitsname
           logwrite( function, msg );                                 // log ths fitsname
@@ -4671,7 +4699,7 @@ logwrite(function, message.str());
           retstring.append( "  get:            returns shutter state\n" );
           retstring.append( "  time:           returns the last shutter open/close time duration\n" );
           retstring.append( "  expose <msec>:  open shutter for integral <msec> milliseconds\n" );
-          error = NO_ERROR;
+          error = HELP;
         }
         else {
           logwrite( function, "ERROR: expected { init | open | close | get | time | expose <msec> }" );
@@ -4708,7 +4736,7 @@ logwrite(function, message.str());
         retstring.append( " pending\n" );
         retstring.append( "  returns which channels have an exposure pending and for each\n" );
         retstring.append( "  exposure buffer which devices have writes pending.\n\n" );
-        error = NO_ERROR;
+        error = HELP;
       }
 
       message.str(""); message << "this_expbuf=" << this->get_expbuf();
@@ -4723,18 +4751,18 @@ logwrite(function, message.str());
       {
       std::vector<int> pending = this->exposure_pending_list();
       message.str(""); message << "exposures pending: ";
-      for ( auto dev : pending ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : pending ) message << this->controller[dev].channel << " ";
       logwrite( function, message.str() );
       }
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "in readout: ";
-      for ( auto dev : this->devlist ) if ( this->controller[dev].in_readout ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : this->devlist ) if ( this->controller[dev].in_readout ) message << this->controller[dev].channel << " ";
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "in frametransfer: ";
-      for ( auto dev : this->devlist ) if ( this->controller[dev].in_frametransfer ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : this->devlist ) if ( this->controller[dev].in_frametransfer ) message << this->controller[dev].channel << " ";
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
@@ -4747,7 +4775,7 @@ logwrite(function, message.str());
 
         // ...and for each exposure buffer, show which devices have writes pending
         //
-        for ( auto wp : pending ) {
+        for ( const auto &wp : pending ) {
           message << wp << " ";
         }
         logwrite( function, message.str() );
@@ -4770,13 +4798,13 @@ logwrite(function, message.str());
         retstring.append( "  Initiate the frame transfer waveforms on the indicated device.\n" );
         retstring.append( "  Supply dev# or chan from { " );
         message.str("");
-        for ( auto dd : this->devlist ) {
+        for ( const auto &dd : this->devlist ) {
           message << dd << " " << this->controller[dd].channel << " ";
         }
         if ( this->devlist.empty() ) message << "no_devices_open ";
         message << "}";
         retstring.append( message.str() );
-        return( NO_ERROR );
+        return HELP;
       }
 
       // must have at least one device open
@@ -4790,7 +4818,7 @@ logwrite(function, message.str());
       // check if arg is a channel by comparing to all the defined channels in the devlist
       //
       int dev=-1;
-      for ( auto dd : this->devlist ) {
+      for ( const auto &dd : this->devlist ) {
         if ( this->controller[dd].channel == tokens[1] ) {
           dev = dd;
           break;

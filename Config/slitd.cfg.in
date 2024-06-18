@@ -7,6 +7,7 @@ NBPORT=@SLITD_NB_PORT@            # slitd server non-blocking port
 DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+EMULATOR_PORT=@SLITD_PI_PORT@     # emulator listens on this port
 
 # For each actuator's controller specify:
 # MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
@@ -18,8 +19,10 @@ ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 #
 # It is required that one be named "A" and the other "B"
 #
-MOTOR_CONTROLLER="A @IP_ETS8P@ @ETS8P_SLIT@ 1 1"
-MOTOR_CONTROLLER="B @IP_ETS8P@ @ETS8P_SLIT@ 2 1"
+#MOTOR_CONTROLLER="A @IP_ETS8P@ @ETS8P_SLIT@ 1 1"
+#MOTOR_CONTROLLER="B @IP_ETS8P@ @ETS8P_SLIT@ 2 1"
+MOTOR_CONTROLLER="A localhost @SLITD_PI_PORT@ 1 1" # emulator
+MOTOR_CONTROLLER="B localhost @SLITD_PI_PORT@ 2 1" # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref>"

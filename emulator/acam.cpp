@@ -1,16 +1,16 @@
 /**
- * @file    slit.cpp
+ * @file    acam.cpp
  * @brief   
  * @author  David Hale <dhale@astro.caltech.edu>
  * @details 
  *
  */
 
-#include "slit.h"
+#include "acam.h"
 
-namespace SlitEmulator {
+namespace AcamEmulator {
 
-  /***** SlitEmulator::ControllerInfo::ControllerInfo *************************/
+  /***** AcamEmulator::ControllerInfo::ControllerInfo *************************/
   /**
    * @fn         ControllerInfo
    * @brief      class constructor
@@ -24,66 +24,27 @@ namespace SlitEmulator {
     this->ontarget = false;
     this->pos      = -1;
   }
-  /***** SlitEmulator::ControllerInfo::ControllerInfo *************************/
-
-
-  /***** SlitEmulator::ControllerInfo::~ControllerInfo ************************/
-  /**
-   * @fn         ~ControllerInfo
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  ControllerInfo::~ControllerInfo() {
-  }
-  /***** SlitEmulator::ControllerInfo::~ControllerInfo ************************/
-
-
-  /***** SlitEmulator::Interface::Interface ***********************************/
-  /**
-   * @fn         Interface
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::Interface() {
-  }
-  /***** SlitEmulator::Interface::Interface ***********************************/
-
-
-  /***** SlitEmulator::Interface::~Interface **********************************/
-  /**
-   * @fn         ~Interface
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** SlitEmulator::Interface::~Interface **********************************/
+  /***** AcamEmulator::ControllerInfo::ControllerInfo *************************/
 
 
   long Interface::test() {
-    std::string function = "  (SlitEmulator::Interface::test) ";
+    std::string function = "  (AcamEmulator::Interface::test) ";
     std::cerr << get_timestamp() << function << "controller_info.size() = " << this->controller_info.size() << "\n";
     return( NO_ERROR );
   }
 
 
-  /***** SlitEmulator::Interface::do_home *************************************/
+  /***** AcamEmulator::Interface::do_home *************************************/
   /**
    * @fn         do_home
    * @brief      thread to emulate homing (just sleeps)
-   * @param[in]  reference to SlitEmulator::ControllerInfo object
+   * @param[in]  reference to AcamEmulator::ControllerInfo object
    * @param[in]  reference to mutex
    * @return     ERROR or NO_ERROR
    *
    */
-  void Interface::do_home( SlitEmulator::ControllerInfo &info, std::mutex &mlock ) {
-    std::string function = "  (SlitEmulator::Interface::do_home) ";
+  void Interface::do_home( AcamEmulator::ControllerInfo &info, std::mutex &mlock ) {
+    std::string function = "  (AcamEmulator::Interface::do_home) ";
 
     // sleep here
     //
@@ -102,22 +63,22 @@ namespace SlitEmulator {
 
     std::cerr << get_timestamp() << function << "home " << info.name << " complete!\n";
   }
-  /***** SlitEmulator::Interface::do_home *************************************/
+  /***** AcamEmulator::Interface::do_home *************************************/
 
 
-  /***** SlitEmulator::Interface::do_move *************************************/
+  /***** AcamEmulator::Interface::do_move *************************************/
   /**
    * @fn         do_move
    * @brief      thread to emulate moving (just sleeps)
-   * @param[in]  reference to SlitEmulator::ControllerInfo object
+   * @param[in]  reference to AcamEmulator::ControllerInfo object
    * @param[in]  reference to mutex
    * @param[in]  int distance to move
    * @param[in]  float final position
    * @return     ERROR or NO_ERROR
    *
    */
-  void Interface::do_move( SlitEmulator::ControllerInfo &info, std::mutex &mlock, int distance, float pos ) {
-    std::string function = "  (SlitEmulator::Interface::do_move) ";
+  void Interface::do_move( AcamEmulator::ControllerInfo &info, std::mutex &mlock, int distance, float pos ) {
+    std::string function = "  (AcamEmulator::Interface::do_move) ";
 
     // sleep here
     //
@@ -135,10 +96,10 @@ namespace SlitEmulator {
 
     std::cerr << get_timestamp() << function << "move " << info.name << " complete!\n";
   }
-  /***** SlitEmulator::Interface::do_move *************************************/
+  /***** AcamEmulator::Interface::do_move *************************************/
 
 
-  /***** SlitEmulator::Interface::parse_command *******************************/
+  /***** AcamEmulator::Interface::parse_command *******************************/
   /**
    * @fn         parse_command
    * @brief      parse incomming command
@@ -148,7 +109,7 @@ namespace SlitEmulator {
    *
    */
   long Interface::parse_command( std::string cmd, std::string &retstring ) {
-    std::string function = "  (SlitEmulator::Interface::parse_command) ";
+    std::string function = "  (AcamEmulator::Interface::parse_command) ";
     int myaddr=-1;
     int mydev=-1;
     int myaxis=1;
@@ -222,7 +183,7 @@ namespace SlitEmulator {
 
       std::cerr << get_timestamp() << function << "spawning do_home thread for " << this->controller_info.at( mydev).name << "\n";
 
-      std::thread( std::ref(SlitEmulator::Interface::do_home), 
+      std::thread( std::ref(AcamEmulator::Interface::do_home), 
                    std::ref(this->controller_info.at( mydev )),
                    std::ref(this->pos_mutex) ).detach();
 
@@ -264,7 +225,7 @@ namespace SlitEmulator {
 
       std::cerr << get_timestamp() << function << "spawning do_move thread for " << this->controller_info.at( mydev).name << "\n";
 
-      std::thread( std::ref(SlitEmulator::Interface::do_move),
+      std::thread( std::ref(AcamEmulator::Interface::do_move),
                    std::ref(this->controller_info.at( mydev )),
                    std::ref(this->pos_mutex),
                    distance,
@@ -304,6 +265,6 @@ namespace SlitEmulator {
 
     return ( NO_ERROR );
   }
-  /***** SlitEmulator::Interface::parse_command *******************************/
+  /***** AcamEmulator::Interface::parse_command *******************************/
 
 }

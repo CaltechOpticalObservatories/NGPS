@@ -112,6 +112,7 @@ int main(int argc, char **argv) {
     }
 
   }
+
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     acamd.exit_cleanly();
@@ -152,7 +153,7 @@ int main(int argc, char **argv) {
   // TcpSocket objects are instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
   //
   std::vector<Network::TcpSocket> socklist;          // create a vector container to hold N_THREADS TcpSocket objects
-  socklist.reserve(N_THREADS);
+  socklist.reserve(Acam::N_THREADS);
 
   Network::TcpSocket s(acamd.blkport, true, -1, 0);  // instantiate TcpSocket object with blocking port
   if ( s.Listen() < 0 ) {                            // create a listening socket
@@ -167,7 +168,7 @@ int main(int argc, char **argv) {
   // pre-thread N_THREADS-1 detached threads to handle requests on the non-blocking port
   // thread #0 is reserved for the blocking port (above)
   //
-  for (int i=1; i<N_THREADS; i++) {                  // create N_THREADS-1 non-blocking socket objects
+  for (int i=1; i<Acam::N_THREADS; i++) {            // create N_THREADS-1 non-blocking socket objects
     if (i==1) {                                      // first one only
       Network::TcpSocket s(acamd.nbport, false, CONN_TIMEOUT, i);   // TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
       if ( s.Listen() < 0 ) {                        // create a listening socket
@@ -183,7 +184,7 @@ int main(int argc, char **argv) {
     }
     std::thread( std::ref(Acam::Server::thread_main),
                  std::ref(acamd),
-                 socklist[i] ).detach();  // spawn a thread to handle each non-blocking socket request
+                 std::ref(socklist[i]) ).detach();  // spawn a thread to handle each non-blocking socket request
   }
 
   // Instantiate a multicast UDP object and spawn a thread to send asynchronous messages

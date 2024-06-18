@@ -72,6 +72,7 @@ int main(int argc, char **argv) {
     }
 
   }
+
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     thermald.exit_cleanly();
@@ -138,7 +139,11 @@ int main(int argc, char **argv) {
   socklist.reserve(N_THREADS);
 
   Network::TcpSocket s(thermald.blkport, true, -1, 0);  // instantiate TcpSocket object with blocking port
-  s.Listen();                                        // create a listening socket
+  if ( s.Listen() < 0 ) {                            // create a listening socket
+    message.str(""); message << "ERROR: cannot create listening socket on port " << thermald.blkport;
+    logwrite( function, message.str() );
+    thermald.exit_cleanly();
+  }
   socklist.push_back(s);                             // add it to the socklist vector
   std::thread( std::ref(Thermal::Server::block_main),
                std::ref(thermald),
@@ -150,7 +155,11 @@ int main(int argc, char **argv) {
   for (int i=1; i<N_THREADS; i++) {                  // create N_THREADS-1 non-blocking socket objects
     if (i==1) {                                      // first one only
       Network::TcpSocket s(thermald.nbport, false, CONN_TIMEOUT, i);   // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
-      s.Listen();                                    // create a listening socket
+      if ( s.Listen() < 0 ) {                        // create a listening socket
+        message.str(""); message << "ERROR: cannot create listening socket on port " << thermald.nbport;
+        logwrite( function, message.str() );
+        thermald.exit_cleanly();
+      }
       socklist.push_back(s);
     }
     else {                                           // subsequent socket objects are copies of the first

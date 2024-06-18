@@ -75,7 +75,7 @@ namespace Acam {
    * @brief       return the connected state of the motor controllers
    * @param[in]   arg        used only for help
    * @param[out]  retstring  contains the connected state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be connected for this to return "true".
    *
@@ -98,7 +98,7 @@ namespace Acam {
       retstring = ACAMD_ISOPEN;
       retstring.append( " \n" );
       retstring.append( "  Returns true if all motor controllers are connected, false if any one is not connected.\n" );
-      return( NO_ERROR );
+      return( HELP );
     }
 
     // Loop through all motor controllers, checking each if connected,
@@ -107,7 +107,7 @@ namespace Acam {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( auto &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
 
       bool _isopen = this->motorinterface.is_connected( mot.second.name );
 
@@ -142,7 +142,7 @@ namespace Acam {
    * @brief      home all daisy-chained motors using the neg limit switch
    * @param[in]  name_in    optional list of motors to home
    * @param[out] retstring  reference to return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long MotionInterface::home( std::string name_in, std::string &retstring ) {
@@ -152,16 +152,17 @@ namespace Acam {
     if ( name_in == "?" ) {
       retstring = ACAMD_HOME;
       retstring.append( " [ " );
-      for ( auto const& mot : this->motorinterface.get_motormap() ) {
+      for ( const auto &mot : this->motorinterface.get_motormap() ) {
         retstring.append( mot.first );
         retstring.append( " " );
       }
       retstring.append( "]\n" );
       retstring.append( "  no arg will home all motors simultaneously\n" );
       retstring.append( "  or provide name of motor to home only that motor\n" );
-      return( NO_ERROR );
+      return( HELP );
     }
 
+logwrite( "Acam::MotionInterface::home", name_in );
     // All the work is done by the PI motor interface class
     //
     return this->motorinterface.home( name_in, retstring );
@@ -174,7 +175,7 @@ namespace Acam {
    * @brief       return the home state of the motors
    * @param[in]   name_in  optionally contains one or more motors to check
    * @param[out]  retstring  contains the home state ("true" | "false")
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All named motors must be homed for this to return "true".
    *
@@ -191,12 +192,12 @@ namespace Acam {
     if ( name_in == "?" ) {
       retstring = ACAMD_ISHOME;
       retstring.append( " [ " );
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "]\n" );
       retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
       retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
       retstring.append( "  homed, false if any one is not homed.\n" );
-      return( NO_ERROR );
+      return( HELP );
     }
 
     // Build a vector of all selected motor controllers, or all motor controllers
@@ -204,7 +205,7 @@ namespace Acam {
     //
     std::vector<std::string> name_list;
     if ( name_in.empty() ) {
-      for ( auto mot : _motormap ) { name_list.push_back( mot.first ); }
+      for ( const auto &mot : _motormap ) { name_list.push_back( mot.first ); }
     }
     else {
       std::transform( name_in.begin(), name_in.end(), name_in.begin(), ::tolower );
@@ -223,7 +224,7 @@ namespace Acam {
     //
     size_t num_home=0;
     std::stringstream homestream;
-    for ( auto name : name_list ) {
+    for ( const auto &name : name_list ) {
 
       // requires an open connection
       //
@@ -264,7 +265,7 @@ namespace Acam {
    * @brief      basic motion test commands
    * @param[in]  args       string containing optional args (see details below)
    * @param[out] retstring  return string contains response
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * expected args: [ [ <name> [ native <cmd> | <posname> ] ] ]
    *
@@ -286,7 +287,7 @@ namespace Acam {
       retstring.append( "  <name> only gives list of posnames\n" );
       retstring.append( "  <name> <posname> gives info for that posname\n" );
       retstring.append( "  <name> native <cmd> sends native commands to that motor\n" );
-      return( NO_ERROR );
+      return( HELP );
     }
 
     auto _motormap = this->motorinterface.get_motormap();
@@ -296,7 +297,7 @@ namespace Acam {
     //
     if ( args.empty() ) {
       retstream << "{ ";
-      for ( auto const &mot : _motormap ) { retstream << mot.first << " "; }
+      for ( const auto &mot : _motormap ) { retstream << mot.first << " "; }
       retstream << "}";
       retstring = retstream.str();
       logwrite( function, retstring );
@@ -332,7 +333,7 @@ namespace Acam {
 
       if ( arglist.size() == 1 ) {
         retstream << "{ ";
-        for ( auto const &pos : _motormap[ name ].posmap ) { retstream << pos.first << " "; }
+        for ( const auto &pos : _motormap[ name ].posmap ) { retstream << pos.first << " "; }
         retstream << "}";
         retstring = retstream.str();
         logwrite( function, retstring );
@@ -443,7 +444,7 @@ namespace Acam {
    * @brief      set or get the filter
    * @param[in]  destname   string containing destination filter position name
    * @param[out] retstring  return string contains the current position name
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long MotionInterface::filter( std::string destname, std::string &retstring ) {
@@ -461,7 +462,7 @@ namespace Acam {
       retstring.append( " [ <filtername> | home | ishome ]\n" );
       retstring.append( "  Move filterwheel to filter <filtername> \n" );
       retstring.append( "  where <filtername> = { " );
-      for ( auto const &pos : _motormap[ filter ].posmap ) {
+      for ( const auto &pos : _motormap[ filter ].posmap ) {
         retstring.append( pos.first );
         retstring.append( " " );
       }
@@ -469,14 +470,14 @@ namespace Acam {
       retstring.append( "  and return <filtername>.\n" );
       retstring.append( "  Optionally home the filterwheel or check if homed, return true|false.\n" );
       retstring.append( "  If no arg provided, return only the current <filtername>.\n" );
-      return( NO_ERROR );
+      return( HELP );
     }
 
     // Option to home the filter or check if homed
     //
     if ( destname == "home" ) {
       this->home( filter, destname );
-      destname="";
+      destname.clear();
     }
     else
     if ( destname == "ishome" ) {
@@ -657,7 +658,7 @@ message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( 
    * @brief      set or get the cover position
    * @param[in]  posname    string containing { "open" | "close" | "home" | "ishome" | "?" }
    * @param[out] retstring  return string contains the current position name
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long MotionInterface::cover( std::string posname, std::string &retstring ) {
@@ -676,14 +677,14 @@ message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( 
       retstring.append( "  For these three options, return open|closed\n" );
       retstring.append( "  For \"ishome\" return true|false\n" );
       retstring.append( "  If no arg provided, return only the current position { open | closed }\n" );
-      return( NO_ERROR );
+      return( HELP );
     }
 
     // Option to home the cover
     //
     if ( posname == "home" ) {
       this->home( cover, posname );
-      posname="";
+      posname.clear();
     }
     else
     if ( posname == "ishome" ) {

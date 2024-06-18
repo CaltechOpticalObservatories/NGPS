@@ -153,7 +153,10 @@ int main( int argc, char **argv ) {
   // The TcpSocket object is instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
 
   Network::TcpSocket s(emulator.port, true, -1, 0);    // instantiate TcpSocket object
-  s.Listen();                                                      // create listening socket
+  if ( s.Listen() < 0 ) {                                          // create listening socket
+    std::cerr << get_timestamp() << function << "ERROR: cannot create listening socket on port " << emulator.port << "\n";
+    emulator.exit_cleanly();
+  }
   std::thread( block_main, s ).detach();                           // spawn thread to handle requests
 
   for (;;) pause();                                                // main thread suspends

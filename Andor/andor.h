@@ -15,7 +15,7 @@
 #include "network.h"
 #include "utilities.h"
 #include "atmcdLXd.h"
-#include "sim_andor.h"
+#include "andor_emulator.h"
 
 #define ANDOR_SDK "/usr/local/etc/andor"
 
@@ -131,10 +131,10 @@ namespace Andor {
         catch ( CCfits::FitsError& error ) {
           message.str(""); message << "FITS file error thrown: " << error.message();
           logwrite(function, message.str());
-          return( ERROR );
+          return ERROR;
         }
 
-        return( NO_ERROR );
+        return NO_ERROR;
       }
 
   };
@@ -243,17 +243,23 @@ namespace Andor {
   /***** Andor::SDK ***********************************************************/
 
 
-  /***** Andor::Sim ***********************************************************/
+  /***** Andor::Emulator ******************************************************/
   /**
-   * @class     Sim
-   * @brief     Derived class for simulating the Andor CCD Software Development Kit
+   * @class     Emulator
+   * @brief     Derived class for emulating the Andor CCD Software Development Kit
    * @details   This class inherits from AndorBase.
    *
    */
-  class Sim : public AndorBase {
+  class Emulator : public AndorBase {
     private:
       bool initialized;
+      double exptime;
+
     public:
+      Emulator() : initialized(false), exptime(0) { }
+
+      inline double get_exptime() { return this->exptime; }
+
       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
       long _GetAvailableCameras( int &number ) override;
       long _GetCameraHandle( int index, int* handle ) override;
@@ -292,7 +298,7 @@ namespace Andor {
 
       SkySim skysim;
   };
-  /***** Andor::Sim ***********************************************************/
+  /***** Andor::Emulator ******************************************************/
 
 
   /***** Andor::Interface *****************************************************/
@@ -308,7 +314,7 @@ namespace Andor {
     private:
       bool initialized;           ///< is the Andor SDK initialized?
       int  serial;                ///< serial number to use
-      bool andor_simulated;       ///< is the Andor simulated?
+      bool andor_emulated;        ///< is the Andor emulator in use?
       Andor::AndorBase* andor;    ///< pointer to the Andor class to use
 //    std::unique_ptr<uint16_t[]> image_data;
       uint16_t* image_data;
@@ -319,7 +325,7 @@ namespace Andor {
        * @brief      default Interface constructor
        *
        */
-      Interface() : initialized( false ), serial( -1 ), andor_simulated( false ), andor( &sdk ), image_data( nullptr ) { }
+      Interface() : initialized( false ), serial( -1 ), andor_emulated( false ), andor( &sdk ), image_data( nullptr ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /***** Andor::Interface::Interface **************************************/
@@ -327,35 +333,34 @@ namespace Andor {
        * @brief      Interface constructor accepts serial number
        *
        */
-      Interface( int sn ) : initialized( false ), serial( sn ), andor_simulated( false ), andor( &sdk ), image_data( nullptr ) { }
+      Interface( int sn ) : initialized( false ), serial( sn ), andor_emulated( false ), andor( &sdk ), image_data( nullptr ) { }
       /***** Andor::Interface::Interface **************************************/
 
       Andor::SDK sdk;             ///< object for the real Andor SDK
 
-      Andor::Sim sim;             ///< object for the simulated Andor
+      Andor::Emulator emulator;   ///< object for the Andor emulator
 
-      /***** Andor::Interface::sim_andor **************************************/
+      /***** Andor::Interface::andor_emulator *********************************/
       /**
-       * @brief      enable/disable simulating the Andor
-       * @param[in]  simandor  true=use simulator, false=use real Andor SDK
-       * @details    "sim" or "sdk" or "null"
+       * @brief      enable/disable Andor emulator
+       * @param[in]  emulate  true=use emulator, false=use real Andor SDK
        *
        */
-      inline void sim_andor( bool simandor ) {
-        this->andor = simandor ? static_cast<Andor::AndorBase*>(&sim) : static_cast<Andor::AndorBase*>(&sdk);
-        this->andor_simulated = simandor;
+      inline void andor_emulator( bool emulate ) {
+        this->andor = emulate ? static_cast<Andor::AndorBase*>(&emulator) : static_cast<Andor::AndorBase*>(&sdk);
+        this->andor_emulated = emulate;
         return;
       }
-      /***** Andor::Interface::sim_andor **************************************/
+      /***** Andor::Interface::andor_emulator *********************************/
 
       /***** Andor::Interface::get_andor_object *******************************/
       /**
        * @brief      returns string indicating which object is in use
-       * @return     "sim" or "sdk" or "null"
+       * @return     "emulator" or "sdk" or "null"
        *
        */
       inline std::string_view get_andor_object() {
-        if ( this->andor == &sim ) return "sim";
+        if ( this->andor == &emulator ) return "emulator";
         else
         if ( this->andor == &sdk ) return "sdk";
         else
@@ -371,7 +376,7 @@ namespace Andor {
 //    std::unique_ptr<uint16_t[]>& get_image_data() { return this->image_data; }
       inline uint16_t* get_image_data() { return this->image_data; }
 
-      inline bool is_simulated() { return this->andor_simulated; }
+      inline bool is_emulated() { return this->andor_emulated; }
 
       inline bool is_initialized() { return this->initialized; };
 
@@ -382,8 +387,8 @@ namespace Andor {
       long close();
       long test();
       long shutter();
-      long exptime( int exptime_in );
-      long exptime( std::string exptime_in, std::string &retstring );
+      long set_exptime( int exptime );
+      long set_exptime( std::string exptime, std::string &retstring );
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
       unsigned int start_acquisition();

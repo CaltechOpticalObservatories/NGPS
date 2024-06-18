@@ -40,18 +40,16 @@ namespace CalibEmulator {
    *
    */
   class ControllerInfo {
-    private:
-
     public:
-      ControllerInfo();
-      ~ControllerInfo();
-
       bool homed;
       bool ontarget;
+      float pos;
+
       int addr;
       std::string name;
       float min, max;
-      float pos;
+
+      ControllerInfo() : homed(false), ontarget(false), pos(-1) { }
 
       long load_info( std::string &input ) {
         std::string function = "  (CalibEmulator::ControllerInfo::load_info) ";
@@ -59,16 +57,14 @@ namespace CalibEmulator {
 
         Tokenize( input, tokens, " \"" );
 
-        if ( tokens.size() != 4 ) {
-          std::cerr << get_timestamp() << function << "bad number of tokens: " << tokens.size() << ". expected 2\n";
+        if ( tokens.size() < 1 || tokens.size() > 5 ) {
+          std::cerr << get_timestamp() << function << "bad number of tokens: " << tokens.size() << ". expected 5\n";
           return( ERROR );
         }
 
         try {
-          this->addr = std::stoi( tokens.at(0) );
-          this->name = tokens.at(1);
-          this->min =  std::stof( tokens.at(2) );
-          this->max =  std::stof( tokens.at(3) );
+          this->addr = std::stoi( tokens.at(3) );
+          this->name = tokens.at(0);
         }
         catch ( std::invalid_argument &e ) {
           std::cerr << get_timestamp() << function << "error loading tokens from input: " << input << ": " << e.what() << "\n";
@@ -91,10 +87,8 @@ namespace CalibEmulator {
    *
    */
   class Interface {
-    private:
     public:
-      Interface();
-      ~Interface();
+      Interface() = default;
 
       std::mutex pos_mutex;
 

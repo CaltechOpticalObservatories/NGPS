@@ -1148,12 +1148,12 @@ namespace Andor {
       catch ( std::invalid_argument & ) {
         message.str(""); message << "ERROR: unable to convert requested index " << args << " to integer";
         logwrite( function, message.str() );
-        return( ERROR );
+        return ERROR;
       }
       catch ( std::out_of_range & ) {
         message.str(""); message << "ERROR: requested index " << args << " outside integer range";
         logwrite( function, message.str() );
-        return( ERROR );
+        return ERROR;
       }
     }
     else index=-1;   // indicates a specific index was not requested
@@ -1186,7 +1186,7 @@ namespace Andor {
     if ( index != -1 && index > ncameras ) {
       message.str(""); message << "ERROR requested index " << index << " must be in range {0:" << (ncameras-1) << "}";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // Set the current camera handle
@@ -1263,7 +1263,7 @@ namespace Andor {
     //
     if (error==NO_ERROR) error = set_read_mode( 4 );        // image mode
     if (error==NO_ERROR) error = set_acquisition_mode( 1 ); // single scan mode
-    if (error==NO_ERROR) error = exptime( 0 );
+    if (error==NO_ERROR) error = set_exptime( 0 );
     if (error==NO_ERROR) error = ( andor ? andor->_SetShutter( 1, 0, 50, 50 ) : ERROR );  // TTL high fully auto shutter
 
     message.str(""); message << "camera s/n " << this->camera_info.serial_number << " initialized";
@@ -1287,7 +1287,7 @@ namespace Andor {
     ShutDown();
     this->initialized = false;
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Andor::Interface::close **********************************************/
 
@@ -1389,7 +1389,7 @@ namespace Andor {
 
     if ( ! is_initialized() ) {
       logwrite( function, "ERROR camera not initialized" );
-      return( ERROR );
+      return ERROR;
     }
 
     // Get Number of AD Chans and HS Speeds if needed
@@ -1477,7 +1477,7 @@ namespace Andor {
       for ( auto &sp : vec ) message << " " << sp;
       message << " }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // find the index of the speed in the vector
@@ -1520,7 +1520,7 @@ namespace Andor {
       for ( auto &sp : vec ) message << " " << sp;
       message << " }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // find the index of the speed in the vector
@@ -1532,7 +1532,7 @@ namespace Andor {
     if ( index < 0 || index >= (int)this->camera_info.vsspeeds.size() ) {
       message.str(""); message << "ERROR invalid index " << index;
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     float speed = this->camera_info.vsspeeds[index];
@@ -1564,7 +1564,7 @@ namespace Andor {
 
     if ( hbin < 1 || vbin < 1 || hstart < 1 || hend < 1 || vstart < 1 || vend < 1 ) {
       logwrite( function, "ERROR all image parameters must be >= 1" );
-      return( ERROR );
+      return ERROR;
     }
 
     long error = ( andor ? andor->_SetImage( hbin, vbin, hstart, hend, vstart, vend ) : ERROR );
@@ -1602,7 +1602,7 @@ namespace Andor {
     if ( hbin < 1 || vbin < 1 ) {
       message.str(""); message << "ERROR " << hbin << " " << vbin << " must be > 0";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // Don't change ROI but use the existing values
@@ -1742,7 +1742,7 @@ namespace Andor {
     if ( type != 0 && type != 1 ) {
       message.str(""); message << "ERROR invalid type " << type << ": expected { 0 1 }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     long error = ( andor ? andor->_SetOutputAmplifier( type ) : ERROR );
@@ -1782,7 +1782,7 @@ namespace Andor {
       message.str(""); message << "ERROR: gain " << gain << " outside range { "
                                << low << " " << high << " }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
     else {
       error = ( andor ? andor->_SetEMCCDGain( gain ) : ERROR );
@@ -1898,7 +1898,7 @@ namespace Andor {
       message.str("");
       message << "ERROR invalid mode " << mode << ": expected range { 0:4 }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     long error = ( andor ? andor->_SetReadMode( mode ) : ERROR );
@@ -1936,7 +1936,7 @@ namespace Andor {
     if ( mode < 0 || mode > 5 ) {
       message.str(""); message << "ERROR invalid mode " << mode << ": expected { 1:5 }";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     long error = ( andor ? andor->_SetAcquisitionMode( mode ) : ERROR );
@@ -2038,7 +2038,7 @@ namespace Andor {
 
     if ( this->image_data == nullptr ) {
       logwrite( function, "ERROR no image data available" );
-      return( ERROR );
+      return ERROR;
     }
 
     this->camera_info.fits_name = "/tmp/andor.fits";
@@ -2062,10 +2062,10 @@ namespace Andor {
 
     imgname = this->camera_info.fits_name;      // return the name of the file created
 
-    // If Andor is simulated then the file just created is the input for the
+    // If Andor is emulated then the file just created is the input for the
     // sky simulator, which is called now to generate the simulated image.
     //
-    if ( is_simulated() ) error = sim.skysim.generate_image( imgname, "/tmp/andorout2.fits" );
+    if ( is_emulated() ) error = emulator.skysim.generate_image( imgname, "/tmp/andorout2.fits", emulator.get_exptime() );
 
     return error;
   }
@@ -2083,20 +2083,20 @@ namespace Andor {
     std::string function = "Andor::Interface::simulate_frame";
     std::stringstream message;
 
-    if ( is_simulated() ) {
+    if ( is_emulated() ) {
       std::string simfile = generate_temp_filename( "skysim" );    // create a temporary filename for skysim output
-      long error = sim.skysim.generate_image( name_in, simfile );  // generate simulated image with temp filename
+      long error = emulator.skysim.generate_image( name_in, simfile, emulator.get_exptime() );  // generate simulated image with temp filename
       if ( error == NO_ERROR ) {
         std::filesystem::rename( simfile, name_in );               // rename this temp filename as input filename
       }
       else {
         logwrite( function, "ERROR generating skysim image" );
       }
-      return( error );
+      return error;
     }
     else {
-      logwrite( function, "ERROR Andor is not simulated" );
-      return(ERROR);
+      logwrite( function, "ERROR Andor emulator not enabled" );
+      return ERROR;
     }
   }
   /***** Andor::Interface::simulate_frame *************************************/
@@ -2150,35 +2150,35 @@ return NO_ERROR;
     delete [] image_data;
 
 4/3/24 ***/
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Andor::Interface::test ***********************************************/
 
 
-  /***** Andor::Interface::exptime ********************************************/
+  /***** Andor::Interface::set_exptime ****************************************/
   /**
    * @brief      set the exposure time
-   * @param[in]  exptime_in  integer exposure time
+   * @param[in]  exptime  integer exposure time
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::exptime( int exptime_in ) {
+  long Interface::set_exptime( int exptime ) {
     std::string dontcare;
-    return exptime( std::to_string( exptime_in ), dontcare );
+    return set_exptime( std::to_string( exptime ), dontcare );
   }
-  /***** Andor::Interface::exptime ********************************************/
+  /***** Andor::Interface::set_exptime ****************************************/
 
 
-  /***** Andor::Interface::exptime ********************************************/
+  /***** Andor::Interface::set_exptime ****************************************/
   /**
    * @brief      set or get the exposure time
-   * @param[in]  exptime_in  string exposure time
+   * @param[in]  exptime  string exposure time
    * @param[out] retstring   reference to string return value
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::exptime( std::string exptime_in, std::string &retstring ) {
-    std::string function = "Andor::Interface::exptime";
+  long Interface::set_exptime( std::string exptime, std::string &retstring ) {
+    std::string function = "Andor::Interface::set_exptime";
     std::stringstream message;
     double exptime_try=NAN;
     long error = NO_ERROR;
@@ -2186,9 +2186,9 @@ return NO_ERROR;
     // If an exposure time was passed in then
     // try to convert it (string) to a double
     //
-    if ( ! exptime_in.empty() ) {
+    if ( ! exptime.empty() ) {
       try {
-        if ( ( exptime_try = std::stod( exptime_in ) ) < 0 ) {
+        if ( ( exptime_try = std::stod( exptime ) ) < 0 ) {
           logwrite( function, "ERROR: exptime must be >= 0" );
         }
         else {
@@ -2197,16 +2197,16 @@ return NO_ERROR;
         }
       }
       catch ( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR: unable to convert exposure time: " << exptime_in << " to double";
+        message.str(""); message << "ERROR: unable to convert exposure time: " << exptime << " to double";
         logwrite( function, message.str() );
         retstring="error_"+std::string( e.what() );
-        return( ERROR );
+        return ERROR;
       }
       catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR: exposure time " << exptime_in << " outside double range";
+        message.str(""); message << "ERROR: exposure time " << exptime << " outside double range";
         logwrite( function, message.str() );
         retstring="error_"+std::string( e.what() );
-        return( ERROR );
+        return ERROR;
       }
     }
 
@@ -2214,9 +2214,9 @@ return NO_ERROR;
 
     message.str(""); message << "exposure time is " << retstring << " sec";
     logwrite(function, message.str());
-    return( error );
+    return error;
   }
-  /***** Andor::Interface::exptime ********************************************/
+  /***** Andor::Interface::set_exptime ****************************************/
 
 
   /***** Andor::FITS_file::FITS_file ******************************************/
@@ -2256,7 +2256,7 @@ return NO_ERROR;
     else {
       message.str(""); message << "ERROR unable to create file \"" << this->info.fits_name << "\"";
       logwrite(function, message.str());
-      return(ERROR);
+      return ERROR;
     }
 
     try {
@@ -2268,12 +2268,12 @@ return NO_ERROR;
     catch ( CCfits::FITS::CantCreate ){
       message.str(""); message << "ERROR: unable to open FITS file \"" << this->info.fits_name << "\"";
       logwrite(function, message.str());
-      return(ERROR);
+      return ERROR;
     }
     catch ( ... ) {
       message.str(""); message << "unknown error opening FITS file \"" << this->info.fits_name << "\"";
       logwrite(function, message.str());
-      return(ERROR);
+      return ERROR;
     }
 
     message.str(""); message << "opened file \"" << this->info.fits_name << "\" for FITS write";
@@ -2281,7 +2281,7 @@ return NO_ERROR;
 
     this->fits_name = this->info.fits_name;
 
-    return(NO_ERROR);
+    return NO_ERROR;
   }
   /***** Andor::FITS_file::open_file ******************************************/
 
@@ -2353,7 +2353,7 @@ return NO_ERROR;
     this->pFits->pHDU().addKey( "PIXSCALE", this->info.pixel_scale, "arcsec per pixel" );
     this->pFits->pHDU().addKey( "POSANG", "TBD", "angle of image Y axis relative to North" );
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Andor::FITS_file::create_header **************************************/
 
@@ -2370,7 +2370,7 @@ return NO_ERROR;
 
     if ( wcs_in.empty() ) {
       logwrite( function, "no wcs file provided" );
-      return( NO_ERROR );
+      return NO_ERROR;
     }
     else {
       message << "read WCS input file " << wcs_in;
@@ -2396,7 +2396,7 @@ return NO_ERROR;
 
     this->pFits->pHDU().copyAllKeys( &pInfile->pHDU(), { TYP_WCS_KEY, TYP_REFSYS_KEY, TYP_USER_KEY } );
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Andor::FITS_file::copy_header ****************************************/
 
@@ -2430,10 +2430,10 @@ return NO_ERROR;
     catch ( CCfits::FitsError& error ) {
       message.str(""); message << "FITS file error thrown: " << error.message();
       logwrite(function, message.str());
-      return( ERROR );
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Andor::FITS_file::write_image ****************************************/
 

@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef CAMERAD_H
-#define CAMERAD_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -54,7 +53,7 @@ namespace Camera {
    *
    */
 #ifdef ASTROCAM
-  class Server : public AstroCam::Interface {
+  class Server : public AstroCam::Interface, public NewInterface<AstroCam::NewAstroCam> {
 #elif STA_ARCHON
   class Server : public Archon::Interface {
 #endif
@@ -68,6 +67,7 @@ namespace Camera {
         this->nbport=-1;
         this->blkport=-1;
         this->asyncport=-1;
+        this->cmd_num=0;
       }
       /***** Camera::Server ***************************************************/
 
@@ -90,6 +90,8 @@ namespace Camera {
 
       int nonblocking_socket;
       int blocking_socket;
+
+      std::atomic<int> cmd_num;
 
       Network::TcpSocket nonblocking;
 
@@ -303,4 +305,3 @@ namespace Camera {
 
 }
 /***** Camera *****************************************************************/
-#endif

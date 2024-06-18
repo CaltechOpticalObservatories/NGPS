@@ -3,60 +3,62 @@
 # This file defines the fully qualified path to each
 # software component and its associated configuration file.
 
+BASEDIR="/home/developer/Software"
+
 # observation sequencer
 #
-SEQUENCERD="/home/developer/Software/bin/sequencerd"
-SEQUENCERD_CONFIG="/home/developer/Software/Config/sequencerd.cfg"
+SEQUENCERD=$BASEDIR"/bin/sequencerd"
+SEQUENCERD_CONFIG=$BASEDIR"/Config/sequencerd.cfg"
 
 # acam daemon
 #
-ACAMD="/home/developer/Software/bin/acamd"
-ACAMD_CONFIG="/home/developer/Software/Config/acamd.cfg"
+ACAMD=$BASEDIR"/bin/acamd"
+ACAMD_CONFIG=$BASEDIR"/Config/acamd.cfg"
 
 # calib daemon
 #
-CALIBD="/home/developer/Software/bin/calibd"
-CALIBD_CONFIG="/home/developer/Software/Config/calibd.cfg"
+CALIBD=$BASEDIR"/bin/calibd"
+CALIBD_CONFIG=$BASEDIR"/Config/calibd.cfg"
 
 # camera daemon
 #
-CAMERAD="/home/developer/Software/bin/camerad"
-CAMERAD_CONFIG="/home/developer/Software/Config/camerad.cfg"
+CAMERAD=$BASEDIR"/bin/camerad"
+CAMERAD_CONFIG=$BASEDIR"/Config/camerad.cfg"
 
 # flexure daemon
 #
-FLEXURED="/home/developer/Software/bin/flexured"
-FLEXURED_CONFIG="/home/developer/Software/Config/flexured.cfg"
+FLEXURED=$BASEDIR"/bin/flexured"
+FLEXURED_CONFIG=$BASEDIR"/Config/flexured.cfg"
 
 # focus daemon
 #
-FOCUSD="/home/developer/Software/bin/focusd"
-FOCUSD_CONFIG="/home/developer/Software/Config/focusd.cfg"
+FOCUSD=$BASEDIR"/bin/focusd"
+FOCUSD_CONFIG=$BASEDIR"/Config/focusd.cfg"
 
 # power daemon
 #
-POWERD="/home/developer/Software/bin/powerd"
-POWERD_CONFIG="/home/developer/Software/Config/powerd.cfg"
+POWERD=$BASEDIR"/bin/powerd"
+POWERD_CONFIG=$BASEDIR"/Config/powerd.cfg"
 
 # slit daemon
 #
-SLITD="/home/developer/Software/bin/slitd"
-SLITD_CONFIG="/home/developer/Software/Config/slitd.cfg"
+SLITD=$BASEDIR"/bin/slitd"
+SLITD_CONFIG=$BASEDIR"/Config/slitd.cfg"
 
 # tcs daemon
 #
-TCSD="/home/developer/Software/bin/tcsd"
-TCSD_CONFIG="/home/developer/Software/Config/tcsd.cfg"
+TCSD=$BASEDIR"/bin/tcsd"
+TCSD_CONFIG=$BASEDIR"/Config/tcsd.cfg"
 
 # telemetry daemon
 #
-TELEMD="/home/developer/Software/bin/telemd"
-TELEMD_CONFIG="/home/developer/Software/Config/telemd.cfg"
+TELEMD=$BASEDIR"/bin/telemd"
+TELEMD_CONFIG=$BASEDIR"/Config/telemd.cfg"
 
 # thermal daemon
 #
-THERMALD="/home/developer/Software/bin/thermald"
-THERMALD_CONFIG="/home/developer/Software/Config/thermald.cfg"
+THERMALD=$BASEDIR"/bin/thermald"
+THERMALD_CONFIG=$BASEDIR"/Config/thermald.cfg"
 
 
 # Arrays of all the above processes, their associated names, and their associated config files

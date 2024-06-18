@@ -17,7 +17,7 @@ TCSD_PORT=@TCSD_BLK_PORT@
 
 # this is the port number that the emulator listens to
 #
-EMULATOR=@FILTERD_PI_PORT@
+EMULATOR_PORT=@ACAMD_EMULATOR@
 
 # host:port for the external camera server
 #
@@ -29,9 +29,11 @@ CAMERASERVER_PORT=@ACAM_CAMERA_SERVER_PORT@
 PIXSCALE=0.26
 
 # Specify the Andor serial number for the ACAM, required to identify the
-# correct camera when more than one is present.
+# correct camera when more than one is present, or
+# set "ANDOR_SN=emulate" to emulate the Andor.
 #
-ANDOR_SN=13452
+#ANDOR_SN=13452
+ANDOR_SN=emulate
 
 # PUSH_GUIDER_SETTINGS
 # This defines the shell script which pushes guider settings to the
@@ -67,8 +69,10 @@ PUSH_GUIDER_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 #
 # For acamd, one controller must be named "filter" and the other must be named "cover"
 #
-MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
-MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
+#MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
+#MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
+MOTOR_CONTROLLER="filter localhost @ACAMD_EMULATOR@ 1 1"     # emulator
+MOTOR_CONTROLLER="cover  localhost @ACAMD_EMULATOR@ 2 1"     # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"

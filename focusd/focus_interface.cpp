@@ -80,7 +80,7 @@ namespace Focus {
    * @brief       return the connected state of the motor controllers
    * @param[in]   arg        used only for help
    * @param[out]  retstring  contains the connected state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be connected for this to return "true".
    *
@@ -98,7 +98,7 @@ namespace Focus {
       retstring = FOCUSD_ISOPEN;
       retstring.append( " \n" );
       retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Loop through all motor controllers, checking each if connected,
@@ -107,7 +107,7 @@ namespace Focus {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( auto &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
 
       bool _isopen = this->motorinterface.is_connected( mot.second.name );
 
@@ -142,7 +142,7 @@ namespace Focus {
    * @brief      send native command to controller identified by channel name
    * @param[in]  args       contains channel name, command and arg(s)
    * @param[out] retstring  return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::native( std::string args, std::string &retstring ) {
@@ -159,10 +159,10 @@ namespace Focus {
       retstring.append( " <chan> <cmd>\n" );
       retstring.append( "  Send native command <cmd> to controller indicated by channel name,\n" );
       retstring.append( "  where <chan> is one of { " );
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "} and <cmd> is any PI-native command and args. This command blocks;\n" );
       retstring.append( "native commands are not run in a separate thread.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Need something, anything
@@ -217,7 +217,7 @@ namespace Focus {
    * @brief      home all or indicated daisy-chained motors
    * @param[in]  name_in    optional list of motors to home
    * @param[out] retstring  return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::home( std::string name_in, std::string &retstring ) {
@@ -231,9 +231,9 @@ namespace Focus {
       retstring.append( "  If no argument is supplied then all axes are homed simultaneously,\n" );
       retstring.append( "  or a single axis may be supplied from { " );
       auto _motormap = this->motorinterface.get_motormap();
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // All the work is done by the PI motor interface class
@@ -248,7 +248,7 @@ namespace Focus {
    * @brief       return the home state of the motors
    * @param[in]   name_in    optionally contains one or more motors to check
    * @param[out]  retstring  contains the home state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be homed for this to return "true".
    *
@@ -261,12 +261,12 @@ namespace Focus {
       retstring = FOCUSD_ISHOME;
       retstring.append( " [ " );
       auto _motormap = this->motorinterface.get_motormap();
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
       retstring.append( "]\n" );
       retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
       retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
       retstring.append( "  homed, false if any one is not homed.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // All the work is done by the PI motor interface class
@@ -281,7 +281,7 @@ namespace Focus {
    * @brief      set the focus position of the selected channel
    * @param[in]  args       contains channel name and focus position
    * @param[out] retstring  return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::set( std::string args, std::string &retstring ) {
@@ -321,7 +321,7 @@ namespace Focus {
         logwrite( function, message.str() );
         return( ERROR );
       }
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Tokenize the arg string. Need two tokens: <chan> and either <pos> or "nominal"
@@ -355,7 +355,7 @@ namespace Focus {
    * @brief      get the current position of channel indicated by arg
    * @param[in]  name       string contains the channel name
    * @param[out] retstring  reference to string contains focus position
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get( std::string name, std::string &retstring ) {
@@ -371,9 +371,9 @@ namespace Focus {
       retstring.append( "  Get the focus position of the indicated channel\n" );
       retstring.append( "  where <chan> is one of { " );
       auto _motormap = this->motorinterface.get_motormap();
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Need something, anything
@@ -431,7 +431,7 @@ namespace Focus {
     // which controller has this addr?
     //
     std::string name;
-    for ( auto const &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
       if ( mot.second.addr == addr ) {
         name = mot.second.name;
         break;
@@ -478,7 +478,7 @@ namespace Focus {
     //
     auto _motormap = this->motorinterface.get_motormap();
 
-    for ( auto const &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
       this->motorinterface.stop_motion( mot.second.name, mot.second.addr );
     }
 
@@ -533,7 +533,7 @@ namespace Focus {
    * @brief      test commands
    * @param[in]  args
    * @param[out] retstring  reference to any reply
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * This is the place to put various debugging and system testing tools.
    *
@@ -570,7 +570,7 @@ namespace Focus {
       retstring.clear();
       retstring.append( "  motormap  return definition of motormap\n" );
       retstring.append( "  posmap    return definition of posmap\n" );
-      return( NO_ERROR );
+      return HELP;
     }
     else
 
@@ -579,14 +579,14 @@ namespace Focus {
     if ( testname == "motormap" ) {
       retstring="name host:port addr naxes axisnum min max reftype";
       logwrite( function, retstring );
-      for ( auto const &mot : _motormap ) {
+      for ( const auto &mot : _motormap ) {
         retstring.append("\n");
         message.str(""); message << mot.first << " "
                                  << mot.second.host << ":"
                                  << mot.second.port << " "
                                  << mot.second.addr << " "
                                  << mot.second.naxes;
-        for ( auto const &axis : mot.second.axes ) {
+        for ( const auto &axis : mot.second.axes ) {
           message << " " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " " << axis.second.reftype;
         }
         retstring.append( message.str() );
@@ -601,10 +601,10 @@ namespace Focus {
     if ( testname == "posmap" ) {
       retstring="motorname axis posid pos posname";
       logwrite( function, retstring );
-      for ( auto const &mot : _motormap ) {
+      for ( const auto &mot : _motormap ) {
         retstring.append("\n");
         message.str(""); message << mot.first << " ";
-        for ( auto const &pos : mot.second.posmap ) {
+        for ( const auto &pos : mot.second.posmap ) {
           message << " " << pos.second.axis << " " << pos.second.posid << " " << pos.second.position << " " << pos.second.posname;
         }
         retstring.append( message.str() );

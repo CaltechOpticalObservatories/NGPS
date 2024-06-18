@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
     }
 
   }
+
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     server.exit_cleanly();
@@ -420,7 +421,9 @@ void doit(Network::TcpSocket &sock) {
         args= sbuf.substr(cmd_sep+1);                // otherwise args is everything after that space.
       }
 
-      message.str(""); message << "thread " << sock.id << " received command on fd " << sock.getfd() << ": " << cmd << " " << args;
+      if ( ++server.cmd_num == INT_MAX ) server.cmd_num = 0;
+
+      message.str(""); message << "thread " << sock.id << " received command on fd " << sock.getfd() << " (" << server.cmd_num << ") : " << cmd << " " << args;
       logwrite(function, message.str());
     }
     catch ( std::runtime_error &e ) {
@@ -442,7 +445,8 @@ void doit(Network::TcpSocket &sock) {
     std::string retstring="";                               // string for return the value (where needed)
 
     if ( cmd == "help" || cmd == "?" ) {
-                    for ( auto s : CAMERAD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                    for ( const auto &s : CAMERAD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                    ret = HELP;
     }
     else
     if ( cmd == "exit" ) {
@@ -540,7 +544,7 @@ void doit(Network::TcpSocket &sock) {
 //                    logwrite( function, "prikeys:" );  ret = server.camera_info.prikeys.listkeys();
 //                    logwrite( function, "extkeys:" );  ret = server.camera_info.extkeys.listkeys();
                       for ( std::size_t i=0; i<server.fitsinfo.size(); ++i ) {
-                        auto const &info = server.fitsinfo[i];
+                        const auto &info = server.fitsinfo[i];
                         message.str(""); message << "fitsinfo[" << i << "] primary systemkeys:"; logwrite( function, message.str() );
                         ret = info != nullptr && info->systemkeys.primary().listkeys();
                         message.str(""); message << "fitsinfo[" << i << "] primary telemkeys:"; logwrite( function, message.str() );
@@ -560,7 +564,7 @@ void doit(Network::TcpSocket &sock) {
                     else {
                       ret = server.camera_info.userkeys.primary().addkey(args);
 //                    server.fitsinfo[0]->telemkeys.primary().addkey( "FOO", true, "test telemetry primary key" );
-//                    for ( auto &info : server.fitsinfo ) ret = info->userkeys.extension().addkey( args );
+//                    for ( const auto &info : server.fitsinfo ) ret = info->userkeys.extension().addkey( args );
 //                    if ( ret != NO_ERROR ) server.camera.log_error( function, "bad syntax" );
                     }
                     }
@@ -767,11 +771,27 @@ void doit(Network::TcpSocket &sock) {
       ret = ERROR;
     }
 
-    if (ret != NOTHING) {
-      std::string retstr=(ret==0?"DONE\n":"ERROR\n");
-      if ( ret==0 ) retstr="DONE\n"; else retstr="ERROR" + server.camera.get_longerror() + "\n";
-      if (sock.Write(retstr)<0) connection_open=false;
-    }
+      // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
+      // and log the reply along with the command number. Write the reply back to the socket.
+      //
+      // Don't append anything nor log the reply if the command was just requesting help.
+      //
+      if (ret != NOTHING) {
+        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( ret == NO_ERROR ) retstring.append( "DONE" );
+        if ( ret != HELP && ret != NO_ERROR ) {
+          retstring.append( "ERROR" );
+          retstring.append( server.camera.get_longerror() );
+        }
+
+        if ( ! retstring.empty() && ret != HELP ) {
+          message.str(""); message << "command (" << server.cmd_num << ") reply: " << retstring;
+          logwrite( function, message.str() );
+        }
+
+        retstring.append( "\n" );
+        if ( sock.Write( retstring ) < 0 ) connection_open=false;
+      }
 
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                          // Keep blocking connection open for interactive session.

@@ -44,28 +44,7 @@
  */
 namespace Acam {
 
-  const std::string DAEMON_NAME = "acamd";       ///< when run as a daemon, this is my name
-
   constexpr double PI = 3.14159265358979323846;
-
-  class CPyObject {
-    private:
-      PyObject *p;
-    public:
-      CPyObject() : p(NULL) { }
-      CPyObject( PyObject* pin ) : p(pin) { }
-      ~CPyObject() { Release(); }
-
-      PyObject* getObject() { return p; }
-      PyObject* setObject(PyObject* _p) { return (p=_p); }
-      void Release() { if (p) Py_DECREF(p); p=NULL; }
-      PyObject* operator ->() { return p; }
-      bool is() { return p ? true : false; }
-      operator PyObject*() { return p; }
-      PyObject* operator = (PyObject* pp) { p = pp; return p; }
-      operator bool() { return p ? true : false; }
-  };
-
 
   /***** Acam::Camera *********************************************************/
   /**
@@ -89,7 +68,7 @@ namespace Acam {
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
 
-      long simandor( std::string args, std::string &retstring );
+      long emulator( std::string args, std::string &retstring );
       long open( std::string args );
       long close();
       long start_acquisition();
@@ -226,14 +205,14 @@ namespace Acam {
       std::string push_image;    ///<! name of script to push an image to GUI
 
     public:
-      GuideManager() : update(false), exptime(NAN), gain(-1), filter("???"), focus(NAN) { }
+      GuideManager() : update(false), exptime(NAN), gain(-1), filter("undef"), focus(NAN) { }
 
       // These are the GUIDER GUI settings
       //
       double exptime;
       int gain;
-      std::string filter;
-      double focus;
+      std::string filter;  // Python needs an arg so filter can't be empty-initialize in constructor
+      std::atomic<double> focus;
 
       // sets the private variable push_settings, call on config
       inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
@@ -259,19 +238,19 @@ namespace Acam {
        */
       std::string get_message_string() {
         std::stringstream message;
-        if ( this->exptime < 0 ) message << "???"; else { message << std::fixed << std::setprecision(3) << this->exptime; }
+        if ( this->exptime < 0 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->exptime; }
         message << " ";
-        if ( this->gain < 1 ) message << "???"; else { message << std::fixed << std::setprecision(3) << this->gain; }
+        if ( this->gain < 1 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->gain; }
         message << " ";
-        message << ( this->filter.empty() ? "???" : this->filter );
+        message << ( this->filter.empty() ? "undef" : this->filter );  // Python will need an arg so filter can't be empty
         message << " ";
-        if ( std::isnan( this->focus ) ) message << "???"; else { message << std::fixed << std::setprecision(2) << this->focus; };
+        if ( std::isnan( this->focus ) ) message << "ERR"; else { message << std::fixed << std::setprecision(2) << this->focus; };
         return message.str();
       }
 
       /**
-       * @fn         push_guider_settings
        * @brief      calls the push_settings script with the formatted message string
+       * @details    the script pushes the settings to the Guider GUI
        */
       void push_guider_settings() {
         std::string function = "Acam::GuideManager::push_guider_settings";
@@ -288,8 +267,9 @@ namespace Acam {
       }
 
       /**
-       * @fn         push_guider_image
        * @brief      calls the push_image script with the formatted message string
+       * @details    the script pushes the indicated file to the Guider GUI display
+       * @param[in]  filename  fits file to send
        */
       void push_guider_image( std::string_view filename ) {
         std::string function = "Acam::GuideManager::push_guider_image";
@@ -320,6 +300,8 @@ namespace Acam {
   class Interface {
     private:
       bool class_initialized;
+      std::atomic<bool> monitor_focus_thread_running;
+      std::atomic<bool> acquire_thread_running;
       std::string imagename;
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
@@ -333,7 +315,9 @@ namespace Acam {
 
       GuideManager guide_manager;
 
-      Interface() : imagename(""), wcsname(""), cameraserver_host(""), motion_host(""), cameraserver_port(-1), motion_port(-1) { }
+      Interface() : monitor_focus_thread_running(false),
+                    acquire_thread_running(false),
+                    imagename(""), wcsname(""), cameraserver_host(""), motion_host(""), cameraserver_port(-1), motion_port(-1) { }
 
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
@@ -357,9 +341,9 @@ namespace Acam {
 
       FITS_file fits_file;                     /// instantiate a FITS container object
 
-      TcsDaemonClient tcsd;                    /// for communicating with the TCS daemon
+      TcsDaemonClient tcsd;                    /// for communicating with the TCS daemon, defined in ~/Software/tcsd/tcsd_client.h
 
-      SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets
+      SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
       void initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long initialize_class();                 /// initialize the Interface class
@@ -371,7 +355,8 @@ namespace Acam {
       long acquire_fix( std::string args, std::string &retstring );    /// wrapper to acquire an Andor image
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
-      long guider_settings_control( std::string args, std::string &retstring );
+      long guider_settings_control();          /// get guider settings and push to Guider GUI display
+      long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long test( std::string args, std::string &retstring );
 
       long collect_header_info();
@@ -381,8 +366,10 @@ namespace Acam {
 
       long configure_interface( Config &config );
 
+      static void dothread_acquire( Acam::Interface &iface, const std::string whattodo, const std::string sourcefile );
       static void dothread_set_filter( Acam::Interface &iface, std::string filter_req );
       static void dothread_set_focus( Acam::Interface &iface, double focus_req );
+      static void dothread_monitor_focus( Acam::Interface &iface );
   };
   /***** Acam::Interface ******************************************************/
 

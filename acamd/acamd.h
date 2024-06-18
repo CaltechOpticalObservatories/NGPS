@@ -29,7 +29,6 @@
 #include "acam_server.h"
 
 
-#define  N_THREADS    10          ///< total number of threads spawned by daemon, one for blocking and the remainder for non-blocking
 #define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds
 
 void signal_handler(int signo);   ///< handles ctrl-C

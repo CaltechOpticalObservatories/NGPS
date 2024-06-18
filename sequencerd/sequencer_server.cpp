@@ -1009,7 +1009,7 @@ namespace Sequencer {
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,
-          args="";                                     // then the arg list is empty,
+          args.clear();                                // then the arg list is empty,
         }
         else {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
@@ -1037,11 +1037,11 @@ namespace Sequencer {
        * process commands here
        */
       ret = NOTHING;
-      std::string retstring="";
+      std::string retstring;
 
       if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
-                      for ( auto s : SEQUENCERD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
-                      ret = NO_ERROR;
+                      for ( const auto &s : SEQUENCERD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = HELP;
       }
       else
       if ( cmd.compare( SEQUENCERD_EXIT )==0 ) {
@@ -1583,11 +1583,12 @@ namespace Sequencer {
         // If the retstring doesn't already have a DONE or ERROR in it,
         // then append that to the retstring.
         //
-        if ( ( retstring.find( "DONE" )  == std::string::npos ) &&
+        if ( ret != HELP &&
+             ( retstring.find( "DONE" )  == std::string::npos ) &&
              ( retstring.find( "ERROR" ) == std::string::npos ) ) {
           retstring.append( ret == 0 ? "DONE" : "ERROR" );
 
-          if ( buf.find("help")==std::string::npos && buf.find("?")==std::string::npos ) {
+          if ( ret != HELP && buf.find("help")==std::string::npos && buf.find("?")==std::string::npos ) {
             message.str(""); message << "command (" << seq.cmd_num << ") reply: " << retstring;
             logwrite( function, message.str() );
           }

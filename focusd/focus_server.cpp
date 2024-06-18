@@ -420,7 +420,7 @@ namespace Focus {
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,
-          args="";                                     // then the arg list is empty,
+          args.clear();                                // then the arg list is empty,
         }
         else {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
@@ -449,11 +449,11 @@ namespace Focus {
       // process commands here
       //
       ret = NOTHING;
-      std::string retstring="";
+      std::string retstring;
 
       if ( cmd == "help" || cmd == "?" ) {
-                      for ( auto s : FOCUSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
-                      ret = NO_ERROR;
+                      for ( const auto &s : FOCUSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = HELP;
       }
       else
 
@@ -541,10 +541,21 @@ namespace Focus {
         ret = ERROR;
       }
 
+      // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
+      // and log the reply along with the command number. Write the reply back to the socket.
+      //
+      // Don't append anything nor log the reply if the command was just requesting help.
+      //
       if (ret != NOTHING) {
-        if ( not retstring.empty() ) retstring.append( " " );
-        std::string term=(ret==NO_ERROR?"DONE\n":"ERROR\n");
-        retstring.append( term );
+        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+
+        if ( ! retstring.empty() && ret != HELP ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
+          logwrite( function, message.str() );
+        }
+
+        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

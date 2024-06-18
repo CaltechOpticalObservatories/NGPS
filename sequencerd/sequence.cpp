@@ -927,7 +927,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     // Turn on power to slit hardware.
     //
-    for ( auto plug : seq.power_switch[POWER_SLIT].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_SLIT].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
@@ -1011,7 +1011,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     // Turn on power to acam hardware.
     //
-    for ( auto plug : seq.power_switch[POWER_ACAM].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_ACAM].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
@@ -1100,7 +1100,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Turn off power to acam hardware.
     // Any error here is added to thr_error.
     //
-    for ( auto plug : seq.power_switch[POWER_ACAM].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_ACAM].plugname ) {
       long pwrerr=NO_ERROR;
       std::stringstream cmd;
       cmd << plug << " OFF";
@@ -1143,7 +1143,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     // Turn on power to calib hardware.
     //
-    for ( auto plug : seq.power_switch[POWER_CALIB].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_CALIB].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error = seq.powerd.send( cmd.str(), reply );
@@ -1235,7 +1235,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Turn off power to calib hardware.
     // Any error here is added to thr_error.
     //
-    for ( auto plug : seq.power_switch[POWER_CALIB].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_CALIB].plugname ) {
       long pwrerr=NO_ERROR;
       std::stringstream cmd;
       cmd << plug << " OFF";
@@ -1449,7 +1449,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Turn on power to flexure hardware.
     //
     logwrite( function, "powering on flexure hardware" );
-    for ( auto plug : seq.power_switch[POWER_FLEXURE].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_FLEXURE].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
@@ -1512,7 +1512,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Turn on power to focus hardware.
     //
     logwrite( function, "powering on focus hardware" );
-    for ( auto plug : seq.power_switch[POWER_FOCUS].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_FOCUS].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
@@ -1575,7 +1575,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Turn on power to science cameras
     //
     logwrite( function, "powering on science cameras" );
-    for ( auto plug : seq.power_switch[POWER_CAMERA].plugname ) {
+    for ( const auto &plug : seq.power_switch[POWER_CAMERA].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
@@ -1605,7 +1605,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     // send all of the preamble commands
     //
-    for ( auto cmd : seq.camera_preamble ) {
+    for ( const auto &cmd : seq.camera_preamble ) {
       if (error==NO_ERROR) error = seq.camerad.send( cmd, reply );
     }
 
@@ -3870,6 +3870,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       retstring.append( "   states [ ? ]\n" );
       retstring.append( "   tablenames [ ? ]\n" );
       retstring.append( "   update ? | { pending | complete | unassigned }\n" );
+      return HELP;
     }
     else
 
@@ -3882,7 +3883,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring = "test async [ <message> ]\n";
         retstring.append( "  Queue and broadcast optional <message>. If <message> not supplied\n" );
         retstring.append( "  then broadcast \"test\".\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       if ( tokens.size() > 1 ) {
         bool first=true;
@@ -3911,10 +3912,10 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "  Log all of the camera preamble commands.\n" );
         retstring.append( "  These are commands that will be sent to the camera daemon\n" );
         retstring.append( "  on initialization.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
-      for ( auto cmd : this->camera_preamble ) {
+      for ( const auto &cmd : this->camera_preamble ) {
         logwrite( function, "camera "+cmd );
       }
     }
@@ -3928,7 +3929,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test isready\n";
         retstring.append( "  Report which systems are not ready\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       message.str("");
       uint32_t ss = this->system_not_ready.load(std::memory_order_relaxed);
@@ -3953,7 +3954,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test cameraset\n";
         retstring.append( "  Set only the camera according to the parameters in the target row.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
       std::thread( dothread_camera_set, std::ref(*this) ).detach();        // set camera in a thread
@@ -3968,7 +3969,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test expose\n";
         retstring.append( "  Trigger an exposure.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
       std::thread( dothread_trigger_exposure, std::ref(*this) ).detach();  // trigger exposure in a thread
@@ -3984,7 +3985,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring = "test states\n";
         retstring.append( "  Log the REQSTATE and SEQSTATE bits that are set,\n" );
         retstring.append( "  and a list of the threads currently running\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       // get the seqstate and reqstate and put them (numerically) into the return string
@@ -4030,7 +4031,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring = "test single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>\n";
         retstring.append( "  Get command line info for a single observation without the database.\n" );
         retstring.append( "  Arguments must be comma delimited in the order shown.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       std::string::size_type pos = args.find( "single " );         // note space at end of test name!
       std::string arglist = args.substr( pos+strlen("single ") );  // arglist is the rest of the args string after "single "
@@ -4097,7 +4098,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "  Read the next PENDING target from the database.\n" );
         retstring.append( "  This is the equivalent (and necessary) step performed prior\n" );
         retstring.append( "  to starting an observation.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       TargetInfo::TargetState ret;
@@ -4139,7 +4140,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring = "test addrow <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\n";
         retstring.append( "  Insert a fixed row into the database. Arguments are space delimited\n" );
         retstring.append( "  in the order shown.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       int number=0;
       std::string name="", ra="", dec="";
@@ -4181,7 +4182,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "  Update state of current target in target table to COMPLETE\n" );
         retstring.append( "  and insert a record in the completed observations table.\n" );
         retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       error = this->target.update_state( Sequencer::TARGET_COMPLETE );
       if (error==NO_ERROR) error = this->target.insert_completed();
@@ -4207,7 +4208,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
           retstring = "test update { pending | complete | unassigned }\n";
           retstring.append( "  Update state of current target in target table to PENDING | COMPLETE | UNASSIGNED.\n" );
           retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
-          return( NO_ERROR );
+          return HELP;
         }
         if ( tokens[1] != "pending" && tokens[1] != "complete" && tokens[1] != "unassigned" ) {
           logwrite( function, "update expected { pending | complete | unassigned }" );
@@ -4232,7 +4233,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring = "test radec\n";
         retstring.append( "  Convert the RA,DEC of the current target from HH:MM:SS to decimal.\n" );
         retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       double ra,dec;
       ra  = this->target.radec_to_decimal( target.ra_hms );
@@ -4252,7 +4253,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test notify\n";
         retstring.append( "  Send a notification signal to unblock all waiting threads.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       this->cv.notify_all();
     }
@@ -4266,7 +4267,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test tablenames\n";
         retstring.append( "  Print the names of the tables in the database\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       error = this->target.get_table_names();
     }
@@ -4280,7 +4281,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test pause\n";
         retstring.append( "  Send an asynchronous command to camerad to pause exposure.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       error = this->camerad.async( "PEX" );
     }
@@ -4294,7 +4295,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test resume\n";
         retstring.append( "  Send an asynchronous command to camerad to resume exposure.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
       error = this->camerad.async( "REX" );
     }
@@ -4313,7 +4314,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "  and start the acquisition sequence. Optional <solverargs> may be\n" );
         retstring.append( "  included to send to the solver.\n" );
         retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       // any and all args are taken to be optional solver args
@@ -4349,7 +4350,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "  Spawn a thread to start the acquisition sequence.\n" );
         retstring.append( "  This only performs the acquisition so the TCS must\n" );
         retstring.append( "  already be tracking on a target.\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       // Read the current cass angle from the TCS
@@ -4432,7 +4433,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "  Convert the coordinates of the current target from one\n" );
         retstring.append( "  coordinate system to another, as specified by <from> and <to>.\n" );
         retstring.append( "  A target must have been first read from the database (e.g. test getnext)\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       std::string from, to;
@@ -4465,7 +4466,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = "test script <file>\n";
         retstring.append( "  Run <file> as a script. EXPERIMENTAL!\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       if ( tokens.size() != 2 ) {
@@ -4492,7 +4493,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         retstring.append( "    power | acam | slit | calib | camera | focus | flexure | tcs <which>.\n" );
         retstring.append( "  Note that power must be running before any other module.\n" );
         retstring.append( "  Module tcs requires an additional argument <which> = sim | tcs\n" );
-        return( NO_ERROR );
+        return HELP;
       }
 
       if ( tokens.size() != 2 ) {

@@ -21,6 +21,7 @@ const std::string ACAMD_GAIN     = "gain";      ///< set/get CCD Gain
 const std::string ACAMD_IMFLIP   = "imflip";    ///< set/get CCD image flip states
 const std::string ACAMD_IMROT    = "imrot";     ///< set/get CCD image rotation states
 const std::string ACAMD_SPEED    = "speed";     ///< set/get CCD clocking speeds
+const std::string ACAMD_EMULATOR = "emulator";  ///< set/get Andor emulator state
 const std::string ACAMD_EXIT     = "exit";      ///< 
 const std::string ACAMD_EXPTIME  = "exptime";   ///< set/get camera exposure time
 const std::string ACAMD_FILTER   = "filter";    ///< filter [ name ] to set or get the filter
@@ -32,7 +33,6 @@ const std::string ACAMD_ISOPEN   = "isopen";    ///< *** close connection to all
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
-const std::string ACAMD_SIMANDOR = "simandor";  ///< set/get Andor simulator state
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver
 const std::string ACAMD_TCSGET = "tcsget";      ///< 
 const std::string ACAMD_TCSINIT = "tcsinit";    ///< initialize acamd's connection to tcsd
@@ -63,6 +63,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_ACQUIRE+" [ ? | <filename> ]",
                                                 ACAMD_ACQUIREFIX+" [ ? ]",
                                                 ACAMD_BIN+" [ ? | <hbin> <vbin> ]",
+                                                ACAMD_EMULATOR+" [ ? | true | false ]",
                                                 ACAMD_EXPTIME+" [ ? | <exptime> ]",
                                                 ACAMD_GAIN+" [ ? | <gain> ]",
                                                 ACAMD_GUIDESET+" [ ? | <exptime> <gain> <filter> <focus> ]",
@@ -73,13 +74,8 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_CAMERASERVER_COORDS+" <ra> <dec> <pa>",
 #endif
                                                 ACAMD_QUALITY+" [ ? ]",
-                                                ACAMD_SIMANDOR+" [ ? | true | false ]",
                                                 ACAMD_SOLVE+" [ ? | <filename>] [ <key>=<val> ... ]",
                                                 ACAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 ACAMD_TEMP+" [ ? | <setpoint> ]",
-                                                ACAMD_TEST+" ? | <testname> ...",
-                                                "   fpoffsets <from> <to> <ra> <dec> <angle>",
-                                                "   adchans"
-                                                "   emgainrange"
-                                                "   getemgain"
+                                                ACAMD_TEST+" ? | <testname> ..."
                                               };

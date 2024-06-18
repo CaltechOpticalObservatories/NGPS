@@ -8,6 +8,8 @@ cmake_minimum_required( VERSION 3.12 )
 
 set( POWERD_DIR ${PROJECT_BASE_DIR}/powerd )
 
+set( CMAKE_CXX_STANDARD 17 )
+
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
 include_directories( ${PROJECT_BASE_DIR}/WTI )

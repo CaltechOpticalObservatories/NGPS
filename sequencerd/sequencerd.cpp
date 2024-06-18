@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
                  std::ref(socklist[thrid]) ).detach();   // spawn a thread to handle each non-blocking socket request
   }
 
-  Network::TcpSocket async(sequencerd.asyncport, true, true, -1, thrid);    // instantiate TcpSocket object as blocking and asynchronous
+  Network::TcpSocket async( Sequencer::DAEMON_NAME, sequencerd.asyncport, true, true, -1, thrid );    // instantiate TcpSocket object as blocking and asynchronous
   async.Listen();                                    // create a listening socket
   socklist.push_back(async);                         // add it to the socklist vector
   std::thread( std::ref(Sequencer::Server::block_main),
@@ -202,7 +202,9 @@ int main(int argc, char **argv) {
   //
   std::thread( std::ref(Sequencer::Server::new_log_day), logpath ).detach();
 
-  sequencerd.sequence.report_seqstate();
+  sequencerd.sequence.async.enqueue( "SEQUENCERD:started" );  // broadcast that I have started
+
+  sequencerd.sequence.report_seqstate();                      // broadcast the seqstate
 
   for (;;) pause();                                  // main thread suspends
 //Py_END_ALLOW_THREADS

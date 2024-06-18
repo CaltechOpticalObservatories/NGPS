@@ -46,7 +46,7 @@ namespace TCS {
     if ( tokens.size() != 3 ) {
       message.str(""); message << "ERROR bad number of parameters in \"" << input << "\": expected 3 but received " << tokens.size();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     try {
@@ -57,12 +57,12 @@ namespace TCS {
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
     catch ( std::out_of_range &e ) {
       message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // Check that (potentially) valid values have been extracted
@@ -70,15 +70,15 @@ namespace TCS {
     if ( tryport < 1 ) {
       message.str(""); message << "ERROR port " << tryport << " must be greater than 0";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
     if ( tryname.empty() ) {
       logwrite( function, "ERROR name cannot be empty" );
-      return( ERROR );
+      return ERROR;
     }
     if ( tryhost.empty() ) {
       logwrite( function, "ERROR host cannot be empty" );
-      return( ERROR );
+      return ERROR;
     }
 
     // Insert a new element into the tcsmap with the name loaded from the config file,
@@ -88,7 +88,7 @@ namespace TCS {
     this->interface.tcsmap.emplace( tryname, 
                                     TCS::TcsIO{std::make_unique<Network::Interface>(tryname, tryhost, tryport, '\r', '\0')});
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** TCS::Server::load_tcs_info *******************************************/
 
@@ -127,11 +127,11 @@ namespace TCS {
         }
         catch (std::invalid_argument &) {
           logwrite(function, "ERROR: bad NBPORT: unable to convert to integer");
-          return(ERROR);
+          return ERROR;
         }
         catch (std::out_of_range &) {
           logwrite(function, "NBPORT number out of integer range");
-          return(ERROR);
+          return ERROR;
         }
         this->nbport = port;
         message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -148,11 +148,11 @@ namespace TCS {
         }
         catch (std::invalid_argument &) {
           logwrite(function, "ERROR: bad BLKPORT: unable to convert to integer");
-          return(ERROR);
+          return ERROR;
         }
         catch (std::out_of_range &) {
           logwrite(function, "BLKPORT number out of integer range");
-          return(ERROR);
+          return ERROR;
         }
         this->blkport = port;
         message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -169,11 +169,11 @@ namespace TCS {
         }
         catch (std::invalid_argument &) {
           logwrite(function, "ERROR: bad ASYNCPORT: unable to convert to integer");
-          return(ERROR);
+          return ERROR;
         }
         catch (std::out_of_range &) {
           logwrite(function, "ASYNCPORT number out of integer range");
-          return(ERROR);
+          return ERROR;
         }
         this->asyncport = port;
         message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -244,12 +244,12 @@ namespace TCS {
    * This thread never terminates.
    *
    */
-  void Server::block_main( TCS::Server &server, Network::TcpSocket sock ) {
-    while(1) {
-      sock.Accept();
-      server.doit(sock);            // call function to do the work
-      sock.Close();
-    }
+  void Server::block_main( TCS::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
+    server.threads_active.fetch_add(1);  // atomically increment threads_busy counter
+    server.doit(*sock);
+    sock->Close();
+    server.threads_active.fetch_sub(1);  // atomically increment threads_busy counter
+    server.id_pool.release_number( sock->id );
     return;
   }
   /***** Server::block_main ***************************************************/
@@ -272,17 +272,34 @@ namespace TCS {
    * is mutex-protected.
    *
    */
-  void Server::thread_main( TCS::Server &server, Network::TcpSocket sock ) {
+  void Server::thread_main( TCS::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
     while (1) {
-      server.conn_mutex.lock();
-      sock.Accept();
-      server.conn_mutex.unlock();
-      server.doit(sock);         // call function to do the work
-      sock.Close();
+      {
+      std::lock_guard<std::mutex> lock(server.conn_mutex);
+      sock->Accept();
+      }
+      server.doit(*sock);                // call function to do the work
+      sock->Close();
     }
     return;
   }
   /***** Server::thread_main **************************************************/
+
+
+  /***** Server::handle_new_connection ****************************************/
+  /**
+   * @brief      handles extra connections if main threads are busy
+   * @param[in]  server  reference to TCS::Server object
+   * @param[in]  sock    shared pointer to Network::TcpSocket socket object
+   *
+   */
+  void Server::handle_new_connection( TCS::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
+    server.doit(*sock);                  // call function to do the work
+    sock->Close();
+    server.remove_socket( sock->id );    // this socket won't be needed again
+    return;
+  }
+  /***** Server::handle_new_connection ****************************************/
 
 
   /***** Server::async_main ***************************************************/
@@ -341,7 +358,7 @@ namespace TCS {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit(Network::TcpSocket sock) {
+  void Server::doit(Network::TcpSocket &sock) {
     std::string function = "TCS::Server::doit";
     long  ret;
     std::stringstream message;
@@ -415,17 +432,17 @@ namespace TCS {
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,
-          args="";                                     // then the arg list is empty,
+          args.clear();                                // then the arg list is empty,
         }
         else {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
         }
 
-        sock.id = ++this->cmd_num;
+        ++this->cmd_num;
         if ( this->cmd_num == INT_MAX ) this->cmd_num = 0;
 
         if ( !polling ) {
-          message.str(""); message << "received command on fd " << sock.getfd() << " (" << sock.id << "): " << cmd << " " << args;
+          message.str(""); message << "received command on fd " << sock.getfd() << " (" << this->cmd_num << "): " << cmd << " " << args;
           logwrite(function, message.str());
         }
       }
@@ -448,8 +465,8 @@ namespace TCS {
       std::string retstring;
 
       if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
-                      for ( auto s : TCSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
-                      ret = NO_ERROR;
+                      for ( const auto &s : TCSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = HELP;
       }
       else
       if ( cmd.compare( TCSD_EXIT ) == 0 ) {
@@ -474,16 +491,14 @@ namespace TCS {
       // list
       //
       if ( cmd.compare( TCSD_LIST ) == 0 ) {
-                      this->interface.list( args, retstring );
-                      ret = NO_ERROR;
+                      ret = this->interface.list( args, retstring );
       }
       else
 
       // llist
       //
       if ( cmd.compare( TCSD_LLIST ) == 0 ) {
-                      this->interface.llist( args, retstring );
-                      ret = NO_ERROR;
+                      ret = this->interface.llist( args, retstring );
       }
       else
 
@@ -491,6 +506,13 @@ namespace TCS {
       //
       if ( cmd.compare( TCSD_ISOPEN ) == 0 ) {
                       ret = this->interface.isopen( args, retstring );
+      }
+      else
+
+      // getname
+      //
+      if ( cmd.compare( TCSD_GET_NAME ) == 0 ) {
+                      ret = this->interface.get_name( args, retstring );
       }
       else
 
@@ -510,7 +532,7 @@ namespace TCS {
       else
 
       if ( cmd.compare( TCSD_GET_FOCUS ) == 0 ) {
-                      args.insert( 0, ( polling ? "poll " : "" ) );  // insert polling arg
+                      if ( polling ) args = "poll";
                       ret = this->interface.get_focus( args, retstring );
       }
       else
@@ -555,10 +577,21 @@ namespace TCS {
         std::replace( retstring.begin(), retstring.end(), '\n', ',');
       }
 
+      // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
+      // and log the reply along with the command number. Write the reply back to the socket.
+      //
+      // Don't append anything nor log the reply if the command was just requesting help.
+      //
       if (ret != NOTHING) {
-        if ( !retstring.empty() ) retstring.append( " " );
-        std::string term=(ret==NO_ERROR?"DONE\n":"ERROR\n");
-        retstring.append( term );
+        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+
+        if ( ! retstring.empty() && ret != HELP && !polling ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
+          logwrite( function, message.str() );
+        }
+
+        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

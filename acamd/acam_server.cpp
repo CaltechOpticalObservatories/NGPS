@@ -363,9 +363,10 @@ namespace Acam {
    */
   void Server::thread_main( Acam::Server &acam, Network::TcpSocket sock ) {
     while (1) {
-      acam.conn_mutex.lock();
+      {
+      std::lock_guard<std::mutex> lock ( acam.conn_mutex );
       sock.Accept();
-      acam.conn_mutex.unlock();
+      }
       acam.doit(sock);           // call function to do the work
       sock.Close();
     }
@@ -442,6 +443,9 @@ namespace Acam {
 
     while (connection_open) {
 
+message.str(""); message << "connected to fd " << sock.getfd() << " thread " << sock.id;
+logwrite(function, message.str());
+
       // Wait (poll) connected socket for incoming data...
       //
       int pollret;
@@ -491,7 +495,7 @@ namespace Acam {
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,
-          args="";                                     // then the arg list is empty,
+          args.clear();                                // then the arg list is empty,
         }
         else {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
@@ -518,12 +522,12 @@ namespace Acam {
       // process commands here
       //
       ret = NOTHING;
-      std::string retstring="";
+      std::string retstring;
       bool suppress_term_state=false;
 
       if ( cmd == "help" || cmd == "?" ) {
-                      for ( auto s : ACAMD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
-                      ret = NO_ERROR;
+                      for ( const auto &s : ACAMD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = HELP;
       }
       else
       if ( cmd == ACAMD_EXIT ) {
@@ -532,13 +536,20 @@ namespace Acam {
       else
 
       if ( cmd == ACAMD_TCSINIT ) {
+                      // If the TCS initialization is successful, then spawn
+                      // a detached thread to monitor the focus, which is
+                      // what keeps the Guider GUI updated on focus changes.
+                      //
                       ret = this->interface.tcsd.init( args, retstring );
+                      if ( ret==NO_ERROR && args.find("?") == std::string::npos && args.find("help") == std::string::npos ) {
+                        std::thread( this->interface.dothread_monitor_focus, std::ref(interface) ).detach();
+                      }
       }
       else
       if ( cmd == ACAMD_TCSISOPEN ) {
                       ret = this->interface.tcsd.client.is_open();
                       retstring = ( ret ? "true" : "false" );
-                      ret = 0;
+                      ret = NO_ERROR;
       }
       else
       if ( cmd == ACAMD_TCSISCONNECTED ) {
@@ -546,12 +557,26 @@ namespace Acam {
       }
       else
       if ( cmd == ACAMD_TCSGET ) {
-                      double foo;
-                      this->interface.tcsd.get_cass( foo );
-                      double ra_h, dec_d;
-                      this->interface.tcsd.get_coords( ra_h, dec_d );
-                      retstring = std::to_string(foo) + " " + std::to_string(ra_h) + " " + std::to_string(dec_d);
-                      ret = 0;
+                      if ( args.empty() ) {
+                        double casangle;
+                        this->interface.tcsd.get_cass( casangle );
+                        double ra_h, dec_d;
+                        this->interface.tcsd.get_coords( ra_h, dec_d );
+                        retstring = std::to_string(casangle) + " " + std::to_string(ra_h) + " " + std::to_string(dec_d);
+                        ret = NO_ERROR;
+                      }
+                      else
+                      if ( args == "?" || args == "help" ) {
+                        retstring = ACAMD_TCSGET;
+                        retstring.append( "\n" );
+                        retstring.append( "  Returns <cassangle> <ra> <dec>\n" );
+                        ret = HELP;
+                      }
+                      else {
+                        logwrite( function, "ERROR invalid argument" );
+                        retstring = "invalid_argument";
+                        ret = ERROR;
+                      }
       }
       else
       // commands for the Andor camera direct
@@ -634,11 +659,13 @@ namespace Acam {
       }
       else
       if ( cmd == ACAMD_EXPTIME ) {
-                      ret = this->interface.camera.exptime( args, retstring );
+                      ret  = this->interface.camera.exptime( args, retstring );  // set exptime
+                      ret |= this->interface.guider_settings_control();          // update Guider GUI display
       }
       else
       if ( cmd == ACAMD_GAIN ) {
-                      ret = this->interface.camera.gain( args, retstring );
+                      ret  = this->interface.camera.gain( args, retstring );     // set gain
+                      ret |= this->interface.guider_settings_control();          // update Guider GUI display
       }
       else
       if ( cmd == ACAMD_GUIDESET ) {
@@ -654,8 +681,8 @@ namespace Acam {
                       ret = this->interface.camera.temperature( args, retstring );
       }
       else
-      if ( cmd == ACAMD_SIMANDOR ) {
-                      ret = this->interface.camera.simandor( args, retstring );
+      if ( cmd == ACAMD_EMULATOR ) {
+                      ret = this->interface.camera.emulator( args, retstring );
       }
       else
 
@@ -757,10 +784,21 @@ namespace Acam {
         ret = ERROR;
       }
 
+      // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
+      // and log the reply along with the command number. Write the reply back to the socket.
+      //
+      // Don't append anything nor log the reply if the command was just requesting help.
+      //
       if (ret != NOTHING) {
-        if ( !retstring.empty() ) retstring.append( " " );
-        std::string term=(ret==0?"DONE\n":"ERROR\n");
-        retstring.append( suppress_term_state ? "\n" : term );
+        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+
+        if ( ! retstring.empty() && ret != HELP ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
+          logwrite( function, message.str() );
+        }
+
+        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

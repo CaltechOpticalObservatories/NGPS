@@ -5,8 +5,8 @@
  * @details 
  *
  */
-#ifndef CAMERA_H
-#define CAMERA_H
+
+#pragma once
 
 #include <CCfits/CCfits>           // needed here for types in set_axes()
 #include <dirent.h>                // for imdir()
@@ -37,6 +37,20 @@
  *
  */
 namespace Camera {
+
+  class InterfaceBase {
+    public:
+      InterfaceBase() = default;
+  };
+
+  template <typename T>
+  class NewInterface : public T {
+    public:
+      NewInterface() = default;
+
+      long new_expose( std::string nseq_in ) { return T::new_expose( nseq_in ); }
+  };
+
 
   /***** Camera::Shutter ******************************************************/
   /**
@@ -546,4 +560,3 @@ namespace Camera {
 
 }
 /***** Camera *****************************************************************/
-#endif

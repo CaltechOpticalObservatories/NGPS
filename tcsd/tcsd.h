@@ -33,7 +33,6 @@
 #include "daemonize.h"
 #include "tcs_server.h"
 
-#define  N_THREADS    10          ///< total number of threads spawned by sequencer, one for blocking and the rest for non-blocking
 #define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds
 
 TCS::Server tcsd;                 ///< global TCS::Server object so that the main daemon can access the namespace

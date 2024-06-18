@@ -16,6 +16,7 @@ const std::string TCSD_GET_COORDS = "getcoords";
 const std::string TCSD_GET_DOME = "getdome";
 const std::string TCSD_GET_FOCUS = "getfocus";
 const std::string TCSD_GET_MOTION = "getmotion";
+const std::string TCSD_GET_NAME = "getname";
 const std::string TCSD_ISOPEN = "isopen";
 const std::string TCSD_LIST = "list";
 const std::string TCSD_LLIST = "llist";
@@ -33,6 +34,7 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_GET_DOME+" [ ? ]",
                                                TCSD_GET_FOCUS+" [ ? ]",
                                                TCSD_GET_MOTION+" [ ? ]",
+                                               TCSD_GET_NAME+" [ ? ]",
                                                TCSD_ISOPEN+" [ ? ]",
                                                TCSD_LIST+" [ ? ]",
                                                TCSD_LLIST+" [ ? ]",

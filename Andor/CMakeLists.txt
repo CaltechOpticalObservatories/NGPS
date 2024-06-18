@@ -6,9 +6,11 @@
 
 cmake_minimum_required( VERSION 3.12 )
 
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -ggdb )
-
 set( ANDOR_DIR ${PROJECT_BASE_DIR}/Andor )
+
+set( CMAKE_CXX_STANDARD 17 )
+
+add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
@@ -31,7 +33,7 @@ add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -l
 
 add_library( andor STATIC
         ${ANDOR_DIR}/andor.cpp
-        ${ANDOR_DIR}/sim_andor.cpp
+        ${ANDOR_DIR}/andor_emulator.cpp
         ${PYTHON_DEV}
         )
 

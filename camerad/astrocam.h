@@ -7,8 +7,8 @@
  * ARC-64 PCI and ARC-66 PCIe.
  *
  */
-#ifndef ASTROCAM_H
-#define ASTROCAM_H
+
+#pragma once
 
 #include <CCfits/CCfits>           // needed here for types in set_axes()
 #include <atomic>
@@ -540,13 +540,21 @@ namespace AstroCam {
   /***** AstroCam::DeInterlace ************************************************/
 
 
+  class NewAstroCam : public Camera::InterfaceBase {
+    public:
+
+      NewAstroCam() = default;
+
+      long new_expose( std::string nseq_in );
+  };
+
   /***** AstroCam::Interface **************************************************/
   /**
    * @class Interface
    * @brief This class defines the interface to the AstroCam controller
    *
    */
-  class Interface {
+  class Interface : public Camera::InterfaceBase {
     private:
 //    int bufsize;
       int FITS_STRING_KEY;
@@ -1004,5 +1012,3 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
 }
 /***** AstroCam ***************************************************************/
-
-#endif

@@ -60,10 +60,10 @@ namespace Calib {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    for ( auto const &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
       message.str(""); message << "[DEBUG] motion controller " << mot.first
                                << " addr=" << mot.second.addr;
-      for ( auto const &pos : mot.second.posmap ) {
+      for ( const auto &pos : mot.second.posmap ) {
         message << " " << pos.second.posname << "=" << pos.second.position;
       }
       logwrite( function, message.str() );
@@ -114,7 +114,7 @@ namespace Calib {
    * @brief       return the connected state of the motor controllers
    * @param[in]   arg        used only for help
    * @param[out]  retstring  contains the connected state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be connected for this to return "true".
    *
@@ -132,7 +132,7 @@ namespace Calib {
       retstring = CALIBD_ISOPEN;
       retstring.append( " \n" );
       retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Loop through all motor controllers, checking each if connected,
@@ -141,7 +141,7 @@ namespace Calib {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( auto &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
 
       bool _isopen = this->motorinterface.is_connected( mot.second.name );
 
@@ -179,7 +179,7 @@ logwrite( function, message.str() );
    * @brief      home all calib actuators
    * @param[in]  name_in    optional list of motors to home
    * @param[out] retstring  reference to return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Motion::home( std::string name_in, std::string &retstring ) {
@@ -190,11 +190,11 @@ logwrite( function, message.str() );
       retstring = CALIBD_HOME;
       retstring.append( " [ " );
       auto _motormap = this->motorinterface.get_motormap();
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "]\n" );
       retstring.append( "  Home all calib motors or single motor indicated by optional <name>.\n" );
       retstring.append( "  If no argument is supplied then all are homed simultaneously.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // All the work is done by the PI motor interface class
@@ -209,7 +209,7 @@ logwrite( function, message.str() );
    * @brief       return the home state of the motors
    * @param[in]   name_in    optionally contains one or more motors to check
    * @param[out]  retstring  contains the home state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be homed for this to return "true".
    *
@@ -222,12 +222,12 @@ logwrite( function, message.str() );
       retstring = CALIBD_ISHOME;
       retstring.append( " [ " );
       auto _motormap = this->motorinterface.get_motormap();
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
       retstring.append( "]\n" );
       retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
       retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
       retstring.append( "  homed, false if any one is not homed.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // All the work is done by the PI motor interface class
@@ -246,7 +246,7 @@ logwrite( function, message.str() );
    *             each in its own thread.
    * @param[in]  input      list of actuators with optional "=state" i.e. cover=open, door=close
    * @param[out] retstring  actuator state { OPEN | CLOSE }
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Motion::set( std::string input, std::string &retstring ) {
@@ -261,9 +261,9 @@ logwrite( function, message.str() );
       retstring = CALIBD_SET;
       retstring.append( " <actuator>=<posname> [ <actuator>=<posname> ]\n" );
       retstring.append( "  where <posname> is\n" );
-      for ( auto const &mot : _motormap ) {
+      for ( const auto &mot : _motormap ) {
         retstring.append( "                     { " );
-        for ( auto const &pos : mot.second.posmap ) {
+        for ( const auto &pos : mot.second.posmap ) {
           retstring.append( pos.second.posname ); retstring.append( " " );
         }
         retstring.append( "} for <actuator> = " );
@@ -272,7 +272,7 @@ logwrite( function, message.str() );
       }
       retstring.append( "  One or both actuators may be set simultaneously.\n" );
       retstring.append( "  There are no space between <actuator>=<posname>, e.g. set door=open\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     std::stringstream namelist;                      // list of actuator names used for getting position after move
@@ -289,7 +289,7 @@ logwrite( function, message.str() );
     // Iterate through each requested actuator, and
     // build the motornames, posnames vectors to pass to moveto().
     //
-    for ( auto actuator : input_list ) {
+    for ( const auto &actuator : input_list ) {
 
       // Tokenize each item in above vector on "=" to get
       // the actuator name and the desired posname.
@@ -327,7 +327,7 @@ logwrite( function, message.str() );
    * @brief      get the position of the named actuator(s)
    * @param[in]  name_in    name of actuator(s), can be space-delimited list
    * @param[out] retstring  current position of actuator(s) { open | closed }
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Motion::get( std::string name_in, std::string &retstring ) {
@@ -345,17 +345,17 @@ logwrite( function, message.str() );
       retstring = CALIBD_GET;
       retstring.append( " [ <actuator> ]\n" );
       retstring.append( "  where <actuator> is { " );
-      for ( auto const &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
       retstring.append( "  If no arg is supplied then the position of both is returned.\n" );
       retstring.append( "  Supplying an actuator name returns the position of only the specified actuator.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // If no name(s) supplied then create a vector of all defined actuator names
     //
     if ( name_in.empty() ) {
-      for ( auto const &mot : _motormap ) {
+      for ( const auto &mot : _motormap ) {
         name_list.push_back( mot.first );
       }
     }
@@ -363,7 +363,7 @@ logwrite( function, message.str() );
       Tokenize( name_in, name_list, " " );  // otherwise create a vector of the supplied name(s)
     }
 
-    for ( auto const &name : name_list ) {
+    for ( const auto &name : name_list ) {
       std::string posname;
 
       if ( _motormap.find( name ) == _motormap.end() ) {
@@ -591,7 +591,7 @@ logwrite( function, message.str() );
    * @brief      lamp modulator control main parser
    * @param[in]  args       input arg string
    * @param[out] retstring  return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    * @details    Provides lamp modulator control to set and/or get settings.
    *             Input args are:
    *             ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]
@@ -641,7 +641,7 @@ logwrite( function, message.str() );
       retstring.append( "  <T> = period in msec {0,50:3600000} where 0=off\n" );
       retstring.append( "\n" );
       retstring.append( "  modulators open every <T> msec and close every <T> + ( <D> * <T> ) msec\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Anything after this requires at least arduino to be configured
@@ -704,7 +704,7 @@ logwrite( function, message.str() );
       auto foundn = std::find( this->mod_nums.begin(), this->mod_nums.end(), n );
       if ( n != 0 && foundn==this->mod_nums.end() ) {
        message.str(""); message << "ERROR invalid mod number " << n << ". expected { 0 ";
-       for ( auto num : this->mod_nums ) message << num << " ";
+       for ( const auto &num : this->mod_nums ) message << num << " ";
        message << "} (check config)";
        retstring="invalid_argument";
        return( ERROR );
@@ -786,7 +786,7 @@ logwrite( function, message.str() );
     double per;
 
     if ( num==0 ) {  // read all configured modulators
-      for ( auto modnum : this->mod_nums ) {
+      for ( const auto &modnum : this->mod_nums ) {
         error |= this->status( modnum, dut, per, pow );
         retstream << modnum << "," << dut << "," << per << " [" << ( pow ? "on" : "off" ) << "]\n";
       }
@@ -819,7 +819,7 @@ logwrite( function, message.str() );
     long error=NO_ERROR;
 
     if ( num==0 ) {  // set all configured modulators
-      for ( auto modnum : this->mod_nums ) error |= this->power( modnum, pow );
+      for ( const auto &modnum : this->mod_nums ) error |= this->power( modnum, pow );
     }
     else {           // set the specific modulator
       error = this->power( num, pow );
@@ -847,7 +847,7 @@ logwrite( function, message.str() );
     long error=NO_ERROR;
 
     if ( num==0 ) {  // set all configured modulators
-      for ( auto modnum : this->mod_nums ) error |= this->mod( modnum, dut, per );
+      for ( const auto &modnum : this->mod_nums ) error |= this->mod( modnum, dut, per );
     }
     else {           // set the specific modulator
       error = this->mod( num, dut, per );
@@ -878,7 +878,7 @@ logwrite( function, message.str() );
 
     // Set all configured modulators
     //
-    for ( auto const &modit : this->mod_map ) {
+    for ( const auto &modit : this->mod_map ) {
       if ( this->mod( modit.second.num, modit.second.dut, modit.second.per ) != NO_ERROR ) {
         message.str(""); message << "ERROR setting modulator " << modit.second.num;
         logwrite( function, message.str() );

@@ -351,7 +351,8 @@ namespace Telemetry {
       std::string retstring="";
 
       if ( cmd.compare( "help" ) == 0 ) {
-                      for ( auto s : TELEMD_SYNTAX ) { sock.Write( s ); sock.Write( "\n" ); }
+                      for ( auto s : TELEMD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret = NO_ERROR;
       }
       else
       if ( cmd.compare( TELEMD_EXIT ) == 0 ) {

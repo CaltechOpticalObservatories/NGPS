@@ -3,6 +3,10 @@
 # This script starts daemons, either the one specified by name, or all of them
 #
 
+# Get the fully qualified paths for each process and their config files here
+#
+source /home/developer/Software/run/ngps-config
+
 # @fn:     usage
 # @brief:  displays usage
 # @param:  none
@@ -148,17 +152,6 @@ select_proc( ) {
 		fi
 	done
 }
-
-# Get the fully qualified paths for each process and their config files here
-#
-source /home/developer/Software/run/ngps-config
-
-# Arrays of all processes, their associated names, and their associated config files
-# These two arrays must be aligned!
-#
-#PROCS=("$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$POWERD" "$SLITD" "$SEQUENCERD")
-#PROCNAMES=("calibd" "camerad" "flexured" "focusd" "powerd" "slitd" "sequencerd")
-#CONFIGS=("$CALIBD_CONFIG" "$CAMERAD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" "$POWERD_CONFIG" "$SLITD_CONFIG" "$SEQUENCERD_CONFIG")
 
 # Force daemon mode by default by adding " -d" to the command line
 #

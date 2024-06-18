@@ -828,7 +828,7 @@ namespace Thermal {
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,
-          args="";                                     // then the arg list is empty,
+          args.clear();                                // then the arg list is empty,
         }
         else {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
@@ -857,11 +857,11 @@ namespace Thermal {
       // process commands here
       //
       ret = NOTHING;
-      std::string retstring="";
+      std::string retstring;
 
       if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
-                      for ( auto s : THERMALD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
-                      ret= NO_ERROR;
+                      for ( const auto &s : THERMALD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+                      ret= HELP;
       }
       else
       if ( cmd.compare( THERMALD_EXIT ) == 0 ) {
@@ -872,9 +872,12 @@ namespace Thermal {
       // ECHO
       //
       if ( cmd.compare( THERMALD_ECHO ) == 0 ) {
-                      if ( args == "?" ) sock.Write( THERMALD_ECHO
-                                                     +" <string>\n  server receives and writes back <string> to the client.\n"
-                                                     +"  Used to test if the server is responsive.\n" );
+                      if ( args == "?" ) {
+                        retstring = THERMALD_ECHO;
+                        retstring.append( +" <string>\n  server receives and writes back <string> to the client.\n" );
+                        retstring.append( "  Used to test if the server is responsive.\n" );
+                        ret = HELP;
+                      }
                       else {
                         sock.Write( args );
                         sock.Write( "\n" );
@@ -906,7 +909,7 @@ namespace Thermal {
                         retstring.append( "\n" );
                         retstring.append( "  Stops telemetry, re-reads config file, applies configuration,\n" );
                         retstring.append( "  closes and re-opens connections to hardware, starts telemetry.\n" );
-                        ret = NO_ERROR;
+                        ret = HELP;
                       }
                       else {
                         ret = this->telemetry( "stop", retstring );
@@ -938,10 +941,21 @@ namespace Thermal {
         ret = ERROR;
       }
 
+      // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
+      // and log the reply along with the command number. Write the reply back to the socket.
+      //
+      // Don't append anything nor log the reply if the command was just requesting help.
+      //
       if (ret != NOTHING) {
-        if ( not retstring.empty() ) retstring.append( " " );
-        std::string term=(ret==NO_ERROR?"DONE\n":"ERROR\n");
-        retstring.append( term );
+        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+
+        if ( ! retstring.empty() && ret != HELP ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
+          logwrite( function, message.str() );
+        }
+
+        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

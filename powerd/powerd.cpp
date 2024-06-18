@@ -124,6 +124,7 @@ int main(int argc, char **argv) {
     }
 
   }
+
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     powerd.exit_cleanly();
@@ -547,10 +548,16 @@ void doit(Network::TcpSocket sock) {
     }
 
     if (ret != NOTHING) {
-      if ( ! retstring.empty() ) { message.str(""); message << "reply=" << retstring; logwrite( function, message.str() ); }
       if ( ! retstring.empty() ) retstring.append( " " );
-      std::string term=(ret==0?"DONE\n":"ERROR\n");
-      retstring.append( term );
+      retstring.append( ret == 0 ? "DONE" : "ERROR" );
+
+      if ( ! retstring.empty() && cmd != "help" && cmd != "?"
+                               && cmd != POWERD_STATUS && cmd != POWERD_LIST ) {
+        message.str(""); message << "command (" << powerd.cmd_num << ") reply: " << retstring;
+        logwrite( function, message.str() );
+      }
+
+      retstring.append( "\n" );
       if ( sock.Write( retstring ) < 0 ) connection_open=false;
     }
 

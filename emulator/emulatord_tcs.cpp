@@ -147,7 +147,7 @@ int main( int argc, char **argv ) {
 
   ret = emulator.configure_emulator();    // get needed values out of read-in configuration file for the daemon
   if ( emulator.port < 1 ) {
-    std::cerr << get_timestamp() << function << "ERROR: no port configured\n";
+    std::cerr << get_timestamp() << function << "ERROR: no port configured for the emulator\n";
     emulator.exit_cleanly();
   }
 
@@ -166,7 +166,10 @@ int main( int argc, char **argv ) {
   for (int thrid=0; thrid<N_THREADS; thrid++) {      // create N_THREADS-1 non-blocking socket objects
     if (thrid==0) {                                  // first one only
       Network::TcpSocket s(emulator.port, true, -1, thrid); // instantiate TcpSocket object, blocking port, CONN_TIMEOUT timeout
-      s.Listen();                                    // create a listening socket
+      if ( s.Listen() < 0 ) {                        // create a listening socket
+        std::cerr << get_timestamp() << function << "ERROR: cannot create listening socket on port " << emulator.port << "\n";
+        emulator.exit_cleanly();
+      }
       socklist.push_back(s);
     }
     else {                                           // subsequent socket objects are copies of the first

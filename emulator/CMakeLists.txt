@@ -8,6 +8,8 @@ cmake_minimum_required( VERSION 3.12 )
 
 set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
 
+set( CMAKE_CXX_STANDARD 17 )
+
 include_directories( ${EMULATOR_DIR} )
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
@@ -18,7 +20,7 @@ find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 include_directories( ${PYTHON_DEV} )
 
-add_definitions( -Wall -ansi -O2 -Wno-variadic-macros -std=c++17 -ggdb )
+add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
 
 # ----------------------------------------------------------------------------
 # andorserver
@@ -34,21 +36,24 @@ target_link_libraries(emulatord.andorserver
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.andorserver POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.andorserver> )
+
 
 # ----------------------------------------------------------------------------
-# acam_pi
+# acam
 # ----------------------------------------------------------------------------
 
-add_executable(emulatord.acam_pi
-        ${EMULATOR_DIR}/emulatord_acam_pi.cpp 
-        ${EMULATOR_DIR}/acam_pi.cpp 
+add_executable(emulatord.acam
+        ${EMULATOR_DIR}/emulatord_acam.cpp 
+        ${EMULATOR_DIR}/acam.cpp 
         )
-target_link_libraries(emulatord.acam_pi
+target_link_libraries(emulatord.acam
         network
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.acam POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.acam> )
 
 # ----------------------------------------------------------------------------
 # calib
@@ -64,6 +69,7 @@ target_link_libraries(emulatord.calib
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.calib POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.calib> )
 
 # ----------------------------------------------------------------------------
 # camera
@@ -79,6 +85,7 @@ target_link_libraries(emulatord.camera
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.camera POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.camera> )
 
 # ----------------------------------------------------------------------------
 # flexure
@@ -94,6 +101,7 @@ target_link_libraries(emulatord.flexure
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.flexure POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.flexure> )
 
 # ----------------------------------------------------------------------------
 # focus
@@ -109,6 +117,7 @@ target_link_libraries(emulatord.focus
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.focus POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.focus> )
 
 # ----------------------------------------------------------------------------
 # power
@@ -124,6 +133,7 @@ target_link_libraries(emulatord.power
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.power POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.power> )
 
 # ----------------------------------------------------------------------------
 # slit
@@ -139,6 +149,7 @@ target_link_libraries(emulatord.slit
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
+add_custom_command( TARGET emulatord.slit POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.slit> )
 
 # ----------------------------------------------------------------------------
 # tcs
@@ -159,6 +170,7 @@ target_link_libraries(emulatord.tcs
         ${CMAKE_THREAD_LIBS_INIT}
         ${PYTHON_LIB}
         )
+add_custom_command( TARGET emulatord.tcs POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.tcs> )
 
 # -- Port Definitions ----------------------------------------------------------
 #

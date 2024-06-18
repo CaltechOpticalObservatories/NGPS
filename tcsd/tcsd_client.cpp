@@ -22,23 +22,24 @@
    *
    *             The named devices {real,sim} must have been defined in the
    *             configuration file.
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long TcsDaemonClient::init( std::string_view which, std::string &retstring ) {
     std::string function = "TcsDaemonClient::init";
     std::stringstream message;
-    std::string reply;
+    std::string reply, tcsname;
     long error=NO_ERROR;
     bool connected_to_tcs=false;     // has tcsd opened a connection to the TCS?
 
     // Help
     //
     if ( which == "?" || which == "help" ) {
-      retstring = "";
-      retstring.append( "   Initialize acamd's connection to tcsd.\n" );
-      retstring.append( "   Valid args are sim | real to specify simulated or real TCS.\n" );
-      retstring.append( "   If optional arg not specified then return connection status.\n" );
-      return( NO_ERROR );
+      retstring = "tcsinit [ sim | real ]\n";
+      retstring.append( "   Initialize connection to tcsd and open the named TCS.\n" );
+      retstring.append( "   If optional arg not specified then return connection status {true|false}\n" );
+      retstring.append( "   otherwise tcsd opens a connection to the real TCS or the emulator.\n" );
+      return HELP;
     }
 
     // Syntax check -- if something is supplied then it must be real|sim
@@ -46,7 +47,7 @@
     if ( !which.empty() && which != "real" && which != "sim" ) {
       logwrite( function, "ERROR expected real | sim | <empty>" );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     // If not already connected to the tcs daemon then try to connect
@@ -56,7 +57,7 @@
       error = this->client.connect();                    // connect to the daemon
       if ( error != NO_ERROR ) {
         logwrite( function, "ERROR connecting to tcsd" );
-        return( ERROR );
+        return ERROR;
       }
     }
 
@@ -64,7 +65,7 @@
 
     // Is tcsd connected to the TCS, either real|sim ?
     //
-    // The response will be "<name>|false|ERROR" where <name> is the name of the TCS device
+    // The response will be "true|false|ERROR"
     // if connected.
     //
     error = this->client.send( TCSD_ISOPEN, reply );
@@ -73,34 +74,49 @@
     // Close connection to daemon.
     //
     if ( error != NO_ERROR || reply.find( "ERROR" ) != std::string::npos ) {
-      logwrite( function, "ERROR: tcsd unable to communicate with TCS. Closing daemon connection, try again." );
+      logwrite( function, "ERROR: tcsd unable to communicate with TCS. Closing daemon connection." );
       this->client.disconnect();
       retstring="not_connected";
-      return( ERROR );
+      return ERROR;
     }
 
     if ( reply.find( "false" ) != std::string::npos ) {
       connected_to_tcs = false;
     }
-    else {
+    else
+    if ( reply.find( "true" ) != std::string::npos ) {
       connected_to_tcs = true;
     }
+    else {
+      message.str(""); message << "ERROR invalid reply \"" << reply << "\" from tcsd. Expected true|false DONE";
+      logwrite( function, message.str() );
+      this->client.disconnect();
+      retstring="not_connected";
+      return ERROR;
+    }
 
-    // Already checked for error so the reply will be either
-    // "true <name> DONE" or
-    // "false DONE"
-    // and I want to extract the state true|false and if true, also the <name> here.
+    // Already checked for error so the reply will be either "true|false DONE"
+    // and I want to extract the state true|false so remove the " DONE" from the reply.
+    // std::string::erase can throw an exception
     //
-    if ( !connected_to_tcs ) {
-      message.str(""); message << "tcsd not connected to TCS";
+    try {
       reply.erase( reply.find( " DONE" ) );
     }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR invalid reply \"" << reply << "\" from tcsd. Expected true|false DONE : " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    if ( !connected_to_tcs ) {
+      message.str(""); message << "tcsd not connected to TCS";
+      tcsname = "not_connected";
+    }
     else {
-      // reply is "true <name> DONE" here, and this removes the "true " and " DONE"
+      // reply is "true DONE" here, and this removes the "true " and " DONE"
       //
-      reply.erase( reply.find( "true " ), 5 );
-      reply.erase( reply.find( " DONE" ) );
-      message.str(""); message << "tcsd connected to TCS " << reply;
+      error = this->client.send( TCSD_GET_NAME, tcsname );
+      message.str(""); message << "tcsd connected to TCS " << tcsname;
     }
 
     logwrite( function, message.str() );
@@ -109,15 +125,15 @@
     //
     if ( which.empty() ) {
       retstring=reply;
-      return( NO_ERROR );
+      return NO_ERROR;
     }
 
     // If the currently opened device is not the requested device then close it
     //
-    if ( reply != which ) {
+    if ( tcsname != which ) {
       error = this->client.send( TCSD_CLOSE, reply );
       connected_to_tcs = false;
-      message.str(""); message << "closed connection to TCS " << reply;
+      message.str(""); message << "closed connection to TCS " << tcsname;
       logwrite( function, message.str() );
     }
     else {
@@ -358,7 +374,7 @@
     if ( tcs_message.empty() ) {
       logwrite( function, "ERROR: empty tcs_message string" );
       value = TCS_UNDEFINED;
-      return( ERROR );
+      return ERROR;
     }
 
     Tokenize( tcs_message, tokens, " " );
@@ -396,13 +412,13 @@
         message << "ERROR parsing tcs message \"" << tcs_message << "\": " << e.what();
         logwrite( function, message.str() );
         value = TCS_UNDEFINED;
-        return( ERROR );
+        return ERROR;
       }
       catch( std::invalid_argument &e ) {
         message << "ERROR parsing tcs message \"" << tcs_message << "\": " << e.what();
         logwrite( function, message.str() );
         value = TCS_UNDEFINED;
-        return( ERROR );
+        return ERROR;
       }
       error = NO_ERROR;
     }
@@ -421,7 +437,7 @@
     logwrite( function, message.str() );
 #endif
 
-    return( error );
+    return error;
   }
   /***** TcsDaemonClient::extract_value ***************************************/
 
@@ -445,7 +461,7 @@
 #ifdef LOGLEVEL_DEBUG
       logwrite( function, "[DEBUG] TCS successful completion" );
 #endif
-      return( NO_ERROR );
+      return NO_ERROR;
     }
     else {
       if ( value == TCS_UNRECOGNIZED_COMMAND ) {
@@ -467,7 +483,7 @@
         message.str(""); message << "ERROR: " << value << " is not a valid TCS response";
         logwrite( function, message.str() );
       }
-      return( ERROR );
+      return ERROR;
     }
   }
   /***** TcsDaemonClient::parse_generic_reply *********************************/
@@ -530,7 +546,7 @@
     //
     if ( this->client.send( tcscmd.str(), tcsreply ) != NO_ERROR ) {
       logwrite( function, "ERROR getting dome position from tcsd" );
-      return( ERROR );
+      return ERROR;
     }
 
     std::vector<std::string> tcstokens;
@@ -540,7 +556,7 @@
     //
     if ( tcstokens.size() <= 1 || tcsreply == "ERROR" ) {
       logwrite( function, "ERROR getting dome position from tcsd" );
-      return( ERROR );
+      return ERROR;
     }
 
     // On success GET_DOME returns two numbers, the dome azimuth and the telescope azimuth, followed by DONE
@@ -548,7 +564,7 @@
     if ( tcstokens.size() != 3 ) {
       message.str(""); message << "ERROR malformed reply \"" << tcsreply << "\" getting dome position. expected <domeaz> <telaz>";
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // convert the values to doubles
@@ -560,15 +576,15 @@
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing tcs reply \"" << tcsreply << "\": " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
     catch( std::invalid_argument &e ) {
       message.str(""); message << "ERROR parsing tcs reply \"" << tcsreply << "\": " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::get_dome_position *******************************/
 
@@ -705,7 +721,7 @@
     //
     if ( str_in.empty() ) {
       logwrite( function, "ERROR: empty input string returns NaN" );
-      return( NAN );
+      return NAN;
     }
 
     // If there's a minus sign (-) in the input string then set the sign
@@ -717,15 +733,22 @@
     // tokens, "+", "D", "MM", "SS.sss" so determine the sign then get rid of it.
     //
     if ( str_in.find( '-' ) != std::string::npos ) sign = -1.0;
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
+    try {
+      str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
+      str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
+    }
+    catch( std::out_of_range &e ) {
+      message << "ERROR invalid string \"" << str_in << "\" (missing +/-): " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
 
     Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
 
     if ( tokens.size() != 3 ) {
       message.str(""); message << "ERROR: expected 3 tokens but received " << tokens.size() << " from str_in \"" << str_in << "\"";
       logwrite( function, message.str() );
-      return( NAN );
+      return NAN;
     }
 
     double hh, mm, ss, dec;
@@ -738,18 +761,18 @@
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing input string \"" << str_in << "\": " << e.what();
       logwrite( function, message.str() );
-      return( NAN );
+      return NAN;
     }
     catch( std::invalid_argument &e ) {
       message.str(""); message << "ERROR parsing input string \"" << str_in << "\": " << e.what();
       logwrite( function, message.str() );
-      return( NAN );
+      return NAN;
     }
 
     dec = sign * ( hh + mm + ss );
     ret << std::fixed << std::setprecision(6) << dec;
     retstring = ret.str();
 
-    return( dec );
+    return dec;
   }
   /***** Sequencer::TargetInfo::radec_to_decimal ******************************/

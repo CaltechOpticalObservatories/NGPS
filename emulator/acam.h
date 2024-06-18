@@ -1,12 +1,12 @@
 /**
- * @file    slit.h
+ * @file    acam.h
  * @brief   
  * @details 
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
-#ifndef SLIT_H
-#define SLIT_H
+#ifndef ACAM_H
+#define ACAM_H
 
 #include <atomic>
 #include <mutex>
@@ -25,15 +25,15 @@
 #include "logentry.h"
 #include "network.h"
 
-/***** SlitEmulator ***********************************************************/
+/***** AcamEmulator ***********************************************************/
 /**
- * @namespace SlitEmulator
- * @brief     this namespace contains everything for the slit emulator
+ * @namespace AcamEmulator
+ * @brief     this namespace contains everything for the acam emulator
  *
  */
-namespace SlitEmulator {
+namespace AcamEmulator {
 
-  /***** SlitEmulator::ControllerInfo *****************************************/
+  /***** AcamEmulator::ControllerInfo *****************************************/
   /**
    * @class  ControllerInfo
    * @brief  emulated motor controller info class
@@ -46,7 +46,6 @@ namespace SlitEmulator {
 
     public:
       ControllerInfo();
-      ~ControllerInfo();
 
       bool servo;
       bool homed;
@@ -57,7 +56,7 @@ namespace SlitEmulator {
       float pos;
 
       long load_info( std::string &input ) {
-        std::string function = "  (SlitEmulator::ControllerInfo::load_info) ";
+        std::string function = "  (AcamEmulator::ControllerInfo::load_info) ";
         std::vector<std::string> tokens;
 
         Tokenize( input, tokens, " \"" );
@@ -84,37 +83,35 @@ namespace SlitEmulator {
       }
 
   };
-  /***** SlitEmulator::ControllerInfo *****************************************/
+  /***** AcamEmulator::ControllerInfo *****************************************/
 
 
-  /***** SlitEmulator::Interface **********************************************/
+  /***** AcamEmulator::Interface **********************************************/
   /**
    * @class  Interface
-   * @brief  interface class for the slit emulator
+   * @brief  interface class for the acam emulator
    *
    * This class interfaces the daemon to the emulated controller.
    *
    */
   class Interface {
-    private:
     public:
-      Interface();
-      ~Interface();
+      Interface() = default;
 
       std::mutex pos_mutex;
 
       // This is a vector of all daisy-chain connected controllers
       //
-      std::vector<SlitEmulator::ControllerInfo> controller_info;
+      std::vector<AcamEmulator::ControllerInfo> controller_info;
 
       long parse_command( std::string cmd, std::string &retstring );
       long test();
-      static void do_home( SlitEmulator::ControllerInfo &info, std::mutex &mlock );
-      static void do_move( SlitEmulator::ControllerInfo &info, std::mutex &mlock, int distance, float pos );
+      static void do_home( AcamEmulator::ControllerInfo &info, std::mutex &mlock );
+      static void do_move( AcamEmulator::ControllerInfo &info, std::mutex &mlock, int distance, float pos );
 
   };
-  /***** SlitEmulator::Interface **********************************************/
+  /***** AcamEmulator::Interface **********************************************/
 
 }
-/***** SlitEmulator ***********************************************************/
+/***** AcamEmulator ***********************************************************/
 #endif

@@ -23,6 +23,7 @@ const long NO_ERROR = 0;
 const long ERROR = 1;
 const long BUSY = 2;
 const long TIMEOUT = 3;
+const long HELP = 3;
 const long EXIT = 999;
 
 /***** Common *****************************************************************/
@@ -125,12 +126,12 @@ namespace Common {
         this->keydb[key].keyvalue   = val.str();
         this->keydb[key].keycomment = comment;
 
-#ifdef LOGLEVEL_DEBUG
-        std::string function = "Common::FitsKeys::addkey";
-        std::stringstream message;
-        message << "[DEBUG] added key type " << type << ": " << key << "=" << tval << " (" << this->keydb[key].keytype << ") // " << comment;
-        logwrite( function, message.str() );
-#endif
+//#ifdef LOGLEVEL_DEBUG
+//        std::string function = "Common::FitsKeys::addkey";
+//        std::stringstream message;
+//        message << "[DEBUG] added key type " << type << ": " << key << "=" << tval << " (" << this->keydb[key].keytype << ") // " << comment;
+//        logwrite( function, message.str() );
+//#endif
         return( NO_ERROR );
       }
       /***** Common::FitsKeys::addkey *****************************************/
@@ -184,17 +185,17 @@ void merge( Common::FitsKeys from ) {
         // get a vector of iterators for all the keys matching the search string
         //
         erasevec = this->FindKeys( search_for );
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] found " << erasevec.size() << " entries matching \"" << search_for << "*\"";
-        logwrite( function, message.str() );
-#endif
+//#ifdef LOGLEVEL_DEBUG
+//        message.str(""); message << "[DEBUG] found " << erasevec.size() << " entries matching \"" << search_for << "*\"";
+//        logwrite( function, message.str() );
+//#endif
 
         // loop through that vector and erase the selected iterators from the database
         //
         for ( auto vec : erasevec ) {
-#ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] erasing " << vec->first; logwrite( function, message.str() );
-#endif
+//#ifdef LOGLEVEL_DEBUG
+//          message.str(""); message << "[DEBUG] erasing " << vec->first; logwrite( function, message.str() );
+//#endif
           this->keydb.erase( vec );
         }
         return;
@@ -261,17 +262,18 @@ void merge( Common::FitsKeys from ) {
       char term_write;            ///< send adds this char on Writes
       char term_read;             ///< send looks for this char on Reads (if reply requested)
       bool timedout;
+      std::atomic<int> num_send;
 
     public:
-      DaemonClient() : term_write('\n'), term_read('\n'), timedout(false), name("unconfigured_daemon"), port(-1), nbport(-1) {
+      DaemonClient() : term_write('\n'), term_read('\n'), timedout(false), num_send(2), name("unconfigured_daemon"), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };
 
-      DaemonClient( std::string name_in ) : term_write('\n'), term_read('\n'), timedout(false), name(name_in), port(-1), nbport(-1) {
+      DaemonClient( std::string name_in ) : term_write('\n'), term_read('\n'), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< preferred constructor with name to identify daemon
 
-      DaemonClient( std::string name_in, char write_in, char read_in ) : term_write(write_in), term_read(read_in), timedout(false), name(name_in), port(-1), nbport(-1) {
+      DaemonClient( std::string name_in, char write_in, char read_in ) : term_write(write_in), term_read(read_in), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< preferred constructor with name to identify daemon
 
@@ -290,7 +292,7 @@ void merge( Common::FitsKeys from ) {
       long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
       long send( std::string command, std::string &reply );        ///< for internal use only
       long connect();                                              ///< initialize socket connection to daemon
-      long disconnect();                                           ///< close socket connection to daemon
+      void disconnect();                                           ///< close socket connection to daemon
       void set_name( std::string name_in ) { this->name=name_in; } ///< name this daemon
       void set_port( int port );                                   ///< set the port number
 

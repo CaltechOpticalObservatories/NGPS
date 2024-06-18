@@ -96,13 +96,14 @@ namespace TCS {
       /**
        * These are the functions for communicating with the TCS
        */
-      void list( const std::string &arg, std::string &retstring );
-      void llist( const std::string &arg, std::string &retstring );
+      long list( const std::string &arg, std::string &retstring );
+      long llist( const std::string &arg, std::string &retstring );
       long open( const std::string &arg, std::string &retstring );
       bool isopen();
       long isopen( std::string &retstring );
       long isopen( const std::string &arg, std::string &retstring );
       long close();
+      long get_name( const std::string &arg, std::string &retstring );
       long get_weather_coords( const std::string &arg, std::string &retstring );
       long get_coords( const std::string &arg, std::string &retstring );
       long get_cass( const std::string &arg, std::string &retstring );

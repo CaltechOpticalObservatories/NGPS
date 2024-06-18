@@ -157,7 +157,10 @@ int main( int argc, char **argv ) {
     std::cerr << get_timestamp() << function << emulator.subsystem << " "
               << "configured nps" << nps.first << " on port " << nps.second.port << "\n";
     Network::TcpSocket s( nps.second.port, true, -1, nps.first );  // instantiate TcpSocket object
-    s.Listen();                                                    // create listening socket
+    if ( s.Listen() < 0 ) {                                        // create listening socket
+      std::cerr << get_timestamp() << function << "ERROR: cannot create listening socket on port " << emulator.port << "\n";
+      emulator.exit_cleanly();
+    }
     std::thread( block_main, s ).detach();                         // spawn thread to handle requests
   }
 

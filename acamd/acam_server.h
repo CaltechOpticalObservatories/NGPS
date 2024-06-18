@@ -40,6 +40,10 @@
  */
 namespace Acam {
 
+  const std::string DAEMON_NAME = "acamd";       ///< when run as a daemon, this is my name
+
+  const int N_THREADS = 10;
+
   /***** Acam::Server *********************************************************/
   /**
    * @class  Server

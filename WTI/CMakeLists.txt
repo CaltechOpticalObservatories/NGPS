@@ -7,6 +7,8 @@ cmake_minimum_required( VERSION 3.12 )
 
 set( WTI_DIR ${PROJECT_BASE_DIR}/WTI )
 
+set( CMAKE_CXX_STANDARD 17 )
+
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
 

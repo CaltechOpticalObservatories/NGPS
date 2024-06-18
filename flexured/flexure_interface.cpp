@@ -84,7 +84,7 @@ namespace Flexure {
    * @brief       return the connected state of the motor controllers
    * @param[in]   arg        used only for help
    * @param[out]  retstring  contains the connected state "true" | "false"
-   * @return      ERROR or NO_ERROR
+   * @return      ERROR | NO_ERROR | HELP
    *
    * All motors must be connected for this to return "true".
    *
@@ -102,7 +102,7 @@ namespace Flexure {
       retstring = FLEXURED_ISOPEN;
       retstring.append( " \n" );
       retstring.append( "  Returns true if all controllers are connected, false if any one is not connected.\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Loop through all motor controllers, checking each if connected,
@@ -111,7 +111,7 @@ namespace Flexure {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( auto &mot : _motormap ) {
+    for ( const auto &mot : _motormap ) {
 
       bool _isopen = this->motorinterface.is_connected( mot.second.name );
 
@@ -146,7 +146,7 @@ namespace Flexure {
    * @brief      set the position of the indicated channel and axis
    * @param[in]  args       string containing <name> <axis> <pos>
    * @param[out] retstring  reference to return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::set( std::string args, std::string &retstring ) {
@@ -162,8 +162,8 @@ namespace Flexure {
       retstring.append( " <chan> <axis> <pos>\n" );
       retstring.append( "  Set position of indicated <chan> and <axis> to <pos>,\n" );
       retstring.append( "  where <chan> <axis> <min> <max> are as follows:\n" );
-      for ( auto &mot : _motormap ) {
-        for ( auto &axis : mot.second.axes ) {
+      for ( const auto &mot : _motormap ) {
+        for ( const auto &axis : mot.second.axes ) {
           retstring.append( "     " );
           retstring.append( mot.first ); retstring.append( " " );
           message.str(""); message << axis.first << " ";
@@ -173,7 +173,7 @@ namespace Flexure {
           retstring.append( "\n" );
         }
       }
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Tokenize the input arg list,
@@ -220,7 +220,7 @@ namespace Flexure {
    * @brief      get the position of the indicated channel and axis
    * @param[in]  args       string containing <name> <axis> <pos>
    * @param[out] retstring  reference to return string
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::get( std::string args, std::string &retstring ) {
@@ -236,13 +236,13 @@ namespace Flexure {
       retstring.append( " <chan> <axis> <pos>\n" );
       retstring.append( "  Get position of indicated <chan> and <axis>,n" );
       retstring.append( "  where <chan> <axis> are as follows:\n" );
-      for ( auto &mot : _motormap ) {
-        for ( auto &axis : mot.second.axes ) {
+      for ( const auto &mot : _motormap ) {
+        for ( const auto &axis : mot.second.axes ) {
           message.str(""); message << "     " << mot.first << " " << axis.first << "\n";
           retstring.append( message.str() );
         }
       }
-      return( NO_ERROR );
+      return HELP;
     }
 
     // Tokenize the input arg list,
@@ -398,7 +398,7 @@ namespace Flexure {
       retstring.clear();
       retstring.append( "  motormap  return definition of motormap\n" );
       retstring.append( "  posmap    return definition of posmap\n" );
-      return( NO_ERROR );
+      return HELP;
     }
     else
 
@@ -406,14 +406,14 @@ namespace Flexure {
     //
     if ( testname == "motormap" ) {
       retstring="name host:port addr naxes \n      axisnum min max reftype";
-      for ( auto const &mot : _motormap ) {
+      for ( const auto &mot : _motormap ) {
         retstring.append("\n");
         message.str(""); message << mot.first << " "
                                  << mot.second.host << ":"
                                  << mot.second.port << " "
                                  << mot.second.addr << " "
                                  << mot.second.naxes;
-        for ( auto const &axis : mot.second.axes ) {
+        for ( const auto &axis : mot.second.axes ) {
           message << "\n      " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " " << axis.second.reftype;
         }
         retstring.append( message.str() );
@@ -427,10 +427,10 @@ namespace Flexure {
     if ( testname == "posmap" ) {
       retstring="motorname axis posid pos posname";
       logwrite( function, retstring );
-      for ( auto const &mot : _motormap ) {
+      for ( const auto &mot : _motormap ) {
         retstring.append("\n");
         message.str(""); message << mot.first << " ";
-        for ( auto const &pos : mot.second.posmap ) {
+        for ( const auto &pos : mot.second.posmap ) {
           message << " " << pos.second.axis << " " << pos.second.posid << " " << pos.second.position << " " << pos.second.posname;
         }
         retstring.append( message.str() );

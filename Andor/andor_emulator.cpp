@@ -1,6 +1,7 @@
 /**
- * @file    sim.cpp
- * @brief   this file contains the simulator code for the Andor interface
+ * @file    andor_emulator.cpp
+ * @brief   this file contains the emulator code for the Andor interface
+ * @details most of the emulated SDK wrappers don't do anything but return NO_ERROR
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
@@ -8,6 +9,7 @@
 #include "atmcdLXd.h"
 #include "andor.h"
 #include "logentry.h"
+#include <Python.h>
 
 namespace Andor {
 
@@ -17,7 +19,7 @@ namespace Andor {
   std::vector<float> sim_vsspeeds = { 0.6, 1.13, 2.2, 4.33 };
 
 
-  /***** Andor::Sim::_GetAcquiredData16 ***************************************/
+  /***** Andor::Emulator::_GetAcquiredData16 **********************************/
   /**
    * @brief      
    * @details    16-bit version of GetAcquiredData. buf must be large enough
@@ -25,16 +27,16 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) {
-    std::string function = "Andor::Sim::_GetAcquiredData16";
+  long Emulator::_GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) {
+    std::string function = "Andor::Emulator::_GetAcquiredData16";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetAcquiredData16 ***************************************/
+  /***** Andor::Emulator::_GetAcquiredData16 **********************************/
 
 
-  /***** Andor::Sim::_GetAvailableCameras *************************************/
+  /***** Andor::Emulator::_GetAvailableCameras ********************************/
   /**
    * @brief      wrapper for Andor Sim GetAvailableCameras
    * @details    Returns the total number of installed Andor cameras.
@@ -43,8 +45,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_GetAvailableCameras( int &number ) {
-    std::string function = "Andor::Sim::_GetAvailableCameras";
+  long Emulator::_GetAvailableCameras( int &number ) {
+    std::string function = "Andor::Emulator::_GetAvailableCameras";
     std::stringstream message;
 
     number = 1;
@@ -53,10 +55,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetAvailableCameras *************************************/
+  /***** Andor::Emulator::_GetAvailableCameras ********************************/
 
 
-  /***** Andor::Sim::_GetCameraHandle *****************************************/
+  /***** Andor::Emulator::_GetCameraHandle ************************************/
   /**
    * @brief      wrapper for Andor Sim GetCameraHandle
    * @details    Returns the handle for the camera specified by index. When
@@ -68,16 +70,16 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_GetCameraHandle( int index, int* handle ) {
-    std::string function = "Andor::Sim::_GetCameraHandle";
+  long Emulator::_GetCameraHandle( int index, int* handle ) {
+    std::string function = "Andor::Emulator::_GetCameraHandle";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetCameraHandle *****************************************/
+  /***** Andor::Emulator::_GetCameraHandle ************************************/
 
 
-  /***** Andor::Sim::_GetCameraSerialNumber ***********************************/
+  /***** Andor::Emulator::_GetCameraSerialNumber ******************************/
   /**
    * @brief      wrapper for Andor Sim GetCameraSerialNumber
    * @details    checks return value
@@ -85,18 +87,18 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_GetCameraSerialNumber( int &number ) {
-    std::string function = "Andor::Sim::_GetCameraSerialNumber";
+  long Emulator::_GetCameraSerialNumber( int &number ) {
+    std::string function = "Andor::Emulator::_GetCameraSerialNumber";
     std::stringstream message;
 
     number = 12345;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetCameraSerialNumber ***********************************/
+  /***** Andor::Emulator::_GetCameraSerialNumber ******************************/
 
 
-  /***** Andor::Sim::_GetDetector *********************************************/
+  /***** Andor::Emulator::_GetDetector ****************************************/
   /**
    * @brief      wrapper for Andor Sim GetDetector
    * @details    Returns the size of the detector in pixels
@@ -105,8 +107,8 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_GetDetector( int &xpix, int &ypix ) {
-    std::string function = "Andor::Sim::_GetDetector";
+  long Emulator::_GetDetector( int &xpix, int &ypix ) {
+    std::string function = "Andor::Emulator::_GetDetector";
     std::stringstream message;
 
     xpix = 1024;
@@ -114,10 +116,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetDetector *********************************************/
+  /***** Andor::Emulator::_GetDetector ****************************************/
 
 
-  /***** Andor::Sim::_GetStatus ***********************************************/
+  /***** Andor::Emulator::_GetStatus ******************************************/
   /**
    * @brief      wrapper for Andor Sim GetStatus
    * @details    checks return value
@@ -127,15 +129,15 @@ namespace Andor {
    * This function is overloaded. This version does not provide the status message string.
    *
    */
-  long Sim::_GetStatus( std::string &status ) {
-    std::string function = "Andor::Sim::_GetStatus";
+  long Emulator::_GetStatus( std::string &status ) {
+    std::string function = "Andor::Emulator::_GetStatus";
     int dontcare;
     return this->_GetStatus( dontcare, status );
   }
-  /***** Andor::Sim::_GetStatus ***********************************************/
+  /***** Andor::Emulator::_GetStatus ******************************************/
 
 
-  /***** Andor::Sim::_GetStatus ***********************************************/
+  /***** Andor::Emulator::_GetStatus ******************************************/
   /**
    * @brief      wrapper for Andor Sim GetStatus
    * @details    Return status of Andor Sim system. Should be called before an
@@ -147,15 +149,15 @@ namespace Andor {
    * This function is overloaded. This version does not provide the status message string.
    *
    */
-  long Sim::_GetStatus( int &status_id ) {
-    std::string function = "Andor::Sim::_GetStatus";
+  long Emulator::_GetStatus( int &status_id ) {
+    std::string function = "Andor::Emulator::_GetStatus";
     std::string dontcare;
     return this->_GetStatus( status_id, dontcare );
   }
-  /***** Andor::Sim::_GetStatus ***********************************************/
+  /***** Andor::Emulator::_GetStatus ******************************************/
 
 
-  /***** Andor::Sim::_GetStatus ***********************************************/
+  /***** Andor::Emulator::_GetStatus ******************************************/
   /**
    * @brief      wrapper for Andor Sim GetStatus checks return value
    * @details    Return status of Andor Sim system. Should be called before an
@@ -168,8 +170,8 @@ namespace Andor {
    * This function is overloaded. This version provides the status message string.
    *
    */
-  long Sim::_GetStatus( int &status_id, std::string &status_msg ) {
-    std::string function = "Andor::Sim::_GetStatus";
+  long Emulator::_GetStatus( int &status_id, std::string &status_msg ) {
+    std::string function = "Andor::Emulator::_GetStatus";
     std::stringstream message;
 
     status_id  = DRV_IDLE;
@@ -177,10 +179,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetStatus ***********************************************/
+  /***** Andor::Emulator::_GetStatus ******************************************/
 
 
-  /***** Andor::Sim::_GetNumberADChannels *************************************/
+  /***** Andor::Emulator::_GetNumberADChannels ********************************/
   /**
    * @brief      wrapper for Andor Sim GetNumberADChannels
    * @details    returns the number of AD converter channels available
@@ -188,8 +190,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetNumberADChannels( int &channels ) {
-    std::string function = "Andor::Sim::_GetNumberADChannels";
+  long Emulator::_GetNumberADChannels( int &channels ) {
+    std::string function = "Andor::Emulator::_GetNumberADChannels";
     std::stringstream message;
 
     channels = 1;
@@ -198,10 +200,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetNumberADChannels *************************************/
+  /***** Andor::Emulator::_GetNumberADChannels ********************************/
 
 
-  /***** Andor::Sim::_GetNumberHSSpeeds ***************************************/
+  /***** Andor::Emulator::_GetNumberHSSpeeds **********************************/
   /**
    * @brief      wrapper for Andor Sim GetNumberHSSpeeds
    * @details    returns the number of horizontal shift speeds available
@@ -211,8 +213,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetNumberHSSpeeds( int adchan, int type, int &speeds ) {
-    std::string function = "Andor::Sim::_GetNumberHSSpeeds";
+  long Emulator::_GetNumberHSSpeeds( int adchan, int type, int &speeds ) {
+    std::string function = "Andor::Emulator::_GetNumberHSSpeeds";
     std::stringstream message;
     long error=NO_ERROR;
 
@@ -231,10 +233,10 @@ namespace Andor {
 
     return error;
   }
-  /***** Andor::Sim::_GetNumberHSSpeeds ***************************************/
+  /***** Andor::Emulator::_GetNumberHSSpeeds **********************************/
 
 
-  /***** Andor::Sim::_GetNumberVSSpeeds ***************************************/
+  /***** Andor::Emulator::_GetNumberVSSpeeds **********************************/
   /**
    * @brief      wrapper for Andor Sim GetNumberVSSpeeds
    * @details    returns the number of vertical shift speeds available
@@ -242,8 +244,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetNumberVSSpeeds( int &speeds ) {
-    std::string function = "Andor::Sim::_GetNumberVSSpeeds";
+  long Emulator::_GetNumberVSSpeeds( int &speeds ) {
+    std::string function = "Andor::Emulator::_GetNumberVSSpeeds";
     std::stringstream message;
 
     speeds = sim_vsspeeds.size();
@@ -252,10 +254,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetNumberVSSpeeds ***************************************/
+  /***** Andor::Emulator::_GetNumberVSSpeeds **********************************/
 
 
-  /***** Andor::Sim::_GetHSSpeed **********************************************/
+  /***** Andor::Emulator::_GetHSSpeed *****************************************/
   /**
    * @brief      wrapper for Andor Sim GetHSSpeed
    * @details    returns the horizontal shift speed for specified amp and index
@@ -266,8 +268,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetHSSpeed( int chan, int type, int index, float &speed ) {
-    std::string function = "Andor::Sim::_GetHSSpeed";
+  long Emulator::_GetHSSpeed( int chan, int type, int index, float &speed ) {
+    std::string function = "Andor::Emulator::_GetHSSpeed";
     std::stringstream message;
 
     auto it = sim_hsspeeds.find( type );
@@ -290,10 +292,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetHSSpeed **********************************************/
+  /***** Andor::Emulator::_GetHSSpeed *****************************************/
 
 
-  /***** Andor::Sim::_SetHSSpeed **********************************************/
+  /***** Andor::Emulator::_SetHSSpeed *****************************************/
   /**
    * @brief      wrapper for Andor Sim SetHSSpeed
    * @details    Set the speed at which pixels are shifted into output node
@@ -303,16 +305,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_SetHSSpeed( int type, int index ) {
-    std::string function = "Andor::Sim::_SetHSSpeed";
+  long Emulator::_SetHSSpeed( int type, int index ) {
+    std::string function = "Andor::Emulator::_SetHSSpeed";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetHSSpeed **********************************************/
+  /***** Andor::Emulator::_SetHSSpeed *****************************************/
 
 
-  /***** Andor::Sim::_GetVSSpeed **********************************************/
+  /***** Andor::Emulator::_GetVSSpeed *****************************************/
   /**
    * @brief      wrapper for Andor Sim GetVSSpeed
    * @details    returns the vertical shift speed for specified index
@@ -321,8 +323,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetVSSpeed( int index, float &speed ) {
-    std::string function = "Andor::Sim::_GetVSSpeed";
+  long Emulator::_GetVSSpeed( int index, float &speed ) {
+    std::string function = "Andor::Emulator::_GetVSSpeed";
     std::stringstream message;
 
     if ( index < 0 || index > (int)sim_vsspeeds.size() ) {
@@ -336,10 +338,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetVSSpeed **********************************************/
+  /***** Andor::Emulator::_GetVSSpeed *****************************************/
 
 
-  /***** Andor::Sim::_SetVSSpeed **********************************************/
+  /***** Andor::Emulator::_SetVSSpeed *****************************************/
   /**
    * @brief      wrapper for Andor Sim SetVSSpeed
    * @details    set the vertical speed used for subsequent acquisitions
@@ -347,16 +349,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_SetVSSpeed( int index ) {
-    std::string function = "Andor::Sim::_SetVSSpeed";
+  long Emulator::_SetVSSpeed( int index ) {
+    std::string function = "Andor::Emulator::_SetVSSpeed";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetVSSpeed **********************************************/
+  /***** Andor::Emulator::_SetVSSpeed *****************************************/
 
 
-  /***** Andor::Sim::_SetEMCCDGain ********************************************/
+  /***** Andor::Emulator::_SetEMCCDGain ***************************************/
   /**
    * @brief      wrapper for Andor Sim SetEMCCDGain
    * @details    set gain value
@@ -364,16 +366,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_SetEMCCDGain( int gain ) {
-    std::string function = "Andor::Sim::_SetEMCCDGain";
+  long Emulator::_SetEMCCDGain( int gain ) {
+    std::string function = "Andor::Emulator::_SetEMCCDGain";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetEMCCDGain ********************************************/
+  /***** Andor::Emulator::_SetEMCCDGain ***************************************/
 
 
-  /***** Andor::Sim::_GetEMCCDGain ********************************************/
+  /***** Andor::Emulator::_GetEMCCDGain ***************************************/
   /**
    * @brief      wrapper for Andor Sim GetEMCCDGain
    * @details    return gain setting (by reference) and save in class
@@ -381,16 +383,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetEMCCDGain( int &gain ) {
-    std::string function = "Andor::Sim::_GetEMCCDGain";
+  long Emulator::_GetEMCCDGain( int &gain ) {
+    std::string function = "Andor::Emulator::_GetEMCCDGain";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetEMCCDGain ********************************************/
+  /***** Andor::Emulator::_GetEMCCDGain ***************************************/
 
 
-  /***** Andor::Sim::_GetEMGainRange ******************************************/
+  /***** Andor::Emulator::_GetEMGainRange *************************************/
   /**
    * @brief      wrapper for Andor Sim GetEMGainRange
    * @details    return minimum and maximum values for selected EM gain mode
@@ -399,8 +401,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetEMGainRange( int &low, int &high ) {
-    std::string function = "Andor::Sim::_GetEMGainRange";
+  long Emulator::_GetEMGainRange( int &low, int &high ) {
+    std::string function = "Andor::Emulator::_GetEMGainRange";
     std::stringstream message;
 
     low  =   1;
@@ -411,10 +413,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetEMGainRange ******************************************/
+  /***** Andor::Emulator::_GetEMGainRange *************************************/
 
 
-  /***** Andor::Sim::_SetOutputAmplifier **************************************/
+  /***** Andor::Emulator::_SetOutputAmplifier *********************************/
   /**
    * @brief      wrapper for Andor Sim SetOutputAmplifier
    * @details    set the type of amplifier to be used
@@ -422,16 +424,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_SetOutputAmplifier( int type ) {
-    std::string function = "Andor::Sim::_SetOutputAmplifier";
+  long Emulator::_SetOutputAmplifier( int type ) {
+    std::string function = "Andor::Emulator::_SetOutputAmplifier";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetOutputAmplifier **************************************/
+  /***** Andor::Emulator::_SetOutputAmplifier *********************************/
 
 
-  /***** Andor::Sim::_GetTemperature ******************************************/
+  /***** Andor::Emulator::_GetTemperature *************************************/
   /**
    * @brief      wrapper for Andor Sim GetTemperature
    * @details    returns temperature of detector to the nearest degree C
@@ -439,8 +441,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetTemperature( int &temp, std::string_view &status ) {
-    std::string function = "Andor::Sim::_GetTemperature";
+  long Emulator::_GetTemperature( int &temp, std::string_view &status ) {
+    std::string function = "Andor::Emulator::_GetTemperature";
     std::stringstream message;
 
     temp   = -120;
@@ -448,10 +450,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetTemperature ******************************************/
+  /***** Andor::Emulator::_GetTemperature *************************************/
 
 
-  /***** Andor::Sim::_GetTemperatureRange *************************************/
+  /***** Andor::Emulator::_GetTemperatureRange ********************************/
   /**
    * @brief      wrapper for Andor Sim GetTemperature checks return value
    * @details    returns the valid range of temperatures
@@ -460,8 +462,8 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_GetTemperatureRange( int &min, int &max ) {
-    std::string function = "Andor::Sim::_GetTemperatureRange";
+  long Emulator::_GetTemperatureRange( int &min, int &max ) {
+    std::string function = "Andor::Emulator::_GetTemperatureRange";
     std::stringstream message;
 
     min = -120;
@@ -469,10 +471,10 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetTemperatureRange *************************************/
+  /***** Andor::Emulator::_GetTemperatureRange ********************************/
 
 
-  /***** Andor::Sim::_CoolerON ************************************************/
+  /***** Andor::Emulator::_CoolerON *******************************************/
   /**
    * @brief      wrapper for Andor Sim CoolerON
    * @details    turns on the cooling
@@ -480,16 +482,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_CoolerON() {
-    std::string function = "Andor::Sim::_CoolerON";
+  long Emulator::_CoolerON() {
+    std::string function = "Andor::Emulator::_CoolerON";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_CoolerON ************************************************/
+  /***** Andor::Emulator::_CoolerON *******************************************/
 
 
-  /***** Andor::Sim::_CoolerOFF ***********************************************/
+  /***** Andor::Emulator::_CoolerOFF ******************************************/
   /**
    * @brief      wrapper for Andor Sim CoolerOFF
    * @details    turns off the cooling
@@ -497,16 +499,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_CoolerOFF() {
-    std::string function = "Andor::Sim::_CoolerOFF";
+  long Emulator::_CoolerOFF() {
+    std::string function = "Andor::Emulator::_CoolerOFF";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_CoolerOFF ***********************************************/
+  /***** Andor::Emulator::_CoolerOFF ******************************************/
 
 
-  /***** Andor::Sim::_SetTemperature ******************************************/
+  /***** Andor::Emulator::_SetTemperature *************************************/
   /**
    * @brief      wrapper for Andor Sim SetTemperature
    * @details    set the temperature of the detector (does NOT control cooling)
@@ -514,16 +516,16 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Sim::_SetTemperature( int temp ) {
-    std::string function = "Andor::Sim::_SetTemperature";
+  long Emulator::_SetTemperature( int temp ) {
+    std::string function = "Andor::Emulator::_SetTemperature";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetTemperature ******************************************/
+  /***** Andor::Emulator::_SetTemperature *************************************/
 
 
-  /***** Andor::Sim::_GetVersionInfo ******************************************/
+  /***** Andor::Emulator::_GetVersionInfo *************************************/
   /**
    * @brief      wrapper for Andor Sim GetVersionInfo
    * @details    Retrieves version information about different aspects of the
@@ -531,34 +533,34 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) {
-    std::string function = "Andor::Sim::_GetVersionInfo";
+  long Emulator::_GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) {
+    std::string function = "Andor::Emulator::_GetVersionInfo";
     std::stringstream message;
 
-    if ( info != nullptr ) strcpy( info, "simulator" );
+    if ( info != nullptr ) strcpy( info, "emulator" );
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_GetVersionInfo ******************************************/
+  /***** Andor::Emulator::_GetVersionInfo *************************************/
 
 
-  /***** Andor::Sim::_Initialize **********************************************/
+  /***** Andor::Emulator::_Initialize *****************************************/
   /**
    * @brief      wrapper for Andor Sim Initialize
    * @details    initialize the Andor Sim system
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_Initialize() {
-    std::string function = "Andor::Sim::_Initialize";
+  long Emulator::_Initialize() {
+    std::string function = "Andor::Emulator::_Initialize";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_Initialize **********************************************/
+  /***** Andor::Emulator::_Initialize *****************************************/
 
 
-  /***** Andor::Sim::_SetAcquisitionMode **************************************/
+  /***** Andor::Emulator::_SetAcquisitionMode *********************************/
   /**
    * @brief      wrapper for Andor Sim SetAcquisitionMode
    * @details    set acquisitiion mode to be used on next StartAcquisition
@@ -575,21 +577,21 @@ namespace Andor {
    * Sets the class variable "mode" on success.
    *
    */
-  long Sim::_SetAcquisitionMode( int mode ) {
-    std::string function = "Andor::Sim::_SetAcquisitionMode";
+  long Emulator::_SetAcquisitionMode( int mode ) {
+    std::string function = "Andor::Emulator::_SetAcquisitionMode";
     std::stringstream message;
 
     if ( mode != 1 ) {
       logwrite( function, "ERROR only mode 1 is supported" );
-      return( ERROR );
+      return ERROR;
     }
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetAcquisitionMode **************************************/
+  /***** Andor::Emulator::_SetAcquisitionMode *********************************/
 
 
-  /***** Andor::Sim::_SetCurrentCamera ****************************************/
+  /***** Andor::Emulator::_SetCurrentCamera ***********************************/
   /**
    * @brief      wrapper for Andor Sim SetCurrentCamera
    * @details    When multiple cameras are installed this allows selecting which
@@ -599,35 +601,43 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_SetCurrentCamera( int handle ) {
-    std::string function = "Andor::Sim::_SetCurrentCamera";
+  long Emulator::_SetCurrentCamera( int handle ) {
+    std::string function = "Andor::Emulator::_SetCurrentCamera";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetCurrentCamera ****************************************/
+  /***** Andor::Emulator::_SetCurrentCamera ***********************************/
 
 
-  /***** Andor::Sim::_SetExposureTime *****************************************/
+  /***** Andor::Emulator::_SetExposureTime ************************************/
   /**
    * @brief      wrapper for Andor Sim SetExposureTime
    * @details    Set the exposure time to the nearest valid value not less
    *             than the given value. Actual exposure time is obtained by
    *             GetAcquisitionTimings.
-   * @param[in]  exptime  exposure time in seconds
+   * @param[in]  exptime_in  exposure time in seconds
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_SetExposureTime( double exptime ) {
-    std::string function = "Andor::Sim::_SetExposureTime";
+  long Emulator::_SetExposureTime( double exptime_in ) {
+    std::string function = "Andor::Emulator::_SetExposureTime";
     std::stringstream message;
+
+    if ( std::isnan( exptime_in ) || exptime_in < 0 ) {
+      message.str(""); message << "ERROR bad exposure time " << exptime_in;
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    this->exptime = exptime_in;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetExposureTime *****************************************/
+  /***** Andor::Emulator::_SetExposureTime ************************************/
 
 
-  /***** Andor::Sim::_SetImageFlip ********************************************/
+  /***** Andor::Emulator::_SetImageFlip ***************************************/
   /**
    * @brief      wrapper for Andor Sim SetImageFlip
    * @details    This causes data output from Sim to be flipped in one or both
@@ -638,16 +648,16 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_SetImageFlip( int hflip, int vflip ) {
-    std::string function = "Andor::Sim::_SetImageFlip";
+  long Emulator::_SetImageFlip( int hflip, int vflip ) {
+    std::string function = "Andor::Emulator::_SetImageFlip";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetImageFlip ********************************************/
+  /***** Andor::Emulator::_SetImageFlip ***************************************/
 
 
-  /***** Andor::Sim::_SetImageRotate ******************************************/
+  /***** Andor::Emulator::_SetImageRotate *************************************/
   /**
    * @brief      wrapper for Andor Sim SetImageRotate
    * @details    This causes data output from Sim to be rotated in one or both
@@ -657,16 +667,16 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_SetImageRotate( int rotdir ) {
-    std::string function = "Andor::Sim::_SetImageRotate";
+  long Emulator::_SetImageRotate( int rotdir ) {
+    std::string function = "Andor::Emulator::_SetImageRotate";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetImageRotate ******************************************/
+  /***** Andor::Emulator::_SetImageRotate *************************************/
 
 
-  /***** Andor::Sim::_SetImage ************************************************/
+  /***** Andor::Emulator::_SetImage *******************************************/
   /**
    * @brief      wrapper for Andor Sim SetImage checks return value
    * @details    sets the horizontal and vertical binning when taking a
@@ -680,16 +690,16 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) {
-    std::string function = "Andor::Sim::_SetImage";
+  long Emulator::_SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) {
+    std::string function = "Andor::Emulator::_SetImage";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetImage ************************************************/
+  /***** Andor::Emulator::_SetImage *******************************************/
 
 
-  /***** Andor::Sim::_SetReadMode *********************************************/
+  /***** Andor::Emulator::_SetReadMode ****************************************/
   /**
    * @brief      wrapper for Andor Sim SetReadMode
    * @details    set the readout mode to be used on subsequent acquisitions
@@ -704,16 +714,16 @@ namespace Andor {
    *  4 = image
    *
    */
-  long Sim::_SetReadMode( int mode ) {
-    std::string function = "Andor::Sim::_SetReadMode";
+  long Emulator::_SetReadMode( int mode ) {
+    std::string function = "Andor::Emulator::_SetReadMode";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetReadMode *********************************************/
+  /***** Andor::Emulator::_SetReadMode ****************************************/
 
 
-  /***** Andor::Sim::_SetShutter **********************************************/
+  /***** Andor::Emulator::_SetShutter *****************************************/
   /**
    * @brief      wrapper for Andor Sim SetShutter
    * @details    controls behavior of the shutter
@@ -724,16 +734,16 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_SetShutter( int type, int mode, int closetime, int opentime ) {
-    std::string function = "Andor::Sim::_SetShutter";
+  long Emulator::_SetShutter( int type, int mode, int closetime, int opentime ) {
+    std::string function = "Andor::Emulator::_SetShutter";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_SetShutter **********************************************/
+  /***** Andor::Emulator::_SetShutter *****************************************/
 
 
-  /***** Andor::Sim::_StartAcquisition ****************************************/
+  /***** Andor::Emulator::_StartAcquisition ***********************************/
   /**
    * @brief      wrapper for Andor Sim StartAcquisition
    * @details    starts the acquisition
@@ -741,38 +751,46 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Sim::_StartAcquisition() {
-    std::string function = "Andor::Sim::_StartAcquisition";
+  long Emulator::_StartAcquisition() {
+    std::string function = "Andor::Emulator::_StartAcquisition";
     std::stringstream message;
 
     return NO_ERROR;
   }
-  /***** Andor::Sim::_StartAcquisition ****************************************/
+  /***** Andor::Emulator::_StartAcquisition ***********************************/
 
 
-  /***** Andor::SkySim::SkySim ************************************************/
+  /***** Andor::SkyEmulator::SkySim ************************************************/
   /**
    * @brief      SkySim class constructor
    *
    */
-  SkySim::SkySim() : python_initialized( false ), py_instance( PYTHON_PATH ) {
+  SkySim::SkySim() : python_initialized( false ), py_instance( PYTHON_PATH ), pSkySimModule( nullptr ) {
     std::string function = "Andor::SkySim::SkySim";
     std::stringstream message;
 
     if ( !py_instance.is_initialized() ) {
-        logwrite( function, "ERROR could not initialize Python" );
-        return;
+      logwrite( function, "ERROR could not initialize Python" );
+      if ( PyErr_Occurred() ) PyErr_Print();
+      return;
     }
 
-    CPyObject pModuleName;
+    PyObject* pModuleName = PyUnicode_FromString( PYTHON_SKYSIM_MODULE );
 
-    pModuleName   = PyUnicode_FromString( PYTHON_SKYSIM_MODULE );
+    if ( ! pModuleName ) {
+      logwrite( function, "ERROR could not create module name string" );
+      if ( PyErr_Occurred() ) PyErr_Print();
+      return;
+    }
+
     pSkySimModule = PyImport_Import( pModuleName );
 
-    pModuleName.Release();
+    Py_DECREF( pModuleName );  // done with pModuleName
 
-    if ( pSkySimModule == nullptr ) {
-      PyErr_Print();
+    if ( pSkySimModule == nullptr || PyErr_Occurred() ) {
+      message.str(""); message << "ERROR Python module " << PYTHON_SKYSIM_MODULE << " not initialized";
+      logwrite( function, message.str() );
+      if ( PyErr_Occurred() ) PyErr_Print();
       python_initialized = false;
       return;
     }
@@ -787,69 +805,108 @@ namespace Andor {
 
   /***** Andor::SkySim::generate_image ****************************************/
   /**
-   * @brief      SkySim class constructor
-   * @param[in]  imagename
+   * @brief      calls Python skysim to generate an image
+   * @param[in]  headerfile
+   * @param[in]  outputfile
+   * @param[in]  exptime
    *
    */
-  long SkySim::generate_image( std::string_view headerfile, std::string_view outputfile ) {
+  long SkySim::generate_image( const std::string_view &headerfile, const std::string_view &outputfile, const double exptime ) {
     std::string function = "Andor::SkySim::generate_image";
     std::stringstream message;
     long error = NO_ERROR;
 
-    if ( !python_initialized ) {
-      logwrite( function, "ERROR Python is not initialized" );
-      return( ERROR );
+    if ( !python_initialized || pSkySimModule == nullptr ) {
+      message.str(""); message << "ERROR Python module " << PYTHON_SKYSIM_MODULE << " is not initialized";
+      logwrite( function, message.str() );
+      return ERROR;
     }
 
-    if ( pSkySimModule == nullptr ) {
-      logwrite( function, "ERROR Python skysim module not imported" );
-      return( ERROR );
-    }
+    // The exposure time (rounded to nearest msec) is needed only to emulate the delay,
+    // otherwise the skysim function uses the exptime from the headerfile to generate an
+    // image with the appropriate exposure time.
+    //
+    // Minimum delay is 10 msec to prevent excessive CPU usage.
+    //
+    long expdelay = (long)( std::round( exptime * 1000.0 ) );
+    if ( expdelay == 0 ) expdelay = 10;
+    std::this_thread::sleep_for( std::chrono::milliseconds( expdelay ) );
 
-    message.str(""); message << "read header from: " << headerfile;
-    logwrite( function, message.str() );
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
-    // Call the Python function here
+    // Build Python function name
     //
     PyObject* pFunction = PyObject_GetAttrString( pSkySimModule, PYTHON_SKYSIM_FUNCTION );
 
-    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
-      PyErr_Print();
+    if ( !pFunction || !PyCallable_Check( pFunction ) || PyErr_Occurred() ) {
       logwrite( function, "ERROR Python skysim function not callable" );
-      return( ERROR );
+      if ( PyErr_Occurred() ) PyErr_Print();
+      PyGILState_Release( gstate );
+      return ERROR;
     }
 
+    // Build Python arguments
+    //
     PyObject* pHeaderfile = PyUnicode_FromString( headerfile.data() );
     PyObject* pOutputfile = PyUnicode_FromString( outputfile.data() );
     PyObject* pImageSize  = PyDict_New();
+
+    if ( !pHeaderfile || !pOutputfile || !pImageSize || PyErr_Occurred() ) {
+      logwrite( function, "ERROR creating Python arguments" );
+      if ( PyErr_Occurred() ) PyErr_Print();
+      Py_XDECREF( pFunction );
+      Py_XDECREF( pHeaderfile );
+      Py_XDECREF( pOutputfile );
+      Py_XDECREF( pImageSize );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
 
     PyDict_SetItemString( pImageSize, "IMAGE_SIZE", PyLong_FromLong( 1024 ) );
 
     PyObject* pArgs   = PyTuple_Pack( 2, pHeaderfile, pOutputfile );
 
+    if ( !pArgs || PyErr_Occurred() ) {
+      logwrite( function, "ERROR packing Python arguments" );
+      if ( PyErr_Occurred() ) PyErr_Print();
+      Py_XDECREF( pFunction );
+      Py_XDECREF( pHeaderfile );
+      Py_XDECREF( pOutputfile );
+      Py_XDECREF( pImageSize );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Call the Python function here
+    //
     PyObject* pReturn = PyObject_Call( pFunction, pArgs, pImageSize );
 
     if ( !pReturn || PyErr_Occurred() ) {
-      PyErr_Print();
       message.str(""); message << "ERROR calling Python function: " << PYTHON_SKYSIM_FUNCTION;
       logwrite( function, message.str() );
+      if ( PyErr_Occurred() ) PyErr_Print();
       error = ERROR;
     }
 
     // clean up
     //
-    Py_DECREF( pArgs );
-    Py_DECREF( pFunction );
-    Py_DECREF( pImageSize );
-    Py_DECREF( pHeaderfile );
-    Py_DECREF( pOutputfile );
+    Py_XDECREF( pArgs );
+    Py_XDECREF( pFunction );
+    Py_XDECREF( pImageSize );
+    Py_XDECREF( pHeaderfile );
+    Py_XDECREF( pOutputfile );
 
-    message.str(""); message << "output: " << outputfile;
+    // Release the GIL
+    //
+    PyGILState_Release( gstate );
+
+    message.str(""); message << "headerfile: " << headerfile << " outputfile: " << outputfile;
     logwrite( function, message.str() );
 
-    return( error );
+    return error;
   }
   /***** Andor::SkySim::generate_image ****************************************/
-
 
 }

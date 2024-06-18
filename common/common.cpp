@@ -143,7 +143,7 @@ namespace Common {
   long FitsKeys::listkeys() {
     std::string function = "Common::FitsKeys::listkeys";
     std::stringstream message;
-    for ( auto const &keydb : this->keydb ) {
+    for ( const auto &keydb : this->keydb ) {
       message.str("");
       message << keydb.second.keyword << " = " << keydb.second.keyvalue;
       if ( ! keydb.second.keycomment.empty() ) message << " // " << keydb.second.keycomment;
@@ -341,16 +341,13 @@ namespace Common {
    *
    */
   long Common::DaemonClient::async( std::string command, std::string &reply ) {
-    std::string function = "DaemonClient::async";
+    std::string function = "Common::DaemonClient::async";
     std::stringstream message;
     long error = NO_ERROR;
 
     // Create a local socket object for non-blocking communication with the daemon
     //
-    Network::TcpSocket _sock;
-
-    _sock.sethost( "localhost" );
-    _sock.setport( this->nbport );
+    Network::TcpSocket _sock( this->name, this->nbport );
 
     // Create and connect to the non-blocking socket
     //
@@ -365,13 +362,13 @@ namespace Common {
 
     // Send the command to the non-blocking socket
     //
-    message.str(""); message << "sending \"" << command << "\" to " << this->name << "/" << this->nbport;
+    message.str(""); message << "sending \"" << strip_newline(command) << "\" to " << this->name << "/" << this->nbport;
     logwrite( function, message.str() );
     command.append( "\n" );
     int wrote = _sock.Write( command );
 
     if ( wrote <= 0 ) {
-      message.str(""); message << "ERROR no bytes written for \"" << command << "\" to " << this->name << "/" << this->nbport;
+      message.str(""); message << "ERROR no bytes written for \"" << strip_newline(command) << "\" to " << this->name << "/" << this->nbport;
       logwrite( function, message.str() );
       error = ERROR;
     }
@@ -392,13 +389,13 @@ namespace Common {
     int pollret;
     if ( error==NO_ERROR && ( ( pollret = _sock.Poll() ) <= 0 ) ) {
       if ( pollret == 0 ) {
-        message.str(""); message << "TIMEOUT " << this->name << " polling socket " << _sock.gethost()
-                                 << "/" << _sock.getport() << " on fd " << _sock.getfd();
+        message.str(""); message << "TIMEOUT polling socket " << _sock.gethost() << "/" << _sock.getport()
+                                 << " on fd " << _sock.getfd() << " for " << this->name;
         logwrite( function, message.str() );
       }
       if ( pollret <0 ) {
-        message.str(""); message << "ERROR " << this->name << " polling socket " << _sock.gethost()
-                                 << "/" << _sock.getport() << " on fd " << _sock.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR polling socket " << _sock.gethost() << "/" << _sock.getport()
+                                 << " on fd " << _sock.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite( function, message.str() );
       }
       error = ERROR;
@@ -410,13 +407,13 @@ namespace Common {
     long ret;
     if ( error==NO_ERROR && ( ( ret = _sock.Read( reply, delim ) ) <= 0 ) ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
-        message.str(""); message << "ERROR " << this->name << " reading from socket " << _sock.gethost()
-                                 << "/" << _sock.getport() << " on fd " << _sock.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR reading from socket " << _sock.gethost() << "/" << _sock.getport()
+                                 << " on fd " << _sock.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       if ( ret==0 ) {
-        message.str(""); message << "TIMEOUT " << this->name << " reading from socket " << _sock.gethost()
-                                 << "/" << _sock.getport() << " on fd " << _sock.getfd();
+        message.str(""); message << "TIMEOUT reading from socket " << _sock.gethost() << "/" << _sock.getport()
+                                 << " on fd " << _sock.getfd() << " for " << this->name;
         logwrite( function, message.str() );
       }
       error = ERROR;
@@ -452,32 +449,29 @@ namespace Common {
    *
    * this->term_write is automatically appended to the end of the command
    *
+   * If Poll() returns < 0 but errno is not set then it's possible the file descriptor
+   * is stale. If that happens, re-open the socket and try send()ing again. Limit the
+   * number of retries which is set when the socket is initially opened.
+   *
    */
   long Common::DaemonClient::send( std::string command, std::string &reply ) {
-    std::string function = "DaemonClient::send";
+    std::string function = "Common::DaemonClient::send";
     std::stringstream message;
     long ret;
 
     if ( ! this->socket.isconnected() ) {
-      message.str(""); message << "ERROR:cannot send \"" << command << "\" to " << this->name
+      message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name
                                << " because daemon is not connected";
       logwrite( function, message.str() );
       return ERROR;
     }
 
     if ( this->socket.getfd() < 1 ) {
-      message.str(""); message << "ERROR:cannot send \"" << command << "\" to " << this->name 
+      message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name 
                                << " because fd " << this->socket.getfd() << " is invalid";
       logwrite( function, message.str() );
       return ERROR;
     }
-
-//#ifdef LOGLEVEL_DEBUG
-    if ( command.find( std::string( "poll" ) ) == std::string::npos ) {
-      message.str(""); message << "sending \"" << command << "\" to " << this->name << " on fd " << this->socket.getfd();
-      logwrite( function, message.str() );
-    }
-//#endif
 
     // send the command
     //
@@ -488,31 +482,52 @@ namespace Common {
     //
     int pollret;
     if ( ( pollret = this->socket.Poll() ) <= 0 ) {
+      long error = ERROR;
       if ( pollret == 0 ) {
-        message.str(""); message << "TIMEOUT " << this->name << " polling socket " << this->socket.gethost()
-                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+        message.str(""); message << "TIMEOUT polling socket " << this->socket.gethost() << "/" << this->socket.getport()
+                                 << " on fd " << this->socket.getfd() << " for " << this->name;
         logwrite( function, message.str() );
         this->timedout=true;
       }
-      if ( pollret <0 ) {
-        message.str(""); message << "ERROR " << this->name << " polling socket " << this->socket.gethost()
-                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << strerror(errno);
+      else
+      if ( pollret < 0 && errno ) {                // this is probably a real error
+        message.str(""); message << "ERROR polling socket " << this->socket.gethost() << "/" << this->socket.getport()
+                                 << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite( function, message.str() );
       }
-      return ERROR;
+      else
+      if ( pollret < 0 && !errno ) {               // this is probably a stale fd
+        if ( this->num_send.fetch_sub(1) <= 0 ) {  // decrement. recursuve resend limit reached when num_send counter is zero
+          message.str(""); message << "ERROR no response from " << this->socket.gethost() << "/" << this->socket.getport()
+                                   << " and exceeded retry limit: check " << this->name;
+          logwrite( function, message.str() );
+          this->disconnect();
+          return( ERROR );
+        }
+        message.str(""); message << "ERROR no response from " << this->socket.gethost() << "/" << this->socket.getport()
+                                 << ": will re-open connection to " << this->name << " and try again";
+        logwrite( function, message.str() );
+        error = this->connect();                   // establish new connection
+        if ( error == NO_ERROR ) {
+          error = this->send( command, reply );    // recursive call to try again
+        }
+      }
+      return error;
     }
+
+    this->num_send.store(2);                       // successful send resets the num_send counter
 
     // read the response
     //
     if ( ( ret = this->socket.Read( reply, this->term_read ) ) <= 0 ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
-        message.str(""); message << "ERROR " << this->name << " reading from socket " << this->socket.gethost()
-                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << strerror(errno);
+        message.str(""); message << "ERROR reading from socket " << this->socket.gethost() << "/" << this->socket.getport()
+                                 << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite(function, message.str());
       }
       if ( ret==0 ) {
-        message.str(""); message << "TIMEOUT " << this->name << " reading from socket " << this->socket.gethost()
-                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+        message.str(""); message << "TIMEOUT reading from socket " << this->socket.gethost() << "/"<< this->socket.getport()
+                                 << " on fd " << this->socket.getfd() << " for " << this->name;
         logwrite( function, message.str() );
         this->timedout=true;
       }
@@ -582,18 +597,18 @@ namespace Common {
    *
    */
   long Common::DaemonClient::command( std::string args ) {
-    std::string function = "DaemonClient::command";
+    std::string function = "Common::DaemonClient::command";
     std::stringstream message;
     std::string reply;
     std::string done = "DONE";
     long retval = this->command( args, reply );
     if ( reply.find( std::string( "DONE" ) ) == std::string::npos ) {
-      message.str(""); message << "sending " << args << " to " << this->name << " returned " << reply;
+      message.str(""); message << "sending " << strip_newline(args) << " to " << this->name << " returned " << reply;
       logwrite( function, message.str() );
     }
 #ifdef LOGLEVEL_DEBUG
     else {
-      message.str(""); message << "[DEBUG] sending " << args << " to " << this->name << " returned " << reply;
+      message.str(""); message << "[DEBUG] sending " << strip_newline(args) << " to " << this->name << " returned " << reply;
       logwrite( function, message.str() );
     }
 #endif
@@ -613,7 +628,7 @@ namespace Common {
    *
    */
   long Common::DaemonClient::command( std::string args, std::string &retstring ) {
-    std::string function = "DaemonClient::command";
+    std::string function = "Common::DaemonClient::command";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -692,14 +707,12 @@ namespace Common {
   /***** Common::DaemonClient::connect ************************************************/
   /**
    * @brief      initialize socket connection to the daemon
+   * @details    establishes socket connection to daemon using Network::TcpSocket class
    * @return     ERROR or NO_ERROR
    *
-   * This function establishes a socket connection to the daemon
-   * using the Network::TcpSocket class.
-   *
    */
-  long Common::DaemonClient::connect( ) {
-    std::string function = "DaemonClient::connect";
+  long Common::DaemonClient::connect() {
+    std::string function = "Common::DaemonClient::connect";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -730,7 +743,8 @@ namespace Common {
         logwrite( function, message.str() );
         error = ERROR;
       } else {
-        message.str(""); message << "connected to " << this->name << " on port " << this->port;
+        message.str(""); message << "connected to " << this->name << " at " << this->socket.gethost() << "/" << this->socket.getport()
+                                 << " on fd " << this->socket.getfd();
         logwrite( function, message.str() );
       }
     }
@@ -743,14 +757,13 @@ namespace Common {
   /***** Common::DaemonClient::disconnect *********************************************/
   /**
    * @brief      close socket connection to the daemon
-   * @return     NO_ERROR
    *
    * This function closes the socket connection to the daemon
    * using the Network::TcpSocket class.
    *
    */
-  long Common::DaemonClient::disconnect() {
-    std::string function = "DaemonClient::disconnect";
+  void Common::DaemonClient::disconnect() {
+    std::string function = "Common::DaemonClient::disconnect";
     std::stringstream message;
 
     // If connected then close the connection
@@ -766,7 +779,7 @@ namespace Common {
       logwrite( function, message.str() );
     }
 
-    return( NO_ERROR );
+    return;
   }
   /***** Common::DaemonClient::disconnect *********************************************/
 
@@ -782,7 +795,7 @@ namespace Common {
    *
    */
   long Common::DaemonClient::is_connected( std::string &reply ) {
-    std::string function = "DaemonClient::is_connected";
+    std::string function = "Common::DaemonClient::is_connected";
     std::stringstream message;
 
     reply = ( this->socket.isconnected() ? "true" : "false" );
