@@ -9,25 +9,21 @@ import edu.caltech.palomar.util.general.CommandLogModel;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
+import java.net.SocketTimeoutException;
+import java.util.StringTokenizer;
 import java.util.Vector;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.DailyRollingFileAppender;
 import org.apache.log4j.Layout;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PatternLayout;
-import java.net.InetAddress;
-import java.net.DatagramSocket;
-import java.net.DatagramPacket;
-import java.net.SocketTimeoutException;
-import java.io.IOException;
-import edu.caltech.palomar.instruments.ngps.os.IniReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.MulticastSocket;
-import java.net.Socket;
-import java.util.StringTokenizer;
+        
 //=== File Prolog =============================================================
 //	This code was developed by California Institute of Technology
 //      Caltech Optical Observatories, Palomar Observatory
@@ -231,15 +227,42 @@ public void start_AsynchronousMonitor(){
    myAsynchronousMonitorThread.start();
 }
 /*================================================================================================
+/   setAttribute()
+/      Set the value of any String attribute of this class
+/=================================================================================================*/
+public void setAttributeString(String fieldToSet, String newValue) {
+    Class<?>c = this.getClass();
+    try{
+        Field f = c.getDeclaredField(fieldToSet);
+        String oldValue = (String) f.get(this);
+        f.set(this, newValue);
+        propertyChangeListeners.firePropertyChange(fieldToSet, oldValue, newValue);
+    } catch(Exception e){
+      System.out.println(e.toString());
+    }  
+ }
+/*================================================================================================
+/   setAttribute()
+/      Set the value of any String attribute of this class
+/=================================================================================================*/
+public void setAttributeBool(String fieldToSet, Boolean newValue) {
+    Class<?>c = this.getClass();
+    try{
+        Field f = c.getDeclaredField(fieldToSet);
+        Boolean oldValue = (Boolean) f.get(this) ;
+        f.set(this, newValue);
+        propertyChangeListeners.firePropertyChange(fieldToSet, oldValue, newValue);
+    } catch(Exception e){
+      System.out.println(e.toString());
+    }  
+ }
+/*================================================================================================
 /       setCommandConnected(boolean new_command_connected)
 /=================================================================================================*/
   public void setCommandConnected(boolean new_command_connected) {
     boolean  old_command_connected = this.command_connected;
     this.command_connected = new_command_connected;
     propertyChangeListeners.firePropertyChange("command_connected", Boolean.valueOf(old_command_connected), Boolean.valueOf(new_command_connected));
-  }
-  public boolean isCommandConnected() {
-    return command_connected;
   }
 /*================================================================================================
 /       setBlockingConnected(boolean new_blocking_connected)
@@ -249,9 +272,6 @@ public void start_AsynchronousMonitor(){
     this.blocking_connected = new_blocking_connected;
     propertyChangeListeners.firePropertyChange("blocking_connected", Boolean.valueOf(old_blocking_connected), Boolean.valueOf(new_blocking_connected));
   }
-  public boolean isBlockingConnected() {
-    return blocking_connected;
-  }
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -259,9 +279,6 @@ public void start_AsynchronousMonitor(){
     boolean  old_async_connected = this.async_connected;
     this.async_connected = new_async_connected;
     propertyChangeListeners.firePropertyChange("async_connected", Boolean.valueOf(old_async_connected), Boolean.valueOf(new_async_connected));
-  }
-  public boolean isAsyncConnected() {
-    return async_connected;
   }
 /*================================================================================================
 /      setERROR(boolean new_error)
@@ -282,9 +299,6 @@ public void start_AsynchronousMonitor(){
     this.progress = new_progress;
     propertyChangeListeners.firePropertyChange("progress", Integer.valueOf(old_progress), Integer.valueOf(new_progress));
   }
-  public int getProgress() {
-    return progress;
-  }  
 /*================================================================================================
 /     setProgress(int new_progress)
 /=================================================================================================*/
@@ -293,9 +307,6 @@ public void start_AsynchronousMonitor(){
     this.progress_string = new_progress_string;
     propertyChangeListeners.firePropertyChange("progress_string", old_progress_string, new_progress_string);
   }
-  public java.lang.String getProgressString() {
-    return progress_string;
-  } 
 /*================================================================================================
 /     setProgress(int new_progress)
 /=================================================================================================*/
@@ -303,9 +314,6 @@ public void start_AsynchronousMonitor(){
     java.lang.String  old_overhead_progress_string = this.overhead_progress_string;
     this.overhead_progress_string = new_overhead_progress_string;
     propertyChangeListeners.firePropertyChange("overhead_progress_string", old_overhead_progress_string, new_overhead_progress_string);
-  }
-  public java.lang.String getOverheadProgressString() {
-    return overhead_progress_string;
   }
   /*================================================================================================
 /     setOverheadProgress(int new_overhead_progress)
@@ -315,9 +323,6 @@ public void start_AsynchronousMonitor(){
     this.overhead_progress = new_overhead_progress;
     propertyChangeListeners.firePropertyChange("overhead_progress", Integer.valueOf(old_overhead_progress),Integer.valueOf(new_overhead_progress));
   }
-  public int getOverheadProgress() {
-    return overhead_progress;
-  }  
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -326,9 +331,6 @@ public void start_AsynchronousMonitor(){
     this.total_time = new_total_time;
     propertyChangeListeners.firePropertyChange("total_time", Integer.valueOf(old_total_time), Integer.valueOf(new_total_time));
   }
-  public int getTotalEXPTime() {
-    return total_time;
-  }  
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -337,9 +339,6 @@ public void start_AsynchronousMonitor(){
     this.elapsed_time_1 = new_elapsed_time_1;
     propertyChangeListeners.firePropertyChange("elapsed_time_1", Integer.valueOf(old_elapsed_time_1), Integer.valueOf(new_elapsed_time_1));
   }
-  public int getElapedTime_1() {
-    return elapsed_time_1;
-  } 
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -348,9 +347,6 @@ public void start_AsynchronousMonitor(){
     this.elapsed_time_2 = new_elapsed_time_2;
     propertyChangeListeners.firePropertyChange("elapsed_time_2", Integer.valueOf(old_elapsed_time_2), Integer.valueOf(new_elapsed_time_2));
   }
-  public int getElapedTime_2() {
-    return elapsed_time_2;
-  }  
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -359,9 +355,6 @@ public void start_AsynchronousMonitor(){
     this.elapsed_time_3 = new_elapsed_time_3;
     propertyChangeListeners.firePropertyChange("elapsed_time_3", Integer.valueOf(old_elapsed_time_3), Integer.valueOf(new_elapsed_time_3));
   }
-  public int getElapedTime_3() {
-    return elapsed_time_3;
-  }  
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -369,9 +362,6 @@ public void start_AsynchronousMonitor(){
     int  old_elapsed_time_4 = this.elapsed_time_4;
     this.elapsed_time_4 = new_elapsed_time_4;
     propertyChangeListeners.firePropertyChange("elapsed_time_4", Integer.valueOf(old_elapsed_time_4), Integer.valueOf(new_elapsed_time_4));
-  }
-  public int getElapedTime_4() {
-    return elapsed_time_4;
   }
  /*================================================================================================
 /      setPixelCount_1(int new_pixel_count_1)
@@ -381,9 +371,6 @@ public void start_AsynchronousMonitor(){
     this.image_size = new_image_size;
     propertyChangeListeners.firePropertyChange("image_size", Integer.valueOf(old_image_size),Integer.valueOf(new_image_size));
   }
-  public int getImageSize() {
-    return image_size;
-  }  
 /*================================================================================================
 /      setPixelCount_1(int new_pixel_count_1)
 /=================================================================================================*/
@@ -392,9 +379,6 @@ public void start_AsynchronousMonitor(){
     this.pixel_count_1 = new_pixel_count_1;
     propertyChangeListeners.firePropertyChange("pixel_count_1", Integer.valueOf(old_pixel_count_1),Integer.valueOf(new_pixel_count_1));
   }
-  public int getPixelCount_1() {
-    return pixel_count_1;
-  } 
 /*================================================================================================
 /      setPixelCount_1(int new_pixel_count_1)
 /=================================================================================================*/
@@ -403,9 +387,6 @@ public void start_AsynchronousMonitor(){
     this.pixel_count_2 = new_pixel_count_2;
     propertyChangeListeners.firePropertyChange("pixel_count_2", Integer.valueOf(old_pixel_count_2), Integer.valueOf(new_pixel_count_2));
   }
-  public int getPixelCount_2() {
-    return pixel_count_2;
-  } 
 /*================================================================================================
 /      setPixelCount_1(int new_pixel_count_1)
 /=================================================================================================*/
@@ -414,9 +395,6 @@ public void start_AsynchronousMonitor(){
     this.pixel_count_3 = new_pixel_count_3;
     propertyChangeListeners.firePropertyChange("pixel_count_3", Integer.valueOf(old_pixel_count_3), Integer.valueOf(new_pixel_count_3));
   }
-  public int getPixelCount_3() {
-    return pixel_count_3;
-  } 
 /*================================================================================================
 /      setPixelCount_1(int new_pixel_count_1)
 /=================================================================================================*/
@@ -425,9 +403,6 @@ public void start_AsynchronousMonitor(){
     this.pixel_count_4 = new_pixel_count_4;
     propertyChangeListeners.firePropertyChange("pixel_count_4", Integer.valueOf(old_pixel_count_4), Integer.valueOf(new_pixel_count_4));
   }
-  public int getPixelCount_4() {
-    return pixel_count_4;
-  }   
 /*================================================================================================
 /      executeCommand(int socket,java.lang.String command,double delay)
 /=================================================================================================*/
@@ -435,7 +410,7 @@ public void start_AsynchronousMonitor(){
       java.lang.String response = new java.lang.String();
         logMessage(INFO,command);
            if(myCommandSocket.isConnected()){
-              response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR);
+              response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR); // NO RESPONSES!
               if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
                 //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
                 myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
@@ -496,7 +471,7 @@ public boolean abort(){
  /=================================================================================================*/
 public boolean airmass(double airmass_limit){
     String command = "airmass "+Double.toString(airmass_limit);
-    java.lang.String response = executeCommand(command);
+    java.lang.String response = executeCommandB(command);
 
     return isERROR();
 }
@@ -666,9 +641,6 @@ public void tcs_list(){
     this.active_tcs_address = new_active_tcs_address;
     propertyChangeListeners.firePropertyChange("active_tcs_address", old_active_tcs_address, new_active_tcs_address);
   }
-  public java.lang.String getActiveTCSAddress() {
-    return active_tcs_address;
-  } 
 /*================================================================================================
 /     setSimulatorAddress(java.lang.String new_simulator_address)
 /=================================================================================================*/
@@ -677,9 +649,6 @@ public void tcs_list(){
     this.active_tcs_name = new_active_tcs_name;
     propertyChangeListeners.firePropertyChange("active_tcs_name", old_active_tcs_name, new_active_tcs_name);
   }
-  public java.lang.String getActiveTCSname() {
-    return active_tcs_name;
-  }   
 /*================================================================================================
 /       setCommandConnected(boolean new_command_connected)
 /=================================================================================================*/
@@ -687,9 +656,6 @@ public void tcs_list(){
     boolean  old_tcs_connected = this.tcs_connected;
     this.tcs_connected = new_tcs_connected;
     propertyChangeListeners.firePropertyChange("tcs_connected", Boolean.valueOf(old_tcs_connected), Boolean.valueOf(new_tcs_connected));
-  }
-  public boolean isTCSConnected() {
-    return tcs_connected;
   }
   /*================================================================================================
 /       setCommandConnected(boolean new_command_connected)
@@ -699,15 +665,11 @@ public void tcs_list(){
     this.tcs_connected_in_progress = new_tcs_connected_in_progress;
     propertyChangeListeners.firePropertyChange("tcs_connected_in_progress", Boolean.valueOf(old_tcs_connected_in_progress), Boolean.valueOf(new_tcs_connected_in_progress));
   }
-  public boolean isTCSConnected_in_progress() {
-    return tcs_connected_in_progress;
-  }
 /*================================================================================================
 /   tcs_connect( 
 /=================================================================================================*/
 public boolean tcs_connect(){
-    java.lang.String command = new java.lang.String();
-    command = "tcs connect";
+    String command = "tcs connect";
     java.lang.String response = executeCommandB(command);
     return isERROR();
 } 
@@ -717,8 +679,7 @@ public boolean tcs_connect(){
 /=================================================================================================*/
 public boolean tcs_isOpen(){
    boolean isopen = false;
-   java.lang.String command = new java.lang.String();
-   command = "tcs isopen";
+   String command = "tcs isopen";
    java.lang.String response = executeCommandB(command);   
    response = response.replace(" DONE","");
    response = response.trim();
@@ -728,11 +689,13 @@ public boolean tcs_isOpen(){
       setActiveTCSname(response);
    }else if(response.matches("sim")){
       isopen = true; 
-      setActiveTCSAddress(getSimulatorAddress());
+//      setActiveTCSAddress(getSimulatorAddress());
+      setActiveTCSAddress(this.simulator_address);
       setActiveTCSname(response);
    }else if(response.matches("real")){
       isopen = true;
-      setActiveTCSAddress(getTCSAddress());
+//     setActiveTCSAddress(getTCSAddress());
+      setActiveTCSAddress(this.tcs_address);
       setActiveTCSname(response);
    }   
    this.setTCSConnected(isopen);
@@ -744,8 +707,7 @@ public boolean tcs_isOpen(){
 /=================================================================================================*/
 public boolean tcs_isConnected(){
    boolean isconnected = false;
-   java.lang.String command = new java.lang.String();
-   command = "tcs isconnected";
+   String command = "tcs isconnected";
    java.lang.String response = executeCommandB(command);   
    response = response.replace(" DONE","");
    response = response.trim();
@@ -847,7 +809,7 @@ public void parseAsyncMessage(java.lang.String message){
           
      if(message.contains("TCSD:open")){
         String[] messages = message.split(":"); // e.g. TCSD:open:true
-        if(messages[2].contains("true")){
+        if(messages[2].contains("true")){   // if Boolean.valueOf(messages[2])...
             setTCSConnectedInProgress(false);
             setTCSConnected(true);
         }else if(messages[2].contains("false")){
