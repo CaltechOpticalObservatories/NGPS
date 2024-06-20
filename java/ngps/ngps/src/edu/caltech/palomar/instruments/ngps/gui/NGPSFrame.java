@@ -2409,6 +2409,7 @@ public static JTable constructTable(){
 
     private void MinutesSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_MinutesSpinnerStateChanged
         minutes = ((Integer)MinutesSpinner.getValue()).intValue();
+        updateStarTime();
 //        updateSelectedTimeDate();
         // TODO add your handling code here:
     }//GEN-LAST:event_MinutesSpinnerStateChanged
