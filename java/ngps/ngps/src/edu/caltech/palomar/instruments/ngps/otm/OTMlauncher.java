@@ -891,27 +891,6 @@ return timestampAsString;
      return current_target;
  }
 /*================================================================================================
-/      test()
-/=================================================================================================*/
- private void test(){
-     try{   
-           java.sql.Timestamp start_time_initial = new java.sql.Timestamp(System.currentTimeMillis());
-           double seeing = 1.25;
-           int    wavelength = 500;
-           constructScriptFile(start_time_initial,seeing,wavelength);
-           long start_time = System.currentTimeMillis();
-           CommandLine commandLine = start_OTM();
-           int exitValue              = executor.execute(commandLine);
-           if(exitValue != 0){
-               displayScreenMessage("OTM exited with an error. Please see execution log.");
-           }           
-           setProcessingState(IDLE);
-    }catch(Exception e){
-            logMessage(ERROR,"method ExecuteProcessThread error = " + e.toString());
-            setProcessingState(IDLE);
-    }  
- }
-/*================================================================================================
 /      add and remove Property Change Listeners
 /=================================================================================================*/
   public synchronized void removePropertyChangeListener(PropertyChangeListener l) {
@@ -970,9 +949,6 @@ public java.sql.Timestamp getStartTimestamp(){
     this.ProcessingState = newProcessingState;
     propertyChangeListeners.firePropertyChange("ProcessingState", Integer.valueOf(oldProcessingState), Integer.valueOf(newProcessingState));
   }
-  public int getProcessingState() {
-    return ProcessingState;
-  } 
 /*================================================================================================
 /        setTargetImageFile(String newTargetImageFile)
 /=================================================================================================*/
@@ -980,9 +956,6 @@ public java.sql.Timestamp getStartTimestamp(){
      java.lang.String oldTargetImageFile = this.targetImageFile;
      this.targetImageFile                = newTargetImageFile;
     propertyChangeListeners.firePropertyChange("targetImageFile", oldTargetImageFile, newTargetImageFile);
-   }
-   public String getTargetImageFile() {
-     return targetImageFile;
    }
 /*================================================================================================
 /        setStatusMessage(String newStatusMessage) 
@@ -992,9 +965,6 @@ public java.sql.Timestamp getStartTimestamp(){
      this.StatusMessage                = newStatusMessage;
      propertyChangeListeners.firePropertyChange("StatusMessage", oldStatusMessage, newStatusMessage);
    }
-   public String getStatusMessage() {
-     return StatusMessage;
-   }   
 /*================================================================================================
 /      setDIR(java.lang.String newDIR)
 /=================================================================================================*/
@@ -1002,9 +972,6 @@ public java.sql.Timestamp getStartTimestamp(){
       java.lang.String oldDIR = this.DIR;
       this.DIR = newDIR;
       propertyChangeListeners.firePropertyChange("DIR", oldDIR, newDIR);
-  }
-  public java.lang.String getDIR(){
-      return DIR;
   }
  /*================================================================================================
 /      setTotalProgress(int new_exposure_progress)
@@ -1014,37 +981,6 @@ public java.sql.Timestamp getStartTimestamp(){
     this.total_progress = new_total_progress;
    propertyChangeListeners.firePropertyChange("total_progress", Integer.valueOf(old_total_progress), Integer.valueOf(new_total_progress));
   }
-  public int getTotalProgress() {
-    return total_progress;
-  } 
-/*================================================================================================
-/     start_OTM(java.lang.String fits_file_name,double seeing)
-/=================================================================================================*/
- public CommandLine start_OTM(){
-//    String line = "/Users/jennifermilburn/Desktop/NGPS/python/git/OTM/start_OTM.txt";
-//    String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/start_OTM.txt";
-//    String line = "/Users/jennifermilburn/Desktop/NGPS/telemtry/telemetry_server/config/otm/OTM_SCRIPT.txt";
-    String line = "/tmp/OTM_SCRIPT.txt";
-      setProcessingState(RUNNING);
-       CommandLine commandLine = CommandLine.parse(line);
- //       commandLine.addArgument("/Users/jennifermilburn/Desktop/NGPS/python/git/OTM/OTM.py");
-//        commandLine.addArgument("-seeing");
-//        commandLine.addArgument("1.25");
-//        commandLine.addArgument(Printf.format("%5.4f", new PrintfData().add(scale_low)));
-//        commandLine.addArgument("-out");
-//        commandLine.addArgument(Printf.format("%5.4f", new PrintfData().add(scale_high))); 
-//        commandLine.addArgument("/Users/jennifermilburn/Desktop/NGPS/python/git/OUTPUT_OTM.csv");
-        logMessage(INFO,"Starting OTM.py Program ");
-   return commandLine;     
- }  
-/*================================================================================================
-/      kill_Python()
-/=================================================================================================*/
- public boolean kill_Solve_Field(){
-    watchdog.destroyProcess();
-    boolean state = watchdog.killedProcess();
-    return state;
- }
 /*=============================================================================================
 /        logMessage(java.lang.String message)
 /=============================================================================================*/
@@ -1079,65 +1015,6 @@ public void displayScreenMessage(java.lang.String message){
             }
         });   
 }
-/*=============================================================================================
-/     INNER CLASS that executes a process in separate thread so that it doesn't
- *     block execution of the rest of the system. 
-/=============================================================================================*/
-public class ExecuteProcessThread  implements Runnable{
-    private Thread             myThread;
-    private java.sql.Timestamp  start_time;
-    private double              seeing;
-    private int                 wavelength;
-    
-    public ExecuteProcessThread(java.sql.Timestamp start_time,double seeing,int wavelength){
-      this.start_time  = start_time;
-      this.seeing      = seeing;
-      this.wavelength  = wavelength;
-    }
-    public void run(){
-        try{  
-           myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "OTM python process starting"); 
-           OTM(start_time,seeing,wavelength);
-           myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "OTM python process complete"); 
-        }catch(Exception e){
-           System.out.println(e.toString());
-        }
-     }
-    public void start(){
-     myThread = new Thread(this);
-     myThread.start();
-     }
-    }// End of the ExecuteProcessThread Inner Class
-/*=============================================================================================
-/     INNER CLASS that executes a process in separate thread so that it doesn't
- *     block execution of the rest of the system. 
-/=============================================================================================*/
-public class ExecutePlotThread  implements Runnable{
-    private Thread             myThread;
-    private java.sql.Timestamp  start_time;
-    private double              seeing;
-    private int                 wavelength;
-    
-    public ExecutePlotThread(java.sql.Timestamp new_start_time,double new_seeing,int new_wavelength){
-        start_time = new_start_time;
-        seeing     = new_seeing;
-        wavelength = new_wavelength;
-    }
-    public void run(){
-        try{  
-           myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "OTM_plot python process starting"); 
-           OTM(start_time,seeing,wavelength);
-           PLOT();
-           myCommandLogModel.insertMessage(CommandLogModel.COMMAND, "OTM_plot python process complete"); 
-        }catch(Exception e){
-           System.out.println(e.toString());
-        }
-     }
-    public void start(){
-     myThread = new Thread(this);
-     myThread.start();
-     }
-    }// End of the ExecuteProcessThread Inner Class
 /*=============================================================================================
 /     INNER CLASS that executes a process in separate thread so that it doesn't
  *     block execution of the rest of the system. 
