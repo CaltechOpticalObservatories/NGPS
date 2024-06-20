@@ -14,7 +14,6 @@ add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
-include_directories( ${PYTHON_DEV} )
 
 # Andor SDK
 #
@@ -29,6 +28,7 @@ find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib )
 #
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
+include_directories( ${PYTHON_DEV} )
 add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
 
 add_library( andor STATIC
