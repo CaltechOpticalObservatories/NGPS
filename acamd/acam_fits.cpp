@@ -186,7 +186,7 @@ logwrite( function, file_in );
       return( ERROR );
     }
 
-    for ( auto const &keydb : this->info.fitskeys.keydb ) {
+    for ( const auto &keydb : this->info.fitskeys.keydb ) {
 //    message.str(""); message << "[DEBUG]: adding key \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
 //    this->pFits->pHDU().addKey( keydb.second.keyword, keydb.second.keyvalue, keydb.second.keycomment );
       this->add_key( keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );

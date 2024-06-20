@@ -52,7 +52,6 @@ INCLUDE( ${GIT_COMMIT_FILE} )
 
 # Here is everything to build
 #
-#add_subdirectory( ${PROJECT_BASE_DIR}/AndorCamera2 )
 add_subdirectory( ${PROJECT_BASE_DIR}/Andor )
 add_subdirectory( ${PROJECT_BASE_DIR}/acamd )
 add_subdirectory( ${PROJECT_BASE_DIR}/utils )
@@ -61,7 +60,6 @@ add_subdirectory( ${PROJECT_BASE_DIR}/camerad )
 add_subdirectory( ${PROJECT_BASE_DIR}/sequencerd )
 add_subdirectory( ${PROJECT_BASE_DIR}/flexured )
 add_subdirectory( ${PROJECT_BASE_DIR}/calibd )
-#add_subdirectory( ${PROJECT_BASE_DIR}/filterd )
 add_subdirectory( ${PROJECT_BASE_DIR}/slitd )
 add_subdirectory( ${PROJECT_BASE_DIR}/focusd )
 add_subdirectory( ${PROJECT_BASE_DIR}/powerd )
