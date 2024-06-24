@@ -1729,14 +1729,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // convert them to decimal and to scope coordinates.
       // (fpoffsets.coords_* are always in degrees)
       //
-      seq.target.fpoffsets.coords_in.ra    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-      seq.target.fpoffsets.coords_in.dec   = seq.target.radec_to_decimal( seq.target.dec_dms );
-      seq.target.fpoffsets.coords_in.angle = seq.target.slitangle;
+      double ra_in    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
+      double dec_in   = seq.target.radec_to_decimal( seq.target.dec_dms );
+      double angle_in = seq.target.slitangle;
 
       // can't be NaN
       //
-      bool ra_isnan  = std::isnan( seq.target.fpoffsets.coords_in.ra  );
-      bool dec_isnan = std::isnan( seq.target.fpoffsets.coords_in.dec );
+      bool ra_isnan  = std::isnan( ra_in  );
+      bool dec_isnan = std::isnan( dec_in );
 
       if ( ra_isnan || dec_isnan ) {
         message.str(""); message << "ERROR: converting";
@@ -1750,43 +1750,51 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
         return;
       }
 
-      // The acam GUI would like to know the coordinates of the acam,
-      // which can be attained by converting the target coords from slit->acam ...
+//    OBSOLETE
+//
+//    // The acam GUI would like to know the coordinates of the acam,
+//    // which can be attained by converting the target coords from slit->acam ...
+//    //
+//    std::stringstream acam;
+//    std::string dontcare;
+//    if ( error == NO_ERROR ) seq.acamd.command( ACAMD_INIT, dontcare );         // send here, don't need the reply
+//
+//    double ra_out, dec_out, angle_out;
+//
+//    error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM",
+//                                                 ra_in, dec_in, angle_in,
+//                                                 ra_out, dec_out, angle_out );  // convert coords_in from SLIT to ACAM
+//
+//    acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)     // this is the so-called "prepare" command
+//                                      << " " << ra_out
+//                                      << " " << dec_out
+//                                      << " " << angle_out;
+//
+//    {
+//    message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
+//    std::string rastr, decstr;
+//    double _ra = ra_out * TO_HOURS;
+//    seq.target.decimal_to_sexa( _ra, rastr );
+//    seq.target.decimal_to_sexa( dec_out, decstr );
+//    message.str(""); message << "[ACQUIRE] ACAM COORDS= " << rastr << "  " << decstr << "  " << angle_out;
+//    logwrite( function, message.str() );
+//    }
+//
+//    if ( error == NO_ERROR ) seq.acamd.command( acam.str(), dontcare );         // send here, don't need the reply
+
+      // Before sending the target coords to the TCS, convert them from slit->scope,
       //
-      std::stringstream acam;
-      std::string dontcare;
-      if ( error == NO_ERROR ) seq.acamd.command( ACAMD_INIT, dontcare );         // send here, don't need the reply
-
-      error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM" );              // convert coords_in from SLIT to ACAM
-
-      acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)     // this is the so-called "prepare" command
-                                        << " " << seq.target.fpoffsets.coords_out.ra
-                                        << " " << seq.target.fpoffsets.coords_out.dec
-                                        << " " << seq.target.fpoffsets.coords_out.angle;
-
-      {
-      message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
-      std::string rastr, decstr;
-      double _ra = seq.target.fpoffsets.coords_out.ra * TO_HOURS;
-      seq.target.decimal_to_sexa( _ra, rastr );
-      seq.target.decimal_to_sexa( seq.target.fpoffsets.coords_out.dec, decstr );
-      message.str(""); message << "[ACQUIRE] ACAM COORDS= " << rastr << "  " << decstr << "  " << seq.target.fpoffsets.coords_out.angle;
-      logwrite( function, message.str() );
-      }
-
-      if ( error == NO_ERROR ) seq.acamd.command( acam.str(), dontcare );         // send here, don't need the reply
-
-      // Before sending the target coords to the TCS, convert them from slit->scope...
-      //
-      error = seq.target.fpoffsets.compute_offset( "SLIT", "SCOPE" );             // convert coords_in from SLIT->SCOPE
+      double ra_out, dec_out, angle_out;
+      error = seq.target.fpoffsets.compute_offset( "SLIT", "SCOPE",
+                                                   ra_in, dec_in, angle_in,
+                                                   ra_out, dec_out, angle_out );
 
       // For now, announce this error but don't stop the show
       //
-      double _solved_angle = ( seq.target.fpoffsets.coords_out.angle < 0 ? seq.target.fpoffsets.coords_out.angle + 360.0
-                                                                         : seq.target.fpoffsets.coords_out.angle         );
+      double _solved_angle = ( angle_out < 0 ? angle_out + 360.0 : angle_out );
 
       if ( std::abs(_solved_angle) - std::abs(seq.target.casangle) > 0.01 ) {
-        message.str(""); message << "NOTICE: Calculated angle " << seq.target.fpoffsets.coords_out.angle
+        message.str(""); message << "NOTICE: Calculated angle " << angle_out
                                  << " is not equivalent to casangle " << seq.target.casangle;
         seq.async.enqueue_and_log( function, message.str() );
       }
@@ -1796,7 +1804,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       std::stringstream ringgo_cmd;
       std::string       ringgo_reply;
 //    int               ringgo_reply_value;
-      ringgo_cmd << TCSD_RINGGO << " " << seq.target.fpoffsets.coords_out.angle;                                 // this is calculated cass angle
+      ringgo_cmd << TCSD_RINGGO << " " << angle_out;                              // this is calculated cass angle
       error = seq.tcsd.send( ringgo_cmd.str(), ringgo_reply );
       if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
         message.str(""); message << "ERROR: sending RINGGO command. TCS reply: " << ringgo_reply;
@@ -1815,18 +1823,18 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       std::string       coords_reply;
 //    int               coords_reply_value;
 
-      coords_cmd << "COORDS " << ( seq.target.fpoffsets.coords_out.ra * TO_HOURS )  << " "                       // RA in decimal hours
-                              <<   seq.target.fpoffsets.coords_out.dec << " "                                    // DEC in decimal degrees
-                              <<   "2000" << " "                                                                 // equinox always = 2000
-                              <<   "0 0"  << " "                                                                 // RA,DEC proper motion not used
-                              << "\"" << seq.target.name << "\"";                                                // target name in quotes
+      coords_cmd << "COORDS " << ( ra_out * TO_HOURS )  << " "                       // RA in decimal hours
+                              <<   dec_out << " "                                    // DEC in decimal degrees
+                              <<   "2000" << " "                                     // equinox always = 2000
+                              <<   "0 0"  << " "                                     // RA,DEC proper motion not used
+                              << "\"" << seq.target.name << "\"";                    // target name in quotes
 
       {
       std::string rastr, decstr;
-      double _ra = seq.target.fpoffsets.coords_out.ra * TO_HOURS;
+      double _ra = ra_out * TO_HOURS;
       seq.target.decimal_to_sexa( _ra, rastr );
-      seq.target.decimal_to_sexa( seq.target.fpoffsets.coords_out.dec, decstr );
-      message.str(""); message << "[ACQUIRE] SCOPE COORDS= " << rastr << "  " << decstr << "  " << seq.target.fpoffsets.coords_out.angle;
+      seq.target.decimal_to_sexa( dec_out, decstr );
+      message.str(""); message << "[ACQUIRE] SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out;
       logwrite( function, message.str() );
       }
 
@@ -2046,7 +2054,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
       logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE ); std::thread( dothread_acquisition, std::ref(seq) ).detach();
+//    seq.set_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE ); std::thread( dothread_acquisition, std::ref(seq) ).detach();
+//    call acamd( ACQUIRE ) here ! (or equiv)
     }
     else
     if ( error==NO_ERROR && seq.target.acquired ) {
@@ -2570,17 +2579,18 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       error = seq.target.fpoffsets.compute_offset( "SCOPE", "SLIT", 0, 0, cass_now );
 
       // Now convert the slit coordinates to ACAM coordinates using the RA, DEC from the database
-      // and the slit position angle just obtained above (which is currently stored in coords_out.angle).
+      // and the slit position angle from the previous calculation.
       //
-      seq.target.fpoffsets.coords_in.ra    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-      seq.target.fpoffsets.coords_in.dec   = seq.target.radec_to_decimal( seq.target.dec_dms );
-      seq.target.fpoffsets.coords_in.angle = seq.target.fpoffsets.coords_out.angle;
+      double ra_in    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
+      double dec_in   = seq.target.radec_to_decimal( seq.target.dec_dms );
 
-      error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM" );              // convert coords_in from SLIT to ACAM
+      // output units will be in degrees
+      //
+      double acam_ra_goal, acam_dec_goal, acam_angle_goal;
 
-      double acam_ra_goal    = seq.target.fpoffsets.coords_out.ra;                // units degrees
-      double acam_dec_goal   = seq.target.fpoffsets.coords_out.dec;
-      double acam_angle_goal = seq.target.fpoffsets.coords_out.angle;
+      error = seq.target.fpoffsets.compute_offset_last_angle( "SLIT", "ACAM",
+                                                              ra_in, dec_in,
+                                                              acam_ra_goal, acam_dec_goal, acam_angle_goal );
 
       {  // this local section is just for display purposes and its variables are not used elsewhere
       std::string rastr, decstr;
@@ -2594,7 +2604,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // Acquire an image from the camera.
       // The reply contains a FITS filename that has to be passed to the astrometry solver.
       //
-      error  = seq.acamd.command( ACAMD_ACQUIRE, reply );
+      error  = seq.acamd.command( ACAMD_FRAMEGRAB, reply );
 
       // Perform the astrometry calculations on the acquired image (and calculate image quality).
       // Optional solver args can be included here, which currently only come from the test commands.
@@ -4361,21 +4371,21 @@ logwrite( function, "[DEBUG] setting READY bit" );
       // This call is just to convert the current cass rotator angle to a slit position angle,
       // so we don't care about the RA, DEC coordinates.
       //
-      { double dontcare=0;
-        error = this->target.fpoffsets.compute_offset( "SCOPE", "SLIT", dontcare, dontcare, cass_now );
-      }
+      double ra_out, dec_out, angle_out;
+      error = this->target.fpoffsets.compute_offset( "SCOPE", "SLIT", 0, 0, cass_now,
+                                                     ra_out, dec_out, angle_out );
 
       // Before starting acquire thread, must first send coordinates to the acam cameraserver
       //
-      this->target.fpoffsets.coords_in.ra    = this->target.radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
-      this->target.fpoffsets.coords_in.dec   = this->target.radec_to_decimal( this->target.dec_dms );
-      this->target.fpoffsets.coords_in.angle = this->target.fpoffsets.coords_out.angle;
+      double ra_in    = this->target.radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
+      double dec_in   = this->target.radec_to_decimal( this->target.dec_dms );
+      double angle_in = angle_out;
 
       // can't be NaN
       //
-      bool ra_isnan  = std::isnan( this->target.fpoffsets.coords_in.ra  );
-      bool dec_isnan = std::isnan( this->target.fpoffsets.coords_in.dec );
-      bool cas_isnan = std::isnan( this->target.fpoffsets.coords_in.angle );
+      bool ra_isnan  = std::isnan( ra_in  );
+      bool dec_isnan = std::isnan( dec_in );
+      bool cas_isnan = std::isnan( angle_in );
 
       if ( ra_isnan || dec_isnan || cas_isnan ) {
         message.str(""); message << "ERROR: converting";
@@ -4387,21 +4397,27 @@ logwrite( function, "[DEBUG] setting READY bit" );
         return ERROR;
       }
 
-      // The acam cameraserver needs the coords converted slit->acam...
-      //
-      std::stringstream acam;
-      std::string dontcare;
-
-      error = this->target.fpoffsets.compute_offset( "SLIT", "ACAM" );               // convert coords_in from SLIT to ACAM
-
-      acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)
-                                        << " " << this->target.fpoffsets.coords_out.ra
-                                        << " " << this->target.fpoffsets.coords_out.dec
-                                        << " " << this->target.fpoffsets.coords_out.angle;
-
-      message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
-
-      if ( error == NO_ERROR ) error = this->acamd.command( acam.str(), dontcare );  // send here, don't need the reply
+//    OBSOLETE
+//
+//    // The acam cameraserver needs the coords converted slit->acam...
+//    //
+//    std::stringstream acam;
+//    std::string dontcare;
+//
+//    // Convert _in coords from SLIT to ACAM
+//    //
+//    error = this->target.fpoffsets.compute_offset( "SLIT", "ACAM",
+//                                                   ra_in, dec_in, angle_in,
+//                                                   ra_out, dec_out, angle_out );
+//
+//    acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)
+//                                      << " " << ra_out
+//                                      << " " << dec_out
+//                                      << " " << angle_out;
+//
+//    message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
+//
+//    if ( error == NO_ERROR ) error = this->acamd.command( acam.str(), dontcare );  // send here, don't need the reply
 
       // Finally, spawn the acquisition thread
       //
@@ -4437,9 +4453,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
       }
 
       std::string from, to;
-      double ra,dec;
-      ra  = this->target.radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
-      dec = this->target.radec_to_decimal( target.dec_dms );
+      double ra_in  = this->target.radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
+      double dec_in = this->target.radec_to_decimal( target.dec_dms );
+      double angle_in = this->target.casangle;
       try {
         from = tokens.at(1);
         to   = tokens.at(2);
@@ -4452,8 +4468,14 @@ logwrite( function, "[DEBUG] setting READY bit" );
         message.str(""); message << "invalid argument parsing from/to from " << args << ": " << e.what();
         logwrite( function, message.str() );
       }
-      this->target.fpoffsets.set_inputs( ra, dec, this->target.casangle );
-      error = this->target.fpoffsets.compute_offset( from, to );
+      double ra_out, dec_out, angle_out;
+      error = this->target.fpoffsets.compute_offset( from, to,
+                                                     ra_in, dec_in, angle_in,
+                                                     ra_out, dec_out, angle_out );
+      message.str(""); message << ra_in << " " << dec_in << " " << angle_in << "\n"
+                               << from << " -> " << to << "\n"
+                               << ra_out << " " << dec_out << " " << angle_out << "\n";
+      retstring = message.str();
     }
     else
 

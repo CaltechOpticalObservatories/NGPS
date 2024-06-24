@@ -9,10 +9,9 @@
 
 #pragma once
 
-const std::string ACAMD_ACQUIRE  = "acquire";   ///< *** the main acquire wrapper
-const std::string ACAMD_ACQUIREFIX= "acquirefix";   ///< acquire using the WCSfix file from solve
+const std::string ACAMD_FRAMEGRAB  = "framegrab";   ///< *** the main acquire wrapper
+const std::string ACAMD_FRAMEGRABFIX= "framegrabfix";   ///< acquire using the WCSfix file from solve
 const std::string ACAMD_BIN      = "bin";       ///< set/get camera binning
-const std::string ACAMD_CAMERASERVER_COORDS = "prepare";  ///< *** send coordinates to external camera server
 const std::string ACAMD_CLOSE    = "close";     ///< *** close connection to all devices
 const std::string ACAMD_CONFIG   = "config";    ///< reload configuration, apply what can be applied
 const std::string ACAMD_COVER    = "cover";     ///< cover [ open|close ] to set or get the dust over
@@ -60,8 +59,8 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_TCSISCONNECTED+" [ ? ]",
                                                 ACAMD_TCSISOPEN+" [ ? ]",
                                                 "  CAMERA COMMANDS:",
-                                                ACAMD_ACQUIRE+" [ ? | <filename> ]",
-                                                ACAMD_ACQUIREFIX+" [ ? ]",
+                                                ACAMD_FRAMEGRAB+" [ ? | <filename> ]",
+                                                ACAMD_FRAMEGRABFIX+" [ ? ]",
                                                 ACAMD_BIN+" [ ? | <hbin> <vbin> ]",
                                                 ACAMD_EMULATOR+" [ ? | true | false ]",
                                                 ACAMD_EXPTIME+" [ ? | <exptime> ]",
@@ -70,9 +69,6 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_IMFLIP+" [ ? | <hflip> <vflip> ]",
                                                 ACAMD_IMROT+" [ ? | <rotdir> ]",
                                                 ACAMD_INIT,
-#ifdef ACAM_ANDOR_SOURCE_SERVER
-                                                ACAMD_CAMERASERVER_COORDS+" <ra> <dec> <pa>",
-#endif
                                                 ACAMD_QUALITY+" [ ? ]",
                                                 ACAMD_SOLVE+" [ ? | <filename>] [ <key>=<val> ... ]",
                                                 ACAMD_SPEED+" [ ? | <hori> <vert> ]",

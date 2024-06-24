@@ -782,17 +782,23 @@ std::mutex generate_tmpfile_mtx;
   /***** tchar ****************************************************************/
   /**
    * @brief      return a printable string of a non-printable terminating char
-   * @param[in]  str  input string
-   * @return     string
+   * @param[in]  str  reference to input string
+   * @return     string (static references are valid for the lifetime of the program)
    *
    */
-  std::string_view tchar( std::string_view str ) {
-    if ( str.empty() ) return "??";
+  const std::string &tchar( const std::string &str ) {
+    static const std::string unknown   = "??";
+    static const std::string newline   = "\\n";
+    static const std::string carreturn = "\\r";
+    static const std::string nullchar  = "\\0";
+
+    if ( str.empty() ) return unknown;
+
     switch ( str.back() ) {
-      case '\n': return "\\n";
-      case '\r': return "\\r";
-      case '\0': return "\\0";
-      default  : return "??";
+      case '\n': return newline;
+      case '\r': return carreturn;
+      case '\0': return nullchar;
+      default  : return unknown;
     }
   }
   /***** tchar ****************************************************************/
@@ -821,23 +827,27 @@ std::mutex generate_tmpfile_mtx;
    * @param[in]  str  input string
    * @return     string
    *
+   * str is cast to uchar for safety because iscntrl() requires uchar
+   *
    */
-  std::string_view strip_control_characters( const std::string &str ) {
-    // Strip leading control characters
+  std::string strip_control_characters( const std::string &str ) {
+    // locate leading control characters
     //
     size_t start = 0;
-    while ( start < str.length() && std::iscntrl( str[start] ) ) {
+    while ( start < str.length() && std::iscntrl( static_cast<unsigned char>( str[start] ) ) ) {
       ++start;
     }
 
-    // Strip trailing control characters
+    // locate trailing control characters
     //
     size_t end = str.length();
-    while ( end > start && std::iscntrl( str[end - 1] ) ) {
+    while ( end > start && std::iscntrl( static_cast<unsigned char>( str[end - 1] ) ) ) {
       --end;
     }
 
-    return std::string_view( str.data() + start, end - start );
+    // return the substring without leading and trailing control characters
+    //
+    return str.substr( start, end - start );
   }
   /***** strip_control_characters *********************************************/
 

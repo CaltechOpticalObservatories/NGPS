@@ -85,38 +85,6 @@ namespace Acam {
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
 
-      // CAMERASERVER_HOST -- hostname for the external camera server
-      //
-      if ( config.param[entry].find( "CAMERASERVER_HOST" ) == 0 ) {
-        this->interface.cameraserver_host = config.arg[entry];
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
-      }
-
-      // CAMERASERVER_PORT -- port number on CAMSERVER_HOST for the external camera server
-      //
-      if ( config.param[entry].find( "CAMERASERVER_PORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad CAMSERVER_PORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "CAMSERVER_PORT number out of integer range");
-          return(ERROR);
-        }
-        this->interface.cameraserver_port = port;
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
-      }
-
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
       // Each CONTROLLER is stored in an STL map indexed by motorname
@@ -291,7 +259,6 @@ namespace Acam {
 
     // Initialize the class using the config parameters just read
     //
-    if ( error == NO_ERROR ) error = this->interface.initialize_class();
     if ( error == NO_ERROR ) error = this->interface.motion.initialize_class();
 
     return error;
@@ -615,15 +582,6 @@ logwrite(function, message.str());
       }
       else
 
-#ifdef ACAM_ANDOR_SOURCE_SERVER
-      // commands for the external camera server
-      //
-      if ( cmd == ACAMD_CAMERASERVER_COORDS ) {
-                      ret = this->interface.camera_server.coords( args );
-      }
-      else
-#endif
-
       // open connections to all devices, camera and motion
       //
       if ( cmd == ACAMD_OPEN ) {
@@ -718,22 +676,17 @@ logwrite(function, message.str());
                       }
       }
       else
-
-      // ACQUIRE
-      //
-      if ( cmd == ACAMD_ACQUIRE ) {
-                      ret = this->interface.acquire( args, retstring );
+      if ( cmd == ACAMD_FRAMEGRAB ) {
+                      ret = this->interface.framegrab( args, retstring );
       }
       else
-      // ACQUIREFIX
-      //
-      if ( cmd == ACAMD_ACQUIREFIX ) {
-                      ret = this->interface.acquire_fix( args, retstring );
+      if ( cmd == ACAMD_FRAMEGRABFIX ) {
+                      ret = this->interface.framegrab_fix( args, retstring );
       }
       else
       if ( cmd == ACAMD_INIT ) {
-                      this->interface.acquire_init( );
-                      ret = NO_ERROR;  // acquire_init() returns void, never fails
+                      this->interface.init_names();
+                      ret = NO_ERROR;  // init_names() returns void, never fails
       }
       else
 

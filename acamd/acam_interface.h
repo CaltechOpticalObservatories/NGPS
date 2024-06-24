@@ -88,43 +88,6 @@ namespace Acam {
   /***** Acam::Camera *********************************************************/
 
 
-  /***** Acam::CameraServer ***************************************************/
-  /**
-   * @class  CameraServer
-   * @brief  CameraServer class
-   *
-   * This class is used for communicating with the ACAM camera via an external server
-   *
-   */
-  class CameraServer {
-    private:
-
-      std::string name;        /// name for the external camera server
-      std::string host;        /// host name for the external camera server
-      int port;                /// port number for external camera server
-      bool image_ready;
-      std::string imagename;   /// fits filename of last acquired image
-      std::string wcsfile;     /// fits filename of image containing updated WCS headers
-
-    public:
-      CameraServer();
-      CameraServer( std::string host, int port );
-      CameraServer( std::string name, std::string host, int port );
-      ~CameraServer();
-
-      long open();                                                   /// open a connection to the acam server
-      inline long isopen() { return this->server.isconnected(); };   /// open a connection to the acam server
-      long close();                                                  /// close the connection to the acam server
-      long acquire( std::string wcsname, std::string &imagename );   /// acquire image from the acam server
-      long coords( std::string coords_in );                          /// send coords to the acam server
-      long send_command( std::string cmd, std::string &retstring );  /// send a command string to the camera server, accept reply
-      long send_command( std::string cmd );                          /// send a command string to the camera server (no reply)
-
-      Network::TcpSocket server;                                     /// TCP/IP socket object to communicate with the server
-  };
-  /***** Acam::CameraServer ***************************************************/
-
-
   /***** Acam::Astrometry *****************************************************/
   /**
    * @class  Astrometry
@@ -145,9 +108,7 @@ namespace Acam {
       bool python_initialized;
 
     public:
-      Astrometry() : pAstrometryModule(nullptr), pQualityModule(nullptr) {  /// class constructor
-        initialize_python();
-      }
+      Astrometry() : python_initialized(false), isacquire(true), pAstrometryModule(nullptr), pQualityModule(nullptr) { }
 
       void initialize_python();                          /// initializes the Python module
 
@@ -172,7 +133,6 @@ namespace Acam {
       long solve( std::string imagename_in );
       long solve( std::string imagename_in, std::vector<std::string> solverargs_in );
       long solverargs( std::string argsin, std::string &argsout );
-      long compute_offset( std::string from, std::string to );
   };
   /***** Acam::Astrometry *****************************************************/
 
@@ -301,23 +261,21 @@ namespace Acam {
     private:
       bool class_initialized;
       std::atomic<bool> monitor_focus_thread_running;
-      std::atomic<bool> acquire_thread_running;
+      std::atomic<bool> framegrab_thread_running;
       std::string imagename;
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
-      std::chrono::steady_clock::time_point acquire_time;
+      std::chrono::steady_clock::time_point framegrab_time;
 
     public:
-      std::string cameraserver_host;
       std::string motion_host;
-      int cameraserver_port;
       int motion_port;
 
       GuideManager guide_manager;
 
       Interface() : monitor_focus_thread_running(false),
-                    acquire_thread_running(false),
-                    imagename(""), wcsname(""), cameraserver_host(""), motion_host(""), cameraserver_port(-1), motion_port(-1) { }
+                    framegrab_thread_running(false),
+                    imagename(""), wcsname(""), motion_host(""), motion_port(-1) { }
 
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
@@ -333,8 +291,6 @@ namespace Acam {
 
       Camera camera;                           /// 
 
-      CameraServer camera_server;              /// provides an interface to the Andor A&G camera via an external server
-
       MotionInterface motion;                  /// this object provides the interface to the filter and dust cover
 
       Astrometry astrometry;                   /// provides the interface to the Python astrometry packages
@@ -346,13 +302,12 @@ namespace Acam {
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
       void initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
-      long initialize_class();                 /// initialize the Interface class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
       long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components
       long close( std::string component, std::string &help );      /// wrapper to open all acam-related hardware components
-      long acquire( std::string args, std::string &retstring );    /// wrapper to acquire an Andor image
-      long acquire_fix( std::string args, std::string &retstring );    /// wrapper to acquire an Andor image
+      long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
+      long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long guider_settings_control();          /// get guider settings and push to Guider GUI display
@@ -360,13 +315,13 @@ namespace Acam {
       long test( std::string args, std::string &retstring );
 
       long collect_header_info();
-      long save_acquired();
 
-      inline void acquire_init() { imagename=""; wcsname=""; return; }
+      inline void init_names() { imagename=""; wcsname=""; return; }  // TODO still needed?
 
       long configure_interface( Config &config );
 
-      static void dothread_acquire( Acam::Interface &iface, const std::string whattodo, const std::string sourcefile );
+      static void dothread_fpoffset( Acam::Interface &iface );
+      static void dothread_framegrab( Acam::Interface &iface, const std::string whattodo, const std::string sourcefile );
       static void dothread_set_filter( Acam::Interface &iface, std::string filter_req );
       static void dothread_set_focus( Acam::Interface &iface, double focus_req );
       static void dothread_monitor_focus( Acam::Interface &iface );

@@ -19,11 +19,6 @@ TCSD_PORT=@TCSD_BLK_PORT@
 #
 EMULATOR_PORT=@ACAMD_EMULATOR@
 
-# host:port for the external camera server
-#
-CAMERASERVER_HOST=localhost
-CAMERASERVER_PORT=@ACAM_CAMERA_SERVER_PORT@
-
 # Specify the pixel scale, arcsec per pixel
 #
 PIXSCALE=0.26

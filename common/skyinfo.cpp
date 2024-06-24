@@ -8,7 +8,7 @@ namespace SkyInfo {
    *
    */
   FPOffsets::FPOffsets() {
-    std::string function = "FPOffsets::FPOffsets";
+    std::string function = "SkyInfo::FPOffsets::FPOffsets";
     std::stringstream message;
 
     if ( !this->py_instance.is_initialized() ) {
@@ -24,6 +24,35 @@ namespace SkyInfo {
   /***** SkyInfo::FPOffsets::FPOffsets ****************************************/
 
 
+  /***** SkyInfo::FPOffsets::recompute_offset *********************************/
+  long FPOffsets::recompute_offset( const std::string &from, const std::string &to,
+                                    double &ra_out, double &dec_out, double &angle_out ) {
+    long error = compute_offset( from, to );
+
+    ra_out    = this->coords_out.ra;
+    dec_out   = this->coords_out.dec;
+    angle_out = this->coords_out.angle;
+
+    return error;
+  }
+  /***** SkyInfo::FPOffsets::recompute_offset *********************************/
+
+
+  long FPOffsets::compute_offset_last_angle( const std::string &from, const std::string &to,
+                                             const double ra_in, const double dec_in,
+                                             double &ra_out, double &dec_out, double &angle_out ) {
+    this->coords_in.ra    = ra_in;
+    this->coords_in.dec   = dec_in;
+    this->coords_in.angle = this->coords_out.angle;  // use the last calculated angle as input
+
+    long error = compute_offset( from, to );
+
+    ra_out    = this->coords_out.ra;
+    dec_out   = this->coords_out.dec;
+    angle_out = this->coords_out.angle;
+
+    return error;
+  }
   /***** SkyInfo::FPOffsets::compute_offset ***********************************/
   /**
    * @brief      calculate focal plane offsets of one component from another
@@ -38,7 +67,8 @@ namespace SkyInfo {
    * All units are in degrees.
    *
    */
-  long FPOffsets::compute_offset( std::string from, std::string to, double ra_in, double dec_in, double angle_in ) {
+  long FPOffsets::compute_offset( const std::string &from, const std::string &to,
+                                  const double ra_in, const double dec_in, const double angle_in ) {
     this->coords_in.ra    = ra_in;
     this->coords_in.dec   = dec_in;
     this->coords_in.angle = angle_in;
@@ -65,8 +95,8 @@ namespace SkyInfo {
    * All units are in degrees.
    *
    */
-  long FPOffsets::compute_offset( std::string from, std::string to,
-                                  double ra_in, double dec_in, double angle_in,
+  long FPOffsets::compute_offset( const std::string &from, const std::string &to,
+                                  const double ra_in, const double dec_in, const double angle_in,
                                   double &ra_out, double &dec_out, double &angle_out ) {
     this->coords_in.ra    = ra_in;
     this->coords_in.dec   = dec_in;
@@ -95,8 +125,8 @@ namespace SkyInfo {
    * members and outputs to class members.
    *
    */
-  long FPOffsets::compute_offset( std::string from, std::string to ) {
-    std::string function = "FPOffsets::compute_offset";
+  long FPOffsets::compute_offset( const std::string &from, const std::string &to ) {
+    std::string function = "SkyInfo::FPOffsets::compute_offset";
     std::stringstream message;
 
 //#ifdef LOGLEVEL_DEBUG
@@ -238,7 +268,7 @@ namespace SkyInfo {
    *             to the goal via the PT command.
    *
    */
-  long FPOffsets::solve_offset( double ra_acam, double dec_acam, double ra_goal, double dec_goal,
+  long FPOffsets::solve_offset( const double ra_acam, const double dec_acam, const double ra_goal, const double dec_goal,
                                 double &ra_off, double &dec_off ) {
     std::string function = "SkyInfo::FPOffsets::solve_offset";
     std::stringstream message;

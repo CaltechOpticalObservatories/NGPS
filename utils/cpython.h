@@ -5,14 +5,14 @@
  *
  */
 
+#pragma once
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #ifdef WITH_THREAD
 #include "pythread.h"
 #endif
-
-#ifndef CPYTHON_H
-#define CPYTHON_H
+#include <iostream>
 
 /***** PyScope ****************************************************************/
 /**
@@ -64,23 +64,31 @@ namespace CPython {
       bool _initialized;    /// set when the Python interpreter is successfully initialized
 
       void initialize( const char* pythonpath ) {
-        _restore_path = std::getenv( "PYTHONPATH" ); // Save the original PYTHONPATH
+        _restore_path = std::getenv( "PYTHONPATH" );    // Save the original PYTHONPATH
 
-        if (pythonpath) {                            // Set PYTHONPATH if provided
+        if (pythonpath) {                               // Set PYTHONPATH if provided
           setenv( "PYTHONPATH", pythonpath, 1 );
         }
 
-        Py_Initialize();                             // Initialize the Python interpreter
+        Py_Initialize();                                // Initialize the Python interpreter
+
+        PyGILState_STATE gstate = PyGILState_Ensure();  // Acquire the GIL
 
         _initialized = (Py_IsInitialized() ? true : false);
+
+        PyGILState_Release( gstate );                   // Release the GIL
       }
 
     void finalize() {
+      PyGILState_STATE gstate = PyGILState_Ensure();    // Acquire the GIL
+
       if ( _initialized && Py_IsInitialized() ) {
         setenv( "PYTHONPATH", (_restore_path ? _restore_path : "") , 1 );    // Restore the original PYTHONPATH
-        Py_Finalize();                               // Finalize the Python interpreter
+        Py_Finalize();                                  // Finalize the Python interpreter
         _initialized = false;
       }
+
+      PyGILState_Release( gstate );                     // Release the GIL
     }
 
     public:
@@ -101,9 +109,21 @@ namespace CPython {
        */
       ~CPyInstance() { finalize(); }
 
+      /**
+       *  @brief     writes to stderr when a Python error occurs
+       *  @param[in] function  name of function where error occurred
+       *  @details   PyErr_Print() should only be called when PyErr_Occurred()
+       *             so this wraps that for safety.
+       */
+      void print_python_error( const std::string& function ) {
+        if ( PyErr_Occurred() ) {
+          std::cerr << "A Python error occurred in " << function << "\n";
+          PyErr_Print();
+        }
+      }
+
       inline bool is_initialized() { return _initialized; }
   };
 
 }
 /***** CPython ****************************************************************/
-#endif

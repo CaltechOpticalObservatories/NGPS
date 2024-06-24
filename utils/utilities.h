@@ -98,9 +98,9 @@ long md5_file( const std::string &filename, std::string &hash );  /// compute md
 
 bool is_owner( const std::filesystem::path &filename );
 bool has_write_permission( const std::filesystem::path &filename );
-std::string_view tchar( std::string_view str );
+const std::string &tchar( const std::string &str );
 const std::string strip_newline( const std::string &str_in );
-std::string_view strip_control_characters( const std::string &str );
+std::string strip_control_characters( const std::string &str );
 bool starts_with( const std::string &str, std::string_view prefix );
 bool ends_with( const std::string &str, std::string_view suffix );
 std::string generate_temp_filename( const std::string &prefix );

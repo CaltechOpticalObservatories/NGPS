@@ -32,13 +32,17 @@ namespace Andor {
       bool python_initialized;
 
     public:
-      SkySim();
+      SkySim() : python_initialized(false) { }
 
-      CPython::CPyInstance py_instance;
+      void initialize_python();
+
+      CPython::CPyInstance py_instance { PYTHON_PATH };
 
       PyObject* pSkySimModule;
 
       long generate_image( const std::string_view &headerfile, const std::string_view &outputfile, const double exptime );
+
+      inline bool is_initialized() { return this->python_initialized; }
   };
   /***** Andor::SkySim ********************************************************/
 }

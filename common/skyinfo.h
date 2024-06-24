@@ -72,14 +72,20 @@ namespace SkyInfo {
       // It can be called with both inputs and a reference to output variables so that outputs are returned directly.
       // In all cases, the class variables will be updated with the results.
       //
-      long compute_offset( std::string from, std::string to );
-      long compute_offset( std::string from, std::string to, double ra_in, double dec_in, double angle_in );
-      long compute_offset( std::string from, std::string to,
-                           double ra_in, double dec_in, double angle_in,
+      long recompute_offset( const std::string &from, const std::string &to,
+                             double &ra_out, double &dec_out, double &angle_out );
+      long compute_offset_last_angle( const std::string &from, const std::string &to,
+                                      const double ra_in, const double dec_in, 
+                                      double &ra_out, double &dec_out, double &angle_out );
+      long compute_offset( const std::string &from, const std::string &to );
+      long compute_offset( const std::string &from, const std::string &to,
+                           const double ra_in, const double dec_in, const double angle_in );
+      long compute_offset( const std::string &from, const std::string &to,
+                           const double ra_in, const double dec_in, const double angle_in,
                            double &ra_out, double &dec_out, double &angle_out );
 
-      long solve_offset( double ra_acam, double dec_acam,
-                         double ra_goal, double dec_goal,
+      long solve_offset( const double ra_acam, const double dec_acam,
+                         const double ra_goal, const double dec_goal,
                          double &ra_off, double &dec_off );
 
   };

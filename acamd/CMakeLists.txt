@@ -10,13 +10,6 @@ set( ACAMD_DIR ${PROJECT_BASE_DIR}/acamd )
 
 set( CMAKE_CXX_STANDARD 17 )
 
-# Uncomment _one_ of these to select the source of real Andor images,
-# either direct from the camera (ACAM_ANDOR_SOURCE_ANDOR) or via an
-# external server (ACAM_ANDOR_SOURCE_SERVER) aka "the gui".
-#
-#add_definitions(-DACAM_ANDOR_SOURCE_SERVER)
-add_definitions(-DACAM_ANDOR_SOURCE_ANDOR)
-
 # C-Python API Development libraries and headers
 #
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )

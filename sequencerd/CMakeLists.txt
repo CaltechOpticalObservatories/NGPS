@@ -43,6 +43,7 @@ target_link_libraries(sequencerd
         common
         logentry
         utilities
+        skyinfo
         ${CMAKE_THREAD_LIBS_INIT}
         ${CCFITS_LIB}
         ${CFITS_LIB}

@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
   // Allow running in the foreground
   //
   if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
-    start_daemon = false;
+    start_daemon = true;
   }
 
   // TODO make configurable
@@ -41,6 +41,8 @@ int main(int argc, char **argv) {
     Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
   }
 
+  logwrite( function, "daemonized. child process running" );
+
   // Now the child process instantiates a Server object
   //
   Acam::Server acamd;
@@ -49,11 +51,12 @@ int main(int argc, char **argv) {
   // only by the child process, after daemonizing.
   //
   acamd.initialize_python_objects();
+  PyEval_SaveThread();
 
   std::string logpath;
   long ret=NO_ERROR;
 
-  Py_BEGIN_ALLOW_THREADS
+//Py_BEGIN_ALLOW_THREADS
 
   // check for "-f <filename>" command line option to specify config file
   //
@@ -199,7 +202,7 @@ int main(int argc, char **argv) {
   std::thread( std::ref(Acam::Server::new_log_day), logpath ).detach();
 
   for (;;) pause();                                  // main thread suspends
-  Py_END_ALLOW_THREADS
+//Py_END_ALLOW_THREADS
   return 0;
 }
 /***** main *******************************************************************/

@@ -346,9 +346,17 @@ namespace Andor {
        * @param[in]  emulate  true=use emulator, false=use real Andor SDK
        *
        */
-      inline void andor_emulator( bool emulate ) {
+      void andor_emulator( bool emulate ) {
+        // Point the andor pointer to the appropriate class
+        //
         this->andor = emulate ? static_cast<Andor::AndorBase*>(&emulator) : static_cast<Andor::AndorBase*>(&sdk);
+
+        // Initialize the SkySim Python module if needed
+        //
+        if ( this->andor_emulated && ! this->emulator.skysim.is_initialized() ) this->emulator.skysim.initialize_python();
+
         this->andor_emulated = emulate;
+
         return;
       }
       /***** Andor::Interface::andor_emulator *********************************/

@@ -760,47 +760,54 @@ namespace Andor {
   /***** Andor::Emulator::_StartAcquisition ***********************************/
 
 
-  /***** Andor::SkyEmulator::SkySim ************************************************/
+  /***** Andor::SkySim::initialize_python *************************************/
   /**
-   * @brief      SkySim class constructor
+   * @brief      initializes the Python module needed for SkySim
    *
    */
-  SkySim::SkySim() : python_initialized( false ), py_instance( PYTHON_PATH ), pSkySimModule( nullptr ) {
-    std::string function = "Andor::SkySim::SkySim";
+  void SkySim::initialize_python() {
+    std::string function = "Andor::SkySim::initialize_python";
     std::stringstream message;
 
-    if ( !py_instance.is_initialized() ) {
-      logwrite( function, "ERROR could not initialize Python" );
-      if ( PyErr_Occurred() ) PyErr_Print();
+    if ( ! py_instance.is_initialized() ) {
+      logwrite( function, "ERROR could not initialize Python interpreter" );
+      py_instance.print_python_error( function );
       return;
     }
+
+    PyGILState_STATE gstate = PyGILState_Ensure();   // Acquire the GIL
 
     PyObject* pModuleName = PyUnicode_FromString( PYTHON_SKYSIM_MODULE );
 
     if ( ! pModuleName ) {
       logwrite( function, "ERROR could not create module name string" );
-      if ( PyErr_Occurred() ) PyErr_Print();
+      py_instance.print_python_error( function );
+      Py_XDECREF( pModuleName );
+      PyGILState_Release( gstate );                  // Release the GIL
       return;
     }
 
     pSkySimModule = PyImport_Import( pModuleName );
 
-    Py_DECREF( pModuleName );  // done with pModuleName
-
-    if ( pSkySimModule == nullptr || PyErr_Occurred() ) {
+    if ( pSkySimModule == nullptr ) {
       message.str(""); message << "ERROR Python module " << PYTHON_SKYSIM_MODULE << " not initialized";
       logwrite( function, message.str() );
-      if ( PyErr_Occurred() ) PyErr_Print();
-      python_initialized = false;
+      py_instance.print_python_error( function );
+      Py_XDECREF( pModuleName );
+      Py_XDECREF( pSkySimModule );
+      PyGILState_Release( gstate );                  // Release the GIL
       return;
     }
-    else python_initialized = true;
 
-    logwrite( function, "initialized" );
+    PyGILState_Release( gstate );                    // Release the GIL
+
+    python_initialized = true;
+
+    logwrite( function, "initialized Python skysim module" );
 
     return;
   }
-  /***** Andor::SkySim::SkySim ************************************************/
+  /***** Andor::SkySim::initialize_python *************************************/
 
 
   /***** Andor::SkySim::generate_image ****************************************/
@@ -832,18 +839,17 @@ namespace Andor {
     if ( expdelay == 0 ) expdelay = 10;
     std::this_thread::sleep_for( std::chrono::milliseconds( expdelay ) );
 
-    // Acquire the GIL
-    //
-    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyGILState_STATE gstate = PyGILState_Ensure();   // Acquire the GIL
 
     // Build Python function name
     //
     PyObject* pFunction = PyObject_GetAttrString( pSkySimModule, PYTHON_SKYSIM_FUNCTION );
 
-    if ( !pFunction || !PyCallable_Check( pFunction ) || PyErr_Occurred() ) {
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
       logwrite( function, "ERROR Python skysim function not callable" );
-      if ( PyErr_Occurred() ) PyErr_Print();
-      PyGILState_Release( gstate );
+      py_instance.print_python_error( function );
+      Py_XDECREF( pFunction );
+      PyGILState_Release( gstate );                  // Release the GIL
       return ERROR;
     }
 
@@ -853,14 +859,14 @@ namespace Andor {
     PyObject* pOutputfile = PyUnicode_FromString( outputfile.data() );
     PyObject* pImageSize  = PyDict_New();
 
-    if ( !pHeaderfile || !pOutputfile || !pImageSize || PyErr_Occurred() ) {
+    if ( !pHeaderfile || !pOutputfile || !pImageSize ) {
       logwrite( function, "ERROR creating Python arguments" );
-      if ( PyErr_Occurred() ) PyErr_Print();
+      py_instance.print_python_error( function );
       Py_XDECREF( pFunction );
       Py_XDECREF( pHeaderfile );
       Py_XDECREF( pOutputfile );
       Py_XDECREF( pImageSize );
-      PyGILState_Release( gstate );
+      PyGILState_Release( gstate );                  // Release the GIL
       return ERROR;
     }
 
@@ -870,12 +876,13 @@ namespace Andor {
 
     if ( !pArgs || PyErr_Occurred() ) {
       logwrite( function, "ERROR packing Python arguments" );
-      if ( PyErr_Occurred() ) PyErr_Print();
+      py_instance.print_python_error( function );
       Py_XDECREF( pFunction );
       Py_XDECREF( pHeaderfile );
       Py_XDECREF( pOutputfile );
+      Py_XDECREF( pArgs );
       Py_XDECREF( pImageSize );
-      PyGILState_Release( gstate );
+      PyGILState_Release( gstate );                  // Release the GIL
       return ERROR;
     }
 
@@ -883,10 +890,10 @@ namespace Andor {
     //
     PyObject* pReturn = PyObject_Call( pFunction, pArgs, pImageSize );
 
-    if ( !pReturn || PyErr_Occurred() ) {
+    if ( !pReturn ) {
       message.str(""); message << "ERROR calling Python function: " << PYTHON_SKYSIM_FUNCTION;
       logwrite( function, message.str() );
-      if ( PyErr_Occurred() ) PyErr_Print();
+      py_instance.print_python_error( function );
       error = ERROR;
     }
 
@@ -898,9 +905,7 @@ namespace Andor {
     Py_XDECREF( pHeaderfile );
     Py_XDECREF( pOutputfile );
 
-    // Release the GIL
-    //
-    PyGILState_Release( gstate );
+    PyGILState_Release( gstate );                    // Release the GIL
 
     message.str(""); message << "headerfile: " << headerfile << " outputfile: " << outputfile;
     logwrite( function, message.str() );

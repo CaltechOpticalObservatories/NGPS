@@ -36,7 +36,7 @@
 
 #include "logentry.h"                  // for logwrite() within the Network namespace
 
-#define POLLTIMEOUT 3000               ///< default Poll timeout in msec
+#define POLLTIMEOUT 6000               ///< default Poll timeout in msec
 #define LISTENQ 64                     ///< listen(3n) backlog 
 #define UDPMSGLEN 256                  ///< UDP message length
 
