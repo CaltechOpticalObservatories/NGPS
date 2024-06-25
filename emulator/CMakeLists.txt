@@ -23,23 +23,6 @@ include_directories( ${PYTHON_DEV} )
 add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
 
 # ----------------------------------------------------------------------------
-# andorserver
-# ----------------------------------------------------------------------------
-
-add_executable(emulatord.andorserver
-        ${EMULATOR_DIR}/emulatord_andorserver.cpp 
-        ${EMULATOR_DIR}/andorserver.cpp 
-        )
-target_link_libraries(emulatord.andorserver
-        network
-        logentry
-        utilities
-        ${CMAKE_THREAD_LIBS_INIT}
-        )
-add_custom_command( TARGET emulatord.andorserver POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.andorserver> )
-
-
-# ----------------------------------------------------------------------------
 # acam
 # ----------------------------------------------------------------------------
 

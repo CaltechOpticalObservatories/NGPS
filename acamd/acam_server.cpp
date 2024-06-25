@@ -406,12 +406,7 @@ namespace Acam {
 
     bool connection_open=true;
 
-    PySCOPE();
-
     while (connection_open) {
-
-message.str(""); message << "connected to fd " << sock.getfd() << " thread " << sock.id;
-logwrite(function, message.str());
 
       // Wait (poll) connected socket for incoming data...
       //

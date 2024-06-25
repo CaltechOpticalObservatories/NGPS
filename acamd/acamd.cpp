@@ -56,8 +56,6 @@ int main(int argc, char **argv) {
   std::string logpath;
   long ret=NO_ERROR;
 
-//Py_BEGIN_ALLOW_THREADS
-
   // check for "-f <filename>" command line option to specify config file
   //
   if ( cmdOptionExists( argv, argv+argc, "-f" ) ) {
@@ -202,7 +200,7 @@ int main(int argc, char **argv) {
   std::thread( std::ref(Acam::Server::new_log_day), logpath ).detach();
 
   for (;;) pause();                                  // main thread suspends
-//Py_END_ALLOW_THREADS
+
   return 0;
 }
 /***** main *******************************************************************/

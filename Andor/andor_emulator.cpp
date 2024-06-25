@@ -762,12 +762,11 @@ namespace Andor {
 
   /***** Andor::SkySim::initialize_python *************************************/
   /**
-   * @brief      initializes the Python module needed for SkySim
+   * @brief      initializes the Python skysim module
    *
    */
   void SkySim::initialize_python() {
     std::string function = "Andor::SkySim::initialize_python";
-    std::stringstream message;
 
     if ( ! py_instance.is_initialized() ) {
       logwrite( function, "ERROR could not initialize Python interpreter" );
@@ -790,8 +789,7 @@ namespace Andor {
     pSkySimModule = PyImport_Import( pModuleName );
 
     if ( pSkySimModule == nullptr ) {
-      message.str(""); message << "ERROR Python module " << PYTHON_SKYSIM_MODULE << " not initialized";
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR Python skysim module not initialized" );
       py_instance.print_python_error( function );
       Py_XDECREF( pModuleName );
       Py_XDECREF( pSkySimModule );
@@ -824,8 +822,7 @@ namespace Andor {
     long error = NO_ERROR;
 
     if ( !python_initialized || pSkySimModule == nullptr ) {
-      message.str(""); message << "ERROR Python module " << PYTHON_SKYSIM_MODULE << " is not initialized";
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR Python skysim module is not initialized" );
       return ERROR;
     }
 
@@ -891,8 +888,7 @@ namespace Andor {
     PyObject* pReturn = PyObject_Call( pFunction, pArgs, pImageSize );
 
     if ( !pReturn ) {
-      message.str(""); message << "ERROR calling Python function: " << PYTHON_SKYSIM_FUNCTION;
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR calling Python skysim function" );
       py_instance.print_python_error( function );
       error = ERROR;
     }

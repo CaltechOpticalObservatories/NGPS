@@ -315,7 +315,7 @@ namespace Andor {
       bool initialized;           ///< is the Andor SDK initialized?
       int  serial;                ///< serial number to use
       bool andor_emulated;        ///< is the Andor emulator in use?
-      Andor::AndorBase* andor;    ///< pointer to the Andor class to use
+      Andor::AndorBase* andor;    ///< pointer to the Andor object to use
 //    std::unique_ptr<uint16_t[]> image_data;
       uint16_t* image_data;
 
@@ -347,16 +347,22 @@ namespace Andor {
        *
        */
       void andor_emulator( bool emulate ) {
-        // Point the andor pointer to the appropriate class
+
+        // Point the andor pointer to the appropriate object
         //
         this->andor = emulate ? static_cast<Andor::AndorBase*>(&emulator) : static_cast<Andor::AndorBase*>(&sdk);
 
         // Initialize the SkySim Python module if needed
         //
-        if ( this->andor_emulated && ! this->emulator.skysim.is_initialized() ) this->emulator.skysim.initialize_python();
+        if ( emulate && ! this->emulator.skysim.is_initialized() ) this->emulator.skysim.initialize_python();
 
+        // Save to the class for future queries
+        //
         this->andor_emulated = emulate;
 
+        logwrite( "Andor::Interface::andor_emulator",
+                  ( emulate ? "NOTICE: Andor emulator enabled" :
+                              "NOTICE: Andor emulator disabled, using real Andor SDK" ) );
         return;
       }
       /***** Andor::Interface::andor_emulator *********************************/
