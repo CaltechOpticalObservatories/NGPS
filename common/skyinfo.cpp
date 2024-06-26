@@ -17,8 +17,13 @@ namespace SkyInfo {
       return;
     }
 
+    PyGILState_STATE gstate = PyGILState_Ensure();   // Acquire the GIL
+
     this->pModuleName = PyUnicode_FromString( PYTHON_FPOFFSETS_MODULE );
     this->pModule     = PyImport_Import( this->pModuleName );
+
+    PyGILState_Release( gstate );                    // Release the GIL
+
     this->python_initialized = true;
   }
   /***** SkyInfo::FPOffsets::FPOffsets ****************************************/
@@ -129,13 +134,21 @@ namespace SkyInfo {
     std::string function = "SkyInfo::FPOffsets::compute_offset";
     std::stringstream message;
 
-//#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[ACQUIRE] from=" << from << " to=" << to
-                             << " coords_in.ra=" << this->coords_in.ra
-                             << " .dec=" << this->coords_in.dec
-                             << " .angle=" << this->coords_in.angle << " deg";
-    logwrite( function, message.str() );
-//#endif
+    // Check for valid inputs before passing something to Python that
+    // it won't like.
+    //
+    if ( from.empty() || to.empty()        ||
+         std::isnan( this->coords_in.ra )  ||
+         std::isnan( this->coords_in.dec ) ||
+         std::isnan( this->coords_in.angle ) ) {
+      logwrite( function, "ERROR empty from/to string(s) or one or more input values is NaN" );
+      message.str(""); message << "from=" << from << " to=" << to
+                             << " ra=" << this->coords_in.ra
+                             << " dec=" << this->coords_in.dec
+                             << " angle=" << this->coords_in.angle << " deg";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -273,10 +286,19 @@ namespace SkyInfo {
     std::string function = "SkyInfo::FPOffsets::solve_offset";
     std::stringstream message;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] ra_acam=" << ra_acam << " dec_acam=" << dec_acam << " ra_goal=" << ra_goal << " dec_goal=" << dec_goal;
-    logwrite( function, message.str() );
-#endif
+    // Check for valid inputs before passing something to Python that
+    // it won't like.
+    //
+    if ( std::isnan( ra_acam )  ||
+         std::isnan( dec_acam ) ||
+         std::isnan( ra_goal )  ||
+         std::isnan( dec_goal ) ) {
+      logwrite( function, "ERROR one or more input values is NaN" );
+      message.str(""); message << "ra_acam=" << ra_acam << " dec_acam=" << dec_acam 
+                               << " ra_goal=" << ra_goal << " dec_goal=" << dec_goal;
+      logwrite( function, message.str() );
+      return ERROR;
+    }
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
