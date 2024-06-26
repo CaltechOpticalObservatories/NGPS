@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef SEQUENCER_SERVER_H
-#define SEQUENCER_SERVER_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -45,6 +44,8 @@ namespace Sequencer {
   const std::string ACK = "ACK\n";
   const std::string ERR = "ERR\n";
 
+  const int N_THREADS = 10;
+
   /***** Sequencer::Server ****************************************************/
   /**
    * @class Server
@@ -56,6 +57,9 @@ namespace Sequencer {
   class Server {
     private:
     public:
+
+      static Server* instance;
+
       /***** Sequencer::Server ************************************************/
       /**
        * @brief  class constructor
@@ -65,7 +69,14 @@ namespace Sequencer {
         this->blkport=-1;
         this->asyncport=-1;
         this->messageport=-1;
-        this->cmd_num=0;
+        this->cmd_num.store(0);
+        instance=this;
+
+        // Register these signals
+        //
+        signal( SIGINT,  signal_handler );
+        signal( SIGPIPE, signal_handler );
+        signal( SIGHUP,  signal_handler );
 
         // The names of all of the daemons defined in the Sequencer::Sequence class
         // are initialized here. The names are useful just for logging.
@@ -120,9 +131,15 @@ namespace Sequencer {
       static void gui_main( Sequencer::Server &seq, Network::TcpSocket &sock );     ///< main function for gui threads
       static void async_main( Sequencer::Server &seq, Network::UdpSocket sock );    ///< asynchronous message sending thread
 
+      void handle_signal( int signo );
+
+      static inline void signal_handler( int signo ) {
+        if ( instance ) { instance->handle_signal( signo ); }
+        return;
+      }
+
   };
   /***** Sequencer::Server ****************************************************/
 
 }
 /***** Sequencer **************************************************************/
-#endif

@@ -11,6 +11,44 @@
 
 namespace Sequencer {
 
+  Server* Server::instance = nullptr;
+
+  /***** Sequencer::Server::handle_signal *************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  int signo
+   *
+   */
+  void Server::handle_signal(int signo) {
+    std::string function = "Sequencer::Server::handle_signal";
+    std::stringstream message;
+
+    switch (signo) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite(function, "received termination signal");
+        message << "NOTICE:" << Sequencer::DAEMON_NAME << " exit";
+        Server::instance->sequence.async.enqueue( message.str() );
+        Server::instance->exit_cleanly();                      // shutdown the daemon
+        break;
+      case SIGHUP:  // TODO reconfigure?
+        Server::instance->sequence.async.enqueue_and_log( function,
+          "ERROR: caught unhandled HUP signal" );
+        break;
+      case SIGPIPE:
+        logwrite(function, "ignored SIGPIPE");
+        break;
+      default:
+        message << "received unknown signal " << strsignal(signo);
+        logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << Sequencer::DAEMON_NAME << " exit";
+        Server::instance->sequence.async.enqueue( message.str() );
+        break;
+    }
+    return;
+  }
+  /***** Sequencer::Server::handle_signal *************************************/
+
 
   /***** Sequencer::Server::exit_cleanly **************************************/
   /**
@@ -950,8 +988,6 @@ namespace Sequencer {
                              << "connection on fd " << sock.getfd()
                              << " port " << sock.getport();
     logwrite( function, message.str() );
-
-//  PySCOPE();
 
     while ( connection_open ) {
 

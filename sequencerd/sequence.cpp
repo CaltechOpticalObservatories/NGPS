@@ -4460,20 +4460,20 @@ logwrite( function, "[DEBUG] setting READY bit" );
         to   = tokens.at(2);
       }
       catch( std::out_of_range &e ) {
-        message.str(""); message << "out of range parsing from/to from " << args << ": " << e.what();
+        message.str(""); message << "ERROR: out of range parsing from/to from " << args << ": " << e.what();
         logwrite( function, message.str() );
       }
       catch( std::invalid_argument &e ) {
-        message.str(""); message << "invalid argument parsing from/to from " << args << ": " << e.what();
+        message.str(""); message << "ERROR: invalid argument parsing from/to from " << args << ": " << e.what();
         logwrite( function, message.str() );
       }
       double ra_out, dec_out, angle_out;
       error = this->target.fpoffsets.compute_offset( from, to,
                                                      ra_in, dec_in, angle_in,
                                                      ra_out, dec_out, angle_out );
-      message.str(""); message << ra_in << " " << dec_in << " " << angle_in << "\n"
-                               << from << " -> " << to << "\n"
-                               << ra_out << " " << dec_out << " " << angle_out << "\n";
+      message.str(""); message << ra_in << " " << dec_in << " " << angle_in << " "
+                               << from << " -> " << to << " "
+                               << ra_out << " " << dec_out << " " << angle_out;
       retstring = message.str();
     }
     else

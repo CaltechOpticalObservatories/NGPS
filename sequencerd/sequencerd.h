@@ -7,8 +7,7 @@
  *
  */
 
-#ifndef SEQUENCERD_H
-#define SEQUENCERD_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -33,11 +32,5 @@
 #include "daemonize.h"
 #include "sequencer_server.h"
 
-#define  N_THREADS    10          ///< total number of threads spawned by sequencer, one for blocking and the rest for non-blocking
-
-Sequencer::Server sequencerd;     ///< global Sequencer::Server object so that the main daemon can access the namespace
-
 void signal_handler(int signo);   ///< handles ctrl-C
 int main(int argc, char **argv);  ///< the main function
-
-#endif

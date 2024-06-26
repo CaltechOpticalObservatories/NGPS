@@ -24,16 +24,19 @@ int main(int argc, char **argv) {
   std::stringstream message;
   std::string logpath;
   long ret=NO_ERROR;
-  std::string daemon_in;     // daemon setting read from config file
-  bool start_daemon = false; // don't start as daemon unless specifically requested
 
-//Py_BEGIN_ALLOW_THREADS
-
-  // capture these signals
+  // Daemonize by default, but allow command line arg to keep it as
+  // a foreground process
   //
-  signal(SIGINT, signal_handler);
-  signal(SIGPIPE, signal_handler);
-  signal(SIGHUP, signal_handler);
+  if ( ! cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    logwrite( function, "starting daemon" );
+    Daemon::daemonize( Sequencer::DAEMON_NAME, "/tmp", "", "", "" );
+  }
+
+  // Now the child process instantiates a Server object so that
+  // the daemon can access the namespace.
+  //
+  Sequencer::Server sequencerd;
 
   // check for "-f <filename>" command line option to specify config file
   //
@@ -63,7 +66,6 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < sequencerd.config.n_entries; entry++) {
     if (sequencerd.config.param[entry] == "LOGPATH") logpath = sequencerd.config.arg[entry];
-    if (sequencerd.config.param[entry] == "DAEMON")  daemon_in = sequencerd.config.arg[entry];
 
     if (sequencerd.config.param[entry] == "TM_ZONE") {
       if ( sequencerd.config.arg[entry] != "UTC" && sequencerd.config.arg[entry] != "local" ) {
@@ -81,27 +83,6 @@ int main(int argc, char **argv) {
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     sequencerd.exit_cleanly();
-  }
-
-  if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
-  else
-  if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
-    message.str(""); message << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }";
-    logwrite( function, message.str() );
-    sequencerd.exit_cleanly();
-  }
-
-  // check for "-d" command line option last so that the command line
-  // can override the config file to start as daemon
-  //
-  if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
-    start_daemon = true;
-  }
-
-  if ( start_daemon ) {
-    logwrite( function, "starting daemon" );
-    Daemon::daemonize( Sequencer::DAEMON_NAME, "/tmp", "", "", "" );
   }
 
   if ( ( init_log( logpath, Sequencer::DAEMON_NAME ) != 0 ) ) {      // initialize the logging system
@@ -137,7 +118,7 @@ int main(int argc, char **argv) {
   // TcpSocket objects are instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
   //
   std::vector<Network::TcpSocket> socklist;          // create a vector container to hold N_THREADS TcpSocket objects
-  socklist.reserve(N_THREADS);
+  socklist.reserve(Sequencer::N_THREADS);
 
   Network::TcpSocket s(sequencerd.blkport, true, -1, 0); // instantiate TcpSocket object with blocking port
   if ( s.Listen() < 0 ) {                            // create a listening socket
@@ -153,7 +134,7 @@ int main(int argc, char **argv) {
   // thread #0 is reserved for the blocking port (above)
   //
   int thrid=1;
-  for (thrid=1; thrid<N_THREADS-1; thrid++) {        // create N_THREADS-1 non-blocking socket objects
+  for (thrid=1; thrid<Sequencer::N_THREADS-1; thrid++) {        // create N_THREADS-1 non-blocking socket objects
     if (thrid==1) {                                  // first one only
       Network::TcpSocket s(sequencerd.nbport, false, 0, thrid); // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
       if ( s.Listen() < 0 ) {                        // create a listening socket
@@ -207,7 +188,7 @@ int main(int argc, char **argv) {
   sequencerd.sequence.report_seqstate();                      // broadcast the seqstate
 
   for (;;) pause();                                  // main thread suspends
-//Py_END_ALLOW_THREADS
+
   return 0;
 }
 /***** main *******************************************************************/
@@ -220,6 +201,7 @@ int main(int argc, char **argv) {
  * @return nothing
  *
  */
+/***
 void signal_handler(int signo) {
   std::string function = "Sequencer::signal_handler";
   switch (signo) {
@@ -242,4 +224,5 @@ void signal_handler(int signo) {
   }
   return;
 }
+***/
 /***** signal_handler *********************************************************/
