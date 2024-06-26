@@ -1450,8 +1450,8 @@ namespace Sequencer {
       //
       if ( cmd.compare( SEQUENCERD_STATE ) == 0) {
                       retstring = seq.sequence.report_seqstate();
-                      retstring.append( "\n" );
-                      if ( not sock.isasync() ) sock.Write( retstring );
+                      retstring.append( " " );
+                      ret = NO_ERROR;
       }
       else
 

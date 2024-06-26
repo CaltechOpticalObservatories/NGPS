@@ -240,24 +240,23 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::report_seqstate *********************************/
   /**
-   * @brief      logs and writes the seqstate string to the async port
+   * @brief      writes the seqstate string to the async port
+   * @details    This broadcasts the seqstate as a string with the "RUNSTATE:"
+   *             message tag, but returns only the seqstate string.
    * @return     seqstate string
    *
    */
   std::string Sequence::report_seqstate() {
-    std::stringstream message;
-    uint32_t ss = this->seqstate.load(std::memory_order_relaxed);
-    message << "RUNSTATE: " << this->seqstate_string( ss );
-    this->async.enqueue( message.str() );
+    std::string async_message = "RUNSTATE: ";
 
-//  uint32_t rs = this->reqstate.load();
-//  message << " | REQSTATE: " << this->seqstate_string( rs );
-//
-//  uint32_t ts = this->thrstate.load();
-//  message << " | THREADS: " << this->thrstate_string( ts );
-//  logwrite( "Sequencer::Sequence::report_seqstate", message.str() );
+    uint32_t ss = this->seqstate.load( std::memory_order_relaxed );  // get the seqstate
 
-    return( message.str() );
+    std::string retstring = this->seqstate_string( ss );             // convert it to a string
+
+    async_message.append( retstring );
+    this->async.enqueue( async_message );                            // broadcast it with tag
+
+    return( retstring );                                             // return it
   }
   /***** Sequencer::Sequence::report_seqstate *********************************/
 

@@ -173,17 +173,7 @@ namespace TCS {
 
     this->name = tcsloc->second.name();  // save the name of the opened tcs
 
-    error = this->isopen( retstring );
-
-    asyncmsg.str(""); asyncmsg << "TCSD:open:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
-    // After opening, broadcast the name for the GUI
-    //
-    std::string tcsname;
-    this->get_name( "", tcsname );
-    asyncmsg.str(""); asyncmsg << "TCSD:name:" << tcsname;
-    this->async.enqueue( asyncmsg.str() );
+    error = this->isopen( retstring );   // this will broadcast the state and name
 
     return error;
   }
@@ -198,7 +188,9 @@ namespace TCS {
    */
   bool Interface::isopen() {
     std::string ret;
-    this->isopen( ret );
+
+    this->isopen( ret );                 // this will broadcast the state and name
+
     return( ret == "false" ? false : true );
   }
   /***** TCS::Interface::isopen ***********************************************/
@@ -242,14 +234,23 @@ namespace TCS {
       return HELP;
     }
 
+    std::string name;
+
     for ( const auto &[key,val] : this->tcsmap ) {
       if ( val.isconnected() ) {
-        retstring = "true";       // Found a connected TCS
-        return NO_ERROR;          // so get out now.
+        name = val.name();        // Found a connected TCS
+        break;                    // so get out now.
       }
     }
 
-    retstring = "false";
+    retstring = ( ! name.empty() ? "true" : "false" );  // return string is the state
+
+    asyncmsg.str(""); asyncmsg << "TCSD:open:" << retstring;
+    this->async.enqueue( asyncmsg.str() );              // broadcast the state
+
+    asyncmsg.str(""); asyncmsg << "TCSD:name:" << ( ! name.empty() ? name : "not_connected" );
+    this->async.enqueue( asyncmsg.str() );              // broadcast the name
+
     return NO_ERROR;
   }
   /***** TCS::Interface::isopen ***********************************************/
@@ -275,6 +276,8 @@ namespace TCS {
         this->name.clear();  // clear the name of the opened tcs
       }
     }
+
+    this->isopen();          // do this to broadcast new state
 
     return error;
   }
