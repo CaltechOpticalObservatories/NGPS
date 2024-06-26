@@ -487,9 +487,10 @@ public class Panel3D extends JPanel implements MouseListener,
      * @param file  the output file ({@code null} not permitted).
      * @param w  the chart width.
      * @param h  the chart height.
-     * 
+     *
      * @deprecated Use ExportUtils.writeAsPDF() directly.
      */
+    @Deprecated
     void writeAsPDF(File file, int w, int h) {
         ExportUtils.writeAsPDF(drawable, w, h, file);
     }
@@ -503,9 +504,10 @@ public class Panel3D extends JPanel implements MouseListener,
      * @param file  the output file ({@code null} not permitted).
      * @param w  the chart width.
      * @param h  the chart height.
-     * 
+     *
      * @deprecated Use ExportUtils.writeAsPDF() directly.
      */
+    @Deprecated
     void writeAsSVG(File file, int w, int h) {
         ExportUtils.writeAsSVG(this.drawable, w, h, file);
     }

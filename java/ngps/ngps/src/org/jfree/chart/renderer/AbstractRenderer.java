@@ -2169,6 +2169,7 @@ public abstract class AbstractRenderer implements Cloneable, Serializable {
      * @see #setItemLabelAnchorOffset(double)
      * @deprecated use {@link #getItemLabelInsets()}
      */
+    @Deprecated
     public double getItemLabelAnchorOffset() {
         return Math.max(
                 Math.max(itemLabelInsets.getTop(), itemLabelInsets.getBottom()),
@@ -2184,6 +2185,7 @@ public abstract class AbstractRenderer implements Cloneable, Serializable {
      * @see #getItemLabelAnchorOffset()
      * @deprecated use {@link #setItemLabelInsets(RectangleInsets)}
      */
+    @Deprecated
     public void setItemLabelAnchorOffset(double offset) {
         setItemLabelInsets(new RectangleInsets(offset, offset, offset, offset));
     }

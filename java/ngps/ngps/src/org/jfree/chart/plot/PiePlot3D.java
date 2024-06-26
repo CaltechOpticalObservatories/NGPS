@@ -81,6 +81,7 @@ import org.jfree.data.general.PieDataset;
  * 
  * @deprecated For 3D pie charts, use Orson Charts (https://github.com/jfree/orson-charts).
  */
+@Deprecated
 public class PiePlot3D extends PiePlot implements Serializable {
 
     /** For serialization. */
