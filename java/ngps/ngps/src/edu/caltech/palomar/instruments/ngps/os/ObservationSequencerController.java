@@ -744,149 +744,46 @@ public void parseAsyncMessage(java.lang.String message){
         evaluateState(message);
      }
      if(message.contains("ELAPSEDTIME")){
-         if(message.contains("_0")){
-             message = message.replace("ELAPSEDTIME_0:","");
-             message = message.trim();
-             String[] messages = message.split(" ");
-             int elapse_time_milliseconds = Integer.parseInt(messages[0]);
-             setElapsedTime_1(elapse_time_milliseconds); // IDENTICAL BELOW HERE
-             messages[1] = messages[1].replace("EXPTIME:", "");
-             int total_time_milliseconds = Integer.parseInt(messages[1]);
-             setTotalEXPTime(total_time_milliseconds);  
-             double current_progress = ((double)elapse_time_milliseconds/(double)total_time_milliseconds)*100.0;
-             setProgress((int)current_progress);
-             double time_in_seconds = (double)elapse_time_milliseconds/1000.0;
-             setProgressString("ELAPSED TIME = "+time_in_seconds);
-             System.out.println("PROGRESS = "+current_progress);
-         }
-         if(message.contains("_1")){
-             message = message.replace("ELAPSEDTIME_1:","");
-             message = message.trim();
-             String[] messages = message.split(" ");
-             int elapse_time_milliseconds = Integer.parseInt(messages[0]);
-             setElapsedTime_2(elapse_time_milliseconds);
-             messages[1] = messages[1].replace("EXPTIME:", "");
-             int total_time_milliseconds = Integer.parseInt(messages[1]);
-             setTotalEXPTime(total_time_milliseconds);  
-             double current_progress = ((double)elapse_time_milliseconds/(double)total_time_milliseconds)*100.0;
-             setProgress((int)current_progress);
-             double time_in_seconds = (double)elapse_time_milliseconds/1000.0;
-             setProgressString("ELAPSED TIME = "+time_in_seconds);
-             System.out.println("PROGRESS = "+current_progress);
-         }
-         if(message.contains("_2")){
-             message = message.replace("ELAPSEDTIME_2:","");
-             message = message.trim();
-             String[] messages = message.split(" ");
-             int elapse_time_milliseconds = Integer.parseInt(messages[0]);
-             setElapsedTime_3(elapse_time_milliseconds);
-             messages[1] = messages[1].replace("EXPTIME:", "");
-             int total_time_milliseconds = Integer.parseInt(messages[1]);
-             setTotalEXPTime(total_time_milliseconds);  
-             double current_progress = ((double)elapse_time_milliseconds/(double)total_time_milliseconds)*100.0;
-             setProgress((int)current_progress);
-             double time_in_seconds = (double)elapse_time_milliseconds/1000.0;
-             setProgressString("ELAPSED TIME = "+time_in_seconds);
-             System.out.println("PROGRESS = "+current_progress);
-         }
-         if(message.contains("_3")){
-             message = message.replace("ELAPSEDTIME_3:","");
-             message = message.trim();
-             String[] messages = message.split(" ");
-             int elapse_time_milliseconds = Integer.parseInt(messages[0]);
-             setElapsedTime_4(elapse_time_milliseconds);
-             messages[1] = messages[1].replace("EXPTIME:", "");
-             int total_time_milliseconds = Integer.parseInt(messages[1]);
-             setTotalEXPTime(total_time_milliseconds);  
-             double current_progress = ((double)elapse_time_milliseconds/(double)total_time_milliseconds)*100.0;
-             setProgress((int)current_progress);
-             double time_in_seconds = (double)elapse_time_milliseconds/1000.0;
-             setProgressString("ELAPSED TIME = "+time_in_seconds);
-             System.out.println("PROGRESS = "+current_progress);
-         }
+         // message looks like "ELAPSEDTIME_n:xxx EXPTIME:yyy" where xxx and yyy are ints
+         
+         String[] msgList = message.split(" ");
+         int elapse_time_milliseconds = Integer.parseInt( msgList[0].split(":")[1] );
+         int total_time_milliseconds = Integer.parseInt( msgList[1].split(":")[1] );
+         
+         // setter _n are off from message _n by 1
+         if(message.contains("_0")){ setElapsedTime_1(elapse_time_milliseconds); }
+         if(message.contains("_1")){ setElapsedTime_2(elapse_time_milliseconds); }
+         if(message.contains("_2")){ setElapsedTime_3(elapse_time_milliseconds); }
+         if(message.contains("_3")){ setElapsedTime_4(elapse_time_milliseconds); }
+
+         setTotalEXPTime(total_time_milliseconds);  
+         double current_progress = ((double)elapse_time_milliseconds/(double)total_time_milliseconds)*100.0;
+         setProgress((int)current_progress);
+         double time_in_seconds = (double)elapse_time_milliseconds/1000.0;
+         setProgressString("ELAPSED TIME = "+time_in_seconds);
+         System.out.println("PROGRESS = "+current_progress);
+
      }
      if(message.contains("PIXELCOUNT")){
-         if(message.contains("_0")){
-             //  EXAMPLE     PIXELCOUNT_3:1048576 IMAGESIZE: 1048576
-             String[] messages = message.split(" ");            
-             java.lang.String pixcount = messages[0].replace("PIXELCOUNT_0:","");
-             java.lang.String totalpix = messages[2];
-             pixcount = pixcount.trim();
-             totalpix = totalpix.trim();
-             try{
-             int pixel_count = Integer.parseInt(pixcount);
-             int total_pixels = Integer.parseInt(totalpix);
-             setPixelCount_1(pixel_count);
-             setImageSize(total_pixels);
-             if(pixel_count != 0){
-               double current_progress = ((double)pixel_count/(double)total_pixels)*100.0;
-               setOverheadProgress((int)current_progress);
-               setOverheadProgressString("READOUT % ="+df.format(current_progress));
-             }
-             }catch(Exception e){
-                System.out.println(e.toString());
-             }
+         // message looks like "PIXELCOUNT_n:xxx IMAGESIZE:yyy" where xxx and yyy are ints
+         String[] msgList = message.split(" ");
+         int pixel_count = Integer.parseInt( msgList[0].split(":")[1] );
+         int total_pixels = Integer.parseInt( msgList[1].split(":")[1] );
+
+         // setter _n are off from message _n by 1
+         if(message.contains("_0")){ setPixelCount_1(pixel_count); }
+         if(message.contains("_1")){ setPixelCount_2(pixel_count); }
+         if(message.contains("_2")){ setPixelCount_3(pixel_count); }
+         if(message.contains("_3")){ setPixelCount_4(pixel_count); }
+
+         setImageSize(total_pixels);
+         if(pixel_count != 0){
+           double current_progress = ((double)pixel_count/(double)total_pixels)*100.0;
+           setOverheadProgress((int)current_progress);
+           setOverheadProgressString("READOUT % ="+df.format(current_progress));
+           System.out.println("READOUT % = "+current_progress);
          }
-         if(message.contains("_1")){
-             String[] messages = message.split(" ");            
-             java.lang.String pixcount = messages[0].replace("PIXELCOUNT_1:","");
-             java.lang.String totalpix = messages[2];
-             pixcount = pixcount.trim();
-             totalpix = totalpix.trim();
-             try{
-             int pixel_count = Integer.parseInt(pixcount);
-             int total_pixels = Integer.parseInt(totalpix);
-             setPixelCount_2(pixel_count);
-             setImageSize(total_pixels);
-             if(pixel_count != 0){
-               double current_progress = ((double)pixel_count/(double)total_pixels)*100.0;
-               setOverheadProgress((int)current_progress);  
-               setOverheadProgressString("READOUT % ="+df.format(current_progress));
-             }
-             }catch(Exception e){
-                System.out.println(e.toString());
-             }             
-         }
-         if(message.contains("_2")){
-             String[] messages = message.split(" ");            
-             java.lang.String pixcount = messages[0].replace("PIXELCOUNT_2:","");
-             java.lang.String totalpix = messages[2];
-             pixcount = pixcount.trim();
-             totalpix = totalpix.trim();
-             try{
-             int pixel_count = Integer.parseInt(pixcount);
-             int total_pixels = Integer.parseInt(totalpix);
-             setPixelCount_3(pixel_count);
-             setImageSize(total_pixels);
-             if(pixel_count != 0){
-               double current_progress = ((double)pixel_count/(double)total_pixels)*100.0;
-               setOverheadProgress((int)current_progress);   
-               setOverheadProgressString("READOUT % ="+df.format(current_progress));
-             }
-             }catch(Exception e){
-                System.out.println(e.toString());
-             }
-         }
-         if(message.contains("_3")){
-             String[] messages = message.split(" ");            
-             java.lang.String pixcount = messages[0].replace("PIXELCOUNT_3:","");
-             java.lang.String totalpix = messages[2];
-             pixcount = pixcount.trim();
-             totalpix = totalpix.trim();
-             try{
-             int pixel_count = Integer.parseInt(pixcount);
-             int total_pixels = Integer.parseInt(totalpix);
-             setPixelCount_4(pixel_count);
-             setImageSize(total_pixels);
-             if(pixel_count != 0){
-                  double current_progress = ((double)pixel_count/(double)total_pixels)*100.0;
-                  setOverheadProgress((int)current_progress);
-                  setOverheadProgressString("READOUT % ="+df.format(current_progress));
-             }
-             }catch(Exception e){
-                System.out.println(e.toString());
-             }         
-         }
+         
      }
    }catch(Exception e){
       System.out.println("ERROR PARSING ASYNC MESSAGE"+e.toString());

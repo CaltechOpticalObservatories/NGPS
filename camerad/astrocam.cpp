@@ -57,7 +57,7 @@ namespace AstroCam {
    */
   void Callback::readCallback( int expbuf, int devnum, std::uint32_t uiPixelCount, std::uint32_t uiImageSize ) {
     std::stringstream message;
-    message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE: " << uiImageSize;
+    message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE:" << uiImageSize;
     std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
     return;
   }
