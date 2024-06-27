@@ -745,7 +745,11 @@ public void initializeActionButtons(){
     }//GEN-LAST:event_do_allRadioButtonActionPerformed
 
     private void system_stateButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_system_stateButtonActionPerformed
-        // TODO add your handling code here:
+        System.out.println("PRESSED STATE BUTTON ") ;// TODO add your handling code here:
+        myObservationSequencerController.state();
+        myObservationSequencerController.waitMilliseconds(100);
+        System.out.println("NEW STATE = "+myObservationSequencerController.getSTATE()) ;// TODO add your handling code here:
+        //myObservationSequencerController.myBlockingSocket.setConnected(true);
     }//GEN-LAST:event_system_stateButtonActionPerformed
 
 

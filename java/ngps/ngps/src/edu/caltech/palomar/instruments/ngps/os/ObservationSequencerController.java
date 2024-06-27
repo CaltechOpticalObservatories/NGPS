@@ -6,7 +6,6 @@ package edu.caltech.palomar.instruments.ngps.os;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.io.ClientSocket;
 import edu.caltech.palomar.util.general.CommandLogModel;
-import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
@@ -16,7 +15,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.SocketTimeoutException;
-import java.util.StringTokenizer;
 import java.util.Vector;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.DailyRollingFileAppender;
@@ -74,8 +72,6 @@ public class ObservationSequencerController {
 //    public ClientSocket               myAsyncSocket      = new ClientSocket();
     public CommandLogModel            myCommandLogModel  = new CommandLogModel();
     public CommandLogModel            myAsyncLogModel    = new CommandLogModel();
-    private  boolean                  command_connected;
-    private  boolean                  blocking_connected;
     private  boolean                  async_connected;
     private boolean                   error;   
     public static int                 COMMAND             = 0;
@@ -89,8 +85,6 @@ public class ObservationSequencerController {
     public static int                 DO_ONE              = 1;
     public static int                 DO_ALL              = 2;
     private java.lang.String          state               = new java.lang.String();
-    private java.lang.String          runstate            = new java.lang.String();
-    private java.lang.String          reqstate            = new java.lang.String();
     private int                       elapsed_time_1;
     private int                       elapsed_time_2;
     private int                       elapsed_time_3;
@@ -141,7 +135,7 @@ public void connect(){
     myCommandSocket.startConnection(ClientSocket.USE_HOSTNAME);
     myBlockingSocket.startConnection(ClientSocket.USE_HOSTNAME);
     start_AsynchronousMonitor();
-    waitMilliseconds(10);
+    waitMilliseconds(2000);
     state();
 }
 /*================================================================================================
@@ -150,12 +144,12 @@ public void connect(){
 public void query_tcs_connection(){
     tcs_connect();
     tcs_list();
-    boolean isOpen = tcs_isOpen();    
+    tcs_isOpen();    
 }
 /*================================================================================================
 /      waitForResponse(int newDelay)
 /=================================================================================================*/
-private void waitMilliseconds(int newDelay){
+public void waitMilliseconds(int newDelay){
      try{
         Thread.currentThread().sleep(newDelay);} // sleep for awhile to let the messages pile up
       catch (Exception e){
@@ -179,47 +173,12 @@ private void waitMilliseconds(int newDelay){
   public void initializeSockets(){
         initializeLogging(); 
         stringUtil.setInstrumentName(myIniReader.INSTRUMENT_NAME);
-        setCommandConnected(false);
-        setBlockingConnected(false);
         setAsyncConnected(false);
-        myCommandSocket = new ClientSocket(myIniReader.SERVERNAME,myIniReader.COMMAND_SERVERPORT);
-        myCommandSocket.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
-        public void propertyChange(java.beans.PropertyChangeEvent e) {
-            myCommandSocket_propertyChange(e);
-         }
-        });
+        myCommandSocket = new ClientSocket(myIniReader.SERVERNAME,myIniReader.COMMAND_SERVERPORT);        
         myBlockingSocket = new ClientSocket(myIniReader.SERVERNAME,myIniReader.BLOCKING_SERVERPORT);
-        myBlockingSocket.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
-        public void propertyChange(java.beans.PropertyChangeEvent e) {
-            myBlockingSocket_propertyChange(e);
-         }
-        });
   }
+  
 /*=============================================================================================
-/     Property Change Listener for the _propertyChange
-/=============================================================================================*/
-  private void myCommandSocket_propertyChange(PropertyChangeEvent e)  {
-     java.lang.String propertyName = e.getPropertyName();
-       if(propertyName == "connected"){
-        boolean state = (java.lang.Boolean)e.getNewValue();
-        setCommandConnected(state);
-        if(state){            
-        }
-      }
-  }
-/*=============================================================================================
-/     Property Change Listener for the _propertyChange
-/=============================================================================================*/
-  private void myBlockingSocket_propertyChange(PropertyChangeEvent e)  {
-     java.lang.String propertyName = e.getPropertyName();
-       if(propertyName == "connected"){
-        boolean state = (java.lang.Boolean)e.getNewValue();
-        setBlockingConnected(state);
-        if(state){          
-        }
-      }
-  }  
-  /*=============================================================================================
 /     start_AsynchronousMonitor()
 /=============================================================================================*/
 public void start_AsynchronousMonitor(){
@@ -256,22 +215,7 @@ public void setAttributeBool(String fieldToSet, Boolean newValue) {
       System.out.println(e.toString());
     }  
  }
-/*================================================================================================
-/       setCommandConnected(boolean new_command_connected)
-/=================================================================================================*/
-  public void setCommandConnected(boolean new_command_connected) {
-    boolean  old_command_connected = this.command_connected;
-    this.command_connected = new_command_connected;
-    propertyChangeListeners.firePropertyChange("command_connected", Boolean.valueOf(old_command_connected), Boolean.valueOf(new_command_connected));
-  }
-/*================================================================================================
-/       setBlockingConnected(boolean new_blocking_connected)
-/=================================================================================================*/
-  public void setBlockingConnected(boolean new_blocking_connected) {
-    boolean  old_blocking_connected = this.blocking_connected;
-    this.blocking_connected = new_blocking_connected;
-    propertyChangeListeners.firePropertyChange("blocking_connected", Boolean.valueOf(old_blocking_connected), Boolean.valueOf(new_blocking_connected));
-  }
+
 /*================================================================================================
 /       setAsyncConnected(boolean new_async_connected)
 /=================================================================================================*/
@@ -406,40 +350,59 @@ public void setAttributeBool(String fieldToSet, Boolean newValue) {
 /*================================================================================================
 /      executeCommand(int socket,java.lang.String command,double delay)
 /=================================================================================================*/
-  public java.lang.String executeCommand(java.lang.String command){
-      java.lang.String response = new java.lang.String();
-        logMessage(INFO,command);
-           if(myCommandSocket.isConnected()){
-              response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR); // NO RESPONSES!
-              if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
-                //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
-                myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
-               }
-           }
-       logMessage(INFO,response);
+  public String executeCommand(String command){
+      // RETURNS ACK or ERR
+      logMessage(INFO,command);
+      System.out.println("COMMAND: "+command);
+
+      String response = myCommandSocket.sendReceiveCommandSequencer(command+TERMINATOR);
+
+      // Handle null response; converts to "null"
+      response = String.valueOf(response);
+      System.out.println("RESPONSE: "+response);      
+      logMessage(INFO,response);
+       
+        if(response.contains("ACK")){ // Sequencer always finishes line with DONE if successful
+            setERROR(false);
+        } 
+        else if(response.isEmpty() || response=="null"){
+            setERROR(true);
+            myCommandLogModel.insertMessage(CommandLogModel.ERROR, command+"--> No sequencer response (maybe nothing was sent)");
+            }
+        else {
+            setERROR(true);
+            myCommandLogModel.insertMessage(CommandLogModel.ERROR, command+"--> "+response);
+            }
+        
     return response;
-  }   
+  }  
  /*================================================================================================
 /      executeCommand(int socket,java.lang.String command,double delay)
 /=================================================================================================*/
-  public java.lang.String executeCommandB(java.lang.String command){
-      java.lang.String response = new java.lang.String();
+  public String executeCommandB(String command){
         logMessage(INFO,command);
-           if(myBlockingSocket.isConnected()){
-              response = myBlockingSocket.sendReceiveCommandARCHON(command+TERMINATOR);
-              if( response.trim().startsWith("ERROR") || response.trim().startsWith("NOTICE") ){
-                //myCommandLogModel.insertMessage(CommandLogModel.COMMAND,command);
-                myCommandLogModel.insertMessage(CommandLogModel.ERROR,command+" -> "+response.trim());       
-               }
-           }
-        logMessage(INFO,response);
-       
-        if(response.matches("DONE")){
-            setERROR(false); 
-        }else{
-            setERROR(true);                
-        }
+        System.out.println("BLOCKING COMMAND: "+command);
 
+      //  System.out.println("CONNECTION 1 == "+String.valueOf(myBlockingSocket.isConnected())); 
+      String response = myBlockingSocket.sendReceiveCommandSequencer(command+TERMINATOR);
+
+      // Handle null response; converts to "null"
+      response = String.valueOf(response);
+      System.out.println("BLOCKING RESPONSE: "+response);      
+      logMessage(INFO,response);
+       
+        if(response.contains("DONE")){ // Sequencer always finishes line with DONE if successful
+            setERROR(false);
+        } 
+        else if(response.isEmpty() || response=="null"){
+            setERROR(true);
+            myCommandLogModel.insertMessage(CommandLogModel.ERROR, command+"--> No sequencer response (maybe nothing was sent)");
+            }
+        else {
+            setERROR(true);
+            myCommandLogModel.insertMessage(CommandLogModel.ERROR, command+"--> "+response);
+            }
+        
     return response;
   }  
 /*=============================================================================================
@@ -462,8 +425,7 @@ public void logMessage(int code,java.lang.String message){
 /      abort()
 /=================================================================================================*/
 public boolean abort(){
-    java.lang.String response = executeCommandB("abort");
-
+    String response = executeCommand("abort");
     return isERROR();
 } 
 /*================================================================================================
@@ -479,7 +441,7 @@ public boolean airmass(double airmass_limit){
 /      do_one_all(int code){
 /=================================================================================================*/
 public boolean do_one_all(int code){
-    java.lang.String command = new java.lang.String();
+    String command = new String();
     if(code == DO_ONE){
         command = "do one";
     }
@@ -504,7 +466,7 @@ public boolean modexptime(double mod_exptime){
 /      pause()
 /=================================================================================================*/
 public boolean pause(){
-    java.lang.String response = executeCommandB("pause");
+    String response = executeCommand("pause");
 
      return isERROR();
 } 
@@ -512,73 +474,42 @@ public boolean pause(){
 /     resume()
 /=================================================================================================*/
 public boolean resume(){
-    java.lang.String response = executeCommandB("resume");
-
+    String response = executeCommand("resume");
     return isERROR();
 } 
 /*================================================================================================
 /     shutdown()
 /=================================================================================================*/
 public boolean shutdown(){
-    java.lang.String response = executeCommandB("shutdown");
-
+    String response = executeCommand("shutdown");
     return isERROR();
 } 
 /*================================================================================================
 /     start()
 /=================================================================================================*/
 public boolean start(){
-    java.lang.String response = executeCommandB("start");
-
+    String response = executeCommand("start");
     return isERROR();
 } 
 /*================================================================================================
 /     startup()
 /=================================================================================================*/
 public boolean startup(){
-    String command = "startup";
-    java.lang.String response = executeCommandB(command);
-
+    String response = executeCommand("startup");
     return isERROR();
 } 
 /*================================================================================================
 /     stop()
 /=================================================================================================*/
 public boolean stop(){
-    String command = "stop";
-   java.lang.String response = executeCommandB(command);
-
+    String response = executeCommand("stop");
    return isERROR();
 } 
 /*================================================================================================
 /    state()
 /=================================================================================================*/
 public boolean state(){
-    String command = "state";
-    java.lang.String response = executeCommandB(command); 
-//   java.lang.String response = executeCommand_local(command);
-   System.out.println(response);
-   try{
-   java.util.ArrayList runstate_arraylist = new java.util.ArrayList();
-    //    RUNSTATE: OFFLINE | REQSTATE: OFFLINE | THREADS: async_listener
-        java.lang.String runstate = response;
-        runstate = runstate.replace("RUNSTATE:", "");
-        StringTokenizer st = new StringTokenizer(runstate," ");
-        int count = st.countTokens();
-        if(st.nextToken() != null ){
-            java.lang.String current_runstate = (java.lang.String )st.nextToken();
-            count = st.countTokens();
-            for(int i=1;i<count;i++){
-                java.lang.String current_secondary_state = st.nextToken();
-                runstate_arraylist.add(current_secondary_state);
-            }       
-            runstate = runstate.trim();
-            System.out.println("RUNSTATE = "+runstate);        
-            evaluateState(current_runstate,runstate_arraylist);
-        }
-   }catch(Exception e){
-       System.out.println(e.toString());
-   }   
+    String response = executeCommand("state"); 
     return isERROR();
 }
 /*================================================================================================
@@ -597,9 +528,8 @@ public boolean isUpdateArmed(){
 /     stop()
 /=================================================================================================*/
 public void tcs_list(){
-    java.lang.String command = new java.lang.String();
-    command = "tcs llist";
-   java.lang.String response = executeCommandB(command);
+   String response = executeCommandB("tcs llist");
+   // returns something like "real 10.200.99.2:49200 false,sim localhost:49200 false DONE"
    try{
       java.lang.String[] records = response.split(",");
       java.lang.String[] record1 = records[0].split(" ");
@@ -677,29 +607,14 @@ public boolean tcs_connect(){
 /   tcs_isOpen()
 /     Ask if sequencer is connected to tcsd (TCS daemon)
 /=================================================================================================*/
+//public boolean tcs_getName(){ 
+//    // tcs getname --> sim or real
+//}
+
+
 public boolean tcs_isOpen(){
-   boolean isopen = false;
-   String command = "tcs isopen";
-   java.lang.String response = executeCommandB(command);   
-   response = response.replace(" DONE","");
-   response = response.trim();
-   if(response.matches("false")){
-      isopen = false; 
-      setActiveTCSAddress("NOT CONNECTED");
-      setActiveTCSname(response);
-   }else if(response.matches("sim")){
-      isopen = true; 
-//      setActiveTCSAddress(getSimulatorAddress());
-      setActiveTCSAddress(this.simulator_address);
-      setActiveTCSname(response);
-   }else if(response.matches("real")){
-      isopen = true;
-//     setActiveTCSAddress(getTCSAddress());
-      setActiveTCSAddress(this.tcs_address);
-      setActiveTCSname(response);
-   }   
-   this.setTCSConnected(isopen);
-   return isopen;
+   String response = executeCommandB("tcs isopen");  
+   return isERROR();
 } 
 /*================================================================================================
 /   tcs_isConnected()
@@ -729,62 +644,44 @@ public void tcsinit(String realOrSim){
     String command = "tcsinit " + realOrSim;
     String response = executeCommandB(command);
 }
-
 /*================================================================================================
-/    targetset(int id)
+/    evaluateState(String stateString)  // CHAZ ADDED
 /=================================================================================================*/
-public synchronized void evaluateState(java.lang.String current_runstate,java.util.ArrayList current_modifiers){
-    System.out.println("RUNSTATE = "+current_runstate+" "+" MODIFIER COUNT = "+current_modifiers.size());
-    if(current_runstate.matches("OFFLINE")){
-       setSTATE("OFFLINE");
-    }
-    if(current_runstate.matches("STARTING")){
-       setSTATE("STARTING");
-    }
-     if(current_runstate.matches("SHUTTING")){
-       setSTATE("SHUTTING");   // THIS STATE IS NOT ACTUALLY CAPTURED BY THE LISTENER
-    }    
-    if(current_runstate.matches("READY")){
+public synchronized void evaluateState(String stateString){
+    
+    System.out.println("statestring = "+stateString);
+    
+    if(!stateString.contains("RUNSTATE:")){ return; }
+    stateString = stateString.replace("RUNSTATE:", "");
+    
+    if(stateString.contains("READY")){
        setSTATE("READY");
        setProgress(0);
        setProgressString("");
        setOverheadProgress(0);
        setOverheadProgressString("");
-//       if(isUpdateArmed()){
-//           disarmUpdate();
-//           dbms.executeQueryState(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);           
-//       }
     }  
-    if(current_runstate.matches("RUNNING")){
-        int count = current_modifiers.size();     
-        System.out.println("Number of Modifiers = "+count);
-          for(int i=0;i<count;i++){
-            java.lang.String current_modifier = (java.lang.String)current_modifiers.get(i);
-            System.out.println(current_modifier);
-            if(current_modifier.matches("TCSOP")){
-                setSTATE("TCSOP");
-            }else if(current_modifier.matches("SLEW")){
-                setSTATE("SLEW");
-            }else if(current_modifier.matches("ACQUIRE")){
-                setSTATE("ACQUIRE");
-            }else if(current_modifier.matches("EXPOSING")){
-                setSTATE("EXPOSING");
-           }else if(current_modifier.matches("READOUT")){ 
-                setSTATE("READOUT");
-            }else {
-                setSTATE("RUNNING");
+    
+    if(stateString.contains("RUNNING")){
+        
+//        List<String> runOpts = List.of("TCSOP", "SLEW", "ACQUIRE", "EXPOSING", "READOUT");
+        String[] runOpts = {"TCSOP", "SLEW", "ACQUIRE", "EXPOSING", "READOUT"};
+        
+        for(String s : runOpts){
+            if (stateString.contains(s)) {
+                setSTATE(s);
+            } else {setSTATE("RUNNING");
             }
-          }
-    } 
-     if(current_runstate.matches("PAUSED")){
-       setSTATE("PAUSED");
-    } 
-    if(current_runstate.matches("STOPREQ")){
-       setSTATE("STOPREQ");
-    }  
-    if(current_runstate.matches("ABORTREQ")){
-       setSTATE("ABORTREQ");
-    }   
+        }
+    } // end of if RUNNING
+
+//    List<String> stateOpts = List.of("OFFLINE", "STARTING", "SHUTTING", "PAUSED", "STOPREQ","ABORTREQ");
+    String[] stateOpts = {"OFFLINE", "STARTING", "SHUTTING", "PAUSED", "STOPREQ","ABORTREQ"};
+    
+    for(String s : stateOpts){
+        if (stateString.contains(s)) {setSTATE(s); } 
+    }
+
     this.notifyAll();
 }
 /*================================================================================================
@@ -801,10 +698,9 @@ public void parseAsyncMessage(java.lang.String message){
      else if(message.trim().startsWith("NOTICE")){
         myCommandLogModel.insertMessage(CommandLogModel.COMMAND, message);
      }
-
      // Refresh connection to sequencerd
      if(message.contains("SEQUENCERD:started")){
-        System.out.println("DO SOMETHING");  
+        connect();  
      }
           
      if(message.contains("TCSD:open")){
@@ -845,18 +741,7 @@ public void parseAsyncMessage(java.lang.String message){
         dbms.queryState(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);
      }
      if(message.contains("RUNSTATE")){
-        java.lang.String runstate = message;
-        runstate = runstate.replace("RUNSTATE:", "");
-        StringTokenizer st = new StringTokenizer(runstate," ");
-        java.lang.String current_runstate = (java.lang.String )st.nextToken();
-        int count = st.countTokens();
-        for(int i=0;i<count;i++){
-            java.lang.String current_secondary_state = st.nextToken();
-            runstate_arraylist.add(current_secondary_state);
-        }       
-        runstate = runstate.trim();
-        System.out.println("RUNSTATE = "+runstate);        
-        evaluateState(current_runstate,runstate_arraylist);
+        evaluateState(message);
      }
      if(message.contains("ELAPSEDTIME")){
          if(message.contains("_0")){
@@ -864,7 +749,7 @@ public void parseAsyncMessage(java.lang.String message){
              message = message.trim();
              String[] messages = message.split(" ");
              int elapse_time_milliseconds = Integer.parseInt(messages[0]);
-             setElapsedTime_1(elapse_time_milliseconds);
+             setElapsedTime_1(elapse_time_milliseconds); // IDENTICAL BELOW HERE
              messages[1] = messages[1].replace("EXPTIME:", "");
              int total_time_milliseconds = Integer.parseInt(messages[1]);
              setTotalEXPTime(total_time_milliseconds);  

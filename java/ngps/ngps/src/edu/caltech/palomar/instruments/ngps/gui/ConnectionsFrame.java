@@ -81,15 +81,19 @@ public void setDBMS(NGPSdatabase new_dbms){
     myObservationSequencerController = newObservationSequencerController;
     myObservationSequencerController.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
     public void propertyChange(java.beans.PropertyChangeEvent e) {
-             state_propertyChange(e);
+             TCS_propertyChange(e);
           }
      });  
-     myObservationSequencerController.myCommandSocket.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
+     myObservationSequencerController.myBlockingSocket.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
         public void propertyChange(java.beans.PropertyChangeEvent e) {
-            myCommandSocket_propertyChange(e);
+            OSCommandSocket_propertyChange(e);
          }
         });
-     if(myObservationSequencerController.myCommandSocket.isConnected()){
+     myObservationSequencerController.myCommandSocket.addPropertyChangeListener((java.beans.PropertyChangeEvent e) -> {
+         OSCommandSocket_propertyChange(e);
+    });
+
+     if(myObservationSequencerController.myBlockingSocket.isConnected()){ // CHAZ change to state check?
          this.OSButton.setIcon(ON);
      }
      myObservationSequencerController.query_tcs_connection();
@@ -99,7 +103,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 /*=============================================================================================
 /     Property Change Listener for the Ephemeris_propertyChange
 /=============================================================================================*/
-  private void state_propertyChange(PropertyChangeEvent e)  {
+  private void TCS_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
      System.out.println(propertyName);
      if(propertyName.matches("tcs_connected")){
@@ -121,10 +125,10 @@ public void setDBMS(NGPSdatabase new_dbms){
      if(propertyName.matches("active_tcs_address")){
          java.lang.String value = (java.lang.String)e.getNewValue();
          tcs_ip_Label.setText(value);   
-         if(value.matches("sim")){
+         if(value.contains("sim")){
            simulatorRadioButton.setSelected(true);
          }
-         if(value.matches("real")){
+         if(value.contains("real")){
            P200RadioButton.setSelected(true);
          }
      }
@@ -136,7 +140,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 /*=============================================================================================
 /     Property Change Listener for the _propertyChange
 /=============================================================================================*/
-  private void myCommandSocket_propertyChange(PropertyChangeEvent e)  {
+  private void OSCommandSocket_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
        if(propertyName == "connected"){
         boolean state = (java.lang.Boolean)e.getNewValue();
@@ -192,6 +196,11 @@ public void setDBMS(NGPSdatabase new_dbms){
         jLabel2.setText("mySQL Database connection");
 
         OSButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
+        OSButton.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                OSButtonStateChanged(evt);
+            }
+        });
         OSButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 OSButtonActionPerformed(evt);
@@ -354,6 +363,10 @@ public void setDBMS(NGPSdatabase new_dbms){
     private void P200RadioButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_P200RadioButtonActionPerformed
         // TODO add your handling code here:
     }//GEN-LAST:event_P200RadioButtonActionPerformed
+
+    private void OSButtonStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_OSButtonStateChanged
+        // TODO add your handling code here:
+    }//GEN-LAST:event_OSButtonStateChanged
 
     /**
      * @param args the command line arguments

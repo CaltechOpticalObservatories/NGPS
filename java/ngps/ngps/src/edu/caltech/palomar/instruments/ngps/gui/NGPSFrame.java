@@ -169,10 +169,10 @@ public class NGPSFrame extends javax.swing.JFrame {
 /     NGPSFrame()
 /=============================================================================================*/
     public NGPSFrame(String args[]) {
-         if(args[0].matches("OBSERVE")){
+         if(args[0].toUpperCase().matches("OBSERVE")){
             CONFIGURATION = OBSERVE;   
          }
-         if(args[0].matches("PLAN")){
+         if(args[0].toUpperCase().matches("PLAN")){
             CONFIGURATION = PLAN;   
          } 
         initComponents();

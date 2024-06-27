@@ -71,7 +71,7 @@ public class ConnectionTester {
       java.lang.String response = new java.lang.String();
          myCommandSocket.startConnection(ClientSocket.USE_HOSTNAME);
            if(myCommandSocket.isConnected()){
-              response = myCommandSocket.sendReceiveCommandARCHON(command+TERMINATOR);
+              response = myCommandSocket.sendReceiveCommandSequencer(command+TERMINATOR);
             }
          myCommandSocket.closeConnection();
     return response;

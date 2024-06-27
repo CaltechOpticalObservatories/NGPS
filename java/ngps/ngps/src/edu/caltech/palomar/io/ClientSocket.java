@@ -207,31 +207,23 @@ public class ClientSocket extends java.lang.Object{
 /   startConnection() method
 /=============================================================================================*/
   public boolean startConnection(int connectionMethod){
+      try{ closeConnection(); }
+      catch (Exception e) {;}
+      
    try{
    // First we create a new socket and attach the input and output streams
-//     System.out.print("Client Socket Line 149" + "\n");
        if(connectionMethod == USE_INETADDRESS){
            serverSocket = new java.net.Socket(getServerInetAddress(),getServerPort());
-//           System.out.print("Client Socket Line 152" + "\n");
         }// if we are going to connect using the InetAddress
        if(connectionMethod == USE_HOSTNAME){
-//         System.out.print("Client Socket Line 155" + "\n");
-           java.lang.String myServerName = getServerName();
-           int  myServerPort = getServerPort();
            Thread.currentThread().yield();
-//           System.out.print("Client Socket Line 159" + "\n");
            serverSocket = new java.net.Socket(getServerName() ,getServerPort());
-//           System.out.print("Client Socket Line 161" + "\n");
         }// if we are going to connect using the InetAddress
      if(serverSocket != null){
-//       System.out.print("Client Socket Line 164" + "\n");
          // Now we need to create the Readers and Writers to the Socket if everything worked
          myBufferedReader      = new BufferedReader( new InputStreamReader(serverSocket.getInputStream()));
          myBufferedInputStream = new BufferedInputStream( serverSocket.getInputStream());
          myBufferedWriter      = new BufferedWriter( new OutputStreamWriter(serverSocket.getOutputStream()));
-//         myDataOutputStream = new DataOutputStream(serverSocket.getOutputStream());
-//         myDataInputStream  = new DataInputStream(serverSocket.getInputStream());
-//         System.out.print("Client Socket Line 170" + "\n");
      }// a probably unecessary check to make sure the socket was actually created
     // If we've made it this far then we can set the connection equal to true
     setConnected(true);
@@ -330,80 +322,6 @@ public void reinitializeBufferedReader(){
        logErrorMessage("An Exception occured while closing the connection: " + t);
     }
  }
-/*=============================================================================================
-/    getBytes(int new_num_bytes)
-/=============================================================================================*/
-  public byte[] getBytes(int new_num_bytes){
-     int num_bytes = new_num_bytes;
-     int buffer_length = 32768;
-     byte[] array = new byte[num_bytes];
-       try{
-          int readTotal = 0;
-          while(readTotal < num_bytes){
-            int available = myBufferedInputStream.available();
-            if(available != -1){
-              int length = num_bytes-readTotal; 
-              if(length >= buffer_length){
-                  length = buffer_length;
-              }
-             int read = myBufferedInputStream.read(array, readTotal, length);
-             readTotal = readTotal + read;
-//             System.out.println("Bytes read = "+ readTotal);
-            }
-          }
-//          System.out.println("Bytes read = "+ readTotal);
-       }catch(Exception ioe){
-         logErrorMessage(ioe.toString());
-       }
-    return array;
-  }
-/*=============================================================================================
-/     getResponse() Method - This method is used to monitor an asynchronous 
-/=============================================================================================*/
-   public synchronized java.lang.String getResponse(){
-     java.lang.String myResponse = new java.lang.String();
-     if(isConnected()){
-       // Only try to read from the socket if a response is expected to this command
-           if(myBufferedReader != null){
-       try{
- //  DEALING WITH THE PROBLEM OF THE RESPONSE FROM THE SERVER NOT BEING READY
-            if(!myBufferedReader.ready()) {
-                int count = 0;
-                while((!myBufferedReader.ready()) && (count < REPEAT_DELAY)){
-                  Thread.currentThread().sleep(READ_DELAY);
-                  count = count + 1;
-                }// end of While !myBufferedReader.ready()
-                if(!myBufferedReader.ready()){
-                   return myResponse;
-                }// end of logging error message if the response is still not here
-            }// end of if !myBufferedReader.ready()
-// ACTUALLY READING FROM THE SOCKET
-            if(myBufferedReader.ready()){
-                 char[] myChar = new char[1024];
-                 int index = 0;
-                 boolean state = myBufferedReader.ready();
-                 while(state){
-                     myChar[index] = (char)myBufferedReader.read();
-                     state         = myBufferedReader.ready();
-                   if (index >= 1023){
-                       state = false;
-                   }
-                   index = index + 1;
-                 }
-                 myResponse = new java.lang.String(myChar);
-                 myResponse = myResponse.trim();
-              }
-        }catch(IOException  ex2){
-                   logErrorMessage("An IOException occured while reading from the socket: " + ex2);
-                   setConnected(false);
-         }// end of catching the IOException
-         catch(java.lang.InterruptedException ex3){
-                    logErrorMessage("An error occurred while waiting to read from the server: "+ex3);
-         }// end of the catch
-       }// end of checking the validity of the BufferedReader
-     }// end of checking to make sure the socket has connected to the server
-   return myResponse;
-   }// end of the getResponse method
 /*=============================================================================================
 /     sendCommand Method - This method is used to send a string to the server
 /                          checks to see if the connection is active before sending
@@ -646,164 +564,14 @@ public void waitTest(double newDelay){
 /*=============================================================================================
 /     sendRecieveCommand(java.lang.String newCommand)
 /=============================================================================================*/
-  public java.lang.String sendReceiveCommandHardWait(java.lang.String newCommand,double expectedDelay){
-    java.lang.String myResponse = new java.lang.String();
-    if(isConnected()){
-       if(myBufferedWriter != null){
-         try{
-           myBufferedWriter.write(newCommand);
-           myBufferedWriter.flush();
-           writeToLogFile(newCommand);
-           if(isLogging()){
-                 logSendMessage(newCommand);
-            }// if isLogging is true
-          }// end of the try block
-         catch(IOException  ex1){
-              logErrorMessage("An IOException occured while writing to the socket: " + ex1);
-              setConnected(false);
-              if(serverSocket == null){
-                  logErrorMessage("The connection to the server has been lost. ");
-              }// is the socket has gone null then flag that the connection is lost
-         }// end of catching the IOException
-       }// end of checking to make sure the writer has been initialized
-      // Only try to read from the socket if a response is expected to this command
-          if(myBufferedReader != null){
-          wait(expectedDelay);
-          try{
-//  DEALING WITH THE PROBLEM OF THE RESPONSE FROM THE SERVER NOT BEING READY
-           if(!myBufferedReader.ready()) {
-               int count = 0;
-               while((!myBufferedReader.ready()) && (count < REPEAT_DELAY)){
-                 Thread.currentThread().sleep(READ_DELAY);
-                 count = count + 1;
-               }// end of While !myBufferedReader.ready()
-               if(!myBufferedReader.ready()){
-                  logErrorMessage("Connection timed out without response. 4");
-                  System.out.println("Connection timed out without response. 4");
-                  return myResponse;
-              }// end of logging error message if the response is still not here
-           }// end of if !myBufferedReader.ready()
-// ACTUALLY READING FROM THE SOCKET
-           if(myBufferedReader.ready()){
-             char[] myChar = new char[512];
-             int index = 0;
-             boolean state = myBufferedReader.ready();
-             while(state){
-                 myChar[index] = (char)myBufferedReader.read();
-                 state         = myBufferedReader.ready();
-               if (index >= 511){
-                   state = false;
-               }
-               index = index + 1;
-             }
-             myResponse = new java.lang.String(myChar);
-             writeToLogFile(myResponse);
-             }// end of if myBufferedReader.ready()
-               if(isLogging()){
-                     logReceiveMessage(myResponse);
-                }// if isLogging is true
-              }// end of the try block
-             catch(IOException  ex2){
-                  logErrorMessage("An IOException occured while reading from the socket: " + ex2);
-                  setConnected(false);
-                  if(serverSocket == null){
-                      logErrorMessage("The connection to the server has been lost. ");
-                  }
-             }// end of catching the IOException
-             catch(java.lang.Exception ex3){
-                   logErrorMessage("An error occurred while waiting to read from the server: "+ex3);
-             }// end of the catch
-          }// end of checking the validity of the BufferedReader
-     }// end of checking to make sure the socket has connected to the server
-  return myResponse;
-  }// end of the sendCommand method
-  /*=============================================================================================
-/     sendRecieveCommand(java.lang.String newCommand)
-/=============================================================================================*/
-  public java.lang.String sendReceiveCommandMotors(java.lang.String newCommand,double expectedDelay){
-    java.lang.String myResponse = new java.lang.String();
-    if(isConnected()){
-       if(myBufferedWriter != null){
-         try{
-           myBufferedWriter.write(newCommand);
-           myBufferedWriter.flush();
-           writeToLogFile(newCommand);
-           if(isLogging()){
-                 logSendMessage(newCommand);
-            }// if isLogging is true
-          }// end of the try block
-         catch(IOException  ex1){
-              logErrorMessage("An IOException occured while writing to the socket: " + ex1);
-              setConnected(false);
-              if(serverSocket == null){
-                  logErrorMessage("The connection to the server has been lost. ");
-              }// is the socket has gone null then flag that the connection is lost
-         }// end of catching the IOException
-       }// end of checking to make sure the writer has been initialized
-      // Only try to read from the socket if a response is expected to this command
-          if(myBufferedReader != null){
-          wait(expectedDelay);
-          try{
-//  DEALING WITH THE PROBLEM OF THE RESPONSE FROM THE SERVER NOT BEING READY
-           if(!myBufferedReader.ready()) {
-               int count = 0;
-               while((!myBufferedReader.ready()) && (count < REPEAT_DELAY)){
-                 Thread.currentThread().sleep(READ_DELAY);
-                 count = count + 1;
-               }// end of While !myBufferedReader.ready()
-               if(!myBufferedReader.ready()){
-                  logErrorMessage("Connection timed out without response. 5");
-                  System.out.println("Connection timed out without response. 5");
-                  return myResponse;
-              }// end of logging error message if the response is still not here
-           }// end of if !myBufferedReader.ready()
-// ACTUALLY READING FROM THE SOCKET
-           if(myBufferedReader.ready()){
-             char[] myChar = new char[2048];
-             int index = 0;
-             boolean state = myBufferedReader.ready();
-             while(state){
-                 myChar[index] = (char)myBufferedReader.read();
-                 state         = myBufferedReader.ready();
-                 if(!state){
-                    Thread.currentThread().sleep(10); 
-                    state         = myBufferedReader.ready();
-                 }
-               if (index >= 2047){
-                   state = false;
-               }
-               index = index + 1;
-             }
-             myResponse = new java.lang.String(myChar);
-             writeToLogFile(myResponse);
-             }// end of if myBufferedReader.ready()
-               if(isLogging()){
-                     logReceiveMessage(myResponse);
-                }// if isLogging is true
-              }// end of the try block
-             catch(IOException  ex2){
-                  logErrorMessage("An IOException occured while reading from the socket: " + ex2);
-                  setConnected(false);
-                  if(serverSocket == null){
-                      logErrorMessage("The connection to the server has been lost. ");
-                  }
-             }// end of catching the IOException
-             catch(java.lang.Exception ex3){
-                   logErrorMessage("An error occurred while waiting to read from the server: "+ex3);
-             }// end of the catch
-          }// end of checking the validity of the BufferedReader
-     }// end of checking to make sure the socket has connected to the server
-  return myResponse;
-  }// end of the sendCommand method
-/*=============================================================================================
-/     sendRecieveCommand(java.lang.String newCommand)
-/=============================================================================================*/
-  public java.lang.String sendReceiveCommandARCHON(java.lang.String newCommand){
-    int BUFFER_SIZE = 4096;
-    java.lang.String myResponse = new java.lang.String();
+  public java.lang.String sendReceiveCommandSequencer(java.lang.String newCommand){
+      
+      logErrorMessage(newCommand);
+      
+    String myResponse = null;
     int old_REPEAT_DELAY = REPEAT_DELAY;
-    REPEAT_DELAY = 100;
-    if(isConnected()){
+    REPEAT_DELAY = 20;
+//    if(isConnected()){
        if(myBufferedWriter != null){
          try{
            myBufferedWriter.write(newCommand);
@@ -828,33 +596,28 @@ public void waitTest(double newDelay){
            if(!myBufferedReader.ready()) {
                int count = 0;
                while((!myBufferedReader.ready()) && (count < REPEAT_DELAY)){
-                 Thread.currentThread().sleep(1);
+                 Thread.currentThread().sleep(100);
                  count = count + 1;
                }// end of While !myBufferedReader.ready()
+               System.out.println("TOTAL READ TRIES: "+String.valueOf(count));
+               logErrorMessage("TOTAL READ TRIES: "+String.valueOf(count));
                if(!myBufferedReader.ready()){
-                  logErrorMessage("Connection timed out without response. 6");
-                  System.out.println("Connection timed out without response. 6");
-                  return myResponse;
+                  String msg = "Connection timed out without response. 6";
+                  logErrorMessage(msg);
+                  System.out.println(msg);
+               //   return myResponse;
               }// end of logging error message if the response is still not here
            }// end of if !myBufferedReader.ready()
 // ACTUALLY READING FROM THE SOCKET
-           if(myBufferedReader.ready()){
-             char[] myChar = new char[BUFFER_SIZE];
-             int index = 0;
-             boolean state = myBufferedReader.ready();
-             while(state){
-                 myChar[index] = (char)myBufferedReader.read();
-                 if(myChar[index] == '\n'){
-                    state = false; 
-                 }
-               if (index >= BUFFER_SIZE){
-                   state = false;
-               }
-               index = index + 1;                 
-             }
-             myResponse = new java.lang.String(myChar);
-             writeToLogFile(myResponse);
-             }// end of if myBufferedReader.ready()
+
+        if(myBufferedReader.ready()){
+            
+            System.out.println("READER READY");
+             
+             myResponse = myBufferedReader.readLine();
+             // System.out.println("RESPONSE: "+myResponse);
+             } else {System.out.println("READER DID NOT READ");}// end of if myBufferedReader.ready()
+
                if(isLogging()){
                      logReceiveMessage(myResponse);
                 }// if isLogging is true
@@ -870,85 +633,13 @@ public void waitTest(double newDelay){
                    logErrorMessage("An error occurred while waiting to read from the server: "+ex3);
              }// end of the catch
           }// end of checking the validity of the BufferedReader
-     }// end of checking to make sure the socket has connected to the server
+//    }// end of if(isConnected)
     REPEAT_DELAY  = old_REPEAT_DELAY;
+    
+  if(myResponse == null){ setConnected(false); }
+  else { setConnected(true); }
   return myResponse;
   }// end of the sendCommand method  
-/*=============================================================================================
-/     sendRecieveCommand(java.lang.String newCommand)
-/=============================================================================================*/
-  public java.lang.String sendReceiveCommandARCHON_binary(java.lang.String newCommand){
-    int BUFFER_SIZE = 4096;
-    java.lang.String myResponse = new java.lang.String();
-    int old_REPEAT_DELAY = REPEAT_DELAY;
-    REPEAT_DELAY = 100;
-    if(isConnected()){
-       if(myBufferedWriter != null){
-         try{
-           myBufferedWriter.write(newCommand);
-           myBufferedWriter.flush();
-          }// end of the try block
-         catch(IOException  ex1){
-              logErrorMessage("An IOException occured while writing to the socket: " + ex1);
-              setConnected(false);
-              if(serverSocket == null){
-                  logErrorMessage("The connection to the server has been lost. ");
-              }// is the socket has gone null then flag that the connection is lost
-         }// end of catching the IOException
-       }// end of checking to make sure the writer has been initialized
-      // Only try to read from the socket if a response is expected to this command
-          if(myBufferedReader != null){
-          try{
-//  DEALING WITH THE PROBLEM OF THE RESPONSE FROM THE SERVER NOT BEING READY
-           if(!myBufferedReader.ready()) {
-               int count = 0;
-               while((!myBufferedReader.ready()) && (count < REPEAT_DELAY)){
-                 Thread.currentThread().sleep(1);
-                 count = count + 1;
-               }// end of While !myBufferedReader.ready()
-               if(!myBufferedReader.ready()){
-                  logErrorMessage("Connection timed out without response. 7");
-                  System.out.println("Connection timed out without response. 7");
-                  return myResponse;
-              }// end of logging error message if the response is still not here
-           }// end of if !myBufferedReader.ready()
-// ACTUALLY READING FROM THE SOCKET
-           if(myBufferedReader.ready()){
-             char[] myChar = new char[BUFFER_SIZE];
-             int index = 0;
-             boolean state = myBufferedReader.ready();
-             while(state){
-                 myChar[index] = (char)myBufferedReader.read();
-                 if(myChar[index] == '\n'){
-                    state = false; 
-                 }
-               if (index >= BUFFER_SIZE){
-                   state = false;
-               }
-               index = index + 1;                 
-             }
-             myResponse = new java.lang.String(myChar);
-             writeToLogFile(myResponse);
-             }// end of if myBufferedReader.ready()
-               if(isLogging()){
-                     logReceiveMessage(myResponse);
-                }// if isLogging is true
-              }// end of the try block
-             catch(IOException  ex2){
-                  logErrorMessage("An IOException occured while reading from the socket: " + ex2);
-                  setConnected(false);
-                  if(serverSocket == null){
-                      logErrorMessage("The connection to the server has been lost. ");
-                  }
-             }// end of catching the IOException
-             catch(java.lang.Exception ex3){
-                   logErrorMessage("An error occurred while waiting to read from the server: "+ex3);
-             }// end of the catch
-          }// end of checking the validity of the BufferedReader
-     }// end of checking to make sure the socket has connected to the server
-    REPEAT_DELAY  = old_REPEAT_DELAY;
-  return myResponse;
-  }// end of the sendCommand method   
 /*=============================================================================================
 /                               Server InetAddress Methods
 /     public void setDefaultServerInetAddress(
@@ -1069,6 +760,7 @@ public void waitTest(double newDelay){
       if(isLogging){
          if(errorCommandLogModel != null){
               errorCommandLogModel.insertMessage(newMessage);
+              System.out.println(newMessage);
          }// checking to make sure the error actually exists
       }// check to make sure we are logging things
   }// end of the logErrorMessage
