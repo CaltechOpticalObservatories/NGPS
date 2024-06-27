@@ -699,11 +699,11 @@ public void parseAsyncMessage(java.lang.String message){
         myCommandLogModel.insertMessage(CommandLogModel.COMMAND, message);
      }
      // Refresh connection to sequencerd
-     if(message.contains("SEQUENCERD:started")){
+     if(message.startsWith("SEQUENCERD:started")){
         connect();  
      }
           
-     if(message.contains("TCSD:open")){
+     if(message.startsWith("TCSD:open")){
         String[] messages = message.split(":"); // e.g. TCSD:open:true
         if(messages[2].contains("true")){   // if Boolean.valueOf(messages[2])...
             setTCSConnectedInProgress(false);
@@ -715,7 +715,7 @@ public void parseAsyncMessage(java.lang.String message){
         }
      }
 
-     if(message.contains("TCSD:name")){
+     if(message.startsWith("TCSD:name")){
         String[] messages = message.split(":"); // e.g. TCSD:name:real or sim
         setActiveTCSname(messages[2]);
         if(messages[2].contains("sim")){
@@ -728,7 +728,7 @@ public void parseAsyncMessage(java.lang.String message){
          
      }     
 
-     if(message.contains("TARGETSTATE")){
+     if(message.startsWith("TARGETSTATE")){
         // Example TARGETSTATE:active TARGET:ZTF20ackgfep OBSID:187
         String[] messages = message.split(" ");
         java.lang.String current_state = messages[0].replace("TARGETSTATE:","");
@@ -740,10 +740,10 @@ public void parseAsyncMessage(java.lang.String message){
         //dbms.executeQueryState(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel); 
         dbms.queryState(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);
      }
-     if(message.contains("RUNSTATE")){
+     if(message.startsWith("RUNSTATE")){
         evaluateState(message);
      }
-     if(message.contains("ELAPSEDTIME")){
+     if(message.startsWith("ELAPSEDTIME")){
          // message looks like "ELAPSEDTIME_n:xxx EXPTIME:yyy" where xxx and yyy are ints
          
          String[] msgList = message.split(" ");
@@ -764,7 +764,7 @@ public void parseAsyncMessage(java.lang.String message){
          System.out.println("PROGRESS = "+current_progress);
 
      }
-     if(message.contains("PIXELCOUNT")){
+     if(message.startsWith("PIXELCOUNT")){
          // message looks like "PIXELCOUNT_n:xxx IMAGESIZE:yyy" where xxx and yyy are ints
          String[] msgList = message.split(" ");
          int pixel_count = Integer.parseInt( msgList[0].split(":")[1] );
