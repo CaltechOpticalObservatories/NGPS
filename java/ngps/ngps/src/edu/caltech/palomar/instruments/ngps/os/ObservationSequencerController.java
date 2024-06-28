@@ -695,9 +695,13 @@ public void parseAsyncMessage(java.lang.String message){
      if(message.trim().startsWith("ERROR")){
         myCommandLogModel.insertMessage(CommandLogModel.ERROR, message);
      }
-     else if(message.trim().startsWith("NOTICE")){
+     if(message.trim().startsWith("NOTICE")){
         myCommandLogModel.insertMessage(CommandLogModel.COMMAND, message);
      }
+     if(message.trim().startsWith("GUICLEAR")){
+        myCommandLogModel.clearDocument();
+     }
+
      // Refresh connection to sequencerd
      if(message.startsWith("SEQUENCERD:started")){
         connect();  

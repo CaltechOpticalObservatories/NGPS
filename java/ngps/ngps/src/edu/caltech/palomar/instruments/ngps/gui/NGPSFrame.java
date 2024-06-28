@@ -212,6 +212,9 @@ public class NGPSFrame extends javax.swing.JFrame {
         if(CONFIGURATION == PLAN){
             left_mainPanel.remove(myOScontrolsPanel);
             myConnectionsFrame.setDBMS(dbms);
+            planningPanel.remove(fetchLiveButton);
+            planningPanel.remove(auto_start_timeCheckBox);
+            planningPanel.remove(auto_fetchCheckBox);            
             setTitle("PLANNING");
             pack();
         }        
