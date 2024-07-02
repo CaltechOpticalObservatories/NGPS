@@ -16,12 +16,12 @@ Buttons:
 [grab fits] -- Copy current FITS frame to a separate DS9 window for analysis
   (also saves in /data/acam/grab/)
 
-[put on slit] -- NOT IMPLEMENTED.  Move the spectrograph slit to the coordinates of the
-  crosshairs. User can zoom in first for more precision.
+[put on slit] -- NOT IMPLEMENTED.  Move the spectrograph slit to the coordinates
+ of the crosshairs. User can zoom in first for more precision.
 
 [gui help] -- This message
 
 Troubleshooting:
 
-WHERE IS THE SETTINGS DISPLAY?  The current camera settings are displayed at the bottom
-  of the image.  If they are not visible, try zooming out.
+WHERE IS THE SETTINGS DISPLAY?  The current camera settings are displayed at 
+ the bottom of the image.  If they are not visible, try zooming out.
