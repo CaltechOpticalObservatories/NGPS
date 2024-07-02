@@ -20,3 +20,8 @@ Buttons:
   crosshairs. User can zoom in first for more precision.
 
 [gui help] -- This message
+
+Troubleshooting:
+
+WHERE IS THE SETTINGS DISPLAY?  The current camera settings are displayed at the bottom
+  of the image.  If they are not visible, try zooming out.
