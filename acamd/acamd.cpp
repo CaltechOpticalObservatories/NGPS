@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
   // Allow running in the foreground
   //
   if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
-    start_daemon = true;
+    start_daemon = false;
   }
 
   // TODO make configurable
@@ -39,9 +39,8 @@ int main(int argc, char **argv) {
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
     Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
+    logwrite( function, "daemonized. child process running" );
   }
-
-  logwrite( function, "daemonized. child process running" );
 
   // Now the child process instantiates a Server object
   //
