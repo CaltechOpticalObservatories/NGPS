@@ -60,7 +60,7 @@ public class OTMmodel extends java.lang.Object{
     setOTMAirmass_start(1.0);
     setSkymag(21.0);
     setOTMexpt(1.0);
-    setOTMslitwidth(1.2);  
+    setOTMslitwidth(1.0);  
     setOTMmoon("NONE");
     setOTMslitangle(0.0); 
     setOTMpointmode("SLIT");

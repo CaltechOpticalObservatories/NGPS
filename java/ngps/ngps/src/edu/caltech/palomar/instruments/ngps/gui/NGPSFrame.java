@@ -1383,30 +1383,22 @@ public static JTable constructTable(){
         pasteMenuItem = new javax.swing.JMenuItem();
         deleteMenuItem = new javax.swing.JMenuItem();
         insert_copiedMenuItem = new javax.swing.JMenuItem();
+        jMenuItem1 = new javax.swing.JMenuItem();
         viewMenu = new javax.swing.JMenu();
-        basicRadioButtonMenuItem = new javax.swing.JRadioButtonMenuItem();
-        detailedRadioButtonMenuItem = new javax.swing.JRadioButtonMenuItem();
-        otm_outputMenuItem = new javax.swing.JMenuItem();
         zoomInMenuItem = new javax.swing.JMenuItem();
         zoomOutMenuItem = new javax.swing.JMenuItem();
-        plotMenuItem = new javax.swing.JMenuItem();
         toolsMenu = new javax.swing.JMenu();
-        optimizeMenuItem = new javax.swing.JMenuItem();
         hourly_weatherMenuItem = new javax.swing.JMenuItem();
         ten_day_weatherMenuItem = new javax.swing.JMenuItem();
-        ephemerisMenuItem = new javax.swing.JMenuItem();
-        reportBugMenuItem = new javax.swing.JMenuItem();
         engineeringMenuItem = new javax.swing.JMenuItem();
         connectionsMenuItem = new javax.swing.JMenuItem();
+        otm_outputMenuItem = new javax.swing.JMenuItem();
         helpMenu = new javax.swing.JMenu();
         quick_startMenuItem = new javax.swing.JMenuItem();
-        etcMenuItem = new javax.swing.JMenuItem();
-        data_reductionMenuItem = new javax.swing.JMenuItem();
-        calibrationMenuItem = new javax.swing.JMenuItem();
-        line_listMenuItem = new javax.swing.JMenuItem();
-        example_spectraMenuItem = new javax.swing.JMenuItem();
         ngps_instrument_manualMenuItem = new javax.swing.JMenuItem();
+        etcMenuItem = new javax.swing.JMenuItem();
         errors_diagnosticsMenuItem = new javax.swing.JMenuItem();
+        reportBugMenuItem = new javax.swing.JMenuItem();
 
         jMenu3.setText("jMenu3");
 
@@ -1445,6 +1437,7 @@ public static JTable constructTable(){
         setResizable(false);
 
         planningPanel.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 1, true));
+        planningPanel.setPreferredSize(new java.awt.Dimension(533, 246));
 
         jLabel11.setFont(new java.awt.Font("Arial", 1, 14)); // NOI18N
         jLabel11.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -1452,6 +1445,8 @@ public static JTable constructTable(){
 
         twilightButton.setFont(new java.awt.Font("Arial", 1, 10)); // NOI18N
         twilightButton.setText("Twilight");
+        twilightButton.setMaximumSize(new java.awt.Dimension(85, 35));
+        twilightButton.setPreferredSize(new java.awt.Dimension(85, 35));
         twilightButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 twilightButtonActionPerformed(evt);
@@ -1462,6 +1457,7 @@ public static JTable constructTable(){
 
         fetchLiveButton.setFont(new java.awt.Font("Arial", 1, 10)); // NOI18N
         fetchLiveButton.setText("Fetch Live");
+        fetchLiveButton.setPreferredSize(new java.awt.Dimension(85, 35));
 
         jPanel10.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 1, true));
         jPanel10.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
@@ -1476,7 +1472,7 @@ public static JTable constructTable(){
         auto_fetchCheckBox.setText("Auto");
 
         jLabel8.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
-        jLabel8.setText("Airmass Limit");
+        jLabel8.setText("Airmass Limit:");
 
         airmass_limitTextField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -1487,12 +1483,14 @@ public static JTable constructTable(){
         jLabel12.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
         jLabel12.setText("Start Time:");
 
+        HoursSpinner.setPreferredSize(new java.awt.Dimension(28, 35));
         HoursSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
                 HoursSpinnerStateChanged(evt);
             }
         });
 
+        MinutesSpinner.setPreferredSize(new java.awt.Dimension(28, 35));
         MinutesSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
                 MinutesSpinnerStateChanged(evt);
@@ -1500,7 +1498,7 @@ public static JTable constructTable(){
         });
 
         jLabel13.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
-        jLabel13.setText("Seeing");
+        jLabel13.setText("Seeing:");
 
         seeingTextField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -1521,7 +1519,7 @@ public static JTable constructTable(){
         });
 
         jLabel7.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
-        jLabel7.setText("   Accept    Cancel");
+        jLabel7.setText("Accept   Cancel");
 
         jLabel17.setFont(new java.awt.Font("Arial", 1, 14)); // NOI18N
         jLabel17.setText("Target List:");
@@ -1533,105 +1531,95 @@ public static JTable constructTable(){
         planningPanel.setLayout(planningPanelLayout);
         planningPanelLayout.setHorizontalGroup(
             planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(planningPanelLayout.createSequentialGroup()
-                .addComponent(jLabel11, javax.swing.GroupLayout.PREFERRED_SIZE, 413, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, planningPanelLayout.createSequentialGroup()
                 .addGap(18, 18, 18)
-                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addGroup(planningPanelLayout.createSequentialGroup()
-                        .addComponent(jLabel17)
-                        .addGap(4, 4, 4)
-                        .addComponent(sekected_target_listjLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(jLabel7, javax.swing.GroupLayout.PREFERRED_SIZE, 140, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                        .addGroup(planningPanelLayout.createSequentialGroup()
+                            .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                .addComponent(jLabel12)
+                                .addComponent(jPanel10, javax.swing.GroupLayout.PREFERRED_SIZE, 98, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                            .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                .addComponent(planning_controlsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGroup(planningPanelLayout.createSequentialGroup()
+                                    .addComponent(HoursSpinner, javax.swing.GroupLayout.PREFERRED_SIZE, 70, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                    .addComponent(MinutesSpinner, javax.swing.GroupLayout.PREFERRED_SIZE, 60, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                        .addGroup(planningPanelLayout.createSequentialGroup()
+                            .addComponent(jLabel17)
+                            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(sekected_target_listjLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 166, javax.swing.GroupLayout.PREFERRED_SIZE)))
                     .addGroup(planningPanelLayout.createSequentialGroup()
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(jLabel12)
-                                    .addComponent(jPanel10, javax.swing.GroupLayout.PREFERRED_SIZE, 98, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addGroup(planningPanelLayout.createSequentialGroup()
-                                        .addComponent(HoursSpinner, javax.swing.GroupLayout.PREFERRED_SIZE, 70, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                        .addComponent(MinutesSpinner, javax.swing.GroupLayout.PREFERRED_SIZE, 60, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                    .addComponent(planning_controlsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                    .addComponent(jLabel8)
-                                    .addComponent(jLabel13))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                                    .addComponent(seeingTextField)
-                                    .addComponent(airmass_limitTextField))
-                                .addGap(0, 0, Short.MAX_VALUE)))
+                            .addComponent(jLabel13)
+                            .addComponent(jLabel8, javax.swing.GroupLayout.PREFERRED_SIZE, 107, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
+                            .addComponent(seeingTextField)
+                            .addComponent(airmass_limitTextField))))
+                .addGap(18, 18, 18)
+                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(planningPanelLayout.createSequentialGroup()
+                        .addComponent(acceptButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(cancelButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jLabel7, javax.swing.GroupLayout.PREFERRED_SIZE, 130, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addGroup(planningPanelLayout.createSequentialGroup()
+                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
+                            .addComponent(twilightButton, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(fetchLiveButton, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addComponent(twilightButton, javax.swing.GroupLayout.PREFERRED_SIZE, 80, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(6, 6, 6)
-                                .addComponent(auto_start_timeCheckBox))
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addGap(86, 86, 86)
-                                .addComponent(auto_fetchCheckBox))
-                            .addComponent(fetchLiveButton)
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addGap(12, 12, 12)
-                                .addComponent(acceptButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(12, 12, 12)
-                                .addComponent(cancelButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)))))
-                .addGap(29, 29, 29))
+                            .addComponent(auto_start_timeCheckBox)
+                            .addComponent(auto_fetchCheckBox))))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+            .addComponent(jLabel11, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         );
         planningPanelLayout.setVerticalGroup(
             planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(planningPanelLayout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap()
                 .addComponent(jLabel11)
-                .addGap(6, 6, 6)
+                .addGap(4, 4, 4)
                 .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(planningPanelLayout.createSequentialGroup()
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jPanel10, javax.swing.GroupLayout.PREFERRED_SIZE, 33, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(planning_controlsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 33, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(planning_controlsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 35, javax.swing.GroupLayout.PREFERRED_SIZE))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(MinutesSpinner, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                                 .addComponent(jLabel12)
                                 .addComponent(HoursSpinner, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(seeingTextField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jLabel13))
+                            .addComponent(jLabel13, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE))
                         .addGap(3, 3, 3)
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                             .addComponent(airmass_limitTextField, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(jLabel8, javax.swing.GroupLayout.PREFERRED_SIZE, 24, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(jLabel17, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(sekected_target_listjLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                     .addGroup(planningPanelLayout.createSequentialGroup()
+                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(auto_start_timeCheckBox)
+                            .addComponent(twilightButton, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(fetchLiveButton, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(auto_fetchCheckBox))
+                        .addGap(18, 18, Short.MAX_VALUE)
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(twilightButton)
-                            .addComponent(auto_start_timeCheckBox))
-                        .addGap(6, 6, 6)
-                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(auto_fetchCheckBox)
-                            .addComponent(fetchLiveButton))
-                        .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(acceptButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(6, 6, 6))
-                            .addGroup(planningPanelLayout.createSequentialGroup()
-                                .addGap(18, 18, 18)
-                                .addComponent(cancelButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))))
-                .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(jLabel7)
-                    .addComponent(jLabel17, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(sekected_target_listjLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addGap(30, 30, 30))
+                            .addComponent(acceptButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(cancelButton, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(jLabel7)))
+                .addContainerGap(20, Short.MAX_VALUE))
         );
 
         detailsPanel.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
@@ -1902,9 +1890,9 @@ public static JTable constructTable(){
             .addGroup(left_mainPanelLayout.createSequentialGroup()
                 .addGap(5, 5, 5)
                 .addComponent(myOScontrolsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGap(18, 18, Short.MAX_VALUE)
                 .addComponent(main_tableScrollPane, javax.swing.GroupLayout.PREFERRED_SIZE, 638, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(137, 137, 137))
+                .addContainerGap())
         );
 
         NGPSMenu.setText("NGPS");
@@ -2027,6 +2015,11 @@ public static JTable constructTable(){
 
         cutMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_X, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         cutMenuItem.setText("Cut");
+        cutMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                cutMenuItemActionPerformed(evt);
+            }
+        });
         editMenu.add(cutMenuItem);
 
         copyMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK));
@@ -2054,30 +2047,18 @@ public static JTable constructTable(){
         });
         editMenu.add(insert_copiedMenuItem);
 
+        jMenuItem1.setForeground(java.awt.Color.lightGray);
+        jMenuItem1.setText("Sort targets by RA");
+        jMenuItem1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem1ActionPerformed(evt);
+            }
+        });
+        editMenu.add(jMenuItem1);
+
         mainMenuBar.add(editMenu);
 
         viewMenu.setText("View");
-
-        basicRadioButtonMenuItem.setSelected(true);
-        basicRadioButtonMenuItem.setText("Basic");
-        viewMenu.add(basicRadioButtonMenuItem);
-
-        detailedRadioButtonMenuItem.setSelected(true);
-        detailedRadioButtonMenuItem.setText("Detailed");
-        detailedRadioButtonMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                detailedRadioButtonMenuItemActionPerformed(evt);
-            }
-        });
-        viewMenu.add(detailedRadioButtonMenuItem);
-
-        otm_outputMenuItem.setText("OTM Output");
-        otm_outputMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                otm_outputMenuItemActionPerformed(evt);
-            }
-        });
-        viewMenu.add(otm_outputMenuItem);
 
         zoomInMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_EQUALS, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         zoomInMenuItem.setText("Zoom In");
@@ -2097,17 +2078,9 @@ public static JTable constructTable(){
         });
         viewMenu.add(zoomOutMenuItem);
 
-        plotMenuItem.setText("Plot");
-        plotMenuItem.setEnabled(false);
-        viewMenu.add(plotMenuItem);
-
         mainMenuBar.add(viewMenu);
 
         toolsMenu.setText("Tools");
-
-        optimizeMenuItem.setText("Optimize observation order");
-        optimizeMenuItem.setEnabled(false);
-        toolsMenu.add(optimizeMenuItem);
 
         hourly_weatherMenuItem.setText("Hourly weather forcast");
         hourly_weatherMenuItem.addActionListener(new java.awt.event.ActionListener() {
@@ -2125,17 +2098,6 @@ public static JTable constructTable(){
         });
         toolsMenu.add(ten_day_weatherMenuItem);
 
-        ephemerisMenuItem.setText("Ephemeris");
-        toolsMenu.add(ephemerisMenuItem);
-
-        reportBugMenuItem.setText("Report bug");
-        reportBugMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                reportBugMenuItemActionPerformed(evt);
-            }
-        });
-        toolsMenu.add(reportBugMenuItem);
-
         engineeringMenuItem.setText("Engineering");
         engineeringMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -2152,6 +2114,14 @@ public static JTable constructTable(){
         });
         toolsMenu.add(connectionsMenuItem);
 
+        otm_outputMenuItem.setText("OTM Output");
+        otm_outputMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                otm_outputMenuItemActionPerformed(evt);
+            }
+        });
+        toolsMenu.add(otm_outputMenuItem);
+
         mainMenuBar.add(toolsMenu);
 
         helpMenu.setText("Help");
@@ -2164,46 +2134,6 @@ public static JTable constructTable(){
         });
         helpMenu.add(quick_startMenuItem);
 
-        etcMenuItem.setText("OTM and ETC");
-        etcMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                etcMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(etcMenuItem);
-
-        data_reductionMenuItem.setText("Data reduction");
-        data_reductionMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                data_reductionMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(data_reductionMenuItem);
-
-        calibrationMenuItem.setText("Calibration");
-        calibrationMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                calibrationMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(calibrationMenuItem);
-
-        line_listMenuItem.setText("Line list");
-        line_listMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                line_listMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(line_listMenuItem);
-
-        example_spectraMenuItem.setText("Example spectra");
-        example_spectraMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                example_spectraMenuItemActionPerformed(evt);
-            }
-        });
-        helpMenu.add(example_spectraMenuItem);
-
         ngps_instrument_manualMenuItem.setText("NGPS instrument manual");
         ngps_instrument_manualMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -2212,6 +2142,14 @@ public static JTable constructTable(){
         });
         helpMenu.add(ngps_instrument_manualMenuItem);
 
+        etcMenuItem.setText("OTM and ETC");
+        etcMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                etcMenuItemActionPerformed(evt);
+            }
+        });
+        helpMenu.add(etcMenuItem);
+
         errors_diagnosticsMenuItem.setText("OTMflag codes");
         errors_diagnosticsMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -2219,6 +2157,14 @@ public static JTable constructTable(){
             }
         });
         helpMenu.add(errors_diagnosticsMenuItem);
+
+        reportBugMenuItem.setText("Report bug");
+        reportBugMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                reportBugMenuItemActionPerformed(evt);
+            }
+        });
+        helpMenu.add(reportBugMenuItem);
 
         mainMenuBar.add(helpMenu);
 
@@ -2232,9 +2178,9 @@ public static JTable constructTable(){
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addComponent(left_mainPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(planningPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(detailsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(detailsPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(planningPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 464, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -2242,10 +2188,10 @@ public static JTable constructTable(){
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(left_mainPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                    .addComponent(left_mainPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(planningPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(planningPanel, javax.swing.GroupLayout.PREFERRED_SIZE, 225, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(detailsPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
@@ -2269,17 +2215,9 @@ public static JTable constructTable(){
         // TODO add your handling code here:
     }//GEN-LAST:event_copyMenuItemActionPerformed
 
-    private void detailedRadioButtonMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_detailedRadioButtonMenuItemActionPerformed
-        // TODO add your handling code here:
-    }//GEN-LAST:event_detailedRadioButtonMenuItemActionPerformed
-
     private void zoomOutMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_zoomOutMenuItemActionPerformed
         decreaseFontSize();
     }//GEN-LAST:event_zoomOutMenuItemActionPerformed
-
-    private void line_listMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_line_listMenuItemActionPerformed
-        myBrowserDisplay.executeFirefox(myBrowserDisplay.URLMAP.getProperty("LINELIST"));
-    }//GEN-LAST:event_line_listMenuItemActionPerformed
 
     private void saveMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveMenuItemActionPerformed
        if(dbms.selectedObservationSet == null){
@@ -2302,38 +2240,6 @@ public static JTable constructTable(){
 //         mainTabbedPane.addTab("Selected target set", myretrieveDatabasePanel);
     }//GEN-LAST:event_openMenuItemActionPerformed
 
-    private void acceptButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_acceptButtonActionPerformed
-       try{
-           if(dbms.selectedObservationSet == null){
-               java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
-               java.lang.String airmass_limit_string = airmass_limitTextField.getText();
-               double airmass_limit = Double.parseDouble(airmass_limit_string);
-               dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
-                dbms.SaveAs(current_set_name);
-           }else{
-               java.lang.String airmass_limit_string = airmass_limitTextField.getText();
-               double airmass_limit = Double.parseDouble(airmass_limit_string);
-               dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
-               dbms.executeUpdateTargetTable(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);
-           }
-       }catch(Exception e){
-           System.out.println("Error Updating the DBMS table"+e.toString());
-       }
-    }//GEN-LAST:event_acceptButtonActionPerformed
-
-    private void cancelButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cancelButtonActionPerformed
-        try{
-          if(dbms.selectedObservationSet == null){
-             dbms.createNewTargetList(); 
-          }
-          if(dbms.selectedObservationSet != null){
-             dbms.queryObservations(dbms.selectedObservationSet.getSET_ID()); 
-          }          
-        }catch(Exception e){
-           System.out.println(e.toString());
-        }
-    }//GEN-LAST:event_cancelButtonActionPerformed
-
     private void new_target_listMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_new_target_listMenuItemActionPerformed
          try{
           dbms.createNewTargetList();
@@ -2341,12 +2247,6 @@ public static JTable constructTable(){
            System.out.println(e.toString());
         }       // TODO add your handling code here:
     }//GEN-LAST:event_new_target_listMenuItemActionPerformed
-
-    private void twilightButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_twilightButtonActionPerformed
-        myNightlyWindow.UpdateDisplay();
-        myNightlyWindow.setVisible(true);
-     
-    }//GEN-LAST:event_twilightButtonActionPerformed
 
     private void save_asMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_save_asMenuItemActionPerformed
         try{
@@ -2403,30 +2303,6 @@ public static JTable constructTable(){
         myOTMoutputFrame.setVisible(true);
     }//GEN-LAST:event_otm_outputMenuItemActionPerformed
 
-    private void HoursSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_HoursSpinnerStateChanged
-        // TODO add your handling code here:
-        hours = ((Integer)HoursSpinner.getValue()).intValue();
-        updateStarTime();
-//        updateSelectedTimeDate();
-    }//GEN-LAST:event_HoursSpinnerStateChanged
-
-    private void MinutesSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_MinutesSpinnerStateChanged
-        minutes = ((Integer)MinutesSpinner.getValue()).intValue();
-        updateStarTime();
-//        updateSelectedTimeDate();
-        // TODO add your handling code here:
-    }//GEN-LAST:event_MinutesSpinnerStateChanged
-
-    private void seeingTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_seeingTextFieldActionPerformed
-        try{
-           java.lang.String my_seeing = seeingTextField.getText();
-           java.lang.Double current = Double.valueOf(my_seeing);
-           dbms.myOTMlauncher.setSeeing(current.intValue());
-       }catch(Exception e){
-          System.out.println(e.toString());
-       }
-    }//GEN-LAST:event_seeingTextFieldActionPerformed
-
     private void engineeringMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_engineeringMenuItemActionPerformed
        // boolean e_state = engineeringMenuItem.
         myEngineeringFrame.setVisible(true);
@@ -2456,17 +2332,6 @@ public static JTable constructTable(){
         myBrowserDisplay.openURLkey("BUG_REPORT");
     }//GEN-LAST:event_reportBugMenuItemActionPerformed
 
-    private void airmass_limitTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_airmass_limitTextFieldActionPerformed
-       try{
-          java.lang.String airmass_limit_string = airmass_limitTextField.getText();
-          double airmass_limit = Double.parseDouble(airmass_limit_string);
-          this.dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
-       }catch(Exception e){
-          System.out.println(e.toString());
-          airmass_limitTextField.setText("");        ;
-       }
-    }//GEN-LAST:event_airmass_limitTextFieldActionPerformed
-
     private void quick_startMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_quick_startMenuItemActionPerformed
        myBrowserDisplay.openURLkey("GUI_MANUAL");
     }//GEN-LAST:event_quick_startMenuItemActionPerformed
@@ -2474,18 +2339,6 @@ public static JTable constructTable(){
     private void etcMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_etcMenuItemActionPerformed
         myBrowserDisplay.openURLkey("OTM_ETC_MANUAL");
     }//GEN-LAST:event_etcMenuItemActionPerformed
-
-    private void data_reductionMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_data_reductionMenuItemActionPerformed
-        myBrowserDisplay.openURLkey("DATA_REDUCTION");
-    }//GEN-LAST:event_data_reductionMenuItemActionPerformed
-
-    private void calibrationMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_calibrationMenuItemActionPerformed
-         myBrowserDisplay.openURLkey("CALIBRATION");
-    }//GEN-LAST:event_calibrationMenuItemActionPerformed
-
-    private void example_spectraMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_example_spectraMenuItemActionPerformed
-        myBrowserDisplay.openURLkey("EXAMPLE_SPECTRA");
-    }//GEN-LAST:event_example_spectraMenuItemActionPerformed
 
     private void ngps_instrument_manualMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ngps_instrument_manualMenuItemActionPerformed
          myBrowserDisplay.openURLkey("NGPS_INSTRUMENT_MANUAL");
@@ -2502,6 +2355,86 @@ public static JTable constructTable(){
     private void mainTableKeyPressed(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_mainTableKeyPressed
 
     }//GEN-LAST:event_mainTableKeyPressed
+
+    private void jMenuItem1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem1ActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jMenuItem1ActionPerformed
+
+    private void cutMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cutMenuItemActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_cutMenuItemActionPerformed
+
+    private void cancelButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cancelButtonActionPerformed
+        try{
+            if(dbms.selectedObservationSet == null){
+                dbms.createNewTargetList();
+            }
+            if(dbms.selectedObservationSet != null){
+                dbms.queryObservations(dbms.selectedObservationSet.getSET_ID());
+            }
+        }catch(Exception e){
+            System.out.println(e.toString());
+        }
+    }//GEN-LAST:event_cancelButtonActionPerformed
+
+    private void acceptButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_acceptButtonActionPerformed
+        try{
+            if(dbms.selectedObservationSet == null){
+                java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
+                java.lang.String airmass_limit_string = airmass_limitTextField.getText();
+                double airmass_limit = Double.parseDouble(airmass_limit_string);
+                dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
+                dbms.SaveAs(current_set_name);
+            }else{
+                java.lang.String airmass_limit_string = airmass_limitTextField.getText();
+                double airmass_limit = Double.parseDouble(airmass_limit_string);
+                dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
+                dbms.executeUpdateTargetTable(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);
+            }
+        }catch(Exception e){
+            System.out.println("Error Updating the DBMS table"+e.toString());
+        }
+    }//GEN-LAST:event_acceptButtonActionPerformed
+
+    private void seeingTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_seeingTextFieldActionPerformed
+        try{
+            java.lang.String my_seeing = seeingTextField.getText();
+            java.lang.Double current = Double.valueOf(my_seeing);
+            dbms.myOTMlauncher.setSeeing(current.intValue());
+        }catch(Exception e){
+            System.out.println(e.toString());
+        }
+    }//GEN-LAST:event_seeingTextFieldActionPerformed
+
+    private void MinutesSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_MinutesSpinnerStateChanged
+        minutes = ((Integer)MinutesSpinner.getValue()).intValue();
+        updateStarTime();
+        //        updateSelectedTimeDate();
+        // TODO add your handling code here:
+    }//GEN-LAST:event_MinutesSpinnerStateChanged
+
+    private void HoursSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_HoursSpinnerStateChanged
+        // TODO add your handling code here:
+        hours = ((Integer)HoursSpinner.getValue()).intValue();
+        updateStarTime();
+        //        updateSelectedTimeDate();
+    }//GEN-LAST:event_HoursSpinnerStateChanged
+
+    private void airmass_limitTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_airmass_limitTextFieldActionPerformed
+        try{
+            java.lang.String airmass_limit_string = airmass_limitTextField.getText();
+            double airmass_limit = Double.parseDouble(airmass_limit_string);
+            this.dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
+        }catch(Exception e){
+            System.out.println(e.toString());
+            airmass_limitTextField.setText("");        ;
+        }
+    }//GEN-LAST:event_airmass_limitTextFieldActionPerformed
+
+    private void twilightButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_twilightButtonActionPerformed
+        myNightlyWindow.UpdateDisplay();
+        myNightlyWindow.setVisible(true);
+    }//GEN-LAST:event_twilightButtonActionPerformed
 
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
@@ -2584,25 +2517,19 @@ public static JTable constructTable(){
     private javax.swing.JTextField airmass_limitTextField;
     private javax.swing.JCheckBox auto_fetchCheckBox;
     private javax.swing.JCheckBox auto_start_timeCheckBox;
-    private javax.swing.JRadioButtonMenuItem basicRadioButtonMenuItem;
-    private javax.swing.JMenuItem calibrationMenuItem;
     private javax.swing.JButton cancelButton;
     private javax.swing.JMenuItem connectionsMenuItem;
     private javax.swing.JMenuItem copyMenuItem;
     private javax.swing.JMenuItem cutMenuItem;
-    private javax.swing.JMenuItem data_reductionMenuItem;
     private javax.swing.JLabel dbms_stateLabel;
     private javax.swing.JMenuItem deleteMenuItem;
-    private javax.swing.JRadioButtonMenuItem detailedRadioButtonMenuItem;
     private javax.swing.JTabbedPane detailedTabbedPane;
     private javax.swing.JPanel detailsPanel;
     private javax.swing.JMenu editMenu;
     private javax.swing.JMenuItem engineeringMenuItem;
-    private javax.swing.JMenuItem ephemerisMenuItem;
     private javax.swing.JMenuItem errors_diagnosticsMenuItem;
     private javax.swing.JMenuItem etcMenuItem;
     private javax.swing.JTable etcTable;
-    private javax.swing.JMenuItem example_spectraMenuItem;
     private javax.swing.JMenuItem exportMenuItem;
     private javax.swing.JButton fetchLiveButton;
     private javax.swing.JMenu helpMenu;
@@ -2626,6 +2553,7 @@ public static JTable constructTable(){
     private javax.swing.JLabel jLabel9;
     private javax.swing.JMenu jMenu1;
     private javax.swing.JMenu jMenu3;
+    private javax.swing.JMenuItem jMenuItem1;
     private javax.swing.JPanel jPanel10;
     private javax.swing.JPanel jPanel6;
     private javax.swing.JPanel jPanel7;
@@ -2638,7 +2566,6 @@ public static JTable constructTable(){
     private javax.swing.JPopupMenu.Separator jSeparator2;
     private javax.swing.JPopupMenu.Separator jSeparator3;
     private javax.swing.JPanel left_mainPanel;
-    private javax.swing.JMenuItem line_listMenuItem;
     private javax.swing.JMenuBar mainMenuBar;
     private javax.swing.JTable mainTable;
     private javax.swing.JScrollPane main_tableScrollPane;
@@ -2649,14 +2576,12 @@ public static JTable constructTable(){
     private javax.swing.JMenuItem ngps_instrument_manualMenuItem;
     private javax.swing.JTable observationTable;
     private javax.swing.JMenuItem openMenuItem;
-    private javax.swing.JMenuItem optimizeMenuItem;
     private javax.swing.JMenuItem otm_outputMenuItem;
     private javax.swing.JLabel otm_state_Label;
     private javax.swing.JMenuItem pasteMenuItem;
     private javax.swing.JTable planTable;
     private javax.swing.JPanel planningPanel;
     private javax.swing.JPanel planning_controlsPanel;
-    private javax.swing.JMenuItem plotMenuItem;
     private javax.swing.JMenuItem preferencesMenuItem;
     private javax.swing.JMenuItem quick_startMenuItem;
     private javax.swing.JMenuItem quitMenuItem;
