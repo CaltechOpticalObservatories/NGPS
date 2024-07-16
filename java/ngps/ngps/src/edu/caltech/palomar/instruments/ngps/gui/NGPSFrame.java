@@ -134,7 +134,7 @@ public class NGPSFrame extends javax.swing.JFrame {
   public int                       DEFAULT_WAVELENGTH;
   public double                    DEFAULT_AIRMASS_LIMIT;
   private int                      DEFAULT_FONT = 12;
-  private java.lang.String         CURRENT_FONT_NAME = "Ariel";
+  private String                   DEFAULT_FONT_NAME = "Ariel";
   private ImageIcon                ON;
   private ImageIcon                OFF;
   private ImageIcon                UNKNOWN;
@@ -190,7 +190,7 @@ public class NGPSFrame extends javax.swing.JFrame {
         initializeJSkyCalcModel();
         readProperties();
         initializeIcons();
-        main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,DEFAULT_FONT));
+        main_editor_table.setFont(new Font(DEFAULT_FONT_NAME, Font.BOLD,DEFAULT_FONT));
         otm_state_Label.setIcon(UNKNOWN);
         dbms_stateLabel.setIcon(UNKNOWN);
         acceptButton.setIcon(ACCEPT_OFF);
@@ -273,21 +273,20 @@ public class NGPSFrame extends javax.swing.JFrame {
 /*=============================================================================================
 /     increase and decrease font size for main table
 /=============================================================================================*/ 
-public void increaseFontSize(){
+public void changeFontSize(int df){
     int fontSize = main_editor_table.getFont().getSize();
-    Font newFont = new Font(CURRENT_FONT_NAME, Font.BOLD, fontSize+2);
+    Font newFont = main_editor_table.getFont().deriveFont((float) fontSize+df);
     main_editor_table.setFont(newFont); 
     main_editor_table.getTableHeader().setFont(newFont);
     
-    main_editor_table.setRowHeight(main_editor_table.getRowHeight()+2);
+    main_editor_table.setRowHeight(main_editor_table.getRowHeight()+df);
+}  
+  
+public void increaseFontSize(){
+    changeFontSize(2);
 }
 public void decreaseFontSize(){
-    int fontSize = main_editor_table.getFont().getSize();
-    Font newFont = new Font(CURRENT_FONT_NAME, Font.BOLD, fontSize-2);
-    main_editor_table.setFont(newFont); 
-    main_editor_table.getTableHeader().setFont(newFont);
-    
-    main_editor_table.setRowHeight(main_editor_table.getRowHeight()-2);
+    changeFontSize(-2);
 }
 /*=============================================================================================ls
 /     initializePanels()
