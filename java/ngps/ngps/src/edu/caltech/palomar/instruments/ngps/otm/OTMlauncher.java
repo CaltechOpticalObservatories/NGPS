@@ -682,7 +682,7 @@ java.sql.Timestamp timestamp =new java.sql.Timestamp(System.currentTimeMillis())
     java.util.Date parsedDate = dateFormat.parse(current_datetime);
     timestamp = new java.sql.Timestamp(parsedDate.getTime());
 } catch(Exception e) { //this generic but you can control another types of exception
-    // look the origin of excption 
+    System.out.println("timestamp Error:  "+e.toString());
 }
 return timestamp;
 }
@@ -753,12 +753,18 @@ return timestampAsString;
             }            
         }
         if(field.matches("OTMslewgo")){
-            try{  
-                java.sql.Timestamp current_timestamp = string_to_timestamp(current_value);
-                current_target.otm.setOTMslewgo(current_timestamp);
-            }catch(Exception e){
-                System.out.println("Error parsing the OTMslewgo value from the OTM output"+e.toString());
-            }            
+            java.sql.Timestamp current_timestamp = string_to_timestamp("1999-01-01T00:00:00.0");
+            
+            if (!current_value.toUpperCase().contains("NONE")){
+                try{
+                    current_timestamp = string_to_timestamp(current_value);
+                }catch(Exception e){
+                    System.out.println("Invalid OTMslewgo value:" +current_value);
+                }               
+            } else{
+                System.out.println("OTMslewgo was NONE");
+            }
+            current_target.otm.setOTMslewgo(current_timestamp);
         }  
         if(field.matches("OTMlast")){
             try{

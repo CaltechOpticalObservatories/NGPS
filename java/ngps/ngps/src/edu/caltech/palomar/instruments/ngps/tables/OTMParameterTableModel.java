@@ -221,7 +221,12 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = current.otm.getSkymag();
         } 
         if(row == 6){
-           returnObject = timestamp_to_string(current.otm.getOTMslewgo());
+           java.sql.Timestamp OTMslewgoTimestamp = current.otm.getOTMslewgo();
+           if(OTMslewgoTimestamp.getTime() < 1E12){ // roughly the year 2002 -- the default value is 1999-01-01
+               returnObject = "None";
+           } else{
+           returnObject = timestamp_to_string(current.otm.getOTMslewgo());               
+           }
         }        
         if(row == 7){
            returnObject = timestamp_to_string(current.otm.getOTMstart());
