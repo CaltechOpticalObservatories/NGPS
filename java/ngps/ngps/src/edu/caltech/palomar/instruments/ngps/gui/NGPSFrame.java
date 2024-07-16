@@ -134,7 +134,6 @@ public class NGPSFrame extends javax.swing.JFrame {
   public int                       DEFAULT_WAVELENGTH;
   public double                    DEFAULT_AIRMASS_LIMIT;
   private int                      DEFAULT_FONT = 12;
-  private int                      CURRENT_FONT;
   private java.lang.String         CURRENT_FONT_NAME = "Ariel";
   private ImageIcon                ON;
   private ImageIcon                OFF;
@@ -191,8 +190,7 @@ public class NGPSFrame extends javax.swing.JFrame {
         initializeJSkyCalcModel();
         readProperties();
         initializeIcons();
-        setFontSize(DEFAULT_FONT);
-        main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,CURRENT_FONT));
+        main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,DEFAULT_FONT));
         otm_state_Label.setIcon(UNKNOWN);
         dbms_stateLabel.setIcon(UNKNOWN);
         acceptButton.setIcon(ACCEPT_OFF);
@@ -273,25 +271,22 @@ public class NGPSFrame extends javax.swing.JFrame {
       myConnectionsFrame.setVisible(false);
   }
 /*=============================================================================================
-/     setFontSize(int new_font_size)
-/=============================================================================================*/ 
-public void setFontSize(int new_font_size){
-   CURRENT_FONT =  new_font_size;
-} 
-public int getFontSize(){
-    return CURRENT_FONT;
-}
-/*=============================================================================================
 /     increase and decrease font size for main table
 /=============================================================================================*/ 
 public void increaseFontSize(){
-    CURRENT_FONT = CURRENT_FONT+2;
-    main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,CURRENT_FONT)); 
+    int fontSize = main_editor_table.getFont().getSize();
+    Font newFont = new Font(CURRENT_FONT_NAME, Font.BOLD, fontSize+2);
+    main_editor_table.setFont(newFont); 
+    main_editor_table.getTableHeader().setFont(newFont);
+    
     main_editor_table.setRowHeight(main_editor_table.getRowHeight()+2);
 }
 public void decreaseFontSize(){
-    CURRENT_FONT = CURRENT_FONT-2;
-    main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,CURRENT_FONT));
+    int fontSize = main_editor_table.getFont().getSize();
+    Font newFont = new Font(CURRENT_FONT_NAME, Font.BOLD, fontSize-2);
+    main_editor_table.setFont(newFont); 
+    main_editor_table.getTableHeader().setFont(newFont);
+    
     main_editor_table.setRowHeight(main_editor_table.getRowHeight()-2);
 }
 /*=============================================================================================ls
