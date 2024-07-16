@@ -285,12 +285,14 @@ public int getFontSize(){
 /     increase and decrease font size for main table
 /=============================================================================================*/ 
 public void increaseFontSize(){
-    CURRENT_FONT = CURRENT_FONT+1;
+    CURRENT_FONT = CURRENT_FONT+2;
     main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,CURRENT_FONT)); 
+    main_editor_table.setRowHeight(main_editor_table.getRowHeight()+2);
 }
 public void decreaseFontSize(){
-    CURRENT_FONT = CURRENT_FONT-1;
-    main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,CURRENT_FONT));    
+    CURRENT_FONT = CURRENT_FONT-2;
+    main_editor_table.setFont(new Font(CURRENT_FONT_NAME, Font.BOLD,CURRENT_FONT));
+    main_editor_table.setRowHeight(main_editor_table.getRowHeight()-2);
 }
 /*=============================================================================================ls
 /     initializePanels()

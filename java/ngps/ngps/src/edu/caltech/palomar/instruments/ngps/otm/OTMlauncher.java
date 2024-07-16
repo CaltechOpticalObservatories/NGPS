@@ -761,8 +761,6 @@ return timestampAsString;
                 }catch(Exception e){
                     System.out.println("Invalid OTMslewgo value:" +current_value);
                 }               
-            } else{
-                System.out.println("OTMslewgo was NONE");
             }
             current_target.otm.setOTMslewgo(current_timestamp);
         }  
