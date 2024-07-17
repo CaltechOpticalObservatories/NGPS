@@ -1,0 +1,24 @@
+MOVING mysql db directory (use mv not cp to preserve SELinux attributes)
+
+www.thegeekstuff.com/2016/05/move-mysql-directory/
+www.dailyrazor.com/blog/cant-connect-to-local-mysql-server-through-socket/
+
+AS ROOT:
+
+systemctl stop mysqld
+
+mkdir -p /data/backup
+cp -r /var/lib/mysql /data/backup/mysql
+
+mkdir -p /data/var/lib
+cd /var/lib
+mv mysql /data/var/lib/
+
+vi /etc/my.cnf.d/mysql-server.cnf
+# CHANGE -->  datadir=/data/var/lib/mysql
+# CHANGE -->  socket=/data/var/lib/mysql/mysql.sock
+
+vi /etc/my.cnf.d/client.cnf
+# ADD -->  socket=/data/var/lib/mysql/mysql.sock
+
+systemctl start mysqld
