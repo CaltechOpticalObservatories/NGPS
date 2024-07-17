@@ -114,8 +114,10 @@ namespace TCS {
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
-      long send_command( std::string cmd, std::string &reply );
-      void parse_reply_code( std::string codein, std::string &reply );
+      long pt_offset( std::string args, std::string &retstring );
+      long send_command( std::string cmd, std::string &retstring );
+      long parse_reply_code( std::string codein, std::string &retstring );
+      long parse_motion_code( std::string codein, std::string &retstring );
 
       Common::Queue async;                                 ///< asynchronous message queue object
   };

@@ -248,7 +248,7 @@ namespace TCS {
     asyncmsg.str(""); asyncmsg << "TCSD:open:" << retstring;
     this->async.enqueue( asyncmsg.str() );              // broadcast the state
 
-    asyncmsg.str(""); asyncmsg << "TCSD:name:" << ( ! name.empty() ? name : "not_connected" );
+    asyncmsg.str(""); asyncmsg << "TCSD:name:" << ( ! name.empty() ? name : "offline" );
     this->async.enqueue( asyncmsg.str() );              // broadcast the name
 
     return NO_ERROR;
@@ -288,7 +288,7 @@ namespace TCS {
   /**
    * @brief      get the name of the currently connected TCS
    * @param[in]  arg        used only to request help
-   * @param[out] retstring  contains name of tcs { tcs | sim } or not_connected
+   * @param[out] retstring  contains name of tcs { tcs | sim } or offline
    * @return     NO_ERROR | HELP
    *
    */
@@ -301,7 +301,7 @@ namespace TCS {
     if ( arg == "?" || arg == "help" ) {
       retstring = TCSD_GET_NAME;
       retstring.append( " \n" );
-      retstring.append( "  Returns the name of the connected TCS: sim | tcs | not_connected\n" );
+      retstring.append( "  Returns the name of the connected TCS: sim | tcs | offline\n" );
       return HELP;
     }
 
@@ -314,7 +314,7 @@ namespace TCS {
         break;                   // so get out now!
       }
     }
-    if ( retstring.empty() ) retstring="not_connected";
+    if ( retstring.empty() ) retstring="offline";
 
     asyncmsg << "TCSD:name:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
@@ -711,12 +711,9 @@ namespace TCS {
     }
 
     std::stringstream cmd;
-    std::string retcode;
     cmd << "FOCUSGO " << std::fixed << std::setprecision(2) << value;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retcode );
-
-    this->parse_reply_code( retcode, retstring );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring );
 
     return error;
   }
@@ -855,7 +852,6 @@ namespace TCS {
   long Interface::get_motion( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_motion";
     std::stringstream message, asyncmsg;
-    int motion_code = TCS_UNDEFINED;
     long error = NO_ERROR;
 
     // Help
@@ -867,48 +863,11 @@ namespace TCS {
       return HELP;
     }
 
-    std::string motion;
-    if ( this->send_command( "?MOTION", motion ) != NO_ERROR ) {
+    // Send the command
+    //
+    if ( this->send_command( "?MOTION", retstring ) != NO_ERROR ) {
       logwrite( function, "ERROR getting motion state from TCS" );
       error = ERROR;
-    }
-
-    // Response will be a number that is converted to int here
-    //
-    try {
-      if ( error == NO_ERROR ) motion_code = std::stoi( motion );
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR out of range parsing TCS reply \"" << motion << "\": " << e.what();
-      logwrite( function, message.str() );
-      motion_code = TCS_UNDEFINED;
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR converting TCS reply \"" << motion << "\" to integer: " << e.what();
-      logwrite( function, message.str() );
-      motion_code = TCS_UNDEFINED;
-    }
-
-    // set the return string based on the TCS motion code
-    //
-    switch( motion_code ) {
-      case TCS_MOTION_STOPPED:    retstring = TCS_MOTION_STOPPED_STR;
-                                  break;
-      case TCS_MOTION_SLEWING:    retstring = TCS_MOTION_SLEWING_STR;
-                                  break;
-      case TCS_MOTION_OFFSETTING: retstring = TCS_MOTION_OFFSETTING_STR;
-                                  break;
-      case TCS_MOTION_TRACKING:   retstring = TCS_MOTION_TRACKING_STR;
-                                  break;
-      case TCS_MOTION_SETTLING:   retstring = TCS_MOTION_SETTLING_STR;
-                                  break;
-      case TCS_MOTION_UNKNOWN:    retstring = TCS_MOTION_UNKNOWN_STR;
-                                  break;
-      default:                    retstring = TCS_MOTION_UNKNOWN_STR;
-                                  message.str(""); message << "ERROR unrecognized motion code " << motion_code;
-                                  logwrite( function, message.str() );
-                                  error = ERROR;
-                                  break;
     }
 
     asyncmsg << "TCSD:motion:" << ( !retstring.empty() ? retstring : "ERROR" );
@@ -930,7 +889,6 @@ namespace TCS {
    */
   long Interface::ringgo( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::ringgo";
-    std::string retcode;
     std::stringstream message, asyncmsg;
     long error = ERROR;
 
@@ -995,9 +953,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retcode );
-
-    this->parse_reply_code( retcode, retstring );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring );
 
     return error;
   }
@@ -1045,7 +1001,7 @@ namespace TCS {
 
     long error = this->send_command( cmd.str(), retcode );
 
-    if ( error == NO_ERROR ) this->parse_reply_code( retcode, retstring );
+    if ( error == NO_ERROR ) error |= this->parse_reply_code( retcode, retstring );
 
     asyncmsg << "TCSD:coords:" << ( error == ERROR ? "ERROR" : retstring );
     this->async.enqueue( asyncmsg.str() );
@@ -1055,15 +1011,82 @@ namespace TCS {
   /***** TCS::Interface::coords ***********************************************/
 
 
+  /***** TCS::Interface::pt_offset ********************************************/
+  /**
+   * @brief      wrapper for the native PT command
+   * @details    wraps the PT command to provide a friendly reply
+   * @param[in]  args       contains <ra> <dec> in degrees
+   * @param[out] retstring  reference to return string for the command sent to the TCS
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::pt_offset( std::string args, std::string &retstring ) {
+    std::string function = "TCS::Interface::pt_offset";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = TCSD_PTOFFSET;
+      retstring.append( " <ra> <dec> \n" );
+      retstring.append( "  Send guider offsets to the TCS.\n" );
+      retstring.append( "  There is currently no reliable way of accurately knowning when we have\n" );
+      retstring.append( "  arrived so this command will wait the amount of time that it should take,\n" );
+      retstring.append( "  based on the TCS offset rates (MRATEs) plus 25% margin.\n\n" );
+      retstring.append( "  <ra> and <dec> must be supplied in decimal degrees\n" );
+      return HELP;
+    }
+
+    // check minimum/maximum number of arguments
+    //
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 2 ) {
+      logwrite( function, "ERROR invalid number of arguments: expected <ra> <dec>" );
+      retstring="invalid_arguments";
+      return ERROR;
+    }
+
+    // Try to convert them to double to ensure that they are good numbers
+    // before sending them to the TCS.
+    //
+    try {
+      std::stod( tokens[0] );
+      std::stod( tokens[1] );
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing \"" << args << "\":" << e.what();
+      logwrite( function, message.str() );
+      retstring="invalid_arguments";
+      return ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR parsing \"" << args << "\":" << e.what();
+      logwrite( function, message.str() );
+      retstring="invalid_arguments";
+      return ERROR;
+    }
+
+    std::stringstream cmd;
+    cmd << "PT " << args;
+
+    long error = this->send_command( cmd.str(), retstring );
+
+    return error;
+  }
+  /***** TCS::Interface::pt_offset ********************************************/
+
+
   /***** TCS::Interface::send_command *****************************************/
   /**
    * @brief      writes the raw command, as received, to the TCS
-   * @param[in]  cmd    string to send to TCS
-   * @param[out] reply  reference to string to contain reply
+   * @param[in]  cmd        string to send to TCS
+   * @param[out] retstring  reference to return string
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::send_command( std::string cmd, std::string &reply ) {
+  long Interface::send_command( std::string cmd, std::string &retstring ) {
     std::string function = "TCS::Interface::send_command";
     std::stringstream message;
     std::string sbuf;
@@ -1098,13 +1121,33 @@ namespace TCS {
 
     // TCS is good, send the command, read the reply
     //
+    std::string reply;
     if ( tcs_loc->second.send( cmd, reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS on fd " << tcs_loc->second.fd();
       logwrite( function, message.str() );
       return ERROR;
     }
 
-    return NO_ERROR;
+    // Success or failure depends on what's in the TCS reply,
+    // which depends on the command.
+    //
+    if ( cmd == "?MOTION" ) {                           // ?MOTION replys have unique codes
+      return( parse_motion_code( reply, retstring ) );  // which are translated into retstring here.
+    }
+    else                                                // These commands reply with information (not a code)...
+    if ( cmd == "?NAME"        ||
+         cmd == "?PARALLACTIC" ||
+         cmd == "?WEATHER"     ||
+         cmd == "RAWDEC"       ||
+         cmd == "RAWPOS"       ||
+         cmd == "REQPOS"       ||
+         cmd == "REQSTAT"         ) {
+      retstring = reply;                                // ... so put their information into retstring.
+      return NO_ERROR;                                  // It would have failed on send if ever.
+    }
+    else {                                              // Everything else returns a code,
+      return( parse_reply_code( reply, retstring ) );   // which is translated here.
+    }
   }
   /***** TCS::Interface::send_command *****************************************/
 
@@ -1114,9 +1157,10 @@ namespace TCS {
    * @brief      parse the TCS reply code into a friendly string
    * @param[in]  codein  input reply code string
    * @param[out] reply   reference to string to contain friendly reply
+   * @return     ERROR | NO_ERROR
    *
    */
-  void Interface::parse_reply_code( std::string codein, std::string &reply ) {
+  long Interface::parse_reply_code( std::string codein, std::string &reply ) {
     std::string function = "TCS::Interface::parse_reply_code";
     std::stringstream message;
     int code = TCS_UNDEFINED;
@@ -1129,31 +1173,86 @@ namespace TCS {
     catch( std::out_of_range &e ) {
       message.str(""); message << "EXCEPTION: out of range parsing TCS return value \"" << codein << "\": " << e.what();
       logwrite( function, message.str() );
+      return ERROR;
     }
     catch( std::invalid_argument &e ) {
       message.str(""); message << "EXCEPTION: converting TCS return value \"" << codein << "\" to integer: " << e.what();
       logwrite( function, message.str() );
+      return ERROR;
     }
 
     // Convert the reply code integer to a friendly string
     //
     switch ( code ) {
       case TCS_SUCCESS:              reply = TCS_SUCCESS_STR;
-                                     break;
-      case TCS_UNRECOGNIZED_COMMAND: reply = TCS_UNRECOGNIZED_COMMAND;
-                                     break;
-      case TCS_INVALID_PARAMETER:    reply = TCS_INVALID_PARAMETER;
-                                     break;
-      case TCS_UNABLE_TO_EXECUTE:    reply = TCS_UNABLE_TO_EXECUTE;
-                                     break;
-      case TCS_HOST_UNAVAILABLE:     reply = TCS_HOST_UNAVAILABLE;
-                                     break;
+                                     return NO_ERROR;
+      case TCS_UNRECOGNIZED_COMMAND: reply = TCS_UNRECOGNIZED_COMMAND_STR;
+                                     return ERROR;
+      case TCS_INVALID_PARAMETER:    reply = TCS_INVALID_PARAMETER_STR;
+                                     return ERROR;
+      case TCS_UNABLE_TO_EXECUTE:    reply = TCS_UNABLE_TO_EXECUTE_STR;
+                                     return ERROR;
+      case TCS_HOST_UNAVAILABLE:     reply = TCS_HOST_UNAVAILABLE_STR;
+                                     return ERROR;
       case TCS_UNDEFINED:
       default:                       reply = TCS_UNDEFINED_STR;
-                                     break;
+                                     return ERROR;
     }
-    return;
   }
   /***** TCS::Interface::parse_reply_code *************************************/
 
+
+  /***** TCS::Interface::parse_motion_code ************************************/
+  /**
+   * @brief      parse the TCS reply code into a friendly string
+   * @param[in]  codein     input reply code string
+   * @param[out] retstring  reference to return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::parse_motion_code( std::string codein, std::string &retstring ) {
+    std::string function = "TCS::Interface::parse_motion_code";
+    std::stringstream message;
+    int motion_code = TCS_MOTION_UNKNOWN;
+
+    // Response will be a number that is converted to int here
+    //
+    try {
+      motion_code = std::stoi( codein );
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR converting TCS reply \"" << codein << "\" to integer: " << e.what();
+      logwrite( function, message.str() );
+      retstring="invalid_reply";
+      return ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR converting TCS reply \"" << codein << "\" to integer: " << e.what();
+      logwrite( function, message.str() );
+      retstring="invalid_reply";
+      return ERROR;
+    }
+
+    // set the return string based on the TCS motion code
+    //
+    switch( motion_code ) {
+      case TCS_MOTION_STOPPED:    retstring = TCS_MOTION_STOPPED_STR;
+                                  return NO_ERROR;
+      case TCS_MOTION_SLEWING:    retstring = TCS_MOTION_SLEWING_STR;
+                                  return NO_ERROR;
+      case TCS_MOTION_OFFSETTING: retstring = TCS_MOTION_OFFSETTING_STR;
+                                  return NO_ERROR;
+      case TCS_MOTION_TRACKING:   retstring = TCS_MOTION_TRACKING_STR;
+                                  return NO_ERROR;
+      case TCS_MOTION_SETTLING:   retstring = TCS_MOTION_SETTLING_STR;
+                                  return NO_ERROR;
+      case TCS_MOTION_UNKNOWN:
+      default:                    retstring = TCS_MOTION_UNKNOWN_STR;
+                                  retstring = "unknown_reply";
+                                  message.str(""); message << "ERROR unrecognized motion code " << motion_code;
+                                  logwrite( function, message.str() );
+                                  return ERROR;
+    }
+  }
+  /***** TCS::Interface::parse_motion_code ************************************/
 }

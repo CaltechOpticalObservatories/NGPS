@@ -35,17 +35,16 @@
     // Help
     //
     if ( which == "?" || which == "help" ) {
-      retstring = "tcsinit [ sim | real ]\n";
-      retstring.append( "   Initialize connection to tcsd and open the named TCS.\n" );
-      retstring.append( "   If optional arg not specified then return connection status {true|false}\n" );
-      retstring.append( "   otherwise tcsd opens a connection to the real TCS or the emulator.\n" );
+      retstring = "tcsinit [ sim | real | shutdown ]\n";
+      retstring.append( "   Initialize connection to tcs daemon (tcsd) and open the specified TCS.\n" );
+      retstring.append( "   If no arg specified then return connection status: sim | real | offline\n" );
       return HELP;
     }
 
     // Syntax check -- if something is supplied then it must be real|sim
     //
-    if ( !which.empty() && which != "real" && which != "sim" ) {
-      logwrite( function, "ERROR expected real | sim | <empty>" );
+    if ( !which.empty() && which != "real" && which != "sim" && which != "shutdown" ) {
+      logwrite( function, "ERROR expected real | sim | shutdown | <empty>" );
       retstring="invalid_argument";
       return ERROR;
     }
@@ -76,7 +75,7 @@
     if ( error != NO_ERROR || reply.find( "ERROR" ) != std::string::npos ) {
       logwrite( function, "ERROR: tcsd unable to communicate with TCS. Closing daemon connection." );
       this->client.disconnect();
-      retstring="not_connected";
+      retstring="offline";
       return ERROR;
     }
 
@@ -91,7 +90,7 @@
       message.str(""); message << "ERROR invalid reply \"" << reply << "\" from tcsd. Expected true|false DONE";
       logwrite( function, message.str() );
       this->client.disconnect();
-      retstring="not_connected";
+      retstring="offline";
       return ERROR;
     }
 
@@ -110,7 +109,7 @@
 
     if ( !connected_to_tcs ) {
       message.str(""); message << "tcsd not connected to TCS";
-      tcsname = "not_connected";
+      tcsname = "offline";
     }
     else {
       // reply is "true DONE" here, and this removes the "true " and " DONE"
@@ -126,6 +125,14 @@
     if ( which.empty() ) {
       retstring=reply;
       return NO_ERROR;
+    }
+
+    // Send CLOSE then disconnect
+    //
+    if ( which == "shutdown" ) {
+      error = this->client.send( TCSD_CLOSE, reply );
+      this->client.disconnect();
+      return error;
     }
 
     // If the currently opened device is not the requested device then close it
@@ -184,6 +191,51 @@
   /***** TcsDaemonClient::init ************************************************/
 
 
+  /***** TcsDaemonClient::get_name ********************************************/
+  /**
+   * @brief      ask tcsd for the name of the connected TCS
+   * @param[out] name  name of tcs
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long TcsDaemonClient::get_name( std::string &name ) {
+    std::string function = "TcsDaemonClient::get_name";
+    std::stringstream message;
+
+    // Ask for the name of the TCS.
+    // Response is expected to be "<name> DONE"
+    //
+    if ( this->client.send( TCSD_GET_NAME, name ) != NO_ERROR ) {
+      logwrite( function, "ERROR reading TCS name" );
+      name="error";
+      return ERROR;
+    }
+
+    // Remove the " DONE" from the reply, which becomes the return string
+    //
+    try {
+      auto pos = name.find( " DONE" );
+      if ( pos != std::string::npos ) {
+        name.erase( pos );
+      }
+      else {
+        message.str(""); message << "ERROR reading TCS name: \"" << name << "\"";
+        logwrite( function, message.str() );
+        name="error";
+        return ERROR;
+      }
+    }
+    catch( std::exception &e ) {
+      message.str(""); message << "ERROR invalid reply \"" << name << "\" from tcsd: " << e.what();
+      logwrite( function, message.str() );
+      name="error";
+      return ERROR;
+    }
+    return NO_ERROR;
+  }
+  /***** TcsDaemonClient::get_name ********************************************/
+
+
   /***** TcsDaemonClient::get_cass ********************************************/
   /**
    * @brief      read the current TCS cass angle
@@ -192,7 +244,7 @@
    *
    */
   long TcsDaemonClient::get_cass( double &cass ) {
-    std::string function = "TcsDaemonClient::get_tcs_cass";
+    std::string function = "TcsDaemonClient::get_cass";
     std::stringstream message;
     std::string tcsreply;
 
@@ -234,6 +286,35 @@
     return NO_ERROR;
   }
   /***** TcsDaemonClient::get_cass ********************************************/
+
+
+  /***** TcsDaemonClient::pt_offset *******************************************/
+  /**
+   * @brief      send command to tcsd to send guider offsets
+   * @param[in]  ra_d   RA in degrees
+   * @param[in]  dec_d  DEC in degrees
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long TcsDaemonClient::pt_offset( double ra_d, double dec_d ) {
+    std::string function = "TcsDaemonClient::pt_offset";
+    std::string tcsreply;
+    std::stringstream tcscmd;
+
+    tcscmd << TCSD_PTOFFSET << " " << std::fixed << std::setprecision(6)
+           << ra_d << " " << dec_d;
+
+    if ( this->client.send( tcscmd.str(), tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR sending guider offsets" );
+      return ERROR;
+    }
+
+    logwrite( function, tcsreply );
+
+    if ( ends_with( tcsreply, "DONE" ) ) return NO_ERROR;
+    else return ERROR;
+  }
+  /***** TcsDaemonClient::pt_offset *******************************************/
 
 
   /***** TcsDaemonClient::set_focus *******************************************/

@@ -560,6 +560,11 @@ namespace TCS {
       if ( caseCompareString( cmd, TCSD_COORDS ) ) {
                       ret = this->interface.coords( args, retstring );
       }
+      else
+
+      if ( caseCompareString( cmd, TCSD_PTOFFSET ) ) {
+                      ret = this->interface.pt_offset( args, retstring );
+      }
 
       // all other commands go straight to the TCS interface
       //
