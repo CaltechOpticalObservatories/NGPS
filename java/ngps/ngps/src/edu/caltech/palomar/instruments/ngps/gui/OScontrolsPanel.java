@@ -176,10 +176,10 @@ public void initializeActionButtons(){
          if(do_allRadioButton.isSelected()){
              myObservationSequencerController.do_one_all(ObservationSequencerController.DO_ALL);
          } 
-         java.lang.String set_name = myObservationSequencerController.dbms.getSelectedSetName();
-         if(set_name != null){
-             myObservationSequencerController.targetset(set_name);
-         }         
+
+         int set_id = myObservationSequencerController.dbms.getSelectedSET_ID();         
+         myObservationSequencerController.targetset(set_id);
+
          myObservationSequencerController.start();
          myObservationSequencerController.state();
 //    }       
