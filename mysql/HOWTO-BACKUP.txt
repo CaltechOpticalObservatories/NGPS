@@ -1,5 +1,5 @@
 mysqldump --user=root -p --no-data ngps > backup-structure-ngps.sql
-mysqldump --user=root -p --no-data telemetry > backup-structure-telemtry.sql
+mysqldump --user=root -p --no-data telemetry > backup-structure-telemetry.sql
 
 This creates a file that can be run in mysql to restore all the tables without data. You will need the mysql root password.
 
