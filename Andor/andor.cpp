@@ -1302,10 +1302,14 @@ namespace Andor {
     std::string function = "Andor::Interface::start_acquisition";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     long error = ( andor ? andor->_StartAcquisition() : ERROR );
 
-    message << ( error==NO_ERROR ? "acquisition started" : "ERROR starting acquisition" );
-    logwrite( function, message.str() );
+    if ( error != NO_ERROR ) logwrite( function, "ERROR starting acquisition" );
 
     return error;
   }
@@ -1321,6 +1325,11 @@ namespace Andor {
   long Interface::shutter() {
     std::string function = "Andor::Interface::shutter";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     long error = ( andor ? andor->_SetShutter( 0, 2, 0, 0 ) : ERROR );
 
@@ -1343,6 +1352,11 @@ namespace Andor {
     std::string function = "Andor::Interface::get_detector";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     return ( andor ? andor->_GetDetector( x, y ) : ERROR );
   }
   /***** Andor::Interface::get_detector ***************************************/
@@ -1357,6 +1371,11 @@ namespace Andor {
   long Interface::get_status() {
     std::string function = "Andor::Interface::get_status";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     std::string status;
     long error = NO_ERROR;
@@ -1384,6 +1403,11 @@ namespace Andor {
   long Interface::get_speeds() {
     std::string function = "Andor::Interface::get_speeds";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     long error = NO_ERROR;
 
@@ -1465,6 +1489,11 @@ namespace Andor {
     std::string function = "Andor::Interface::set_hsspeed";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     // vector of HS speeds
     //
     auto vec = this->camera_info.hsspeeds[ this->camera_info.amptype ];
@@ -1507,6 +1536,11 @@ namespace Andor {
   long Interface::set_vsspeed( float speed_in ) {
     std::string function = "Andor::Interface::set_vsspeed";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     // vector of VS speeds
     //
@@ -1562,6 +1596,11 @@ namespace Andor {
     std::string function = "Andor::Interface::set_image";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     if ( hbin < 1 || vbin < 1 || hstart < 1 || hend < 1 || vstart < 1 || vend < 1 ) {
       logwrite( function, "ERROR all image parameters must be >= 1" );
       return ERROR;
@@ -1599,6 +1638,11 @@ namespace Andor {
     std::string function = "Andor::Interface::set_binning";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     if ( hbin < 1 || vbin < 1 ) {
       message.str(""); message << "ERROR " << hbin << " " << vbin << " must be > 0";
       logwrite( function, message.str() );
@@ -1630,6 +1674,11 @@ namespace Andor {
   long Interface::set_imflip( int hflip, int vflip ) {
     std::string function = "Andor::Interface::set_imflip";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     long error = NO_ERROR;
 
@@ -1667,6 +1716,11 @@ namespace Andor {
     std::string function = "Andor::Interface::set_imrot";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     long error = NO_ERROR;
 
     switch( rotdir ) {
@@ -1698,6 +1752,11 @@ namespace Andor {
     std::string function = "Andor::Interface::get_emgain_range";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     return ( andor ? andor->_GetEMGainRange( low, high ) : ERROR );
   }
   /***** Andor::Interface::get_emgain_range ***********************************/
@@ -1714,6 +1773,11 @@ namespace Andor {
   long Interface::get_emgain( int &gain ) {
     std::string function = "Andor::Interface::get_emgain";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     long error = ( andor ? andor->_GetEMCCDGain( gain ) : ERROR );
 
@@ -1738,6 +1802,11 @@ namespace Andor {
   long Interface::set_output_amplifier( int type ) {
     std::string function = "Andor::Interface::set_output_amplifier";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     if ( type != 0 && type != 1 ) {
       message.str(""); message << "ERROR invalid type " << type << ": expected { 0 1 }";
@@ -1770,6 +1839,11 @@ namespace Andor {
   long Interface::set_emgain( int gain ) {
     std::string function = "Andor::Interface::set_emgain";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     long error = NO_ERROR;
 
@@ -1810,6 +1884,11 @@ namespace Andor {
   long Interface::set_temperature( int temp ) {
     std::string function = "Andor::Interface::set_temperature";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     long error = NO_ERROR;
 
@@ -1867,6 +1946,11 @@ namespace Andor {
     std::string function = "Andor::Interface::get_temperature";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     std::string_view status;
 
     long error = ( andor ? andor->_GetTemperature( temp, status ) : ERROR );
@@ -1893,6 +1977,11 @@ namespace Andor {
   long Interface::set_read_mode( int mode ) {
     std::string function = "Andor::Interface::set_read_mode";
     std::stringstream message;
+
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
 
     if ( mode < 0 || mode > 4 ) {
       message.str("");
@@ -1933,6 +2022,11 @@ namespace Andor {
     std::string function = "Andor::Interface::set_acquisition_mode";
     std::stringstream message;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     if ( mode < 0 || mode > 5 ) {
       message.str(""); message << "ERROR invalid mode " << mode << ": expected { 1:5 }";
       logwrite( function, message.str() );
@@ -1972,6 +2066,11 @@ namespace Andor {
     std::stringstream message;
     long error = NO_ERROR;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     // Make sure the camera is in single scan mode
     //
     if ( this->camera_info.acqmode != 1 ) error = this->set_acquisition_mode( 1 );
@@ -2003,8 +2102,6 @@ namespace Andor {
     timespec timenow             = Time::getTimeNow();         // get the time NOW
     this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
-
-    logwrite( function, "data acquired" );
 
     if ( this->image_data == nullptr ) {
       logwrite( function, "ERROR image_data is null" );
@@ -2183,6 +2280,11 @@ return NO_ERROR;
     double exptime_try=NAN;
     long error = NO_ERROR;
 
+    if ( ! is_initialized() ) {
+      logwrite( function, "ERROR camera not initialized" );
+      return ERROR;
+    }
+
     // If an exposure time was passed in then
     // try to convert it (string) to a double
     //
@@ -2210,9 +2312,9 @@ return NO_ERROR;
       }
     }
 
-    retstring = std::to_string( this->camera_info.exposure_time );
+    retstring = ( error ? "not_set" : std::to_string( this->camera_info.exposure_time ) );
 
-    message.str(""); message << "exposure time is " << retstring << " sec";
+    message.str(""); message << "exposure time is " << retstring << ( error ? "" : " sec" );
     logwrite(function, message.str());
     return error;
   }
