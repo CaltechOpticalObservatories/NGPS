@@ -10,6 +10,8 @@ set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
 
 set( CMAKE_CXX_STANDARD 17 )
 
+add_definitions( -Wall -ansi -O0 -Wno-variadic-macros )
+
 include_directories( ${EMULATOR_DIR} )
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
@@ -19,8 +21,6 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 include_directories( ${PYTHON_DEV} )
-
-add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
 
 # ----------------------------------------------------------------------------
 # acam
@@ -150,6 +150,7 @@ target_link_libraries(emulatord.tcs
         network
         logentry
         utilities
+        skyinfo
         ${CMAKE_THREAD_LIBS_INIT}
         ${PYTHON_LIB}
         )

@@ -6,19 +6,232 @@
  *
  */
 
-#include "tcs.h"
+#include "emulatord_tcs.h"
 
 #define MOVETYPE_FOCUS_GO  0
 #define MOVETYPE_FOCUS_INC 1
 
 namespace TcsEmulator {
 
+  TcsEmulator::Server* Server::instance = nullptr;
+
+  /***** TcsEmulator::Server::handle_signal ***********************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  signo
+   *
+   */
+  void Server::handle_signal( int signo ) {
+    std::string function = "  (TcsEmulator::signal_handler) ";
+    switch ( signo ) {
+      case SIGTERM:
+      case SIGINT:
+        std::cerr << get_timestamp() << function << Server::instance->subsystem << " received termination signal\n";
+        Server::instance->exit_cleanly();                   // shutdown the daemon
+        break;
+      case SIGHUP:
+        std::cerr << get_timestamp() << function << Server::instance->subsystem << " caught SIGHUP\n";
+        Server::instance->configure_emulator();             // TODO can (/should) this be done while running?
+        break;
+      case SIGPIPE:
+        std::cerr << get_timestamp() << function << Server::instance->subsystem << " caught SIGPIPE\n";
+        break;
+      default:
+        std::cerr << get_timestamp() << function << Server::instance->subsystem << " received unknown signal\n";
+        Server::instance->exit_cleanly();                   // shutdown the daemon
+        break;
+    }
+    return;
+  }
+  /***** TcsEmulator::Server::handle_signal ***********************************/
+
+
+  /***** TcsEmulator::Server::exit_cleanly ************************************/
+  /**
+   * @brief      closes things nicely and exits
+   *
+   */
+  void Server::exit_cleanly() {
+    std::string function = "  (TcsEmulator::Server::exit_cleanly) ";
+    std::cerr << get_timestamp() << function << "emulatord." << Server::instance->subsystem << " exiting\n";
+
+    // close connection
+    //
+    if ( Server::instance->port > 0 ) close( Server::instance->port );
+    exit( EXIT_SUCCESS );
+  }
+  /***** TcsEmulator::Server::exit_cleanly ************************************/
+
+
+  /***** TcsEmulator::Server::block_main **************************************/
+  /**
+   * @brief      main function for blocking connection thread
+   * @param[in]  server  reference to TcsEmulator::Server object
+   * @param[in]  sock    Network::TcpSocket socket object
+   *
+   * accepts a socket connection and processes the request by
+   * calling function doit()
+   *
+   * This thread never terminates.
+   *
+   */
+  void Server::block_main( TcsEmulator::Server &server, Network::TcpSocket sock ) {
+    std::string function = "  (TcsEmulator::Server::block_main) ";
+    while(1) {
+      sock.Accept();
+      std::cerr << get_timestamp() << function << " Accept returns connection on fd = " << sock.getfd() << "\n";
+      std::thread( server.doit, std::ref(sock) ).detach();  // spawn a thread to handle this connection
+    }
+  }
+  /***** TcsEmulator::Server::block_main **************************************/
+
+
+  /***** TcsEmulator::Server::doit ********************************************/
+  /**
+   * @brief      the workhorse of each thread connetion
+   * @param[in]  sock  TcpSocket object
+   *
+   * stays open until closed by client
+   *
+   * commands come in the form:
+   * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
+   *
+   */
+  void Server::doit( Network::TcpSocket sock ) {
+    std::string function = "  (TcsEmulator::Server::doit) ";
+    long  ret;
+    std::stringstream message;
+    std::string cmd, args;        // arg string is everything after command
+    std::vector<std::string> tokens;
+    char delim = '\r';           /// commands sent to me (the TCS) have been terminated with this
+    char term = '\0';     /// my replies (as the TCS) get terminated with this
+
+    bool connection_open=true;
+
+    std::cerr << get_timestamp() << function << "accepted connection on fd " << sock.getfd() << "\n";
+    while (connection_open) {
+
+      // Wait (poll) connected socket for incoming data...
+      //
+      int pollret;
+      if ( ( pollret=sock.Poll() ) <= 0 ) {
+        if (pollret==0) {
+          std::cerr << get_timestamp() << function << Server::instance->subsystem
+                    << " Poll timeout on fd " << sock.getfd() << " thread " << sock.id << "\n";
+        }
+        if (pollret <0) {
+          std::cerr << get_timestamp() << function << Server::instance->subsystem << " Poll error on fd " << sock.getfd()
+                    << " thread " << sock.id << ": " << strerror(errno) << "\n";
+        }
+        break;                      // this will close the connection
+      }
+
+      // Data available, now read from connected socket...
+      //
+      std::string sbuf;
+      if ( (ret=sock.Read( sbuf, delim )) <= 0 ) {     // read until newline delimiter
+        if (ret<0) {                // could be an actual read error
+          std::cerr << get_timestamp() << function << Server::instance->subsystem
+                    << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
+        }
+        if (ret==-2 && sock.getfd() != -1) std::cerr << get_timestamp() << function << Server::instance->subsystem
+                                                     << " timeout reading from fd " << sock.getfd() << "\n";
+        break;                      // Breaking out of the while loop will close the connection.
+                                    // This probably means that the client has terminated abruptly, 
+                                    // having sent FIN but not stuck around long enough
+                                    // to accept CLOSE and give the LAST_ACK.
+      }
+
+      std::cerr << get_timestamp() << function << "[DEBUG] incomming command is terminated with " << tchar(sbuf) << "\n";
+
+      // convert the input buffer into a string and remove any trailing linefeed
+      // and carriage return
+      //
+      sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
+      sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+
+      try {
+        std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
+
+        cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
+
+        if (cmd.empty()) continue;                     // If no command then skip over everything.
+
+        if (cmd_sep == std::string::npos) {            // If no space was found,
+          args="";                                     // then the arg list is empty,
+        }
+        else {
+          args= sbuf.substr(cmd_sep+1);                // otherwise args is everything after that space.
+        }
+
+        sock.id = ++Server::instance->cmd_num;
+        if ( Server::instance->cmd_num == INT_MAX ) Server::instance->cmd_num = 0;
+
+        std::cerr << get_timestamp() << function << Server::instance->subsystem << " received command on fd " << sock.getfd()
+                  << " (" << sock.id << "): " << cmd << " " << args << "\n";
+      }
+      catch ( std::runtime_error &e ) {
+        std::stringstream errstream; errstream << e.what();
+        std::cerr << get_timestamp() << function << Server::instance->subsystem
+                  << " error parsing arguments: " << errstream.str() << "\n";
+        ret = -1;
+      }
+      catch ( ... ) {
+        std::cerr << get_timestamp() << function << Server::instance->subsystem << " unknown error parsing arguments: " << args << "\n";
+        ret = -1;
+      }
+
+      // process commands here
+      //
+      ret = NOTHING;
+      std::string retstring;      // string for the return value
+
+      retstring.clear();
+
+      if ( cmd.compare( "exit" ) == 0 ) {
+                      Server::instance->exit_cleanly();                                   // shutdown the daemon
+      }
+      else
+      if ( cmd.compare( TCSD_CLOSE ) == 0 ) {
+                      sock.Close();
+                      return;
+      }
+      else {  // if no matching command found then send it straight to the interface's command parser
+        try {
+          std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );   // make uppercase
+        }
+        catch (...) {
+          std::cerr << get_timestamp() << function << "error converting command to uppercase\n";
+          ret=ERROR;
+        }
+        ret = Server::instance->interface.parse_command( sbuf, retstring );               // send the command to the parser
+      }
+
+#ifdef LOGLEVEL_DEBUG
+      std::cerr << get_timestamp() << function << "[DEBUG] ret=" << ret << " retstring=" << retstring << "\n";
+      std::cerr << get_timestamp() << function << "[DEBUG] retstring is terminated with " << tchar(retstring) << "\n";
+#endif
+
+      if ( ret != NOTHING && !retstring.empty() ) {
+        retstring.push_back( term );       // push_back is overloaded to accept a char which is needed here
+        if ( sock.Write( retstring ) <0 ) connection_open=false;
+      }
+
+      if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
+                                           // Keep blocking connection open for interactive session.
+    }
+
+    connection_open = false;
+    sock.Close();
+    std::cerr << get_timestamp() << function << "connection closed\n";
+    return;
+  }
+  /***** TcsEmulator::Server::doit ********************************************/
+
+
   /***** TcsEmulator::Interface::Interface ************************************/
   /**
-   * @fn         Interface
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
+   * @brief      Interface class constructor
    *
    */
   Interface::Interface() {
@@ -39,25 +252,9 @@ namespace TcsEmulator {
   /***** TcsEmulator::Interface::Interface ************************************/
 
 
-  /***** TcsEmulator::Interface::~Interface ***********************************/
-  /**
-   * @fn         ~Interface
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** TcsEmulator::Interface::~Interface ***********************************/
-
-
   /***** TcsEmulator::Telescope::Telescope ************************************/
   /**
-   * @fn         Telescope
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
+   * @brief      Telescope class constructor
    *
    * sets some default values
    * some of these can be overridden by the configuration file
@@ -98,17 +295,19 @@ namespace TcsEmulator {
   /***** TcsEmulator::Telescope::Telescope ************************************/
 
 
-  /***** TcsEmulator::Telescope::~Telescope ***********************************/
+  /***** TcsEmulator::Telescope::initialize_python_objects ********************/
   /**
-   * @fn         ~Telescope
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
+   * @brief      provides interface to initialize Python objects in the class
+   * @details    This provides an interface (to the Acam Server) to initialize
+   *             any Python modules in objects in the class. Allows Daemons to
+   *             ensure Python initialization is done by the child process.
    *
    */
-  Telescope::~Telescope() {
+  void Telescope::initialize_python_objects() {
+//  this->initialize_python();
+    return;
   }
-  /***** TcsEmulator::Telescope::~Telescope ***********************************/
+  /***** TcsEmulator::Telescope::initialize_python_objects ********************/
 
 
   /***** TcsEmulator::Telescope::get_time *************************************/
@@ -141,7 +340,7 @@ namespace TcsEmulator {
                << mytime.tm_sec  << "."
                << std::setprecision(1)
                << std::setw(1)
-               << (int)(timenow.tv_nsec/1000000000.0);
+               << static_cast<int>(timenow.tv_nsec/1000000000.0);
 
     return( timestring.str() );
   }
@@ -222,7 +421,7 @@ namespace TcsEmulator {
         telescope.focus.store( ( current_focus + focus_dir * telescope.focusrate/2.0 ) );
       }
 
-      usleep( 500000 );
+      std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
       if ( get_clock_time() >= focus_end_time ) break;
     }
     telescope.focus.store( newfocus );
@@ -237,10 +436,9 @@ namespace TcsEmulator {
 
   /***** TcsEmulator::Telescope::do_coords ************************************/
   /**
-   * @fn         do_coords
    * @brief      perform the COORDS command work, which "moves" the telescope
-   * @param[in]  telescope
-   * @param[in]  args
+   * @param[in]  telescope  reference to Telescope object
+   * @param[in]  args       <ra> <dec> <equinox> <ramotion> <decmotion>
    *
    */
   void Telescope::do_coords( TcsEmulator::Telescope &telescope, std::string args ) {
@@ -255,8 +453,8 @@ namespace TcsEmulator {
       // already checked that there are at least 5 tokens but all that matters
       // here is RA and DEC
       //
-      req_ra  = std::stof( tokens.at(0) );
-      req_dec = std::stof( tokens.at(1) );
+      req_ra  = std::stod( tokens.at(0) );
+      req_dec = std::stod( tokens.at(1) );
 
       // The name is optional
       //
@@ -330,7 +528,7 @@ namespace TcsEmulator {
         telescope.dec.store( ( current_dec + dec_dir * telescope.slewrate_dec/2.0 ) );
       }
 
-      usleep( 500000 );
+      std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
       if ( get_clock_time() >= clock_end ) break;
     }
 
@@ -362,7 +560,7 @@ namespace TcsEmulator {
         telescope.dec.store( ( current_dec + dec_dir * telescope.slewrate_dec/telescope.settle_dec ) );
       }
 
-      usleep( 1000000 );
+      std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
       if ( get_clock_time() >= clock_end ) break;
     }
 
@@ -388,30 +586,22 @@ namespace TcsEmulator {
 
   /***** TcsEmulator::Telescope::do_pt ****************************************/
   /**
-   * @fn         do_pt
    * @brief      perform the PT command work, which "offsets" the telescope
    * @details    inputs are in arcsec
-   * @param[in]  telescope
-   * @param[in]  args
-   * @return     none
+   * @param[in]  telescope  reference to Telescope object
+   * @param[in]  args       string contains "<raoff> <decoff>" in decimal arcsec
    *
    */
   void Telescope::do_pt( TcsEmulator::Telescope &telescope, std::string args ) {
     std::string function = "  (TcsEmulator::Telescope::do_pt) ";
 
-    double ra_off, dec_off;  // offsets read in
-    double newra, newdec;    // these will be the new RA, DEC after offsetting
-    double ra_now  = telescope.ra.load();
-    double dec_now = telescope.dec.load();
+    double ra_off, dec_off;                 // offsets read in (arcsec)
+    double newra, newdec;                   // these will be the new RA (hr), DEC (deg) after offsetting
+    double ra_now  = telescope.ra.load();   // (hr)
+    double dec_now = telescope.dec.load();  // (deg)
 
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
-
-    // before starting the slew, set a flag to prevent another thread from also starting a slew
-    //
-    telescope.telmoving.store( true );
-
-    telescope.motionstate.store( TCS_MOTION_OFFSETTING );
 
     try {
       ra_off  = std::stod( tokens.at(0) ) / 3600.;  // convert from arcsec to deg
@@ -432,11 +622,14 @@ namespace TcsEmulator {
 
     // Call FPOffsets::apply_offset_deg() to calculate the new RA, DEC coordinates
     // after applying the offsets.
-    // new* is where we want to end up, after offset is complete
+    // newra,newdec is where we want to end up, after offset is complete
     //
     std::cerr << get_timestamp() << function << "[DEBUG] before apply_offset call ra_now=" << ra_now << " dec_now=" << dec_now << "\n";
-    telescope.fpoffsets.apply_offset( ra_now * 15.0, dec_now, ra_off, dec_off, newra, newdec );
+
+    telescope.fpoffsets.apply_offset( (ra_now * 15.0), dec_now, ra_off, dec_off, newra, newdec );
+
     newra /= 15.0;                                 // apply_offset returns deg, tcs uses hr so convert from deg to hours
+
     std::cerr << get_timestamp() << function << "[DEBUG] after apply_offset call newra=" << newra << " newdec=" << newdec << "\n";
 
     // calculate the offset distance and the offset time for each of RA, DEC
@@ -455,7 +648,14 @@ namespace TcsEmulator {
     //
     double clock_end = get_clock_time() + offsettime;
 
-    // Begin the offsetting here, loop at 10Hz
+    // before starting the slew, set a flag to prevent another thread from also starting a slew
+    //
+    telescope.telmoving.store( true );
+
+    telescope.motionstate.store( TCS_MOTION_OFFSETTING );
+
+    // Begin the offsetting here, loop at 10Hz, move a little at a time.
+    // After this loop, set the telescope position to be the new position.
     //
     while ( true ) {
 
@@ -472,7 +672,7 @@ namespace TcsEmulator {
       if ( ( ra  += telescope.offsetrate_ra/10.0 )  <= newra )  telescope.ra.store( ra  );
       if ( ( dec += telescope.offsetrate_dec/10.0 ) <= newdec ) telescope.dec.store( dec );
 
-      usleep( 100000 );
+      std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       if ( get_clock_time() >= clock_end ) break;
     }
 
@@ -621,32 +821,69 @@ namespace TcsEmulator {
     double _ra  = this->ra.load();   // decimal hours, e.g. 01.2345
     double _dec = this->dec.load();  // decimal degrees
 
-    std::string  ra_sign = (  _ra < 0 ? "-" : "+" );
-    std::string dec_sign = ( _dec < 0 ? "-" : "+" );
+    std::cerr << get_timestamp() << function << "read decimal position ra "
+              << std::fixed << std::setprecision(9)
+              << _ra << "  dec " << _dec << "\n";
 
-     _ra = std::abs( _ra);
-    _dec = std::abs(_dec);
+    // RA
+    //
+    std::string ra_sign = (  _ra < 0 ? "-" : "+" );                 // sign of RA
+    _ra                 = std::fabs( _ra  ) + 0.000000001;          // double positive rational RA hours
+    double ra_whole_hr  = std::trunc( _ra );                        // double whole RA hours
+    double ra_minutes   = ( _ra - ra_whole_hr ) * 60.0;             // double rational RA minutes
+    double ra_whole_min = std::trunc( ra_minutes );                 // double whole RA minutes
+    double ra_seconds   = ( ra_minutes - ra_whole_min ) * 60.0;     // double rational RA seconds
 
-    int ra_hh     = (int)_ra;
-    double ra_mm  = (_ra - ra_hh) * 60.;
-    double ra_ss  = (ra_mm - (int)ra_mm) * 60.;
-    double ra_sss = (ra_ss - (int)ra_ss)*100.;
+    int ra_hh           = static_cast<int>( ra_whole_hr  );         // RA sexagesimal "HH"
+    int ra_mm           = static_cast<int>( ra_whole_min );         // RA sexagesimal "MM"
 
-    int dec_dd     = (int)_dec;
-    double dec_mm  = (_dec - dec_dd) * 60.;
-    double dec_ss  = (dec_mm - (int)dec_mm) * 60.;
-    double dec_sss = (dec_ss - (int)dec_ss)*10.;
+    if ( ra_seconds >= 59.999 ) {                                   // accommodate rounding errors
+      ra_seconds = 0.0;
+      ra_minutes += 1.0;
+      if ( ra_minutes >= 59.999 ) {
+        ra_minutes = 0.0;
+        ra_hh += 1;
+      }
+    }
+    ra_mm = static_cast<int>( ra_minutes );
 
+    // DEC
+    //
+    std::string dec_sign = ( _dec < 0 ? "-" : "+" );                // sign of DEC
+    _dec                 = std::fabs( _dec ) + 0.000000001;         // double positive rational DEC degrees
+    double dec_whole_deg = std::trunc( _dec );                      // double whole DEC degrees
+    double dec_minutes   = ( _dec - dec_whole_deg ) * 60.0;         // double rational DEC minutes
+    double dec_whole_min = std::trunc( dec_minutes );               // double whole DEC minutes
+    double dec_seconds   = ( dec_minutes - dec_whole_min ) * 60.0;  // double rational DEC seconds
+
+    int dec_dd           = static_cast<int>( dec_whole_deg );       // DEC sexagesimal "DD"
+    int dec_mm           = static_cast<int>( dec_whole_min );       // DEC sexagesimal "MM"
+
+    if ( dec_seconds >= 59.999 ) {                                  // accommodate rounding errors
+      dec_seconds = 0.0;
+      dec_minutes += 1.0;
+      if ( dec_minutes >= 59.999 ) {
+        dec_minutes = 0.0;
+        dec_dd += 1;
+      }
+    }
+    dec_mm = static_cast<int>( dec_minutes );
+
+    // assemble the return string
+    //
     ret << "UTC = " << this->get_time() << ", "
         << "LST = 00:00:00\n"
-        << "RA = " <<  ra_sign << std::fixed  << std::setfill('0') << std::setw(2) << (int)_ra     << ":"
-                                              << std::setfill('0') << std::setw(2) << (int)ra_mm   << ":"
-                                              << std::setfill('0') << std::setw(2) << (int)ra_ss   << "."
-                                              << std::setfill('0') << std::setw(2) << (int)std::round(ra_sss)  << ", "
-        << "DEC = " << dec_sign << std::fixed << std::setfill('0') << std::setw(2) << (int)_dec    << ":"
-                                              << std::setfill('0') << std::setw(2) << (int)dec_mm  << ":"
-                                              << std::setfill('0') << std::setw(2) << (int)dec_ss  << "."
-                                              << std::setfill('0') << std::setw(1) << (int)std::round(dec_sss) << ", "
+        << "RA = " <<  ra_sign << std::fixed
+                   << std::setfill('0') << std::setw(2) << ra_hh << ":"
+                   << std::setfill('0') << std::setw(2) << ra_mm << ":"
+                   << std::fixed << std::setprecision(3) << std::setw(6)
+                   << std::setfill('0') << ra_seconds
+        << ", "
+        << "DEC = " << dec_sign << std::fixed
+                    << std::setfill('0') << std::setw(2) << dec_dd  << ":"
+                    << std::setfill('0') << std::setw(2) << dec_mm  << ":"
+                    << std::fixed << std::setprecision(3) << std::setw(6)
+                    << std::setfill('0') << dec_seconds << ", "
         << "HA=W00:00:00.0\n"
         << "air mass = " << std::fixed << std::setprecision(3) << this->airmass;
 
@@ -659,7 +896,6 @@ namespace TcsEmulator {
 
   /***** TcsEmulator::Interface::parse_command ********************************/
   /**
-   * @fn         parse_command
    * @brief      parse commands for the TCS, spawn a thread if necessary
    * @param[in]  cmd
    * @param[out] retstring
@@ -959,117 +1195,5 @@ namespace TcsEmulator {
   }
   /***** TcsEmulator::Interface::parse_command ********************************/
 
-
-  /***** TcsEmulator::FPOffsets::FPOffsets ************************************/
-  /**
-   * @brief      class constructor
-   *
-   */
-  FPOffsets::FPOffsets() {
-    std::string function = "  (TcsEmulator::FPOffsets::FPOffsets) ";
-    std::stringstream message;
-
-    if ( !this->py_instance.is_initialized() ) {
-      std::cerr << get_timestamp() << function << "ERROR could not initialize Python\n";
-      this->python_initialized = false;
-      return;
-    }
-
-    this->pModuleName = PyUnicode_FromString( PYTHON_FPOFFSETS_MODULE );
-    this->pModule     = PyImport_Import( this->pModuleName );
-    this->python_initialized = true;
-  }
-  /***** TcsEmulator::FPOffsets::FPOffsets ************************************/
-
-
-  /***** TcsEmulator::FPOffsets::~FPOffsets ***********************************/
-  /**
-   * @brief      class deconstructor
-   *
-   */
-  FPOffsets::~FPOffsets() {
-  }
-  /***** TcsEmulator::FPOffsets::~FPOffsets ***********************************/
-
-
-  /***** TcsEmulator::FPOffsets::apply_offset *********************************/
-  /**
-   * @brief      calculate offsets to apply to the telescope
-   * @param[in]  ra_in    current RA in deg
-   * @param[in]  dec_in   current DEC in deg
-   * @param[in]  ra_off   RA offset in deg
-   * @param[in]  dec_off  DEC offset in deg
-   * @param[in]  ra_out   reference to new telescope RA
-   * @param[in]  dec_out  reference to new telescope DEC
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  long FPOffsets::apply_offset( double ra_in, double dec_in, double ra_off, double dec_off,
-                                double &ra_out, double &dec_out ) {
-    std::string function = "  (TcsEmulator::FPOffsets::apply_offset) ";
-    std::stringstream message;
-
-    std::cerr << get_timestamp() << function << "ra_in=" << ra_in << " dec_in=" << dec_in << " ra_off=" << ra_off << " dec_off=" << dec_off << "\n";
-
-    if ( !this->python_initialized ) {
-      std::cerr << get_timestamp() << function << "ERROR Python is not initialized\n";
-      return( ERROR );
-    }
-
-    if ( this->pModule==NULL ) {
-      std::cerr << get_timestamp() << function << "ERROR: Python module not imported\n";
-      return( ERROR );
-    }
-
-    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_APPLYOFFSETDEG_FUNCTION );
-
-    // Build up the PyObject argument list that will be passed to the function
-    //
-    PyObject* pArgList = Py_BuildValue( "(dddd)", ra_in, dec_in, ra_off, dec_off );
-
-    // Call the Python function here
-    //
-    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
-      std::cerr << get_timestamp() << function << "ERROR: Python function not callable\n";
-      return( ERROR );
-    }
-
-    PyObject* pReturn = PyObject_CallObject( pFunction, pArgList );
-
-    // Expected back a tuple
-    //
-    if ( !PyTuple_Check( pReturn ) ) {
-      std::cerr << get_timestamp() << function << "ERROR: did not receive a tuple\n";
-      return( ERROR );
-    }
-
-    int tuple_size = PyTuple_Size( pReturn );
-
-    // Put each tuple item in its place
-    //
-    for ( int tuplen = 0; tuplen < tuple_size; tuplen++ ) {
-      PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
-      if ( PyFloat_Check( pItem ) ) {
-        switch ( tuplen ) {
-          case 0: ra_out    = PyFloat_AsDouble( pItem ); break;
-          case 1: dec_out   = PyFloat_AsDouble( pItem ); break;
-          default:
-            std::cerr << get_timestamp() << function << "ERROR unexpected tuple item " << tuplen << ": expected {0,1}\n";
-            return( ERROR );
-            break;
-        }
-      }
-    }
-
-    // Checking after extracting, because it may allow for partial extraction
-    //
-    if ( tuple_size != 2 ) {
-      std::cerr << get_timestamp() << function << "ERROR expected 2 tuple items but received " << tuple_size << "\n";
-      return( ERROR );
-    }
-
-    return NO_ERROR;
-  }
-  /***** TcsEmulator::FPOffsets::apply_offset *********************************/
 
 }

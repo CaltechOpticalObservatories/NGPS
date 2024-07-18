@@ -20,11 +20,11 @@ const int TCS_UNDEFINED            = 9999;
 // human-readable strings to match the above
 //
 inline static const char TCS_SUCCESS_STR[] = "success";
-inline static const char TCS_UNRECOGNIZED_COMMAND_STR[] = "unrecognized";
-inline static const char TCS_INVALID_PARAMETER_STR[] = "bad param";
-inline static const char TCS_UNABLE_TO_EXECUTE_STR[] = "cannot exectute";
-inline static const char TCS_HOST_UNAVAILABLE_STR[] = "unavailable";
-inline static const char TCS_UNDEFINED_STR[] = "undefined";
+inline static const char TCS_UNRECOGNIZED_COMMAND_STR[] = "tcs_unrecognized_command";
+inline static const char TCS_INVALID_PARAMETER_STR[] = "tcs_bad_param";
+inline static const char TCS_UNABLE_TO_EXECUTE_STR[] = "tcs_already_moving";
+inline static const char TCS_HOST_UNAVAILABLE_STR[] = "tcs_unavailable";
+inline static const char TCS_UNDEFINED_STR[] = "tcs_undefined";
 
 // these are return values for the ?MOTION command
 //

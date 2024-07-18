@@ -7,8 +7,7 @@
  *
  */
 
-#ifndef EMULATORD_TCS_H
-#define EMULATORD_TCS_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -31,6 +30,9 @@
 
 #define  BUFSIZE      1024  ///< size of the input command buffer
 
+void signal_handler( int signo );
+int main( int argc, char** argv );
+
 /***** TcsEmulator ************************************************************/
 /**
  * @namespace TcsEmulator
@@ -39,6 +41,9 @@
  */
 namespace TcsEmulator {
 
+  const std::string DAEMON_NAME = "emulatord.tcs";
+
+  const int N_THREADS = 10;
 
   /***** TcsEmulator::Server **************************************************/
   /**
@@ -52,6 +57,8 @@ namespace TcsEmulator {
   class Server {
     private:
     public:
+      static Server* instance;
+
       int port;
       std::string subsystem;             ///< subsystem name
       std::atomic<int> cmd_num;
@@ -60,6 +67,20 @@ namespace TcsEmulator {
 
       TcsEmulator::Interface interface;  ///< create an emulater interface
 
+      static void block_main( TcsEmulator::Server &server, Network::TcpSocket sock );   ///< main function for blocking connection thread
+      static void doit(Network::TcpSocket sock);                                      ///< the workhorse of each thread connetion
+      void exit_cleanly();
+
+      inline void initialize_python_objects() {                                ///< allows for initializing Python objects by the child process
+        this->interface.telescope.initialize_python_objects();
+      }
+
+      void handle_signal( int signo );
+
+      static inline void signal_handler( int signo ) {
+        if ( instance ) { instance->handle_signal( signo ); }
+        return;
+      }
       /***** TcsEmulator::Server **********************************************/
       /**
        * @fn         Server
@@ -70,41 +91,17 @@ namespace TcsEmulator {
       Server() {
         this->port=-1;
         this->subsystem="tcs";
-        this->cmd_num=0;
+        this->cmd_num.store(0);
+        instance = this;
+
+        // Register these signals
+        //
+        signal( SIGINT,  signal_handler );
+        signal( SIGPIPE, signal_handler );
+        signal( SIGHUP,  signal_handler );
+
       }
       /***** TcsEmulator::Server **********************************************/
-
-
-      /***** TcsEmulator::~Server *********************************************/
-      /**
-       * @fn         ~Server
-       * @brief      class deconstructor cleans up on exit
-       * @param[in]  none
-       * @return     none
-       */
-      ~Server() {
-      }
-      /***** TcsEmulator::~Server *********************************************/
-
-
-      /***** TcsEmulator::Server::exit_cleanly ********************************/
-      /**
-       * @fn         exit_cleanly
-       * @brief      closes things nicely and exits
-       * @param[in]  none
-       * @return     none
-       *
-       */
-      void exit_cleanly(void) {
-        std::string function = "  (TcsEmulator::Server::exit_cleanly) ";
-        std::cerr << get_timestamp() << function << "emulatord." << this->subsystem << " exiting\n";
-
-        // close connection
-        //
-        if ( this->port > 0 ) close( this->port );
-        exit( EXIT_SUCCESS );
-      }
-      /***** TcsEmulator::Server::exit_cleanly ********************************/
 
 
       /***** TcsEmulator::Server::load_tcs_info *******************************/
@@ -267,4 +264,3 @@ namespace TcsEmulator {
 
 }
 /***** TcsEmulator ************************************************************/
-#endif

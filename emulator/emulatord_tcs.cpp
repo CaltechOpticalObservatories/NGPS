@@ -9,48 +9,6 @@
 #include "emulatord_tcs.h"
 #include "daemonize.h"
 
-#define N_THREADS 10
-
-TcsEmulator::Server emulator;
-
-/***** signal_handler *********************************************************/
-/**
- * @fn         signal_handler
- * @brief      handles ctrl-C
- * @param[in]  int signo
- * @return     nothing
- *
- */
-void signal_handler( int signo ) {
-  std::string function = "  (TcsEmulator::signal_handler) ";
-  switch ( signo ) {
-    case SIGTERM:
-    case SIGINT:
-      std::cerr << get_timestamp() << function << emulator.subsystem << " received termination signal\n";
-      emulator.exit_cleanly();                   // shutdown the daemon
-      break;
-    case SIGHUP:
-      std::cerr << get_timestamp() << function << emulator.subsystem << " caught SIGHUP\n";
-      emulator.configure_emulator();             // TODO can (/should) this be done while running?
-      break;
-    case SIGPIPE:
-      std::cerr << get_timestamp() << function << emulator.subsystem << " caught SIGPIPE\n";
-      break;
-    default:
-      std::cerr << get_timestamp() << function << emulator.subsystem << " received unknown signal\n";
-      emulator.exit_cleanly();                   // shutdown the daemon
-      break;
-  }
-  return;
-}
-/***** signal_handler *********************************************************/
-
-
-int  main( int argc, char **argv );                 // main thread (just gets things started)
-void block_main( Network::TcpSocket sock );         // this thread handles requests on blocking port
-void doit( Network::TcpSocket sock );               // the worker thread
-
-
 /***** main *******************************************************************/
 /**
  * @fn         main
@@ -62,15 +20,30 @@ void doit( Network::TcpSocket sock );               // the worker thread
 int main( int argc, char **argv ) {
   std::string function = "  (TcsEmulator::main) ";
   std::stringstream message;
-  long ret=NO_ERROR;
-  std::string daemon_in;     // daemon setting read from config file
-  bool start_daemon = false; // don't start as daemon unless specifically requested
+  bool start_daemon = true;
 
-  // capture these signals
+  // Allow running in the foreground
   //
-  signal(SIGINT, signal_handler);
-  signal(SIGPIPE, signal_handler);
-  signal(SIGHUP, signal_handler);
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
+  }
+
+  // daemonize, but don't close all file descriptors
+  //
+  if ( start_daemon ) {
+    std::cerr << get_timestamp() << function << " starting daemon\n";
+    Daemon::daemonize( "emulatord.tcs", "/tmp", "/dev/null", "/tmp/emulatord.tcs.stderr", "", false );
+    std::cerr << get_timestamp() << function << " daemonized. child process running\n";
+  }
+
+  // Now the child process instantiates a Server object
+  //
+  TcsEmulator::Server emulator;
+
+  emulator.initialize_python_objects();
+  PyEval_SaveThread();
+
+  long ret=NO_ERROR;
 
   // check for "-f <filename>" command line option to specify config file
   //
@@ -116,30 +89,6 @@ int main( int argc, char **argv ) {
       return(ERROR);
     }
 
-    if ( configkey == "DAEMON")  daemon_in = configval;
-
-  }
-
-  if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
-  else
-  if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
-    std::cerr << get_timestamp() << function << emulator.subsystem 
-              << " ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }\n";
-    emulator.exit_cleanly();
-  }
-
-  // check for "-d" command line option last so that the command line
-  // can override the config file to start as daemon
-  //
-  if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
-    start_daemon = true;
-  }
-
-  if ( start_daemon ) {
-    std::cerr << get_timestamp() << function << "starting emulator daemon for " << emulator.subsystem << "\n";
-    std::string name = "emulatord." + emulator.subsystem;
-    Daemon::daemonize( name, "/tmp", "", "", "" );
   }
 
   std::cerr << get_timestamp() << function << emulator.subsystem << " " 
@@ -159,11 +108,11 @@ int main( int argc, char **argv ) {
   // TcpSocket objects are instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
   //
   std::vector<Network::TcpSocket> socklist;          // create a vector container to hold N_THREADS TcpSocket objects
-  socklist.reserve(N_THREADS);
+  socklist.reserve(TcsEmulator::N_THREADS);
 
   // pre-thread N_THREADS detached threads to handle requests
   //
-  for (int thrid=0; thrid<N_THREADS; thrid++) {      // create N_THREADS-1 non-blocking socket objects
+  for (int thrid=0; thrid<TcsEmulator::N_THREADS; thrid++) {      // create N_THREADS-1 non-blocking socket objects
     if (thrid==0) {                                  // first one only
       Network::TcpSocket s(emulator.port, true, -1, thrid); // instantiate TcpSocket object, blocking port, CONN_TIMEOUT timeout
       if ( s.Listen() < 0 ) {                        // create a listening socket
@@ -177,182 +126,13 @@ int main( int argc, char **argv ) {
       s.id = thrid;
       socklist.push_back(s);
     }
-    std::thread( std::ref(block_main),
+    std::thread( std::ref(TcsEmulator::Server::block_main),
+                 std::ref(emulator),
                  std::ref(socklist[thrid]) ).detach();   // spawn a thread to handle each non-blocking socket request
   }
 
   for (;;) pause();                                                // main thread suspends
+
   return 0;
 }
 /***** main *******************************************************************/
-
-
-/***** block_main *************************************************************/
-/**
- * @fn         block_main
- * @brief      main function for blocking connection thread
- * @param[in]  Network::TcpSocket sock, socket object
- * @return     nothing
- *
- * accepts a socket connection and processes the request by
- * calling function doit()
- *
- * This thread never terminates.
- *
- */
-void block_main( Network::TcpSocket sock ) {
-  std::string function = "  (TcsEmulator::block_main) ";
-  while (1) {
-    sock.Accept();
-    std::cerr << get_timestamp() << function << " Accept returns connection on fd = " << sock.getfd() << "\n";
-    std::thread( doit, std::ref(sock) ).detach();  // spawn a thread to handle this connection
-  }
-  return;
-}
-/***** block_main *************************************************************/
-
-
-/***** doit *******************************************************************/
-/**
- * @fn         doit
- * @brief      the workhorse of each thread connetion
- * @param[in]  int thr
- * @return     nothing
- *
- * stays open until closed by client
- *
- * commands come in the form: 
- * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
- *
- */
-void doit( Network::TcpSocket sock ) {
-  std::string function = "  (TcsEmulator::doit) ";
-  long  ret;
-  std::stringstream message;
-  std::string cmd, args;        // arg string is everything after command
-  std::vector<std::string> tokens;
-  char delim = '\r';           /// commands sent to me (the TCS) have been terminated with this
-  char term = '\0';     /// my replies (as the TCS) get terminated with this
-
-  bool connection_open=true;
-
-  std::cerr << get_timestamp() << function << "accepted connection on fd " << sock.getfd() << "\n";
-  while (connection_open) {
-
-    // Wait (poll) connected socket for incoming data...
-    //
-    int pollret;
-    if ( ( pollret=sock.Poll() ) <= 0 ) {
-      if (pollret==0) {
-        std::cerr << get_timestamp() << function << emulator.subsystem 
-                  << " Poll timeout on fd " << sock.getfd() << " thread " << sock.id << "\n";
-      }
-      if (pollret <0) {
-        std::cerr << get_timestamp() << function << emulator.subsystem << " Poll error on fd " << sock.getfd() 
-                  << " thread " << sock.id << ": " << strerror(errno) << "\n";
-      }
-      break;                      // this will close the connection
-    }
-
-    // Data available, now read from connected socket...
-    //
-    std::string sbuf;
-    if ( (ret=sock.Read( sbuf, delim )) <= 0 ) {     // read until newline delimiter
-      if (ret<0) {                // could be an actual read error
-        std::cerr << get_timestamp() << function << emulator.subsystem 
-                  << " Read error on fd " << sock.getfd() << ": " << strerror(errno) << "\n";
-      }
-      if (ret==-2 && sock.getfd() != -1) std::cerr << get_timestamp() << function << emulator.subsystem
-                                                   << " timeout reading from fd " << sock.getfd() << "\n";
-      break;                      // Breaking out of the while loop will close the connection.
-                                  // This probably means that the client has terminated abruptly, 
-                                  // having sent FIN but not stuck around long enough
-                                  // to accept CLOSE and give the LAST_ACK.
-    }
-
-    std::cerr << get_timestamp() << function << "[DEBUG] incomming command is terminated with " << tchar(sbuf) << "\n";
-
-    // convert the input buffer into a string and remove any trailing linefeed
-    // and carriage return
-    //
-    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
-    sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
-
-    try {
-      std::size_t cmd_sep = sbuf.find_first_of(" "); // find the first space, which separates command from argument list
-
-      cmd = sbuf.substr(0, cmd_sep);                 // cmd is everything up until that space
-
-      if (cmd.empty()) continue;                     // If no command then skip over everything.
-
-      if (cmd_sep == std::string::npos) {            // If no space was found,
-        args="";                                     // then the arg list is empty,
-      }
-      else {
-        args= sbuf.substr(cmd_sep+1);                // otherwise args is everything after that space.
-      }
-
-      sock.id = ++emulator.cmd_num;
-      if ( emulator.cmd_num == INT_MAX ) emulator.cmd_num = 0;
-
-      std::cerr << get_timestamp() << function << emulator.subsystem << " received command on fd " << sock.getfd() 
-                << " (" << sock.id << "): " << cmd << " " << args << "\n";
-    }
-    catch ( std::runtime_error &e ) {
-      std::stringstream errstream; errstream << e.what();
-      std::cerr << get_timestamp() << function << emulator.subsystem 
-                << " error parsing arguments: " << errstream.str() << "\n";
-      ret = -1;
-    }
-    catch ( ... ) {
-      std::cerr << get_timestamp() << function << emulator.subsystem << " unknown error parsing arguments: " << args << "\n";
-      ret = -1;
-    }
-
-    // process commands here
-    //
-    ret = NOTHING;
-    std::string retstring;      // string for the return value
-
-    retstring.clear();
-
-    if ( cmd.compare( "exit" ) == 0 ) {
-                    emulator.exit_cleanly();                                   // shutdown the daemon
-    }
-    else
-    if ( cmd.compare( TCSD_CLOSE ) == 0 ) {
-                    sock.Close();
-                    return;
-    }
-    else {  // if no matching command found then send it straight to the interface's command parser
-      try {
-        std::transform( sbuf.begin(), sbuf.end(), sbuf.begin(), ::toupper );   // make uppercase
-      }
-      catch (...) {
-        std::cerr << get_timestamp() << function << "error converting command to uppercase\n";
-        ret=ERROR;
-      }
-      ret = emulator.interface.parse_command( sbuf, retstring );               // send the command to the parser
-    }
-
-#ifdef LOGLEVEL_DEBUG
-    std::cerr << get_timestamp() << function << "[DEBUG] ret=" << ret << " retstring=" << retstring << "\n";
-    std::cerr << get_timestamp() << function << "[DEBUG] retstring is terminated with " << tchar(retstring) << "\n";
-#endif
-
-    if ( ret != NOTHING && !retstring.empty() ) {
-      retstring.push_back( term );       // push_back is overloaded to accept a char which is needed here
-      if ( sock.Write( retstring ) <0 ) connection_open=false;
-    }
-
-    if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
-                                         // Keep blocking connection open for interactive session.
-  }
-
-  connection_open = false;
-  sock.Close();
-  std::cerr << get_timestamp() << function << "connection closed\n";
-  return;
-}
-/***** doit *******************************************************************/
-
