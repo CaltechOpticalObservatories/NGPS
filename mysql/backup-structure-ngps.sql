@@ -16,6 +16,49 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `completed_obs`
+--
+
+DROP TABLE IF EXISTS `completed_obs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `completed_obs` (
+  `LOG_ID` int NOT NULL AUTO_INCREMENT,
+  `OWNER` varchar(32) DEFAULT NULL COMMENT 'Name of target list owner',
+  `OBSERVATION_ID` int DEFAULT NULL COMMENT 'ID from the master targets table',
+  `SET_ID` int DEFAULT NULL COMMENT 'ID of the user''s target set',
+  `TARGET_NUMBER` int DEFAULT NULL,
+  `SEQUENCE_NUMBER` int DEFAULT NULL,
+  `NAME` varchar(128) NOT NULL COMMENT 'Name of the astronomical target or calibration',
+  `FITSFILE` varchar(512) DEFAULT NULL COMMENT 'File with the spectrum images',
+  `RA` varchar(32) DEFAULT NULL COMMENT 'Right ascension',
+  `DECL` varchar(32) DEFAULT NULL COMMENT 'Declination',
+  `ALT` float DEFAULT NULL COMMENT 'Altitude (deg)',
+  `AZ` float DEFAULT NULL COMMENT 'Azimuth (deg)',
+  `AIRMASS` float DEFAULT NULL COMMENT 'Airmass',
+  `CASANGLE` float DEFAULT NULL COMMENT 'Cassegrain angle of the P200',
+  `SLITANGLE_REQ` varchar(8) DEFAULT NULL COMMENT 'Slit angle request',
+  `POINTMODE` varchar(8) DEFAULT NULL COMMENT 'Where to place target (ACAM or SLIT)',
+  `NOTBEFORE` datetime DEFAULT NULL COMMENT 'Earliest date/time to start exposure',
+  `SLEW_START` datetime DEFAULT NULL COMMENT 'Slew start date/time',
+  `EXPTIME` float DEFAULT NULL COMMENT 'Exposure time (s)',
+  `EXPTIME_REQ` varchar(12) DEFAULT NULL COMMENT 'Exposure time request',
+  `EXP_START` datetime DEFAULT NULL COMMENT 'Exposure start date/time',
+  `EXP_END` datetime DEFAULT NULL COMMENT 'Exposure end date/time',
+  `SLITWIDTH` float DEFAULT NULL COMMENT 'Spectrograph slit width (arcsec)',
+  `SLITWIDTH_REQ` varchar(12) DEFAULT NULL COMMENT 'Slit width request',
+  `SLITOFFSET` float DEFAULT NULL COMMENT 'Slit lateral offset (arcsec)',
+  `BINSPECT` int DEFAULT NULL COMMENT 'CCD binning in spectral direction',
+  `BINSPAT` int DEFAULT NULL COMMENT 'CCD binning in spatial direction',
+  `OBSMODE` varchar(32) DEFAULT NULL COMMENT 'Observation mode, CCD settings',
+  `NOTE` varchar(512) DEFAULT NULL COMMENT 'Observer''s note on this target',
+  `OTMFLAG` varchar(20) DEFAULT NULL COMMENT 'OTM flag codes at time of exposure',
+  PRIMARY KEY (`LOG_ID`,`NAME`),
+  UNIQUE KEY `LOG_ID_UNIQUE` (`LOG_ID`)
+) ENGINE=InnoDB AUTO_INCREMENT=81 DEFAULT CHARSET=utf8mb3;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `completed_observations`
 --
 
@@ -23,15 +66,15 @@ DROP TABLE IF EXISTS `completed_observations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `completed_observations` (
-  `OBSERVATION-LOG-ID` int NOT NULL AUTO_INCREMENT,
+  `OBSERVATION_LOG_ID` int NOT NULL AUTO_INCREMENT,
   `OBSERVATION_ID` int DEFAULT NULL,
   `SET_ID` int DEFAULT NULL,
   `TARGET_NUMBER` int DEFAULT NULL,
   `SEQUENCE_NUMBER` int DEFAULT NULL,
   `NAME` varchar(128) NOT NULL,
-  `FITS-FILE` varchar(512) DEFAULT NULL,
-  `START-TIME` datetime DEFAULT NULL,
-  `END-TIME` datetime DEFAULT NULL,
+  `FITSFILE` varchar(512) DEFAULT NULL,
+  `EXP_START` datetime DEFAULT NULL,
+  `EXP_END` datetime DEFAULT NULL,
   `DURATION` int DEFAULT NULL,
   `RA` varchar(32) DEFAULT NULL,
   `DECL` varchar(32) DEFAULT NULL,
@@ -43,8 +86,8 @@ CREATE TABLE `completed_observations` (
   `BINSPAT` int DEFAULT NULL,
   `OBSMODE` varchar(32) DEFAULT NULL,
   `CASANGLE` float DEFAULT NULL,
-  PRIMARY KEY (`OBSERVATION-LOG-ID`,`NAME`),
-  UNIQUE KEY `OBSERVATION-LOG-ID_UNIQUE` (`OBSERVATION-LOG-ID`)
+  PRIMARY KEY (`OBSERVATION_LOG_ID`,`NAME`),
+  UNIQUE KEY `OBSERVATION-LOG-ID_UNIQUE` (`OBSERVATION_LOG_ID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=81 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -157,4 +200,4 @@ CREATE TABLE `targets` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-07-17 10:03:49
+-- Dump completed on 2024-07-18 10:50:04

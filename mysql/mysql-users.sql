@@ -23,7 +23,8 @@ SHOW GRANTS FOR grafana@localhost;
 CREATE USER obseq@localhost IDENTIFIED BY 'Write1Spec2.!';
 GRANT SELECT on ngps.target_sets TO obseq@localhost;
 GRANT SELECT, UPDATE, INSERT on ngps.targets TO obseq@localhost;
-GRANT INSERT on ngps.completed_observations TO obseq@localhost;
+GRANT INSERT on ngps.completed_observations TO obseq@localhost; -- DEPRECATED
+GRANT INSERT ON ngps.completed_obs TO obseq@localhost;
 SHOW GRANTS FOR obseq@localhost;
 
 -- gui
