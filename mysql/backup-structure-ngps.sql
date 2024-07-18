@@ -24,7 +24,7 @@ DROP TABLE IF EXISTS `completed_obs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `completed_obs` (
   `LOG_ID` int NOT NULL AUTO_INCREMENT,
-  `OWNER` varchar(32) DEFAULT NULL COMMENT 'Name of target list owner',
+  `OWNER` varchar(32) NOT NULL COMMENT 'Name of target list owner',
   `OBSERVATION_ID` int DEFAULT NULL COMMENT 'ID from the master targets table',
   `SET_ID` int DEFAULT NULL COMMENT 'ID of the user''s target set',
   `TARGET_NUMBER` int DEFAULT NULL,
@@ -200,4 +200,4 @@ CREATE TABLE `targets` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-07-18 10:50:04
+-- Dump completed on 2024-07-18 11:02:31
