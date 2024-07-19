@@ -252,49 +252,6 @@ namespace TcsEmulator {
   /***** TcsEmulator::Interface::Interface ************************************/
 
 
-  /***** TcsEmulator::Telescope::Telescope ************************************/
-  /**
-   * @brief      Telescope class constructor
-   *
-   * sets some default values
-   * some of these can be overridden by the configuration file
-   *
-   */
-  Telescope::Telescope() {
-    this->motionstate.store( TCS_MOTION_STOPPED );  //! telescope is stopped by default
-
-    // default slew and settling times set here can be overridden by configuration file
-    //
-    this->focusrate = 5;          //! default slew rate is 5mm/s, override with EMULATOR_FOCUSRATE
-    this->slewrate_ra = 0.75;     //! default slew rate is 0.75/s for RA, override with EMULATOR_SLEWRATE_RA
-    this->slewrate_dec = 0.75;    //! default slew rate is 0.75/s for DEC override with EMULATOR_SLEWRATE_DEC
-    this->slewrate_casangle = 2;  //! default slew rate is 2/s for CASANGLE override with EMULATOR_SLEWRATE_CASNGLE
-    this->settle_ra = 12;         //! default settling time is 12s for RA override with EMULATOR_SETTLE_RA
-    this->settle_dec = 12;        //! default settling time is 12s for DEC override with EMULATOR_SETTLE_DEC
-    this->settle_casangle = 0.5;  //! default settling time is 0.5s for CASANGLE override with EMULATOR_SETTLE__CASNGLE
-    this->offsetrate_ra = 45;     //! default offset RA rate in arcsec/sec
-    this->offsetrate_dec = 45;    //! default offset DEC rate in arcsec/sec
-
-    this->name = " ";
-    this->telid = 200;
-    this->tubelength = 22.11;
-    this->focus.store(36.71);
-    this->ra.store(0);
-    this->dec.store(0);
-    this->offset_ra = 0;
-    this->offset_dec = 0;
-    this->trackrate_ra = 0;
-    this->trackrate_dec = 0;
-    this->casangle = 0;
-    this->ha = 0;
-    this->lst = 0;
-    this->airmass = 1.0;
-    this->azimuth = 0;
-    this->zangle = 0;
-  }
-  /***** TcsEmulator::Telescope::Telescope ************************************/
-
-
   /***** TcsEmulator::Telescope::initialize_python_objects ********************/
   /**
    * @brief      provides interface to initialize Python objects in the class
