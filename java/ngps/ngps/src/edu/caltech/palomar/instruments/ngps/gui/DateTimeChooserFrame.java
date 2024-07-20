@@ -222,7 +222,7 @@ public java.lang.String constructMonthString(int new_month){
      }); 
  }
  /*=============================================================================================
-/     myMonth_propertyChange(PropertyChangeEvent e)
+/     myDateTimeModel_propertyChange(PropertyChangeEvent e)
 /=============================================================================================*/
    private void myDateTimeModel_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
@@ -240,15 +240,15 @@ public java.lang.String constructMonthString(int new_month){
         updateSelectedTimeDate();
      }
      if(propertyName == "hour"){
-        month = ((java.lang.Integer)e.getNewValue()).intValue();
+        hours = ((java.lang.Integer)e.getNewValue()).intValue();
         HoursSpinner.setValue(Integer.valueOf(hours));
      }
      if(propertyName == "minute"){
-        month = ((java.lang.Integer)e.getNewValue()).intValue();
+        minutes = ((java.lang.Integer)e.getNewValue()).intValue();
         MinutesSpinner.setValue(Integer.valueOf(minutes));
     }
      if(propertyName == "second"){
-        month = ((java.lang.Integer)e.getNewValue()).intValue();
+        seconds = ((java.lang.Integer)e.getNewValue()).intValue();
         SecondsSpinner.setValue(Integer.valueOf(seconds));
      }    
   }

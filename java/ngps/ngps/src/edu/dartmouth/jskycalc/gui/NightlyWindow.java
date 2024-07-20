@@ -77,7 +77,7 @@ import java.beans.PropertyChangeSupport;
       JLabel [] phenlabel;
       String [] labeltext = {"Sunset","Twilight Ends","LST Eve. Twi.","Night Center","Twilight Begins",
         "LST Morn. Twi.","Sunrise","Moonrise","Moonset","UTC Twilight"};
-      NightlyAlmanac Nightly;
+      public NightlyAlmanac Nightly;
       private java.lang.String UTC_twilight = new java.lang.String();
 /*================================================================================================
 /

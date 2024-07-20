@@ -48,9 +48,10 @@ import java.beans.PropertyChangeEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.sql.Timestamp;
-import java.util.Calendar;
 import java.util.Properties;
 import java.util.Stack;
+import java.util.Calendar;
+import java.time.Instant;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
 import javax.swing.DropMode;
@@ -72,6 +73,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.plaf.basic.BasicProgressBarUI;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
+import javax.swing.Timer;
 import org.jdatepicker.impl.JDatePanelImpl;
 import org.jdatepicker.impl.JDatePickerImpl;
 import org.jdatepicker.impl.UtilDateModel;
@@ -164,6 +166,7 @@ public class NGPSFrame extends javax.swing.JFrame {
   public BrowserDisplay            myBrowserDisplay = new BrowserDisplay();
 //  public OScontrolsPanel           myOScontrolsPanel;
   public ChangePasswordFrame       myChangePasswordFrame; 
+  public Timer                     startTimer;
 /*=============================================================================================
 /     NGPSFrame()
 /=============================================================================================*/
@@ -212,7 +215,8 @@ public class NGPSFrame extends javax.swing.JFrame {
             myConnectionsFrame.setDBMS(dbms);
             planningPanel.remove(fetchLiveButton);
             planningPanel.remove(auto_start_timeCheckBox);
-            planningPanel.remove(auto_fetchCheckBox);            
+            planningPanel.remove(auto_fetchCheckBox);
+            connectionsMenuItem.setEnabled(false);
             setTitle("PLANNING");
             pack();
         }        
@@ -302,6 +306,33 @@ public JMenu getAccountMenu(){
     minutesSpinnerModel    =  new SpinnerNumberModel(0,0,60,1);
     HoursSpinner.setModel(     hoursSpinnerModel);
     MinutesSpinner.setModel(   minutesSpinnerModel);
+
+    // add a timer that updates the calendar and time with current date/time
+    // Timer is enabled by the Auto checkbox
+    final int timerStep_ms = 10000;  // 10s cycle
+    startTimer = new Timer(timerStep_ms, new ActionListener(){
+        public void actionPerformed(ActionEvent evt) {
+                        
+            Instant now = Instant.now() ;  
+            String nowStr = now.toString() ;  // UTC  "yyyy-mm-ddTHH:MM:SS.SSSS"
+            String[] nowDateArr = nowStr.split("T")[0].split("-") ;
+            int nowYr = Integer.parseInt(nowDateArr[0]) ;
+            int nowMo = Integer.parseInt(nowDateArr[1]) ;
+            int nowDa = Integer.parseInt(nowDateArr[2]) ;
+            System.out.println("DATE  "+nowDateArr[0]+nowDateArr[1]+nowDateArr[2]);
+            
+            String[] nowTimeArr = nowStr.split("T")[1].split(":") ;
+            int nowHr = Integer.parseInt(nowTimeArr[0]) ;
+            int nowMin = Integer.parseInt(nowTimeArr[1]) ;
+            int nowSec = Integer.parseInt(nowTimeArr[2].substring(0, 2)) ; // seconds for testing
+                                                                
+            datePicker.getModel().setDate(nowYr, nowMo-1, nowDa); // month starts from 0 (?)
+            HoursSpinner.setValue(nowHr) ; 
+            MinutesSpinner.setValue(nowMin) ;                
+        }
+    });
+    startTimer.setRepeats(true);
+    startTimer.setInitialDelay(0);  // Fire immediately when started
  }
  /*================================================================================================
 /     initializeGlobalPreferences()
@@ -693,6 +724,7 @@ public void initializeObservationSequencerController(){
               }
       });
     myOScontrolsPanel.initialize(myObservationSequencerController); 
+    myOScontrolsPanel.addAutoStartCheckbox(auto_start_timeCheckBox) ;
     myObservationSequencerController.connect();
     myObservationSequencerController.setNGPSdatabase(dbms);
     myTargetSetFrame.setObservationSequencerController(myObservationSequencerController);
@@ -865,7 +897,7 @@ public static JTable constructPlanTable(){
                 if(rowIndex == FLAG_ROW){
                   if(current_target != null){
                     java.lang.String flags = (current_target.otm.getOTMflag());
-                    if (flags.contains("DAY")) {
+                    if (flags.contains("DAY") & flags.contains("-1")) {
                         c.setBackground(super.getBackground());
                         c.setForeground(Color.red);
                         jc.setBorder(super.getBorder());                   
@@ -908,16 +940,25 @@ public static JTable constructTable(){
                 Target current = ((MasterDBTableModel)getModel()).getRecord(rowIndex);
                 boolean selected_row = current.isSelected();
                 String state = current.getSTATE();
+                String OTMflag = current.otm.getOTMflag();
                 if ("exposing".equals(state)) {
                     c.setBackground(Color.green);
                     c.setForeground(Color.black);
                     jc.setBorder(new MatteBorder(1, 0, 1, 0, Color.BLACK));                   
-                } else if("PENDING".matches(state)){
+                }
+                else if("PENDING".matches(state)){
 //                    c.setBackground(super.getBackground());
 //                    c.setForeground(super.getForeground());
-                    c.setBackground(Color.white);
-                    c.setForeground(Color.black);
-                    jc.setBorder(super.getBorder());
+                    if(!OTMflag.trim().isEmpty()){
+                        c.setBackground(Color.white);
+                        c.setForeground(Color.BLUE);
+                        jc.setBorder(super.getBorder());   
+                    }
+                    else{
+                        c.setBackground(Color.white);
+                        c.setForeground(Color.black);
+                        jc.setBorder(super.getBorder());
+                    }
                 }
                 else if("completed".matches(state)){
                     c.setBackground(Color.gray);
@@ -937,11 +978,6 @@ public static JTable constructTable(){
                 else if("ERROR-OTM".matches(state) | "error-otm".matches(state)){
                     c.setBackground(Color.white);
                     c.setForeground(Color.RED);
-                    jc.setBorder(super.getBorder());   
-                }
-                else if("WARN-OTM".matches(state) | "warn-otm".matches(state)){
-                    c.setBackground(Color.white);
-                    c.setForeground(Color.BLUE);
                     jc.setBorder(super.getBorder());   
                 }
                 if((columnIndex > 17)&(columnIndex < 25)){
@@ -1361,7 +1397,7 @@ public static JTable constructTable(){
         preferencesMenuItem = new javax.swing.JMenuItem();
         shutdownMenuItem = new javax.swing.JMenuItem();
         quitMenuItem = new javax.swing.JMenuItem();
-        jMenu1 = new javax.swing.JMenu();
+        fileMenu = new javax.swing.JMenu();
         new_target_listMenuItem = new javax.swing.JMenuItem();
         jSeparator3 = new javax.swing.JPopupMenu.Separator();
         openMenuItem = new javax.swing.JMenuItem();
@@ -1384,6 +1420,7 @@ public static JTable constructTable(){
         zoomInMenuItem = new javax.swing.JMenuItem();
         zoomOutMenuItem = new javax.swing.JMenuItem();
         toolsMenu = new javax.swing.JMenu();
+        SunAndMoonMenuitem = new javax.swing.JMenuItem();
         hourly_weatherMenuItem = new javax.swing.JMenuItem();
         ten_day_weatherMenuItem = new javax.swing.JMenuItem();
         engineeringMenuItem = new javax.swing.JMenuItem();
@@ -1450,6 +1487,11 @@ public static JTable constructTable(){
         });
 
         auto_start_timeCheckBox.setText("Auto");
+        auto_start_timeCheckBox.addItemListener(new java.awt.event.ItemListener() {
+            public void itemStateChanged(java.awt.event.ItemEvent evt) {
+                auto_start_timeCheckBoxItemStateChanged(evt);
+            }
+        });
 
         fetchLiveButton.setFont(new java.awt.Font("Arial", 1, 10)); // NOI18N
         fetchLiveButton.setText("Fetch Live");
@@ -1494,7 +1536,7 @@ public static JTable constructTable(){
         });
 
         jLabel13.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
-        jLabel13.setText("Seeing:");
+        jLabel13.setText("Seeing (arcsec):");
 
         seeingTextField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -1928,7 +1970,7 @@ public static JTable constructTable(){
 
         mainMenuBar.add(NGPSMenu);
 
-        jMenu1.setText("File");
+        fileMenu.setText("File");
 
         new_target_listMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         new_target_listMenuItem.setText("New Target List");
@@ -1937,8 +1979,8 @@ public static JTable constructTable(){
                 new_target_listMenuItemActionPerformed(evt);
             }
         });
-        jMenu1.add(new_target_listMenuItem);
-        jMenu1.add(jSeparator3);
+        fileMenu.add(new_target_listMenuItem);
+        fileMenu.add(jSeparator3);
 
         openMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         openMenuItem.setText("Open");
@@ -1947,8 +1989,8 @@ public static JTable constructTable(){
                 openMenuItemActionPerformed(evt);
             }
         });
-        jMenu1.add(openMenuItem);
-        jMenu1.add(jSeparator2);
+        fileMenu.add(openMenuItem);
+        fileMenu.add(jSeparator2);
 
         saveMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         saveMenuItem.setText("Save");
@@ -1957,7 +1999,7 @@ public static JTable constructTable(){
                 saveMenuItemActionPerformed(evt);
             }
         });
-        jMenu1.add(saveMenuItem);
+        fileMenu.add(saveMenuItem);
 
         save_asMenuItem.setText("Save as");
         save_asMenuItem.addActionListener(new java.awt.event.ActionListener() {
@@ -1965,8 +2007,8 @@ public static JTable constructTable(){
                 save_asMenuItemActionPerformed(evt);
             }
         });
-        jMenu1.add(save_asMenuItem);
-        jMenu1.add(jSeparator1);
+        fileMenu.add(save_asMenuItem);
+        fileMenu.add(jSeparator1);
 
         importMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_I, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         importMenuItem.setText("Import");
@@ -1975,7 +2017,7 @@ public static JTable constructTable(){
                 importMenuItemActionPerformed(evt);
             }
         });
-        jMenu1.add(importMenuItem);
+        fileMenu.add(importMenuItem);
 
         exportMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_E, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         exportMenuItem.setText("Export");
@@ -1984,9 +2026,9 @@ public static JTable constructTable(){
                 exportMenuItemActionPerformed(evt);
             }
         });
-        jMenu1.add(exportMenuItem);
+        fileMenu.add(exportMenuItem);
 
-        mainMenuBar.add(jMenu1);
+        mainMenuBar.add(fileMenu);
 
         editMenu.setText("Edit");
 
@@ -2077,6 +2119,14 @@ public static JTable constructTable(){
         mainMenuBar.add(viewMenu);
 
         toolsMenu.setText("Tools");
+
+        SunAndMoonMenuitem.setText("Sun and Moon");
+        SunAndMoonMenuitem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                SunAndMoonMenuitemActionPerformed(evt);
+            }
+        });
+        toolsMenu.add(SunAndMoonMenuitem);
 
         hourly_weatherMenuItem.setText("Hourly weather forcast");
         hourly_weatherMenuItem.addActionListener(new java.awt.event.ActionListener() {
@@ -2428,9 +2478,32 @@ public static JTable constructTable(){
     }//GEN-LAST:event_airmass_limitTextFieldActionPerformed
 
     private void twilightButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_twilightButtonActionPerformed
+        int twiHour = myNightlyWindow.Nightly.eveningTwilight.when.UTDate.timeofday.hour  ;
+        HoursSpinner.setValue(Integer.valueOf(twiHour)) ;
+        int twiMinute = myNightlyWindow.Nightly.eveningTwilight.when.UTDate.timeofday.minute  ;
+        MinutesSpinner.setValue(Integer.valueOf(twiMinute)) ;
+    }//GEN-LAST:event_twilightButtonActionPerformed
+
+    private void SunAndMoonMenuitemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_SunAndMoonMenuitemActionPerformed
         myNightlyWindow.UpdateDisplay();
         myNightlyWindow.setVisible(true);
-    }//GEN-LAST:event_twilightButtonActionPerformed
+    }//GEN-LAST:event_SunAndMoonMenuitemActionPerformed
+
+    private void auto_start_timeCheckBoxItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_auto_start_timeCheckBoxItemStateChanged
+        if(auto_start_timeCheckBox.isSelected()){
+            HoursSpinner.setEnabled(false);
+            MinutesSpinner.setEnabled(false);
+            datePicker.getComponent(1).setEnabled(false);
+            twilightButton.setEnabled(false);
+            startTimer.start();
+        } else{
+            HoursSpinner.setEnabled(true);
+            MinutesSpinner.setEnabled(true);            
+            datePicker.getComponent(1).setEnabled(true);
+            twilightButton.setEnabled(true);
+            startTimer.stop();            
+        }
+    }//GEN-LAST:event_auto_start_timeCheckBoxItemStateChanged
 
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
@@ -2505,9 +2578,10 @@ public static JTable constructTable(){
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JSpinner HoursSpinner;
-    private javax.swing.JSpinner MinutesSpinner;
+    public javax.swing.JSpinner HoursSpinner;
+    public javax.swing.JSpinner MinutesSpinner;
     private javax.swing.JMenu NGPSMenu;
+    private javax.swing.JMenuItem SunAndMoonMenuitem;
     private javax.swing.JMenuItem aboutNGPSMenuItem;
     private javax.swing.JButton acceptButton;
     private javax.swing.JTextField airmass_limitTextField;
@@ -2528,6 +2602,7 @@ public static JTable constructTable(){
     private javax.swing.JTable etcTable;
     private javax.swing.JMenuItem exportMenuItem;
     private javax.swing.JButton fetchLiveButton;
+    private javax.swing.JMenu fileMenu;
     private javax.swing.JMenu helpMenu;
     private javax.swing.JMenuItem hourly_weatherMenuItem;
     private javax.swing.JMenuItem importMenuItem;
@@ -2547,7 +2622,6 @@ public static JTable constructTable(){
     private javax.swing.JLabel jLabel7;
     private javax.swing.JLabel jLabel8;
     private javax.swing.JLabel jLabel9;
-    private javax.swing.JMenu jMenu1;
     private javax.swing.JMenu jMenu3;
     private javax.swing.JMenuItem jMenuItem1;
     private javax.swing.JPanel jPanel10;

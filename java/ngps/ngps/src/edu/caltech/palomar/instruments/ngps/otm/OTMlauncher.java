@@ -504,20 +504,12 @@ public void readOTMoutput(){
              current.setSTATE("PENDING");
              dbms.myTargetDBMSTableModel.fireTableDataChanged();
 
-             if(flags.contains("DAY")){
+             if(flags.contains("DAY") & flags.contains("-1")){ // Change to check exposure start time == None/Null
                  current.setSTATE("ERROR-OTM");
                  dbms.myTargetDBMSTableModel.fireTableDataChanged();
                  continue;
              }
-             if(!flags.trim().isEmpty()){
-                 current.setSTATE("WARN-OTM");
-                 dbms.myTargetDBMSTableModel.fireTableDataChanged();
-             }
-//             else if(current.getSTATE().matches("OTM")){
-//                 current.setSTATE("PENDING");
-//                 dbms.myTargetDBMSTableModel.fireTableDataChanged();
-//             }
-             // if state matches OTM
+
              if(first_image){
                  first_image = false;
                  long first_image_start = current.otm.getOTMstart().getTime();

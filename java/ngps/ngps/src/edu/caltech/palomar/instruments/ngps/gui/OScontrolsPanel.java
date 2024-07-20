@@ -36,6 +36,8 @@ public class OScontrolsPanel extends javax.swing.JPanel {
  public java.lang.String          CONFIG          = new java.lang.String("config");
  public java.lang.String          IMAGE_CACHE     = new java.lang.String("images");
  public java.lang.String          IMAGE_DIR     = USERDIR+SEP+IMAGE_CACHE;
+ public javax.swing.JCheckBox     autoStartCheckbox;  // copy of the one from planning pane
+
 /*=============================================================================================
 /     OScontrolsPanel(ObservationSequencerController newObservationSequencerController)
 /=============================================================================================*/ 
@@ -157,6 +159,11 @@ public void initializeActionButtons(){
             }
         });  
 }  
+
+public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
+    autoStartCheckbox = auto_start_timeCheckBox;
+}
+
  private void STARTUPActionPerformed(java.awt.event.ActionEvent evt){
 //    if(myObservationSequencerController.isBlockingConnected()){
         myObservationSequencerController.tcs_isOpen();
@@ -735,12 +742,15 @@ public void initializeActionButtons(){
     private void do_oneRadioButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_do_oneRadioButtonActionPerformed
          if(do_oneRadioButton.isSelected()){
              myObservationSequencerController.do_one_all(ObservationSequencerController.DO_ONE);
+             autoStartCheckbox.setEnabled(true);
          }
     }//GEN-LAST:event_do_oneRadioButtonActionPerformed
 
     private void do_allRadioButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_do_allRadioButtonActionPerformed
          if(do_allRadioButton.isSelected()){
-             myObservationSequencerController.do_one_all(ObservationSequencerController.DO_ALL);
+            myObservationSequencerController.do_one_all(ObservationSequencerController.DO_ALL);
+            autoStartCheckbox.setSelected(true);
+            autoStartCheckbox.setEnabled(false);
          } 
     }//GEN-LAST:event_do_allRadioButtonActionPerformed
 

@@ -236,10 +236,10 @@ public void setEdited(boolean new_edited){
      addColumn("NAME");
      addColumn("RA");
      addColumn("DEC");
-     addColumn("Requested"+ '\n'+ "EXPTIME");
-     addColumn("Calculated"+ '\n'+  "EXPTIME"); //6
-     addColumn("Requested" + '\n'+ "SLIT width");
-     addColumn("Calculated"+ '\n'+ "SLIT width");//8
+     addColumn("EXPTIME"+ '\n'+ "Request");
+     addColumn("Calculated"+ '\n'+ "EXPTIME (s)"); //6
+     addColumn("SLITWIDTH" + '\n'+ "Request");
+     addColumn("Calculated"+ '\n'+ "SLITWIDTH");//8
      addColumn("AIRMASS");
      addColumn("OTMSNR");//10
      addColumn("NOTE");

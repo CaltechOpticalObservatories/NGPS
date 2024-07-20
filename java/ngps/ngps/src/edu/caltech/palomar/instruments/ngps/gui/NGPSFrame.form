@@ -111,7 +111,7 @@
             </MenuItem>
           </SubComponents>
         </Menu>
-        <Menu class="javax.swing.JMenu" name="jMenu1">
+        <Menu class="javax.swing.JMenu" name="fileMenu">
           <Properties>
             <Property name="text" type="java.lang.String" value="File"/>
           </Properties>
@@ -308,6 +308,14 @@
             <Property name="text" type="java.lang.String" value="Tools"/>
           </Properties>
           <SubComponents>
+            <MenuItem class="javax.swing.JMenuItem" name="SunAndMoonMenuitem">
+              <Properties>
+                <Property name="text" type="java.lang.String" value="Sun and Moon"/>
+              </Properties>
+              <Events>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="SunAndMoonMenuitemActionPerformed"/>
+              </Events>
+            </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="hourly_weatherMenuItem">
               <Properties>
                 <Property name="text" type="java.lang.String" value="Hourly weather forcast"/>
@@ -622,6 +630,9 @@
           <Properties>
             <Property name="text" type="java.lang.String" value="Auto"/>
           </Properties>
+          <Events>
+            <EventHandler event="itemStateChanged" listener="java.awt.event.ItemListener" parameters="java.awt.event.ItemEvent" handler="auto_start_timeCheckBoxItemStateChanged"/>
+          </Events>
         </Component>
         <Component class="javax.swing.JButton" name="fetchLiveButton">
           <Properties>
@@ -710,6 +721,9 @@
           <Events>
             <EventHandler event="stateChanged" listener="javax.swing.event.ChangeListener" parameters="javax.swing.event.ChangeEvent" handler="HoursSpinnerStateChanged"/>
           </Events>
+          <AuxValues>
+            <AuxValue name="JavaCodeGenerator_VariableModifier" type="java.lang.Integer" value="1"/>
+          </AuxValues>
         </Component>
         <Component class="javax.swing.JSpinner" name="MinutesSpinner">
           <Properties>
@@ -720,13 +734,16 @@
           <Events>
             <EventHandler event="stateChanged" listener="javax.swing.event.ChangeListener" parameters="javax.swing.event.ChangeEvent" handler="MinutesSpinnerStateChanged"/>
           </Events>
+          <AuxValues>
+            <AuxValue name="JavaCodeGenerator_VariableModifier" type="java.lang.Integer" value="1"/>
+          </AuxValues>
         </Component>
         <Component class="javax.swing.JLabel" name="jLabel13">
           <Properties>
             <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
               <Font name="Arial" size="12" style="1"/>
             </Property>
-            <Property name="text" type="java.lang.String" value="Seeing:"/>
+            <Property name="text" type="java.lang.String" value="Seeing (arcsec):"/>
           </Properties>
         </Component>
         <Component class="javax.swing.JTextField" name="seeingTextField">
