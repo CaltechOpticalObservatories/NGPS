@@ -1020,8 +1020,8 @@ public static JTable constructTable(){
         JMenuItem copy_menu_item    = new JMenuItem("Copy");
         paste_menu_item   = new JMenuItem("Paste");
         insert_copied_menu_item   = new JMenuItem("Insert Copied row");
-        paste_menu_item.setEnabled(false);
-        insert_copied_menu_item.setEnabled(false);
+        //paste_menu_item.setEnabled(false);
+        //insert_copied_menu_item.setEnabled(false);
            JPopupMenu popup          = new JPopupMenu("Editing Functions");
                       popup.add(insert_menu_item);
                       popup.add(delete_menu_item);
@@ -1031,7 +1031,7 @@ public static JTable constructTable(){
            insert_menu_item.addActionListener(new ActionListener() {
               public void actionPerformed(ActionEvent ev) {
                  System.out.println("Insert Menu Item pressed");
-                 current_table_model.insert(selected_table_row, new Target());
+                 current_table_model.insert(selected_table_row+1, new Target());
               }
            });
            delete_menu_item.addActionListener(new ActionListener() {
@@ -1049,37 +1049,39 @@ public static JTable constructTable(){
                  System.out.println("Copy Menu Item pressed");
                  Target selected_copy_target = current_table_model.getRecord(selected_table_row);                 
                  copy_stack.push(selected_copy_target.clone());
-                 paste_menu_item.setEnabled(true);
-                 insert_copied_menu_item.setEnabled(true);
+                 //paste_menu_item.setEnabled(true);
+                 //insert_copied_menu_item.setEnabled(true);
+                 setPaste(true);
               }
            });
            paste_menu_item.addActionListener(new ActionListener() {
               public void actionPerformed(ActionEvent ev) {
                  System.out.println("Paste Menu Item pressed"); 
-                 Target current_target = (Target)copy_stack.pop();
-                 current_table_model.delete(selected_table_row);
-                 current_table_model.insert(selected_table_row, current_target);
-                 current_table_model.reorder_table();
-                 boolean state = copy_stack.empty();
-                 if(state){
+                 if(!copy_stack.empty()){
+                     Target current_target = (Target)copy_stack.pop();
+                     current_table_model.delete(selected_table_row);
+                     current_table_model.insert(selected_table_row, current_target);
+                     current_table_model.reorder_table();                     
+                 }
+                 if(copy_stack.empty()){
                     setPaste(false); 
-                    paste_menu_item.setEnabled(false);
-                    insert_copied_menu_item.setEnabled(false);
+                    //paste_menu_item.setEnabled(false);
+                    //insert_copied_menu_item.setEnabled(false);
                  }
               }
            });
            insert_copied_menu_item.addActionListener(new ActionListener() {
               public void actionPerformed(ActionEvent ev) {
-                 System.out.println("Paste Menu Item pressed"); 
-                 Target current_target = (Target)copy_stack.pop();
-//                 current_table_model.delete(selected_table_row);
-                 current_table_model.insert(selected_table_row, current_target);
-                 current_table_model.reorder_table();
-                 boolean state = copy_stack.empty();
-                 if(state){
+                 System.out.println("Insert Copied Menu Item pressed"); 
+                 if(!copy_stack.empty()){
+                     Target current_target = (Target)copy_stack.pop();
+                     current_table_model.insert(selected_table_row+1, current_target);
+                     current_table_model.reorder_table();
+                 }
+                 if(copy_stack.empty()){
                     setPaste(false); 
-                    paste_menu_item.setEnabled(false);
-                    insert_copied_menu_item.setEnabled(false);
+                    //paste_menu_item.setEnabled(false);
+                    //insert_copied_menu_item.setEnabled(false);
                  }
               }
            });
@@ -1408,13 +1410,12 @@ public static JTable constructTable(){
         importMenuItem = new javax.swing.JMenuItem();
         exportMenuItem = new javax.swing.JMenuItem();
         editMenu = new javax.swing.JMenu();
-        newTargetCheckBoxMenuItem = new javax.swing.JCheckBoxMenuItem();
-        new_target_from_databaseMenuItem = new javax.swing.JMenuItem();
-        cutMenuItem = new javax.swing.JMenuItem();
+        insertRowMenuItem = new javax.swing.JMenuItem();
+        insert_copiedMenuItem = new javax.swing.JMenuItem();
         copyMenuItem = new javax.swing.JMenuItem();
         pasteMenuItem = new javax.swing.JMenuItem();
         deleteMenuItem = new javax.swing.JMenuItem();
-        insert_copiedMenuItem = new javax.swing.JMenuItem();
+        new_target_from_databaseMenuItem = new javax.swing.JMenuItem();
         jMenuItem1 = new javax.swing.JMenuItem();
         viewMenu = new javax.swing.JMenu();
         zoomInMenuItem = new javax.swing.JMenuItem();
@@ -2032,52 +2033,17 @@ public static JTable constructTable(){
 
         editMenu.setText("Edit");
 
-        newTargetCheckBoxMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_T, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        newTargetCheckBoxMenuItem.setSelected(true);
-        newTargetCheckBoxMenuItem.setText("Insert New Target");
-        newTargetCheckBoxMenuItem.addActionListener(new java.awt.event.ActionListener() {
+        insertRowMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_T, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        insertRowMenuItem.setText("Insert Row");
+        insertRowMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                newTargetCheckBoxMenuItemActionPerformed(evt);
+                insertRowMenuItemActionPerformed(evt);
             }
         });
-        editMenu.add(newTargetCheckBoxMenuItem);
+        editMenu.add(insertRowMenuItem);
 
-        new_target_from_databaseMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        new_target_from_databaseMenuItem.setText("Get Target from Database");
-        new_target_from_databaseMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                new_target_from_databaseMenuItemActionPerformed(evt);
-            }
-        });
-        editMenu.add(new_target_from_databaseMenuItem);
-
-        cutMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_X, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        cutMenuItem.setText("Cut");
-        cutMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cutMenuItemActionPerformed(evt);
-            }
-        });
-        editMenu.add(cutMenuItem);
-
-        copyMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        copyMenuItem.setText("Copy");
-        copyMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                copyMenuItemActionPerformed(evt);
-            }
-        });
-        editMenu.add(copyMenuItem);
-
-        pasteMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        pasteMenuItem.setText("Paste");
-        editMenu.add(pasteMenuItem);
-
-        deleteMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        deleteMenuItem.setText("Delete");
-        editMenu.add(deleteMenuItem);
-
-        insert_copiedMenuItem.setText("Insert Copied Cells");
+        insert_copiedMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_V, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        insert_copiedMenuItem.setText("Insert Copied Row");
         insert_copiedMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 insert_copiedMenuItemActionPerformed(evt);
@@ -2085,8 +2051,45 @@ public static JTable constructTable(){
         });
         editMenu.add(insert_copiedMenuItem);
 
-        jMenuItem1.setForeground(java.awt.Color.lightGray);
+        copyMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        copyMenuItem.setText("Copy Row");
+        copyMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                copyMenuItemActionPerformed(evt);
+            }
+        });
+        editMenu.add(copyMenuItem);
+
+        pasteMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        pasteMenuItem.setText("Paste Row");
+        pasteMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                pasteMenuItemActionPerformed(evt);
+            }
+        });
+        editMenu.add(pasteMenuItem);
+
+        deleteMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_D, java.awt.event.InputEvent.SHIFT_DOWN_MASK | java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        deleteMenuItem.setText("Delete Row");
+        deleteMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                deleteMenuItemActionPerformed(evt);
+            }
+        });
+        editMenu.add(deleteMenuItem);
+
+        new_target_from_databaseMenuItem.setText("Get Target from Database");
+        new_target_from_databaseMenuItem.setEnabled(false);
+        new_target_from_databaseMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                new_target_from_databaseMenuItemActionPerformed(evt);
+            }
+        });
+        editMenu.add(new_target_from_databaseMenuItem);
+
+        jMenuItem1.setForeground(java.awt.Color.black);
         jMenuItem1.setText("Sort targets by RA");
+        jMenuItem1.setEnabled(false);
         jMenuItem1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jMenuItem1ActionPerformed(evt);
@@ -2258,7 +2261,12 @@ public static JTable constructTable(){
     }//GEN-LAST:event_importMenuItemActionPerformed
 
     private void copyMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_copyMenuItemActionPerformed
-        // TODO add your handling code here:
+         System.out.println("Copy Menu Item pressed");
+         Target selected_copy_target = dbms.myTargetDBMSTableModel.getRecord(selected_table_row);                 
+         copy_stack.push(selected_copy_target.clone());
+         setPaste(true);
+         //paste_menu_item.setEnabled(true);
+         //insert_copied_menu_item.setEnabled(true);
     }//GEN-LAST:event_copyMenuItemActionPerformed
 
     private void zoomOutMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_zoomOutMenuItemActionPerformed
@@ -2324,7 +2332,17 @@ public static JTable constructTable(){
     }//GEN-LAST:event_zoomInMenuItemActionPerformed
 
     private void insert_copiedMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_insert_copiedMenuItemActionPerformed
-        // TODO add your handling code here:
+         System.out.println("Insert Copied Menu Item pressed"); 
+        if(!copy_stack.empty()){
+         Target current_target = (Target)copy_stack.pop();
+         dbms.myTargetDBMSTableModel.insert(selected_table_row+1, current_target);
+         dbms.myTargetDBMSTableModel.reorder_table();            
+        }
+         if(copy_stack.empty()){
+            setPaste(false); 
+            //pasteMenuItem.setEnabled(false);
+            //insert_copiedMenuItem.setEnabled(false);
+         }
     }//GEN-LAST:event_insert_copiedMenuItemActionPerformed
 
     private void shutdownMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_shutdownMenuItemActionPerformed
@@ -2357,10 +2375,6 @@ public static JTable constructTable(){
     private void new_target_from_databaseMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_new_target_from_databaseMenuItemActionPerformed
         myTargetSearchFrame.setVisible(true);
     }//GEN-LAST:event_new_target_from_databaseMenuItemActionPerformed
-
-    private void newTargetCheckBoxMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_newTargetCheckBoxMenuItemActionPerformed
-        // TODO add your handling code here:
-    }//GEN-LAST:event_newTargetCheckBoxMenuItemActionPerformed
 
     private void aboutNGPSMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_aboutNGPSMenuItemActionPerformed
         my_aboutNGPSFrame.setVisible(true);
@@ -2405,10 +2419,6 @@ public static JTable constructTable(){
     private void jMenuItem1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem1ActionPerformed
         // TODO add your handling code here:
     }//GEN-LAST:event_jMenuItem1ActionPerformed
-
-    private void cutMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cutMenuItemActionPerformed
-        // TODO add your handling code here:
-    }//GEN-LAST:event_cutMenuItemActionPerformed
 
     private void cancelButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cancelButtonActionPerformed
         try{
@@ -2505,6 +2515,35 @@ public static JTable constructTable(){
         }
     }//GEN-LAST:event_auto_start_timeCheckBoxItemStateChanged
 
+    private void insertRowMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_insertRowMenuItemActionPerformed
+        System.out.println("Insert Menu Item pressed"); 
+        dbms.myTargetDBMSTableModel.insert(selected_table_row+1, new Target()) ;
+    }//GEN-LAST:event_insertRowMenuItemActionPerformed
+
+    private void deleteMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_deleteMenuItemActionPerformed
+         System.out.println("Delete Menu Item pressed"); 
+         Target current_target = dbms.myTargetDBMSTableModel.getRecord(selected_table_row);
+         if(current_target.getObservationID() != 0){
+             dbms.delete_stack.push(current_target);
+         }
+         dbms.myTargetDBMSTableModel.delete(selected_table_row);
+    }//GEN-LAST:event_deleteMenuItemActionPerformed
+
+    private void pasteMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_pasteMenuItemActionPerformed
+         System.out.println("Paste Menu Item pressed"); 
+         if(!copy_stack.empty()){
+             Target current_target = (Target)copy_stack.pop();
+             dbms.myTargetDBMSTableModel.delete(selected_table_row);
+             dbms.myTargetDBMSTableModel.insert(selected_table_row, current_target);
+             dbms.myTargetDBMSTableModel.reorder_table();             
+         }
+         if(copy_stack.empty()){
+            setPaste(false); 
+         }
+            //pasteMenuItem.setEnabled(false);
+            //insert_copiedMenuItem.setEnabled(false);         }
+    }//GEN-LAST:event_pasteMenuItemActionPerformed
+
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
 
@@ -2590,7 +2629,6 @@ public static JTable constructTable(){
     private javax.swing.JButton cancelButton;
     private javax.swing.JMenuItem connectionsMenuItem;
     private javax.swing.JMenuItem copyMenuItem;
-    private javax.swing.JMenuItem cutMenuItem;
     private javax.swing.JLabel dbms_stateLabel;
     private javax.swing.JMenuItem deleteMenuItem;
     private javax.swing.JTabbedPane detailedTabbedPane;
@@ -2606,6 +2644,7 @@ public static JTable constructTable(){
     private javax.swing.JMenu helpMenu;
     private javax.swing.JMenuItem hourly_weatherMenuItem;
     private javax.swing.JMenuItem importMenuItem;
+    private javax.swing.JMenuItem insertRowMenuItem;
     private javax.swing.JMenuItem insert_copiedMenuItem;
     private javax.swing.JCheckBox jCheckBox2;
     private javax.swing.JLabel jLabel1;
@@ -2640,7 +2679,6 @@ public static JTable constructTable(){
     private javax.swing.JTable mainTable;
     private javax.swing.JScrollPane main_tableScrollPane;
     private edu.caltech.palomar.instruments.ngps.gui.OScontrolsPanel myOScontrolsPanel;
-    private javax.swing.JCheckBoxMenuItem newTargetCheckBoxMenuItem;
     private javax.swing.JMenuItem new_target_from_databaseMenuItem;
     private javax.swing.JMenuItem new_target_listMenuItem;
     private javax.swing.JMenuItem ngps_instrument_manualMenuItem;
