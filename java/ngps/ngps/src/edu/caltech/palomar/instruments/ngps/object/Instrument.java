@@ -20,7 +20,7 @@ public class Instrument extends java.lang.Object{
   public int              nexp;
   public double           slitwidth;
   public java.lang.String slitwidth_string;
-  public java.lang.String slitwidth_code;
+//  public java.lang.String slitwidth_code;
   public double           slitoffset;
   public java.lang.String ccdmode;
   public int              bin_spec;
@@ -46,7 +46,7 @@ public Instrument(){
 }
 private void initializeValues(){
     setNEXP(1);
-    setSlitwidth(1.0);
+    setSlitwidth(1.0);  // CHAZ
     setSlitOffset(0.0);
     setOBSMODE("default");
     setBIN_SPEC(1);
@@ -139,14 +139,14 @@ public DefaultMutableTreeNode constructTreeNode(){
   /*================================================================================================
 /      setSlitwidth(double new)
 /=================================================================================================*/
-  public void setSlitwidth_code(java.lang.String new_slitwidth_code) {
-    java.lang.String  old_slitwidth_code = this.slitwidth_code;
-    slitwidth_code = new_slitwidth_code;
-    propertyChangeListeners.firePropertyChange("slitwidth_code", old_slitwidth_code, new_slitwidth_code);
-  }
-  public java.lang.String getSlitwidth_code() {
-    return slitwidth_code;
-  }
+//  public void setSlitwidth_code(java.lang.String new_slitwidth_code) {
+//    java.lang.String  old_slitwidth_code = this.slitwidth_code;
+//    slitwidth_code = new_slitwidth_code;
+//    propertyChangeListeners.firePropertyChange("slitwidth_code", old_slitwidth_code, new_slitwidth_code);
+//  }
+//  public java.lang.String getSlitwidth_code() {
+//    return slitwidth_code;
+//  }
 /*================================================================================================
 /      setSlitwidth(double new)
 /=================================================================================================*/
@@ -248,7 +248,7 @@ public Instrument clone(){
     current.setOBSMODE(this.getOBSMODE());
     current.setSlitOffset(this.getSlitOffset());
     current.setSlitwidth(this.getSlitwidth());
-    current.setSlitwidth_code(this.getSlitwidth_code());
+    //current.setSlitwidth_code(this.getSlitwidth_code());
     current.setSlitwidth_string(this.getSlitwidth_string());
   return current;  
 }

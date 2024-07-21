@@ -221,18 +221,28 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = current.otm.getSkymag();
         } 
         if(row == 6){
-           java.sql.Timestamp OTMslewgoTimestamp = current.otm.getOTMslewgo();
-           if(OTMslewgoTimestamp.getTime() < 1E12){ // roughly the year 2002 -- the default value is 1999-01-01
+           java.sql.Timestamp ts = current.otm.getOTMslewgo();
+           if(ts.getTime() < 1E12){ // roughly the year 2002 -- the default value is 1999-01-01
                returnObject = "None";
            } else{
-           returnObject = timestamp_to_string(current.otm.getOTMslewgo());               
+           returnObject = timestamp_to_string(ts);               
            }
         }        
         if(row == 7){
-           returnObject = timestamp_to_string(current.otm.getOTMstart());
+           java.sql.Timestamp ts = current.otm.getOTMstart();
+           if(ts.getTime() < 1E12){ // roughly the year 2002 -- the default value is 1999-01-01
+               returnObject = "None";
+           } else{
+           returnObject = timestamp_to_string(ts);               
+           }
         }        
         if(row == 8){
-           returnObject = timestamp_to_string(current.otm.getOTMend());
+           java.sql.Timestamp ts = current.otm.getOTMend();
+           if(ts.getTime() < 1E12){ // roughly the year 2002 -- the default value is 1999-01-01
+               returnObject = "None";
+           } else{
+           returnObject = timestamp_to_string(ts);               
+           }
         }        
         if(row == 9){
            returnObject = current.otm.getOTMpa();
@@ -280,13 +290,13 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
     }
     if(col == 0){
         if(row == 0){
-           returnObject = "Exposure Time";
+           returnObject = "Exposure Time (s)";
         }       
         if(row == 1){
-           returnObject = "Slit Width";
+           returnObject = "Slit Width (arcsec)";
         }        
         if(row == 2){
-           returnObject = "Slit Angle";
+           returnObject = "Cassegrain Angle (deg)";
         } 
         if(row == 3){
            returnObject = "Airmass start";
@@ -307,10 +317,10 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "Exposure End Time";
         }        
         if(row == 9){
-           returnObject = "OTMpa";
+           returnObject = "OTMpa (deg)";
         }        
         if(row == 10){
-           returnObject = "OTMwait";
+           returnObject = "OTMwait (min)";
         }        
         if(row == 11){
            returnObject = "OTMflag";
@@ -319,13 +329,13 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "OTMlast";
         }   
         if(row == 13){
-           returnObject = "OTMslew";
+           returnObject = "OTMslew (s)";
         }                 
         if(row == 14){
-           returnObject = "OTMmoon";
+           returnObject = "OTMmoon (deg)";
         }                 
         if(row == 15){
-           returnObject = "OTMslitangle";
+           returnObject = "OTMslitangle (deg)";
         }  
         if(row == 16){
            returnObject = "OTMSNR";

@@ -1372,13 +1372,13 @@ public static JTable constructTable(){
         sekected_target_listjLabel = new javax.swing.JLabel();
         detailsPanel = new javax.swing.JPanel();
         detailedTabbedPane = new javax.swing.JTabbedPane();
-        jPanel6 = new javax.swing.JPanel();
+        observationTab = new javax.swing.JPanel();
         jScrollPane3 = new javax.swing.JScrollPane();
         observationTable = new javax.swing.JTable();
-        jPanel7 = new javax.swing.JPanel();
+        ETCTab = new javax.swing.JPanel();
         jScrollPane4 = new javax.swing.JScrollPane();
         etcTable = new javax.swing.JTable();
-        jPanel8 = new javax.swing.JPanel();
+        planTab = new javax.swing.JPanel();
         jScrollPane5 = new javax.swing.JScrollPane();
         planTable = new javax.swing.JTable();
         jLabel9 = new javax.swing.JLabel();
@@ -1496,6 +1496,7 @@ public static JTable constructTable(){
 
         fetchLiveButton.setFont(new java.awt.Font("Arial", 1, 10)); // NOI18N
         fetchLiveButton.setText("Fetch Live");
+        fetchLiveButton.setEnabled(false);
         fetchLiveButton.setPreferredSize(new java.awt.Dimension(85, 35));
 
         jPanel10.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 1, true));
@@ -1509,6 +1510,7 @@ public static JTable constructTable(){
         planning_controlsPanel.setLayout(new javax.swing.BoxLayout(planning_controlsPanel, javax.swing.BoxLayout.PAGE_AXIS));
 
         auto_fetchCheckBox.setText("Auto");
+        auto_fetchCheckBox.setEnabled(false);
 
         jLabel8.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
         jLabel8.setText("Airmass Limit:");
@@ -1693,24 +1695,24 @@ public static JTable constructTable(){
         });
         jScrollPane3.setViewportView(observationTable);
 
-        javax.swing.GroupLayout jPanel6Layout = new javax.swing.GroupLayout(jPanel6);
-        jPanel6.setLayout(jPanel6Layout);
-        jPanel6Layout.setHorizontalGroup(
-            jPanel6Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel6Layout.createSequentialGroup()
+        javax.swing.GroupLayout observationTabLayout = new javax.swing.GroupLayout(observationTab);
+        observationTab.setLayout(observationTabLayout);
+        observationTabLayout.setHorizontalGroup(
+            observationTabLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(observationTabLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane3)
                 .addContainerGap())
         );
-        jPanel6Layout.setVerticalGroup(
-            jPanel6Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel6Layout.createSequentialGroup()
+        observationTabLayout.setVerticalGroup(
+            observationTabLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(observationTabLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane3, javax.swing.GroupLayout.PREFERRED_SIZE, 289, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
-        detailedTabbedPane.addTab("Observation", jPanel6);
+        detailedTabbedPane.addTab("Observation", observationTab);
 
         jScrollPane4.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         jScrollPane4.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER);
@@ -1743,24 +1745,24 @@ public static JTable constructTable(){
         });
         jScrollPane4.setViewportView(etcTable);
 
-        javax.swing.GroupLayout jPanel7Layout = new javax.swing.GroupLayout(jPanel7);
-        jPanel7.setLayout(jPanel7Layout);
-        jPanel7Layout.setHorizontalGroup(
-            jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel7Layout.createSequentialGroup()
+        javax.swing.GroupLayout ETCTabLayout = new javax.swing.GroupLayout(ETCTab);
+        ETCTab.setLayout(ETCTabLayout);
+        ETCTabLayout.setHorizontalGroup(
+            ETCTabLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(ETCTabLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane4)
                 .addContainerGap())
         );
-        jPanel7Layout.setVerticalGroup(
-            jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel7Layout.createSequentialGroup()
+        ETCTabLayout.setVerticalGroup(
+            ETCTabLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(ETCTabLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane4)
                 .addContainerGap())
         );
 
-        detailedTabbedPane.addTab("ETC", jPanel7);
+        detailedTabbedPane.addTab("ETC", ETCTab);
 
         jScrollPane5.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
@@ -1792,24 +1794,24 @@ public static JTable constructTable(){
         });
         jScrollPane5.setViewportView(planTable);
 
-        javax.swing.GroupLayout jPanel8Layout = new javax.swing.GroupLayout(jPanel8);
-        jPanel8.setLayout(jPanel8Layout);
-        jPanel8Layout.setHorizontalGroup(
-            jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel8Layout.createSequentialGroup()
+        javax.swing.GroupLayout planTabLayout = new javax.swing.GroupLayout(planTab);
+        planTab.setLayout(planTabLayout);
+        planTabLayout.setHorizontalGroup(
+            planTabLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(planTabLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane5)
                 .addContainerGap())
         );
-        jPanel8Layout.setVerticalGroup(
-            jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel8Layout.createSequentialGroup()
+        planTabLayout.setVerticalGroup(
+            planTabLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(planTabLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(jScrollPane5)
                 .addContainerGap())
         );
 
-        detailedTabbedPane.addTab("Plan", jPanel8);
+        detailedTabbedPane.addTab("Plan", planTab);
 
         jLabel9.setFont(new java.awt.Font("Arial", 1, 13)); // NOI18N
         jLabel9.setText("Target Name:");
@@ -2617,6 +2619,7 @@ public static JTable constructTable(){
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JPanel ETCTab;
     public javax.swing.JSpinner HoursSpinner;
     public javax.swing.JSpinner MinutesSpinner;
     private javax.swing.JMenu NGPSMenu;
@@ -2664,9 +2667,6 @@ public static JTable constructTable(){
     private javax.swing.JMenu jMenu3;
     private javax.swing.JMenuItem jMenuItem1;
     private javax.swing.JPanel jPanel10;
-    private javax.swing.JPanel jPanel6;
-    private javax.swing.JPanel jPanel7;
-    private javax.swing.JPanel jPanel8;
     private javax.swing.JPanel jPanel9;
     private javax.swing.JScrollPane jScrollPane3;
     private javax.swing.JScrollPane jScrollPane4;
@@ -2682,11 +2682,13 @@ public static JTable constructTable(){
     private javax.swing.JMenuItem new_target_from_databaseMenuItem;
     private javax.swing.JMenuItem new_target_listMenuItem;
     private javax.swing.JMenuItem ngps_instrument_manualMenuItem;
+    private javax.swing.JPanel observationTab;
     private javax.swing.JTable observationTable;
     private javax.swing.JMenuItem openMenuItem;
     private javax.swing.JMenuItem otm_outputMenuItem;
     private javax.swing.JLabel otm_state_Label;
     private javax.swing.JMenuItem pasteMenuItem;
+    private javax.swing.JPanel planTab;
     private javax.swing.JTable planTable;
     private javax.swing.JPanel planningPanel;
     private javax.swing.JPanel planning_controlsPanel;

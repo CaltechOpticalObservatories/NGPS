@@ -186,7 +186,7 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = current.instrument.getExposuretime();
         }        
         if(row == 5){
-           returnObject = current.instrument.getSlitwidth();
+           returnObject = current.instrument.getSlitwidth_string();
         }        
         if(row == 6){
            returnObject = current.instrument.getSlitOffset();
@@ -225,10 +225,10 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "DEC offset (arcsec)";
         }        
         if(row == 4){
-           returnObject = "Exposure Time (s)";
+           returnObject = "EXPTIME Request";
         }        
         if(row == 5){
-           returnObject = "Slit Width (arcsec)";
+           returnObject = "SLITWIDTH Request";
         }        
         if(row == 6){
            returnObject = "Slit offset (arcsec)";

@@ -119,6 +119,7 @@ public class OTMlauncher {
    public java.lang.String OTM_INFILE        = TEMPDIR+SEP+"OTM_JAVA_INPUT.csv";
    public java.lang.String OTM_OUTFILE        = TEMPDIR+SEP+"OTM_JAVA_OUTPUT.csv";
    public java.lang.String OTM_SCRIPT        = TEMPDIR+SEP+"OTM_JAVA_SCRIPT.txt";
+   public String NULLDATETIME                = "1999-01-01T00:00:00.0";
    
 
    public java.lang.String DIR               = new java.lang.String();
@@ -745,7 +746,7 @@ return timestampAsString;
             }            
         }
         if(field.matches("OTMslewgo")){
-            java.sql.Timestamp current_timestamp = string_to_timestamp("1999-01-01T00:00:00.0");
+            java.sql.Timestamp current_timestamp = string_to_timestamp(NULLDATETIME);
             
             if (!current_value.toUpperCase().contains("NONE")){
                 try{
@@ -780,21 +781,29 @@ return timestampAsString;
             }            
        }       
        if(field.matches("OTMstart")){
-            try{  
-                java.sql.Timestamp current_timestamp = string_to_timestamp(current_value);
-                current_target.otm.setOTMstart(current_timestamp);
-            }catch(Exception e){
-                System.out.println(e.toString());
-            }            
+            java.sql.Timestamp current_timestamp = string_to_timestamp(NULLDATETIME);
+            
+            if (!current_value.toUpperCase().contains("NONE")){
+                try{
+                    current_timestamp = string_to_timestamp(current_value);
+                }catch(Exception e){
+                    System.out.println("Invalid OTMstart value:" +current_value);
+                }               
+            }
+            current_target.otm.setOTMstart(current_timestamp);
        }  
        if(field.matches("OTMend")){
-            try{  
-                java.sql.Timestamp current_timestamp = string_to_timestamp(current_value);
-                current_target.otm.setOTMend(current_timestamp);
-            }catch(Exception e){
-                System.out.println(e.toString());
-            }            
-       } 
+            java.sql.Timestamp current_timestamp = string_to_timestamp(NULLDATETIME);
+            
+            if (!current_value.toUpperCase().contains("NONE")){
+                try{
+                    current_timestamp = string_to_timestamp(current_value);
+                }catch(Exception e){
+                    System.out.println("Invalid OTMend value:" +current_value);
+                }               
+            }
+            current_target.otm.setOTMend(current_timestamp);
+       }  
        if(field.matches("OTMSNR")){
            try{
                java.lang.String value = new java.lang.String(current_value);
