@@ -406,14 +406,6 @@ public int getModelType(){
         if(field.matches("SLITWIDTH")){
             try{
                 current_observation.instrument.setSlitwidth_string(current_value.trim()); 
-//                java.util.StringTokenizer st3 = new java.util.StringTokenizer(current_value," ");
-//                java.lang.String code_token1 = st3.nextToken();
-//                java.lang.String value_token2 = st3.nextToken();
-//                current_observation.instrument.setSlitwidth_code(code_token1);
-//                java.lang.Double slitw = Double.valueOf(value_token2);
-//                   if(slitw >= 0.0 & slitw <= 10.00){
-//                      current_observation.instrument.setSlitwidth(slitw); 
-//                   }                            
             }catch(Exception e){
                 System.out.println(e.toString());
             }            
