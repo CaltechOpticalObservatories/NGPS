@@ -52,6 +52,7 @@ private void initializeValues(){
     setBIN_SPACE(1);
     setExposuretime("SET 1"); 
     setSlitwidth_string("SET 1");
+    setRequestedSlitAngle("PA");
 }
 /*================================================================================================
 /          DefaultMutableTreeNode constructTreeNode()
