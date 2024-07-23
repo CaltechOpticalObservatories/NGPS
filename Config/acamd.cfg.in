@@ -118,3 +118,11 @@ MOTOR_POS="cover 1 1 504 close"
 #                  2       4
 #                      3
 
+# ACAM Target acquisition
+#
+ACQUIRE_TIMEOUT=90            # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
+ACQUIRE_RETRYS=3              # max number of retrys before acquisition fails (optional, can be left blank to disable)
+ACQUIRE_OFFSET_THRESHOLD=0.5  # computed offset below this threshold (in arcsec) defines successful acquisition
+ACQUIRE_MIN_REPEAT=2          # minimum number of sequential successful acquires
+ACQUIRE_TCS_MAX_OFFSET=30     # the maximum allowable offset sent to the TCS, in arcsec
+

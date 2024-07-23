@@ -46,6 +46,28 @@ namespace Acam {
 
   constexpr double PI = 3.14159265358979323846;
 
+  enum FocusThreadStates {
+    FOCUS_MONITOR_STOPPED,
+    FOCUS_MONITOR_STOP_REQ,
+    FOCUS_MONITOR_START_REQ,
+    FOCUS_MONITOR_RUNNING
+  };
+
+  enum TargetAcquisitionModes {
+    TARGET_NOP = 0,
+    TARGET_ACQUIRE,
+    TARGET_GUIDE,
+    TARGET_MODE_COUNT
+  };
+
+  const std::string TargetAcquisitionModeString[] = {
+    "stopped",
+    "acquiring",
+    "guiding"
+  };
+
+  class Interface;  // forward declaration since it's used in the Target class
+
   /***** Acam::Camera *********************************************************/
   /**
    * @class  Camera
@@ -73,7 +95,7 @@ namespace Acam {
       long close();
       long start_acquisition();
       long get_frame();
-      long write_frame( std::string source_file, std::string &outfile );
+      long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
       long get_status();
       long bin( std::string args, std::string &retstring );
       long imflip( std::string args, std::string &retstring );
@@ -120,6 +142,13 @@ namespace Acam {
 
       PyObject* pAstrometryModule;                       /// astrometry
       PyObject* pQualityModule;                          /// image quality
+
+      inline void get_solution( std::string &_result, double &_ra, double &_dec, double &_angle ) {
+        _result = this->result;
+        _ra     = this->ra;
+        _dec    = this->dec;
+        _angle  = this->pa;
+      }
 
       inline std::string get_result() {
         std::stringstream result_str;
@@ -248,20 +277,136 @@ namespace Acam {
   /***** Acam::GuideManager ***************************************************/
 
 
+  /***** Acam::Target *********************************************************/
+  /**
+   * @class   Target
+   * @brief   defines functions and settings for target and target acquisition
+   * @details This class contains info about the target (coords) and related
+   *          functions, such as the target acquisition sequence. It declares
+   *          the Acam::Interface class as a friend, so that it can directly
+   *          call Interface functions.
+   *
+   */
+  class Target {
+
+    friend class Acam::Interface;          ///< Make Interface a friend of Target
+
+    private:
+      Acam::Interface* iface;              ///< Pointer to the Interface instance
+
+      double offset_threshold;  ///< successful acquisition when computed offset below config ACQUIRE_OFFSET_THRESHOLD
+      double timeout;           ///< target acquisition timeout (sec) from config ACAM_ACQUIRE_TIMEOUT
+      int max_attempts;         ///< max number of acquisition loop attempts
+      int min_repeat;           ///< minimum sequential successful acquires from config ACQUIRE_MIN_REPEAT
+
+      int nacquired;
+      int attempts;
+      int sequential_failures;
+
+      std::atomic<bool> acquired;          ///< is the target acquired?
+      std::atomic<bool> stop_acquisition;  ///< should the acquisition sequence run?
+
+      double tcs_max_offset;
+
+      std::chrono::time_point<std::chrono::steady_clock,
+                              std::chrono::duration<double>> timeout_time;
+
+      struct coords_t {
+        double ra;
+        double dec;
+        double angle;
+      };                                   ///< a structure to hold target coordinates, always decimal degrees
+
+      coords_t coords_slit;                ///< slit coordinates
+
+      double tcs_casangle;                 ///< the cass angle from the TCS, must be supplied
+
+    public:
+
+      inline double get_timeout() { return this->timeout; }
+
+      inline long set_timeout( const double _timeout ) {
+        if ( std::isnan( _timeout ) || _timeout <= 0 ) return ERROR;
+        else {
+          this->timeout = _timeout;
+          return NO_ERROR;
+        }
+      }
+
+      inline long set_offset_threshold( const double _thresh ) {
+        if ( std::isnan( _thresh ) || _thresh <= 0 ) return ERROR;
+        else {
+          this->offset_threshold = _thresh;
+          return NO_ERROR;
+        }
+      }
+
+      inline long set_tcs_max_offset( const double _offset ) {
+        if ( std::isnan( _offset ) || _offset <= 0 ) return ERROR;
+        else {
+          this->tcs_max_offset = _offset;
+          return NO_ERROR;
+        }
+      }
+
+      inline void set_max_attempts( int _max ) { this->max_attempts = _max; }
+      inline void set_min_repeat( int _repeat ) { this->min_repeat = _repeat; }
+
+      std::vector<std::string> ext_solver_args;   ///< externally-set solver args (probably only for testing)
+
+      std::atomic<Acam::TargetAcquisitionModes> acquire_mode;  ///< enum list of possible acquisition modes
+
+      /* @brief  return a human-friendly string of the target mode
+       */
+      inline std::string acquire_mode_string() {
+        if ( acquire_mode >= 0 && acquire_mode < Acam::TARGET_MODE_COUNT ) {
+          return TargetAcquisitionModeString[ acquire_mode ];
+        }
+        else return "unknown";
+      }
+
+      inline void set_interface_instance( Acam::Interface* iface_in ) { iface = iface_in; }
+
+      long acquire( Acam::TargetAcquisitionModes requested_mode );
+      long do_acquire();
+
+      inline void save_casangle( const double _angle ) { this->tcs_casangle = _angle; }
+
+      inline void set_coords( const double _ra, const double _dec, const double _angle ) {
+        this->coords_slit.ra    = _ra;
+        this->coords_slit.dec   = _dec;
+        this->coords_slit.angle = _angle;
+      }
+
+      inline void get_coords( double &_ra, double &_dec, double &_angle ) {
+        _ra    = this->coords_slit.ra;
+        _dec   = this->coords_slit.dec;
+        _angle = this->coords_slit.angle;;
+      }
+
+      Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
+                 acquired(false),
+                 stop_acquisition(false),
+                 acquire_mode(Acam::TARGET_NOP) { }
+  };
+  /***** Acam::Target *********************************************************/
+
+
   /***** Acam::Interface ******************************************************/
   /**
-   * @class  Interface
-   * @brief  interface class for acam
-   *
-   * This class defines the interface for the acam system and
-   * contains the functions used to communicate with it.
+   * @class   Interface
+   * @brief   interface class for acam
+   * @details This class defines the interface for the acam system and contains
+   *          the functions used to communicate with it. The Target class is
+   *          my friend so I share an instance of my *this pointer so that he
+   *          can call my functions.
    *
    */
   class Interface {
     private:
-      bool class_initialized;
-      std::atomic<bool> monitor_focus_thread_running;
+      std::atomic<Acam::FocusThreadStates> monitor_focus_state;
       std::atomic<bool> framegrab_thread_running;
+      std::atomic<bool> tcs_online;
       std::string imagename;
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
@@ -273,10 +418,15 @@ namespace Acam {
 
       GuideManager guide_manager;
 
-      Interface() : monitor_focus_thread_running(false),
+      Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
                     framegrab_thread_running(false),
-                    imagename(""), wcsname(""), motion_host(""), motion_port(-1) { }
+                    tcs_online(false),
+                    motion_port(-1) {
+        target.set_interface_instance( this ); ///< Set the Interface instance in Target
+      }
 
+      inline bool target_acquired()      { return this->target.acquired; }
+      inline bool is_framegrab_running() { return this->framegrab_thread_running.load( std::memory_order_acquire ); }
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
@@ -284,6 +434,8 @@ namespace Acam {
       inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
 
       Acam::FitsInfo fitsinfo;
+
+      Target target;                           /// for target acquisition
 
 //    Telemetry telemetry;                     /// for collecting and writing telemetry data files
 
@@ -305,13 +457,17 @@ namespace Acam {
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
       long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components
+      bool isopen( std::string component );     /// wrapper for acam-related hardware components
       long close( std::string component, std::string &help );      /// wrapper to open all acam-related hardware components
+      long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long guider_settings_control();          /// get guider settings and push to Guider GUI display
       long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
+      long acquire( std::string args, std::string &retstring );
+      long target_coords( std::string args, std::string &retstring );  /// set or get target coords for acquire
       long test( std::string args, std::string &retstring );
 
       long collect_header_info();

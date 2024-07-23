@@ -1545,7 +1545,7 @@ namespace Sequencer {
       // Call TCS Initialization
       //
       if ( cmd.compare( SEQUENCERD_TCSINIT ) == 0 ) {
-                      ret = seq.sequence.tcs_init( args );
+                      ret = seq.sequence.tcs_init( args, retstring );
                       if ( ! retstring.empty() ) retstring.append( " " );
       }
       else

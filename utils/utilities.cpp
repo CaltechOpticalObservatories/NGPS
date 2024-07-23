@@ -911,3 +911,182 @@ std::mutex generate_tmpfile_mtx;
     }
   }
   /***** generate_temp_filename ***********************************************/
+
+
+  /***** radec_to_decimal *****************************************************/
+  /**
+   * @brief      convert string RA or DEC to decimal number
+   * @param[in]  str_in  input string to convert
+   * @return     double representation of string, or NaN on error
+   *
+   * Input string could be  HH:MM:SS.sss
+   *                        HH MM SS.sss
+   *                       ±DD:MM:SS.sss
+   *                       ±DD MM SS.sss
+   *                       ± D:MM:SS.sss
+   *                       ± D MM SS.sss
+   *
+   * Convert the input string into a decimal (double) number, HH.hhh or ±DD.dddd
+   *
+   * If the string is empty or otherwise cannot be converted then return NaN.
+   *
+   * This function is overloaded.
+   *
+   */
+  double radec_to_decimal( std::string str_in ) {
+    std::string dontcare;
+    return( radec_to_decimal( str_in, dontcare ) );
+  }
+  /***** radec_to_decimal *****************************************************/
+
+
+  /***** radec_to_decimal *****************************************************/
+  /**
+   * @brief      convert string RA or DEC to decimal number
+   * @param[in]  str_in     input string to convert
+   * @param[out] retstring  string representation of return value
+   * @return     double representation of string, or NaN on error
+   *
+   * This function is overloaded.
+   * This version accepts a reference to a return string, to return a string
+   * version of the decimal (double) return value.
+   *
+   */
+  double radec_to_decimal( std::string str_in, std::string &retstring ) {
+    std::vector<std::string> tokens;
+    double sign=1.0;
+
+    // can't convert an empty string to a value other than NaN
+    //
+    if ( str_in.empty() ) {
+      retstring = "invalid_input";
+      std::cerr << "ERROR: radec_to_decimal cannot convert empty input string\n";
+      return( NAN );
+    }
+
+    // If there's a minus sign (-) in the input string then set the sign
+    // multiplier negative, then remove the sign.
+    //
+    // This is done because tokenizing on space or colon would result in three separate
+    // tokens (HH MM SS or DD MM SS) except for the case where the degree is a single
+    // digit, then it's possible that tokenizing " + D MM SS.sss" it could result in four
+    // tokens, "+", "D", "MM", "SS.sss" so determine the sign then get rid of it.
+    //
+    if ( str_in.find( '-' ) != std::string::npos ) sign = -1.0;
+    str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
+    str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
+
+    Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
+
+    if ( tokens.size() != 3 ) {
+      std::cerr << "ERROR: radec_to_decimal expected 3 tokens but received " << tokens.size()
+                << " from str_in \"" << str_in << "\"\n";
+      retstring = "invalid_input";
+      return( NAN );
+    }
+
+    double hh, mm, ss, dec;
+    std::stringstream ret;
+    try {
+      hh = std::stod( tokens.at(0) );
+      mm = std::stod( tokens.at(1) ) / 60.0;
+      ss = std::stod( tokens.at(2) ) / 3600.0;
+    }
+    catch( std::out_of_range &e ) {
+      std::cerr << "ERROR: radec_to_decimal out of range parsing input string \"" << str_in << "\": " << e.what() << "\n";
+      retstring = "out_of_range";
+      return( NAN );
+    }
+    catch( std::invalid_argument &e ) {
+      std::cerr << "ERROR: radec_to_decimal invalid argument parsing input string \"" << str_in << "\": " << e.what() << "\n";
+      retstring = "invalid_argument";
+      return( NAN );
+    }
+
+    dec = sign * ( hh + mm + ss );
+    ret << std::fixed << std::setprecision(6) << dec;
+    retstring = ret.str();
+
+    return( dec );
+  }
+  /***** radec_to_decimal *****************************************************/
+
+
+  /***** decimal_to_sexa ******************************************************/
+  /**
+   * @brief      convert decimal number to sexagesimal
+   * @param[in]  str_in     input string to convert
+   * @param[out] retstring  reference to string representation of return value
+   * @return     double representation of string, or NaN on error
+   *
+   * This function is overloaded.
+   * This version accepts a reference to a return string, to return a string
+   * version of the decimal (double) return value.
+   *
+   */
+  void decimal_to_sexa( const double dec_in, std::string &retstring ) {
+    std::string sign = ( dec_in < 0 ? "-" : "+" );
+
+    double hh, mm, ss;
+    double fractpart, intpart;
+    double dec = std::abs( dec_in );
+
+    fractpart = std::modf( dec, &intpart );
+    hh = intpart;
+    dec = fractpart * 60.0;
+
+    fractpart = std::modf( dec, &intpart );
+    mm = intpart;
+    ss = fractpart * 60;
+
+    std::stringstream ret;
+
+    ret << sign << std::setw(2) << std::setfill('0') << hh << ":"
+                << std::setw(2) << std::setfill('0') << mm << ":"
+                << std::fixed << std::setprecision(2) << ss;
+    retstring = ret.str();
+
+    return;
+  }
+  /***** decimal_to_sexa ******************************************************/
+
+
+  /***** angular_separation ***************************************************/
+  /**
+   * @brief      compute the angular separation between two points on a sphere
+   * @details    inputs are in decimal degrees.
+   * @param[in]  ra1   RA of point1
+   * @param[in]  dec1  DEC of point1
+   * @param[in]  ra2   RA of point2
+   * @param[in]  dec2  DEC of point2
+   * @return     angular separation in arcsec
+   *
+   */
+  double angular_separation( double ra1, double dec1, double ra2, double dec2 ) {
+
+    double pi = 2 * std::acos(0.0);
+
+    // convert inputs to radians
+    //
+    ra1 *= pi/180.; dec1 *= pi/180.;
+    ra2 *= pi/180.; dec2 *= pi/180.;
+
+    double sdlon = std::sin( ra2 - ra1 );
+    double cdlon = std::cos( ra2 - ra1 );
+    double slat1 = std::sin( dec1 );
+    double slat2 = std::sin( dec2 );
+    double clat1 = std::cos( dec1 );
+    double clat2 = std::cos( dec2 );
+
+    double num1 = clat2 * sdlon;
+    double num2 = clat1 * slat2 - slat1 * clat2 * cdlon;
+    double numerator   = std::sqrt( std::pow( num1, 2 ) + std::pow( num2, 2 ) );
+    double denominator = slat1 * slat2 + clat1 * clat2 * cdlon;
+
+    double sep = std::atan2( numerator, denominator );  // separation in radians
+
+    sep = sep * 3600. / ( pi/180. );                    // in arcsec
+
+    return sep;
+  }
+  /***** angular_separation ***************************************************/

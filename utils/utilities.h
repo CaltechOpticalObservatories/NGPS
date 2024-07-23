@@ -32,6 +32,9 @@
 #include <set>
 #include <limits>
 
+#define TO_DEGREES ( 360. / 24. )
+#define TO_HOURS   ( 24. / 360. )
+
 extern std::string tmzone_cfg;                      /// time zone if set in cfg file
 extern std::mutex generate_tmpfile_mtx;
 
@@ -105,6 +108,10 @@ bool starts_with( const std::string &str, std::string_view prefix );
 bool ends_with( const std::string &str, std::string_view suffix );
 std::string generate_temp_filename( const std::string &prefix );
 
+double radec_to_decimal( std::string str_in );                          ///< convert ra,dec from string to double
+double radec_to_decimal( std::string str_in, std::string &retstring );  ///< convert ra,dec from string to double
+void decimal_to_sexa( const double dec_in, std::string &retstring );    ///< convert decimal to sexagesimal
+double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
 
 static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );

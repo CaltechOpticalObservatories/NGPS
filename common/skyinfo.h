@@ -16,6 +16,7 @@
 #define PYTHON_FPOFFSETS_MODULE "FPoffsets"
 #define PYTHON_FPOFFSETS_FUNCTION "compute_offset"
 #define PYTHON_SOLVEOFFSETDEG_FUNCTION "solve_offset_deg"
+#define PYTHON_APPLYOFFSETDEG_FUNCTION "apply_offset_deg"
 
 namespace SkyInfo {
 
@@ -87,6 +88,10 @@ namespace SkyInfo {
       long solve_offset( const double ra_acam, const double dec_acam,
                          const double ra_goal, const double dec_goal,
                          double &ra_off, double &dec_off );
+
+      long apply_offset( const double ra_in, const double dec_in,
+                         const double ra_off, const double dec_off,
+                         double &ra_out, double &dec_out );
 
   };
   /***** SkyInfo::FPOffsets ***************************************************/

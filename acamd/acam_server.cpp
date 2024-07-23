@@ -498,14 +498,7 @@ namespace Acam {
       else
 
       if ( cmd == ACAMD_TCSINIT ) {
-                      // If the TCS initialization is successful, then spawn
-                      // a detached thread to monitor the focus, which is
-                      // what keeps the Guider GUI updated on focus changes.
-                      //
-                      ret = this->interface.tcsd.init( args, retstring );
-                      if ( ret==NO_ERROR && args.find("?") == std::string::npos && args.find("help") == std::string::npos ) {
-                        std::thread( this->interface.dothread_monitor_focus, std::ref(interface) ).detach();
-                      }
+                      ret = this->interface.tcs_init( args, retstring );
       }
       else
       if ( cmd == ACAMD_TCSISOPEN ) {
@@ -539,6 +532,19 @@ namespace Acam {
                         retstring = "invalid_argument";
                         ret = ERROR;
                       }
+      }
+      else
+      if ( cmd == ACAMD_ACQUIRE ) {
+                      ret = this->interface.acquire( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_ISACQUIRED ) {
+                      retstring = ( this->interface.target_acquired() ? "true" : "false" );
+                      ret = NO_ERROR;
+      }
+      else
+      if ( cmd == ACAMD_COORDS ) {
+                      ret = this->interface.target_coords( args, retstring );
       }
       else
       // commands for the Andor camera direct
@@ -613,12 +619,12 @@ namespace Acam {
       else
       if ( cmd == ACAMD_EXPTIME ) {
                       ret  = this->interface.camera.exptime( args, retstring );  // set exptime
-                      ret |= this->interface.guider_settings_control();          // update Guider GUI display
+                             this->interface.guider_settings_control();          // update Guider GUI display igores ret
       }
       else
       if ( cmd == ACAMD_GAIN ) {
                       ret  = this->interface.camera.gain( args, retstring );     // set gain
-                      ret |= this->interface.guider_settings_control();          // update Guider GUI display
+                             this->interface.guider_settings_control();          // update Guider GUI display igores ret
       }
       else
       if ( cmd == ACAMD_GUIDESET ) {

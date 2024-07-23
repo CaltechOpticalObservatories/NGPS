@@ -39,8 +39,9 @@ int main(int argc, char **argv) {
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
     Daemon::daemonize( Acam::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
-    logwrite( function, "daemonized. child process running" );
   }
+
+  logwrite( function, "daemonized. child process running" );
 
   // Now the child process instantiates a Server object
   //

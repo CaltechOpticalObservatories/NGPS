@@ -259,6 +259,7 @@ void merge( Common::FitsKeys from ) {
    */
   class DaemonClient {
     private:
+      std::mutex client_access;
       char term_write;            ///< send adds this char on Writes
       char term_read;             ///< send looks for this char on Reads (if reply requested)
       bool timedout;

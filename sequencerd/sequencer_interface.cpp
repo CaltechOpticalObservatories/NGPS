@@ -720,7 +720,7 @@ namespace Sequencer {
     // Cannot have negative RA
     //
     if ( ! this->ra_hms.empty() ) {
-      double _rah = this->radec_to_decimal( this->ra_hms );  // convert RA from HH:MM:SS.s to decimal hours
+      double _rah = radec_to_decimal( this->ra_hms );  // convert RA from HH:MM:SS.s to decimal hours
       if ( _rah < 0 ) {
         message.str(""); message << "ERROR cannot have negative RA " << this->ra_hms;
         status = message.str();
@@ -732,7 +732,7 @@ namespace Sequencer {
     // Check Declination in range {-90:+90}
     //
     if ( ! this->dec_dms.empty() ) {
-      double _dec = this->radec_to_decimal( this->dec_dms );  // convert DEC from DD:MM:SS.s to decimal degrees
+      double _dec = radec_to_decimal( this->dec_dms );  // convert DEC from DD:MM:SS.s to decimal degrees
       if ( _dec < -90.0 || _dec > 90.0 ) {
         message.str(""); message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
         status = message.str();
@@ -976,143 +976,6 @@ namespace Sequencer {
     return( NO_ERROR );
   }
   /***** Sequencer::TargetInfo::get_table_names *******************************/
-
-
-  /***** Sequencer::TargetInfo::radec_to_decimal ******************************/
-  /**
-   * @brief      convert string RA or DEC to decimal number
-   * @param[in]  str_in  input string to convert
-   * @return     double representation of string, or NaN on error
-   *
-   * Input string could be  HH:MM:SS.sss
-   *                        HH MM SS.sss
-   *                       ±DD:MM:SS.sss
-   *                       ±DD MM SS.sss
-   *                       ± D:MM:SS.sss
-   *                       ± D MM SS.sss
-   *
-   * Convert the input string into a decimal (double) number, HH.hhh or ±DD.dddd
-   *
-   * If the string is empty or otherwise cannot be converted then return NaN.
-   *
-   */
-  double TargetInfo::radec_to_decimal( std::string str_in ) {
-    std::string dontcare;
-    return( this->radec_to_decimal( str_in, dontcare ) );
-  }
-  /***** Sequencer::TargetInfo::radec_to_decimal ******************************/
-
-
-  /***** Sequencer::TargetInfo::radec_to_decimal ******************************/
-  /**
-   * @brief      convert string RA or DEC to decimal number
-   * @param[in]  str_in     input string to convert
-   * @param[out] retstring  reference to string representation of return value
-   * @return     double representation of string, or NaN on error
-   *
-   * This function is overloaded.
-   * This version accepts a reference to a return string, to return a string
-   * version of the decimal (double) return value.
-   *
-   */
-  double TargetInfo::radec_to_decimal( std::string str_in, std::string &retstring ) {
-    std::string function = "Sequencer::TargetInfo::radec_to_decimal";
-    std::stringstream message;
-    std::vector<std::string> tokens;
-    double sign=1.0;
-
-    // can't convert an empty string to a value other than NaN
-    //
-    if ( str_in.empty() ) {
-      logwrite( function, "ERROR: empty input string returns NaN" );
-      return( NAN );
-    }
-
-    // If there's a minus sign (-) in the input string then set the sign
-    // multiplier negative, then remove the sign.
-    //
-    // This is done because tokenizing on space or colon would result in three separate
-    // tokens (HH MM SS or DD MM SS) except for the case where the degree is a single 
-    // digit, then it's possible that tokenizing " + D MM SS.sss" it could result in four 
-    // tokens, "+", "D", "MM", "SS.sss" so determine the sign then get rid of it.
-    //
-    if ( str_in.find( '-' ) != std::string::npos ) sign = -1.0;
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
-
-    Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
-
-    if ( tokens.size() != 3 ) {
-      message.str(""); message << "ERROR: expected 3 tokens but received " << tokens.size() << " from str_in \"" << str_in << "\"";
-      logwrite( function, message.str() );
-      return( NAN );
-    }
-
-    double hh, mm, ss, dec;
-    std::stringstream ret;
-    try {
-      hh = std::stod( tokens.at(0) );
-      mm = std::stod( tokens.at(1) ) / 60.0;
-      ss = std::stod( tokens.at(2) ) / 3600.0;
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: out of range parsing input string \"" << str_in << "\": " << e.what();
-      logwrite( function, message.str() );
-      return( NAN );
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR: invalid argument parsing input string \"" << str_in << "\": " << e.what();
-      logwrite( function, message.str() );
-      return( NAN );
-    }
-
-    dec = sign * ( hh + mm + ss );
-    ret << std::fixed << std::setprecision(6) << dec;
-    retstring = ret.str();
-
-    return( dec );
-  }
-  /***** Sequencer::TargetInfo::radec_to_decimal ******************************/
-
-
-  /***** Sequencer::TargetInfo::decimal_to_sexa *******************************/
-  /**
-   * @brief      convert decimal number to sexagesimal
-   * @param[in]  str_in     input string to convert
-   * @param[out] retstring  reference to string representation of return value
-   * @return     double representation of string, or NaN on error
-   *
-   * This function is overloaded.
-   * This version accepts a reference to a return string, to return a string
-   * version of the decimal (double) return value.
-   *
-   */
-  void TargetInfo::decimal_to_sexa( double dec_in, std::string &retstring ) {
-    std::string function = "Sequencer::TargetInfo::decimal_to_sexa";
-    std::stringstream message;
-    std::string sign = ( dec_in < 0 ? "-" : "+" );
-
-    double hh, mm, ss, dec;
-    double fractpart, intpart;
-
-    fractpart = std::modf( std::abs(dec_in), &intpart );
-    hh = intpart;
-    dec = fractpart * 60.0;
-
-    fractpart = std::modf( dec, &intpart );
-    mm = intpart;
-    ss = fractpart * 60;
-
-    std::stringstream ret;
-
-    ret << sign << std::setw(2) << std::setfill('0') << hh << ":"
-                << std::setw(2) << std::setfill('0') << mm << ":"
-                << std::fixed << std::setprecision(2) << ss;
-    retstring = ret.str();
-
-    return;
-  }
-  /***** Sequencer::TargetInfo::decimal_to_sexa *******************************/
 
 
   /***** Sequencer::PowerSwitch::configure ************************************/

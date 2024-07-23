@@ -787,7 +787,7 @@ namespace Acam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Camera::write_frame( std::string source_file, std::string &outfile ) {
+  long Camera::write_frame( std::string source_file, std::string &outfile, const bool _tcs_online ) {
     std::string function = "Acam::Camera::write_frame";
     std::stringstream message;
 
@@ -833,7 +833,7 @@ namespace Acam {
 
     // This is the one extra call that is outside the normal workflow.
     //
-    if ( andor.is_emulated() ) andor.simulate_frame( fitsinfo.fits_name );
+    if ( andor.is_emulated() && _tcs_online ) andor.simulate_frame( fitsinfo.fits_name );
 
     outfile = fitsinfo.fits_name;
 
@@ -923,10 +923,6 @@ namespace Acam {
   long Astrometry::image_quality( ) {
     std::string function = "Acam::Astrometry::image_quality";
     std::stringstream message;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] PyGILState=" << PyGILState_Check(); logwrite( function, message.str() );
-#endif
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -1071,10 +1067,6 @@ namespace Acam {
     std::string function = "Acam::Astrometry::solve";
     std::stringstream message;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] PyGILState=" << PyGILState_Check(); logwrite( function, message.str() );
-#endif
-
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
       return ERROR;
@@ -1130,10 +1122,6 @@ namespace Acam {
           const char* pkeyname = keyval.at(0).c_str();
           PyObject* pvalue;
           this->pyobj_from_string( keyval.at(1), &pvalue );
-#ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] add solver arg keyword=" << keyval.at(0) << " value=" << keyval.at(1);
-          logwrite( function, message.str() );
-#endif
           PyDict_SetItemString( pKeywords, pkeyname, pvalue );  // takes ownership of pvalue
         }
       }
@@ -1171,11 +1159,6 @@ namespace Acam {
       return ERROR;
     }
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] calling Python function: " << PYTHON_ASTROMETRY_FUNCTION;
-    logwrite( function, message.str() );
-#endif
-
     t0=get_clock_time();
 
     PyObject* pReturn = PyObject_Call( pFunction, pArgList, pKeywords );
@@ -1186,10 +1169,10 @@ namespace Acam {
     Py_DECREF( pArgList );
     Py_DECREF( pKeywords );
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] Python call time " << (t1-t0) << " sec";
-    logwrite( function, message.str() );
-#endif
+//#ifdef LOGLEVEL_DEBUG
+//    message.str(""); message << "[DEBUG] Python call time " << (t1-t0) << " sec";
+//    logwrite( function, message.str() );
+//#endif
 
     // Check the return values from Python here
     //
@@ -1447,6 +1430,103 @@ namespace Acam {
         logwrite( function, message.str() );
         applied++;
       }
+
+      if ( config.param[entry] == "ACQUIRE_TIMEOUT" ) {
+        double to;
+        try {
+          to = std::stod( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TIMEOUT " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TIMEOUT " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        if ( this->target.set_timeout( to ) != NO_ERROR ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TIMEOUT \"" << config.param[entry] << "\" must be >= 0";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        applied++;
+      }
+
+      if ( config.param[entry] == "ACQUIRE_RETRYS" ) {
+        int retrys;
+        try {
+          retrys = std::stoi( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_RETRYS " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_RETRYS " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        this->target.set_max_attempts( retrys );
+        applied++;
+      }
+
+      if ( config.param[entry] == "ACQUIRE_OFFSET_THRESHOLD" ) {
+        double threshold;
+        try {
+          threshold = std::stod( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_OFFSET_THRESHOLD " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_OFFSET_THRESHOLD " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        if ( this->target.set_offset_threshold( threshold ) != NO_ERROR ) {
+          message.str(""); message << "ERROR bad ACQUIRE_OFFSET_THRESHOLD \"" << config.param[entry] << "\" must be >= 0";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        applied++;
+      }
+
+      if ( config.param[entry] == "ACQUIRE_TCS_MAX_OFFSET" ) {
+        double offset;
+        try {
+          offset = std::stod( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        if ( this->target.set_tcs_max_offset( offset ) != NO_ERROR ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_OFFSET \"" << config.param[entry] << "\" must be >= 0";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        applied++;
+      }
+
+      if ( config.param[entry] == "ACQUIRE_MIN_REPEAT" ) {
+        int repeat;
+        try {
+          repeat = std::stoi( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_MIN_REPEAT " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_MIN_REPEAT " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        this->target.set_min_repeat( repeat );
+        applied++;
+      }
     }
     message.str(""); message << "applied " << applied << " configuration lines to the acam interface";
     logwrite(function, message.str());
@@ -1458,12 +1538,12 @@ namespace Acam {
   /***** Acam::Interface::open ************************************************/
   /**
    * @brief      wrapper to open all or specified acam external components
-   * @param[in]  args  string containing 0 or more args specifying which component to open
-   * @param[out] help  return string containing help on request  
+   * @param[in]  args       string containing 0 or more args specifying which component to open
+   * @param[out] retstring  return string contains true | false | <help>
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::open( std::string args, std::string &help ) {
+  long Interface::open( std::string args, std::string &retstring ) {
     std::string function = "Acam::Interface::open";
     std::stringstream message;
     long error = NO_ERROR;
@@ -1477,11 +1557,11 @@ namespace Acam {
       camarg.clear();
     }
     else if ( args == "?" ) {
-      help = ACAMD_OPEN;
-      help.append( " [ [motion] [camera [args]] ]\n" );
-      help.append( "  Open connections to all devices (by default).\n" );
-      help.append( "  Optionally indicate motion | camera to open only the indicated component.\n" );
-      help.append( "  The camera component can take an optional arg to pass to the camera.\n" );
+      retstring = ACAMD_OPEN;
+      retstring.append( " [ [motion] [camera [args]] ]\n" );
+      retstring.append( "  Open connections to all devices (by default).\n" );
+      retstring.append( "  Optionally indicate motion | camera to open only the indicated component.\n" );
+      retstring.append( "  The camera component can take an optional arg to pass to the camera.\n" );
       return HELP;
     }
     else { // ...otherwise look at the arg(s):
@@ -1495,15 +1575,20 @@ namespace Acam {
       int ccount=0;
       for ( size_t i=0; i < arglist.size(); i++ ) {
         size_t next = i+1;
+        // If one arg is motion then any following args must be camera...
+        //
         if ( arglist[i] == "motion" ) {
           component = arglist[i]; ccount++;
           if ( next < arglist.size() && arglist[next] != "camera" ) {
             message.str(""); message << "ERROR: unrecognized arg \"" << arglist[next]
                                      << "\". Expected { [ [motion] [camera [args]] ] }";
             logwrite( function, message.str() );
+            retstring="invalid_argument";
             return ERROR;
           }
         }
+        // If one arg is camera then the following args are passed to the camera
+        //
         if ( arglist[i] == "camera" ) {
           component = arglist[i]; ccount++;
           if ( next < arglist.size() && arglist[next] != "motion" ) {
@@ -1511,28 +1596,23 @@ namespace Acam {
           }
         }
       }
-      if ( ccount == 2 ) component = "all";
 
-      message.str(""); message << "[NOTICE] component=" << component << " camarg=" << camarg;
-      logwrite( function, message.str() );
+      if ( ccount == 2 ) component = "all";
 
       if ( component.empty() ) {
         message.str(""); message << "ERROR: unrecognized arg \"" << args
                                  << "\". Expected { [ [motion] [camera [args]] ] }";
         logwrite( function, message.str() );
+        retstring="invalid_argument";
         return ERROR;
       }
     }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] component=\"" << component << "\"  camarg=\"" << camarg << "\"";
-    logwrite( function, message.str() );
-#endif
 
     if ( component != "all" && component != "motion" && component != "camera" ) {
       message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
                                << "Expected { motion | camera }";
       logwrite( function, message.str() );
+      retstring="invalid_argument";
       return ERROR;
     }
 
@@ -1541,10 +1621,17 @@ namespace Acam {
     }
 
     if ( component == "all" || component == "camera" ) {
-      error |= this->camera.open( camarg );
+      if ( this->camera.open( camarg ) == NO_ERROR ) {    // open the camera
+        error |= this->framegrab( "start", retstring );   // start frame grabbing if open succeeds
+      }
+      else error=ERROR;
     }
 
     if ( error != NO_ERROR ) logwrite( function, "ERROR: one or more components failed to open" );
+
+    bool state = this->isopen( component );
+
+    retstring = ( state ? "true" : "false" );
 
     return error;
   }
@@ -1559,6 +1646,8 @@ namespace Acam {
    * @param[out] retstring  reference to return string
    * @return     ERROR | NO_ERROR | HELP
    *
+   * This function is overloaded
+   *
    */
   long Interface::isopen( std::string component, bool &state, std::string &retstring ) {
     std::string function = "Acam::Interface::isopen";
@@ -1569,8 +1658,9 @@ namespace Acam {
     if ( component == "?" ) {
       retstring = ACAMD_ISOPEN;
       retstring.append( " [ camera | motion ]\n" );
-      retstring.append( "  optionally supply the component name to check only that component\n" );
-      retstring.append( "  checks all components if no arg supplied\n" );
+      retstring.append( "  Returns the open state of the optionally named component.\n" );
+      retstring.append( "  If no arg supplied then both components are checked, returning true\n" );
+      retstring.append( "  only if both are open.\n" );
       return HELP;
     }
 
@@ -1581,11 +1671,6 @@ namespace Acam {
       std::transform( component.begin(), component.end(), component.begin(), ::tolower );
     }
 
-    state = true;               // default True, then "and" will make false if any one is false
-
-    bool motion_open=state, camera_open=state;
-    std::string motion_retstring, camera_retstring;
-
     if ( component != "all" && component != "motion" && component != "camera" ) {
       message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
                                << "Expected { motion | camera }";
@@ -1595,24 +1680,40 @@ namespace Acam {
       return ERROR;
     }
 
-    if ( component == "all" || component == "motion" ) {
-      motion_open = this->motion.is_open( std::string(""), motion_retstring );
+    if ( component == "all" ) {
+      state  = this->motion.is_open();
+      state &= this->camera.andor.is_initialized();
+    }
+    else
+    if ( component == "camera" ) {
+      state  = this->camera.andor.is_initialized();
+    }
+    else
+    if ( component == "motion" ) {
+      state  = this->motion.is_open();
     }
 
-    if ( component == "all" || component == "camera" ) {
-      camera_open = this->camera.andor.is_initialized();
-    }
-
-    if ( motion_open && camera_open ) {
-      state     = true;
-      retstring = "true";
-    }
-    else {
-      state = motion_open && camera_open;
-      retstring = motion_retstring+" "+camera_retstring;
-    }
+    retstring = ( state ? "true" : "false" );
 
     return NO_ERROR;
+  }
+  /***** Acam::Interface::isopen **********************************************/
+
+
+  /***** Acam::Interface::isopen **********************************************/
+  /**
+   * @brief      returns simple boolean for open state of specified component
+   * @param[in]  component  optional string contains which component to check { camera | motion }
+   * @return     true | false
+   *
+   * This function is overloaded
+   *
+   */
+  bool Interface::isopen( std::string component ) {
+    bool state=false;
+    std::string dontcare;
+    long error = this->isopen( component, state, dontcare );
+    if (error==NO_ERROR) return state; else return false;
   }
   /***** Acam::Interface::isopen **********************************************/
 
@@ -1660,12 +1761,121 @@ namespace Acam {
     }
 
     if ( component == "all" || component == "camera" ) {
+      std::string dontcare;
+      error |= this->framegrab( "stop", dontcare );
       error |= this->camera.close();
     }
 
     return error;
   }
   /***** Acam::Interface::close ***********************************************/
+
+
+  /***** Acam::Interface::tcs_init ********************************************/
+  /**
+   * @brief      initialize connection to TCS
+   * @param[in]  args       optional string { real sim shutdown }
+   * @param[out] retstring  return string contains { real sim offline }
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   * Request for help "?" is passed on to the tcs daemon client
+   * via the tcsd.init() call.
+   *
+   */
+  long Interface::tcs_init( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::tcs_init";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // No arg is a query
+    //
+    if ( args.empty() ) {
+
+      if ( ! this->tcsd.client.is_open() ) {
+        retstring="offline";
+        return NO_ERROR;
+      }
+
+      // Ask tcsd client for the name of the TCS.
+      // Response is expected to be "<name> DONE"
+      //
+      error = this->tcsd.client.command( TCSD_GET_NAME, retstring );
+
+      // Remove the " DONE" from the reply, which becomes the return string
+      //
+      if ( error == NO_ERROR ) {
+        try {
+          auto pos = retstring.find( " DONE" );
+          if ( pos != std::string::npos ) {
+            retstring.erase( pos );
+          }
+          else {
+            message.str(""); message << "ERROR reading TCS name: \"" << retstring << "\"";
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch( std::exception &e ) {
+          message.str(""); message << "ERROR invalid reply \"" << retstring << "\" from tcsd: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+      }
+
+      return error;
+    }
+
+    // If shutting down then stop the focus monitoring thread first
+    //
+    if ( args == "shutdown" ) {
+      // Request stop
+      //
+      this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ, std::memory_order_seq_cst );
+
+      // Wait up to 1.5 sec for stop
+      //
+      auto start = std::chrono::steady_clock::now();
+      bool timedout=false;
+      while ( this->monitor_focus_state.load( std::memory_order_seq_cst ) != Acam::FOCUS_MONITOR_STOPPED ) {
+        auto now = std::chrono::steady_clock::now();
+        if ( now - start > std::chrono::milliseconds( 1500 ) ) {
+          timedout=true;
+          break;
+        }
+        std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+      }
+
+      // Stop request timed out. Set the error but continue.
+      //
+      if ( timedout ) {
+        logwrite( function, "ERROR timeout waiting for focus monitor thread to stop" );
+        error = ERROR;
+      }
+    }
+
+    // Send command to tcs daemon client. If help was requested then that
+    // request is passed on here to tcsd.init() so this could return HELP.
+    //
+    error |= this->tcsd.init( args, retstring );   // OR'd to include possible stop-thread-timeout
+
+    // If the TCS initialization is successful, then spawn a detached thread
+    // to monitor the focus (if not already running), which is what keeps
+    // the Guider GUI updated on focus changes.
+    //
+    if ( error==NO_ERROR && args != "shutdown" ) {
+      this->tcs_online.store( true );
+      if ( this->monitor_focus_state.load( std::memory_order_seq_cst ) == Acam::FOCUS_MONITOR_STOPPED ) {
+        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_START_REQ, std::memory_order_seq_cst );
+        std::thread( this->dothread_monitor_focus, std::ref(*this) ).detach();
+      }
+    }
+    else {
+      this->tcs_online.store( false );
+    }
+
+    return error;
+  }
+  /***** Acam::Interface::tcs_init ********************************************/
 
 
   /***** Acam::Interface::framegrab_fix ***************************************/
@@ -1744,11 +1954,17 @@ namespace Acam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = ACAMD_FRAMEGRAB;
-      retstring.append( " start | stop | one [ <filename> ]\n" );
-      retstring.append( "   Start/Stop continuous frame grabbing or grab a single ACAM image.\n" );
+      retstring.append( " [ start | stop | one [ <filename> ] | status ]\n" );
+      retstring.append( "   Start/Stop continuous frame grabbing or grab one single ACAM image.\n" );
       retstring.append( "   If an optional <filename> is supplied then that file will be used\n" );
       retstring.append( "   as a source for header information for the frame.\n" );
+      retstring.append( "   No argument or \"status\" returns true|false to indicate running state.\n" );
       return HELP;
+    }
+
+    if ( args.empty() || args == "status" ) {
+      retstring = ( this->is_framegrab_running() ? "true" : "false" );
+      return NO_ERROR;
     }
 
     // Tokenize the args and make sure there's at least one
@@ -1756,20 +1972,23 @@ namespace Acam {
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
-    if ( tokens.size() < 1 ) {
-      logwrite( function, "ERROR no arguments. expected \"one [ <sourcefile> ] | start | stop\"" );
-      retstring="invalid_argument";
-      return ERROR;
-    }
-
     std::string whattodo, sourcefile;
 
     if ( tokens.size() > 0 ) whattodo   = tokens[0];
     if ( tokens.size() > 1 ) sourcefile = tokens[1];
     if ( tokens.size() > 2 ) {
-      logwrite( function, "ERROR too many arguments. expected \"one [ <sourcefile> ] | start | stop\"" );
+      logwrite( function, "ERROR too many arguments. expected \"one [ <sourcefile> ] | start | stop | status\"" );
       retstring="invalid_argument";
       return ERROR;
+    }
+
+    // Unless requresting a stop, if the TCS is not already open then
+    // initialize the connection // TODO
+    //
+    if ( whattodo != "stop" && ! this->tcsd.client.is_open() ) {
+      this->async.enqueue_and_log( function, "NOTICE: not connected to TCS" );
+      retstring="tcs_offline";
+      this->tcs_online.store( true );
     }
 
     std::thread( dothread_framegrab, std::ref(*this), whattodo, sourcefile ).detach();
@@ -1791,26 +2010,24 @@ namespace Acam {
     std::stringstream message;
     long error = NO_ERROR;
 
-    logwrite( function, "entering thread" );
-
     if ( whattodo == "one" ) {
-      iface.framegrab_thread_running.store( false );
+      iface.framegrab_thread_running.store( false, std::memory_order_seq_cst );
     }
     else
     if ( whattodo == "start" ) {
-      if ( iface.framegrab_thread_running.load() ) {
+      if ( iface.is_framegrab_running() ) {
         logwrite( function, "thread already running, exiting" );
         return;
       }
       else {
         logwrite( function, "set thread running" );
-        iface.framegrab_thread_running.store( true );
+        iface.framegrab_thread_running.store( true, std::memory_order_seq_cst );
       }
     }
     else
     if ( whattodo == "stop" ) {
       logwrite( function, "set thread to stop, exiting" );
-      iface.framegrab_thread_running.store( false );
+      iface.framegrab_thread_running.store( false, std::memory_order_seq_cst );
       return;
     }
     else {
@@ -1822,15 +2039,35 @@ namespace Acam {
     iface.wcsname.clear();
     iface.wcsfix_time = std::chrono::steady_clock::time_point::min();
 
+    // The speed of this do loop can potentially be limited by either the
+    // exposure time or the acquisition, which can be limited by the solver.
+    // In other words, it will acquire images as fast as it needs to, but no
+    // faster.
+    //
     do {
       if (error==NO_ERROR) error = iface.camera.andor.acquire_one();            // acquire a frame from camera into memory
       if (error==NO_ERROR) error = iface.collect_header_info();                              // collect header information
-      if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile, iface.imagename );  // write to FITS file
-      iface.framegrab_time = std::chrono::steady_clock::time_point::min();
-      iface.guide_manager.push_guider_image( iface.imagename );                              // send frame to Guider GUI
-    } while ( error==NO_ERROR && iface.framegrab_thread_running.load() );
+      if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
+                                                             iface.imagename,
+                                                             iface.tcs_online.load() );      // write to FITS file
 
-    logwrite( function, "leaving thread" );
+      iface.framegrab_time = std::chrono::steady_clock::time_point::min();
+
+      iface.guide_manager.push_guider_image( iface.imagename );                              // send frame to Guider GUI
+
+      if (error==NO_ERROR) error = iface.target.do_acquire();                                // acquire target (if needed)
+
+      std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+
+    } while ( error==NO_ERROR && iface.is_framegrab_running() );
+
+    if ( error != NO_ERROR ) {
+      logwrite( function, "ERROR starting thread" );
+      iface.target.acquire( Acam::TARGET_NOP );       // first disable acquisition
+      iface.framegrab_thread_running.store( false, std::memory_order_seq_cst );  // then disable frame grabbing
+    }
+    else logwrite( function, "leaving thread" );
+
     return;
   }
   /***** Acam::Interface::dothread_framegrab **********************************/
@@ -1947,7 +2184,7 @@ namespace Acam {
     double _focus;
     if ( tcsd.get_focus( _focus ) != NO_ERROR ) {
       logwrite( function, "ERROR couldn't read focus" );
-      guide_manager.focus.store(NAN);
+      guide_manager.focus.store(NAN, std::memory_order_seq_cst);
       error=ERROR;
     }
 
@@ -1974,9 +2211,449 @@ namespace Acam {
    */
   long Interface::guider_settings_control() {
     std::string retstring;
-    return this->guider_settings_control( std::string(""), retstring );
+    return ( this->guider_settings_control( std::string(""), retstring ) );
   }
   /***** Acam::Interface::guider_settings_control *****************************/
+
+
+  /***** Acam::Interface::acquire *********************************************/
+  /**
+   * @brief      outside interface to set or get the target acquisition
+   * @details    This uses the target.acquire() function to gain access to
+   *             the Acam::Target class.
+   * @param[in]  args       string,  [ <ra> <dec> <angle> | target | guide | stop ]
+   * @param[out] retstring  contains timeout in seconds
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   * See embedded help for details on format of the input args string.
+   *
+   */
+  long Interface::acquire( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::acquire";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_ACQUIRE;
+      retstring.append( " [ <ra> <dec> <angle> | target | guide | stop ]\n" );
+      retstring.append( "   Set or get target acquisition mode.\n" );
+      retstring.append( "   If no args supplied then the current status is returned in the form of\n" );
+      retstring.append( "   <mode_num> <mode> where <mode> = { stopped acquiring guiding }\n" );
+      retstring.append( "   Acquisition requires knowing what to acquire so the coords must be supplied\n" );
+      retstring.append( "   via one of the following:\n" );
+      retstring.append( "\n" );
+      retstring.append( "   <ra> <dec> <angle> acquire target using specified coords in SLIT referece\n" );
+      retstring.append( "                      frame, then resume normal open loop tracking.\n" );
+      retstring.append( "\n" );
+      retstring.append( "   target             will request coords from the sequenver, acquire the\n" );
+      retstring.append( "                      target, then resume normal open loop tracking.\n" );
+      retstring.append( "\n" );
+      retstring.append( "   guide              requires target acquisition using coords or target,\n" );
+      retstring.append( "                      then will repeatedly acquire target and continue to run\n" );
+      retstring.append( "                      the solver for subsequent images, sending corrections\n" );
+      retstring.append( "                      to the TCS.\n" );
+      retstring.append( "\n" );
+      retstring.append( "   stop               disables any current guiding or acquisition in process.\n" );
+      retstring.append( "\n" );
+      retstring.append( "   When supplying target coords the expected input string <ra> <dec> <angle>\n" );
+      retstring.append( "   can be decimal or sexagesimal. If decimal then <ra> can be decimal degrees\n" );
+      retstring.append( "   or decimal hours. Specify decimal hours by adding a \"h\", as in \"1.234h\".\n" );
+      return HELP;
+    }
+
+    if ( args.empty() ) {                                      // status request only
+      message.str(""); message << this->target.acquire_mode << " " << this->target.acquire_mode_string();
+      logwrite( function, message.str() );
+      retstring = message.str();
+      return NO_ERROR;
+    } else
+
+    // If the camera isn't open then this shouldn't be started
+    //
+    if ( ! isopen( "camera" ) ) {
+      logwrite( function, "ERROR no connection to camera" );
+      retstring = "camera_not_open";
+      return ERROR;
+    } else
+
+    // If the exposure time is zero then there won't be any starlight
+    //
+    if ( this->camera.exptime() == 0 ) {
+      logwrite( function, "ERROR exposure time cannot be zero." );
+      retstring = "camera_exptime";
+      return ERROR;
+    } else
+
+    // If not already in ACQUIRE mode then request the coords from the
+    // sequencer then enable ACQUIRE mode
+    //
+    if ( args == "target" ) {
+      if ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ) {
+        logwrite( function, "target acquisition mode already selected" );
+        return NO_ERROR;
+      }
+      logwrite( function, "ERROR not yet implemented" );
+      retstring="not_implemented";
+      return ERROR;
+      this->astrometry.isacquire = true;                         // informs the solver
+      return( this->target.acquire( Acam::TARGET_ACQUIRE ) );    // enable Target ACQUIRE mode
+    } else
+
+    // If not already in GUIDE mode then enable GUIDE mode
+    //
+    if ( args == "guide" ) {
+      if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
+        logwrite( function, "target guide mode already selected" );
+        return NO_ERROR;
+      }
+      this->astrometry.isacquire = false;                        // informs the solver
+      return( this->target.acquire( Acam::TARGET_GUIDE ) );      // enable Target GUIDE mode
+    } else
+
+    // If not already stopped then stop (disable by setting mode to NOP)
+    //
+    if ( args == "stop" ) {
+      if ( this->target.acquire_mode == Acam::TARGET_NOP ) {
+        logwrite( function, "target guide/acquisition already stopped" );
+        return NO_ERROR;
+      }
+      return( this->target.acquire( Acam::TARGET_NOP ) );        // disables Target guide/acquisition
+    } else
+
+    // Finally, if not already in ACQUIRE mode and not one of the above commands
+    // then assume args contains coordinates and pass them to target_coords() which
+    // will validate them before setting them in the Target class. If coords are
+    // valid then enable ACQUIRE mode.
+    //
+    {
+      if ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ) {
+        logwrite( function, "target acquisition mode already selected" );
+        return NO_ERROR;
+      }
+      std::string coords;
+      long error = this->target_coords( args, coords );          // validate and set the target coords
+      logwrite( function, coords );
+      if ( error == NO_ERROR ) {
+        double timeout = this->target.get_timeout();
+        retstring=std::to_string( timeout );                     // return the timeout in seconds
+        this->astrometry.isacquire = true;                       // informs the solver
+        return( this->target.acquire( Acam::TARGET_ACQUIRE ) );  // enable Target ACQUIRE mode
+      }
+      else return ERROR;
+    }
+  }
+  /***** Acam::Interface::acquire *********************************************/
+
+
+  /***** Acam::Target::acquire ************************************************/
+  /**
+   * @brief      controls target acquisition
+   * @details    This is the interface between the Interface class and the
+   *             Target class, providing outside access to the Target class.
+   * @param[in]  requested_mode  this is a TargetAcquisitionModes enum
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Target::acquire( Acam::TargetAcquisitionModes requested_mode ) {
+    std::string function = "Acam::Target::acquire";
+    std::stringstream message;
+
+    // If the frame grab thread isn't running then try to start it
+    //
+    if ( ! iface->is_framegrab_running() ) {
+
+      std::string dontcare;
+      iface->framegrab( "start", dontcare );           // start framegrab thread
+
+      auto start = std::chrono::steady_clock::now();
+
+      while ( ! iface->is_framegrab_running()  ) {     // shouldn't take long but wait up to 100 msec
+        auto now = std::chrono::steady_clock::now();
+        if ( now - start > std::chrono::milliseconds( 100 ) ) break;
+        std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
+      }
+
+      if ( ! iface->is_framegrab_running() ) {
+        iface->async.enqueue_and_log( function, "ERROR: failed to start frame grabber" );
+        return ERROR;
+      }
+    }
+
+    // Can't start guiding until target has been acquired. In other words,
+    // must start with ACQUIRE, because this will send different args to
+    // the solver.
+    //
+    if ( requested_mode == Acam::TARGET_GUIDE && ! this->acquired ) {
+      logwrite( function, "ERROR: cannot start guiding until target has been acquired" );
+      return ERROR;
+    }
+
+    // For a stop request, set stop_acquisition true, which will break out of the
+    // acquisition loop and prevent further acquisitions from starting.
+    //
+    if ( requested_mode == Acam::TARGET_NOP ) {
+      this->stop_acquisition.store( true, std::memory_order_seq_cst );
+      logwrite( function, "stop requested" );
+    }
+
+    if ( requested_mode == Acam::TARGET_ACQUIRE || requested_mode == Acam::TARGET_GUIDE) {
+      // initialize variables for new acquisition
+      //
+      this->nacquired = 0;
+      this->attempts = 0;
+      this->sequential_failures = 0;
+      this->acquired.store( false, std::memory_order_seq_cst );
+
+      // Start the timeout clock, initialized as the time now plus the
+      // configured timeout in seconds (duration defaults to seconds).
+      //
+      this->timeout_time = std::chrono::steady_clock::now()
+                         + std::chrono::duration<double>(this->timeout);
+
+      // This informs do_acquire() that everything has been initialized
+      // and we're ready to start the acquisition.
+      //
+      this->stop_acquisition.store( false, std::memory_order_seq_cst );
+      logwrite( function, "acquisition initialized" );
+    }
+
+    this->acquire_mode = requested_mode;
+
+    return NO_ERROR;
+  }
+  /***** Acam::Target::acquire ************************************************/
+
+
+  /***** Acam::Target::do_acquire *********************************************/
+  /**
+   * @brief      performs the actual target acquisition if conditions are right
+   * @details    This is called by dothread_framegrab() in a loop, after each frame.
+   *             Based on various conditions, this will either return immediately,
+   *             or it will call the solver and move the telescope.
+   *
+   *             If the acquire_mode is NOP or if stop_acquisition is set, then it
+   *             returns immediately.
+   *
+   *             If the acquire_mode is ACQUIRE then it will continue the solve
+   *             and offset until it succeeds or fails or times out.
+   *
+   *             If the acquire_mode is GUIDE then its just like ACQUIRE except
+   *             that it never stops until stopped, or error.
+   *
+   * @return     ERROR | NO_ERROR | TIMEOUT
+   *
+   */
+  long Target::do_acquire() {
+    std::string function = "Acam::Target::do_acquire";
+    std::stringstream message;
+
+    // Do nothing, return immediately if no acquisition mode selected
+    // or if stop_acquisition is set.
+    //
+    if ( this->acquire_mode == Acam::TARGET_NOP || this->stop_acquisition.load(std::memory_order_seq_cst) ) {
+      return NO_ERROR;
+    }
+
+    // Here is the acquisition sequence, called after every frame grab.
+    //
+    // Using that frame, call the solver and send offsets to the TCS. After this
+    // will be checks on the success and quality of the solution.
+    //
+    // ACQUIRE and GUIDE are the same except that GUIDE doesn't time-out,
+    // and they send different arguments to the solver.
+    //
+    long error = NO_ERROR;
+
+    if ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_GUIDE ) {
+    do {
+      // ACQUIRE mode can time out so check that here (GUIDE never times out).
+      //
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+        if ( std::chrono::steady_clock::now() > this->timeout_time ) {
+          iface->async.enqueue_and_log( function, "ERROR: failed to acquire target within timeout" );
+          return TIMEOUT;
+        }
+      }
+
+      attempts++;
+
+      // The acam interface is given the target coordinates (from the database)
+      // which are in the SLIT reference frame.
+      //
+      // Here compute the "goal" for the acam (in the ACAM reference frame) using
+      // the database coordinates and the current cass angle.
+      //
+
+      // Convert the current cass rotator angle (which is in the SCOPE frame) to a
+      // position angle in the SLIT frame.  The RA, DEC coordinates don't matter
+      // for just computing the angle.
+      //
+      if (!error) error = iface->fpoffsets.compute_offset( "SCOPE", "SLIT",
+                                                           0, 0, this->tcs_casangle );
+
+      // Now convert the target coordinates (from the database) using this angle,
+      // from the SLIT to the ACAM reference frame.
+      //
+      double acam_ra_goal, acam_dec_goal, acam_angle_goal;
+
+      if (!error) error = iface->fpoffsets.compute_offset_last_angle( "SLIT", "ACAM",
+                                                                      this->coords_slit.ra, this->coords_slit.dec,
+                                                                      acam_ra_goal, acam_dec_goal, acam_angle_goal );
+
+      {  // this local section is just for display purposes and its variables are not used elsewhere
+      std::string rastr, decstr;
+      decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
+      decimal_to_sexa( acam_dec_goal, decstr );
+      message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
+                                                         << std::fixed << std::setprecision(6) << acam_angle_goal;
+      logwrite( function, message.str() );
+      }
+
+      // Perform the astrometry calculations on the acquired image (and calculate image quality).
+      // Optional solver args can be included here, which currently only come from the test commands.
+      //
+      bool match_found = false;                    // was a match found?
+      double acam_ra=0, acam_dec=0, acam_angle=0;  // calculations from acam solver
+      std::string result;                          // acam solver result
+
+      std::string last_imagename = iface->get_imagename();
+
+      if (!error) error = iface->astrometry.solve( last_imagename, this->ext_solver_args );
+
+      if (!error) iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
+
+      if (!error) error = iface->astrometry.image_quality();
+
+      if ( result=="GOOD" || result=="NOISY" ) {   // treat GOOD and NOISY the same for now
+        match_found = true;
+        std::string rastr, decstr;
+        double _ra = acam_ra * TO_HOURS;
+        decimal_to_sexa( _ra, rastr );
+        decimal_to_sexa( acam_dec, decstr );
+        message.str(""); message << "[ACQUIRE] solve " << result << ": match found with coords="
+                                 << rastr << "  " << decstr << "  " << acam_angle;
+        logwrite( function, message.str() );
+      }
+
+      // If no match found and exceeded number of attempts then give up and get out.
+      // This counts as an attempt so attempts is incremented.
+      //
+      if ( ! match_found && ( this->max_attempts > 0 ) && ( attempts >= this->max_attempts ) ) {
+        iface->async.enqueue_and_log( function, "ERROR: failed to acquire target within max number of attempts" );
+        error = ERROR;
+        break;
+      }
+
+      // Also get out on any error, or no match found
+      //
+      if ( error != NO_ERROR || !match_found ) break;
+
+      // Continue only if there was a match and no errors
+
+      // Calculate the offsets to send to the TCS.
+      //
+      // Offsets calculated as difference between acam goals and the solution from
+      // solve. ACAM goals are the SLIT->ACAM translated coords from the DB and
+      // are where the ACAM needs to be pointed. Goals never change.
+      //
+      double ra_off, dec_off;  // calculated offsets will be in degrees
+
+      error = iface->fpoffsets.solve_offset( acam_ra, acam_dec,
+                                             acam_ra_goal, acam_dec_goal,
+                                             ra_off, dec_off );
+
+      {  // this local section is just for display purposes and its variables are not used elsewhere
+      double __ra, __dec;
+      iface->tcsd.get_weather_coords( __ra, __dec );  // returns RA hours, DEC degrees
+      message.str(""); message << "[ACQUIRE] tcs coords before: " << __ra*TO_DEGREES << " " << __dec << " deg";
+      logwrite( function, message.str() );
+      }
+
+      // Compute the angular separation between the target (acam_ra_*) and calculated slit (acam_*)
+      //
+      double offset = angular_separation( acam_ra_goal, acam_dec_goal, acam_ra, acam_dec );
+
+      message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
+
+      // There is a maximum offset allowed to the TCS.
+      // This is not a TCS limit (their limit is very large).
+      // This is our limit so that we don't accidentally move too far off the slit.
+      //
+      if ( offset >= this->tcs_max_offset ) {
+        message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
+                                 << this->tcs_max_offset << " and will not be sent to the TCS";
+        logwrite( function, message.str() );
+
+        // Match found but failure to send an offset is considered an attempt
+        // so attempts is incremented.
+        //
+        if ( attempts >= this->max_attempts ) {
+          message.str(""); message << "ERROR: failed to find offset below " << this->tcs_max_offset << " within max number of attempts";
+          iface->async.enqueue_and_log( function, message.str() );
+          error = ERROR;
+          break;
+        }
+      } else
+      // otherwise send the offsets to the TCS and keep looping.
+      //
+      if (error==NO_ERROR) {
+        error = iface->tcsd.pt_offset( ra_off*3600., dec_off*3600. );  // send offset to TCS here (returns when offset is complete)
+        if (error==NO_ERROR) attempts = 0;                             // reset retry counter if match found and offset < max and no errors
+      }
+      else {
+        iface->async.enqueue_and_log( function, "ERROR solving offsets" );
+        break;
+      }
+
+      // If the offset is below ACQUIRE_OFFSET_THRESHOLD then increment the nacquired
+      // counter. We need ACQUIRE_MIN_REPEAT sequential, successful acquires in order
+      // to call this a success, so any failure here resets the counter.
+      //
+      if ( offset < this->offset_threshold ) {
+        this->nacquired++;
+        message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
+        logwrite( function, message.str() );
+      }
+      else {
+        nacquired=0;     // if an acquire is not below threshold then reset the counter
+      }
+
+      if ( this->nacquired == 0 && this->max_attempts > 0 ) {
+        if ( ++this->sequential_failures >= this->max_attempts ) {
+          error = ERROR;
+        }
+      }
+
+      // Either an error or reaching our requirement of nacquired sequential solves
+      // will determine the failure or success of the acquisition.
+      //
+      if ( error != NO_ERROR ) {
+        message.str(""); message << "ERROR acquisition failed after " << this->sequential_failures << " sequential failures";
+        logwrite( function, message.str() );
+        this->acquired.store( false, std::memory_order_seq_cst );
+      }
+
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE &&
+           this->nacquired >= this->min_repeat ) {
+        logwrite( function, "NOTICE: target acquired" );
+        this->acquired.store( true, std::memory_order_seq_cst );                      // Target Acquired!
+      }
+
+    } while ( false );  // the do-loop is executed only once
+    }                   // end of acquisition sequence
+
+    // If target acquired, and if acquisition mode was to acquire,
+    // then disable acquisition mode.
+    //
+    if ( this->acquired.load( std::memory_order_seq_cst ) &&
+         this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+      this->acquire_mode = Acam::TARGET_NOP;
+    }
+
+    return error;
+  }
+  /***** Acam::Target::do_acquire *********************************************/
 
 
   /***** Acam::Interface::dothread_set_filter *********************************/
@@ -2121,14 +2798,15 @@ namespace Acam {
     std::string function = "Acam::Interface::dothread_monitor_focus";
     std::stringstream message;
 
-    if ( iface.monitor_focus_thread_running.load() == true ) {
+    if ( iface.monitor_focus_state.load(std::memory_order_seq_cst) == Acam::FOCUS_MONITOR_RUNNING ) {
       logwrite( function, "thread already running" );
       return;
     }
 
-    iface.monitor_focus_thread_running.store( true );
-
-    logwrite( function, "thread starting" );
+    if ( iface.monitor_focus_state.load(std::memory_order_seq_cst) == Acam::FOCUS_MONITOR_START_REQ ) {
+      logwrite( function, "thread starting" );
+      iface.monitor_focus_state.store( Acam::FOCUS_MONITOR_RUNNING, std::memory_order_seq_cst );
+    }
 
     double focus1, focus2;
     long error = NO_ERROR;
@@ -2145,6 +2823,13 @@ namespace Acam {
     // otherwise updates are not made unless the focus has changed.
     //
     bool initial_pass = true;
+
+    // Sometimes a call to the TCS fails but if you try again it succeeds.
+    // Instead of terminating the thread at the first sign of an error,
+    // try again up to 3 times. Each good call will reset this counter,
+    // and each failed call will increment it.
+    //
+    int error_counter = 0;
 
     do {
       std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
@@ -2163,15 +2848,26 @@ namespace Acam {
            std::abs( focus1 - focus2 ) > tolerance ) {  // focus has changed
         initial_pass = false;
         focus1 = focus2;                                // new baseline focus
-        iface.guide_manager.focus.store( focus1 );      // save baseline focus to the class
+        iface.guide_manager.focus.store( focus1, std::memory_order_seq_cst );      // save baseline focus to the class
         iface.guide_manager.push_guider_settings();     // push new focus to the guider
       }
-    } while ( error == NO_ERROR && iface.monitor_focus_thread_running.load()==true );
+
+      // An error will increment the error counter and clear the error flag
+      // up to 3 times.
+      //
+      if ( error != NO_ERROR && error_counter++ < 3 ) {
+        logwrite( function, "ERROR polling TCS focus but will retry" );
+        error=NO_ERROR;
+      }
+      else error_counter=0;
+
+    } while ( error == NO_ERROR && 
+              iface.monitor_focus_state.load(std::memory_order_seq_cst) == Acam::FOCUS_MONITOR_RUNNING );
 
     message.str(""); message << "thread terminated" << ( error != NO_ERROR ? " with error" : "" );
     logwrite( function, message.str() );
 
-    iface.monitor_focus_thread_running.store( false );
+    iface.monitor_focus_state.store( Acam::FOCUS_MONITOR_STOPPED, std::memory_order_seq_cst );
 
     return;
   }
@@ -2212,11 +2908,12 @@ namespace Acam {
       retstring.append( "  Test Routines\n" );
       retstring.append( "   adchans [ ? ]\n" );
       retstring.append( "   emgainrange\n" );
-      retstring.append( "   fpoffsets <from> <to> <ra> <dec> <angle> (in decimal hours, degrees)\n" );
+      retstring.append( "   fpoffsets ? | <from> <to> <ra> <dec> <angle> (see help for units)\n" );
       retstring.append( "   getemgain\n" );
       retstring.append( "   monitorfocus [ ? | stop | start ]\n" );
       retstring.append( "   sleep\n" );
-      retstring.append( "   threadoffset\n" );
+      retstring.append( "   solverargs [ ? | <key=val> [...<keyn=valn>] ]\n" );
+      retstring.append( "   threadoffset [ ? ]\n" );
       return HELP;
     }
 
@@ -2230,33 +2927,110 @@ namespace Acam {
 
     std::string testname = tokens[0];
 
+    // set optional external solver args
+    //
+    if ( testname == "solverargs" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = ACAMD_TEST;
+        retstring.append( " solverargs [ <args > ]\n" );
+        retstring.append( "  Set optional args to pass to the solver. If <args> is empty\n" );
+        retstring.append( "  then clear the external solver args (otherwise they persist).\n" );
+        retstring.append( "  The current external solver args are returned.\n" );
+        return HELP;
+      }
+      if ( tokens.size() > 1 ) {                                                  // any tokens are the solver args
+        auto pos = args.find( "solverargs " );                                    // note space at end of test name
+        args = args.substr( pos );                                                // get from "solverargs " to the end
+        this->target.ext_solver_args.clear();
+      }
+      else {                                                                      // otherwise erase the solver args
+        this->target.ext_solver_args.clear();
+      }
+      retstring.clear();
+      for ( const auto &solver_arg : this->target.ext_solver_args ) {
+        retstring.append( solver_arg );
+        retstring.append( " " );
+      }
+      error=NO_ERROR;
+    }
+    else
     if ( testname == "fpoffsets" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = ACAMD_TEST;
+        retstring.append( " fpoffsets <from> <to> <ra> <dec> <angle>\n" );
+        retstring.append( "   Calculate focal plane offsets from <from> frame to <to> frame.\n" );
+        retstring.append( "   Coordinates can be decimal or sexagesimal. If decimal then <ra> can be\n" );
+        retstring.append( "   decimal degrees or decimal hours. Specify decimal hours by adding \"h\"\n" );
+        retstring.append( "   as in \"1.234d\". Angle is always decimal degrees.\n" );
+        retstring.append( "   Returned offsets will be in decimal degrees.\n" );
+        return HELP;
+      }
+
       if ( tokens.size() != 6 ) {
         message.str(""); message << "ERROR received " << tokens.size() << " args but expected <from> <to> <ra> <dec> <angle>";
         logwrite( function, message.str() );
         retstring="invalid_argument";
         return ERROR;
       }
+
+      double ra_from, dec_from, angle_from;
+      double ra_to, dec_to, angle_to;
+
+      // Convert the strings to decimal based on what they look like
+      //
       try {
-        std::string from  = tokens.at(1);
-        std::string to    = tokens.at(2);
-        double ra_from    = std::stod( tokens.at(3) );
-        double dec_from   = std::stod( tokens.at(4) );
-        double angle_from = std::stod( tokens.at(5) );
-        double ra_to, dec_to, angle_to;
-        error             = this->fpoffsets.compute_offset( from, to, ra_from, dec_from, angle_from, ra_to, dec_to, angle_to );
+        std::string from    = tokens.at(1);
+        std::string to      = tokens.at(2);
+
+        std::string ra_str  = tokens.at(3);
+        std::string dec_str = tokens.at(4);
+
+        // Parse RA
+        //
+        if ( ra_str.find(":") != std::string::npos ) {        // assume sexagesimal if there's a colon in the string
+          ra_from = radec_to_decimal( ra_str ) * TO_DEGREES;  // convert to decimal degrees
+        }
+        else
+        if ( ends_with( ra_str, "h" ) ) {                     // incoming decimal hours
+          ra_str.pop_back();                                  // remove the h
+          ra_from = std::stod( ra_str ) * TO_DEGREES;         // convert to decimal degrees
+        }
+        else {                                                // leaves only decimal degrees
+          ra_from = std::stod( ra_str );
+        }
+
+        // Parse DEC
+        //
+        if ( dec_str.find(":") != std::string::npos ) {       // assume sexagesimal if there's a colon
+          dec_from = radec_to_decimal( dec_str );             // convert to decimal degrees
+        }
+        else {                                                // leaves onnly decimal degrees
+          dec_from = std::stod( dec_str ) * TO_DEGREES;
+        }
+
+        // Parse Angle
+        //
+        angle_from = std::stod( tokens.at(5) );               // always in decimal degrees
+
+        // Call SkyInfo::FPOffsets::compute_offset()
+        //
+        error = this->fpoffsets.compute_offset( from, to, ra_from, dec_from, angle_from, ra_to, dec_to, angle_to );
+
         message.str("");
-        message << ra_to << " " << dec_to << " " << angle_to;
+        message << from << " -> " << to << "\n"
+                << ra_from << " " << dec_from << " " << angle_from << " -> " << ra_to << " " << dec_to << " " << angle_to;
         retstring = message.str();
       }
       catch ( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR parsing \"" << args << "\" expected <from> <to> <ra> <dec> <angle> : " << e.what();
+        message.str(""); message << "ERROR invalid argument parsing \"" << args << "\" : " << e.what();
         logwrite( function, message.str() );
+        retstring="invalid_argument";
         return ERROR;
       }
       catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR parsing \"" << args << "\" expected <from> <to> <ra> <dec> <angle> : " << e.what();
+        message.str(""); message << "ERROR out of range parsing \"" << args << "\" : " << e.what();
         logwrite( function, message.str() );
+        retstring="out_of_range";
         return ERROR;
       }
     }
@@ -2315,14 +3089,27 @@ namespace Acam {
       }
       else
       if ( tokens.size() > 1 && tokens[1] == "start" ) {
+        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_START_REQ, std::memory_order_seq_cst );
         std::thread( this->dothread_monitor_focus, std::ref(*this) ).detach();
       }
       else
       if ( tokens.size() > 1 && tokens[1] == "stop" ) {
-        this->monitor_focus_thread_running.store( false );
+        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ, std::memory_order_seq_cst );
       }
       else {
-        retstring = ( this->monitor_focus_thread_running.load() ? "running" : "stopped" );
+        auto state = this->monitor_focus_state.load( std::memory_order_seq_cst );
+        switch( state ) {
+          case Acam::FOCUS_MONITOR_STOPPED:   retstring = "stopped";
+                                              break;
+          case Acam::FOCUS_MONITOR_STOP_REQ:  retstring = "stop_req";
+                                              break;
+          case Acam::FOCUS_MONITOR_START_REQ: retstring = "start_req";
+                                              break;
+          case Acam::FOCUS_MONITOR_RUNNING:   retstring = "running";
+                                              break;
+          default:                            retstring = "error";
+                                              break;
+        }
       }
     }
     else
@@ -2523,25 +3310,37 @@ namespace Acam {
     std::string function = "Acam::Interface::collect_header_info";
     std::stringstream message;
 
-    double angle_scope, ra_scope, dec_scope,
-           angle_acam,  ra_acam,  dec_acam;
+    bool _tcs = this->tcs_online.load();
+    std::string tcsname;
 
-    message.str(""); message << " tcsd.client.is_open=" << this->tcsd.client.is_open();
-    logwrite( function, message.str() );
-
-    // If the TCS is not already open then initialize the connection // TODO
+    // Check every time for the TCS because we don't ever want to save
+    // an image with ambiguous keywords.
     //
-    if ( ! this->tcsd.client.is_open() ) {
-      logwrite( function, "ERROR not connected to TCS" );
-      return ERROR;
+    if ( _tcs && this->tcsd.client.is_open() ) {
+      this->tcsd.get_name( tcsname );
     }
+    else {
+      tcsname = "offline";
+      this->tcs_online.store( false );
+      _tcs = this->tcs_online.load();
+    }
+
+    double angle_scope=NAN, ra_scope=NAN, dec_scope=NAN,
+           angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;
 
     // Get the current pointing from the TCS
     //
-    this->tcsd.get_cass( angle_scope );
-    this->tcsd.get_coords( ra_scope, dec_scope );
+    if ( _tcs ) this->tcsd.get_cass( angle_scope );
+    if ( _tcs ) this->tcsd.get_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
 
-    this->fpoffsets.compute_offset( "SCOPE", "ACAM", ra_scope, dec_scope, angle_scope, ra_acam, dec_acam, angle_acam );
+    if ( _tcs ) this->target.save_casangle( angle_scope );     // store in the Target class, required for acquisition
+
+    // Compute FP offsets from TCS coordinates (SCOPE) to ACAM coodinates.
+    // compute_offset() always wants degrees and get_coords() returns RA hours.
+    // Results in degrees.
+    //
+    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (ra_scope*TO_DEGREES), dec_scope, angle_scope,
+                                                                             ra_acam, dec_acam, angle_acam );
 
     // Get some info from the Andor::Information class,
     // which is stored in its camera_info object.
@@ -2554,6 +3353,8 @@ namespace Acam {
     // either a prioi or from the Andor::Information class
     //
     this->camera.fitsinfo.fitskeys.erase_db();
+
+    this->camera.fitsinfo.fitskeys.addkey( "TCS",  tcsname, "" );
 
     this->camera.fitsinfo.fitskeys.addkey( "CREATOR",  "acamd", "file creator" );
     this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
@@ -2604,5 +3405,146 @@ namespace Acam {
     return NO_ERROR;
   }
   /***** Acam::Interface::collect_header_info *********************************/
+
+
+  /***** Acam::Interface::target_coords ***************************************/
+  /**
+   * @brief      interface to set or get target coords
+   * @details    acamd needs to know the target coords and since it doesn't
+   *             have access to the database, it must be told. This provides
+   *             the interface between the outside and the Acam::Target class.
+   *
+   *             The expected input string of <ra> <dec> <angle>
+   *             can be in either decimal or sexagesimal, and if decimal,
+   *             then <ra> can be decimal degrees or decimal hours. Specify
+   *             decimal hours by adding a "h", as in "1.234h".
+   *
+   * @param[in]  args       expected input <ra> <dec> <angle> (see details)
+   * @param[out] retstring  return string contains coords from Target class
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   * This is for internal use and not intended to be used externally except
+   * test and debugging purposes.
+   *
+   */
+  long Interface::target_coords( const std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::target_coords";
+    std::stringstream message;
+
+    double _ra=NAN, _dec=NAN, _angle=NAN;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_COORDS;
+      retstring.append( " [ <ra> <dec> <angle> ]\n" );
+      retstring.append( "  Set or get the target coords used for acquisition/guiding.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  NOT INTENDED TO BE USED DIRECTLY DURING NORMAL OPERATION!\n" );
+      retstring.append( "  The " + ACAMD_ACQUIRE + " command uses this internally.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  The acamd acquisition sequence needs the target coords in the\n" );
+      retstring.append( "  SLIT reference frame, as stored in the database.\n\n" );
+      retstring.append( "  <ra>    can be sexagesimal HH:MM:SS.sss or decimal degrees or decimal\n" );
+      retstring.append( "          hours, specified by appending a \"h\" as in \"1.234h\".\n" );
+      retstring.append( "  <dec>   can be sexagesimal DD:MM:SS.sss , or decimal degrees.\n" );
+      retstring.append( "  <angle> is always specified in decimal degrees.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  If no arg is provided then the last loaded target coords are returned,\n" );
+      retstring.append( "  and the return values will be in decimal degrees.\n" );
+      return HELP;
+    }
+
+    // No arg, get the coords from the Acam::Target class and return them
+    //
+    if ( args.empty() ) {
+      this->target.get_coords( _ra, _dec, _angle );
+      message.str(""); message << _ra << " " << _dec << " " << _angle;
+      retstring = message.str();
+      return NO_ERROR;
+    }
+
+    // Otherwise tokenize and parse the args string
+    //
+    std::vector<std::string> tokens;
+
+    Tokenize( args, tokens, " " );
+
+    // Need at least 3 tokens: ra, dec, angle
+    //
+    if ( tokens.size() != 3 ) {
+      message.str(""); message << "ERROR invalid arguments \"" << args << "\": expected <ra> <dec> <angle>";
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // Convert the strings to decimal based on what they look like
+    //
+    try {
+      std::string ra_str  = tokens.at(0);
+      std::string dec_str = tokens.at(1);
+
+      // Parse RA
+      //
+      if ( ra_str.find(":") != std::string::npos ) {     // assume sexagesimal if there's a colon in the string
+        _ra = radec_to_decimal( ra_str ) * TO_DEGREES;   // convert to decimal degrees
+      }
+      else
+      if ( ends_with( ra_str, "h" ) ) {                  // incoming decimal hours
+        ra_str.pop_back();                               // remove the h
+        _ra = std::stod( ra_str ) * TO_DEGREES;          // convert to decimal degrees
+      }
+      else {                                             // leaves only decimal hours
+        _ra = std::stod( ra_str );
+      }
+
+      // Parse DEC
+      //
+      if ( dec_str.find(":") != std::string::npos ) {    // assume sexagesimal if there's a colon
+        _dec = radec_to_decimal( dec_str );              // convert to decimal degrees
+      }
+      else {                                             // leaves onnly decimal degrees
+        _dec = std::stod( dec_str ) * TO_DEGREES;
+      }
+
+      // Parse Angle
+      //
+      _angle = std::stod( tokens.at(2) );                // always in decimal degrees
+    }
+    catch ( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR invalid argument parsing \"" << args << "\" : " << e.what();
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+    catch ( std::out_of_range &e ) {
+      message.str(""); message << "ERROR out of range parsing \"" << args << "\" : " << e.what();
+      logwrite( function, message.str() );
+      retstring="out_of_range";
+      return ERROR;
+    }
+
+    // If any values are NaN then it's a failure.
+    //
+    if ( std::isnan( _ra ) || std::isnan( _dec ) || std::isnan( _angle ) ) {
+      message.str(""); message << "ERROR one or more NaN values: ra=" << _ra
+                               << " dec=" << _dec << " angle=" << _angle;
+      logwrite( function, message.str() );
+      retstring="bad_value";
+      return ERROR;
+    }
+
+    // Otherwise, finally, coords are valid so save them to the Acam::Target class
+    // which will be used for the target acquisition.
+    //
+    this->target.set_coords( _ra, _dec, _angle );
+
+    message.str(""); message << _ra << " " << _dec << " " << _angle;
+    retstring = message.str();
+
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::target_coords ***************************************/
 
 }

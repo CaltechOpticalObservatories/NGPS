@@ -21,8 +21,9 @@ namespace Sequencer {
    *
    */
   Sequence::Sequence() {
-    this->seqstate.store( Sequencer::SEQ_OFFLINE );
-    this->reqstate.store( Sequencer::SEQ_OFFLINE );
+    this->thrstate.store( 0 );                       /// no threads running
+    this->seqstate.store( Sequencer::SEQ_OFFLINE );  /// offline
+    this->reqstate.store( Sequencer::SEQ_OFFLINE );  /// offline
     this->do_once.store( false );                    /// default to "do all"
     this->tcs_ontarget.store( false );               /// default TCS target not ready to observe
     this->tcs_nowait.store( false );                 /// default to wait
@@ -126,7 +127,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_monitor_ready_state( Sequencer::Sequence &seq ) {
-    std::uint32_t ts = seq.thrstate.load(std::memory_order_relaxed);
+    std::uint32_t ts = seq.thrstate.load();
     if ( ts & THR_MONITOR_READY_STATE ) return;                 // allow only one of these threads to run
     seq.set_thrstate_bit( THR_MONITOR_READY_STATE );
     std::string function = "Sequencer::Sequence::dothread_monitor_ready_state";
@@ -175,7 +176,7 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::set_seqstate_bit";
     std::stringstream debugmessage;
-    std::uint32_t oldstate = this->seqstate.load(std::memory_order_relaxed);
+    std::uint32_t oldstate = this->seqstate.load();
     std::uint32_t newstate =  oldstate | mb;
     debugmessage << "[DEBUG] state changed from " << oldstate << " to " << newstate
                  << ": " << this->seqstate_string( newstate );
@@ -199,7 +200,7 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::clr_seqstate_bit";
     std::stringstream debugmessage;
-    std::uint32_t oldstate = this->seqstate.load(std::memory_order_relaxed);
+    std::uint32_t oldstate = this->seqstate.load();
     std::uint32_t newstate = oldstate & ~mb;
     debugmessage << "[DEBUG] state changed from " << oldstate << " to " << newstate
                  << ": " << this->seqstate_string( newstate );
@@ -224,7 +225,7 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::set_clr_seqstate_bit";
     std::stringstream debugmessage;
-    std::uint32_t oldstate = this->seqstate.load(std::memory_order_relaxed);
+    std::uint32_t oldstate = this->seqstate.load();
     std::uint32_t newstate = oldstate | sb;  // set sb
     newstate &= ~cb;                         // clear cb
     debugmessage << "[DEBUG] state changed from " << oldstate << " to " << newstate
@@ -249,7 +250,7 @@ namespace Sequencer {
   std::string Sequence::report_seqstate() {
     std::string async_message = "RUNSTATE: ";
 
-    uint32_t ss = this->seqstate.load( std::memory_order_relaxed );  // get the seqstate
+    uint32_t ss = this->seqstate.load();                             // get the seqstate
 
     std::string retstring = this->seqstate_string( ss );             // convert it to a string
 
@@ -271,11 +272,11 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::get_seqstate";
     std::stringstream message;
-    message.str(""); message << "[DEBUG] seqstate is " << this->seqstate.load(std::memory_order_relaxed)
-                             << ": " << this->seqstate_string( this->seqstate.load(std::memory_order_relaxed) );
+    message.str(""); message << "[DEBUG] seqstate is " << this->seqstate.load()
+                             << ": " << this->seqstate_string( this->seqstate.load() );
     logwrite( function, message.str() );
 #endif
-    return( this->seqstate.load(std::memory_order_relaxed) );
+    return( this->seqstate.load() );
   }
   /***** Sequencer::Sequence::get_seqstate ************************************/
 
@@ -290,7 +291,7 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::set_reqstate_bit";
     std::stringstream message;
-    std::uint32_t oldstate = this->reqstate.load(std::memory_order_relaxed);
+    std::uint32_t oldstate = this->reqstate.load();
     std::uint32_t newstate =  oldstate | mb;
     message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate
                              << ": " << this->seqstate_string( newstate );
@@ -311,7 +312,7 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::clr_reqstate_bit";
     std::stringstream message;
-    std::uint32_t oldstate = this->reqstate.load(std::memory_order_relaxed);
+    std::uint32_t oldstate = this->reqstate.load();
     std::uint32_t newstate = oldstate & ~mb;
     message.str(""); message << "[DEBUG] state changed from " << oldstate << " to " << newstate
                              << ": " << this->seqstate_string( newstate );
@@ -332,10 +333,10 @@ namespace Sequencer {
 #ifdef LOGLEVEL_DEBUG
     std::string function = "Sequencer::Sequence::get_reqstate";
     std::stringstream message;
-    message.str(""); message << "[DEBUG] reqstate is " << this->reqstate.load(std::memory_order_relaxed);
+    message.str(""); message << "[DEBUG] reqstate is " << this->reqstate.load();
     logwrite( function, message.str() );
 #endif
-    return( this->reqstate.load(std::memory_order_relaxed) );
+    return( this->reqstate.load() );
   }
   /***** Sequencer::Sequence::get_reqstate ************************************/
 
@@ -433,6 +434,15 @@ namespace Sequencer {
           }
         }
 
+        // ---------------------
+        // process TEST messages
+        // ---------------------
+        //
+        if ( starts_with( statstr, "TEST:" ) ) {                                                // async message tag TEST
+          message.str(""); message << "got test message \"" << statstr << "\"";
+          logwrite( function, message.str() );
+        }
+
       }
       catch( std::out_of_range &e ) {
         message.str(""); message << "out of range parsing status string " << statstr << ": " << e.what();
@@ -443,7 +453,8 @@ namespace Sequencer {
         logwrite( function, message.str() );
       }
 
-    }
+    }  // while true
+
     seq.clr_thrstate_bit( THR_SEQUENCER_ASYNC_LISTENER );
     return;
   }
@@ -506,7 +517,7 @@ namespace Sequencer {
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                    // target found, get the threads going
 
-        uint32_t isnotready = seq.system_not_ready.load(std::memory_order_relaxed);  // which systems are not ready
+        uint32_t isnotready = seq.system_not_ready.load();                // which systems are not ready
 
         // If the TCS is not ready and the target contains TCS coordinates,
         // then we cannot proceed.
@@ -574,8 +585,8 @@ namespace Sequencer {
 
       std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );  // create a mutex object for waiting
 
-      while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+      while ( seq.seqstate.load() != seq.reqstate.load() ) {
+        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
         logwrite( function, message.str() );
         seq.cv.wait( wait_lock );
       }
@@ -588,7 +599,7 @@ namespace Sequencer {
 */
       // Now that we're done waiting, check for errors or abort
       //
-      uint32_t thr_error = seq.thr_error.load(std::memory_order_relaxed);
+      uint32_t thr_error = seq.thr_error.load();
       if ( thr_error != THR_NONE ) {
         message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: " << seq.thrstate_string( thr_error );
         logwrite( function, message.str() );
@@ -623,8 +634,8 @@ namespace Sequencer {
       // ...then wait for it to complete
       //
       logwrite( function, "[DEBUG] (2) waiting on notification" );
-      while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+      while ( seq.seqstate.load() != seq.reqstate.load() ) {
+        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
         logwrite( function, message.str() );
         seq.cv.wait( wait_lock );
       }
@@ -632,7 +643,7 @@ namespace Sequencer {
 
       // Now that we're done waiting, check for errors or abort
       //
-      thr_error = seq.thr_error.load(std::memory_order_relaxed);
+      thr_error = seq.thr_error.load();
       if ( thr_error != THR_NONE ) {
         message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: " << seq.thrstate_string( thr_error );
         logwrite( function, message.str() );
@@ -684,7 +695,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       // Check the "dotype" --
       // If this was "do one" then do_once is set and get out now.
       //
-      if ( seq.do_once.load(std::memory_order_relaxed) ) {
+      if ( seq.do_once.load() ) {
         seq.set_seqstate_bit( Sequencer::SEQ_STOPREQ );
         seq.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
         logwrite( function, "stopping sequencer because single-step is selected" );
@@ -696,7 +707,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     logwrite( function, "[DEBUG] I'm out of the main SEQ_RUNNING loop now" );
 #endif
 
-    if ( seq.thr_error.load(std::memory_order_relaxed) != THR_NONE ) {
+    if ( seq.thr_error.load() != THR_NONE ) {
       logwrite( function, "requesting stop because an error was detected" );
       if ( seq.target.get_next( Sequencer::TARGET_ACTIVE, targetstatus ) == TargetInfo::TARGET_FOUND ) {  // If this target was flagged as active,
         seq.target.update_state( Sequencer::TARGET_UNASSIGNED );                                          // then change it to unassigned on error.
@@ -841,9 +852,9 @@ logwrite( function, message.str() ); ///< TODO @todo temporary
     if ( error != NO_ERROR ) {
       seq.async.enqueue_and_log( function, "ERROR: unable to initialize power control" );
 logwrite( function, "[DEBUG] I should be setting thr_error here !!!!!!!!!!!!!!!" );
-message.str(""); message << "[DEBUG] *before* thr_error=" << seq.thr_error.load(std::memory_order_relaxed); logwrite( function, message.str() );
+message.str(""); message << "[DEBUG] *before* thr_error=" << seq.thr_error.load(); logwrite( function, message.str() );
       seq.thr_error.fetch_or( THR_POWER_INIT );
-message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(std::memory_order_relaxed); logwrite( function, message.str() );
+message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(); logwrite( function, message.str() );
     }
     else {
       seq.system_not_ready.fetch_and( ~Sequencer::SEQ_WAIT_POWER );  // clear the not-ready bit on success
@@ -1014,7 +1025,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to acam hardware" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR turning on power to acam hardware" );
     }
 
     // if not connected to the acam daemon then connect
@@ -1022,7 +1033,16 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     if ( !seq.acamd.socket.isconnected() ) {
       logwrite( function, "connecting to acamd daemon" );
       error = seq.acamd.connect();                   // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to acamd daemon" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting sequencerd->acamd" );
+    }
+
+    // Initialize acamd's connection to tcsd
+    //
+    if ( error == NO_ERROR ) {
+      std::stringstream cmd;
+      cmd << ACAMD_TCSINIT << " " << seq.tcs_name;
+      error  = seq.acamd.send( cmd.str(), reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR initializing acamd<->tcsd" );
     }
 
     // Ask acamd if hardware connections are open,
@@ -1030,7 +1050,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     if ( error == NO_ERROR ) {
       error  = seq.acamd.send( ACAMD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with acam hardware" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with acam hardware" );
     }
 
     // and open it if necessary.
@@ -1038,7 +1058,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to acam hardware" );
       error = seq.acamd.send( ACAMD_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to acam hardware" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to acam hardware" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1372,6 +1392,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Allowing clearing the SEQ_WAIT_TCS bit when connected and open.
     //
     if ( isconnected && isopen ) {
+      seq.tcs_name = which;
       seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS );
       message.str(""); message << which << " TCS is initialized";
       logwrite( function, message.str() );
@@ -1420,6 +1441,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       seq.thr_error.fetch_or( THR_TCS_SHUTDOWN );
     }
     else {
+      seq.tcs_name = "offline";
       seq.system_not_ready.fetch_or( Sequencer::SEQ_WAIT_TCS );   // set the not-ready bit on success
       seq.cv.notify_all();
     }
@@ -1683,9 +1705,9 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Before trying to move the telescope, ask where it is pointed
     //
     double ra_h_now, dec_d_now;
-    seq.get_tcs_coords( ra_h_now, dec_d_now );                                                     // returns RA in decimal hours, DEC in decimal degrees
-    double ra_delta  = std::abs( ra_h_now  - seq.target.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
-    double dec_delta = std::abs( dec_d_now - seq.target.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
+    seq.get_tcs_coords( ra_h_now, dec_d_now );                                          // returns RA in decimal hours, DEC in decimal degrees
+    double ra_delta  = std::abs( ra_h_now  - radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
+    double dec_delta = std::abs( dec_d_now - radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] ra_delta=" << ra_delta << " dec_delta=" << dec_delta;
@@ -1710,8 +1732,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
         seq.clr_reqstate_bit( Sequencer::SEQ_GUIDE );
 
         std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );                       // create a mutex object for waiting
-        while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-          message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+        while ( seq.seqstate.load() != seq.reqstate.load() ) {
+          message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
           logwrite( function, message.str() );
           seq.cv.wait( wait_lock );
         }
@@ -1728,8 +1750,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // convert them to decimal and to scope coordinates.
       // (fpoffsets.coords_* are always in degrees)
       //
-      double ra_in    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-      double dec_in   = seq.target.radec_to_decimal( seq.target.dec_dms );
+      double ra_in    = radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
+      double dec_in   = radec_to_decimal( seq.target.dec_dms );
       double angle_in = seq.target.slitangle;
 
       // can't be NaN
@@ -1773,8 +1795,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 //    message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
 //    std::string rastr, decstr;
 //    double _ra = ra_out * TO_HOURS;
-//    seq.target.decimal_to_sexa( _ra, rastr );
-//    seq.target.decimal_to_sexa( dec_out, decstr );
+//    decimal_to_sexa( _ra, rastr );
+//    decimal_to_sexa( dec_out, decstr );
 //    message.str(""); message << "[ACQUIRE] ACAM COORDS= " << rastr << "  " << decstr << "  " << angle_out;
 //    logwrite( function, message.str() );
 //    }
@@ -1831,8 +1853,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       {
       std::string rastr, decstr;
       double _ra = ra_out * TO_HOURS;
-      seq.target.decimal_to_sexa( _ra, rastr );
-      seq.target.decimal_to_sexa( dec_out, decstr );
+      decimal_to_sexa( _ra, rastr );
+      decimal_to_sexa( dec_out, decstr );
       message.str(""); message << "[ACQUIRE] SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out;
       logwrite( function, message.str() );
       }
@@ -1852,8 +1874,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       //
       logwrite( function, "waiting for TCS to be on target" );
 
-      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_ontarget.load(std::memory_order_relaxed)==false ) {
-        usleep( 100000 );
+      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_ontarget.load()==false ) {
+        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       }
 
 /***
@@ -1874,7 +1896,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // from the last target.
       //
 
-      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_nowait.load(std::memory_order_relaxed)==false ) {
+      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_nowait.load()==false ) {
 
         // If an abort has been requested then stop polling the TCS.
         // This doesn't actually stop the telescope, it just means we stop paying attention to it.
@@ -1894,7 +1916,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
           break;
         }
 
-        if ( seq.tcs_nowait.load(std::memory_order_relaxed) == true ) {
+        if ( seq.tcs_nowait.load() == true ) {
           logwrite( function, "requested skip TCS slew" );
           seq.set_clr_seqstate_bit( Sequencer::SEQ_WAIT_SLEW, Sequencer::SEQ_WAIT_TCSOP );
           break;
@@ -1918,7 +1940,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // Poll the TCS at 10Hz to detect when slewing has stopped.
       // This has no timeout but can be cancelled by user command.
       //
-      while ( seq.tcs_nowait.load(std::memory_order_relaxed) != true ) { // error==NO_ERROR && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) 
+      while ( seq.tcs_nowait.load() != true ) { // error==NO_ERROR && not seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) 
 
         // If an abort has been requested then stop polling the TCS.
         // This doesn't actually stop the telescope, it just means we stop paying attention to it.
@@ -2024,7 +2046,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     logwrite( function, "checking dome position" );
     bool domeok = false;
 
-    while ( !domeok && seq.dome_nowait.load(std::memory_order_relaxed)==false) {
+    while ( !domeok && seq.dome_nowait.load()==false) {
 
       // If an abort has been requested then stop polling the TCS.
       // This doesn't actually stop the telescope, it just means we stop paying attention to it.
@@ -2053,8 +2075,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
       logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
-//    seq.set_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE ); std::thread( dothread_acquisition, std::ref(seq) ).detach();
-//    call acamd( ACQUIRE ) here ! (or equiv)
+      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE ); std::thread( dothread_acquisition, std::ref(seq) ).detach();
     }
     else
     if ( error==NO_ERROR && seq.target.acquired ) {
@@ -2104,9 +2125,9 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // on target.  Ask where it is pointed:
     //
     double ra_h_now, dec_d_now;
-    seq.get_tcs_coords( ra_h_now, dec_d_now );                                                     // returns RA in decimal hours, DEC in decimal degrees
-    double ra_delta  = std::abs( ra_h_now  - seq.target.radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
-    double dec_delta = std::abs( dec_d_now - seq.target.radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
+    seq.get_tcs_coords( ra_h_now, dec_d_now );                                          // returns RA in decimal hours, DEC in decimal degrees
+    double ra_delta  = std::abs( ra_h_now  - radec_to_decimal( seq.target.ra_hms  ) );  // compare decimal hours
+    double dec_delta = std::abs( dec_d_now - radec_to_decimal( seq.target.dec_dms ) );  // compare decimal degrees
 
     // If the difference between the TCS coordinates and the target coordinates are within
     // the resolution of reading the TCS then assume we are already pointed. Otherwise,
@@ -2131,8 +2152,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
         // convert ra, dec to decimal
         // can't be NaN
         //
-        if ( std::isnan( seq.target.radec_to_decimal( seq.target.ra_hms,  ra_hms  ) ) ||
-             std::isnan( seq.target.radec_to_decimal( seq.target.dec_dms, dec_dms ) ) ) {
+        if ( std::isnan( radec_to_decimal( seq.target.ra_hms,  ra_hms  ) ) ||
+             std::isnan( radec_to_decimal( seq.target.dec_dms, dec_dms ) ) ) {
           seq.async.enqueue_and_log( function, "ERROR: can't handle NaN value for RA, DEC" );
           seq.thr_error.fetch_or( THR_NOTIFY_TCS );
           seq.clr_thrstate_bit( THR_NOTIFY_TCS );
@@ -2173,7 +2194,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     long error=NO_ERROR;
 
     logwrite( function, "[TODO] focus not yet implemented. sleeping 5s" );
-    usleep( 5000000 );
+    std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
 
     // atomically set thr_error so the main thread knows we had an error
     //
@@ -2202,7 +2223,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     long error=NO_ERROR;
 
     logwrite( function, "[TODO] flexure not yet implemented. sleeping 5s" );
-    usleep( 5000000 );
+    std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
 
     // atomically set thr_error so the main thread knows we had an error
     //
@@ -2231,7 +2252,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     long error=NO_ERROR;
 
     logwrite( function, "[TODO] calibrator not yet implemented. sleeping 6s" );
-    usleep( 6000000 );
+    std::this_thread::sleep_for( std::chrono::seconds( 6 ) );
 
     // atomically set thr_error so the main thread knows we had an error
     //
@@ -2453,68 +2474,68 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     std::string reply;
     long error = NO_ERROR;
 
-    // Initialize the ACAM for acquisition.
-    // Need one of these calls for each new target.
+    // Send the ACQUIRE command to acamd, which requires
+    // the target coordinates (from the database).
     //
-    error = seq.acamd.command( ACAMD_INIT, reply );
+    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << seq.target.ra_hms  << " "
+                                             << seq.target.dec_dms << " "
+                                             << seq.target.casangle;
 
-    int nacquired=0;            // number of sequential successful acquisitions, must meet ACQUIRE_MIN_REPEAT for success
-    long attempts=0;            // total cumulative number of attempts
-    int sequential_failures=0;  // keep track of number of sequential failures (i.e. acquisitions above threshold)
-    bool belowthreshold=false;  // is the acquisition below or above ACQUIRE_OFFSET_THRESHOLD
+    error = seq.acamd.command( cmd.str(), reply );
 
-    seq.target.acquired=false;  // initialize state: target is not acquired
-
-    double clock_timeout = get_clock_time() + seq.acquisition_timeout;  // must acquire by this time
-
-    // Call acquire_target() until we have acquired the min number of times
-    // (or error)
-    //
-    while ( (error==NO_ERROR) && (nacquired < seq.target.min_repeat) ) {
-
-      // before looping, check for a timeout
-      //
-      if ( get_clock_time() > clock_timeout ) {
-        error = ERROR;
-        seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within timeout" );
-        break;
-      }
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] calling acquire_target() with nacquired=" << nacquired 
-                               << " attempts=" << attempts << " sequential_failures=" << sequential_failures;
-      logwrite( function, message.str() );
-#endif
-
-      error = seq.acquire_target( seq, belowthreshold, attempts );
-
-      if ( error == NO_ERROR && belowthreshold ) {
-        nacquired++;
-        message.str(""); message << "acquired " << nacquired << " of " << seq.target.min_repeat;
-        logwrite( function, message.str() );
-      }
-      else nacquired=0;  // if an acquire is not below threshold then reset the counter
-
-      // If not acquired and ACQUIRE_RETRYS is specified in the config file,
-      // then increment sequential_failures counter, which cannot exceed ACQUIRE_RETRYS
-      //
-      if ( nacquired==0 && seq.acquisition_max_retrys > 0 ) {
-        if ( ++sequential_failures >= seq.acquisition_max_retrys ) error=ERROR;
-      }
-      else sequential_failures = 0;  // any acquisition below threshold will reset the sequential_failures counter
-
-    }  // end while error==NO_ERROR && nacquired < min_repeat
-
-    if (error!=NO_ERROR) {
-      seq.thr_error.fetch_or( THR_ACQUISITION );                     // report any error
-      message.str(""); message << "ERROR: acquisition failed after " << attempts << " attempts";
+    if ( error != NO_ERROR ) {
+      seq.thr_error.fetch_or( THR_ACQUISITION );                     // report error
+      message.str(""); message << "ERROR acquiring target";
+      seq.async.enqueue_and_log( function, message.str() );
+      seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE );           // clear ACQUIRE bit
+      seq.clr_thrstate_bit( THR_ACQUISITION );
+      return;
     }
-    else {
-      message.str(""); message << "NOTICE: target acquired after " << attempts << " attempts";
+
+    // The reply contains the timeout.
+    // Acam's acquisition sequence uses that timeout but the Sequencer
+    // will also use it here, so that it knows when to stop asking acamd
+    // for its acquisition status.
+    //
+    double timeout;
+    try {
+      timeout = std::stod( reply );
+    } catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing timeout \"" << reply << "\" from acam: " << e.what();
+      logwrite( function, message.str() );
+      seq.thr_error.fetch_or( THR_ACQUISITION );                     // report any error
+      return;
+    }
+
+    auto timeout_time = std::chrono::steady_clock::now()
+                        + std::chrono::duration<double>(timeout);
+
+    reply.clear();
+
+    // Poll acamd for acquired state, until acquired or timeout
+    //
+    do {
+      if (error==NO_ERROR) error = seq.acamd.command( ACAMD_ISACQUIRED, reply );
+      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+    } while ( error==NO_ERROR && reply != "true" && std::chrono::steady_clock::now() < timeout_time );
+
+    // set message
+    //
+    if ( std::chrono::steady_clock::now() >= timeout_time ) {        // Timeout
+      seq.thr_error.fetch_or( THR_ACQUISITION );
+      message.str(""); message << "ERROR failed to acquire within timeout";
+    }
+    else
+    if ( error!=NO_ERROR ) {                                         // Error polling
+      seq.thr_error.fetch_or( THR_ACQUISITION );
+      message.str(""); message << "ERROR acquiring target";
+    }
+    else {                                                           // Success
+      message.str(""); message << "NOTICE: target acquired";
       seq.target.acquired = true;
     }
 
-    seq.async.enqueue_and_log( function, message.str() );
+    seq.async.enqueue_and_log( function, message.str() );            // log message
 
     seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE );             // clear ACQUIRE bit
     seq.clr_thrstate_bit( THR_ACQUISITION );
@@ -2580,8 +2601,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
       // Now convert the slit coordinates to ACAM coordinates using the RA, DEC from the database
       // and the slit position angle from the previous calculation.
       //
-      double ra_in    = seq.target.radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-      double dec_in   = seq.target.radec_to_decimal( seq.target.dec_dms );
+      double ra_in    = radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
+      double dec_in   = radec_to_decimal( seq.target.dec_dms );
 
       // output units will be in degrees
       //
@@ -2593,8 +2614,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
       {  // this local section is just for display purposes and its variables are not used elsewhere
       std::string rastr, decstr;
-      seq.target.decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
-      seq.target.decimal_to_sexa( acam_dec_goal, decstr );
+      decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
+      decimal_to_sexa( acam_dec_goal, decstr );
       message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
                                                          << std::fixed << std::setprecision(6) << acam_angle_goal;
       logwrite( function, message.str() );
@@ -2633,8 +2654,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
           acam_pa  = stod( tokens.at(3) );
           std::string rastr, decstr;
           double _ra = acam_ra * TO_HOURS;
-          seq.target.decimal_to_sexa( _ra, rastr );
-          seq.target.decimal_to_sexa( acam_dec, decstr );
+          decimal_to_sexa( _ra, rastr );
+          decimal_to_sexa( acam_dec, decstr );
           message.str(""); message << "[ACQUIRE] solve " << tokens.at(0) << ": match found with coords="
                                    << rastr << "  " << decstr << "  " << acam_pa;
           logwrite( function, message.str() );
@@ -2788,11 +2809,11 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     seq.set_thrstate_bit( THR_WAIT_FOR_STATE );
     std::string function = "Sequencer::Sequence::dothread_wait_for_state";
     std::stringstream message;
-    uint32_t last_reqstate = seq.reqstate.load(std::memory_order_relaxed);
+    uint32_t last_reqstate = seq.reqstate.load();
 
     seq.waiting_for_state.store( true );            // let other threads know that I'm already waiting for a state
 
-    message.str(""); message << "sequencer state: " << seq.seqstate_string( seq.seqstate.load(std::memory_order_relaxed) )
+    message.str(""); message << "sequencer state: " << seq.seqstate_string( seq.seqstate.load() )
                              << ". waiting for state: " << seq.seqstate_string( last_reqstate );
     logwrite( function, message.str() );
 
@@ -2800,16 +2821,16 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // Note that other threads can (atomically) change reqstate at any time.
     //
     while ( true ) {
-      uint32_t new_reqstate = seq.reqstate.load(std::memory_order_relaxed);         // reqstate is checked only once per loop here
+      uint32_t new_reqstate = seq.reqstate.load();         // reqstate is checked only once per loop here
       if ( last_reqstate != new_reqstate ) {               // log if reqstate has changed
         message.str(""); message << "requested state changed: " << seq.seqstate_string( new_reqstate );
         logwrite( function, message.str() );
         last_reqstate = new_reqstate;
       }
-      if ( seq.seqstate.load(std::memory_order_relaxed) == last_reqstate ) break;   // condition met: seqstate is reqstate
+      if ( seq.seqstate.load() == last_reqstate ) break;   // condition met: seqstate is reqstate
     }
 
-    uint32_t thr_error = seq.thr_error.load(std::memory_order_relaxed);
+    uint32_t thr_error = seq.thr_error.load();
     if ( thr_error != THR_NONE ) {
       message.str(""); message << "ERROR: the following thread(s) had an error: " << seq.thrstate_string( thr_error );
       logwrite( function, message.str() );
@@ -2819,7 +2840,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // done waiting so send notification
     //
     std::unique_lock<std::mutex> lck(seq.wait_mtx);
-    message.str(""); message << "requested state " << seq.seqstate_string( seq.seqstate.load(std::memory_order_relaxed) ) 
+    message.str(""); message << "requested state " << seq.seqstate_string( seq.seqstate.load() )
                              << " reached: notifying threads";
     logwrite( function, message.str() );
     seq.waiting_for_state.store( false );           // let other threads know that I'm done waiting
@@ -2861,7 +2882,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
     // there are certain conditions when the startup sequence cannot be run
     //
     if ( not seq.is_seqstate_set( Sequencer::SEQ_OFFLINE ) && not seq.is_seqstate_set( Sequencer::SEQ_READY ) ) {
-      message << "ERROR: runstate " << this->seqstate_string( this->seqstate.load(std::memory_order_relaxed) ) << " must be OFFLINE or READY";
+      message << "ERROR: runstate " << this->seqstate_string( this->seqstate.load() ) << " must be OFFLINE or READY";
       seq.async.enqueue_and_log( function, message.str() );
       return( ERROR );
     }
@@ -2886,8 +2907,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     logwrite( function, "[DEBUG] (3) waiting for power control to initialize" );
 
-    while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+    while ( seq.seqstate.load() != seq.reqstate.load() ) {
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
       logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
@@ -2895,7 +2916,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     // Don't proceed unless power control initialized successfully
     //
-    if ( seq.thr_error.load(std::memory_order_relaxed) == THR_NONE ) {
+    if ( seq.thr_error.load() == THR_NONE ) {
       logwrite( function, "power control initialized" );
     }
     else {
@@ -2931,8 +2952,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     logwrite( function, "[DEBUG] (4) waiting for init threads to complete" );
 
-    while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+    while ( seq.seqstate.load() != seq.reqstate.load() ) {
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
       logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
@@ -2944,7 +2965,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load(s
 
     // if any thread returned an error then we are not ready
     //
-    uint32_t thr_error = seq.thr_error.load(std::memory_order_relaxed);
+    uint32_t thr_error = seq.thr_error.load();
     if ( thr_error != THR_NONE ) {
       message.str(""); message << "ERROR: startup failed because the following thread(s) had an error: " << this->thrstate_string( thr_error );
       seq.async.enqueue_and_log( function, message.str() );
@@ -3006,7 +3027,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // shutdown sequence can only be run while ready
     //
     if ( not seq.is_seqstate_set( Sequencer::SEQ_READY ) ) {
-      message << "ERROR: runstate " << this->seqstate_string( this->seqstate.load(std::memory_order_relaxed) ) << " must be READY";
+      message << "ERROR: runstate " << this->seqstate_string( this->seqstate.load() ) << " must be READY";
       seq.async.enqueue_and_log( function, message.str() );
       return( ERROR );
     }
@@ -3039,8 +3060,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     logwrite( function, "[DEBUG] waiting for power control to initialize" );
 
-    while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+    while ( seq.seqstate.load() != seq.reqstate.load() ) {
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
       logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
@@ -3048,7 +3069,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     // Try to proceed even if power control didn't initialize successfully
     //
-    if ( seq.thr_error.load(std::memory_order_relaxed) == THR_NONE ) {
+    if ( seq.thr_error.load() == THR_NONE ) {
       logwrite( function, "power control initialized" );
     }
     else {
@@ -3072,8 +3093,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     logwrite( function, "[DEBUG] (5) waiting for shutdown threads to complete" );
 
-    while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+    while ( seq.seqstate.load() != seq.reqstate.load() ) {
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
       logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
@@ -3090,8 +3111,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     logwrite( function, "[DEBUG] (6) waiting for power daemon to shut down" );
 
-    while ( seq.seqstate.load(std::memory_order_relaxed) != seq.reqstate.load(std::memory_order_relaxed) ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load(std::memory_order_relaxed) );
+    while ( seq.seqstate.load() != seq.reqstate.load() ) {
+      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
       logwrite( function, message.str() );
       seq.cv.wait( wait_lock );
     }
@@ -3100,7 +3121,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // Note the error(s) but shutdown will always close the daemon connections
     // so return success.
     //
-    uint32_t thr_error = seq.thr_error.load(std::memory_order_relaxed);
+    uint32_t thr_error = seq.thr_error.load();
     if ( thr_error != THR_NONE ) {
       message.str(""); message << "NOTICE: the following thread(s) had an error during shutdown: " << this->thrstate_string( thr_error );
       seq.async.enqueue_and_log( function, message.str() );
@@ -3414,7 +3435,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       }
     }
 
-    retstring = ( this->do_once.load(std::memory_order_relaxed) ? "ONE" : "ALL" );
+    retstring = ( this->do_once.load() ? "ONE" : "ALL" );
 
     // send an async message with the current type
     //
@@ -3560,8 +3581,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
     Tokenize( coordstring, tokens, " " );                       // comes back as space-delimited string "hh:mm:ss.ss dd:mm:ss.ss"
     try {                                                       // extract ra dec from coordstring
       if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
-        ra_h  = this->target.radec_to_decimal( tokens.at(0) );  // RA decimal hours
-        dec_d = this->target.radec_to_decimal( tokens.at(1) );  // DEC decimal degrees
+        ra_h  = radec_to_decimal( tokens.at(0) );               // RA decimal hours
+        dec_d = radec_to_decimal( tokens.at(1) );               // DEC decimal degrees
       }
       else
       if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
@@ -3732,9 +3753,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
     double dectime    = dec_off / this->tcs_offsetrate_dec;        // time to offset in DEC
     double offsettime = ( ratime > dectime ? ratime  : dectime );  // only need to wait for the longest one
 
-    long sleeptime = (long) ( ceil(offsettime) * 1000000 );        // round up to next whole usec
+    long sleeptime = (long) ceil(offsettime);                      // round up to next whole second
 
-    usleep( sleeptime );                                           // expected offset time
+    std::this_thread::sleep_for( std::chrono::seconds( sleeptime ) );  // expected offset time
 
     // ...then poll the TCS at 10Hz to detect when telescope has settled (MOTION_TRACKING).
     // The TCS must be settled for TCS_SETTLE_STABLE seconds before declaring that it has settled.
@@ -3765,7 +3786,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       //
       if ( settlecount >= 10*this->tcs_settle_stable ) stable = true;
 
-      usleep(100000);                                                    // sets the 10Hz loop rate
+      std::this_thread::sleep_for( std::chrono::milliseconds(100) );     // sets the 10Hz loop rate
     }
 
     return error;
@@ -3776,8 +3797,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
   /***** Sequencer::Sequence::tcs_init ****************************************/
   /**
    * @brief      initialize the specified tcs device
-   * @param[in]  which  string to indicate which TCS to initialize, {real|sim|shutdown}
-   * @return     ERROR or NO_ERROR
+   * @param[in]  which      optional string indicates what to do {real|sim|shutdown}
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR | HELP
    *
    * @details    This function spawns the dothread_tcs_init thread with a
    *             parameter to specify which TCS device to use {real|sim}, in
@@ -3788,19 +3810,49 @@ logwrite( function, "[DEBUG] setting READY bit" );
    *             Supplying the parameter "shutdown" will invoke the tcs_shutdown thread.
    *
    */
-  long Sequence::tcs_init( std::string which ) {
+  long Sequence::tcs_init( const std::string which, std::string &retstring ) {
     std::string function = "Sequencer::Sequence::tcs_init";
     std::stringstream message;
 
-    uint32_t ts = this->thrstate.load(std::memory_order_relaxed);               // current thread state
+    if ( which=="?" || which=="help" ) {
+      retstring = SEQUENCERD_TCSINIT;
+      retstring.append( " [ real | sim | shutdown ]\n" );
+      retstring.append( "   Initialize the specified TCS, which takes place in a separate thread.\n" );
+      retstring.append( "   real      Connect to and initialize the real P200 TCS.\n" );
+      retstring.append( "   sim       Connect to and initialize the TCS emulator.\n" );
+      retstring.append( "   shutdown  Begin the TCS shutdown sequence.\n" );
+      retstring.append( "   If no argument is supplied then the name of the currently connected TCS\n" );
+      retstring.append( "   is returned, if connected.\n" );
+      return HELP;
+    }
+
+    uint32_t ts = this->thrstate.load();                                        // current thread state
 
     bool is_initing  = ( THR_TCS_INIT & ts );                                   // tcs_init thread already running
     bool is_shutting = ( THR_TCS_SHUTDOWN & ts );                               // tcs_shutdown thread already running
+
+message.str(""); message << "[DEBUG] ts=" << ts
+                         << " THR_TCS_INIT=" << THR_TCS_INIT
+                         << " is_initing=" << is_initing
+                         << " THR_TCS_SHUTDOWN=" << THR_TCS_SHUTDOWN
+                         << " is_shutting=" << is_shutting;
+logwrite( function, message.str() );
+
+    if ( which.empty() ) {
+      if ( ! this->tcsd.socket.isconnected() ) {
+        logwrite( function, "not connected to tcs daemon" );
+        retstring="not_connected";
+        return NO_ERROR;
+      }
+      return( this->tcsd.send( TCSD_GET_NAME, retstring ) );
+    }
 
     if ( is_initing || is_shutting ) {                                          // only allow one init|shutdown thread at a time
       message.str("");
       message << "ERROR:TCS " << ( is_initing ? "initialization" : "shutdown" ) << " is already in progress";
       logwrite( function, message.str() );
+      retstring = ( is_initing ? "init" : "shutdown" );
+      retstring.append( "_in_progress" );
       return ERROR;
     }
     else {
@@ -3941,7 +3993,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
         return HELP;
       }
       message.str("");
-      uint32_t ss = this->system_not_ready.load(std::memory_order_relaxed);
+      uint32_t ss = this->system_not_ready.load();
       message << ss << " ";
 
       // but now I'm going to write to the log (textually) which bits are set
@@ -4000,11 +4052,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
       // get the seqstate and reqstate and put them (numerically) into the return string
       //
       message.str("");
-      uint32_t ss = this->seqstate.load(std::memory_order_relaxed);
+      uint32_t ss = this->seqstate.load();
       message << ss << " ";
-      uint32_t rs = this->reqstate.load(std::memory_order_relaxed);
+      uint32_t rs = this->reqstate.load();
       message << rs << " ";
-      uint32_t ts = this->thrstate.load(std::memory_order_relaxed);
+      uint32_t ts = this->thrstate.load();
       message << ts << " ";
       retstring = message.str();
 
@@ -4114,7 +4166,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       std::stringstream rts;
       std::string targetstatus;
       if ( tokens.size() > 1 ) {
-        ret = this->target.get_next( tokens[1], targetstatus );  // if a state was supplied then get the next target with the supplied state
+        ret = this->target.get_next( tokens[1], targetstatus );  // if state supplied then get next target with this state
       }
       else {
         ret = this->target.get_next( targetstatus );             // otherwise use the default (which is "pending")
@@ -4198,7 +4250,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
       // let the world know of the state change
       //
-      message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
+      message.str(""); message << "TARGETSTATE:" << this->target.state
+                               << " TARGET:"     << this->target.name
+                               << " OBSID:"      << this->target.obsid;
       this->async.enqueue( message.str() );
     }
     else
@@ -4227,7 +4281,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
         // let the world know of the state change
         //
-        message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
+        message.str(""); message << "TARGETSTATE:" << this->target.state
+                                 << " TARGET:"     << this->target.name
+                                 << " OBSID:"      << this->target.obsid;
         this->async.enqueue( message.str() );
       }
     }
@@ -4245,8 +4301,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
         return HELP;
       }
       double ra,dec;
-      ra  = this->target.radec_to_decimal( target.ra_hms );
-      dec = this->target.radec_to_decimal( target.dec_dms );
+      ra  = radec_to_decimal( target.ra_hms );
+      dec = radec_to_decimal( target.dec_dms );
       message.str(""); message << "ra " << target.ra_hms << " -> " 
                                << std::fixed << std::setprecision(6) 
                                << ra << "  dec " << target.dec_dms << " -> " << dec;
@@ -4330,9 +4386,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
       //
       if ( tokens.size() > 1 ) {
         std::string::size_type pos = args.find( "moveto " );            // note space at end of test name!
-        this->test_solver_args = args.substr( pos+strlen("moveto ") );  // test_solver_args is the rest of the args string after "moveto "
+        this->test_solver_args = args.substr( pos+strlen("moveto ") );  // remainder of args string after "moveto "
       }
-      else this->test_solver_args="";                                   // delete previous optional solver args if not specified
+      else this->test_solver_args.clear();                              // clear previous solver args if not specified
 
       if ( !this->test_solver_args.empty() ) {
         message.str(""); message << "NOTICE: test solver args: " << this->test_solver_args;
@@ -4376,8 +4432,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
       // Before starting acquire thread, must first send coordinates to the acam cameraserver
       //
-      double ra_in    = this->target.radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
-      double dec_in   = this->target.radec_to_decimal( this->target.dec_dms );
+      double ra_in    = radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
+      double dec_in   = radec_to_decimal( this->target.dec_dms );
       double angle_in = angle_out;
 
       // can't be NaN
@@ -4452,8 +4508,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
       }
 
       std::string from, to;
-      double ra_in  = this->target.radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
-      double dec_in = this->target.radec_to_decimal( target.dec_dms );
+      double ra_in  = radec_to_decimal( target.ra_hms ) * TO_DEGREES ;  // fpoffsets must be in degrees
+      double dec_in = radec_to_decimal( target.dec_dms );
       double angle_in = this->target.casangle;
       try {
         from = tokens.at(1);
@@ -4591,7 +4647,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       }
       else
       if ( tokens[1] == "tcs" && tokens.size()==3 ) {
-        this->tcs_init( tokens[2] );
+        this->tcs_init( tokens[2], retstring );
       }
       else {
         message.str(""); message << "ERROR invalid module \"" << tokens[1] << "\". expected power|acam|slit|calib|camera|focus|flexure|tcs <which>";

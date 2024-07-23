@@ -190,10 +190,6 @@ namespace Sequencer {
       long configure_db( std::string param, std::string value );  ///< configure the database connection parameters (host, user, etc.)
       long targetset( std::string args, std::string &retstring ); ///< set or get the target set to read from the targets table
 
-      double radec_to_decimal( std::string str_in );                           ///< convert ra,dec from string to double
-      double radec_to_decimal( std::string str_in, std::string &retstring );   ///< convert ra,dec from string to double
-      void decimal_to_sexa( double dec_in, std::string &retstring );           ///< convert decimal to sexagesimal
-
   };
   /***** Sequencer::TargetInfo ************************************************/
 

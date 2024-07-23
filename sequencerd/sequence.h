@@ -7,8 +7,7 @@
  * sequence operations which are called by the sequencer daemon.
  *
  */
-#ifndef SEQUENCE_H
-#define SEQUENCE_H
+#pragma once
 
 #include <atomic>
 #include <cmath>
@@ -24,11 +23,9 @@
 #include "powerd_commands.h"
 #include "slitd_commands.h"
 #include "tcsd_commands.h"
+#include "sequencerd_commands.h"
 
 #include "tcs_constants.h"
-
-#define TO_DEGREES ( 360. / 24. )
-#define TO_HOURS   ( 24. / 360. )
 
 /***** Sequencer **************************************************************/
 /**
@@ -208,7 +205,6 @@ const int foo=2;
       volatile std::atomic<bool>          dome_nowait;        ///< set to skip waiting for dome
 
       volatile std::atomic<std::uint32_t> thrstate;           ///< word to indicate which threads are running
-      volatile std::atomic<std::uint32_t> runstate;
       volatile std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
       volatile std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
       volatile std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
@@ -220,6 +216,8 @@ const int foo=2;
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
       std::string last_target;
+
+      std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown
 
       std::string test_solver_args;   ///< optional solver args that can be passed in with a test command
 
@@ -292,7 +290,7 @@ const int foo=2;
       long get_tcs_cass( double &cass );
       double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
       long offset_tcs( double ra_off, double dec_off );                        ///< send ra,dec offsets to the TCS
-      long tcs_init( std::string which );
+      long tcs_init( const std::string which, std::string &retstring );
 
       long acquire_target( Sequencer::Sequence &seq, bool &belowthreshold, long &attempts );
 
@@ -331,4 +329,3 @@ const int foo=2;
 
 }
 /***** Sequencer **************************************************************/
-#endif

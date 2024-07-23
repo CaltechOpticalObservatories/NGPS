@@ -250,12 +250,13 @@ namespace SkyInfo {
       return ERROR;
     }
 
-//#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[ACQUIRE] coords_out.ra=" << this->coords_out.ra
-                             << " .dec=" << this->coords_out.dec
-                             << " .angle=" << this->coords_out.angle << " deg";
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[ACQUIRE] coords_out.ra=" << std::fixed << std::setprecision(6)
+                             << this->coords_out.ra << " .dec="
+                             << this->coords_out.dec << " .angle="
+                             << this->coords_out.angle << " deg";
     logwrite( function, message.str() );
-//#endif
+#endif
 
     PyGILState_Release( gstate );
 
@@ -294,7 +295,7 @@ namespace SkyInfo {
          std::isnan( ra_goal )  ||
          std::isnan( dec_goal ) ) {
       logwrite( function, "ERROR one or more input values is NaN" );
-      message.str(""); message << "ra_acam=" << ra_acam << " dec_acam=" << dec_acam 
+      message.str(""); message << "ra_acam=" << ra_acam << " dec_acam=" << dec_acam
                                << " ra_goal=" << ra_goal << " dec_goal=" << dec_goal;
       logwrite( function, message.str() );
       return ERROR;
@@ -392,13 +393,129 @@ namespace SkyInfo {
       return ERROR;
     }
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] ra_off=" << ra_off << " dec_off=" << dec_off;
-    logwrite( function, message.str() );
-#endif
-
     return NO_ERROR;
   }
   /***** SkyInfo::FPOffsets::solve_offset *************************************/
+
+
+  /***** SkyInfo::FPOffsets::apply_offset *************************************/
+  /**
+   * @brief      calculate offsets to apply to the telescope
+   * @param[in]  ra_in    current RA in deg
+   * @param[in]  dec_in   current DEC in deg
+   * @param[in]  ra_off   RA offset in deg
+   * @param[in]  dec_off  DEC offset in deg
+   * @param[in]  ra_out   reference to new telescope RA
+   * @param[in]  dec_out  reference to new telescope DEC
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long FPOffsets::apply_offset( const double ra_in, const double dec_in, const double ra_off, const double dec_off,
+                                double &ra_out, double &dec_out ) {
+    std::string function = "  (SkyInfo::FPOffsets::apply_offset) ";
+    std::stringstream message;
+
+    // Check for valid inputs before passing something to Python that
+    // it won't like.
+    //
+    if ( std::isnan( ra_in )   ||
+         std::isnan( dec_in )  ||
+         std::isnan( ra_off )  ||
+         std::isnan( dec_off ) ) {
+      logwrite( function, "ERROR one or more input values is NaN" );
+      message.str(""); message << "ra_in=" << ra_in << " dec_in=" << dec_in
+                               << " ra_off=" << ra_off << " dec_off=" << dec_off;
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return ERROR;
+    }
+
+    if ( this->pModule==NULL ) {
+      logwrite( function, "ERROR: Python module not imported" );
+      return ERROR;
+    }
+
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_APPLYOFFSETDEG_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      message.str(""); message << "ERROR Python function " << PYTHON_APPLYOFFSETDEG_FUNCTION << " not callable";;
+      logwrite( function, message.str() );
+      Py_XDECREF( pFunction );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Build up the PyObject argument list that will be passed to the function
+    //
+    PyObject* pArgList = Py_BuildValue( "(dddd)", ra_in, dec_in, ra_off, dec_off );
+
+    // Call the Python function here
+    //
+    PyObject* pReturn = PyObject_CallObject( pFunction, pArgList );
+
+    Py_XDECREF( pFunction );
+    Py_DECREF( pArgList );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      message.str(""); message << "ERROR calling Python function: " << PYTHON_APPLYOFFSETDEG_FUNCTION;
+      logwrite( function, message.str() );
+      PyErr_Print();
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Expected back a tuple
+    //
+    if ( !PyTuple_Check( pReturn ) ) {
+      logwrite( function, "ERROR: did not receive a tuple" );
+      Py_DECREF( pReturn );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    int tuple_size = PyTuple_Size( pReturn );
+
+    // Put each tuple item in its place
+    //
+    for ( int tuplen = 0; tuplen < tuple_size; tuplen++ ) {
+      PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
+      if ( PyFloat_Check( pItem ) ) {
+        switch ( tuplen ) {
+          case 0: ra_out  = PyFloat_AsDouble( pItem );
+                  break;
+          case 1: dec_out = PyFloat_AsDouble( pItem );
+                  break;
+          default:
+            message.str(""); message << "ERROR unexpected tuple item " << tuplen << ": expected {0,1}";
+            logwrite( function, message.str() );
+            Py_DECREF( pReturn );
+            PyGILState_Release( gstate );
+            return ERROR;
+        }
+      }
+    }
+
+    Py_DECREF( pReturn );
+    PyGILState_Release( gstate );
+
+    // Checking after extracting, because it may allow for partial extraction
+    //
+    if ( tuple_size != 2 ) {
+      message.str(""); message << "ERROR expected 2 tuple items but received " << tuple_size;
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** SkyInfo::FPOffsets::apply_offset *************************************/
 
 }

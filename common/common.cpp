@@ -459,6 +459,8 @@ namespace Common {
     std::stringstream message;
     long ret;
 
+    const std::lock_guard<std::mutex> lock( this->client_access );
+
     if ( ! this->socket.isconnected() ) {
       message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name
                                << " because daemon is not connected";
@@ -716,6 +718,8 @@ namespace Common {
     std::stringstream message;
     long error = NO_ERROR;
 
+    const std::lock_guard<std::mutex> lock( this->client_access );
+
     // probably a programming error if this Common::DaemonClient object is not configured
     //
     if ( this->port == -1 ) {
@@ -765,6 +769,8 @@ namespace Common {
   void Common::DaemonClient::disconnect() {
     std::string function = "Common::DaemonClient::disconnect";
     std::stringstream message;
+
+    const std::lock_guard<std::mutex> lock( this->client_access );
 
     // If connected then close the connection
     //

@@ -59,8 +59,6 @@ namespace Acam {
       // Create a new FITS object, specifying the data type and axes for the primary image.
       // Simultaneously create the corresponding file.
       //
-message.str(""); message << "num_axis=" << num_axis << " axes[0]=" << axes[0] << " axes[1]=" << axes[1]; logwrite( function, message.str() );
-
       this->pFits.reset( new CCfits::FITS(this->info.fits_name, this->info.datatype, num_axis, axes) );
     }
     catch ( CCfits::FITS::CantCreate ){
@@ -73,9 +71,6 @@ message.str(""); message << "num_axis=" << num_axis << " axes[0]=" << axes[0] <<
       logwrite(function, message.str());
       return(ERROR);
     }
-
-    message.str(""); message << "opened file \"" << this->info.fits_name << "\" for FITS write";
-    logwrite(function, message.str());
 
     this->fits_name = this->info.fits_name;
     this->file_open = true;
@@ -118,9 +113,6 @@ message.str(""); message << "num_axis=" << num_axis << " axes[0]=" << axes[0] <<
       message.str(""); message << "ERROR writing checksum and closing file: " << error.message();
       logwrite( function, message.str() );
     }
-
-    message.str(""); message << this->fits_name << " closed";
-    logwrite( function, message.str() );
 
     this->file_open = false;
 
@@ -250,11 +242,6 @@ logwrite( function, file_in );
     std::string function = "Acam::FITS_file::add_key";
     std::stringstream message;
 
-#ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] keyword=" << keyword << " type=" << type << " value=" << value << " comment=" << comment;
-    logwrite( function, message.str() );
-#endif
-
     const std::lock_guard<std::mutex> lock( this->fits_mutex );
 
     // The file must have been opened first
@@ -266,23 +253,26 @@ logwrite( function, file_in );
     }
 
     try {
-      if (type.compare("BOOL") == 0) {
+      if ( value.find( "nan" ) != std::string::npos  ) {
+        this->pFits->pHDU().addKey( keyword, "NAN", "" );
+      }
+      else if ( type == "BOOL") {
         bool boolvalue = ( value == "T" ? true : false );
         this->pFits->pHDU().addKey( keyword, boolvalue, comment );
       }
-      else if (type.compare("INT") == 0) {
+      else if ( type == "INT") {
         this->pFits->pHDU().addKey(keyword, std::stoi(value), comment);
       }
-      else if (type.compare("LONG") == 0) {
+      else if ( type == "LONG") {
         this->pFits->pHDU().addKey(keyword, std::stol(value), comment);
       }
-      else if (type.compare("FLOAT") == 0) {
+      else if ( type == "FLOAT") {
         this->pFits->pHDU().addKey(keyword, std::stof(value), comment);
       }
-      else if (type.compare("DOUBLE") == 0) {
+      else if ( type == "DOUBLE") {
         this->pFits->pHDU().addKey(keyword, std::stod(value), comment);
       }
-      else if (type.compare("STRING") == 0) {
+      else if ( type == "STRING") {
         this->pFits->pHDU().addKey(keyword, value, comment);
       }
       else {
@@ -297,18 +287,18 @@ logwrite( function, file_in );
     catch ( std::invalid_argument & ) {
       message.str(""); message << "ERROR: unable to convert value " << value;
       logwrite( function, message.str() );
-      if (type.compare("STRING") != 0) {
+      if ( type != "STRING") {
         this->pFits->pHDU().addKey(keyword, value, comment);
       }
     }
     catch ( std::out_of_range & ) {
       message.str(""); message << "ERROR: value " << value << " out of range";
       logwrite( function, message.str() );
-      if (type.compare("STRING") != 0) {
+      if ( type != "STRING") {
         this->pFits->pHDU().addKey(keyword, value, comment);
       }
     }
-    catch (CCfits::FitsError & err) {
+    catch ( CCfits::FitsError & err ) {
       message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << "): "
                                << err.message();
       logwrite(function, message.str());
