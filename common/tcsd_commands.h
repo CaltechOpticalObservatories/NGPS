@@ -20,6 +20,7 @@ const std::string TCSD_GET_NAME = "getname";
 const std::string TCSD_ISOPEN = "isopen";
 const std::string TCSD_LIST = "list";
 const std::string TCSD_LLIST = "llist";
+const std::string TCSD_OFFSETRATE = "offsetrate";
 const std::string TCSD_OPEN = "open";
 const std::string TCSD_PTOFFSET = "offset";
 const std::string TCSD_RINGGO = "ringgo";
@@ -39,6 +40,7 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_ISOPEN+" [ ? ]",
                                                TCSD_LIST+" [ ? ]",
                                                TCSD_LLIST+" [ ? ]",
+                                               TCSD_OFFSETRATE+" [ ? | <raoff> <decoff> ]",
                                                TCSD_OPEN+" ? | <name>",
                                                TCSD_PTOFFSET+" ? | <ra> <dec>",
                                                TCSD_RINGGO+" ? | <angle>",

@@ -78,11 +78,12 @@ namespace TCS {
    */
   class Interface {
     public:
+      int offsetrate_ra;                           ///< offset rate (arcsec/hr) for RA
+      int offsetrate_dec;                          ///< offset rate (arcsec/hr) for DEC
+
       std::string name;                            ///< the name of the currently open tcs device
 
       std::map< std::string, TCS::TcsIO > tcsmap;  ///< STL map of TcsIO objects indexed by name
-
-      Interface() : publish_enable(false), collect_enable(false) { };
 
       std::mutex publish_mutex;
       std::mutex collect_mutex;
@@ -92,6 +93,8 @@ namespace TCS {
 
       std::atomic<bool> publish_enable;
       std::atomic<bool> collect_enable;
+
+      Interface() : offsetrate_ra(-1), offsetrate_dec(-1), publish_enable(false), collect_enable(false) { };
 
       /**
        * These are the functions for communicating with the TCS
@@ -111,6 +114,7 @@ namespace TCS {
       long set_focus( const std::string &arg, std::string &retstring );
       long get_focus( std::string &retstring );
       long get_focus( const std::string &arg, std::string &retstring );
+      long offsetrate( const std::string &arg, std::string &retstring );
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );

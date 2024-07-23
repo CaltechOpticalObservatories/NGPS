@@ -840,6 +840,95 @@ namespace TCS {
   /***** TCS::Interface::get_focus ********************************************/
 
 
+  /***** TCS::Interface::offsetrate *******************************************/
+  /**
+   * @brief      set the offset tracking rates
+   * @details    uses the MRATES command
+   * @param[in]  arg        "<raoff> <decoff>" in arcsec/second
+   * @param[out] retstring  reference to return string for the command sent to the TCS
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::offsetrate( const std::string &arg, std::string &retstring ) {
+    std::string function = "TCS::Interface::offsetrate";
+    std::stringstream message, asyncmsg;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( arg == "?" || arg == "help" ) {
+      retstring = TCSD_OFFSETRATE;
+      retstring.append( " [ <raoff> <decoff> ]\n" );
+      retstring.append( "  Set or get the telescope offset tracking rates in integer arcsec/second.\n" );
+      retstring.append( "  If no args supplied then current values are returned.  Default offset rates\n" );
+      retstring.append( "  are set by TCS_OFFSET_RATE_RA, TCS_OFFSET_RATE_DEC in the config file.\n" );
+      return HELP;
+    }
+
+    // No args is read-only
+    //
+    if ( arg.empty() ) {
+      message.str(""); message << this->offsetrate_ra << " " << this->offsetrate_dec;
+      retstring = message.str();
+      logwrite( function, retstring );
+      return error;
+    }
+
+    int raoff=-1, decoff=-1;
+
+    std::vector<std::string> tokens;
+    Tokenize( arg, tokens, " " );
+
+    if ( tokens.size() != 2 ) {
+      logwrite( function, "ERROR expected 2 args: <raoff> <decoff>" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    try {
+      raoff  = std::stoi( tokens.at(0) );
+      decoff = std::stoi( tokens.at(1) );
+    }
+    catch( std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing \"" << arg << "\" expected integer {1:50} : " << e.what();
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+    catch( std::invalid_argument &e ) {
+      message.str(""); message << "ERROR parsing \"" << arg << "\" expected integer {1:50} : " << e.what();
+      logwrite( function, message.str() );
+      error = ERROR;
+    }
+
+    if ( raoff  < 1 || raoff  > 50 ||
+         decoff < 1 || decoff > 50 ) {
+      message.str(""); message << "ERROR offsets " << raoff << " " << decoff << " must be integer in range { 1:50 }";
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    std::stringstream cmd;
+    cmd << "MRATES " << raoff << " " << decoff;
+
+    if ( error==NO_ERROR ) error = this->send_command( cmd.str(), retstring );  // set them
+
+    // If no error on set then assume all OK and save in the class.
+    // Unfortunately there is no way to read them back from the TCS.
+    //
+    if ( error==NO_ERROR ) {
+      this->offsetrate_ra  = raoff;
+      this->offsetrate_dec = decoff;
+      message.str(""); message << this->offsetrate_ra << " " << this->offsetrate_dec;
+      retstring = message.str();
+      logwrite( function, retstring );
+    }
+
+    return error;
+  }
+  /***** TCS::Interface::offsetrate *******************************************/
+
+
   /***** TCS::Interface::get_motion *******************************************/
   /**
    * @brief      get the motion status
@@ -999,9 +1088,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "COORDS " << args;
 
-    long error = this->send_command( cmd.str(), retcode );
-
-    if ( error == NO_ERROR ) error |= this->parse_reply_code( retcode, retstring );
+    long error = this->send_command( cmd.str(), retstring );
 
     asyncmsg << "TCSD:coords:" << ( error == ERROR ? "ERROR" : retstring );
     this->async.enqueue( asyncmsg.str() );
@@ -1028,12 +1115,12 @@ namespace TCS {
     //
     if ( args == "?" ) {
       retstring = TCSD_PTOFFSET;
-      retstring.append( " <ra> <dec> \n" );
-      retstring.append( "  Send guider offsets to the TCS.\n" );
+      retstring.append( " <raoff> <decoff> \n" );
+      retstring.append( "  Send guider offsets to the TCS. These are great circle distances in\n" );
+      retstring.append( "  decimal units of arcsec (degree/3600).\n" );
       retstring.append( "  There is currently no reliable way of accurately knowning when we have\n" );
-      retstring.append( "  arrived so this command will wait the amount of time that it should take,\n" );
-      retstring.append( "  based on the TCS offset rates (MRATEs) plus 25% margin.\n\n" );
-      retstring.append( "  <ra> and <dec> must be supplied in decimal degrees\n" );
+      retstring.append( "  arrived so this command will wait the expected time based on the TCS\n" );
+      retstring.append( "  offset rates (MRATEs), with a minimum of 100 msec, before returning.\n" );
       return HELP;
     }
 
@@ -1051,9 +1138,10 @@ namespace TCS {
     // Try to convert them to double to ensure that they are good numbers
     // before sending them to the TCS.
     //
+    double raoff, decoff;
     try {
-      std::stod( tokens[0] );
-      std::stod( tokens[1] );
+      raoff  = std::abs( std::stod( tokens[0] ) );
+      decoff = std::abs( std::stod( tokens[1] ) );
     }
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing \"" << args << "\":" << e.what();
@@ -1068,10 +1156,29 @@ namespace TCS {
       return ERROR;
     }
 
+    // Before sending PT command, check for non-zero offset rates.
+    //
+    if ( this->offsetrate_ra  < 1 || this->offsetrate_ra >  50 ||
+         this->offsetrate_dec < 1 || this->offsetrate_dec > 50 ) {
+      message.str(""); message << "ERROR offset rate(s) " << this->offsetrate_ra << "  " << this->offsetrate_dec << " outside range { 1:50}";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // offsetrate_ra, offsetrate_dec are offset rates in arcsec/sec
+    // so ra_t/offsetrate_ra and dec_t/offsetrate_dec are arcsec / arcsec / sec = sec
+    //
+    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate_ra  );  // time (ms) to offset RA
+    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate_dec );  // time (ms) to offset DEC
+    int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );         // greater of those two times + 50%
+    max_t = std::max( max_t, 100 );                                        // minimum 100 msec
+
     std::stringstream cmd;
     cmd << "PT " << args;
 
-    long error = this->send_command( cmd.str(), retstring );
+    long error = this->send_command( cmd.str(), retstring );               // perform the offset here
+
+    std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
 
     return error;
   }

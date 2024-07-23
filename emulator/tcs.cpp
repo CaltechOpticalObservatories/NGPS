@@ -611,7 +611,7 @@ namespace TcsEmulator {
 
     telescope.motionstate.store( TCS_MOTION_OFFSETTING );
 
-    // Begin the offsetting here, loop at 10Hz, move a little at a time.
+    // Begin the offsetting here, loop at 1kHz, move a little at a time.
     // After this loop, set the telescope position to be the new position.
     //
     while ( true ) {
@@ -626,10 +626,10 @@ namespace TcsEmulator {
       // add the slewrate to ra, dec
       // store it permanently as long as we don't overshoot
       //
-      if ( ( ra  += telescope.offsetrate_ra/10.0 )  <= newra )  telescope.ra.store( ra  );
-      if ( ( dec += telescope.offsetrate_dec/10.0 ) <= newdec ) telescope.dec.store( dec );
+      if ( ( ra  += telescope.offsetrate_ra/1000.0 )  <= newra )  telescope.ra.store( ra  );
+      if ( ( dec += telescope.offsetrate_dec/1000.0 ) <= newdec ) telescope.dec.store( dec );
 
-      std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+      std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
       if ( get_clock_time() >= clock_end ) break;
     }
 

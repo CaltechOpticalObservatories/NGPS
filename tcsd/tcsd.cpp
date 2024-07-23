@@ -113,6 +113,8 @@ int main(int argc, char **argv) {
 
   if (ret==NO_ERROR) ret=tcsd.configure_tcsd();          // get needed values out of read-in configuration file for the daemon
 
+  if (ret==NO_ERROR) ret=tcsd.configure_interface();     // get needed values out of read-in configuration file for the interface
+
   if (ret != NO_ERROR) {
     logwrite(function, "ERROR: unable to configure system");
     tcsd.exit_cleanly();

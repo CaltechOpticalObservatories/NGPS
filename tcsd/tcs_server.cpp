@@ -208,6 +208,97 @@ namespace TCS {
   /***** TCS::Server::configure_tcsd ******************************************/
 
 
+  /***** TCS::Server::configure_interface *************************************/
+  /**
+   * @brief      read and apply the configuration file for the tcs interface
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Server::configure_interface() {
+    std::string function = "TCS::Server::configure_interface";
+    std::stringstream message;
+    int applied=0;
+    long error;
+
+    // loop through the entries in the configuration file, stored in config class
+    //
+    for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      // TCS_OFFSET_RATE_RA -- offset rate for RA ("MRATE") in arcsec per second
+      //
+      if ( config.param[entry] == "TCS_OFFSET_RATE_RA" ) {
+        int rate;
+        try {
+          rate = std::stoi( config.arg[entry] );
+          if ( rate < 1 || rate > 50 ) {
+            message.str(""); message << "ERROR TCS_OFFSET_RATE_RA " << rate << " outside range { 1 : 50 }";
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_RA: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_RA: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.offsetrate_ra = rate;
+        applied++;
+      }
+
+      // TCS_OFFSET_RATE_DEC -- offset rate for RA ("MRATE") in arcsec per second
+      //
+      if ( config.param[entry] == "TCS_OFFSET_RATE_DEC" ) {
+        int rate;
+        try {
+          rate = std::stoi( config.arg[entry] );
+          if ( rate < 1 || rate > 50 ) {
+            message.str(""); message << "ERROR TCS_OFFSET_RATE_DEC " << rate << " outside range { 1 : 50 }";
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_DEC: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_DEC: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.offsetrate_dec = rate;
+        applied++;
+      }
+
+    } // end loop through the entries in the configuration file
+
+    message.str("");
+    if (applied==0) {
+      message << "ERROR: ";
+      error = ERROR;
+    }
+    else {
+      error = NO_ERROR;
+    }
+    message << "applied " << applied << " configuration lines to tcs interface";
+    logwrite(function, message.str());
+
+    return error;
+
+  }
+  /***** TCS::Server::configure_interface *************************************/
+
+
   /***** Server::new_log_day **************************************************/
   /**
    * @brief      creates a new logbook each day
@@ -539,6 +630,11 @@ namespace TCS {
 
       if ( cmd.compare( TCSD_SET_FOCUS ) == 0 ) {
                       ret = this->interface.set_focus( args, retstring );
+      }
+      else
+
+      if ( cmd.compare( TCSD_OFFSETRATE ) == 0 ) {
+                      ret = this->interface.offsetrate( args, retstring );
       }
       else
 

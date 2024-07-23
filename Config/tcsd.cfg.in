@@ -17,6 +17,9 @@ ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 TCS_HOST="real 10.200.99.2 @TCS_PORT@"       # real TCS: name address port
 TCS_HOST="sim localhost @TCS_PORT@"          # simulated TCS: name address port
 
+TCS_OFFSET_RATE_RA=45            # TCS offset rate for RA ("MRATE") in arcsec per second
+TCS_OFFSET_RATE_DEC=45           # TCS offset rate for DEC ("MRATE") in arcsec per second
+
 # emulator-only configuration
 #
 EMULATOR_FOCUSRATE=0.15          # emulator focus rate in mm/s
