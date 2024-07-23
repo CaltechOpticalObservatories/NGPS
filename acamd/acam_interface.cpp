@@ -2192,7 +2192,7 @@ namespace Acam {
 
     logwrite( function, retstring );
 
-    guide_manager.push_guider_settings();
+    std::thread( &Acam::GuideManager::push_guider_settings, &guide_manager ).detach();
 
     return error;
   }
@@ -2523,8 +2523,6 @@ namespace Acam {
 
       if (!error) iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
 
-      if (!error) error = iface->astrometry.image_quality();
-
       if ( result=="GOOD" || result=="NOISY" ) {   // treat GOOD and NOISY the same for now
         match_found = true;
         std::string rastr, decstr;
@@ -2534,6 +2532,7 @@ namespace Acam {
         message.str(""); message << "[ACQUIRE] solve " << result << ": match found with coords="
                                  << rastr << "  " << decstr << "  " << acam_angle;
         logwrite( function, message.str() );
+        iface->astrometry.image_quality();
       }
 
       // If no match found and exceeded number of attempts then give up and get out.
@@ -2694,7 +2693,7 @@ namespace Acam {
 
     if ( iface.guide_manager.filter != filter_og ) {
       iface.guide_manager.set_update();
-      iface.guide_manager.push_guider_settings();
+      std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
     }
 
     if ( error==ERROR ) {
@@ -2849,7 +2848,7 @@ namespace Acam {
         initial_pass = false;
         focus1 = focus2;                                // new baseline focus
         iface.guide_manager.focus.store( focus1, std::memory_order_seq_cst );      // save baseline focus to the class
-        iface.guide_manager.push_guider_settings();     // push new focus to the guider
+        std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
       }
 
       // An error will increment the error counter and clear the error flag
