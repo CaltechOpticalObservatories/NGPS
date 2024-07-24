@@ -5,7 +5,7 @@
 package edu.caltech.palomar.instruments.ngps.gui;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.instruments.ngps.parser.TargetListParser2;
-import edu.caltech.palomar.instruments.ngps.tables.TableRowTransferHandler;
+import edu.caltech.palomar.instruments.ngps.util.TableRowTransferHandler;
 import edu.caltech.palomar.instruments.ngps.tables.DefaultTargetTableModel;
 import edu.caltech.palomar.instruments.ngps.object.Target;
 import static edu.caltech.palomar.instruments.ngps.parser.TargetListParser2.DEFAULT_MODEL;
@@ -242,7 +242,7 @@ public void setModelType(int model_type){
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("importCSVPanel "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/

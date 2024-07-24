@@ -70,7 +70,7 @@ public void setNGPSdatabase(NGPSdatabase new_NGPSdatabase){
 /=============================================================================================*/
   private void results_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("TargetSearchFrame "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/

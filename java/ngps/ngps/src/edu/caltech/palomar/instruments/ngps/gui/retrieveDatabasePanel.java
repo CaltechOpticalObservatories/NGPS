@@ -8,7 +8,7 @@ import edu.caltech.palomar.instruments.ngps.util.ColumnColorRenderer;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.instruments.ngps.object.Target;
 import edu.caltech.palomar.instruments.ngps.tables.EditTableInterface;
-import edu.caltech.palomar.instruments.ngps.tables.TableRowTransferHandler;
+import edu.caltech.palomar.instruments.ngps.util.TableRowTransferHandler;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;

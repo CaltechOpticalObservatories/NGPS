@@ -64,7 +64,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("connectionsFrame: "+propertyName);
     if(propertyName.matches("connected")){
         java.lang.Boolean current_value = (java.lang.Boolean)e.getNewValue(); 
         if(current_value){
@@ -105,7 +105,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 /=============================================================================================*/
   private void TCS_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("TCS_propertyChange"+propertyName);
      if(propertyName.matches("tcs_connected")){
          boolean state = (java.lang.Boolean)e.getNewValue();
          if(state){
@@ -181,7 +181,7 @@ public void setDBMS(NGPSdatabase new_dbms){
         getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
         jLabel1.setFont(new java.awt.Font("Cantarell", 1, 15)); // NOI18N
-        jLabel1.setText("CONNECTIONS:");
+        jLabel1.setText("CONNECTIONS");
         getContentPane().add(jLabel1, new org.netbeans.lib.awtextra.AbsoluteConstraints(170, 10, -1, -1));
 
         jPanel1.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 2, true));
@@ -193,7 +193,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             }
         });
 
-        jLabel2.setText("mySQL Database connection");
+        jLabel2.setText("mySQL Database");
 
         OSButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
         OSButton.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -207,7 +207,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             }
         });
 
-        jLabel3.setText("Observation Sequencer connection");
+        jLabel3.setText("Observation Sequencer");
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
@@ -224,7 +224,7 @@ public void setDBMS(NGPSdatabase new_dbms){
                         .addComponent(OSButton)
                         .addGap(8, 8, 8)
                         .addComponent(jLabel3)))
-                .addContainerGap(160, Short.MAX_VALUE))
+                .addContainerGap(234, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -255,7 +255,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             }
         });
 
-        jLabel4.setText("TCS connection");
+        jLabel4.setText("TCS");
 
         jLabel6.setText("Connected to:");
 
@@ -301,7 +301,7 @@ public void setDBMS(NGPSdatabase new_dbms){
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(tcs_name_Label, javax.swing.GroupLayout.PREFERRED_SIZE, 70, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(tcs_ip_Label, javax.swing.GroupLayout.PREFERRED_SIZE, 130, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(20, Short.MAX_VALUE))
+                .addContainerGap(33, Short.MAX_VALUE))
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)

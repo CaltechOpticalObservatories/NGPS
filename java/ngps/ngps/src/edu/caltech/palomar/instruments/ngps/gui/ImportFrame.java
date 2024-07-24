@@ -11,7 +11,7 @@ import edu.caltech.palomar.instruments.ngps.parser.TargetListParser2;
 import static edu.caltech.palomar.instruments.ngps.parser.TargetListParser2.DEFAULT_MODEL;
 import static edu.caltech.palomar.instruments.ngps.parser.TargetListParser2.ETC_MODEL;
 import edu.caltech.palomar.instruments.ngps.tables.EditTableInterface;
-import edu.caltech.palomar.instruments.ngps.tables.TableRowTransferHandler;
+import edu.caltech.palomar.instruments.ngps.util.TableRowTransferHandler;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
@@ -290,7 +290,7 @@ public void setModelType(int model_type){
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("importFrame: "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/

@@ -104,7 +104,7 @@ public void sign_in(java.lang.String submitted_password){
           if(!compare){
               dbms.setLoggedIn(false);
               dbms.setLoggedInState(NGPSdatabase.LOGIN_UNSUCCESSFUL);
-              frame.getAccountMenu().setText("Not Logged In");
+              frame.getAccountMenu().setText("User Account");
           }         
        }catch(Exception e){
            dbms.setLoggedIn(false);
@@ -166,7 +166,7 @@ public void configureUserTableListener(){
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("signinFrame: "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/
@@ -396,7 +396,7 @@ public void configureUserTableListener(){
        if(logged_in_state == NGPSdatabase.LOGIN_SUCCESSFUL){
            dbms.setLoggedInState(NGPSdatabase.NOT_LOGGED_IN);
            OwnerList.setEnabled(true);
-           frame.getAccountMenu().setText("Not Logged In");
+           frame.getAccountMenu().setText("User Account");
        }
        if(logged_in_state == NGPSdatabase.NOT_LOGGED_IN | logged_in_state == NGPSdatabase.LOGIN_UNSUCCESSFUL){
           java.lang.String submitted_password = new java.lang.String(PasswordField.getPassword());

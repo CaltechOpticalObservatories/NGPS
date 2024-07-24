@@ -211,7 +211,7 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
 /=============================================================================================*/
   private void state_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("OScontrolsPanel: "+propertyName);
     if(propertyName.matches("progress")){
        java.lang.Integer current_value = (java.lang.Integer)e.getNewValue();  
        customexposureProgressBar.setValue(current_value);
@@ -241,14 +241,15 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
            tcs_Label.setIcon(OFF);            
          }
      }
-     if(propertyName.matches("active_tcs_address")){
-         java.lang.String value = (java.lang.String)e.getNewValue();
-         this.active_tcs_ip_Label.setText(value);
-      }
+//     if(propertyName.matches("active_tcs_address")){
+//         java.lang.String value = (java.lang.String)e.getNewValue();
+//         this.active_tcs_ip_Label.setText(value);
+//      }
      if(propertyName.matches("active_tcs_name")){
          java.lang.String value = (java.lang.String)e.getNewValue();
         this.active_tcs_Label1.setText(value);   
      }    
+     
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/
@@ -566,10 +567,8 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
         customoverheadProgressBar = new edu.caltech.palomar.instruments.ngps.gui.CustomProgressBar();
         totalTimeLabel = new javax.swing.JLabel();
         tcs_Label = new javax.swing.JLabel();
-        active_tcs_ip_Label = new javax.swing.JLabel();
         active_tcs_Label1 = new javax.swing.JLabel();
         jLabel1 = new javax.swing.JLabel();
-        jLabel2 = new javax.swing.JLabel();
 
         sequencerPanel.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
@@ -625,19 +624,12 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
         tcs_Label.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/OFF.png"))); // NOI18N
         tcs_Label.setText("  ");
 
-        active_tcs_ip_Label.setFont(new java.awt.Font("Cantarell", 1, 15)); // NOI18N
-        active_tcs_ip_Label.setForeground(new java.awt.Color(6, 158, 25));
-        active_tcs_ip_Label.setText("   ");
-
         active_tcs_Label1.setFont(new java.awt.Font("Cantarell", 1, 15)); // NOI18N
         active_tcs_Label1.setForeground(new java.awt.Color(6, 158, 25));
         active_tcs_Label1.setText("   ");
 
         jLabel1.setFont(new java.awt.Font("Cantarell", 3, 15)); // NOI18N
-        jLabel1.setText("TCS TYPE");
-
-        jLabel2.setFont(new java.awt.Font("Cantarell", 3, 15)); // NOI18N
-        jLabel2.setText("TCS IP address");
+        jLabel1.setText("TCS TYPE:");
 
         javax.swing.GroupLayout sequencerPanelLayout = new javax.swing.GroupLayout(sequencerPanel);
         sequencerPanel.setLayout(sequencerPanelLayout);
@@ -656,15 +648,8 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
                 .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(sequencerPanelLayout.createSequentialGroup()
                         .addGap(18, 18, 18)
-                        .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                            .addGroup(javax.swing.GroupLayout.Alignment.LEADING, sequencerPanelLayout.createSequentialGroup()
-                                .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(tcs_Label, javax.swing.GroupLayout.PREFERRED_SIZE, 18, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(8, 8, 8)
-                                .addComponent(jLabel1)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(active_tcs_Label1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jLabel5, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 88, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(customoverheadProgressBar, javax.swing.GroupLayout.PREFERRED_SIZE, 274, javax.swing.GroupLayout.PREFERRED_SIZE))
                         .addGap(18, 18, 18)
                         .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -675,9 +660,11 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
                                 .addGap(358, 358, 358)
                                 .addComponent(totalTimeLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 55, javax.swing.GroupLayout.PREFERRED_SIZE))
                             .addGroup(sequencerPanelLayout.createSequentialGroup()
-                                .addComponent(jLabel2)
+                                .addComponent(tcs_Label, javax.swing.GroupLayout.PREFERRED_SIZE, 18, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(8, 8, 8)
+                                .addComponent(jLabel1)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(active_tcs_ip_Label, javax.swing.GroupLayout.PREFERRED_SIZE, 258, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                                .addComponent(active_tcs_Label1, javax.swing.GroupLayout.PREFERRED_SIZE, 81, javax.swing.GroupLayout.PREFERRED_SIZE))))
                     .addGroup(sequencerPanelLayout.createSequentialGroup()
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 919, javax.swing.GroupLayout.PREFERRED_SIZE))))
@@ -690,14 +677,12 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
                     .addGroup(sequencerPanelLayout.createSequentialGroup()
                         .addComponent(totalTimeLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 26, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 9, Short.MAX_VALUE)
-                        .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(active_tcs_ip_Label)
+                        .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                            .addComponent(jLabel5)
                             .addGroup(sequencerPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                .addComponent(jLabel5)
                                 .addComponent(tcs_Label)
-                                .addComponent(active_tcs_Label1)
                                 .addComponent(jLabel1)
-                                .addComponent(jLabel2)))
+                                .addComponent(active_tcs_Label1)))
                         .addGap(3, 3, 3)
                         .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 83, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(sequencerPanelLayout.createSequentialGroup()
@@ -712,7 +697,8 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
                             .addGroup(sequencerPanelLayout.createSequentialGroup()
                                 .addComponent(do_oneRadioButton)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(do_allRadioButton)))))
+                                .addComponent(do_allRadioButton)))
+                        .addGap(0, 0, Short.MAX_VALUE)))
                 .addContainerGap())
         );
 
@@ -766,13 +752,11 @@ public void addAutoStartCheckbox(javax.swing.JCheckBox auto_start_timeCheckBox){
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel actionButtonsPanel;
     private javax.swing.JLabel active_tcs_Label1;
-    private javax.swing.JLabel active_tcs_ip_Label;
     private edu.caltech.palomar.instruments.ngps.gui.CustomProgressBar customexposureProgressBar;
     private edu.caltech.palomar.instruments.ngps.gui.CustomProgressBar customoverheadProgressBar;
     private javax.swing.JRadioButton do_allRadioButton;
     private javax.swing.JRadioButton do_oneRadioButton;
     private javax.swing.JLabel jLabel1;
-    private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel5;
     private javax.swing.JScrollPane jScrollPane2;
     private javax.swing.JTextPane messagesTextPane;

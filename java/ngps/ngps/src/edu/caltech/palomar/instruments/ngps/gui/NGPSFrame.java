@@ -77,6 +77,9 @@ import javax.swing.Timer;
 import org.jdatepicker.impl.JDatePanelImpl;
 import org.jdatepicker.impl.JDatePickerImpl;
 import org.jdatepicker.impl.UtilDateModel;
+import javax.swing.KeyStroke;
+import java.awt.event.KeyEvent;
+import javax.swing.AbstractAction;
 //import javax.swing.JFileChooser.FileNameExtensionFilter;
         /**.
  *
@@ -535,7 +538,7 @@ public void updateStarTime(){
 /=============================================================================================*/
   private void nightly_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("nightly_propertyChange "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/
@@ -633,7 +636,7 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
  private void initializeRightMenu(){
      mainMenuBar.add(Box.createHorizontalGlue());
      accountMenu = new javax.swing.JMenu();
-     accountMenu.setText("Guest");
+     accountMenu.setText("User Account");
      myaccount_MenuItem = new javax.swing.JMenuItem();
      myaccount_MenuItem.setText("My Account");
      switch_account_MenuItem = new javax.swing.JMenuItem();
@@ -736,7 +739,7 @@ public void initializeObservationSequencerController(){
 /=============================================================================================*/
   private void state_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("state_propertyChange "+propertyName);
 } 
 /*================================================================================================
 /   initializeEngineeringFrame()
@@ -771,10 +774,49 @@ public void initializeParser(){
 /*================================================================================================
 /      initializeMainTable()
 /=================================================================================================*/
+
+class DownKeyAction extends AbstractAction{
+    @Override
+    public void actionPerformed(ActionEvent e){
+        JTable tbl = (JTable)e.getSource();
+        tbl.requestFocus();
+        if(selected_table_row < tbl.getRowCount()-1){
+            tbl.changeSelection(selected_table_row+1, tbl.getSelectedColumn(), false, false);
+        }
+    }
+}
+class UpKeyAction extends AbstractAction{
+    @Override
+    public void actionPerformed(ActionEvent e){
+        JTable tbl = (JTable)e.getSource();
+        tbl.requestFocus();
+        if(selected_table_row > 0){
+            tbl.changeSelection(selected_table_row-1, tbl.getSelectedColumn(), false, false);
+        }
+    }
+}
+
 public void initializeMainTable(){
   main_editor_table =  constructTable();
   main_editor_table.setModel(dbms.myTargetDBMSTableModel);
   initializeTableModel(main_editor_table,dbms.myTargetDBMSTableModel);
+  
+  // CHAZ kludge to fix arrow key navigation in main table
+  KeyStroke downkey = KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)  ; 
+  KeyStroke upkey = KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)  ; 
+  KeyStroke leftkey = KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0)  ; 
+  KeyStroke rightkey = KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)  ; 
+  KeyStroke enterkey = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0)  ; 
+  main_editor_table.getActionMap().put("nokey", null );
+  main_editor_table.getActionMap().put("downkey", new DownKeyAction());
+  main_editor_table.getActionMap().put("upkey", new UpKeyAction());
+  main_editor_table.getInputMap(JTable.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(downkey, "downkey");
+  main_editor_table.getInputMap(JTable.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(upkey, "upkey");
+  main_editor_table.getInputMap(JTable.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(leftkey, "nokey"); 
+  main_editor_table.getInputMap(JTable.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(rightkey, "nokey"); 
+  // ENTER was also causing selection jump to top row
+  main_editor_table.getInputMap(JTable.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(enterkey, "nokey"); 
+  
   main_tableScrollPane.setViewportView(main_editor_table);
   myParametersTableModel    = new ParametersTableModel();
   myOTMParametersTableModel = new OTMParameterTableModel();
@@ -868,7 +910,7 @@ public void initializeMainTable(){
 /=============================================================================================*/
   private void table_edited_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("table_edited_propertyChange "+propertyName);
     if(propertyName.matches("edited")){
        java.lang.Boolean current_value = (java.lang.Boolean)e.getNewValue();  
        if(current_value){
@@ -929,7 +971,7 @@ public static JTable constructPlanTable(){
 /*================================================================================================
 /      constructTable()
 /=================================================================================================*/
-public static JTable constructTable(){
+public JTable constructTable(){
         JTable current = new JTable() {
         @Override
         public Component prepareRenderer(TableCellRenderer renderer, int rowIndex,int columnIndex) {
@@ -938,7 +980,8 @@ public static JTable constructTable(){
                 Component c = super.prepareRenderer(renderer, rowIndex,columnIndex);
                 JComponent jc = (JComponent)c;
                 Target current = ((MasterDBTableModel)getModel()).getRecord(rowIndex);
-                boolean selected_row = current.isSelected();
+                boolean selected_row = (rowIndex == selected_table_row);  //current.isSelected(); //CHAZ
+                                
                 String state = current.getSTATE();
                 String OTMflag = current.otm.getOTMflag();
                 if ("exposing".equals(state)) {
@@ -1004,7 +1047,7 @@ public static JTable constructTable(){
         paste_state = state;
     }
 /*================================================================================================
-/        selectFITSFiles()
+/        initializeTableModel()
 /=================================================================================================*/
     public void initializeTableModel(JTable current_table,EditTableInterface current_table_model){
 //        current_table.setModel(current_table_model);
@@ -1013,8 +1056,8 @@ public static JTable constructTable(){
         current_table.setRowSelectionAllowed(true);  
         current_table.setDragEnabled(true);
         current_table.setDropMode(DropMode.INSERT_ROWS);
-        TableRowTransferHandler trth = new TableRowTransferHandler(current_table);
-        current_table.setTransferHandler(trth); 
+        TableRowTransferHandler trth = new TableRowTransferHandler(current_table);  // This enables Drag 'n Drop
+        current_table.setTransferHandler(trth);
         JMenuItem insert_menu_item  = new JMenuItem("Insert");
         JMenuItem delete_menu_item  = new JMenuItem("Delete");
         JMenuItem copy_menu_item    = new JMenuItem("Copy");
@@ -1132,72 +1175,7 @@ public static JTable constructTable(){
                 }
             }
         });
-//    javax.swing.InputMap  im = current_table.getInputMap(current_table.WHEN_IN_FOCUSED_WINDOW);
-//    javax.swing.ActionMap am = current_table.getActionMap();
 
-//    im.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "RightArrow");
-//    im.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "LeftArrow");
-//    im.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "UpArrow");
-//    im.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "DownArrow");
-
-//    am.put("RightArrow", new ArrowAction("RightArrow"));
-//    am.put("LeftArrow", new ArrowAction("LeftArrow"));
-//    am.put("UpArrow",   new ArrowAction("UpArrow"));
-//    am.put("DownArrow", new ArrowAction("DownArrow"));
-        current_table.setFocusTraversalKeysEnabled(false);
-        current_table.setFocusable(true);
-        current_table.addKeyListener(new java.awt.event.KeyListener(){
-          int dx = 0;
-          int dy = 0;
-          public void keyPressed(KeyEvent e) {
-            int key = e.getKeyCode();
-            if (key == KeyEvent.VK_LEFT) {
-                dx = -1;
-            }
-            if (key == KeyEvent.VK_RIGHT) {
-                dx = 1;
-            }
-            if (key == KeyEvent.VK_UP) {
-                dy = -1;
-/*                    try{
-                       selected_table_row  =selected_table_row + dy;
-                       int count = current_table_model.getRowCount();
-                       for(int i=0;i<count;i++){
-                           current_table_model.getRecord(i).setSelected(false); 
-                       }
- //                      ((javax.swing.table.AbstractTableModel)(current_table.getModel())).fireTableDataChanged();
-                     }catch(Exception e2){
-                         System.out.println(e2.toString());
-                     }  
-                     current_table.setRowSelectionInterval(selected_table_row,selected_table_row);
-//                     selected_table_row  = current_table.getSelectedRow(); 
-                     trth.setSelectedRow(selected_table_row);
-                     current_table_model.getRecord(selected_table_row).setSelected(true);
-                     ((javax.swing.table.AbstractTableModel)(current_table.getModel())).fireTableDataChanged();
-                     if(dbms.getCombinedChartTest() != null){
-                        dbms.getCombinedChartTest().setSelectedSeries(selected_table_row);
-                        dbms.getCombinedChartTest().updateChartColors();                       
-                     }
-                     dbms.setSelectedTargetName(current_table_model.getRecord(selected_table_row).getName());
-                     myParametersTableModel.setTarget(current_table_model.getRecord(selected_table_row));
-                     myOTMParametersTableModel.setTarget(current_table_model.getRecord(selected_table_row));
-                     myETCParameterTableModel.setTarget(current_table_model.getRecord(selected_table_row));
-                
-//                selected_table_row = selected_table_row + dy;          
-*/                
-            }
-            if (key == KeyEvent.VK_DOWN) {
-               dy = 1;
-//               selected_table_row = selected_table_row + dy;
-            }
-        } 
-          public void keyReleased(KeyEvent e) {
-            int key = e.getKeyCode();
-        }  
-          public void keyTyped(KeyEvent e) {
-            int key = e.getKeyCode();
-        }  
-        });
     }    
 /*================================================================================================
 /        selectFITSFiles()
@@ -1232,7 +1210,7 @@ public static JTable constructTable(){
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("dbms_propertyChange: "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/
@@ -1316,7 +1294,7 @@ public static JTable constructTable(){
 /=============================================================================================*/
   private void otm_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("otm_propertyChange "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/
@@ -1396,6 +1374,7 @@ public static JTable constructTable(){
         mainMenuBar = new javax.swing.JMenuBar();
         NGPSMenu = new javax.swing.JMenu();
         aboutNGPSMenuItem = new javax.swing.JMenuItem();
+        connectionsMenuItem = new javax.swing.JMenuItem();
         preferencesMenuItem = new javax.swing.JMenuItem();
         shutdownMenuItem = new javax.swing.JMenuItem();
         quitMenuItem = new javax.swing.JMenuItem();
@@ -1425,7 +1404,6 @@ public static JTable constructTable(){
         hourly_weatherMenuItem = new javax.swing.JMenuItem();
         ten_day_weatherMenuItem = new javax.swing.JMenuItem();
         engineeringMenuItem = new javax.swing.JMenuItem();
-        connectionsMenuItem = new javax.swing.JMenuItem();
         otm_outputMenuItem = new javax.swing.JMenuItem();
         helpMenu = new javax.swing.JMenu();
         quick_startMenuItem = new javax.swing.JMenuItem();
@@ -1946,6 +1924,14 @@ public static JTable constructTable(){
         });
         NGPSMenu.add(aboutNGPSMenuItem);
 
+        connectionsMenuItem.setText("Connections");
+        connectionsMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                connectionsMenuItemActionPerformed(evt);
+            }
+        });
+        NGPSMenu.add(connectionsMenuItem);
+
         preferencesMenuItem.setText("Preferences");
         preferencesMenuItem.setEnabled(false);
         preferencesMenuItem.addActionListener(new java.awt.event.ActionListener() {
@@ -2014,7 +2000,7 @@ public static JTable constructTable(){
         fileMenu.add(jSeparator1);
 
         importMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_I, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        importMenuItem.setText("Import");
+        importMenuItem.setText("Import CSV");
         importMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 importMenuItemActionPerformed(evt);
@@ -2156,14 +2142,6 @@ public static JTable constructTable(){
             }
         });
         toolsMenu.add(engineeringMenuItem);
-
-        connectionsMenuItem.setText("Connections");
-        connectionsMenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                connectionsMenuItemActionPerformed(evt);
-            }
-        });
-        toolsMenu.add(connectionsMenuItem);
 
         otm_outputMenuItem.setText("OTM Output");
         otm_outputMenuItem.addActionListener(new java.awt.event.ActionListener() {

@@ -696,14 +696,12 @@ public void reorder(int[] fromIndex, int toIndex){
             first = start;
             last = to + end - start;
         }
-        System.out.println("Start = "+start+" End = "+end+" To = "+to);
+        System.out.println("MOVEROW Start = "+start+" End = "+end+" To = "+to);
         int length = dataVector.size();
         if(to < length){
-            System.out.println("CASE 1 Start = "+start+" End = "+end+" To = "+to);
            rotate(dataVector, first, last + 1, shift); 
         }
         if(to >= length){
-           System.out.println("CASE 2 Start = "+start+" End = "+end+" To = "+to); 
 //           rotate(dataVector, first, last + 1, shift); 
         }
         fireTableRowsUpdated(first, last);

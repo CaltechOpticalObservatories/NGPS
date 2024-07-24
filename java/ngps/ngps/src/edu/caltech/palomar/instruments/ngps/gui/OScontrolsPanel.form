@@ -54,16 +54,8 @@
                   <Group type="103" groupAlignment="0" attributes="0">
                       <Group type="102" attributes="0">
                           <EmptySpace min="-2" pref="18" max="-2" attributes="0"/>
-                          <Group type="103" groupAlignment="1" max="-2" attributes="0">
-                              <Group type="102" alignment="0" attributes="0">
-                                  <Component id="jLabel5" min="-2" pref="88" max="-2" attributes="0"/>
-                                  <EmptySpace max="-2" attributes="0"/>
-                                  <Component id="tcs_Label" min="-2" pref="18" max="-2" attributes="0"/>
-                                  <EmptySpace min="-2" pref="8" max="-2" attributes="0"/>
-                                  <Component id="jLabel1" min="-2" max="-2" attributes="0"/>
-                                  <EmptySpace max="-2" attributes="0"/>
-                                  <Component id="active_tcs_Label1" max="32767" attributes="0"/>
-                              </Group>
+                          <Group type="103" groupAlignment="1" attributes="0">
+                              <Component id="jLabel5" alignment="0" min="-2" pref="88" max="-2" attributes="0"/>
                               <Component id="customoverheadProgressBar" min="-2" pref="274" max="-2" attributes="0"/>
                           </Group>
                           <EmptySpace type="separate" max="-2" attributes="0"/>
@@ -76,9 +68,11 @@
                                   <Component id="totalTimeLabel" min="-2" pref="55" max="-2" attributes="0"/>
                               </Group>
                               <Group type="102" attributes="0">
-                                  <Component id="jLabel2" min="-2" max="-2" attributes="0"/>
+                                  <Component id="tcs_Label" min="-2" pref="18" max="-2" attributes="0"/>
+                                  <EmptySpace min="-2" pref="8" max="-2" attributes="0"/>
+                                  <Component id="jLabel1" min="-2" max="-2" attributes="0"/>
                                   <EmptySpace max="-2" attributes="0"/>
-                                  <Component id="active_tcs_ip_Label" min="-2" pref="258" max="-2" attributes="0"/>
+                                  <Component id="active_tcs_Label1" min="-2" pref="81" max="-2" attributes="0"/>
                               </Group>
                           </Group>
                       </Group>
@@ -98,14 +92,12 @@
                       <Group type="102" attributes="0">
                           <Component id="totalTimeLabel" min="-2" pref="26" max="-2" attributes="0"/>
                           <EmptySpace pref="9" max="32767" attributes="0"/>
-                          <Group type="103" groupAlignment="0" attributes="0">
-                              <Component id="active_tcs_ip_Label" alignment="0" min="-2" max="-2" attributes="0"/>
-                              <Group type="103" groupAlignment="3" attributes="0">
-                                  <Component id="jLabel5" alignment="3" min="-2" max="-2" attributes="0"/>
+                          <Group type="103" groupAlignment="3" attributes="0">
+                              <Component id="jLabel5" alignment="3" min="-2" max="-2" attributes="0"/>
+                              <Group type="103" alignment="3" groupAlignment="3" attributes="0">
                                   <Component id="tcs_Label" alignment="3" min="-2" max="-2" attributes="0"/>
-                                  <Component id="active_tcs_Label1" alignment="3" min="-2" max="-2" attributes="0"/>
                                   <Component id="jLabel1" alignment="3" min="-2" max="-2" attributes="0"/>
-                                  <Component id="jLabel2" alignment="3" min="-2" max="-2" attributes="0"/>
+                                  <Component id="active_tcs_Label1" alignment="3" min="-2" max="-2" attributes="0"/>
                               </Group>
                           </Group>
                           <EmptySpace min="-2" pref="3" max="-2" attributes="0"/>
@@ -127,6 +119,7 @@
                                   <Component id="do_allRadioButton" min="-2" max="-2" attributes="0"/>
                               </Group>
                           </Group>
+                          <EmptySpace min="0" pref="0" max="32767" attributes="0"/>
                       </Group>
                   </Group>
                   <EmptySpace min="-2" max="-2" attributes="0"/>
@@ -245,17 +238,6 @@
             <Property name="text" type="java.lang.String" value="  "/>
           </Properties>
         </Component>
-        <Component class="javax.swing.JLabel" name="active_tcs_ip_Label">
-          <Properties>
-            <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
-              <Font name="Cantarell" size="15" style="1"/>
-            </Property>
-            <Property name="foreground" type="java.awt.Color" editor="org.netbeans.beaninfo.editors.ColorEditor">
-              <Color blue="19" green="9e" red="6" type="rgb"/>
-            </Property>
-            <Property name="text" type="java.lang.String" value="   "/>
-          </Properties>
-        </Component>
         <Component class="javax.swing.JLabel" name="active_tcs_Label1">
           <Properties>
             <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
@@ -272,15 +254,7 @@
             <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
               <Font name="Cantarell" size="15" style="3"/>
             </Property>
-            <Property name="text" type="java.lang.String" value="TCS TYPE"/>
-          </Properties>
-        </Component>
-        <Component class="javax.swing.JLabel" name="jLabel2">
-          <Properties>
-            <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
-              <Font name="Cantarell" size="15" style="3"/>
-            </Property>
-            <Property name="text" type="java.lang.String" value="TCS IP address"/>
+            <Property name="text" type="java.lang.String" value="TCS TYPE:"/>
           </Properties>
         </Component>
       </SubComponents>

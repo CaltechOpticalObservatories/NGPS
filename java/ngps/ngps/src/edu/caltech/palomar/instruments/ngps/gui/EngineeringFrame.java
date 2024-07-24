@@ -39,7 +39,7 @@ public class EngineeringFrame extends javax.swing.JFrame {
 /=============================================================================================*/
   private void state_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("engineeringFrame: "+propertyName);
 /*=============================================================================================
 /    PARAMETERS FROM THE JSKYCALCMODEL
 /=============================================================================================*/

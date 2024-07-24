@@ -48,7 +48,7 @@ public class ChangePasswordFrame extends javax.swing.JFrame {
 /=============================================================================================*/
   private void message_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("message_propertyChange "+propertyName);
     if(propertyName.matches("message")){
         java.lang.String current_value = (java.lang.String)e.getNewValue();
         messageLabel.setText(current_value);
@@ -59,7 +59,7 @@ public class ChangePasswordFrame extends javax.swing.JFrame {
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
-     System.out.println(propertyName);
+     System.out.println("passwordFrame: "+propertyName);
     if(propertyName.matches("connected")){
         java.lang.Boolean current_value = (java.lang.Boolean)e.getNewValue(); 
         if(current_value){
