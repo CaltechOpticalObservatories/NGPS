@@ -203,7 +203,7 @@
             <MenuItem class="javax.swing.JMenuItem" name="insertRowMenuItem">
               <Properties>
                 <Property name="accelerator" type="javax.swing.KeyStroke" editor="org.netbeans.modules.form.editors.KeyStrokeEditor">
-                  <KeyStroke key="Ctrl+T"/>
+                  <KeyStroke key="Shift+Ctrl+ENTER"/>
                 </Property>
                 <Property name="text" type="java.lang.String" value="Insert Row"/>
               </Properties>
@@ -247,7 +247,7 @@
             <MenuItem class="javax.swing.JMenuItem" name="deleteMenuItem">
               <Properties>
                 <Property name="accelerator" type="javax.swing.KeyStroke" editor="org.netbeans.modules.form.editors.KeyStrokeEditor">
-                  <KeyStroke key="Shift+Ctrl+D"/>
+                  <KeyStroke key="Shift+Ctrl+BACK_SPACE"/>
                 </Property>
                 <Property name="text" type="java.lang.String" value="Delete Row"/>
               </Properties>
