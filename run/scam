@@ -1,0 +1,16 @@
+#!/usr/bin/bash
+#
+# @file     scam
+# @brief    provides a command line interface for slicecamd
+#
+
+source /home/developer/Software/run/ngps-config
+source $SLICECAMD_CONFIG
+
+command=""
+while [ $# -gt 0 ]
+do
+    command="$command $1"
+    shift 1
+done
+sock $NBPORT $command

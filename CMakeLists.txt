@@ -56,6 +56,7 @@ INCLUDE( ${GIT_COMMIT_FILE} )
 #
 add_subdirectory( ${PROJECT_BASE_DIR}/Andor )
 add_subdirectory( ${PROJECT_BASE_DIR}/acamd )
+add_subdirectory( ${PROJECT_BASE_DIR}/slicecamd )
 add_subdirectory( ${PROJECT_BASE_DIR}/utils )
 add_subdirectory( ${PROJECT_BASE_DIR}/common )
 add_subdirectory( ${PROJECT_BASE_DIR}/camerad )
