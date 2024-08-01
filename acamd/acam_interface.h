@@ -24,12 +24,6 @@
 #include "tcsd_client.h"
 #include "skyinfo.h"
 
-#define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
-#define PYTHON_ASTROMETRY_MODULE "astrometry"
-#define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
-#define PYTHON_IMAGEQUALITY_MODULE "image_quality"
-#define PYTHON_IMAGEQUALITY_FUNCTION "image_quality_cwrap"
-
 #ifdef ANDORSIM
 #include "andorsim.h"
 #else
@@ -43,6 +37,12 @@
  *
  */
 namespace Acam {
+
+  constexpr const char* PYTHON_PATH = "/home/developer/dhale/sandbox/NGPS/Python:/home/developer/dhale/sandbox/NGPS/Python/acam_skyinfo";
+  constexpr const char* PYTHON_ASTROMETRY_MODULE = "astrometry";
+  constexpr const char* PYTHON_ASTROMETRY_FUNCTION = "astrometry_cwrap";
+  constexpr const char* PYTHON_IMAGEQUALITY_MODULE = "image_quality";
+  constexpr const char* PYTHON_IMAGEQUALITY_FUNCTION = "image_quality_cwrap";
 
   constexpr double PI = 3.14159265358979323846;
 
@@ -79,9 +79,11 @@ namespace Acam {
   class Camera {
     private:
       uint16_t* image_data;
+      int simsize;      /// for the sky simulator
+      double conesize;  /// for the sky simulator
 
     public:
-      Camera() : image_data( nullptr ) { };
+      Camera() : image_data( nullptr ), simsize(1024), conesize(1) { };
 
       FITS_file fits_file;        /// instantiate a FITS container object
       FitsInfo  fitsinfo;
@@ -89,6 +91,8 @@ namespace Acam {
       Andor::Interface andor;     ///< create an Andor::Interface object for interfacing with the camera
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
+      inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
+      inline void set_conesize( double val ) { if ( val > 0 ) this->conesize = val; else throw std::out_of_range("conesize must be greater than 0"); }
 
       long emulator( std::string args, std::string &retstring );
       long open( std::string args );
@@ -132,7 +136,7 @@ namespace Acam {
     public:
       Astrometry() : python_initialized(false), isacquire(true), pAstrometryModule(nullptr), pQualityModule(nullptr) { }
 
-      void initialize_python();                          /// initializes the Python module
+      long initialize_python();                          /// initializes the Python module
 
       bool isacquire;
       inline bool is_initialized() { return this->python_initialized; };
@@ -453,7 +457,7 @@ namespace Acam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
-      void initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
+      long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
       long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components

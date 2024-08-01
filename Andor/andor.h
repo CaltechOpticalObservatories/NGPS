@@ -41,6 +41,7 @@ namespace Andor {
     private:
     public:
       int serial_number;
+      std::string camera_name;                     ///< a friendly camera name for humans
       int acqmode;                                 ///< acquisition mode
       std::string acqmodestr;
       int readmode;                                ///< read mode
@@ -84,7 +85,16 @@ namespace Andor {
       std::string timestring;
       double mjd0;
 
-      Information();
+      Information() : serial_number(-1), acqmode(-1), readmode(-1), adchan(0), adchans(-1),
+                      setpoint(20), ccdtemp(-1), temp_min(20), temp_max(20), amptype(-1),
+                      hspeed(-1), vspeed(-1), hbin(1), vbin(1),
+                      hstart(1), vstart(1), hend(1), vend(1),
+                      gain(-1), emgain(-1), emgain_low(-1), emgain_high(-1),
+                      hflip(0), vflip(0),
+                      rows(0), cols(0), axes{0,0}, datatype(-1), npix(0), section_size(0),
+                      pixel_scale(0), exposure_time(0),
+                      mjd0(0) { }
+
   };
   /***** Andor::Information ***************************************************/
 
@@ -254,9 +264,11 @@ namespace Andor {
     private:
       bool initialized;
       double exptime;
+      int serial_number;
 
     public:
-      Emulator() : initialized(false), exptime(0) { }
+      Emulator() : initialized(false), exptime(0), serial_number( -1 ) { }
+      Emulator( int sn ) : initialized(false), exptime(0), serial_number( sn ) { }
 
       inline double get_exptime() { return this->exptime; }
 
@@ -317,15 +329,22 @@ namespace Andor {
       bool andor_emulated;        ///< is the Andor emulator in use?
       Andor::AndorBase* andor;    ///< pointer to the Andor object to use
 //    std::unique_ptr<uint16_t[]> image_data;
+      std::mutex image_data_mutex;
       uint16_t* image_data;
+      std::atomic<bool> err;
 
     public:
+      Andor::SDK sdk;             ///< object for the real Andor SDK
+
+      Andor::Emulator emulator;   ///< object for the Andor emulator
+
       /***** Andor::Interface::Interface **************************************/
       /**
        * @brief      default Interface constructor
        *
        */
-      Interface() : initialized( false ), serial( -1 ), andor_emulated( false ), andor( &sdk ), image_data( nullptr ) { }
+      Interface() : initialized( false ), serial( -1 ), andor_emulated( false ),
+                    andor( &sdk ), image_data( nullptr ), err( false ), emulator( -1 ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /***** Andor::Interface::Interface **************************************/
@@ -333,12 +352,9 @@ namespace Andor {
        * @brief      Interface constructor accepts serial number
        *
        */
-      Interface( int sn ) : initialized( false ), serial( sn ), andor_emulated( false ), andor( &sdk ), image_data( nullptr ) { }
+      Interface( int sn ) : initialized( false ), serial( sn ), andor_emulated( false ),
+                            andor( &sdk ), image_data( nullptr ), err( false ), emulator( sn ) { }
       /***** Andor::Interface::Interface **************************************/
-
-      Andor::SDK sdk;             ///< object for the real Andor SDK
-
-      Andor::Emulator emulator;   ///< object for the Andor emulator
 
       /***** Andor::Interface::andor_emulator *********************************/
       /**
@@ -386,6 +402,10 @@ namespace Andor {
 
       FITS_file fits_file;
 
+      Common::FitsKeys fitskeys;   ///< create a FitsKeys object for FITS keys for this camera
+
+      inline long read_error() { return( this->err.exchange( false ) ? ERROR : NO_ERROR ); };
+
 //    std::unique_ptr<uint16_t[]> get_image_data() { return std::move( this->image_data ); }
 //    std::unique_ptr<uint16_t[]>& get_image_data() { return this->image_data; }
       inline uint16_t* get_image_data() { return this->image_data; }
@@ -395,6 +415,7 @@ namespace Andor {
       inline bool is_initialized() { return this->initialized; };
 
       long simulate_frame( std::string name_in );
+      long simulate_frame( std::string name_in, const int simsize, const double conebuffer );
 
       long simandor( std::string args, std::string &retstring );
       long open( std::string args );
@@ -405,6 +426,7 @@ namespace Andor {
       long set_exptime( std::string exptime, std::string &retstring );
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
+      long save_acquired( std::string wcs_in, std::string &imgname, const int simsize, const double conebuffer );
       unsigned int start_acquisition();
       long get_detector( int &x, int &y );
       long get_status();
@@ -438,12 +460,10 @@ namespace Andor {
         // according to the type of pointer passed in.
         //
         if constexpr ( std::is_same_v<T, int32_t> ) {
-logwrite(function, "int32_t");
           ret = GetAcquiredData( buf, this->camera_info.npix );
         }
         else
         if constexpr ( std::is_same_v<T, uint16_t> ) {
-logwrite(function, "uint16_t");
           ret = GetAcquiredData16( buf, this->camera_info.npix );
         }
         else {

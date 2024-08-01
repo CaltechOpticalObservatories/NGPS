@@ -50,7 +50,9 @@ int main(int argc, char **argv) {
   // Python should not be started by the parent. Initialize the Python objects
   // only by the child process, after daemonizing.
   //
-  acamd.initialize_python_objects();
+  if ( acamd.initialize_python_objects() != NO_ERROR ) {
+    logwrite( function, "ERROR initializing Python objects" );  // TODO should I allow things to continue?
+  }
   PyEval_SaveThread();
 
   std::string logpath;

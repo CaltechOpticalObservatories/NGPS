@@ -833,7 +833,9 @@ namespace Acam {
 
     // This is the one extra call that is outside the normal workflow.
     //
-    if ( andor.is_emulated() && _tcs_online ) andor.simulate_frame( fitsinfo.fits_name );
+    if ( andor.is_emulated() && _tcs_online ) andor.simulate_frame( fitsinfo.fits_name,
+                                                                    this->simsize,
+                                                                    this->conesize );
 
     outfile = fitsinfo.fits_name;
 
@@ -865,14 +867,15 @@ namespace Acam {
    * @brief      Initializes the Python astrometry module
    * @details    If daemonized, this should not be called by a parent process.
    *             Ensure this is called only by a child process.
+   * @return     ERROR | NO_ERROR
    *
    */
-  void Astrometry::initialize_python() {
+  long Astrometry::initialize_python() {
     std::string function = "Acam::Astrometry::initialize_python";
 
     if ( ! py_instance.is_initialized() ) {
       logwrite( function, "ERROR could not initialize Python" );
-      return;
+      return ERROR;
     }
 
     PyGILState_STATE gstate = PyGILState_Ensure();   // Acquire the GIL
@@ -886,18 +889,23 @@ namespace Acam {
       Py_XDECREF( pModuleNameAstrometry );
       Py_XDECREF( pModuleNameQuality );
       PyGILState_Release(gstate);                    // Release the GIL
-      return;
+      return ERROR;
     }
 
     this->pAstrometryModule = PyImport_Import( pModuleNameAstrometry );
     this->pQualityModule    = PyImport_Import( pModuleNameQuality );
 
     if ( this->pAstrometryModule == nullptr || this->pQualityModule == nullptr ) {
+      std::stringstream message;
+      message << "ERROR could not import Python module(s):";
+      if ( this->pAstrometryModule == nullptr ) message << " " << PYTHON_ASTROMETRY_MODULE;
+      if ( this->pQualityModule == nullptr )    message << " " << PYTHON_IMAGEQUALITY_MODULE;
+      logwrite( function, message.str() );
       py_instance.print_python_error( function );
       Py_XDECREF( pModuleNameAstrometry );
       Py_XDECREF( pModuleNameQuality );
       PyGILState_Release(gstate);                    // Release the GIL
-      return;
+      return ERROR;
     }
 
     PyGILState_Release(gstate);                      // Release the GIL
@@ -906,7 +914,7 @@ namespace Acam {
 
     logwrite( function, "initialized Python astrometry module" );
 
-    return;
+    return NO_ERROR;
   }
   /***** Acam::Astrometry::initialize_python **********************************/
 
@@ -1307,11 +1315,11 @@ namespace Acam {
    * @details    This provides an interface (to the Acam Server) to initialize
    *             any Python modules in objects in the class. Allows Daemons to
    *             ensure Python initialization is done by the child process.
+   * @return     ERROR | NO_ERROR
    *
    */
-  void Interface::initialize_python_objects() {
-    this->astrometry.initialize_python();
-    return;
+  long Interface::initialize_python_objects() {
+    return( this->astrometry.initialize_python() );
   }
   /***** Acam::Interface::initialize_python_objects ***************************/
 
@@ -1527,6 +1535,45 @@ namespace Acam {
         this->target.set_min_repeat( repeat );
         applied++;
       }
+
+      if ( config.param[entry] == "SKYSIM_IMAGE_SIZE" ) {
+        try {
+          this->camera.set_simsize( std::stoi( config.arg[entry] ) );
+        }
+        catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR invalid SKYSIM_IMAGE_SIZE " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR invalid SKYSIM_IMAGE_SIZE " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "SKYSIM_CONE_BUFFER" ) {
+        try {
+          this->camera.set_conesize( std::stod( config.arg[entry] ) );
+        }
+        catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR invalid CONE_BUFFER " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR invalid CONE_BUFFER " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
     }
     message.str(""); message << "applied " << applied << " configuration lines to the acam interface";
     logwrite(function, message.str());
@@ -2848,7 +2895,7 @@ namespace Acam {
         initial_pass = false;
         focus1 = focus2;                                // new baseline focus
         iface.guide_manager.focus.store( focus1, std::memory_order_seq_cst );      // save baseline focus to the class
-        std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
+        std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();  // push new focus
       }
 
       // An error will increment the error counter and clear the error flag

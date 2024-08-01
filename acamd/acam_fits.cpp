@@ -61,8 +61,9 @@ namespace Acam {
       //
       this->pFits.reset( new CCfits::FITS(this->info.fits_name, this->info.datatype, num_axis, axes) );
     }
-    catch ( CCfits::FITS::CantCreate ){
-      message.str(""); message << "ERROR: unable to open FITS file \"" << this->info.fits_name << "\"";
+    catch ( CCfits::FITS::CantCreate &err ) {
+      message.str(""); message << "ERROR: unable to open FITS file \"" << this->info.fits_name << "\": "
+                               << err.message();
       logwrite(function, message.str());
       return(ERROR);
     }
@@ -109,7 +110,7 @@ namespace Acam {
       //
       this->pFits->destroy();
     }
-    catch ( CCfits::FitsError& error ) {
+    catch ( CCfits::FitsError &error ) {
       message.str(""); message << "ERROR writing checksum and closing file: " << error.message();
       logwrite( function, message.str() );
     }
@@ -155,7 +156,7 @@ logwrite( function, file_in );
 
       pFits->pHDU().copyAllKeys( &pInfile->pHDU(), categories );
     }
-    catch ( CCfits::FitsError& error ) {
+    catch ( CCfits::FitsError &error ) {
       message.str(""); message << "file_in: " << file_in << " FITS file error thrown: " << error.message();
       logwrite(function, message.str());
       return( ERROR );
@@ -228,7 +229,7 @@ logwrite( function, file_in );
       this->pFits->pHDU().write( fpixel, this->info.section_size, array );
       this->pFits->flush();  // make sure the image is written to disk
     }
-    catch ( CCfits::FitsError& error ) {
+    catch ( CCfits::FitsError &error ) {
       message.str(""); message << "FITS file error thrown: " << error.message();
       logwrite(function, message.str());
       return( ERROR );
@@ -298,7 +299,7 @@ logwrite( function, file_in );
         this->pFits->pHDU().addKey(keyword, value, comment);
       }
     }
-    catch ( CCfits::FitsError & err ) {
+    catch ( CCfits::FitsError &err ) {
       message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << "): "
                                << err.message();
       logwrite(function, message.str());

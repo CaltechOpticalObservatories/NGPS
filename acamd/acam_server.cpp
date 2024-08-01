@@ -485,7 +485,6 @@ namespace Acam {
       //
       ret = NOTHING;
       std::string retstring;
-      bool suppress_term_state=false;
 
       if ( cmd == "help" || cmd == "?" ) {
                       for ( const auto &s : ACAMD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
@@ -629,7 +628,6 @@ namespace Acam {
       else
       if ( cmd == ACAMD_GUIDESET ) {
                       ret = this->interface.guider_settings_control( args, retstring );
-                      suppress_term_state = true;  // suppress the terminating state message
       }
       else
       if ( cmd == ACAMD_SPEED ) {

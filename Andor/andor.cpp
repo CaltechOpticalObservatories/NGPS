@@ -11,36 +11,6 @@
 
 namespace Andor {
 
-  /***** Andor::Information::Information **************************************/
-  /**
-   * @brief      default Information class constructor
-   *
-   */
-  Information::Information() {
-    this->acqmode=-1;
-    this->readmode=-1;
-    this->adchan=0;
-    this->adchans=-1;
-    this->exposure_time=-1;
-    this->setpoint=20;
-    this->emgain_low=-999;
-    this->emgain_high=-999;
-    this->hspeed=-999;
-    this->vspeed=-999;
-    this->gain=-999;
-    this->hbin=1;
-    this->vbin=1;
-    this->hstart=1;
-    this->vstart=1;
-    this->hend=1;
-    this->vend=1;
-    this->hflip=0;
-    this->vflip=0;
-    this->pixel_scale=-1;
-  }
-  /***** Andor::Interface::Interface ******************************************/
-
-
   /***** Andor::SDK::_GetAcquiredData16 ***************************************/
   /**
    * @brief      wrapper for Andor SDK GetAcquiredData16
@@ -2087,9 +2057,11 @@ namespace Andor {
 
     // Get the acquired image
     //
+    std::lock_guard<std::mutex> lock( image_data_mutex );
     if ( this->image_data != nullptr ) {
 //    this->image_data.reset();
       delete [] this->image_data;
+      this->image_data = nullptr;
     }
 //  this->image_data = std::make_unique<uint16_t[]>( this->camera_info.axes[0] * this->camera_info.axes[1] );
     this->image_data = new uint16_t[ this->camera_info.axes[0] * this->camera_info.axes[1] ];
@@ -2118,12 +2090,34 @@ namespace Andor {
   /**
    * @brief      save an acquired image to FITS file
    * @details    This saves the image stored in the class. See also acquire_one().
+   *             This function is overloaded. This version uses hard-coded
+   *             default values of simsize=1024 conebuffer=1
    * @param[in]  wcs_in   optional input image contains WCS header info to re-use
    * @param[out] imgname  output filename
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR
    *
    */
   long Interface::save_acquired( std::string wcs_in, std::string &imgname ) {
+    return( save_acquired( wcs_in, imgname, 1024, 1 ) );
+  }
+  /***** Andor::Interface::save_acquired **************************************/
+
+
+  /***** Andor::Interface::save_acquired **************************************/
+  /**
+   * @brief      save an acquired image to FITS file
+   * @details    This saves the image stored in the class. See also acquire_one().
+   *             This function is overloaded. This version accepts simsize and
+   *             conebuffer as free paramters which will be passed as keyword
+   *             arguments to Python.
+   * @param[in]  wcs_in      optional input image contains WCS header info to re-use
+   * @param[out] imgname     output filename
+   * @param[in]  simsize     IMAGE_SIZE keyword value for simFromHeader
+   * @param[in]  conebuffer  coneBuffer keyword value for simFromHeader
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::save_acquired( std::string wcs_in, std::string &imgname, const int simsize, const double conebuffer ) {
     std::string function = "Andor::Interface::save_acquired";
     std::stringstream message;
     long error = NO_ERROR;
@@ -2133,6 +2127,7 @@ namespace Andor {
     logwrite( function, message.str() );
 #endif
 
+    std::lock_guard<std::mutex> lock( image_data_mutex );
     if ( this->image_data == nullptr ) {
       logwrite( function, "ERROR no image data available" );
       return ERROR;
@@ -2162,7 +2157,9 @@ namespace Andor {
     // If Andor is emulated then the file just created is the input for the
     // sky simulator, which is called now to generate the simulated image.
     //
-    if ( is_emulated() ) error = emulator.skysim.generate_image( imgname, "/tmp/andorout2.fits", emulator.get_exptime() );
+    if ( is_emulated() ) error = emulator.skysim.generate_image( imgname, "/tmp/andorout2.fits",
+                                                                 emulator.get_exptime(),
+                                                                 simsize, conebuffer);
 
     return error;
   }
@@ -2172,17 +2169,40 @@ namespace Andor {
   /***** Andor::Interface::simulate_frame *************************************/
   /**
    * @brief      calls the skysim generator to create a simulated image
+   * @details    This function is overloaded. This version uses hard-coded
+   *             default values of simsize=1024 conebuffer=1
    * @param[in]  name_in  input to skysim, gets overwritten with simulated output
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR
    *
    */
   long Interface::simulate_frame( std::string name_in ) {
+    return( simulate_frame( name_in, 1024, 1 ) );
+  }
+  /***** Andor::Interface::simulate_frame *************************************/
+
+
+  /***** Andor::Interface::simulate_frame *************************************/
+  /**
+   * @brief      calls the skysim generator to create a simulated image
+   * @details    This function is overloaded. This version accepts simsize and
+   *             conebuffer as free paramters which will be passed as keyword
+   *             arguments to Python.
+   * @param[in]  name_in     input to skysim, gets overwritten with simulated output
+   * @param[in]  simsize     IMAGE_SIZE keyword value for simFromHeader
+   * @param[in]  conebuffer  coneBuffer keyword value for simFromHeader
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::simulate_frame( std::string name_in, const int simsize, const double conebuffer ) {
     std::string function = "Andor::Interface::simulate_frame";
     std::stringstream message;
 
     if ( is_emulated() ) {
       std::string simfile = generate_temp_filename( "skysim" );    // create a temporary filename for skysim output
-      long error = emulator.skysim.generate_image( name_in, simfile, emulator.get_exptime() );  // generate simulated image with temp filename
+      long error = emulator.skysim.generate_image( name_in, simfile,
+                                                   emulator.get_exptime(),
+                                                   simsize,
+                                                   conebuffer );   // generate simulated image with temp filename
       if ( error == NO_ERROR ) {
         std::filesystem::rename( simfile, name_in );               // rename this temp filename as input filename
       }

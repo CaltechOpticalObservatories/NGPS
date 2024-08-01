@@ -113,8 +113,8 @@ namespace Acam {
       void exit_cleanly();                                                     ///< exit
       long configure_acamd();                                                  ///< read and apply the configuration file
 
-      inline void initialize_python_objects() {                                ///< allows for initializing Python objects by the child process
-        this->interface.initialize_python_objects();
+      inline long initialize_python_objects() {                                ///< allows for initializing Python objects by the child process
+        return( this->interface.initialize_python_objects() );
       }
 
       void handle_signal( int signo );

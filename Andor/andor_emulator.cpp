@@ -91,7 +91,7 @@ namespace Andor {
     std::string function = "Andor::Emulator::_GetCameraSerialNumber";
     std::stringstream message;
 
-    number = 12345;
+    number = this->serial_number;
 
     return NO_ERROR;
   }
@@ -816,7 +816,11 @@ namespace Andor {
    * @param[in]  exptime
    *
    */
-  long SkySim::generate_image( const std::string_view &headerfile, const std::string_view &outputfile, const double exptime ) {
+  long SkySim::generate_image( const std::string_view &headerfile,
+                               const std::string_view &outputfile,
+                               const double exptime,
+                               const int simsize,
+                               const double conebuffer ) {
     std::string function = "Andor::SkySim::generate_image";
     std::stringstream message;
     long error = NO_ERROR;
@@ -854,20 +858,21 @@ namespace Andor {
     //
     PyObject* pHeaderfile = PyUnicode_FromString( headerfile.data() );
     PyObject* pOutputfile = PyUnicode_FromString( outputfile.data() );
-    PyObject* pImageSize  = PyDict_New();
+    PyObject* pKwArgs     = PyDict_New();
 
-    if ( !pHeaderfile || !pOutputfile || !pImageSize ) {
+    if ( !pHeaderfile || !pOutputfile || !pKwArgs ) {
       logwrite( function, "ERROR creating Python arguments" );
       py_instance.print_python_error( function );
       Py_XDECREF( pFunction );
       Py_XDECREF( pHeaderfile );
       Py_XDECREF( pOutputfile );
-      Py_XDECREF( pImageSize );
+      Py_XDECREF( pKwArgs );
       PyGILState_Release( gstate );                  // Release the GIL
       return ERROR;
     }
 
-    PyDict_SetItemString( pImageSize, "IMAGE_SIZE", PyLong_FromLong( 1024 ) );
+    PyDict_SetItemString( pKwArgs, "IMAGE_SIZE", PyLong_FromLong( simsize ) );
+    PyDict_SetItemString( pKwArgs, "coneBuffer", PyLong_FromLong( conebuffer ) );
 
     PyObject* pArgs   = PyTuple_Pack( 2, pHeaderfile, pOutputfile );
 
@@ -878,14 +883,14 @@ namespace Andor {
       Py_XDECREF( pHeaderfile );
       Py_XDECREF( pOutputfile );
       Py_XDECREF( pArgs );
-      Py_XDECREF( pImageSize );
+      Py_XDECREF( pKwArgs );
       PyGILState_Release( gstate );                  // Release the GIL
       return ERROR;
     }
 
     // Call the Python function here
     //
-    PyObject* pReturn = PyObject_Call( pFunction, pArgs, pImageSize );
+    PyObject* pReturn = PyObject_Call( pFunction, pArgs, pKwArgs );
 
     if ( !pReturn ) {
       logwrite( function, "ERROR calling Python skysim function" );
@@ -897,7 +902,7 @@ namespace Andor {
     //
     Py_XDECREF( pArgs );
     Py_XDECREF( pFunction );
-    Py_XDECREF( pImageSize );
+    Py_XDECREF( pKwArgs );
     Py_XDECREF( pHeaderfile );
     Py_XDECREF( pOutputfile );
 

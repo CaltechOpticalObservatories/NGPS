@@ -9,10 +9,6 @@
 
 #include <cpython.h>
 
-#define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
-#define PYTHON_SKYSIM_MODULE "skysim"
-#define PYTHON_SKYSIM_FUNCTION "simFromHeader"
-
 /***** Andor ******************************************************************/
 /**
  * @namespace  Andor
@@ -20,6 +16,10 @@
  *
  */
 namespace Andor {
+
+  constexpr const char* PYTHON_PATH = "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo";
+  constexpr const char* PYTHON_SKYSIM_MODULE = "skysim";
+  constexpr const char* PYTHON_SKYSIM_FUNCTION = "simFromHeader";
 
   /***** Andor::SkySim ********************************************************/
   /**
@@ -40,7 +40,8 @@ namespace Andor {
 
       PyObject* pSkySimModule;
 
-      long generate_image( const std::string_view &headerfile, const std::string_view &outputfile, const double exptime );
+      long generate_image( const std::string_view &headerfile, const std::string_view &outputfile,
+                           const double exptime, const int simsize, const double conebuffer );
 
       inline bool is_initialized() { return this->python_initialized; }
   };
