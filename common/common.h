@@ -14,6 +14,7 @@
 #include <mutex>
 #include <map>
 #include <condition_variable>
+#include <regex>
 
 #include "logentry.h"
 #include "network.h"
@@ -93,24 +94,29 @@ namespace Common {
         std::string type;
 
         // "convert" the type <T> value into a string via the appropriate stream
-        // and set the type string
+        // and set the type string.
         //
-        if ( std::is_same<T, double>::value ) {
-          val << std::fixed << std::setprecision( prec ) << tval;
-          type = "DOUBLE";
+        // The use of constexpr() ensures that the compiler discards brances
+        // that are not valid for the given T.
+        //
+        if constexpr( std::is_same<T, double>::value ) {
+          val << std::fixed << std::setprecision( prec );
+          if ( !std::isnan(tval) ) val << tval; else val << "NaN";
+          type = ( !std::isnan(tval) ? "DOUBLE" : "STRING" );
         }
         else
-        if ( std::is_same<T, float>::value ) {
-          val << std::fixed << std::setprecision( prec ) << tval;
-          type = "FLOAT";
+        if constexpr( std::is_same<T, float>::value ) {
+          val << std::fixed << std::setprecision( prec );
+          if ( !std::isnan(tval) ) val << tval; else val << "NaN";
+          type = ( !std::isnan(tval) ? "FLOAT" : "STRING" );
         }
         else
-        if ( std::is_same<T, int>::value ) {
+        if constexpr( std::is_same<T, int>::value ) {
           val << tval;
           type = "INT";
         }
         else
-        if ( std::is_same<T, long>::value ) {
+        if constexpr( std::is_same<T, long>::value ) {
           val << tval;
           type = "LONG";
         }
@@ -118,6 +124,8 @@ namespace Common {
           val << tval;
           type = this->get_keytype( val.str() );  // try to infer the type from any string
         }
+
+        if ( key.empty() || ( key.find(" ") != std::string::npos ) ) return NO_ERROR;
 
         // insert new entry into the database
         //

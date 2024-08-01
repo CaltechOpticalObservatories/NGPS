@@ -173,16 +173,20 @@ namespace SkyInfo {
       return ERROR;
     }
 
-    const char* _fromc = from.c_str();
-    const char* _toc   = to.c_str();
-
     // Build up the PyObject argument list that will be passed to the function
     //
-    PyObject* pArgList = Py_BuildValue( "(ssddd)", _fromc, _toc,
+    PyObject* pArgList = Py_BuildValue( "(ssddd)", from.c_str(), to.c_str(),
                                         this->coords_in.ra,
                                         this->coords_in.dec,
                                         this->coords_in.angle
                                       );
+
+    if ( !pArgList ) {
+      logwrite( function, "ERROR: failed to build argument list" );
+      Py_XDECREF( pFunction );
+      PyGILState_Release(gstate);
+      return ERROR;
+    }
 
     // Call the Python function here
     //
@@ -192,8 +196,7 @@ namespace SkyInfo {
     Py_DECREF( pArgList );
 
     if ( !pReturn || PyErr_Occurred() ) {
-      message.str(""); message << "ERROR calling Python function: " << PYTHON_FPOFFSETS_FUNCTION;
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR calling Python function: " PYTHON_FPOFFSETS_FUNCTION );
       PyErr_Print();
       PyGILState_Release(gstate);
       return ERROR;
@@ -246,6 +249,7 @@ namespace SkyInfo {
     if ( tuple_size != 3 ) {
       message.str(""); message << "ERROR unexpected 3 tuple items but received " << tuple_size;
       logwrite( function, message.str() );
+      Py_DECREF( pReturn );
       PyGILState_Release( gstate );
       return ERROR;
     }

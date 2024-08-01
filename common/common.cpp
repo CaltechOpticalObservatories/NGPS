@@ -96,6 +96,10 @@ namespace Common {
   std::string FitsKeys::get_keytype(std::string keyvalue) {
     std::size_t pos(0);
 
+    // If it's empty then what else can it be but string
+    //
+    if ( keyvalue.empty() ) return std::string( "STRING" );
+
     // if the entire string is either (exactly) T or F then it's a boolean
     if ( keyvalue == "T" || keyvalue == "F" ) {
       return std::string( "BOOL" );
@@ -240,11 +244,66 @@ namespace Common {
       return(NO_ERROR);
     }
 
+    // Apply keyword rules one at a time so that the error can identify the problem
+    //
+
+    // no embedded spaces allowed in keyword
+    //
+    if ( keyword.find( " " ) != std::string::npos ) {
+      message.str(""); message << "ERROR embedded spaces not allowed in keyword \"" << keyword << "\"";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // keyword must start with a letter {A:Z}
+    //
+    static const std::regex start( "[A-Z].*" );  // start with [A-Z] followed by 0 or more of anything
+    if ( !regex_match( keyword, start ) ) {
+      message.str(""); message << "ERROR first character of keyword \"" << keyword << "\" must start with A:Z";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // keyword must contain only A-Z, 0-9, underscore and dash
+    //
+    static const std::regex contents( "[A-Z][A-Z0-9_-]*" );  // start with A-Z followed by zero or more of A-Z, 0-9, _, -
+    if ( !regex_match( keyword, contents ) ) {
+      message.str(""); message << "ERROR keyword \"" << keyword << "\" must contain only A-Z, 0-9, underscore or hyphen";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // keyword cannot conntain 0-padded number sequences
+    //
+    static const std::regex zeropadding( "[A-Z_-]*[0][0-9]+[A-Z_-]*" );  // zero or more chars and 0 followed by one or more numbers
+    if ( regex_match( keyword, zeropadding ) ) {
+      message.str(""); message << "ERROR keyword \"" << keyword << "\" cannot contain 0-padded numbers";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // keyvalue limited to 68 bytes
+    //
+    if ( keyvalue.length() > 68 ) {
+      message.str(""); message << "ERROR keyvalue \"" << keyvalue << "\" cannot exceed 68 bytes";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // truncate comments if too long and warn only, no error
+    //
+    if ( keyvalue.length() + keycomment.length() > 68 ) {
+      int limit = 68 - keyvalue.length();
+      keycomment = keycomment.substr(0, limit);
+      message.str(""); message << "NOTICE comment truncated to fit record limit: \"" << keycomment << "\"";
+      logwrite( function, message.str() );
+    }
+
     // insert new entry into the database using the overloaded function
     //
     this->addkey( keyword, keyvalue, keycomment );
 
-    return(NO_ERROR);
+    return NO_ERROR;
   }
   /***** Common::FitsKeys::addkey *********************************************/
 
