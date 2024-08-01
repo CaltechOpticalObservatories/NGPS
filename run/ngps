@@ -47,6 +47,7 @@ help() {
 	echo ""
 	echo -e "\033[1mCommands to communicate with modules:\033[0m"
 	echo "	acam"
+	echo "	scam"
 	echo "	calib"
 	echo "	camera"
 	echo "	power"
