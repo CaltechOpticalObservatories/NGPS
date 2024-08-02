@@ -7,15 +7,23 @@ NBPORT=@POWERD_NB_PORT@           # slitd server non-blocking port
 DAEMON=no                         # run as daemon? {yes|no}
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+EMULATOR_PORT=(@POWERD_EMULATOR_1@ @POWERD_EMULATOR_2@ @POWERD_EMULATOR_3@ @POWERD_EMULATOR_4@) 
 OPEN_ON_START=yes                 # open connection to hardware automatically on startup? {yes|no}
 
 # each unit is assigned a number, host, and port
 # set as follows: NPS_UNIT="NPS# MAXOUTLETS HOST PORT"
-
+#
 NPS_UNIT="1 8 @IP_NPS1@ 3001"     # WTI VMR-8
 NPS_UNIT="2 8 @IP_NPS2@ 3001"     # WTI VMR-8
 NPS_UNIT="3 8 @IP_NPS3@ 3001"     # WTI VMR-8
 NPS_UNIT="4 8 @IP_NPS4@ 3001"     # WTI RPC DC power switch
+
+# Use the following for emulating an NPS
+#
+#NPS_UNIT="1 8 localhost @POWERD_EMULATOR_1@"  # nps1 emulator
+#NPS_UNIT="2 8 localhost @POWERD_EMULATOR_2@"  # nps2 emulator
+#NPS_UNIT="3 8 localhost @POWERD_EMULATOR_3@"  # nps3 emulator
+#NPS_UNIT="4 8 localhost @POWERD_EMULATOR_4@"  # nps4 emulator
 
 # each outlet is assigned by a Network Power Switch plug key (NPS_PLUG)
 # set as follows: NPS_PLUG="NPS# OUTLET# OUTLETNAME"

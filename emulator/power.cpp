@@ -210,7 +210,8 @@ namespace PowerEmulator {
 
     std::string mycmd;                 // command is the 1st token
     size_t nargs;                      // number of args (after command)
-    int    plugnum;                    // plug number extracted from cmd
+    int    plugnum;                    // plug number extracted from cmd for single plug operations
+    std::vector<int> plugnums;         // vector of plug number(s) extracted from cmd for multiple plug operations
     int    set_state=-1;               // requested plug state
 
     if ( tokens.size() < 1 ) {         // should be impossible since already checked for cmd.empty()
@@ -244,7 +245,22 @@ namespace PowerEmulator {
         return( ERROR );
       }
 
-      plugnum = std::stoi( tokens.at(0) );  // plug number
+      // plugnum arg may be a range of plug numbers x:y
+      // so tokenize on colon to get the first:last plug numbers
+      //
+      std::vector<std::string> plugnum_str;
+      Tokenize( tokens.at(0), plugnum_str, ":" );
+
+      int first_plug = std::stoi( plugnum_str.front() );
+      int last_plug  = std::stoi( plugnum_str.back() );
+
+      // Create a vector of plug numbers from first to last
+      //
+      for ( int plug = first_plug; plug <= last_plug; plug++ ) {
+        plugnums.push_back( plug );
+      }
+
+      plugnum = first_plug;  // for single plug operations
     }
     catch( std::invalid_argument &e ) {
       std::cerr << get_timestamp() << function << "ERROR nps" << npsnum 
@@ -278,6 +294,8 @@ namespace PowerEmulator {
       return( ERROR );
     }
 
+    try {
+
     // If requested mycmd is ON or OFF
     //
     if ( set_state >= 0 ) {
@@ -289,8 +307,12 @@ namespace PowerEmulator {
     // otherwise if state is -1 then this is a status request
     //
     else {
-      retstream << this->nps_info.at(npsnum).plugstate.at(plugnum) << "\r\nNPS>";
+      for ( const auto &plug : plugnums ) {
+        retstream << this->nps_info.at(npsnum).plugstate.at( plug ) << ",";       // build return string
+      }
       retstring = retstream.str();
+      if ( !retstring.empty() && retstring.back() == ',' ) retstring.pop_back();  // remove trailing comma
+      retstring += "\r\nNPS>";                                                    // terminate return string
     }
 
     // return the current state
@@ -301,6 +323,14 @@ namespace PowerEmulator {
     for ( auto it = this->nps_info.at(npsnum).plugstate.begin(); it != this->nps_info.at(npsnum).plugstate.end(); ++it ) {
       std::cerr << get_timestamp() << function << "[DEBUG] plugmap for nps" << npsnum << ": "
                 << it->first << " " << it->second << "\n";
+    }
+
+    }
+    catch( std::out_of_range &e ) {
+      std::cerr << get_timestamp() << function << "ERROR nps" << npsnum << " plug " << plugnum << ": " << e.what() << "\n";
+      retstream << "NPS>";
+      retstring = retstream.str();
+      return( ERROR );
     }
 #endif
 
