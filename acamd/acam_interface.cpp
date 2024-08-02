@@ -3388,6 +3388,14 @@ namespace Acam {
     if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (ra_scope*TO_DEGREES), dec_scope, angle_scope,
                                                                              ra_acam, dec_acam, angle_acam );
 
+    // Get the focus from the guide manager which is already monitoring it.
+    // As long as the focus monitor is running then use the focus value,
+    // otherwise set it to NaN. addkey() knows how to handle that.
+    //
+    auto isfocus = this->monitor_focus_state.load( std::memory_order_seq_cst );
+    double focus = this->guide_manager.focus.load( std::memory_order_seq_cst );
+    if ( isfocus != Acam::FOCUS_MONITOR_RUNNING ) focus = NAN;
+
     // Get some info from the Andor::Information class,
     // which is stored in its camera_info object.
     //
@@ -3405,6 +3413,7 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "CREATOR",  "acamd", "file creator" );
     this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     this->camera.fitsinfo.fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
 
     this->camera.fitsinfo.fitskeys.addkey( "EXPSTART", this->camera.andor.camera_info.timestring, "exposure start time" );
     this->camera.fitsinfo.fitskeys.addkey( "MJD0",     this->camera.andor.camera_info.mjd0, "exposure start time (modified Julian Date)" );
