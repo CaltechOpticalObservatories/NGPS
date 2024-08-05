@@ -1771,38 +1771,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
         return;
       }
 
-//    OBSOLETE
-//
-//    // The acam GUI would like to know the coordinates of the acam,
-//    // which can be attained by converting the target coords from slit->acam ...
-//    //
-//    std::stringstream acam;
-//    std::string dontcare;
-//    if ( error == NO_ERROR ) seq.acamd.command( ACAMD_INIT, dontcare );         // send here, don't need the reply
-//
-//    double ra_out, dec_out, angle_out;
-//
-//    error = seq.target.fpoffsets.compute_offset( "SLIT", "ACAM",
-//                                                 ra_in, dec_in, angle_in,
-//                                                 ra_out, dec_out, angle_out );  // convert coords_in from SLIT to ACAM
-//
-//    acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)     // this is the so-called "prepare" command
-//                                      << " " << ra_out
-//                                      << " " << dec_out
-//                                      << " " << angle_out;
-//
-//    {
-//    message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
-//    std::string rastr, decstr;
-//    double _ra = ra_out * TO_HOURS;
-//    decimal_to_sexa( _ra, rastr );
-//    decimal_to_sexa( dec_out, decstr );
-//    message.str(""); message << "[ACQUIRE] ACAM COORDS= " << rastr << "  " << decstr << "  " << angle_out;
-//    logwrite( function, message.str() );
-//    }
-//
-//    if ( error == NO_ERROR ) seq.acamd.command( acam.str(), dontcare );         // send here, don't need the reply
-
       // Before sending the target coords to the TCS, convert them from slit->scope,
       //
       double ra_out, dec_out, angle_out;
@@ -1824,7 +1792,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       //
       std::stringstream ringgo_cmd;
       std::string       ringgo_reply;
-//    int               ringgo_reply_value;
       ringgo_cmd << TCSD_RINGGO << " " << angle_out;                              // this is calculated cass angle
       error = seq.tcsd.send( ringgo_cmd.str(), ringgo_reply );
       if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
@@ -1842,7 +1809,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       //
       std::stringstream coords_cmd;
       std::string       coords_reply;
-//    int               coords_reply_value;
 
       coords_cmd << "COORDS " << ( ra_out * TO_HOURS )  << " "                       // RA in decimal hours
                               <<   dec_out << " "                                    // DEC in decimal degrees
@@ -1877,6 +1843,8 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_ontarget.load()==false ) {
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       }
+
+      logwrite( function, "received on-target signal" );
 
 /***
       // Target coords have been sent to the TCS but they don't actually go to the TCS,
@@ -2028,7 +1996,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
         usleep( 100000 );  // sets the ~10Hz loop rate
       }
 ***/
-      logwrite( function, "TCS settled" );
 
       seq.last_target = seq.target.name;  // remember the last target that was tracked on
 
@@ -2388,75 +2355,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
   /***** Sequencer::Sequence::dothread_modify_exptime *************************/
 
 
-  /***** Sequencer::Sequence::dothread_guide **********************************/
-  /**
-   * @brief      performs the guiding sequence until stopped
-   * @details    target must first have been acquired
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   *
-   * This function is spawned in a thread.
-   *
-   */
-  void Sequence::dothread_guide( Sequencer::Sequence &seq ) {
-    seq.set_thrstate_bit( THR_GUIDING );
-    std::string function = "Sequencer::Sequence::dothread_guide";
-    std::stringstream message;
-    bool belowthreshold=false;
-    long attempts;
-    long error=NO_ERROR;
-
-    // Do not allow guiding until a target has been acquired.
-    // target.acquired is set true by dothread_acquisition() after a successful acquisition.
-    //
-    if ( !seq.target.acquired ) {
-      message.str(""); message << "ERROR: cannot enable guiding when target is not acquired";
-      seq.async.enqueue_and_log( function, message.str() );
-      error = ERROR;
-    }
-    else {
-      seq.set_seqstate_bit( Sequencer::SEQ_GUIDE );                  // clear GUIDE bit to signify we're guiding
-      seq.async.enqueue_and_log( function, "NOTICE: guiding enabled" );
-    }
-
-    // Guiding loops "forever", as long as there's no error,
-    // and until requested to stop.
-    //
-    while ( error==NO_ERROR ) {
-
-      if ( !seq.is_reqstate_set( Sequencer::SEQ_GUIDE ) ) break;     // if requested GUIDE bit clear then stop guiding
-
-      error = seq.acquire_target( seq, belowthreshold, attempts );   // call acquire_target() here
-
-      if ( !belowthreshold ) {                                       // acquisition offsets above minimum threshold for success
-        if ( attempts > seq.acquisition_max_retrys ) {               // exceeding ACQUIRE_RETRYS ends guiding (intentionally using ">" and not ">=" here)
-          message.str(""); message << "ERROR: guider has lost target and exceeded max retrys";
-          seq.async.enqueue_and_log( function, message.str() );
-          break;
-        }
-        else {                                                       // allow retry up to ACQUIRE_RETRYS
-          message.str(""); message << "NOTICE: guider has lost target but will try again";
-          seq.async.enqueue_and_log( function, message.str() );
-        }
-      }
-      else attempts=0;                                               // reset cumulative attempts counter on each success
-
-    }  // end while error==NO_ERROR
-
-    if (error!=NO_ERROR) {
-      seq.thr_error.fetch_or( THR_GUIDING );                         // report any error
-      seq.async.enqueue_and_log( function, "ERROR: guiding disabled" );
-    }
-    else {
-      seq.async.enqueue_and_log( function, "NOTICE: guiding disabled" );
-    }
-
-    seq.clr_seqstate_bit( SEQ_GUIDE );
-    seq.clr_reqstate_bit( SEQ_GUIDE );
-    seq.clr_thrstate_bit( THR_GUIDING );
-  }
-  /***** Sequencer::Sequence::dothread_guide **********************************/
-
-
   /***** Sequencer::Sequence::dothread_acquisition ****************************/
   /**
    * @brief      performs the acqusition sequence
@@ -2477,9 +2375,15 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     // Send the ACQUIRE command to acamd, which requires
     // the target coordinates (from the database).
     //
-    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << seq.target.ra_hms  << " "
-                                             << seq.target.dec_dms << " "
-                                             << seq.target.casangle;
+    message.str(""); message << "starting target acquisition " << seq.target.ra_hms   << " "
+                                                               << seq.target.dec_dms  << " "
+                                                               << seq.target.casangle << " "
+                                                               << seq.target.name;
+    logwrite( function, message.str() );
+    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << seq.target.ra_hms   << " "
+                                             << seq.target.dec_dms  << " "
+                                             << seq.target.casangle << " "
+                                             << seq.target.name;
 
     error = seq.acamd.command( cmd.str(), reply );
 
@@ -2541,257 +2445,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     seq.clr_thrstate_bit( THR_ACQUISITION );
   }
   /***** Sequencer::Sequence::dothread_acquisition ****************************/
-
-
-  /***** Sequencer::Sequence::acquire_target **********************************/
-  /**
-   * @brief      performs a single acquisition
-   * @details    this gets called by the dothread_acquisition and the 
-   *             dothread_guide threads. It is up to those threads to determine
-   *             what to do with a successful acquisition.
-   * @param[in]  seq             reference to Sequencer::Sequence object
-   * @param[out] belowthreshold  reference to bool to indicate if the acquisition is below ACQUIRE_OFFSET_THRESHOLD
-   * @param[out] attempts        reference to cumulative attempts counter
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  long Sequence::acquire_target( Sequencer::Sequence &seq, bool &belowthreshold, long &attempts ) {
-    std::string function = "Sequencer::Sequence::acquire_target";
-    std::stringstream message;
-    std::stringstream cmd;
-    std::string reply, dontcare;
-    long error = NO_ERROR;
-
-    // Begin looping, acquiring images, solving for astrometry, calculating offsets,
-    // moving the telescope ... until acquired, timeout, or error.
-    //
-    double clock_now     = get_clock_time();
-    double clock_timeout = clock_now + seq.acquisition_timeout;  // must acquire by this time
-
-    int retrys=0;    // number of acquisition attempts
-
-    while ( error == NO_ERROR ) {
-
-      attempts++;  // increment cumulative attempts counter
-
-      // before looping, check for a timeout
-      //
-      clock_now = get_clock_time();
-
-      if ( clock_now > clock_timeout ) {
-        error = ERROR;
-        seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within timeout" );
-        break;
-      }
-
-      // The "goal" for the acam is the result from the SLIT->ACAM calculation
-      // that was performed in move_to_target() using the DB coords,
-      // except the angle is the current cass angle read from the TCS.
-      //
-      double cass_now = NAN;
-      error = seq.get_tcs_cass( cass_now );
-
-      // This call is just to convert the current cass rotator angle to a slit position angle,
-      // so we don't care about the RA, DEC coordinates, which are passed in as zero.
-      //
-      logwrite( function, 
-              "[ACQUIRE] the following FPOffset call is for computing slit angle from cass angle and don't care about RA,DEC coords" );
-      error = seq.target.fpoffsets.compute_offset( "SCOPE", "SLIT", 0, 0, cass_now );
-
-      // Now convert the slit coordinates to ACAM coordinates using the RA, DEC from the database
-      // and the slit position angle from the previous calculation.
-      //
-      double ra_in    = radec_to_decimal( seq.target.ra_hms  ) * TO_DEGREES;
-      double dec_in   = radec_to_decimal( seq.target.dec_dms );
-
-      // output units will be in degrees
-      //
-      double acam_ra_goal, acam_dec_goal, acam_angle_goal;
-
-      error = seq.target.fpoffsets.compute_offset_last_angle( "SLIT", "ACAM",
-                                                              ra_in, dec_in,
-                                                              acam_ra_goal, acam_dec_goal, acam_angle_goal );
-
-      {  // this local section is just for display purposes and its variables are not used elsewhere
-      std::string rastr, decstr;
-      decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
-      decimal_to_sexa( acam_dec_goal, decstr );
-      message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
-                                                         << std::fixed << std::setprecision(6) << acam_angle_goal;
-      logwrite( function, message.str() );
-      }
-
-      // Acquire an image from the camera.
-      // The reply contains a FITS filename that has to be passed to the astrometry solver.
-      //
-      error  = seq.acamd.command( ACAMD_FRAMEGRAB, reply );
-
-      // Perform the astrometry calculations on the acquired image (and calculate image quality).
-      // Optional solver args can be included here, which currently only come from the test commands.
-      //
-//    cmd.str(""); cmd << ACAMD_SOLVE << " " << reply;
-//    if ( error == NO_ERROR ) error = seq.acamd.command( ACAMD_SOLVE, reply );
-      cmd.str(""); cmd << ACAMD_SOLVE << " " << seq.test_solver_args;
-      if ( error == NO_ERROR ) error = seq.acamd.command( cmd.str(), reply );
-
-      if ( error == NO_ERROR ) error = seq.acamd.command( ACAMD_QUALITY, dontcare );
-
-      // Tokenize the reply from the solver.
-      // The solver gives us ACAM coordinates.
-      //
-      std::vector<std::string> tokens;
-      Tokenize( reply, tokens, " " );
-
-      bool match_found = false;                 // was a match found?
-      double acam_ra=0, acam_dec=0, acam_pa=0;  // calculations from acam solver
-
-      try {
-        if ( ( tokens.at(0).compare( "GOOD" )  == 0 ) ||
-             ( tokens.at(0).compare( "NOISY" ) == 0 ) ) {  // treat good and noisy the same for now
-          match_found = true;
-          acam_ra  = stod( tokens.at(1) );
-          acam_dec = stod( tokens.at(2) );
-          acam_pa  = stod( tokens.at(3) );
-          std::string rastr, decstr;
-          double _ra = acam_ra * TO_HOURS;
-          decimal_to_sexa( _ra, rastr );
-          decimal_to_sexa( acam_dec, decstr );
-          message.str(""); message << "[ACQUIRE] solve " << tokens.at(0) << ": match found with coords="
-                                   << rastr << "  " << decstr << "  " << acam_pa;
-          logwrite( function, message.str() );
-        }
-        else {
-          match_found = false;
-          message.str(""); message << "solve " << tokens.at(0) << ": no match found";
-          logwrite( function, message.str() );
-        }
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "out of range parsing reply \"" << reply << "\" from acam astrometry solver: " << e.what();
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-      catch( std::invalid_argument &e ) {
-        message.str(""); message << "invalid argument parsing reply \"" << reply << "\" from acam astrometry solver: " << e.what();
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-      catch( ... ) {
-        message.str(""); message << "unknown exception argument parsing reply \"" << reply << "\" from acam astrometry solver";
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-
-      // If no match found and exceeded number of retrys then give up and get out
-      //
-      if ( !match_found && ( seq.acquisition_max_retrys > 0 ) && ( ++retrys >= seq.acquisition_max_retrys ) ) {
-        seq.async.enqueue_and_log( function, "ERROR: failed to acquire target within max number of attempts" );
-        error = ERROR;
-        break;
-      }
-
-      // But if just no match found (and haven't exceeded number of retrys) then keep trying
-      //
-      if ( !match_found ) continue;
-
-      if ( error != NO_ERROR ) break;  // any errors at this point get out of the while !acquired loop now
-
-      // Continue only if there was a match and no errors
-
-      // Calculate the offsets to send to the TCS.
-      // These are in degrees.
-      //
-      // Offsets calculated as difference between acam goals and the solution from solve.
-      // ACAM goals are saved outside this loop. These are the SLIT->ACAM translated coords
-      // from the DB and are where the ACAM needs to be pointed.
-      // Goals never change.
-      //
-      double ra_off, dec_off;
-
-      error = seq.target.fpoffsets.solve_offset( acam_ra, acam_dec,
-                                                 acam_ra_goal, acam_dec_goal,
-                                                 ra_off, dec_off );
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[ACQUIRE] ra_off=" << std::fixed << std::setprecision(6)
-                                                      << ra_off*3600. << " dec_off=" << dec_off*3600. << " (arcsec)";
-      logwrite( function, message.str() );
-#endif
-
-      {  // this local section is just for display purposes and its variables are not used elsewhere
-      double __ra, __dec;
-      seq.get_tcs_weather_coords( __ra, __dec );
-      message.str(""); message << "[ACQUIRE] tcs coords before: " << __ra*TO_DEGREES << " " << __dec << " deg";
-      logwrite( function, message.str() );
-      }
-
-      // Compute the angular separation between the target (acam_ra_*) and calculated slit (acam_*)
-      //
-      double offset = seq.angular_separation( acam_ra_goal, acam_dec_goal, acam_ra, acam_dec );
-
-      message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
-
-      // There is a maximum offset allowed to the TCS.
-      // This is not a TCS limit (their limit is very large).
-      // This is an NGPS limit so that we don't accidentally move too far off the slit.
-      //
-      if ( offset >= seq.target.max_tcs_offset ) {
-        message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
-                                 << seq.target.max_tcs_offset << " and will not be sent to the TCS";
-        logwrite( function, message.str() );
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] retrys=" << retrys;
-        logwrite( function, message.str() );
-#endif
-
-        // Match found but failure to send an offset is also considered a "retry"
-        //
-        if ( ++retrys >= seq.acquisition_max_retrys ) {
-          message.str(""); message << "ERROR: failed to find offset below " << seq.target.max_tcs_offset << " within max number of attempts";
-          seq.async.enqueue_and_log( function, message.str() );
-          error = ERROR;
-          break;
-        }
-      }
-      // otherwise send the offsets to the TCS and keep looping.
-      //
-      else
-      if (error==NO_ERROR) {
-        error = seq.offset_tcs( ra_off, dec_off );  // send offset to TCS here
-        retrys = 0;                                 // reset retry counter if match found and offset < max and no errors
-      }
-      else {
-        seq.async.enqueue_and_log( function, "ERROR solving offsets" );
-        break;
-      }
-
-      {  // temporary logging
-      double __ra, __dec;
-      seq.get_tcs_weather_coords( __ra, __dec );
-      message.str(""); message << "[ACQUIRE] tcs coords after: " << std::fixed << std::setprecision(6)
-                                                                 << __ra*TO_DEGREES << " " << __dec << " deg";
-      logwrite( function, message.str() );
-      }
-
-      // Is the offset below ACQUIRE_OFFSET_THRESHOLD ?
-      //
-      if ( error!=ERROR && offset < seq.target.offset_threshold ) {
-        logwrite( function, "offset below threshold" );
-        belowthreshold=true;
-        break;
-      }
-      else {
-        logwrite( function, "offset above threshold" );
-        belowthreshold=false;
-        break;
-      }
-
-    }  // end while ( error == NO_ERROR )
-
-    if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: acquiring target" );
-    return error;
-  }
-  /***** Sequencer::Sequence::acquire_target **********************************/
 
 
   /***** Sequencer::Sequence::dothread_wait_for_state *************************/
@@ -2927,11 +2580,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       seq.clr_reqstate_bit( Sequencer::SEQ_STARTING );
       return( ERROR );
     }
-
-//  // Start threads for acquisition and guiding.
-//  // Nothing is waiting on them, but rather they will be waiting on signals.
-//  //
-//  std::thread( dothread_guide, std::ref(seq) ).detach();
 
     // The following can be done in parallel.
     // Set the state bit before starting each thread, then
@@ -3663,137 +3311,6 @@ logwrite( function, "[DEBUG] setting READY bit" );
   /***** Sequencer::Sequence::get_tcs_cass ************************************/
 
 
-  /***** Sequencer::Sequence::angular_separation ******************************/
-  /**
-   * @brief      compute the angular separation between two points on a sphere
-   * @details    used for checking telescope offsets. inputs are in decimal degrees.
-   * @param[in]  ra1   RA of point1
-   * @param[in]  dec1  DEC of point1
-   * @param[in]  ra2   RA of point2
-   * @param[in]  dec2  DEC of point2
-   * @return     angular separation in arcsec
-   *
-   */
-  double Sequence::angular_separation( double ra1, double dec1, double ra2, double dec2 ) {
-    std::string function = "Sequencer::Sequence::angular_separation";
-    std::stringstream message;
-
-    message.str(""); message << "[ACQUIRE] goal ra1=" 
-                             << std::fixed << std::setprecision(6)
-                             << ra1 << " dec1=" << dec1 << " ra2=" << ra2 << " dec2=" << dec2;
-    logwrite( function, message.str() );
-
-    double pi = 2 * std::acos(0.0);
-
-    // convert inputs to radians
-    //
-    ra1 *= pi/180.; dec1 *= pi/180.;
-    ra2 *= pi/180.; dec2 *= pi/180.;
-
-    double sdlon = std::sin( ra2 - ra1 );
-    double cdlon = std::cos( ra2 - ra1 );
-    double slat1 = std::sin( dec1 );
-    double slat2 = std::sin( dec2 );
-    double clat1 = std::cos( dec1 );
-    double clat2 = std::cos( dec2 );
-
-    double num1 = clat2 * sdlon;
-    double num2 = clat1 * slat2 - slat1 * clat2 * cdlon;
-    double numerator   = std::sqrt( std::pow( num1, 2 ) + std::pow( num2, 2 ) );
-    double denominator = slat1 * slat2 + clat1 * clat2 * cdlon;
-
-    double sep = std::atan2( numerator, denominator );  // separation in radians
-
-    sep = sep * 3600. / ( pi/180. );                    // in arcsec
-
-    return sep;
-  }
-  /***** Sequencer::Sequence::angular_separation ******************************/
-
-
-  /***** Sequencer::Sequence::offset_tcs **************************************/
-  /**
-   * @brief      send guider offsets to the TCS using the PT command
-   * @param[in]  ra   offset in RA in decimal degrees
-   * @param[in]  dec  offset in DEC in decimal degrees
-   * @return     ERROR or NO_ERROR
-   *
-   * There is no way of knowing accurately that we have arrived, and it might not
-   * be perfectly reliable to catch the motion state flag transition to OFFSETTING
-   * and then the TRACKING, so instead we wait. The PT command is sent and then
-   * this function waits for the amount of time that offset should take, based on
-   * the TCS_OFFSET_RATEs (aka "MRATE"s) in the config file, plust 25% for margin.
-   *
-   */
-  long Sequence::offset_tcs( double ra_off, double dec_off ) {
-    std::string function = "Sequencer::Sequence::offset_tcs";
-    std::stringstream message;
-    std::stringstream cmd;
-    long error = NO_ERROR;
-
-    // convert to arcsec for the TCS, and restrict to max 6000
-    //
-    ra_off  = ( ra_off*3600.  > 6000 ? 6000. : ra_off*3600.  );
-    dec_off = ( dec_off*3600. > 6000 ? 6000. : dec_off*3600. );
-
-    // Form and send the command to the TCS
-    //
-    cmd << "PT " << std::fixed << std::setprecision(6) << ra_off << " " << dec_off;
-
-    message.str(""); message << "[ACQUIRE] sending " << cmd.str(); logwrite( function, message.str() );
-
-    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
-      logwrite( function, "ERROR sending PT offset command to TCS" );
-      return ERROR;
-    }
-
-    // Now we wait for how long it should take to offset, ...
-    //
-    double ratime     = ra_off  / this->tcs_offsetrate_ra;         // time to offset in RA
-    double dectime    = dec_off / this->tcs_offsetrate_dec;        // time to offset in DEC
-    double offsettime = ( ratime > dectime ? ratime  : dectime );  // only need to wait for the longest one
-
-    long sleeptime = (long) ceil(offsettime);                      // round up to next whole second
-
-    std::this_thread::sleep_for( std::chrono::seconds( sleeptime ) );  // expected offset time
-
-    // ...then poll the TCS at 10Hz to detect when telescope has settled (MOTION_TRACKING).
-    // The TCS must be settled for TCS_SETTLE_STABLE seconds before declaring that it has settled.
-    // This is because it can bounce between SETTLING and TRACKING.
-    // This wait can time out.
-    //
-    bool stable=false;
-    int settlecount=0;
-    double clock_timeout = get_clock_time() + this->tcs_settle_timeout;  // must settle by this time
-
-    while ( error!=ERROR && !stable ) {
-
-      if ( get_clock_time() > clock_timeout ) {                          // check for timeout
-        this->async.enqueue_and_log( function, "ERROR: timeout waiting for telescope to settle" );
-        error = ERROR;
-        break;
-      }
-
-      std::string tcsmotion;
-      error = this->poll_tcs_motion( tcsmotion );                        // poll TCS ?MOTION status
-
-      // Once the TCS reports TRACKING, then start a counter. Counter has to exceed the TCS_SETTLE_STABLE
-      // time before marking as settled. If it ever reports not tracking then the count starts over.
-      //
-      if ( tcsmotion == TCS_MOTION_TRACKING_STR ) settlecount++; else settlecount=0;
-
-      // This loop polls at 10Hz so counter must be >= 10 * TCS_SETTLE_STABLE
-      //
-      if ( settlecount >= 10*this->tcs_settle_stable ) stable = true;
-
-      std::this_thread::sleep_for( std::chrono::milliseconds(100) );     // sets the 10Hz loop rate
-    }
-
-    return error;
-  }
-  /***** Sequencer::Sequence::offset_tcs **************************************/
-
-
   /***** Sequencer::Sequence::tcs_init ****************************************/
   /**
    * @brief      initialize the specified tcs device
@@ -4452,28 +3969,6 @@ logwrite( function, message.str() );
         return ERROR;
       }
 
-//    OBSOLETE
-//
-//    // The acam cameraserver needs the coords converted slit->acam...
-//    //
-//    std::stringstream acam;
-//    std::string dontcare;
-//
-//    // Convert _in coords from SLIT to ACAM
-//    //
-//    error = this->target.fpoffsets.compute_offset( "SLIT", "ACAM",
-//                                                   ra_in, dec_in, angle_in,
-//                                                   ra_out, dec_out, angle_out );
-//
-//    acam << ACAMD_CAMERASERVER_COORDS << std::fixed << std::setprecision(6)
-//                                      << " " << ra_out
-//                                      << " " << dec_out
-//                                      << " " << angle_out;
-//
-//    message.str(""); message << "[ACQUIRE] " << acam.str(); logwrite( function, message.str() );
-//
-//    if ( error == NO_ERROR ) error = this->acamd.command( acam.str(), dontcare );  // send here, don't need the reply
-
       // Finally, spawn the acquisition thread
       //
       logwrite( function, "spawning dothread_acquisition..." );
@@ -4674,25 +4169,3 @@ logwrite( function, message.str() );
   }
   /***** Sequencer::Sequence::test ********************************************/
 }
-
-/****
- 
-def angular_separation(lon1, lat1, lon2, lat2):
-    ''' units = radians '''
-
-    Angular separation between two points on a sphere.
-
-    sdlon = np.sin(lon2 - lon1)
-    cdlon = np.cos(lon2 - lon1)
-    slat1 = np.sin(lat1)
-    slat2 = np.sin(lat2)
-    clat1 = np.cos(lat1)
-    clat2 = np.cos(lat2)
-
-    num1 = clat2 * sdlon
-    num2 = clat1 * slat2 - slat1 * clat2 * cdlon
-    denominator = slat1 * slat2 + clat1 * clat2 * cdlon
-
-    return np.arctan2(np.hypot(num1, num2), denominator)
-
-***/

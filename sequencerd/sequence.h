@@ -288,18 +288,13 @@ const int foo=2;
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
-      double angular_separation( double ra1, double dec1, double ra2, double dec2 );  ///< compute angular separation between points on sphere
-      long offset_tcs( double ra_off, double dec_off );                        ///< send ra,dec offsets to the TCS
       long tcs_init( const std::string which, std::string &retstring );
-
-      long acquire_target( Sequencer::Sequence &seq, bool &belowthreshold, long &attempts );
 
       // These are various jobs that are done in their own threads
       //
       static void dothread_trigger_exposure( Sequencer::Sequence &seq );       ///< trigger and wait for exposure
       static void dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in );  ///< modify exptime while exposure running
       static void dothread_acquisition( Sequencer::Sequence &seq );            /// performs the acquisition sequence when signalled
-      static void dothread_guide( Sequencer::Sequence &seq );                  /// performs the guiding sequence when signalled
 
       static void dothread_wait_for_state( Sequencer::Sequence &seq );         ///< wait for seqstate to be requested state
       static void dothread_sequence_start( Sequencer::Sequence &seq );         ///< main sequence start thread

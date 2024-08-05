@@ -2285,6 +2285,8 @@ namespace Acam {
       retstring = ACAMD_ACQUIRE;
       retstring.append( " [ <ra> <dec> <angle> | target | guide | stop ]\n" );
       retstring.append( "   Set or get target acquisition mode.\n" );
+      retstring.append( "   Returns ACQUIRE_TIMEOUT, the number of seconds before acquisition sequence\n" );
+      retstring.append( "   aborts on failure to acquire.\n" );
       retstring.append( "   If no args supplied then the current status is returned in the form of\n" );
       retstring.append( "   <mode_num> <mode> where <mode> = { stopped acquiring guiding }\n" );
       retstring.append( "   Acquisition requires knowing what to acquire so the coords must be supplied\n" );
@@ -2382,7 +2384,7 @@ namespace Acam {
       long error = this->target_coords( args, coords );          // validate and set the target coords
       logwrite( function, coords );
       if ( error == NO_ERROR ) {
-        double timeout = this->target.get_timeout();
+        double timeout = this->target.get_timeout();             // from config ACAM_ACQUIRE_TIMEOUT
         retstring=std::to_string( timeout );                     // return the timeout in seconds
         this->astrometry.isacquire = true;                       // informs the solver
         return( this->target.acquire( Acam::TARGET_ACQUIRE ) );  // enable Target ACQUIRE mode
@@ -2410,6 +2412,7 @@ namespace Acam {
     //
     if ( ! iface->is_framegrab_running() ) {
 
+      logwrite( function, "starting frame grabber" );
       std::string dontcare;
       iface->framegrab( "start", dontcare );           // start framegrab thread
 
@@ -3436,6 +3439,7 @@ namespace Acam {
 
     this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE",  this->camera.andor.camera_info.pixel_scale, "arcsec per pixel" );
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "TARGET",    this->target.get_name(), "target name" );
     this->camera.fitsinfo.fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
     this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
     this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  angle_scope, "Cassegrain ring angle" );
@@ -3469,12 +3473,13 @@ namespace Acam {
    *             have access to the database, it must be told. This provides
    *             the interface between the outside and the Acam::Target class.
    *
-   *             The expected input string of <ra> <dec> <angle>
+   *             The expected minimum input string of <ra> <dec> <angle>
    *             can be in either decimal or sexagesimal, and if decimal,
    *             then <ra> can be decimal degrees or decimal hours. Specify
    *             decimal hours by adding a "h", as in "1.234h".
+   *             An optional target name may be included.
    *
-   * @param[in]  args       expected input <ra> <dec> <angle> (see details)
+   * @param[in]  args       expected input <ra> <dec> <angle> [<name>] (see details)
    * @param[out] retstring  return string contains coords from Target class
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -3487,12 +3492,13 @@ namespace Acam {
     std::stringstream message;
 
     double _ra=NAN, _dec=NAN, _angle=NAN;
+    std::string _name;
 
     // Help
     //
     if ( args == "?" ) {
       retstring = ACAMD_COORDS;
-      retstring.append( " [ <ra> <dec> <angle> ]\n" );
+      retstring.append( " [ <ra> <dec> <angle> [ <name> ] ]\n" );
       retstring.append( "  Set or get the target coords used for acquisition/guiding.\n" );
       retstring.append( "\n" );
       retstring.append( "  NOT INTENDED TO BE USED DIRECTLY DURING NORMAL OPERATION!\n" );
@@ -3504,6 +3510,7 @@ namespace Acam {
       retstring.append( "          hours, specified by appending a \"h\" as in \"1.234h\".\n" );
       retstring.append( "  <dec>   can be sexagesimal DD:MM:SS.sss , or decimal degrees.\n" );
       retstring.append( "  <angle> is always specified in decimal degrees.\n" );
+      retstring.append( "  <name>  optional target name.\n" );
       retstring.append( "\n" );
       retstring.append( "  If no arg is provided then the last loaded target coords are returned,\n" );
       retstring.append( "  and the return values will be in decimal degrees.\n" );
@@ -3527,8 +3534,8 @@ namespace Acam {
 
     // Need at least 3 tokens: ra, dec, angle
     //
-    if ( tokens.size() != 3 ) {
-      message.str(""); message << "ERROR invalid arguments \"" << args << "\": expected <ra> <dec> <angle>";
+    if ( tokens.size() < 3 || tokens.size() > 4 ) {
+      message.str(""); message << "ERROR invalid arguments \"" << args << "\": expected <ra> <dec> <angle> [<name>]";
       logwrite( function, message.str() );
       retstring="invalid_argument";
       return ERROR;
@@ -3566,6 +3573,10 @@ namespace Acam {
       // Parse Angle
       //
       _angle = std::stod( tokens.at(2) );                // always in decimal degrees
+
+      // Optional Target Name
+      //
+      if ( tokens.size() == 4 ) _name = tokens.at(3);
     }
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR invalid argument parsing \"" << args << "\" : " << e.what();
@@ -3593,7 +3604,7 @@ namespace Acam {
     // Otherwise, finally, coords are valid so save them to the Acam::Target class
     // which will be used for the target acquisition.
     //
-    this->target.set_coords( _ra, _dec, _angle );
+    this->target.set_coords( _ra, _dec, _angle, _name );
 
     message.str(""); message << _ra << " " << _dec << " " << _angle;
     retstring = message.str();

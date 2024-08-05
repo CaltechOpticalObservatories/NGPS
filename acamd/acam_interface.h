@@ -325,6 +325,8 @@ namespace Acam {
 
       double tcs_casangle;                 ///< the cass angle from the TCS, must be supplied
 
+      std::string name;                    ///< target name
+
     public:
 
       inline double get_timeout() { return this->timeout; }
@@ -376,10 +378,11 @@ namespace Acam {
 
       inline void save_casangle( const double _angle ) { this->tcs_casangle = _angle; }
 
-      inline void set_coords( const double _ra, const double _dec, const double _angle ) {
+      inline void set_coords( const double _ra, const double _dec, const double _angle, const std::string _name ) {
         this->coords_slit.ra    = _ra;
         this->coords_slit.dec   = _dec;
         this->coords_slit.angle = _angle;
+        this->name              = _name;
       }
 
       inline void get_coords( double &_ra, double &_dec, double &_angle ) {
@@ -387,6 +390,8 @@ namespace Acam {
         _dec   = this->coords_slit.dec;
         _angle = this->coords_slit.angle;;
       }
+
+      inline std::string get_name() { return this->name; };
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  acquired(false),

@@ -1365,34 +1365,6 @@ namespace Sequencer {
       }
       else
 
-      // Set/Clear the GUIDE bit in reqstate to enable/disable guiding, respectively.
-      //
-      if ( cmd.compare( SEQUENCERD_GUIDE ) == 0 ) {
-                      if ( ( strncasecmp( args.c_str(), "on", 2 ) == 0 ) ) {
-                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_GUIDE );                        // set GUIDE bit in reqstate
-                        std::thread( seq.sequence.dothread_guide, std::ref(seq.sequence) ).detach();  // spawn guide thread
-                        logwrite( function, "requested guide on" );
-                        ret=NO_ERROR;
-                      }
-                      else
-                      if ( ( strncasecmp( args.c_str(), "off", 3 ) == 0 ) ) {
-                        if ( !seq.sequence.is_seqstate_set( Sequencer::SEQ_GUIDE ) ) {                // can't disable if guide thread is not running
-                          seq.sequence.async.enqueue_and_log( function, "ERROR: can't disable guiding when not running" );
-                          ret=ERROR;
-                        }
-                        else {
-                          seq.sequence.clr_reqstate_bit( Sequencer::SEQ_GUIDE );                      // clear GUIDE bit from reqstate
-                          logwrite( function, "requested guide off" );
-                          ret=NO_ERROR;
-                        }
-                      }
-                      else {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: expected guide on|off" );
-                        ret = ERROR;
-                      }
-      }
-      else
-
       // Abort can abort nearly every operation (exposure, slew, etc.).
       // Only "stopping", "starting", and "aborting" cannot be aborted.
       // To abort, set the ABORTREQ bit in both seqstate and reqstate.
