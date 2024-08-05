@@ -407,7 +407,7 @@ namespace Physik_Instrumente {
         if ( !is_number ) {
           message.str(""); message << "ERROR position \"" << posname << "\" not in list {";
           for ( const auto &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
-          message << " } for actuator << " << motorname << " and can't be converted to a float";
+          message << " } for actuator " << motorname << " and can't be converted to a float";
           logwrite( function, message.str() );
           retstring="invalid_position";
           return ERROR;
@@ -505,7 +505,7 @@ namespace Physik_Instrumente {
       if ( !is_number ) {
         message.str(""); message << "ERROR position \"" << posname << "\" not in list {";
         for ( const auto &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
-        message << " } for actuator << " << motorname << " and can't be converted to a float";
+        message << " } for actuator " << motorname << " and can't be converted to a float";
         logwrite( function, message.str() );
         retstring="invalid_position";
         return ERROR;

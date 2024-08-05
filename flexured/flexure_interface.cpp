@@ -189,8 +189,9 @@ namespace Flexure {
       return( ERROR );
     }
 
-    std::string chan, pos;
+    std::string chan;
     int axis;
+    float pos;
 
     try {
       chan = tokens[0];
@@ -234,7 +235,7 @@ namespace Flexure {
     if ( args == "?" ) {
       retstring = FLEXURED_SET;
       retstring.append( " <chan> <axis> <pos>\n" );
-      retstring.append( "  Get position of indicated <chan> and <axis>,n" );
+      retstring.append( "  Get position of indicated <chan> and <axis>,\n" );
       retstring.append( "  where <chan> <axis> are as follows:\n" );
       for ( const auto &mot : _motormap ) {
         for ( const auto &axis : mot.second.axes ) {
