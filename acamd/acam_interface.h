@@ -413,8 +413,10 @@ namespace Acam {
    */
   class Interface {
     private:
+      std::mutex framegrab_mutex;
       std::atomic<Acam::FocusThreadStates> monitor_focus_state;
-      std::atomic<bool> framegrab_thread_running;
+      std::atomic<bool> framegrab_run;
+      std::atomic<bool> framegrab_loop_running;
       std::atomic<bool> tcs_online;
       std::string imagename;
       std::string wcsname;
@@ -428,14 +430,16 @@ namespace Acam {
       GuideManager guide_manager;
 
       Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
-                    framegrab_thread_running(false),
+                    framegrab_run(false),
+                    framegrab_loop_running(false),
                     tcs_online(false),
                     motion_port(-1) {
         target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
       inline bool target_acquired()      { return this->target.acquired; }
-      inline bool is_framegrab_running() { return this->framegrab_thread_running.load( std::memory_order_acquire ); }
+      inline bool is_framegrab_running() { return this->framegrab_loop_running.load( std::memory_order_acquire ); }  ///< is it running?
+      inline bool run_framegrab()        { return this->framegrab_run.load( std::memory_order_acquire ); }           ///< should it run?
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
@@ -477,6 +481,7 @@ namespace Acam {
       long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long acquire( std::string args, std::string &retstring );
       long target_coords( std::string args, std::string &retstring );  /// set or get target coords for acquire
+      long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
 
       long collect_header_info();

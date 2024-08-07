@@ -500,6 +500,11 @@ namespace Acam {
                       ret = this->interface.tcs_init( args, retstring );
       }
       else
+
+      if ( cmd == ACAMD_SHUTDOWN ) {
+                      ret = this->interface.shutdown( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_TCSISOPEN ) {
                       ret = this->interface.tcsd.client.is_open();
                       retstring = ( ret ? "true" : "false" );

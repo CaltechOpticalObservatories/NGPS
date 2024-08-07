@@ -35,6 +35,7 @@ const std::string ACAMD_ISOPEN   = "isopen";    ///< *** close connection to all
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
+const std::string ACAMD_SHUTDOWN = "shutdown";  ///< shutdown threads and close connections
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver
 const std::string ACAMD_TCSGET = "tcsget";      ///< 
 const std::string ACAMD_TCSINIT = "tcsinit";    ///< initialize acamd's connection to tcsd
@@ -80,5 +81,6 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_ACQUIRE+" [ ? | [ <ra> <dec> <angle> | target | guide | stop ] ]",
                                                 ACAMD_COORDS+" [ ? | [ <ra> <dec> <angle> ] ]",
                                                 ACAMD_ISACQUIRED,
+                                                ACAMD_SHUTDOWN+" [ ? ]",
                                                 ACAMD_TEST+" ? | <testname> ..."
                                               };

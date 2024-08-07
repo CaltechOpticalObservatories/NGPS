@@ -45,13 +45,18 @@ namespace Acam {
     std::stringstream message;
     long error = NO_ERROR;
 
-    // Open the sockets,
+    // If not already open, then open the sockets,
     // clear any error codes on startup, and
     // enable the servo for each address in controller_info.
     //
-    error |= this->motorinterface.open();
-    error |= this->motorinterface.clear_errors();
-    error |= this->motorinterface.set_servo( true );
+    if ( ! this->is_open() ) {
+      error |= this->motorinterface.open();
+      error |= this->motorinterface.clear_errors();
+      error |= this->motorinterface.set_servo( true );
+    }
+    else {
+      logwrite( function, "motion controllers already open" );
+    }
 
     return( error );
   }

@@ -2049,6 +2049,9 @@ namespace Acam {
   /**
    * @brief      performs continuous acquisition
    * @details    This should be spawned in a thread.
+   *             Set framegrab_run true if the loop should run continuously,
+   *             check with run_framegrab(). Set framegrab_loop_running true
+   *             when the loop is running, check with is_framegrab_running().
    * @param[in]  iface       reference to Acam::Interface object
    *
    */
@@ -2058,7 +2061,7 @@ namespace Acam {
     long error = NO_ERROR;
 
     if ( whattodo == "one" ) {
-      iface.framegrab_thread_running.store( false, std::memory_order_seq_cst );
+      iface.framegrab_run.store( false, std::memory_order_seq_cst );
     }
     else
     if ( whattodo == "start" ) {
@@ -2068,13 +2071,13 @@ namespace Acam {
       }
       else {
         logwrite( function, "set thread running" );
-        iface.framegrab_thread_running.store( true, std::memory_order_seq_cst );
+        iface.framegrab_run.store( true, std::memory_order_seq_cst );
       }
     }
     else
     if ( whattodo == "stop" ) {
       logwrite( function, "set thread to stop, exiting" );
-      iface.framegrab_thread_running.store( false, std::memory_order_seq_cst );
+      iface.framegrab_run.store( false, std::memory_order_seq_cst );
       return;
     }
     else {
@@ -2091,27 +2094,40 @@ namespace Acam {
     // In other words, it will acquire images as fast as it needs to, but no
     // faster.
     //
-    do {
-      if (error==NO_ERROR) error = iface.camera.andor.acquire_one();            // acquire a frame from camera into memory
-      if (error==NO_ERROR) error = iface.collect_header_info();                              // collect header information
-      if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
-                                                             iface.imagename,
-                                                             iface.tcs_online.load() );      // write to FITS file
+    // If I can get the lock then BoolState sets framegrab_loop_running true,
+    // and clears it (false) automatically when it goes out of scope.
+    //
+    {
+    std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
+    if ( lock.try_lock() ) {
+      BoolState loop_running( iface.framegrab_loop_running );    // sets state true here, clears when it goes out of scope
+      do {
+        if (error==NO_ERROR) error = iface.camera.andor.acquire_one();          // acquire a frame from camera into memory
+        if (error==NO_ERROR) error = iface.collect_header_info();                            // collect header information
+        if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
+                                                               iface.imagename,
+                                                               iface.tcs_online.load() );    // write to FITS file
 
-      iface.framegrab_time = std::chrono::steady_clock::time_point::min();
+        iface.framegrab_time = std::chrono::steady_clock::time_point::min();
 
-      iface.guide_manager.push_guider_image( iface.imagename );                              // send frame to Guider GUI
+        iface.guide_manager.push_guider_image( iface.imagename );                            // send frame to Guider GUI
 
-      if (error==NO_ERROR) error = iface.target.do_acquire();                                // acquire target (if needed)
+        if (error==NO_ERROR) error = iface.target.do_acquire();                              // acquire target (if needed)
 
-      std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
-    } while ( error==NO_ERROR && iface.is_framegrab_running() );
+      } while ( error==NO_ERROR && iface.run_framegrab() );
+    }
+    else {                                                                                   // this shouldn't even happen
+      logwrite( function, "ERROR another thread is already running" );
+      return;
+    }
+    }
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR starting thread" );
       iface.target.acquire( Acam::TARGET_NOP );       // first disable acquisition
-      iface.framegrab_thread_running.store( false, std::memory_order_seq_cst );  // then disable frame grabbing
+      iface.framegrab_run.store( false, std::memory_order_seq_cst );  // then disable frame grabbing
     }
     else logwrite( function, "leaving thread" );
 
@@ -2921,6 +2937,56 @@ namespace Acam {
     return;
   }
   /***** Acam::Interface::dothread_monitor_focus ******************************/
+
+
+  /***** Acam::Interface::shutdown ********************************************/
+  /**
+   * @brief      shutdown all threads and connections
+   * @param[in]  args       only used for help
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::shutdown( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::shutdown";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_SHUTDOWN;
+      retstring.append( "\n" );
+      retstring.append( "  Shutdown all threads which communicate with the camera and TCS,\n" );
+      retstring.append( "  and close all connections. The daemon remains running.\n" );
+      return HELP;
+    }
+
+    long error = NO_ERROR;
+    std::string dontcare;
+
+    // stop the framegrab thread
+    //
+    error |= this->framegrab( "stop", dontcare );
+
+    // request stop the focus monitor
+    //
+    this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ,
+                                     std::memory_order_seq_cst );
+
+    // shutdown TCS connection (this will also stop focus monitor thread)
+    //
+    error |= this->tcs_init( "shutdown", dontcare );
+
+    // close socket connections to hardware
+    //
+    error |= this->close( "all", dontcare );
+
+    if ( error == NO_ERROR ) logwrite( function, "acam interfaces shut down" );
+    else logwrite( function, "ERROR shutting down acam interfaces" );
+
+    return error;
+  }
+  /***** Acam::Interface::shutdown ********************************************/
 
 
   /***** Acam::Interface::test ************************************************/
