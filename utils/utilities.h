@@ -292,4 +292,26 @@ class NumberPool {
     }
     /***** NumberPool::release_number *****************************************/
 };
-/***** NumberPool ***********************************************************/
+/***** NumberPool *************************************************************/
+
+
+/***** BoolState **************************************************************/
+/**
+ * @class   BoolState
+ * @brief   automatically set/clear a boolean
+ * @details This is a utility class to automatically set and clear a boolean
+ *          for the duration of a limited scope. You supply the atomic bool
+ *          variable and construct this class with a reference to that variable
+ *          and the bool state is set (true). When the class goes out of scope
+ *          the destructor will clear the bool state (false).
+ *
+ */
+class BoolState {
+  private:
+    std::atomic<bool> &_state;
+  public:
+    BoolState( std::atomic<bool> &state_var ) : _state( state_var ) { _state.store( true, std::memory_order_seq_cst ); }
+    ~BoolState() { _state.store( false, std::memory_order_seq_cst ); }
+};
+/***** BoolState **************************************************************/
+
