@@ -42,6 +42,7 @@ namespace Sequencer {
     this->arm_readout_flag = false;                  /// disarm the readout flag to ignore async messages
     this->last_target="";
     this->test_solver_args="";
+    this->tcs_name="offline";
 
     this->system_not_ready.store( 0 );
     this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_ACAM );
@@ -1033,7 +1034,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     if ( !seq.acamd.socket.isconnected() ) {
       logwrite( function, "connecting to acamd daemon" );
       error = seq.acamd.connect();                   // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting sequencerd->acamd" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting sequencerd -> acamd" );
+    }
+
+    // TCS must have been initialized
+    //
+    if ( seq.tcs_name == "offline" ) {
+      seq.async.enqueue_and_log( function, "ERROR tcs not initialized" );
+      error = ERROR;
     }
 
     // Initialize acamd's connection to tcsd
@@ -1042,7 +1050,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       std::stringstream cmd;
       cmd << ACAMD_TCSINIT << " " << seq.tcs_name;
       error  = seq.acamd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR initializing acamd<->tcsd" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR initializing acamd <-> tcsd" );
     }
 
     // Ask acamd if hardware connections are open,
@@ -1100,15 +1108,16 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     if ( !seq.acamd.socket.isconnected() ) {
       logwrite( function, "connecting to acamd daemon" );
       error = seq.acamd.connect();                   // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to acamd daemon" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting to acamd daemon" );
     }
 
+    // send ACAMD_SHUTDOWN command to acamd -- this will cause it to nicely
     // close connections between acamd and the hardware with which it communicates
     //
     if ( error==NO_ERROR ) {
       logwrite( function, "closing acam hardware" );
-      error = seq.acamd.send( ACAMD_CLOSE, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: closing connection to acam hardware" );
+      error = seq.acamd.send( ACAMD_SHUTDOWN, reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR shutting down acam" );
     }
 
     // disconnect me from acamd, irrespective of any previous error
@@ -2537,7 +2546,30 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     if ( not seq.is_seqstate_set( Sequencer::SEQ_OFFLINE ) && not seq.is_seqstate_set( Sequencer::SEQ_READY ) ) {
       message << "ERROR: runstate " << this->seqstate_string( this->seqstate.load() ) << " must be OFFLINE or READY";
       seq.async.enqueue_and_log( function, message.str() );
-      return( ERROR );
+      return ERROR;
+    }
+
+    // Disallow startup if TCS is not connected and open
+    //
+    if ( !seq.tcsd.socket.isconnected() ) {
+      logwrite( function, "ERROR cannot start: not connected to tcs daemon" );
+      seq.async.enqueue( "TCSD:isopen:false" );            // added here for consistency
+      return ERROR;
+    }
+    else {
+      // Ask tcsd if hardware connection is open.
+      // The response will be "name|false|ERROR" where name is the name of the TCS device
+      // if connected to that device, so to be open, require that there is no error and
+      // that the reply is neither false nor error.
+      //
+      std::string reply;
+      if ( seq.tcsd.send( TCSD_ISOPEN, reply ) != NO_ERROR ||
+           reply.find( "false" ) != std::string::npos      ||
+           reply.find( "ERROR" ) != std::string::npos ) {
+        logwrite( function, "ERROR cannot start: tcs not initialized" );
+        seq.async.enqueue( "TCSD:isopen:false" );            // added here for consistency
+        return ERROR;
+      }
     }
 
     std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );                       // create a mutex object for waiting
@@ -3444,7 +3476,7 @@ logwrite( function, message.str() );
       retstring.append( "   radec [ ? ]\n" );
       retstring.append( "   resume [ ? ]\n" );
       retstring.append( "   single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>\n" );
-      retstring.append( "   start ? | <module>\n" );
+      retstring.append( "   startup ? | <module>\n" );
       retstring.append( "   states [ ? ]\n" );
       retstring.append( "   tablenames [ ? ]\n" );
       retstring.append( "   update ? | { pending | complete | unassigned }\n" );
@@ -4052,13 +4084,13 @@ logwrite( function, message.str() );
     else
 
     // ---------------------------------------------------------
-    // start -- startup a single specified module
+    // startup -- startup a single specified module
     // ---------------------------------------------------------
     //
-    if ( testname == "start" ) {
+    if ( testname == "startup" ) {
 
       if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" ) ) {
-        retstring = "test start <module>\n";
+        retstring = "test startup <module>\n";
         retstring.append( "  Startup only a single specified module in a manner similar\n" );
         retstring.append( "  to the startup command, but only the specified module.\n" );
         retstring.append( "  Valid modules are:\n" );
@@ -4069,7 +4101,7 @@ logwrite( function, message.str() );
       }
 
       if ( tokens.size() != 2 ) {
-        logwrite( function, "ERROR expected start <module>" );
+        logwrite( function, "ERROR expected startup <module>" );
         retstring="invalid_argument";
         return( ERROR );
       }
