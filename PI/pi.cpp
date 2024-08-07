@@ -46,9 +46,12 @@ namespace Physik_Instrumente {
   template <typename ControllerType>
   long Interface<ControllerType>::open() {
     long error=NO_ERROR;
+    // loop through motoromap, opening each motor if not already open
+    // store a collective error so any one failure returns an error
+    //
     for ( const auto &pair : this->motormap ) {
       const std::string &motorname = pair.first;
-      error |= this->_open( motorname );
+      if ( !is_connected( motorname ) ) { error |= this->_open( motorname ); }
     }
     return error;
   }
