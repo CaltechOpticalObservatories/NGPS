@@ -22,21 +22,40 @@
 int main(int argc, char **argv) {
   std::string function = "Sequencer::main";
   std::stringstream message;
-  std::string logpath;
-  long ret=NO_ERROR;
+  bool start_daemon = true;
 
-  // Daemonize by default, but allow command line arg to keep it as
-  // a foreground process
+  // Allow running in the foreground
   //
-  if ( ! cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
-    logwrite( function, "starting daemon" );
-    Daemon::daemonize( Sequencer::DAEMON_NAME, "/tmp", "", "", "" );
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
   }
+
+  // TODO make configurable
+  //
+  std::string daemon_stdout="/dev/null";                          // where daemon sends stdout
+  std::string daemon_stderr="/tmp/"+Sequencer::DAEMON_NAME+".stderr";  // where daemon sends stderr
+
+  // daemonize, but don't close all file descriptors
+  //
+  if ( start_daemon ) {
+    logwrite( function, "starting daemon" );
+    Daemon::daemonize( Sequencer::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
+  }
+
+  logwrite( function, "daemonized. child process running" );
 
   // Now the child process instantiates a Server object so that
   // the daemon can access the namespace.
   //
   Sequencer::Server sequencerd;
+
+  // Python should not be started by the parent. Initialize the Python objects
+  // only by the child process, after daemonizing.
+  //
+  PyEval_SaveThread();
+
+  std::string logpath;
+  long ret=NO_ERROR;
 
   // check for "-f <filename>" command line option to specify config file
   //

@@ -3421,6 +3421,30 @@ logwrite( function, message.str() );
   /***** Sequencer::Sequence::tcs_init ****************************************/
 
 
+  /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
+  /**
+   * @brief      for testing, calls a Python function from a thread
+   *
+   */
+  void Sequence::dothread_test_fpoffset() {
+    std::string function = "Sequencer::Sequence::dothread_fpoffset";
+    std::stringstream message;
+
+    message.str(""); message << "calling fpoffsets.compute_offset() from thread: PyGILState=" << PyGILState_Check();
+    logwrite( function, message.str() );
+
+    double ra_to, dec_to, angle_to;
+
+    this->target.fpoffsets.compute_offset( "SCOPE", "SLIT", 17, -24, 19, ra_to, dec_to, angle_to );
+
+    message.str(""); message << "output = " << ra_to << " " << dec_to << " " << angle_to << " : PyGILState=" << PyGILState_Check();
+    logwrite( function, message.str() );
+
+    return;
+  }
+  /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
+
+
   /***** Sequencer::Sequence::test ********************************************/
   /**
    * @brief      test routines
@@ -3479,6 +3503,7 @@ logwrite( function, message.str() );
       retstring.append( "   startup ? | <module>\n" );
       retstring.append( "   states [ ? ]\n" );
       retstring.append( "   tablenames [ ? ]\n" );
+      retstring.append( "   threadoffset [ ? ]\n" );
       retstring.append( "   update ? | { pending | complete | unassigned }\n" );
       return HELP;
     }
@@ -4185,6 +4210,27 @@ logwrite( function, message.str() );
 
       message.str(""); message << "started " << tokens[1] << " module";
       logwrite( function, message.str() );
+    }
+    else
+
+    // ---------------------------------------------------------
+    // threadoffset -- spawn a thread to call a python function
+    // ---------------------------------------------------------
+    //
+    if ( testname == "threadoffset" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = SEQUENCERD_TEST;
+        retstring.append( " threadoffset\n" );
+        retstring.append( "  Spawns a thread which calls a Python function.\n" );
+        error=HELP;
+      }
+      else {
+        message.str(""); message << "spawning dothread_fpoffset: PyGILState=" << PyGILState_Check();
+        logwrite( function, message.str() );
+        std::thread( &Sequencer::Sequence::dothread_test_fpoffset, this ).detach();
+        message.str(""); message << "spawned dothread_fpoffset: PyGILState=" << PyGILState_Check();
+        logwrite( function, message.str() );
+      }
     }
     else {
 

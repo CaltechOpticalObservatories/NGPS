@@ -269,6 +269,7 @@ const int foo=2;
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
 
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
+      void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply
