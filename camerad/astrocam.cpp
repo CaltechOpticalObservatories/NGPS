@@ -1010,7 +1010,8 @@ namespace AstroCam {
     // look through all connected devices
     //
     for ( const auto &dev : this->devlist ) {
-      if ( this->controller.find( dev ) != this->controller.end() ) nopen++;
+      if ( this->controller.find( dev ) != this->controller.end() )
+        if ( this->controller[dev].connected ) nopen++;
 #ifdef LOGLEVEL_DEBUG
         message.str(""); message << "[DEBUG] " << this->controller[dev].devname << " is " << ( this->controller[dev].connected ? "connected" : "disconnected" );
         logwrite( function, message.str() );
@@ -1018,7 +1019,7 @@ namespace AstroCam {
     }
 
     // If all devices in (non-empty) devlist are connected then return true,
-    // otherwise return false with a space-delimited list of the disconnected devices.
+    // otherwise return false.
     //
     if ( ndev !=0 && ndev == nopen ) {
       retstring = "true";

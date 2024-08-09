@@ -597,8 +597,6 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_ISOPEN ) {
                     ret = server.is_connected( retstring );
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_USEFRAMES ) {
@@ -796,9 +794,6 @@ void doit(Network::TcpSocket &sock) {
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                          // Keep blocking connection open for interactive session.
   }
-
-  message.str(""); message << "thread " << sock.id << " closing fd " << sock.getfd();
-  logwrite(function, message.str());
 
   sock.Close();
   return;
