@@ -2425,12 +2425,21 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
     reply.clear();
 
-    // Poll acamd for acquired state, until acquired or timeout
+    // Poll acamd while it is acquiring. Once finished, get the state.
     //
+    bool acquiring = true;
     do {
-      if (error==NO_ERROR) error = seq.acamd.command( ACAMD_ISACQUIRED, reply );
       std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-    } while ( error==NO_ERROR && reply != "true" && std::chrono::steady_clock::now() < timeout_time );
+      if (error==NO_ERROR) error = seq.acamd.command( ACAMD_ACQUIRE, reply );
+      acquiring = ( reply.find("acquiring") != std::string::npos );
+    } while ( error==NO_ERROR &&
+              acquiring       &&
+              std::chrono::steady_clock::now() < timeout_time );
+
+    // Acquisition loop complete so get the state
+    //
+    error = seq.acamd.command( ACAMD_ISACQUIRED, reply );
+    seq.target.acquired = ( reply.find("true") != std::string::npos );
 
     // set message
     //
@@ -2444,8 +2453,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       message.str(""); message << "ERROR acquiring target";
     }
     else {                                                           // Success
-      message.str(""); message << "NOTICE: target acquired";
-      seq.target.acquired = true;
+      message.str(""); message << "NOTICE: target " << ( seq.target.acquired ? "acquired" : "not acquired" );
     }
 
     seq.async.enqueue_and_log( function, message.str() );            // log message
@@ -2621,7 +2629,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     seq.set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_init, std::ref(seq) ).detach();
     seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_init, std::ref(seq) ).detach();
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );     std::thread( dothread_tcs_init, std::ref(seq), "" ).detach();
-//  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(seq) ).detach();
+    seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(seq) ).detach();
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_init, std::ref(seq) ).detach();
 //  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_init, std::ref(seq) ).detach();
 
