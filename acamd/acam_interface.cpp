@@ -2035,7 +2035,7 @@ namespace Acam {
     if ( whattodo != "stop" && ! this->tcsd.client.is_open() ) {
       this->async.enqueue_and_log( function, "NOTICE: not connected to TCS" );
       retstring="tcs_offline";
-      this->tcs_online.store( true );
+//    this->tcs_online.store( true ); // TODO
     }
 
     std::thread( dothread_framegrab, std::ref(*this), whattodo, sourcefile ).detach();
@@ -2050,7 +2050,7 @@ namespace Acam {
    * @brief      performs continuous acquisition
    * @details    This should be spawned in a thread.
    *             Set framegrab_run true if the loop should run continuously,
-   *             check with run_framegrab(). Set framegrab_loop_running true
+   *             check with should_framegrab_run(). Set framegrab_running true
    *             when the loop is running, check with is_framegrab_running().
    * @param[in]  iface       reference to Acam::Interface object
    *
@@ -2094,13 +2094,13 @@ namespace Acam {
     // In other words, it will acquire images as fast as it needs to, but no
     // faster.
     //
-    // If I can get the lock then BoolState sets framegrab_loop_running true,
+    // If I can get the lock then BoolState sets framegrab_running true,
     // and clears it (false) automatically when it goes out of scope.
     //
     {
     std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
-      BoolState loop_running( iface.framegrab_loop_running );    // sets state true here, clears when it goes out of scope
+      BoolState loop_running( iface.framegrab_running );    // sets state true here, clears when it goes out of scope
       do {
         if (error==NO_ERROR) error = iface.camera.andor.acquire_one();          // acquire a frame from camera into memory
         if (error==NO_ERROR) error = iface.collect_header_info();                            // collect header information
@@ -2116,7 +2116,7 @@ namespace Acam {
 
         std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
-      } while ( error==NO_ERROR && iface.run_framegrab() );
+      } while ( error==NO_ERROR && iface.should_framegrab_run() );
     }
     else {                                                                                   // this shouldn't even happen
       logwrite( function, "ERROR another thread is already running" );
@@ -2126,8 +2126,8 @@ namespace Acam {
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR starting thread" );
-      iface.target.acquire( Acam::TARGET_NOP );       // first disable acquisition
-      iface.framegrab_run.store( false, std::memory_order_seq_cst );  // then disable frame grabbing
+      iface.framegrab_run.store( false, std::memory_order_seq_cst );  // disable frame grabbing
+      iface.target.acquire( Acam::TARGET_NOP );                       // disable acquisition
     }
     else logwrite( function, "leaving thread" );
 
@@ -2426,7 +2426,7 @@ namespace Acam {
 
     // If the frame grab thread isn't running then try to start it
     //
-    if ( ! iface->is_framegrab_running() ) {
+    if ( ! iface->is_framegrab_running() && iface->should_framegrab_run() ) {
 
       logwrite( function, "starting frame grabber" );
       std::string dontcare;

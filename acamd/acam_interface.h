@@ -416,7 +416,7 @@ namespace Acam {
       std::mutex framegrab_mutex;
       std::atomic<Acam::FocusThreadStates> monitor_focus_state;
       std::atomic<bool> framegrab_run;
-      std::atomic<bool> framegrab_loop_running;
+      std::atomic<bool> framegrab_running;
       std::atomic<bool> tcs_online;
       std::string imagename;
       std::string wcsname;
@@ -431,15 +431,15 @@ namespace Acam {
 
       Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
                     framegrab_run(false),
-                    framegrab_loop_running(false),
+                    framegrab_running(false),
                     tcs_online(false),
                     motion_port(-1) {
         target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
       inline bool target_acquired()      { return this->target.acquired; }
-      inline bool is_framegrab_running() { return this->framegrab_loop_running.load( std::memory_order_acquire ); }  ///< is it running?
-      inline bool run_framegrab()        { return this->framegrab_run.load( std::memory_order_acquire ); }           ///< should it run?
+      inline bool is_framegrab_running() { return this->framegrab_running.load( std::memory_order_acquire ); }  ///< is it running?
+      inline bool should_framegrab_run() { return this->framegrab_run.load( std::memory_order_acquire ); }      ///< should it run?
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
