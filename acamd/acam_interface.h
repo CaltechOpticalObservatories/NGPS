@@ -307,8 +307,8 @@ namespace Acam {
       int attempts;
       int sequential_failures;
 
-      std::atomic<bool> acquired;          ///< is the target acquired?
-      std::atomic<bool> stop_acquisition;  ///< should the acquisition sequence run?
+      std::atomic<bool> acquired;          ///< set if target acquired successfully
+      std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
 
       double tcs_max_offset;
 
@@ -415,9 +415,9 @@ namespace Acam {
     private:
       std::mutex framegrab_mutex;
       std::atomic<Acam::FocusThreadStates> monitor_focus_state;
-      std::atomic<bool> framegrab_run;
-      std::atomic<bool> framegrab_running;
-      std::atomic<bool> tcs_online;
+      std::atomic<bool> framegrab_run;      ///< set if framegrab loop should run
+      std::atomic<bool> framegrab_running;  ///< set if framegrab loop is running
+      std::atomic<bool> tcs_online;         ///< set if TCS is online / connected
       std::string imagename;
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;

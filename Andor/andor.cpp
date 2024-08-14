@@ -764,7 +764,7 @@ namespace Andor {
 
     // Initialize the Andor SDK
     //
-    unsigned int ret = Initialize( (char*)ANDOR_SDK );
+    unsigned int ret = Initialize( const_cast<char*>(ANDOR_SDK) );
 
     switch ( ret ) {
       case DRV_SUCCESS:         message << "success";                                          break;

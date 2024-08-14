@@ -17,8 +17,6 @@
 #include "atmcdLXd.h"
 #include "andor_emulator.h"
 
-#define ANDOR_SDK "/usr/local/etc/andor"
-
 /***** Andor ******************************************************************/
 /**
  * @namespace  Andor
@@ -27,8 +25,11 @@
  */
 namespace Andor {
 
-  const int AMPTYPE_EMCCD = 0;
-  const int AMPTYPE_CONV  = 1;
+  constexpr char ANDOR_SDK[] = "/usr/local/etc/andor";         /// location of Andor SDK
+  constexpr std::string_view ANDOR_OBJ_EMULATOR = "emulator";  /// return value for get_andor_object()
+  constexpr std::string_view ANDOR_OBJ_SDK = "sdk";            /// return value for get_andor_object()
+  constexpr int AMPTYPE_EMCCD = 0;
+  constexpr int AMPTYPE_CONV  = 1;
 
   /***** Andor::Information ***************************************************/
   /**
@@ -390,9 +391,9 @@ namespace Andor {
        *
        */
       inline std::string_view get_andor_object() {
-        if ( this->andor == &emulator ) return "emulator";
+        if ( this->andor == &emulator ) return ANDOR_OBJ_EMULATOR;
         else
-        if ( this->andor == &sdk ) return "sdk";
+        if ( this->andor == &sdk ) return ANDOR_OBJ_SDK;
         else
         return "null";
       }

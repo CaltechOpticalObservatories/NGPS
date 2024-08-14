@@ -56,9 +56,9 @@ namespace Acam {
     //
     std::string_view which_andor = this->andor.get_andor_object();
 
-    if ( which_andor == "sim" ) retstring="true";
+    if ( which_andor == Andor::ANDOR_OBJ_EMULATOR ) retstring="true";
     else
-    if ( which_andor == "sdk" ) retstring="false";
+    if ( which_andor == Andor::ANDOR_OBJ_SDK ) retstring="false";
     else {
       retstring="unknown";
       return ERROR;
@@ -2061,7 +2061,13 @@ namespace Acam {
     long error = NO_ERROR;
 
     if ( whattodo == "one" ) {
+      // Clear framegrab_run which means the framegrab loop should not run.
+      // If it's already running then return, the existing framegrab loop will
+      // stop. If it's not already running then drop through, and a single
+      // frame will be grabbed.
+      //
       iface.framegrab_run.store( false, std::memory_order_seq_cst );
+      if ( iface.is_framegrab_running() ) return;
     }
     else
     if ( whattodo == "start" ) {
