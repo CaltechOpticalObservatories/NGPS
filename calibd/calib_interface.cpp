@@ -155,9 +155,6 @@ namespace Calib {
     //
     if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false";
 
-message.str(""); message << "[DEBUG] num_open=" << num_open << " _motormap.size()=" << _motormap.size();
-logwrite( function, message.str() );
-
     // Log who's connected and not
     //
     if ( !connected.empty() ) {
@@ -631,7 +628,7 @@ logwrite( function, message.str() );
       retstring.append( "  close         :  close connection to controller\n" );
       retstring.append( "  reconnect     :  close, open connection to controller\n" );
       retstring.append( "  default       :  set all modulators as defined in config file\n" );
-      retstring.append( "  <n>           :  get status of modulator <n>\n" );
+      retstring.append( "  <n>           :  get status of modulator <n> (see format below)\n" );
       retstring.append( "  <n> on | off  :  set power-only for modulator <n>\n" );
       retstring.append( "  <n> <D> <T>   :  set <D> and <T> for modulator <n>\n" );
       retstring.append( "\n" );
@@ -641,6 +638,8 @@ logwrite( function, message.str() );
       retstring.append( "  <T> = period in msec {0,50:3600000} where 0=off\n" );
       retstring.append( "\n" );
       retstring.append( "  modulators open every <T> msec and close every <T> + ( <D> * <T> ) msec\n" );
+      retstring.append( "\n" );
+      retstring.append( "  Response to status request <n> is \"<n>,on|off,<D>,<T>\"\n" );
       return HELP;
     }
 
@@ -746,7 +745,7 @@ logwrite( function, message.str() );
     // or three args sets <D> and <T> for modulator <n>.
     //
     if ( tokens.size() == 3 ) {  // <n> <D> <T>
-      int D=-1, T=-1;
+      double D=-1.0, T=-1.0;
       try {
         D = std::stod( tokens[1] );
         T = std::stod( tokens[2] );
@@ -788,12 +787,12 @@ logwrite( function, message.str() );
     if ( num==0 ) {  // read all configured modulators
       for ( const auto &modnum : this->mod_nums ) {
         error |= this->status( modnum, dut, per, pow );
-        retstream << modnum << "," << dut << "," << per << " [" << ( pow ? "on" : "off" ) << "]\n";
+        retstream << modnum << "," << ( pow ? "on" : "off" ) << "," << dut << "," << per << " ";
       }
     }
     else {           // read the specific modulator
       error = this->status( num, dut, per, pow );
-      retstream << num << "," << dut << "," << per << " [" << ( pow ? "on" : "off" ) << "]\n";
+      retstream << num << "," << ( pow ? "on" : "off" ) << "," << dut << "," << per;
     }
 
     status = retstream.str();
@@ -955,7 +954,7 @@ logwrite( function, message.str() );
   /***** Calib::Modulator::send_command ***************************************/
   /**
    * @brief      wrapper to send command to Arduino
-   * @details    this wraps the wrapper, used when no reply is to be read
+   * @details    this wraps the wrapper, used when no reply is needed
    * @param[in]  cmd    formatted command to send
    * @return     ERROR or NO_ERROR
    *
@@ -963,8 +962,8 @@ logwrite( function, message.str() );
    *
    */
   long Modulator::send_command( std::string cmd ) {
-    std::string reply("noreply");
-    return send_command( cmd, reply );
+    std::string dontcare;
+    return send_command( cmd, dontcare );
   }
   /***** Calib::Modulator::send_command ***************************************/
 
@@ -991,12 +990,7 @@ logwrite( function, message.str() );
     cmd.append( "\\" );
     cmd.append( "n" );
 
-    if ( reply=="noreply" ) {
-      error = this->arduino->send_command( cmd );
-    }
-    else {
-      error = this->arduino->send_command( cmd, reply );
-    }
+    error = this->arduino->send_command( cmd, reply );
 
     return error;
   }
