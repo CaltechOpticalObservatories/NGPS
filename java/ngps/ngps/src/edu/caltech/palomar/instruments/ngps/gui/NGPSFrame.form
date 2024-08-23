@@ -322,7 +322,7 @@
             </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="hourly_weatherMenuItem">
               <Properties>
-                <Property name="text" type="java.lang.String" value="Hourly weather forcast"/>
+                <Property name="text" type="java.lang.String" value="Hourly weather forecast"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="hourly_weatherMenuItemActionPerformed"/>
@@ -330,7 +330,7 @@
             </MenuItem>
             <MenuItem class="javax.swing.JMenuItem" name="ten_day_weatherMenuItem">
               <Properties>
-                <Property name="text" type="java.lang.String" value="10 day weather forcast"/>
+                <Property name="text" type="java.lang.String" value="10 day weather forecast"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="ten_day_weatherMenuItemActionPerformed"/>
@@ -405,7 +405,7 @@
     </Menu>
   </NonVisualComponents>
   <Properties>
-    <Property name="defaultCloseOperation" type="int" value="3"/>
+    <Property name="defaultCloseOperation" type="int" value="0"/>
     <Property name="resizable" type="boolean" value="false"/>
   </Properties>
   <SyntheticProperties>

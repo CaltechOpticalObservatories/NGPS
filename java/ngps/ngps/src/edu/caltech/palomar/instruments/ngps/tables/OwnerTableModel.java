@@ -42,8 +42,8 @@ public class OwnerTableModel extends AbstractTableModel{
 /          Class Declaration for AstroObjectTableModel
 /=================================================================================================*/
    java.util.Vector    OwnerVector = new java.util.Vector();
-   java.lang.String[]  columnNameArray   = new java.lang.String[4];
-   int columncount = 4;
+   java.lang.String[]  columnNameArray   = new java.lang.String[3];
+   int columncount = 3;
    int rowcount;
    private  javax.swing.JTable myOwnerTable;  
 /*================================================================================================
@@ -81,10 +81,9 @@ public JTable getJTable(){
     private void jbInit(){
        rowcount = 0;
        columnNameArray[0] = "OWNER_ID";
-       columnNameArray[1] = "PROPOSAL_ID";
-       columnNameArray[2] = "PROPOSAL_TITLE";
-       columnNameArray[3] = "PASSWORD";
-    }
+       columnNameArray[1] = "PASSWORD";
+       columnNameArray[2] = "EMAIL";
+     }
 /*================================================================================================
 /         Required Methods for the Abstract Table Model Class
 /    getColumnCount()
@@ -159,9 +158,6 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
     if(vColIndex == 2){
         editable = true;
     }
-    if(vColIndex == 3){
-        editable = false;
-    }
     return editable;
 }
 /*================================================================================================
@@ -174,13 +170,10 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
        returnObject = selectedRow.getOwner_ID();
     }
     if(col == 1){
-       returnObject = selectedRow.getProposal_ID();
+       returnObject = selectedRow.getEncryptedPassword();
     }
     if(col == 2){
-       returnObject = selectedRow.getProposal_Title();
-    }
-    if(col == 3){
-       returnObject = selectedRow.getEncryptedPassword();
+       returnObject = selectedRow.getEmail();
     }
     return returnObject;
   }
@@ -195,14 +188,11 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
        selectedRow.setOwner_ID(((java.lang.String)value));
     }
     if(col == 1){
-       selectedRow.setProposal_ID(((java.lang.String)value));
-    }
-    if(col == 2){
-       selectedRow.setProposal_Title(((java.lang.String)value));
-    }
-    if(col == 3){
        selectedRow.setEncryptedPassword(((java.lang.String)value));
     }
+    if(col == 2){
+       selectedRow.setEmail(((java.lang.String)value));
+    }    
     OwnerVector.setElementAt(selectedRow,row);
    }
    fireTableCellUpdated(row, col);
@@ -242,11 +232,6 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
         return myClass;
      }
      if(c == 2){
-      myClass =  (new java.lang.String()).getClass();
- //        myClass = ((AstroObject)AstroObjectVector.firstElement()).Delta.RoundedDecString(2, ":").getClass();
-        return myClass;
-     }
-     if(c == 3){
       myClass =  (new java.lang.String()).getClass();
  //        myClass = ((AstroObject)AstroObjectVector.firstElement()).Delta.RoundedDecString(2, ":").getClass();
         return myClass;

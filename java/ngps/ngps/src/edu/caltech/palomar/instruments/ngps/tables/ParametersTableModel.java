@@ -219,10 +219,10 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "DEC (dd:mm:ss.s)";
         }        
         if(row == 2){
-           returnObject = "RA offset (arcsec)";
+           returnObject = " --- ";  //"RA offset (arcsec)"
         } 
         if(row == 3){
-           returnObject = "DEC offset (arcsec)";
+           returnObject = " --- ";  //"DEC offset (arcsec)"
         }        
         if(row == 4){
            returnObject = "EXPTIME Request";
@@ -231,7 +231,7 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            returnObject = "SLITWIDTH Request";
         }        
         if(row == 6){
-           returnObject = "Slit offset (arcsec)";
+           returnObject = " --- "; //Slit offset (arcsec)
         }        
         if(row == 7){
            returnObject = "CCD Mode";

@@ -14,10 +14,9 @@ import java.beans.PropertyChangeSupport;
 public class Owner {
   transient protected PropertyChangeSupport propertyChangeListeners = new PropertyChangeSupport(this);
   public java.lang.String owner_id           = new java.lang.String();
-  public java.lang.String proposal_id        = new java.lang.String();
-  public java.lang.String proposal_title     = new java.lang.String();
+  public java.lang.String email              = new java.lang.String();
   public java.lang.String password           = new java.lang.String();
-  public java.lang.String encrypted_password = new java.lang.String();
+  public java.lang.String encrypted_password = new java.lang.String();  
 /*================================================================================================
 /     Owner
 /=================================================================================================*/
@@ -33,28 +32,6 @@ public class Owner {
   }
   public java.lang.String getOwner_ID() {
     return owner_id;
-  }    
-/*================================================================================================
-/      setProposal_ID(java.lang.String new_proposal_id) 
-/=================================================================================================*/
-  public void setProposal_ID(java.lang.String new_proposal_id) {
-    java.lang.String  old_proposal_id = this.proposal_id;
-    this.proposal_id = new_proposal_id;
-   propertyChangeListeners.firePropertyChange("proposal_id", old_proposal_id, new_proposal_id);
-  }
-  public java.lang.String getProposal_ID() {
-    return proposal_id;
-  }  
-/*================================================================================================
-/      setProposal_ID(java.lang.String new_proposal_id) 
-/=================================================================================================*/
-  public void setProposal_Title(java.lang.String new_proposal_title) {
-    java.lang.String  old_proposal_title = this.proposal_title;
-    this.proposal_title = new_proposal_title;
-   propertyChangeListeners.firePropertyChange("proposal_title", old_proposal_title, new_proposal_title);
-  }
-  public java.lang.String getProposal_Title() {
-    return proposal_title;
   }    
 /*================================================================================================
 /      setPassword(java.lang.String new_password)
@@ -78,6 +55,17 @@ public class Owner {
   public java.lang.String getEncryptedPassword() {
     return encrypted_password;
   }  
+/*================================================================================================
+/      setOwner_ID(java.lang.String new_owner_id)
+/=================================================================================================*/
+  public void setEmail(java.lang.String new_email) {
+    java.lang.String  old_email = this.email;
+    this.email = new_email;
+   propertyChangeListeners.firePropertyChange("email", (old_email), new_email);
+  }
+  public java.lang.String getEmail() {
+    return email;
+  }   
 /*================================================================================================
 /      add and remove Property Change Listeners
 /=================================================================================================*/

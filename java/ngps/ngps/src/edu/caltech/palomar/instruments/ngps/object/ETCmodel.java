@@ -54,9 +54,9 @@ public class ETCmodel extends java.lang.Object{
     setWRANGE_HIGH(510);
     setChannel("G");
     setMagnitude(18.0);
-    setMagref("AB user");
+    setMagref("AB match");
     setSeeing(1.25);
-    setSrcmodel("-model constant");
+    setSrcmodel(" "); //-model constant
  } 
  /*================================================================================================
 /          DefaultMutableTreeNode constructTreeNode()

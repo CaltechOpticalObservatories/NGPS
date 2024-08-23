@@ -1033,11 +1033,10 @@ public int executeObservationSetInsertStatement(ObservationSet current){
 public void constructOwnerPreparedStatement(){
     String query = "INSERT INTO ngps.owner ("
     + " OWNER_ID,"
-    + " PROPOSAL_ID,"
-    + " PROPOSAL_TITLE,"
-    + " PASSWORD"
+    + " PASSWORD,"
+    + " EMAIL"
     + " ) VALUES ("
-    +  " ?,?,?,?)";
+    +  " ?,?,?)";
     try{
        INSERT_OWNER_PREP_STATEMENT = conn.prepareStatement(query);
     }catch(Exception e){
@@ -1078,16 +1077,15 @@ public int executeOwnerInsertStatement(Owner current){
     try{
         INSERT_OWNER_PREP_STATEMENT.clearParameters();        
         INSERT_OWNER_PREP_STATEMENT.setString(1,current.getOwner_ID());
-        INSERT_OWNER_PREP_STATEMENT.setString(2,current.getProposal_ID());
-        INSERT_OWNER_PREP_STATEMENT.setString(3,current.getProposal_Title());
-        INSERT_OWNER_PREP_STATEMENT.setString(4,current.getEncryptedPassword());
+        INSERT_OWNER_PREP_STATEMENT.setString(2,current.getEncryptedPassword());
+        INSERT_OWNER_PREP_STATEMENT.setString(3,current.getEmail());
         System.out.println(INSERT_OWNER_PREP_STATEMENT.toString());
         // now that we have all the parameters set execute the update on the DBMS
         INSERT_OWNER_PREP_STATEMENT.executeUpdate();
     }catch(Exception e){
        logMessage(ERROR,"Error in method executeObservationSetInsertStatement "+e.toString());
     } 
-  return set_id;
+  return set_id; 
 }
 /*================================================================================================
 /       constructPreparedStatement()
@@ -1096,9 +1094,8 @@ public Owner transformResultSetToOwner(java.sql.ResultSet results){
      Owner current = new Owner();
       try{  
           current.setOwner_ID(results.getString("OWNER_ID"));
-          current.setProposal_ID(results.getString("PROPOSAL_ID"));
-          current.setProposal_Title(results.getString("PROPOSAL_TITLE"));
           current.setEncryptedPassword(results.getString("PASSWORD"));
+          current.setEmail(results.getString("EMAIL"));
        }catch(Exception e){
          logMessage(ERROR,"Error in method transformResultSetToOwner "+e.toString());
       }

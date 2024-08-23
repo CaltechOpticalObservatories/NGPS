@@ -119,7 +119,7 @@ public class NGPSFrame extends javax.swing.JFrame {
   private JMenuItem                sign_out_MenuItem;  
   private ButtonGroup              do_one_do_all_ButtonGroup;
   private TargetSetFrame           myTargetSetFrame;
-  private signInFrame              my_signInFrame;
+  private signInFrame2             my_signInFrame;
   private CreateOwnerFrame         myCreateOwnerFrame;
   public P200Component             myP200Component;
   public DateTimeChooserFrame      myDateTimeChooserFrame;
@@ -193,7 +193,7 @@ public class NGPSFrame extends javax.swing.JFrame {
         mySimulationServer.myObservationSequencerObject.setSTATE("STOPPED");
         initializeCSVFrame(); 
         initializeRightMenu();
-        initializeJSkyCalcModel();
+//        initializeJSkyCalcModel();
         readProperties();
         initializeIcons();
         main_editor_table.setFont(new Font(DEFAULT_FONT_NAME, Font.BOLD,DEFAULT_FONT));
@@ -201,6 +201,7 @@ public class NGPSFrame extends javax.swing.JFrame {
         dbms_stateLabel.setIcon(UNKNOWN);
         acceptButton.setIcon(ACCEPT_OFF);
         cancelButton.setIcon(CANCEL_OFF);
+        initializeJSkyCalcModel();
         initializeOTMoutputFrame();
         initializeChangePasswordFrame();
         initializeSpinners();        
@@ -248,7 +249,7 @@ public class NGPSFrame extends javax.swing.JFrame {
       myTargetSetFrame.setVisible(false);
   }
   public void initializeSignInFrame(){
-      my_signInFrame = new signInFrame();
+      my_signInFrame = new signInFrame2();
       my_signInFrame.setVisible(false);
       my_signInFrame.setNGPSFrame(this);
   }
@@ -440,7 +441,7 @@ public void initializeJSkyCalcModel(){
               }
             });
      myNightlyWindow.UpdateDisplay();  
-     dbms.myOTMlauncher.setNightlyAlmanac(myNightlyAlmanac);   
+     dbms.myOTMlauncher.setNightlyAlmanac(myNightlyAlmanac);       
         UtilDateModel model = new UtilDateModel();
         Properties p = new Properties();
         p.put("text.today", "Today");
@@ -1004,13 +1005,13 @@ public JTable constructTable(){
                     }
                 }
                 else if("completed".matches(state)){
-                    c.setBackground(Color.gray);
-                    c.setForeground(Color.white);
+                    c.setBackground(Color.white);
+                    c.setForeground(Color.gray);
                     jc.setBorder(super.getBorder());
                 }
                 else if("INACTIVE".matches(state)){
-                    c.setBackground(Color.white);
-                    c.setForeground(Color.GRAY);
+                    c.setBackground(Color.LIGHT_GRAY);
+                    c.setForeground(Color.black);
                     jc.setBorder(super.getBorder());                    
                 }
                 else if("active".matches(state)){
@@ -1445,7 +1446,7 @@ public JTable constructTable(){
                 .addContainerGap())
         );
 
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE);
         setResizable(false);
 
         planningPanel.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 1, true));
@@ -2119,7 +2120,7 @@ public JTable constructTable(){
         });
         toolsMenu.add(SunAndMoonMenuitem);
 
-        hourly_weatherMenuItem.setText("Hourly weather forcast");
+        hourly_weatherMenuItem.setText("Hourly weather forecast");
         hourly_weatherMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 hourly_weatherMenuItemActionPerformed(evt);
@@ -2127,7 +2128,7 @@ public JTable constructTable(){
         });
         toolsMenu.add(hourly_weatherMenuItem);
 
-        ten_day_weatherMenuItem.setText("10 day weather forcast");
+        ten_day_weatherMenuItem.setText("10 day weather forecast");
         ten_day_weatherMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 ten_day_weatherMenuItemActionPerformed(evt);
@@ -2275,11 +2276,16 @@ public JTable constructTable(){
     }//GEN-LAST:event_openMenuItemActionPerformed
 
     private void new_target_listMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_new_target_listMenuItemActionPerformed
-         try{
-          dbms.createNewTargetList();
-        }catch(Exception e){
-           System.out.println(e.toString());
-        }       // TODO add your handling code here:
+       Object[] options = {"Cancel","OK"};
+       int n = JOptionPane.showOptionDialog(this,"Are you sure you want to start a new Target List?\n\nIf needed, please save the current list before continuing.","New Target List",
+                                            JOptionPane.OK_CANCEL_OPTION,JOptionPane.QUESTION_MESSAGE,null,options,options[0]);       
+        if(n == 1){   
+            try{
+              dbms.createNewTargetList();
+            }catch(Exception e){
+               System.out.println(e.toString());
+            }
+        }
     }//GEN-LAST:event_new_target_listMenuItemActionPerformed
 
     private void save_asMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_save_asMenuItemActionPerformed
@@ -2335,12 +2341,24 @@ public JTable constructTable(){
     }//GEN-LAST:event_shutdownMenuItemActionPerformed
 
     private void quitMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_quitMenuItemActionPerformed
-       try{
-          dbms.conn.close();
-          System.exit(0);
-       }catch(Exception e){
-           System.out.println(e.toString());
-       }
+
+        String msg = "Do you really want to quit?";
+        String reminder = "PLEASE SHUTDOWN THE INSTRUMENT IF YOU ARE FINISHED OBSERVING\n(Select Shutdown from NGPS menu.)\n\n";
+        if(!myObservationSequencerController.getSTATE().matches("OFFLINE")){
+            msg = reminder + msg;
+        }
+        
+        Object[] options = {"Cancel","OK"};
+        int n = JOptionPane.showOptionDialog(this,msg,"Quit NGPS",
+                                            JOptionPane.OK_CANCEL_OPTION,JOptionPane.QUESTION_MESSAGE,null,options,options[0]);       
+        if(n == 1){   
+            try{
+              dbms.conn.close();
+              System.exit(0);
+           }catch(Exception e){
+               System.out.println(e.toString());
+           }
+        }
     }//GEN-LAST:event_quitMenuItemActionPerformed
 
     private void otm_outputMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_otm_outputMenuItemActionPerformed
