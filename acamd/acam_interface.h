@@ -30,6 +30,8 @@
 #include "andor.h"
 #endif
 
+#include "acam_interface_shared.h"
+
 /***** Acam *******************************************************************/
 /**
  * @namespace Acam
@@ -326,6 +328,7 @@ namespace Acam {
       double tcs_casangle;                 ///< the cass angle from the TCS, must be supplied
 
       std::string name;                    ///< target name
+      std::string pointmode;
 
     public:
 
@@ -391,11 +394,24 @@ namespace Acam {
         _angle = this->coords_slit.angle;;
       }
 
-      inline std::string get_name() { return this->name; };
+      inline const std::string get_name() { return this->name; };
+
+      inline const std::string get_pointmode() { return this->pointmode; };
+
+      void set_pointmode( const std::string pm ) {
+        if ( pm != Acam::POINTMODE_SLIT || pm != Acam::POINTMODE_ACAM ) {
+          std::stringstream message;
+          message << "ERROR invalid pointmode \"" << pm << "\". expected { "
+                  << POINTMODE_SLIT << " " << POINTMODE_ACAM << " }";
+          logwrite( "Acam::Target::set_pointmode", message.str() );
+        }
+        this->pointmode = pm;
+      }
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  acquired(false),
                  stop_acquisition(false),
+                 pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP) { }
   };
   /***** Acam::Target *********************************************************/

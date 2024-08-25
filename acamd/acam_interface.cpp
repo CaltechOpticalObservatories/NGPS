@@ -2108,6 +2108,10 @@ namespace Acam {
     if ( lock.try_lock() ) {
       BoolState loop_running( iface.framegrab_running );    // sets state true here, clears when it goes out of scope
       do {
+        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
+
+        if ( iface.camera.andor.camera_info.exposure_time == 0 ) continue;      // wait for non-zero exposure time
+
         if (error==NO_ERROR) error = iface.camera.andor.acquire_one();          // acquire a frame from camera into memory
         if (error==NO_ERROR) error = iface.collect_header_info();                            // collect header information
         if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
@@ -2119,8 +2123,6 @@ namespace Acam {
         iface.guide_manager.push_guider_image( iface.imagename );                            // send frame to Guider GUI
 
         if (error==NO_ERROR) error = iface.target.do_acquire();                              // acquire target (if needed)
-
-        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
       } while ( error==NO_ERROR && iface.should_framegrab_run() );
     }
@@ -2290,7 +2292,7 @@ namespace Acam {
    * @brief      outside interface to set or get the target acquisition
    * @details    This uses the target.acquire() function to gain access to
    *             the Acam::Target class.
-   * @param[in]  args       string,  [ <ra> <dec> <angle> | target | guide | stop ]
+   * @param[in]  args       string,  [ <ra> <dec> <angle> | guide | stop ]
    * @param[out] retstring  contains timeout in seconds
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -2305,7 +2307,7 @@ namespace Acam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = ACAMD_ACQUIRE;
-      retstring.append( " [ <ra> <dec> <angle> | target | guide | stop ]\n" );
+      retstring.append( " [ <ra> <dec> <angle> [ <name> ] [ acam | slit ] | guide | stop ]\n" );
       retstring.append( "   Set or get target acquisition mode.\n" );
       retstring.append( "   Returns ACQUIRE_TIMEOUT, the number of seconds before acquisition sequence\n" );
       retstring.append( "   aborts on failure to acquire.\n" );
@@ -2316,9 +2318,11 @@ namespace Acam {
       retstring.append( "\n" );
       retstring.append( "   <ra> <dec> <angle> acquire target using specified coords in SLIT referece\n" );
       retstring.append( "                      frame, then resume normal open loop tracking.\n" );
-      retstring.append( "\n" );
-      retstring.append( "   target             will request coords from the sequenver, acquire the\n" );
-      retstring.append( "                      target, then resume normal open loop tracking.\n" );
+      retstring.append( "                      When supplying coordinates, an optional arg \"acam\" or\n" );
+      retstring.append( "                      \"slit\" may be provided to set the pointmode, indicating\n" );
+      retstring.append( "                      where the target is placed. If not provided, the default\n" );
+      retstring.append( "                      is \"slit\".\n" );
+      retstring.append( "                      An optional target name <name> may also be provided.\n" );
       retstring.append( "\n" );
       retstring.append( "   guide              requires target acquisition using coords or target,\n" );
       retstring.append( "                      then will repeatedly acquire target and continue to run\n" );
@@ -2356,21 +2360,6 @@ namespace Acam {
       return ERROR;
     } else
 
-    // If not already in ACQUIRE mode then request the coords from the
-    // sequencer then enable ACQUIRE mode
-    //
-    if ( args == "target" ) {
-      if ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ) {
-        logwrite( function, "target acquisition mode already selected" );
-        return NO_ERROR;
-      }
-      logwrite( function, "ERROR not yet implemented" );
-      retstring="not_implemented";
-      return ERROR;
-      this->astrometry.isacquire = true;                         // informs the solver
-      return( this->target.acquire( Acam::TARGET_ACQUIRE ) );    // enable Target ACQUIRE mode
-    } else
-
     // If not already in GUIDE mode then enable GUIDE mode
     //
     if ( args == "guide" ) {
@@ -2398,6 +2387,27 @@ namespace Acam {
     // valid then enable ACQUIRE mode.
     //
     {
+      // Default pointmode, if not specified, is SLIT
+      //
+      this->target.set_pointmode( Acam::POINTMODE_SLIT );
+
+      // If pointing mode was provided, set that separately then remove it
+      // from the string, so that the remaining string can be sent to
+      // target_coords() which interprets <ra> <dec> <angle> [ <name> ]
+      //
+      make_uppercase( args );
+      size_t pos;
+      while ( ( pos = args.find( " ACAM" ) ) != std::string::npos ) {
+        args.erase( pos, 5 );
+        this->target.set_pointmode( Acam::POINTMODE_ACAM );
+      }
+      while ( ( pos = args.find( " SLIT" ) ) != std::string::npos ) {
+        args.erase( pos, 5 );
+        this->target.set_pointmode( Acam::POINTMODE_SLIT );
+      }
+      message.str(""); message << "pointmode " << this->target.get_pointmode() << " selected";
+      logwrite( function, message.str() );
+
       if ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ) {
         logwrite( function, "target acquisition mode already selected" );
         return NO_ERROR;
@@ -2551,25 +2561,26 @@ namespace Acam {
       attempts++;
 
       // The acam interface is given the target coordinates (from the database)
-      // which are in the SLIT reference frame.
+      // which are in the <pointmode> reference frame.
       //
       // Here compute the "goal" for the acam (in the ACAM reference frame) using
       // the database coordinates and the current cass angle.
       //
 
       // Convert the current cass rotator angle (which is in the SCOPE frame) to a
-      // position angle in the SLIT frame.  The RA, DEC coordinates don't matter
-      // for just computing the angle.
+      // position angle in the <pointmode> frame.  The RA, DEC coordinates don't matter
+      // for just computing the angle. pointmode_string() returns a string of the
+      // current pointmode.
       //
-      if (!error) error = iface->fpoffsets.compute_offset( "SCOPE", "SLIT",
+      if (!error) error = iface->fpoffsets.compute_offset( "SCOPE", pointmode,
                                                            0, 0, this->tcs_casangle );
 
       // Now convert the target coordinates (from the database) using this angle,
-      // from the SLIT to the ACAM reference frame.
+      // from the <pointmode> to the ACAM reference frame.
       //
       double acam_ra_goal, acam_dec_goal, acam_angle_goal;
 
-      if (!error) error = iface->fpoffsets.compute_offset_last_angle( "SLIT", "ACAM",
+      if (!error) error = iface->fpoffsets.compute_offset_last_angle( pointmode, "ACAM",
                                                                       this->coords_slit.ra, this->coords_slit.dec,
                                                                       acam_ra_goal, acam_dec_goal, acam_angle_goal );
 

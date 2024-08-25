@@ -123,6 +123,17 @@ inline bool caseCompareString( const std::string &s1, const std::string &s2 ) {
   return( (s1.size()==s2.size() ) && std::equal( s1.begin(), s1.end(), s2.begin(), caseCompareChar) ); }
 
 
+inline void make_uppercase( std::string &in ) {
+  try { std::transform( in.begin(), in.end(), in.begin(), ::toupper ); }
+  catch( std::exception &e ) { std::cerr << "ERROR transforming string \"" << in << "\": " << e.what() << "\n"; }
+}
+
+inline std::string to_uppercase( std::string in ) {
+  try { std::transform( in.begin(), in.end(), in.begin(), ::toupper ); return in; }
+  catch( std::exception &e ) { std::cerr << "ERROR transforming string \"" << in << "\": " << e.what() << "\n"; }
+}
+
+
 /***** to_string_prec *******************************************************/
 /**
  * @brief      convert a numeric value to a string with specified precision
