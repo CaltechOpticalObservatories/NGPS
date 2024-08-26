@@ -72,6 +72,10 @@ public class NGPSdatabase {
     private java.lang.String         OTM             = new java.lang.String("otm");    
     public  java.lang.String         DBMS_CONNECTION_PROPERTIES = "ngps_dbms.ini";
     public java.lang.String          LOG_DIRECTORY   = new java.lang.String();
+    public String                       MYSQLDB;
+    public String                       TARGET_TABLE;
+    public String                       TARGETSET_TABLE;
+    public String                       ACCOUNT_TABLE;
     public Connection                conn = null;
     private boolean                  connected;
     private boolean                  table_populated;
@@ -155,14 +159,19 @@ public void initializeDBMS(){
       Properties       dbms_properties                 = new Properties();
       dbms_properties.load(dbms_properties_file);
       dbms_properties_file.close();
+      
+      MYSQLDB = dbms_properties.getProperty("DBMS");
+      TARGET_TABLE = MYSQLDB+"."+dbms_properties.getProperty("TARGET_TABLE");
+      TARGETSET_TABLE = MYSQLDB+"."+dbms_properties.getProperty("TARGETSET_TABLE");
+      ACCOUNT_TABLE = MYSQLDB+"."+dbms_properties.getProperty("ACCOUNT_TABLE");
+
       String SYSTEM             = dbms_properties.getProperty("SYSTEM");
-      String DBMS               = dbms_properties.getProperty("DBMS");
       String USERNAME           = dbms_properties.getProperty("USERNAME");
       String PASSWORD           = dbms_properties.getProperty("PASSWORD");
              PYTHON_INSTALL_DIR = dbms_properties.getProperty("PYTHON_INSTALL_DIR");
       LOG_DIRECTORY = dbms_properties.getProperty("LOG_DIRECTORY");      
       Class.forName("com.mysql.jdbc.Driver").newInstance(); 
-      conn = DriverManager.getConnection("jdbc:mysql://"+SYSTEM+SEP+DBMS+"?"+"user="+USERNAME+"&password="+PASSWORD);
+      conn = DriverManager.getConnection("jdbc:mysql://"+SYSTEM+SEP+MYSQLDB+"?"+"user="+USERNAME+"&password="+PASSWORD);
       setConnected(true);
       constructTargetsPreparedStatement();
       constructUpdateTargetsPreparedStatement();
@@ -501,8 +510,7 @@ public void export(java.lang.String new_export_file){
 /      constructQueryTargetPreparedStatement()
 /=================================================================================================*/
 public void constructQueryTargetPreparedStatement(){
-   // example:    SELECT * FROM ngps.targets WHERE ngps.targets.NAME = 'ZTF22aaheakp' AND ngps.targets.OWNER = 'jennifer';
-   String query = "SELECT * FROM ngps.targets WHERE ngps.targets.NAME = ? AND ngps.targets.OWNER = ?";
+   String query = String.format("SELECT * FROM %1$s WHERE %1$s.NAME = ? AND %1$s.OWNER = ?",TARGET_TABLE);
    try{
        QUERY_TARGET_PREP_STATEMENT = conn.prepareStatement(query);
     }catch(Exception e){
@@ -541,7 +549,7 @@ public int executeQueryTargetPreparedStatement(java.lang.String target_name){
 /      constructDeleteTargetPreparedStatement()
 /=================================================================================================*/
 public void constructDeleteTargetPreparedStatement(){
-    String query = "DELETE FROM ngps.targets WHERE ngps.targets.OBSERVATION_ID = ?";
+    String query = String.format("DELETE FROM %1$s WHERE %1$s.OBSERVATION_ID = ?", TARGET_TABLE);
     try{
        DELETE_TARGET_PREP_STATEMENT = conn.prepareStatement(query);
     }catch(Exception e){
@@ -566,7 +574,7 @@ public void executeDeleteTargetsStatement(Target current){
 /       constructObservationSetPreparedStatement()
 /=================================================================================================*/
 public void constructTargetsPreparedStatement(){   
-    String query = "INSERT INTO ngps.targets ("
+    String query = String.format("INSERT INTO %1$s (", TARGET_TABLE)
     + " SET_ID,"
     + " STATE,"
     + " OBS_ORDER,"
@@ -692,7 +700,7 @@ public void executeTargetsInsertStatement(Target current){
 /       constructObservationSetPreparedStatement()
 /=================================================================================================*/
 public void constructUpdateTargetsPreparedStatement(){   
-    String query = "UPDATE ngps.targets "
+    String query = "UPDATE "+TARGET_TABLE
     + " SET "
     + " SET_ID = ?,"
     + " STATE = ?,"
@@ -755,7 +763,7 @@ public void constructUpdateTargetsPreparedStatement(){
 /      constructQueryState()
 /=================================================================================================*/
 public void constructQueryState(){
-    String query = "SELECT ngps.targets.OBSERVATION_ID, ngps.targets.STATE FROM ngps.targets WHERE ngps.targets.SET_ID = ?; ";
+    String query = String.format("SELECT %1$s.OBSERVATION_ID, %1$s.STATE FROM %1$s WHERE %1$s.SET_ID = ?; ",TARGET_TABLE);
     try{
        QUERY_STATE_PREP_STATEMENT = conn.prepareStatement(query);
     }catch(Exception e){
@@ -961,7 +969,7 @@ public int queryLastInsertID(){
 /       constructObservationSetPreparedStatement()
 /=================================================================================================*/
 public void constructObservationSetPreparedStatement(){
-    String query = "INSERT INTO ngps.target_sets ("
+    String query = String.format("INSERT INTO %1$s (",TARGETSET_TABLE)
     + " SET_NAME,"
     + " OWNER,"
     + " STATE,"
@@ -980,7 +988,7 @@ public void constructObservationSetPreparedStatement(){
 /       constructObservationSetPreparedStatement()
 /=================================================================================================*/
 public void constructUpdateObservationSetPreparedStatement(){   
-    String query = "UPDATE ngps.target_sets "
+    String query = String.format("UPDATE %1$s ",TARGETSET_TABLE)
     + "SET "
     + " NUM_OBSERVATIONS = ?, "
     + " LAST_UPDATE_TIMESTAMP = ?"
@@ -1031,7 +1039,7 @@ public int executeObservationSetInsertStatement(ObservationSet current){
 /       constructObservationSetPreparedStatement()
 /=================================================================================================*/
 public void constructOwnerPreparedStatement(){
-    String query = "INSERT INTO ngps.owner ("
+    String query = String.format("INSERT INTO %1$s (",ACCOUNT_TABLE)
     + " OWNER_ID,"
     + " PASSWORD,"
     + " EMAIL"
@@ -1047,8 +1055,7 @@ public void constructOwnerPreparedStatement(){
 /      constructUpdateOwnerPreparedStatement()
 /=================================================================================================*/
 public void constructUpdateOwnerPreparedStatement(){
-     String query = "UPDATE ngps.owner"
-    + " SET "+ "ngps.owner.PASSWORD = ? "+ " WHERE ngps.owner.OWNER_ID = ? ";
+     String query = String.format("UPDATE %1$s SET %1$s.PASSWORD = ? WHERE %1$s.OWNER_ID = ? ",ACCOUNT_TABLE);
     try{
        UPDATE_OWNER_PREP_STATEMENT = conn.prepareStatement(query);
     }catch(Exception e){
@@ -1108,7 +1115,7 @@ public OwnerTableModel queryOwners(){
     java.sql.ResultSet rs    = null; 
     myOwnerTableModel.clearTable();
     ownerslist.clear();
-    java.lang.String   query = "SELECT * FROM ngps.owner;"; 
+    String query = String.format("SELECT * FROM %1$s;",ACCOUNT_TABLE); 
      try{
         java.sql.PreparedStatement st       = conn.prepareStatement(query);    
                                   rs       = st.executeQuery();  
@@ -1191,7 +1198,7 @@ public MasterDBTableModel queryObservations(int current_set_id){
     java.util.HashMap myHashmap = new java.util.HashMap();
     myTargetDBMSTableModel.clearTable();
 //    myTargetDBMSTableModel.fireTableDataChanged();
-    java.lang.String   query = "SELECT * FROM ngps.targets WHERE ngps.targets.SET_ID = ?;"; 
+    java.lang.String   query = String.format("SELECT * FROM %1$s WHERE %1$s.SET_ID = ?;",TARGET_TABLE); 
      try{
         java.sql.PreparedStatement st  = conn.prepareStatement(query); 
                                    st.setInt(1,current_set_id);
@@ -1222,8 +1229,8 @@ public MasterDBTableModel queryObservations(int current_set_id){
 public void deleteObservationSet(int current_set_id){
    java.sql.ResultSet rs     = null; 
    java.sql.ResultSet rs2    = null; 
-   java.lang.String   query  = "DELETE FROM ngps.targets WHERE ngps.targets.SET_ID = ?"; 
-   java.lang.String   query2 = "DELETE FROM ngps.target_sets WHERE target_sets.SET_ID = ?"; 
+   java.lang.String   query  = String.format("DELETE FROM %1$s WHERE %1$s.SET_ID = ?",TARGET_TABLE); 
+   java.lang.String   query2 = String.format("DELETE FROM %1$s WHERE %1$s.SET_ID = ?",TARGETSET_TABLE); 
      try{
         java.sql.PreparedStatement st  = conn.prepareStatement(query); 
                                    st.setInt(1,current_set_id);
@@ -1259,7 +1266,7 @@ public ObservationSet transformResultSetToObservationSet(java.sql.ResultSet resu
 public ObservationSetTableModel queryObservationSets(java.lang.String current_owner){
     java.sql.ResultSet rs    = null; 
     myObservationSetTableModel.clearTable();
-    java.lang.String   query = "SELECT * FROM ngps.target_sets WHERE ngps.target_sets.owner = ?;"; 
+    java.lang.String query = String.format("SELECT * FROM %1$s WHERE %1$s.owner = ?;",TARGETSET_TABLE); 
      try{
         java.sql.PreparedStatement st  = conn.prepareStatement(query); 
                                    st.setString(1,current_owner);
