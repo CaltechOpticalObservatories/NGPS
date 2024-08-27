@@ -24,7 +24,7 @@ namespace Database {
 
     if ( info.size() != 6 ) {
       logwrite( function, "ERROR constructing: bad info vector. check config file" );
-      throw std::invalid_argument( "ERROR constructing Database object: bad info vector. check config file" );
+      throw std::invalid_argument( "constructing Database object: bad info vector. check config file" );
     }
 
     try {
@@ -192,9 +192,14 @@ namespace Database {
     std::string function = "Database::Database::write";
     std::stringstream message;
 
-    if ( ! _dbconnected ) {
-      logwrite( function, "ERROR: not connected to database" );
-      throw std::runtime_error( "ERROR: not connected to database" );
+    if ( ! _dbconnected || ! _session || ! _sessionopen ) {
+      logwrite( function, "ERROR not connected to database or session not open" );
+      throw std::runtime_error( "not connected to database or session not open" );
+    }
+
+    if ( ! _table || ! _schema ) {
+      logwrite( function, "ERROR table or schema not initialized" );
+      throw std::runtime_error( "table or schema not initialized" );
     }
 
     // Create vectors from the supplied STL map, pre-allocating memory for them.
@@ -209,15 +214,29 @@ namespace Database {
       vals.push_back( dat.second );  // value for that column
     }
 
+    if ( cols.empty() || vals.empty() || cols.size() != vals.size() ) {
+      logwrite( function, "ERROR data empty or improperly formatted" );
+      throw std::runtime_error( "data empty or improperly formatted" );
+    }
+
     // Insert a row into the database table
     //
     try {
       _table->insert( cols ).values( vals ).execute();
     }
     catch ( const mysqlx::Error &err ) {
-      message.str(""); message << "ERROR from mySQL: " << err;
+      message.str(""); message << "ERROR from mySQL: " << err.what();
       logwrite( function, message.str() );
       throw mysqlx::Error( err );
+    }
+    catch ( const std::exception &err ) {
+      message.str(""); message << "ERROR: " << err.what();
+      logwrite( function, message.str() );
+      throw std::exception( err );
+    }
+    catch ( ... ) {
+      logwrite( function, "ERROR unknown exception" );
+      throw;
     }
 
     return;
