@@ -57,7 +57,7 @@ public class ImportFrame extends javax.swing.JFrame {
         initComponents();
         setTitle("Import CSV File");
         initialize();   
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);     
+        //setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);     
     }
 /*=============================================================================================
 /     setNGPSFrame(NGPSFrame newNGPSFrame)
@@ -351,8 +351,6 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
         simpleRadioButton = new javax.swing.JRadioButton();
         jLabel1 = new javax.swing.JLabel();
         selectedFileLabel = new javax.swing.JLabel();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         jTabbedPane2.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0), 3));
 

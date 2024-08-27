@@ -27,7 +27,6 @@ public class CreateOwnerFrame extends javax.swing.JFrame {
      */
     public CreateOwnerFrame() {
         initComponents();       
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
     }
 /*================================================================================================
 /      initializeOwnerList()
@@ -192,8 +191,6 @@ public void executeCreateOwner(){
         confirmPasswordField = new javax.swing.JPasswordField();
         Owner_ID_label6 = new javax.swing.JLabel();
         EmailTextField = new javax.swing.JTextField();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         jTabbedPane1.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 2, true));
 

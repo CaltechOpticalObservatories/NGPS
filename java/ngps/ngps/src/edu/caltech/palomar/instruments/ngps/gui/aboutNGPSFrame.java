@@ -27,7 +27,6 @@ public class aboutNGPSFrame extends javax.swing.JFrame {
     public aboutNGPSFrame() {
         initComponents();
         initializeIcons();
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
         setVisible(false);
     }
 /*================================================================================================
@@ -53,8 +52,6 @@ public class aboutNGPSFrame extends javax.swing.JFrame {
         jLabel2 = new javax.swing.JLabel();
         jLabel3 = new javax.swing.JLabel();
         OKButton = new javax.swing.JButton();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         OpticsLabel.setIcon(new javax.swing.ImageIcon(getClass().getResource("/edu/caltech/palomar/instruments/ngps/gui/Optics.png"))); // NOI18N
 

@@ -98,7 +98,6 @@ public class DateTimeChooserFrame extends javax.swing.JFrame {
         initializeCalendar();
 //        mainPanel.add(myJDateChooser, new org.netbeans.lib.awtextra.AbsoluteConstraints(50, 80, 200, 200));
         DatePanel.add(myJCalendar, java.awt.BorderLayout.CENTER);
-        this.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
     }
 /*=============================================================================================
 /     setJSkyCalcModel(JSkyCalcModel newJSkyCalcModel)
@@ -400,8 +399,6 @@ public void updateDateTime(){
         SelectedTimeTextField = new javax.swing.JTextField();
         UpdateButton = new javax.swing.JButton();
 
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-
         mainPanel.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
         DatePanel.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 2, true));
@@ -516,12 +513,9 @@ public void updateDateTime(){
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel2Layout.createSequentialGroup()
-                        .addComponent(jLabel6)
-                        .addGap(3, 3, 3))
-                    .addGroup(jPanel2Layout.createSequentialGroup()
-                        .addComponent(jLabel7)
-                        .addGap(3, 3, 3)))
+                    .addComponent(jLabel6, javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(jLabel7))
+                .addGap(3, 3, 3)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(SelectedDateTextField, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(SelectedTimeTextField, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -561,7 +555,7 @@ public void updateDateTime(){
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(mainPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 418, Short.MAX_VALUE)
+            .addComponent(mainPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         );
 
         pack();

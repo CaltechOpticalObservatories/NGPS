@@ -78,7 +78,7 @@
           <SubComponents>
             <MenuItem class="javax.swing.JMenuItem" name="aboutNGPSMenuItem">
               <Properties>
-                <Property name="text" type="java.lang.String" value="About NGPS planning"/>
+                <Property name="text" type="java.lang.String" value="About NGPS GUI"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="aboutNGPSMenuItemActionPerformed"/>

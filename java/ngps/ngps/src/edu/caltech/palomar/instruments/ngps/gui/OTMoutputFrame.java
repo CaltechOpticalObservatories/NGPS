@@ -18,7 +18,6 @@ public class OTMoutputFrame extends javax.swing.JFrame {
     public OTMoutputFrame() {
         initComponents();
         setVisible(false);
-        this.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
     }
     public void setDBMS(NGPSdatabase new_dbms){
         dbms = new_dbms;
@@ -38,8 +37,6 @@ public class OTMoutputFrame extends javax.swing.JFrame {
         jTextPane1 = new javax.swing.JTextPane();
         jLabel1 = new javax.swing.JLabel();
         OKButton = new javax.swing.JButton();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         jScrollPane1.setViewportView(jTextPane1);
 

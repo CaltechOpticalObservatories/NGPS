@@ -20,7 +20,6 @@ public class EngineeringFrame extends javax.swing.JFrame {
      */
     public EngineeringFrame() {
         initComponents();
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);     
     }
 /*=============================================================================================
 /    setObservationSequencerController(ObservationSequencerController newObservationSequencerController)
@@ -118,8 +117,6 @@ public class EngineeringFrame extends javax.swing.JFrame {
         jPanel1 = new javax.swing.JPanel();
         jScrollPane1 = new javax.swing.JScrollPane();
         asynchronousTextPane = new javax.swing.JTextPane();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         jLabel1.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);

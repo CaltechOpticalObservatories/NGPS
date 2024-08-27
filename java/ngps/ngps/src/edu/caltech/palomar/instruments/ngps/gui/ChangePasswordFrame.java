@@ -25,7 +25,6 @@ public class ChangePasswordFrame extends javax.swing.JFrame {
     public ChangePasswordFrame() {
         initComponents();
         this.setVisible(false);
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
     }
 /*=============================================================================================
 /     setDBMS(NGPSdatabase new_dbms)
@@ -177,8 +176,6 @@ public boolean sign_in(java.lang.String submitted_password){
         OKButton = new javax.swing.JButton();
         messageLabel = new javax.swing.JLabel();
         ChangePasswordButton = new javax.swing.JButton();
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
         PasswordField.setText("password");
         PasswordField.setMinimumSize(new java.awt.Dimension(11, 400));

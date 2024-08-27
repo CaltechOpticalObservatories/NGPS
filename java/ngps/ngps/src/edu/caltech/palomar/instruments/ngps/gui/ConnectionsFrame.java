@@ -32,7 +32,6 @@ public class ConnectionsFrame extends javax.swing.JFrame {
     public ConnectionsFrame() {
         initComponents();
         initializeIcons();
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
    }
 /*================================================================================================
 /        initializeIcons()
@@ -177,7 +176,6 @@ public void setDBMS(NGPSdatabase new_dbms){
         simulatorRadioButton = new javax.swing.JRadioButton();
         P200RadioButton = new javax.swing.JRadioButton();
 
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
         jLabel1.setFont(new java.awt.Font("Cantarell", 1, 15)); // NOI18N

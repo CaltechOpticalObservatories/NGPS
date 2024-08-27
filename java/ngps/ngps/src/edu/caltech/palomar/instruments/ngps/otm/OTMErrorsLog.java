@@ -18,7 +18,6 @@ public class OTMErrorsLog extends javax.swing.JFrame {
     public OTMErrorsLog() {
         initComponents();
         this.setVisible(false);
-        this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         constructListModel();
     }
     public void initialize(){
@@ -53,7 +52,7 @@ public class OTMErrorsLog extends javax.swing.JFrame {
 
         jButton1.setText("jButton1");
 
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
 
         jScrollPane1.setViewportView(error_List);
 

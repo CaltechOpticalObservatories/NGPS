@@ -1914,7 +1914,7 @@ public JTable constructTable(){
 
         NGPSMenu.setText("NGPS");
 
-        aboutNGPSMenuItem.setText("About NGPS planning");
+        aboutNGPSMenuItem.setText("About NGPS GUI");
         aboutNGPSMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 aboutNGPSMenuItemActionPerformed(evt);

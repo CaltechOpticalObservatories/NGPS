@@ -14,7 +14,6 @@ import org.apache.commons.exec.*;
 import edu.caltech.palomar.util.general.CommandLogModel;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import javax.swing.JOptionPane;
 import javax.swing.JFrame;
 import java.io.FileWriter;
 import java.io.PrintWriter;
@@ -30,16 +29,12 @@ import edu.caltech.palomar.instruments.ngps.object.GlobalPreferencesModel;
 import org.jfree.data.gantt.Task;
 import org.jfree.data.gantt.TaskSeries;
 import org.jfree.data.gantt.TaskSeriesCollection;
-import org.jfree.data.gantt.XYTaskDataset;
 import org.jfree.data.time.SimpleTimePeriod;
-import edu.caltech.palomar.instruments.ngps.charts.OTM_Gantt_Chart;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
 import org.jfree.data.time.Millisecond;
 import java.util.Date;
 import edu.caltech.palomar.instruments.ngps.charts.CombinedAirmassGanttChart;
-import org.jfree.data.time.Day;
-import org.jfree.data.time.Hour;
 import org.jfree.data.xy.DefaultIntervalXYDataset;
 import edu.caltech.palomar.instruments.ngps.charts.XYIntervalChart;
 import java.beans.PropertyChangeEvent;
@@ -49,7 +44,6 @@ import org.jfree.data.xy.XYSeriesCollection;
 import edu.caltech.palomar.instruments.ngps.charts.CombinedChartTest;
 import edu.dartmouth.jskycalc.coord.InstantInTime;
 import edu.dartmouth.jskycalc.coord.Site;
-import edu.dartmouth.jskycalc.gui.NightlyWindow;
 import edu.dartmouth.jskycalc.objects.NightlyAlmanac;
 import edu.dartmouth.jskycalc.objects.WhenWhere;
 import java.io.FileInputStream;
@@ -148,7 +142,6 @@ public class OTMlauncher {
    private java.lang.String             CONFIG          = new java.lang.String("config");
    private java.lang.String             OTM             = new java.lang.String("otm"); 
    public OTMTableModel                 myOTMTableModel = new OTMTableModel();
-   private  TimelineChart               myTimelineChart;   
    private java.lang.String             PLOT_OUTPUT_FILE   = TEMPDIR+SEP+"PLOT.html";
    public  JFrame                       timeline_graph_frame;
    private double                       seeing;
@@ -160,7 +153,6 @@ public class OTMlauncher {
    public TaskSeriesCollection          myTaskSeriesCollection;
  //  public TimeSeries                    myTimeSeries;
    public TimeSeriesCollection          myOTMTimeSeriesCollection;
-   public OTM_Gantt_Chart               myOTM_Gantt_Chart;
    public CombinedAirmassGanttChart     myCombinedAirmassGanttChart;
    public DefaultIntervalXYDataset      myDefaultIntervalXYDataset;
    public XYSeriesCollection            myXYSeriesCollection;
@@ -180,7 +172,6 @@ public class OTMlauncher {
     public OTMlauncher(){ 
         //bootstrap();
         initialize();
-        initializeTimelineFrame();
         setAirmass_limit(DEFAULT_AIRMASS_LIMIT);
         
         loadconfig();
@@ -242,9 +233,6 @@ public void setPublicDocumentModel(CommandLogModel new_CommandLogModel){
   public CommandLogModel getCommandLogModel(){
       return myCommandLogModel;
   }
-  public void initializeTimelineFrame(){
-      myTimelineChart = new TimelineChart(false);
-  } 
 /*================================================================================================
 /      initialize()
 /=================================================================================================*/
@@ -538,7 +526,7 @@ public void readOTMoutput(){
      
     dbms.myTargetDBMSTableModel.fireTableDataChanged();
     
-    myCombinedChartTest = new CombinedChartTest("Observation Timline: "+dbms.getSelectedSetName(),
+    myCombinedChartTest = new CombinedChartTest("Observation Timeline: "+dbms.getSelectedSetName(),
                                                 myDefaultIntervalXYDataset,myXYSeriesCollection,
                                                 sunset,sunrise,reference_time,evening_twilight,morning_twilight,start_first_exposure);
     dbms.setCombinedChartTest(myCombinedChartTest);
