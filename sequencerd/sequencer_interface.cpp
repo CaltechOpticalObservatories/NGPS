@@ -9,64 +9,6 @@
 
 namespace Sequencer {
 
-  /***** Sequencer::TargetInfo::TargetInfo ************************************/
-  /**
-   * @brief  class constructor
-   *
-   * This constructor initializes the database configuration variables as empty,
-   * requiring them to be properly configured from the .cfg file.
-   *
-   * This also defines the target list fields which are accessed in the active 
-   * target table, the table identified by DB_ACTIVE.
-   *
-   */
-  TargetInfo::TargetInfo() {
-    this->db_host       = "";
-    this->db_port       = -1;
-    this->db_user       = "";
-    this->db_pass       = "";
-    this->db_schema     = "";
-    this->db_active     = "";
-    this->db_completed  = "";
-    this->db_sets       = "";
-    this->db_configured = false;
-
-    this->init_record();
-
-    // These are the fields (or columns) to be accessed in the DB_ACTIVE table.
-    // They can be listed in any order.
-    //
-    this->targetlist_cols = { "OBSERVATION_ID",
-                              "OBS_ORDER",
-                              "STATE",
-                              "NAME",
-                              "RA",
-                              "DECL",
-                              "OTMexpt",
-                              "TARGET_NUMBER",
-                              "SEQUENCE_NUMBER",
-                              "OTMslitwidth",
-                              "OTMslitangle",
-                              "SLITOFFSET",
-                              "BINSPECT",
-                              "BINSPAT",
-                              "OTMcass"
-                            };           /// initialize the target list fields for accessing the active target table
-
-    // These are the fields (or columns) to be accessed in the DB_SETS table.
-    //
-    this->targetset_cols  = { "SET_ID",
-                              "SET_NAME"
-                            };           /// initialize the target set fields for accessing the table of target sets
-
-    // These wiil be read from the .cfg file
-    //
-    this->offset_threshold = 0;
-    this->max_tcs_offset = 0;
-  }
-  /***** Sequencer::TargetInfo::TargetInfo ************************************/
-
-
   /***** Sequencer::TargetInfo::colnum ****************************************/
   /**
    * @brief      get column number of requested field from this->targetlist_cols
@@ -99,6 +41,7 @@ namespace Sequencer {
   /***** Sequencer::TargetInfo::init_record ***********************************/
   /**
    * @brief      initialize current target record variables
+   * @details    This is called by the TargetInfo class constructor, and
    *
    */
   void TargetInfo::init_record() {
@@ -108,20 +51,26 @@ namespace Sequencer {
     this->setname="(UNDEFINED)";
     this->obsid=-1;
     this->obsorder=-1;
-    this->name="";
-    this->ra_hms="";
-    this->dec_dms="";
+    this->name.clear();
+    this->ra_hms.clear();
+    this->dec_dms.clear();
     this->slitangle=-1;
     this->casangle=-1;
+    this->pointmode.clear();
     this->slitwidth=-1;
     this->slitoffset=-1;
     this->exptime=-1;
     this->targetnum=-1;
     this->sequencenum=-1;
-    this->obsplan="";
+    this->obsmode.clear();
     this->binspect=-1;
     this->binspat=-1;
     this->acquired=false;
+    this->notbefore="1901-01-01 00:00:00.000";
+    this->slewstart="1901-01-01 00:00:00.000";
+    this->slewend="1901-01-01 00:00:00.000";
+    this->expstart="1901-01-01 00:00:00.000";
+    this->expend="1901-01-01 00:00:00.000";
 
   }
   /***** Sequencer::TargetInfo::init_record ***********************************/
@@ -383,20 +332,21 @@ namespace Sequencer {
   /***** Sequencer::TargetInfo::add_row ***************************************/
   /**
    * @brief      adds a row to the database (non-production)
-   * @param[in]  number  int used for both OBSERVATION_ID and OBS_ORDER
-   * @param[in]  name    string target name
-   * @param[in]  ra      string RA
-   * @param[in]  dec     string DECL
-   * @param[in]  slita   double slit angle
-   * @param[in]  slitw   double slit width
-   * @param[in]  etime   double exposure time
+   * @param[in]  number_in     used for both OBSERVATION_ID and OBS_ORDER
+   * @param[in]  name_in       target name
+   * @param[in]  ra_hms_in     RA in HH:MM:SS
+   * @param[in]  dec_dms_in    DECL in DD:MM:SS
+   * @param[in]  slita_in      slit angle
+   * @param[in]  slitw_in      slit width
+   * @param[in]  exptime_in    exposure time
+   * @param[in]  pointmode_in  point mode
    *
    * This is for testing purposes. Adds a row to the database using the passed-in
    * parameters which set the ID, ORDER, NAME, RA, DECL. Everything else is fixed.
    *
    */
-  long TargetInfo::add_row( int number, std::string name, std::string ra, std::string dec,
-                            double slita, double slitw, double etime ) {
+  long TargetInfo::add_row( int number_in, std::string name_in, std::string ra_hms_in, std::string dec_dms_in,
+                            double slita_in, double slitw_in, double exptime_in, std::string pointmode_in ) {
     std::string function = "Sequencer::TargetInfo::add_row";
     std::stringstream message;
 
@@ -447,28 +397,30 @@ namespace Sequencer {
                           "SLITWIDTH",
                           "SLITOFFSET",
                           "BINSPECT",
-                          "BINSPAT"
+                          "BINSPAT",
+                          "POINTMODE"
                         )
-                .values( number,                     /* OBSERVATION_ID  */
-                         number,                     /* OBS_ORDER       */
-                         this->setid,                /* SET_ID          */
-                         Sequencer::TARGET_PENDING,  /* STATE           */
-                         name,                       /* NAME            */
-                         ra,                         /* RA              */
-                         dec,                        /* DECL            */
-                         "J2000",                    /* EPOCH           */
-                         etime,                      /* EXPTIME         */
-                         etime,                      /* OTMexpt         */
-                         1,                          /* TARGET_NUMBER   */
-                         1,                          /* SEQUENCE_NUMBER */
-                         0.,                         /* CASANGLE        */
-                         0.,                         /* OTMcass         */
-                         slita,                      /* OTMslitangle    */
-                         slitw,                      /* OTMslitwidth    */
-                         slitw,                      /* SLITWIDTH       */
-                         1,                          /* SLITOFFSET      */
-                         1,                          /* BINSPECT        */
-                         1                           /* BINSPAT         */
+                .values( number_in,                  // OBSERVATION_ID
+                         number_in,                  // OBS_ORDER
+                         this->setid,                // SET_ID
+                         Sequencer::TARGET_PENDING,  // STATE
+                         name_in,                    // NAME
+                         ra_hms_in,                  // RA
+                         dec_dms_in,                 // DECL
+                         "J2000",                    // EPOCH
+                         exptime_in,                 // EXPTIME
+                         exptime_in,                 // OTMexpt
+                         1,                          // TARGET_NUMBER
+                         1,                          // SEQUENCE_NUMBER
+                         0.,                         // CASANGLE
+                         0.,                         // OTMcass
+                         slita_in,                   // OTMslitangle
+                         slitw_in,                   // OTMslitwidth
+                         slitw_in,                   // SLITWIDTH
+                         1,                          // SLITOFFSET
+                         1,                          // BINSPECT
+                         1,                          // BINSPAT
+                         pointmode_in                // POINTMODE
                        )
                 .execute();
     }
@@ -633,21 +585,24 @@ namespace Sequencer {
       // so you have to get them by the order requested. The colnum() function returns
       // the correct column number.
       //
+      col = this->colnum( "STATE", this->targetlist_cols );           this->state       = row.get( col );
+      col = this->colnum( "OWNER", this->targetlist_cols );           this->owner       = row.get( col );
       col = this->colnum( "OBSERVATION_ID", this->targetlist_cols );  this->obsid       = row.get( col );
       col = this->colnum( "OBS_ORDER", this->targetlist_cols );       this->obsorder    = row.get( col );
+      col = this->colnum( "TARGET_NUMBER", this->targetlist_cols );   this->targetnum   = row.get( col );
+      col = this->colnum( "SEQUENCE_NUMBER", this->targetlist_cols ); this->sequencenum = row.get( col );
       col = this->colnum( "NAME", this->targetlist_cols );            this->name        = row.get( col );
-      col = this->colnum( "STATE", this->targetlist_cols );           this->state       = row.get( col );
       col = this->colnum( "RA", this->targetlist_cols );              this->ra_hms      = row.get( col );
       col = this->colnum( "DECL", this->targetlist_cols );            this->dec_dms     = row.get( col );
+
       col = this->colnum( "OTMcass", this->targetlist_cols );         this->casangle    = row.get( col );
       col = this->colnum( "OTMslitangle", this->targetlist_cols );    this->slitangle   = row.get( col );
       col = this->colnum( "OTMslitwidth", this->targetlist_cols );    this->slitwidth   = row.get( col );
       col = this->colnum( "SLITOFFSET", this->targetlist_cols );      this->slitoffset  = row.get( col );
       col = this->colnum( "OTMexpt", this->targetlist_cols );         this->exptime     = row.get( col );
-      col = this->colnum( "TARGET_NUMBER", this->targetlist_cols );   this->targetnum   = row.get( col );
-      col = this->colnum( "SEQUENCE_NUMBER", this->targetlist_cols ); this->sequencenum = row.get( col );
       col = this->colnum( "BINSPECT", this->targetlist_cols );        this->binspect    = row.get( col );
       col = this->colnum( "BINSPAT", this->targetlist_cols );         this->binspat     = row.get( col );
+      col = this->colnum( "POINTMODE", this->targetlist_cols );       this->pointmode   = row.get( col );
     }
     catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
       message.str(""); message << "EXCEPTION from mySQL ";
@@ -687,23 +642,23 @@ namespace Sequencer {
 
     // If we got to here then target is found, but do one last quality-control check before returning success
     //
-    error = target_qc( status );
+    error = target_qc_check( status );
 
     return ( error == NO_ERROR ? TARGET_FOUND : TARGET_ERROR );
   }
   /***** Sequencer::TargetInfo::get_next **************************************/
 
 
-  /***** Sequencer::TargetInfo::target_qc *************************************/
+  /***** Sequencer::TargetInfo::target_qc_check *******************************/
   /**
-   * @brief      target info quality control
+   * @brief      target info quality control check
    * @details    applies a limited set of formatting rules and range checks on certain values
    * @param[out] status    reference to string to return status message
    * @return     ERROR or NO_ERROR
    *
    */
-  long TargetInfo::target_qc( std::string &status ) {
-    std::string function = "Sequencer::TargetInfo::target_qc";
+  long TargetInfo::target_qc_check( std::string &status ) {
+    std::string function = "Sequencer::TargetInfo::target_qc_check";
     std::stringstream message;
 
     // You can have both RA and DEC empty (which means don't point the telescope)
@@ -741,9 +696,25 @@ namespace Sequencer {
       }
     }
 
+    // If pointmode not provided (this is OK) then the default is SLIT
+    //
+    if ( this->pointmode.empty() ) {
+      this->pointmode = Acam::POINTMODE_SLIT;
+    }
+    else {
+      if ( ! caseCompareString( this->pointmode, Acam::POINTMODE_ACAM ) &&
+           ! caseCompareString( this->pointmode, Acam::POINTMODE_SLIT ) ) {
+        message.str(""); message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
+                                 << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
+        status = message.str();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+
     return NO_ERROR;
   }
-  /***** Sequencer::TargetInfo::target_qc *************************************/
+  /***** Sequencer::TargetInfo::target_qc_check *******************************/
 
 
   /***** Sequencer::TargetInfo::update_state **********************************/
@@ -872,35 +843,76 @@ namespace Sequencer {
       //
       mysqlx::Table targettable = db.getTable( this->db_completed );
 
-      // add the row
+      // add the row --
+      // All of these are read directly from the target table from
+      // the column of the same name, unless otherwise noted.
       //
-      targettable.insert( "OBSERVATION_ID",
-//                        "STATE",
-                          "NAME",
-                          "RA",
-                          "DECL",
-                          "EXPTIME",
+      targettable.insert( "OWNER",
+                          "OBSERVATION_ID",
+                          "SET_ID",
                           "TARGET_NUMBER",
                           "SEQUENCE_NUMBER",
+                          "NAME",
+                          "FITSFILE",         // internal from ___
+                          "RA",
+                          "DECL",
+                          "TELRA",            // read from tcsd
+                          "TELDECL",          // read from tcsd
+                          "ALT",              // read from tcsd
+                          "AZ",               // read from tcsd
+                          "AIRMASS",          // read from tcsd
+                          "CASANGLE",         // read from tcsd
+                          "SLITANGLE_REQ",
+                          "POINTMODE",
+                          "NOTBEFORE",
+                          "SLEW_START",       // from Sequence::dothread_move_to_target()
+                          "SLEW_END",         // from Sequence::dothread_move_to_target()
+                          "EXPTIME",          // target table col = OTMexpt
+                          "EXPTIME_REQ",
+                          "EXP_START",        // from Sequence::dothread_trigger_exposure()
+                          "EXP_END",          // from Sequence::dothread_sequencer_async_listener() ?
                           "SLITWIDTH",
+                          "SLITWIDTH_REQ",
                           "SLITOFFSET",
                           "BINSPECT",
                           "BINSPAT",
-                          "CASANGLE"
+                          "OBSMODE",
+                          "NOTE",
+                          "OTMFLAG"
                         )
-                .values( this->obsid,
-//                       Sequencer::TARGET_COMPLETE,
-                         this->name,
-                         this->ra_hms,
-                         this->dec_dms,
-                         this->exptime,
+                .values( this->owner,
+                         this->obsid,
+                         this->setid,
                          this->targetnum,
                          this->sequencenum,
+                         this->name,
+                         this->fitsfile,
+                         this->ra_hms,
+                         this->dec_dms,
+                         this->tel_ra,
+                         this->tel_dec,
+                         this->tel_alt,
+                         this->tel_az,
+                         this->airmass,
+                         this->casangle,
+                         this->slitangle_req,
+                         this->pointmode,
+                         this->notbefore,
+                         this->slewstart,
+                         this->slewend,
+                         this->exptime,
+                         this->exptime_req,
+                         this->expstart,
+                         this->expend,
                          this->slitwidth,
+                         this->slitwidth_req,
                          this->slitoffset,
                          this->binspect,
                          this->binspat,
-                         this->casangle )
+                         this->obsmode,
+                         this->note,
+                         this->otmflag
+                        )
                 .execute();
     }
     catch ( const mysqlx::Error &err ) {

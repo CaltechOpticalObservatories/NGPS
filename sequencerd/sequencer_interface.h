@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef SEQUENCER_INTERFACE_H
-#define SEQUENCER_INTERFACE_H
+#pragma once
 
 #include <map>
 #include <string>
@@ -20,6 +19,8 @@
 
 #include <vector>
 #include <mysqlx/xdevapi.h>
+
+#include "acam_interface_shared.h"
 
 #define ERROR_TARGETLIST_BAD_HEADER 1001  ///< TODO change this
 
@@ -123,7 +124,27 @@ namespace Sequencer {
       bool        db_configured;          ///< have the database params been set?
 
     public:
-      TargetInfo();
+      TargetInfo() : db_port(-1), db_configured(false),
+                     targetlist_cols { "OWNER",
+                                       "OBSERVATION_ID",
+                                       "OBS_ORDER",
+                                       "TARGET_NUMBER",
+                                       "SEQUENCE_NUMBER",
+                                       "STATE",
+                                       "NAME",
+                                       "RA",
+                                       "DECL",
+                                       "OTMexpt",
+                                       "OTMslitwidth",
+                                       "OTMslitangle",
+                                       "SLITOFFSET",
+                                       "BINSPECT",
+                                       "BINSPAT",
+                                       "OTMcass",
+                                       "POINTMODE" },
+                     targetset_cols  { "SET_ID",
+                                       "SET_NAME" },
+                     offset_threshold(0), max_tcs_offset(0) { init_record(); }
 
       SkyInfo::FPOffsets fpoffsets;       ///< for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
@@ -150,26 +171,44 @@ namespace Sequencer {
       std::vector<std::string> targetlist_cols;  ///< target list fields, used for accessing the target table, which accepts a variadic param
       std::vector<std::string> targetset_cols;   ///< target set fields, used for accessing the table of target sets
 
+      mysqlx::string owner;               ///< target table owner
+      int            obsid;               ///< current target observation ID (DB internal, used for record-checking)
       int            setid;               ///< ID of the set to get from the targets table
       mysqlx::string setname;             ///< set name associated with setid
-      int            obsid;               ///< current target observation ID (DB internal, used for record-checking)
       int            obsorder;            ///< observation order (DB internal)
-      mysqlx::string state;               ///< current target state
-      mysqlx::string name;                ///< current target name
-      mysqlx::string ra_hms;              ///< current target right ascension in units hh:mm:ss
-      mysqlx::string dec_dms;             ///< current target declination in units dd:mm:ss
-      double         casangle;            ///< current target cass angle
-      double         slitangle;           ///< current slit angle
-      double         slitwidth;           ///< slit width for this target
-      double         slitoffset;          ///< slit offset for this target
-      double         exptime;             ///< exposure time in seconds for this target
-      long           nexp;                ///< number of repeat exposures on this target
       long           targetnum;           ///< ??
       long           sequencenum;         ///< ??
-      mysqlx::string obsplan;             ///< TBD
+      mysqlx::string name;                ///< name of astronomical target or calibration
+      mysqlx::string fitsfile;            ///< file with the spectrum images
+      mysqlx::string ra_hms;              ///< current target right ascension in units hh:mm:ss
+      mysqlx::string dec_dms;             ///< current target declination in units dd:mm:ss
+      mysqlx::string tel_ra;              ///< current target right ascension in units hh:mm:ss
+      mysqlx::string tel_dec;             ///< current target declination in units dd:mm:ss
+      double         tel_alt;             ///< telescope alt (deg) at exposure start
+      double         tel_az;              ///< telescope az (deg) at exposure start
+      double         airmass;             ///< airmass at exposure start
+      double         casangle;            ///< current target cass angle
+      double         slitangle_req;       ///< slit angle requested
+      mysqlx::string pointmode;           ///< pointing mode contains slit|acam with optional space-delimited filter
+      mysqlx::string notbefore;           ///< earliest date/time to start exposure
+      mysqlx::string slewstart;           ///< slew start date/time
+      mysqlx::string slewend;             ///< slew end date/time
+      double         exptime;             ///< exposure time in seconds for this target
+      mysqlx::string exptime_req;         ///< exposure time request
+      mysqlx::string expstart;            ///< exposure start date/time
+      mysqlx::string expend;              ///< exposure end date/time
+      double         slitwidth;           ///< slit width for this target
+      mysqlx::string slitwidth_req;       ///< slit width request
+      double         slitoffset;          ///< slit offset for this target
       int            binspect;            ///< binning in spectral direction for this target
       int            binspat;             ///< binning in spatial direction for this target
-      mysqlx::string pointmode;           ///< pointing mode contains slit|acam with optional space-delimited filter
+      mysqlx::string obsmode;             ///< observation mode contains CCD settings TBD
+      mysqlx::string note;                ///< observer notes
+      mysqlx::string otmflag;             ///< OTM codes
+
+      mysqlx::string state;               ///< current target state
+      double         slitangle;           ///< current slit angle
+      long           nexp;                ///< number of repeat exposures on this target
 
       double         offset_threshold;    ///< computed offset below this threshold (in arcsec) defines successful acquisition
       double         max_tcs_offset;      ///< max allowable TCS offset
@@ -180,12 +219,13 @@ namespace Sequencer {
       TargetInfo::TargetState get_next( );                     ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
-      long target_qc( std::string &status );                   ///< target info quality control
-      long add_row( int number, std::string name, std::string ra_hms, std::string dec_dms, double slita, double slitw, double etime );   ///< add a row to the database
+      long target_qc_check( std::string &status );                   ///< target info quality control check
+      long add_row( int number_in, std::string name_in, std::string ra_hms_in, std::string dec_dms_in,
+                    double slita_in, double slitw_in, double exptime_in, std::string pointmode_in );   ///< add a row to the database
       long update_state( std::string newstate );  ///< update the target status in the database DB_ACTIVE table
       long insert_completed();            ///< insert target record into completed observations table
       long get_table_names();             ///< utility to print all database table names
-      void init_record();
+      void init_record();                 ///< initialize current target record variables
 
       long configure_db( std::string param, std::string value );  ///< configure the database connection parameters (host, user, etc.)
       long targetset( std::string args, std::string &retstring ); ///< set or get the target set to read from the targets table
@@ -195,4 +235,3 @@ namespace Sequencer {
 
 }
 /***** Sequencer **************************************************************/
-#endif

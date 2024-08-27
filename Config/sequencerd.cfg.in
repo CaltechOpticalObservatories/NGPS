@@ -38,8 +38,10 @@ CAMERA_PREAMBLE=(open 0 1)
 CAMERA_PREAMBLE=load
 CAMERA_PREAMBLE=(native CSH)
 CAMERA_PREAMBLE=(native PON)
-CAMERA_PREAMBLE=(buffer 4300 2140)
-CAMERA_PREAMBLE=(geometry 4300 2140)
+CAMERA_PREAMBLE=(buffer I 4300 2140)
+CAMERA_PREAMBLE=(buffer R 4300 2140)
+CAMERA_PREAMBLE=(geometry I 4300 2140)
+CAMERA_PREAMBLE=(geometry R 4300 2140)
 CAMERA_PREAMBLE=(exptime 0)
 CAMERA_PREAMBLE=(readout SPLIT1)
 CAMERA_PREAMBLE=(useframes false)
@@ -71,7 +73,7 @@ DB_USER=obseq
 DB_PASS=Write1Spec2.!
 DB_SCHEMA=ngps
 DB_ACTIVE=targets                    # active target table
-DB_COMPLETED=completed_observations  # completed observations table
+DB_COMPLETED=completed_obs           # completed observations table
 DB_SETS=target_sets                  # table of target sets
 
 # TCS-related configuration

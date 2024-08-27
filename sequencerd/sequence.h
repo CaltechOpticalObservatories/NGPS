@@ -26,6 +26,7 @@
 #include "sequencerd_commands.h"
 
 #include "tcs_constants.h"
+#include "acam_interface_shared.h"
 
 /***** Sequencer **************************************************************/
 /**

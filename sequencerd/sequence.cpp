@@ -569,12 +569,22 @@ namespace Sequencer {
       // Set the state bit before starting each thread, then
       // the thread will clear their bit when they complete
       //
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_set, std::ref(seq) ).detach();
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_set, std::ref(seq) ).detach();
+
       seq.set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );     std::thread( dothread_move_to_target, std::ref(seq) ).detach();
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_set, std::ref(seq) ).detach();
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_set, std::ref(seq) ).detach();
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_set, std::ref(seq) ).detach();
+
+      if ( seq.target.pointmode == Acam::POINTMODE_ACAM ) {
+        seq.dotype( "ONE" );
+      }
+      else {
+        // For pointmode other than ACAM ("SLIT" or empty, which assumes SLIT)
+        // set everything else.
+        //
+        seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_set, std::ref(seq) ).detach();
+        seq.set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_set, std::ref(seq) ).detach();
+        seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_set, std::ref(seq) ).detach();
+        seq.set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_set, std::ref(seq) ).detach();
+        seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_set, std::ref(seq) ).detach();
+      }
 
       // Now that the threads are running, wait until they are all finished.
       // When the SEQ_RUNNING bit is the only bit set then we are ready.
@@ -622,76 +632,78 @@ namespace Sequencer {
         break;
       }
 
-      logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
+      if ( seq.target.pointmode == Acam::POINTMODE_ACAM ) {
+        logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
-      // Start the exposure in a thread...
-      //
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
-      std::thread( dothread_trigger_exposure, std::ref(seq) ).detach();  // trigger exposure in a thread
+        // Start the exposure in a thread...
+        //
+        seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
+        std::thread( dothread_trigger_exposure, std::ref(seq) ).detach();  // trigger exposure in a thread
 
-      seq.set_reqstate_bit( Sequencer::SEQ_RUNNING );                    // set the requested state
-      std::thread( dothread_wait_for_state, std::ref(seq) ).detach();    // wait for requested state
+        seq.set_reqstate_bit( Sequencer::SEQ_RUNNING );                    // set the requested state
+        std::thread( dothread_wait_for_state, std::ref(seq) ).detach();    // wait for requested state
 
-      // ...then wait for it to complete
-      //
-      logwrite( function, "[DEBUG] (2) waiting on notification" );
-      while ( seq.seqstate.load() != seq.reqstate.load() ) {
-        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-        logwrite( function, message.str() );
-        seq.cv.wait( wait_lock );
-      }
-      logwrite( function, "[DEBUG] (2) DONE waiting on notification" );
+        // ...then wait for it to complete
+        //
+        logwrite( function, "[DEBUG] (2) waiting on notification" );
+        while ( seq.seqstate.load() != seq.reqstate.load() ) {
+          message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
+          logwrite( function, message.str() );
+          seq.cv.wait( wait_lock );
+        }
+        logwrite( function, "[DEBUG] (2) DONE waiting on notification" );
 
-      // Now that we're done waiting, check for errors or abort
-      //
-      thr_error = seq.thr_error.load();
-      if ( thr_error != THR_NONE ) {
-        message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: " << seq.thrstate_string( thr_error );
-        logwrite( function, message.str() );
-//      seq.thr_error.store( THR_NONE );  // clear the thread error state // move this outside loop after break
-        break;
-      }
+        // Now that we're done waiting, check for errors or abort
+        //
+        thr_error = seq.thr_error.load();
+        if ( thr_error != THR_NONE ) {
+          message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: " << seq.thrstate_string( thr_error );
+          logwrite( function, message.str() );
+//        seq.thr_error.store( THR_NONE );  // clear the thread error state // move this outside loop after break
+          break;
+        }
 
-      // When an exposure is aborted then it will be marked as UNASSIGNED
-      //
-      if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-        logwrite( function, "ABORT requested" );
+        // When an exposure is aborted then it will be marked as UNASSIGNED
+        //
+        if ( seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
+          logwrite( function, "ABORT requested" );
 logwrite( function, "[DEBUG] setting READY bit" );
-        seq.set_clr_seqstate_bit( Sequencer::SEQ_READY, ( Sequencer::SEQ_ABORTREQ | Sequencer::SEQ_RUNNING ) );  // set and clear together
-        seq.clr_reqstate_bit( ( Sequencer::SEQ_ABORTREQ | Sequencer::SEQ_RUNNING ) );
-        seq.set_reqstate_bit( Sequencer::SEQ_READY );
+          seq.set_clr_seqstate_bit( Sequencer::SEQ_READY, ( Sequencer::SEQ_ABORTREQ | Sequencer::SEQ_RUNNING ) );  // set and clear together
+          seq.clr_reqstate_bit( ( Sequencer::SEQ_ABORTREQ | Sequencer::SEQ_RUNNING ) );
+          seq.set_reqstate_bit( Sequencer::SEQ_READY );
 
-        error = seq.target.update_state( Sequencer::TARGET_UNASSIGNED );
-        message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << seq.target.name 
-                                 << " id " << seq.target.obsid << " order " << seq.target.obsorder
-                                 << " as " << Sequencer::TARGET_UNASSIGNED;
+          error = seq.target.update_state( Sequencer::TARGET_UNASSIGNED );
+          message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << seq.target.name
+                                   << " id " << seq.target.obsid << " order " << seq.target.obsorder
+                                   << " as " << Sequencer::TARGET_UNASSIGNED;
+          logwrite( function, message.str() );
+
+          // let the world know of the state change
+          //
+          message.str(""); message << "TARGETSTATE:" << seq.target.state << " TARGET:" << seq.target.name << " OBSID:" << seq.target.obsid;
+          seq.async.enqueue( message.str() );
+
+          seq.thr_error.fetch_or( THR_SEQUENCE_START );
+          break;
+        }
+
+        // If not aborted then this exposure is now complete
+        //
+        message.str(""); message << "exposure complete for target " << seq.target.name
+                                 << " id " << seq.target.obsid << " order " << seq.target.obsorder;
         logwrite( function, message.str() );
+
+        // Update this target's state in the database
+        //
+        error = seq.target.update_state( Sequencer::TARGET_COMPLETE );       // update the active target table
+        if (error==NO_ERROR) error = seq.target.insert_completed();          // insert into the completed table
+        if (error!=NO_ERROR) seq.thr_error.fetch_or( THR_SEQUENCE_START );   // report any error
 
         // let the world know of the state change
         //
         message.str(""); message << "TARGETSTATE:" << seq.target.state << " TARGET:" << seq.target.name << " OBSID:" << seq.target.obsid;
         seq.async.enqueue( message.str() );
-
-        seq.thr_error.fetch_or( THR_SEQUENCE_START );
-        break;
-      }
-
-      // If not aborted then this exposure is now complete
-      //
-      message.str(""); message << "exposure complete for target " << seq.target.name 
-                               << " id " << seq.target.obsid << " order " << seq.target.obsorder;
-      logwrite( function, message.str() );
-
-      // Update this target's state in the database
-      //
-      error = seq.target.update_state( Sequencer::TARGET_COMPLETE );       // update the active target table
-      if (error==NO_ERROR) error = seq.target.insert_completed();          // insert into the completed table
-      if (error!=NO_ERROR) seq.thr_error.fetch_or( THR_SEQUENCE_START );   // report any error
-
-      // let the world know of the state change
-      //
-      message.str(""); message << "TARGETSTATE:" << seq.target.state << " TARGET:" << seq.target.name << " OBSID:" << seq.target.obsid;
-      seq.async.enqueue( message.str() );
+      }  // end if ( this->target.pointmode == Acam::POINTMODE_ACAM ) {
 
       // Check the "dotype" --
       // If this was "do one" then do_once is set and get out now.
@@ -1780,10 +1792,11 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
         return;
       }
 
-      // Before sending the target coords to the TCS, convert them from slit->scope,
+      // Before sending the target coords to the TCS,
+      // convert them from <pointmode> to scope coordinates.
       //
       double ra_out, dec_out, angle_out;
-      error = seq.target.fpoffsets.compute_offset( "SLIT", "SCOPE",
+      error = seq.target.fpoffsets.compute_offset( seq.target.pointmode, "SCOPE",
                                                    ra_in, dec_in, angle_in,
                                                    ra_out, dec_out, angle_out );
 
@@ -3715,7 +3728,7 @@ logwrite( function, message.str() );
         this->target.sequencenum = 0;                          //  SEQUENCE_NUMBER
         this->target.binspect    = std::stoi( tokens.at(5) );  // *BINSPECT
         this->target.binspat     = std::stoi( tokens.at(6) );  // *BINSPAT
-        this->target.pointmode   = tokens.at(7);               // *POINTMODE
+        this->target.pointmode   = to_uppercase(tokens.at(7)); // *POINTMODE
       }
       catch( std::out_of_range &e ) {
         message.str(""); message << "out of range parsing args " << args << ": " << e.what();
@@ -3786,10 +3799,10 @@ logwrite( function, message.str() );
         return HELP;
       }
       int number=0;
-      std::string name="", ra="", dec="";
+      std::string name, ra, dec, pmode;
       double etime=0., slitw=1., slita=18.;
-      if ( tokens.size() != 8 ) {
-        logwrite( function, "ERROR: expected \"addrow <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\"" );
+      if ( tokens.size() != 9 ) {
+        logwrite( function, "ERROR: expected \"addrow <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime> <pointmode>\"" );
         return( ERROR );
       }
       try {
@@ -3800,18 +3813,14 @@ logwrite( function, message.str() );
         slita  = std::stod( tokens.at(5) );
         slitw  = std::stod( tokens.at(6) );
         etime  = std::stod( tokens.at(7) );
+        pmode  = to_uppercase( tokens.at(8) );
       }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "out of range parsing args " << args << ": " << e.what();
+      catch( std::exception &e ) {
+        message.str(""); message << "ERROR parsing args " << args << ": " << e.what();
         logwrite( function, message.str() );
         return ERROR;
       }
-      catch( std::invalid_argument &e ) {
-        message.str(""); message << "invalid argument parsing args " << args << ": " << e.what();
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      error = this->target.add_row( number, name, ra, dec, slita, slitw, etime );
+      error = this->target.add_row( number, name, ra, dec, slita, slitw, etime, pmode );
     }
     else
 

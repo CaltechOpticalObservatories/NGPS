@@ -14,6 +14,7 @@ add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
+include_directories( ${PROJECT_BASE_DIR}/acamd )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
