@@ -98,21 +98,23 @@ import java.util.Iterator;
 /=================================================================================================*/
 private void initializeTableColumns(){
      setRowCount(0);
-     addColumn("INDEX");
-     addColumn("NAME");
-     addColumn("OBS_ORDER");
-     addColumn("RA");
-     addColumn("DECL");
-     addColumn("OFFSET_RA");
-     addColumn("OFFSET_DEC");    
-     addColumn("EXPTIME");
-     addColumn("NEXP");
-     addColumn("SLITW");
-     addColumn("SLITOFFSET");
-     addColumn("CCDMODE");
-     addColumn("BINSPECT");
-     addColumn("BINSPAT");
-     addColumn("CASSANGLE");
+     addColumn("INDEX");        //0
+     addColumn("NAME");         //1
+     addColumn("OBS_ORDER");    //2
+     addColumn("RA");           //3
+     addColumn("DECL");         //4
+     addColumn("OFFSET_RA");    //5
+     addColumn("OFFSET_DEC");   //6
+     addColumn("EXPTIME");      //7
+     addColumn("NEXP");         //8
+     addColumn("SLITW");        //9
+     addColumn("SLITOFFSET");   //10
+     addColumn("CCDMODE");      //11
+     addColumn("BINSPECT");     //12
+     addColumn("BINSPAT");      //13
+     addColumn("CASSANGLE");    //14
+     
+     
      editable_array[0] = true;
      editable_array[1] = true;
      editable_array[2] = true;

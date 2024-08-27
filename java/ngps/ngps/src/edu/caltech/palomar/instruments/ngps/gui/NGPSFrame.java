@@ -89,9 +89,6 @@ public class NGPSFrame extends javax.swing.JFrame {
   public NGPSdatabase              dbms;
   public TargetListParser2         myTargetListParser;
   public ObservationSequencerController myObservationSequencerController;
-  public importCSVPanel            myimportCSVPanel;
-//  public TargetSetPanel            myTargetSetPanel;
-//  public retrieveDatabasePanel     myretrieveDatabasePanel;
   public ParametersTableModel      myParametersTableModel;
   public OTMParameterTableModel    myOTMParametersTableModel;
   public ETCParameterTableModel    myETCParameterTableModel;

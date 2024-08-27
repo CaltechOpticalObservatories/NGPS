@@ -4,7 +4,6 @@
  */
 package edu.caltech.palomar.instruments.ngps.gui;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
-import edu.caltech.palomar.instruments.ngps.gui.importCSVPanel;
 import edu.caltech.palomar.instruments.ngps.object.Target;
 import edu.caltech.palomar.instruments.ngps.os.ObservationSequencerController;
 import edu.caltech.palomar.instruments.ngps.parser.TargetListParser2;

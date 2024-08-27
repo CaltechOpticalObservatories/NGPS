@@ -56,7 +56,6 @@ public class TargetListParser2 {
   public int                     model_type;
   public static int              DEFAULT_MODEL  = 1;
   public static int              ETC_MODEL      = 2;
-  public static int              EXTENDED_MODEL = 3;
   public JTree                   myJTree;
 /*=============================================================================================
 /        TargetListParser()
@@ -183,7 +182,7 @@ public ArrayList parseHeaderLine(java.lang.String header_line){
     for(int i=0;i<token_count;i++){
         java.lang.String token = st.nextToken();
         header_list.add(token.toUpperCase());
-        System.out.println(token.toUpperCase());
+        System.out.println("TOKEN="+token.toUpperCase());
         token = token.toUpperCase();
         if(token.matches("CHANNEL")){
            setModelType(ETC_MODEL); 
@@ -276,62 +275,6 @@ public int getModelType(){
 //       myJTree.setModel(myDefaultTreeModel);
 //    commitFileToDBMS(currentObservationSet);      
  }     
-/*=============================================================================================
-/   parseText()
-/=============================================================================================*/
- public void parseText(){
-    Target      currentObservation;
-    java.lang.String CommentString = new java.lang.String();
-    java.lang.String current_line   = new java.lang.String();
-    java.lang.String text = myTargetListDocumentModel.getText();    
- 
-    // Clear the table before we start opening the new file    
-//    presenterKey.clear();
-    myTargetSimpleTableModel.clearTable();
-    myTargetExtendedTableModel.clearTable();
-//    myListModel.clearTable();
-    myTargetListDocumentModel.clearDocument();
-    myDefaultTreeModel = currentObservationSet.getTreeModel();
-    DefaultMutableTreeNode root_node = (DefaultMutableTreeNode)myDefaultTreeModel.getRoot();
-    java.util.StringTokenizer tokenString = new java.util.StringTokenizer(text,TERMINATOR);  
-    java.lang.String header_line = tokenString.nextToken();
-    ArrayList        header_list = parseHeaderLine(header_line);
-    myTargetListDocumentModel.insertMessage(TargetListDocumentModel.RESPONSE, header_line);
-    int index = 1;
-    while(tokenString.hasMoreElements()){
-        try{
-           current_line = tokenString.nextToken(); 
-           CommentString = "";
-           while(current_line.startsWith("!")|current_line.isEmpty()){
-               if(current_line.startsWith("!")){
-                        CommentString = CommentString + current_line;
-                        myTargetListDocumentModel.insertMessage(TargetListDocumentModel.RESPONSE, current_line);
-                }
-                current_line = tokenString.nextToken(); 
-           }   
-
-           currentObservation = parseObservationRecord(header_list,current_line);         
-           if(currentObservation != null){
-             currentObservation.setOrder(index);
-             index = index+1;
-//                     myAstroObjectTable.addRecord(currentObservation);
-             currentObservationSet.getObservationHashMap().put(currentObservation.name, currentObservation);
-             myTargetSimpleTableModel.addTarget(currentObservation);  
-             myTargetExtendedTableModel.addTarget(currentObservation);  
-             myDefaultTreeModel.insertNodeInto(currentObservation.constructTreeNode(), root_node,root_node.getChildCount());
-//                     myListModel.addRecord(currentAstroObject.name);0
-             myTargetListDocumentModel.insertMessage(TargetListDocumentModel.COMMAND, current_line);                     
-           }               
-//            }
-            if(currentObservation == null){
-                myTargetListDocumentModel.insertMessage(TargetListDocumentModel.ERROR, current_line);                      
-            } 
-        }catch(Exception e){
-            System.out.println("Problem parsing the text of the edited file. "+e.toString());
-        }  
-//        myJTree.setModel(myDefaultTreeModel);
-    }
- } 
 /*=============================================================================================
 /   parseObservationRecord(java.util.ArrayList current_list,java.lang.String current)
 /=============================================================================================*/
@@ -585,14 +528,11 @@ public int getModelType(){
         currentJEditorPane.setDocument(myTargetListDocumentModel.getDocument());
         int model_type = getModelType();
         if(model_type == DEFAULT_MODEL){
-            currentJTable.setModel(myTargetExtendedTableModel);
+            currentJTable.setModel(myTargetSimpleTableModel);
         }
         if(model_type == ETC_MODEL){
             currentJTable.setModel(myTargetExtendedTableModel);
         }    
-        if(model_type == EXTENDED_MODEL){
-            currentJTable.setModel(myTargetExtendedTableModel);
-        }
      return;
     }
 /*=============================================================================================
