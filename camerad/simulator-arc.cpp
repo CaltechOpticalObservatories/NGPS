@@ -29,8 +29,66 @@ namespace AstroCam {
     //
     if (this->numdev == 0) {
       logwrite(function, "ERROR: no simulated devices found -- check ARCSIM_NUMDEV in config file");
-      return(ERROR);
+      return ERROR;
     }
+
+    // Log PCI devices configured
+    //
+    if ( this->configdev.empty() ) {
+      logwrite( function, "ERROR: no devices configured. Need CONTROLLER keyword in config file." );
+      retstring="not_configured";
+      return ERROR;
+    }
+
+    // If no string is given then use vector of configured devices
+    //
+    if ( devices_in.empty() ) {
+      this->devlist = this->configdev;
+    }
+    else {
+      // Otherwise, tokenize the device list string and build devlist from the tokens
+      //
+      std::vector<std::string> tokens;
+      Tokenize(devices_in, tokens, " ");
+      for ( const auto &n : tokens ) {                // For each token in the devices_in string,
+        try {
+          int dev = std::stoi( n );                   // convert to int
+          if ( std::find( this->devlist.begin(), this->devlist.end(), dev ) == this->devlist.end() ) { // If it's not already in the vector,
+            this->devlist.push_back( dev );                                                            // then push into devlist vector.
+          }
+        }
+        catch (std::invalid_argument &) {
+          message.str(""); message << "ERROR: invalid device number: " << n << ": unable to convert to integer";
+          logwrite(function, message.str());
+          retstring="invalid_argument";
+          return ERROR;
+        }
+        catch (std::out_of_range &) {
+          message.str(""); message << "ERROR: device number " << n << ": out of integer range";
+          logwrite(function, message.str());
+          retstring="out_of_range";
+          return ERROR;
+        }
+        catch(...) { logwrite(function, "unknown error getting device number"); retstring="exception"; return ERROR; }
+      }
+    }
+
+    // For each requested dev in devlist, if there is a matching controller in the config file,
+    // then get the devname and store it in the controller map.
+    //
+    for ( const auto &dev : this->devlist ) {
+      if ( this->controller.find( dev ) != this->controller.end() ) {
+        this->controller[ dev ].devname = "sim"+std::to_string(dev);
+      }
+    }
+
+    // set the controller connected state true
+    //
+    for ( const auto &dev : this->devlist ) {
+      this->controller[dev].connected = true;
+    }
+
+    logwrite( function, "simulated controllers connected" );
 
     this->camera_info.arcsim = true;  // the ARC device is simulated
 
@@ -49,7 +107,15 @@ namespace AstroCam {
   long Interface::disconnect_controller() {
     std::string function = "AstroCam::Interface::disconnect_controller";
     std::stringstream message;
-    logwrite( function, "HEY! I'm the simulator" );
+
+    // clear the controller connected state
+    //
+    for ( const auto &dev : this->devlist ) {
+      this->controller[dev].connected = false;
+    }
+
+    logwrite( function, "simulated controllers disconnected" );
+
     return NO_ERROR;
   }
   /***** AstroCam::Interface::disconnect_controller ***************************/

@@ -2894,7 +2894,8 @@ for ( const auto &dev : selectdev ) {
     auto it = this->controller.find( dev );
 
     if ( it == this->controller.end() ) {
-      message.str(""); message << "ERROR: dev# " << dev << " for chan " << chan << " not configured";
+      message.str(""); message << "ERROR dev# " << dev << " for chan " << chan << " not configured. "
+                               << "Expected <chan> | <dev#> [ <bytes> | <rows> <cols> ]";
       logwrite( function, message.str() );
       retstring="invalid_argument";
       return( ERROR );
@@ -4554,7 +4555,7 @@ logwrite(function, message.str());
    * @brief      test routines
    * @param[in]  args       contains test name and arguments
    * @param[in]  retstring  reference to string for any return values
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * This is the place to put various debugging and system testing tools.
    * It is placed here, rather than in camera, to allow for controller-
@@ -4574,6 +4575,21 @@ logwrite(function, message.str());
     std::stringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = CAMERAD_TEST;
+      retstring.append( "\n" );
+      retstring.append( "  Test Routines\n" );
+      retstring.append( "   async [ ? | <message> ]\n" );
+      retstring.append( "   bw [ ? ]\n" );
+      retstring.append( "   fitsname [ ? ]\n" );
+      retstring.append( "   frametransfer ? | R | I | U | G \n" );
+      retstring.append( "   pending [ ? ]\n" );
+      retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
+      return HELP;
+    }
 
     Tokenize(args, tokens, " ");
 
@@ -4598,6 +4614,12 @@ logwrite(function, message.str());
     // has to be generated at the moment the file is opened.
     //
     if (testname == "fitsname") {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = CAMERAD_TEST;
+        retstring.append( " fitsname\n" );
+        retstring.append( "  Show what the fitsname will look like.\n" );
+        return HELP;
+      }
       std::string msg;
       this->camera.set_fitstime( get_timestamp( ) );                 // must set camera.fitstime first
       if ( this->devlist.size() > 1 ) {
@@ -4622,6 +4644,14 @@ logwrite(function, message.str());
     //
     else
     if (testname == "async") {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = CAMERAD_TEST;
+        retstring.append( " async [ <message > ]\n" );
+        retstring.append( "  Queue an async broadcast message. If no <message> provided,\n" );
+        retstring.append( "  then \"test\" will be queued. Use double-quotes to send\n" );
+        retstring.append( "  compound message strings.\n" );
+        return HELP;
+      }
       if (tokens.size() > 1) {
         if (tokens.size() > 2) {
           logwrite(function, "NOTICE: received multiple strings -- only the first will be queued");
@@ -4645,6 +4675,14 @@ logwrite(function, message.str());
     //
     else
     if (testname == "bw") {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = CAMERAD_TEST;
+        retstring.append( " bw\n" );
+        retstring.append( "  Tests the exposure sequence bandwidth by running a sequence\n" );
+        retstring.append( "  of exposures, including reading the frame buffer -- everything\n" );
+        retstring.append( "  except for the FITS file writing.\n" );
+        return HELP;
+      }
       message.str(""); message << "ERROR: test " << testname << " not implemented";
       logwrite(function, message.str());
       error = ERROR;

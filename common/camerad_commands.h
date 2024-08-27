@@ -78,13 +78,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_RESUME,
                                                   CAMERAD_SHUTTER+" [ ? | enable | 1 | disable | 0 ]",
                                                   CAMERAD_STOP,
-                                                  CAMERAD_TEST+" <testname> ...",
-                                                  "   async [<message>]",
-                                                  "   bw",
-                                                  "   fitsname",
-                                                  "   frametransfer R | I | U | G | ?",
-                                                  "   pending [ ? ]",
-                                                  "   shutter ?|init|open|close|get|time|expose <msec>",
+                                                  CAMERAD_TEST+" ? | <testname> ...",
                                                   CAMERAD_USEFRAMES,
                                                   CAMERAD_WRITEKEYS
                                                 };

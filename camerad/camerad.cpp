@@ -465,7 +465,6 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_OPEN ) {
                     ret = server.connect_controller(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_CLOSE ) {
@@ -616,12 +615,10 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_BUFFER ) {
                     ret = server.buffer(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_IMSIZE ) {
                     ret = server.image_size(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_READOUT ) {
