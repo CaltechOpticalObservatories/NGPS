@@ -2421,6 +2421,9 @@ public JTable constructTable(){
                 dbms.createNewTargetList();
             }
             if(dbms.selectedObservationSet != null){
+                if(dbms.selectedObservationSet.getSET_ID() == 0){
+                    JOptionPane.showMessageDialog(this, "Invalid set ID, initialization failure.");
+                }
                 dbms.queryObservations(dbms.selectedObservationSet.getSET_ID());
             }
         }catch(Exception e){

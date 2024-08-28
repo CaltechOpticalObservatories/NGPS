@@ -407,6 +407,7 @@ public int SaveAs(java.lang.String set_name){
        set_id = executeObservationSetInsertStatement(current);
        setSelectedObservationSet(current);
        setSelectedSET_ID(set_id);
+       current.setSET_ID(set_id);
        setSelectedSetName(set_name);
 //       Iterator hmIterator = map.entrySet().iterator();
        int target_number = 1;
