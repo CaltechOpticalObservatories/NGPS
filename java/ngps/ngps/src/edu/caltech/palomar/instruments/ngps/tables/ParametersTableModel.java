@@ -46,7 +46,7 @@ public class ParametersTableModel extends AbstractTableModel{
    java.lang.String[]  columnNameArray   = new java.lang.String[2];
    Target              current;
    int columncount = 2;
-   int rowcount = 14;
+   int rowcount = 16;
    private  javax.swing.JTable myParametersTable;  
    public edit_monitor my_edit_monitor;
 /*================================================================================================
@@ -78,7 +78,7 @@ public void setEdited(boolean new_edited){
 /=================================================================================================*/
  public void clearTable(){
      parametersVector.clear();
-     rowcount = 14;
+     //rowcount = 15;
      fireTableDataChanged();
  }
 /*================================================================================================
@@ -91,7 +91,7 @@ public void setEdited(boolean new_edited){
 /           jbInit() Initiaization Method
 /=================================================================================================*/
     private void jbInit(){
-       rowcount = 14;
+       //rowcount = 15;
        columnNameArray[0] = "PARAMETER";
        columnNameArray[1] = "VALUE";
     }
@@ -163,6 +163,34 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
     }
     return editable;
 }
+
+public java.sql.Timestamp string_to_timestamp(java.lang.String current_datetime){
+ java.sql.Timestamp timestamp = new java.sql.Timestamp(System.currentTimeMillis());
+    try {
+    java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss.SSS");
+    java.util.Date parsedDate = dateFormat.parse(current_datetime);
+    timestamp = new java.sql.Timestamp(parsedDate.getTime());
+    return timestamp;
+} catch(Exception e) { //this generic but you can control another types of exception
+   System.out.println(e.toString());
+   timestamp = null;
+}
+return timestamp;
+}
+
+public java.lang.String timestamp_to_string(java.sql.Timestamp current){
+//    java.sql.Timestamp timestamp = java.sql.Timestamp.valueOf("2018-12-12 01:02:03.123456789");
+     String timestampAsString = new java.lang.String();
+     try{
+          java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+          timestampAsString = formatter.format(current.toLocalDateTime());       
+     }catch(Exception e){
+        System.out.println(e.toString());
+     }
+//    assertEquals("2018-12-12T01:02:03.123456789", timestampAsString);
+return timestampAsString;
+}
+
 /*================================================================================================
 /         getValueAt() - Required Method for the Abstract Table Model Class
 /=================================================================================================*/
@@ -170,87 +198,39 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
     java.lang.Object returnObject = null;
     if(col == 1){
         if(current != null){
-        if(row == 0){
-           returnObject = current.sky.getRightAscension();
-        }        
-        if(row == 1){
-           returnObject = current.sky.getDeclination();
-        }        
-        if(row == 2){
-           returnObject = current.sky.getOFFSET_RA();
-        } 
-        if(row == 3){
-           returnObject = current.sky.getOFFSET_DEC();
-        }        
-        if(row == 4){
-           returnObject = current.instrument.getExposuretime();
-        }        
-        if(row == 5){
-           returnObject = current.instrument.getSlitwidth_string();
-        }        
-        if(row == 6){
-           returnObject = current.instrument.getSlitOffset();
-        }        
-        if(row == 7){
-           returnObject = current.instrument.getOBSMODE();
-        }        
-        if(row == 8){
-           returnObject = current.instrument.getBIN_SPEC();
-        }        
-        if(row == 9){
-           returnObject = current.instrument.getBIN_SPACE();
-        }           
-        if(row == 10){
-           returnObject = current.instrument.getRequestedSlitAngle();
-        }
-        if(row == 11){
-           returnObject = current.sky.getAIRMASS_MAX();
-        }        
-        if(row == 12){
-           returnObject = current.getCOMMENT();
-        }
+        if(row == 0){ returnObject = current.sky.getRightAscension();}        
+        if(row == 1){ returnObject = current.sky.getDeclination();}        
+        if(row == 2){ returnObject = current.sky.getOFFSET_RA();} 
+        if(row == 3){ returnObject = current.sky.getOFFSET_DEC();}        
+        if(row == 4){ returnObject = current.instrument.getExposuretime();}        
+        if(row == 5){ returnObject = current.instrument.getSlitwidth_string();}        
+        if(row == 6){ returnObject = current.instrument.getSlitOffset();}        
+        if(row == 7){ returnObject = current.instrument.getOBSMODE();}        
+        if(row == 8){ returnObject = current.instrument.getBIN_SPEC();}        
+        if(row == 9){ returnObject = current.instrument.getBIN_SPACE();}           
+        if(row == 10){ returnObject = current.instrument.getRequestedSlitAngle();}
+        if(row == 11){ returnObject = current.sky.getAIRMASS_MAX();}        
+        if(row == 12){ returnObject = current.otm.getOTMpointmode();}
+        if(row == 13){ returnObject = timestamp_to_string(current.otm.getOTMnotbefore());}
+        if(row == 14){ returnObject = current.getCOMMENT();}
        }        
     }
     if(col == 0){
-        if(row == 0){
-           returnObject = "RA (hh:mm:ss.s)";
-        }        
-        if(row == 1){
-           returnObject = "DEC (dd:mm:ss.s)";
-        }        
-        if(row == 2){
-           returnObject = " --- ";  //"RA offset (arcsec)"
-        } 
-        if(row == 3){
-           returnObject = " --- ";  //"DEC offset (arcsec)"
-        }        
-        if(row == 4){
-           returnObject = "EXPTIME Request";
-        }        
-        if(row == 5){
-           returnObject = "SLITWIDTH Request";
-        }        
-        if(row == 6){
-           returnObject = " --- "; //Slit offset (arcsec)
-        }        
-        if(row == 7){
-           returnObject = "CCD Mode";
-        }        
-        if(row == 8){
-           returnObject = "Bin Spectral (int)";
-        }        
-        if(row == 9){
-           returnObject =  "Bin Spatial (int)";
-        }  
-        if(row == 10){
-           returnObject =  "Slit Angle Request (deg)";
-        } 
-        if(row == 11){
-           returnObject =  "Airmass limit";
-        } 
-        if(row == 12){
-           returnObject =  "Comment";
-        }  
+        if(row == 0){returnObject = "RA (hh:mm:ss.s)";}        
+        if(row == 1){returnObject = "DEC (dd:mm:ss.s)";}        
+        if(row == 2){returnObject = " --- ";}  //"RA offset (arcsec)"
+        if(row == 3){returnObject = " --- ";}  //"DEC offset (arcsec)"
+        if(row == 4){returnObject = "EXPTIME Request";}        
+        if(row == 5){returnObject = "SLITWIDTH Request";}        
+        if(row == 6){returnObject = " --- ";} //Slit offset (arcsec)
+        if(row == 7){returnObject = "CCD Mode";}        
+        if(row == 8){returnObject = "Bin Spectral (int)";}        
+        if(row == 9){returnObject =  "Bin Spatial (int)";}  
+        if(row == 10){returnObject =  "Slit Angle Request (deg)";} 
+        if(row == 11){returnObject =  "Airmass limit";} 
+        if(row == 12){returnObject =  "Point Mode";}  
+        if(row == 13){returnObject =  "Not Before";}  
+        if(row == 14){returnObject =  "Comment";}  
     }
     return returnObject;
   }
@@ -310,6 +290,16 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
            current.sky.setAIRMASS_MAX((java.lang.String)value);
         }  
         if(row == 12){
+           current.otm.setOTMpointmode((java.lang.String)value);
+        }  
+        if(row == 13){
+            try{
+               current.otm.setOTMnotbefore(string_to_timestamp((java.lang.String)value));
+            }catch(Exception e){
+              current.otm.setOTMnotbefore(null);     
+            }
+        } 
+        if(row == 14){
            current.setCOMMENT((java.lang.String)value);
         }  
     }
