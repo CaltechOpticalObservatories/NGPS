@@ -218,6 +218,7 @@ public class NGPSFrame extends javax.swing.JFrame {
             planningPanel.remove(auto_start_timeCheckBox);
             planningPanel.remove(auto_fetchCheckBox);
             connectionsMenuItem.setEnabled(false);
+            shutdownMenuItem.setEnabled(false);
             setTitle("PLANNING");
             pack();
         }        
@@ -2341,8 +2342,11 @@ public JTable constructTable(){
 
         String msg = "Do you really want to quit?";
         String reminder = "PLEASE SHUTDOWN THE INSTRUMENT IF YOU ARE FINISHED OBSERVING\n(Select Shutdown from NGPS menu.)\n\n";
-        if(!myObservationSequencerController.getSTATE().matches("OFFLINE")){
-            msg = reminder + msg;
+        
+        if(CONFIGURATION==OBSERVE){
+            if(!myObservationSequencerController.getSTATE().matches("OFFLINE")){
+                msg = reminder + msg;
+            }
         }
         
         Object[] options = {"Cancel","OK"};
