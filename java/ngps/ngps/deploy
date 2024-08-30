@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Run this script to copy the development version of the GUI in this directory
+# to the public deployment directory and then rsync with the main ngps computer
+
+synclist=DEPLOY.TXT
 dest=/usr/local/palomar/deployment/NGPS_GUI/
 
 read -p "Do you wish to deploy to $dest ? [y/N]:  " yn
@@ -7,7 +11,7 @@ case $yn in
     [Yy]* ) 
 	echo ''
 	echo 'SYNCING EXTERNAL FILES AND FOLDERS'
-	rsync -arv . $dest --files-from=DEPLOY.TXT
+	rsync -arv . $dest --files-from=$synclist
 
 	echo ''
 	echo 'SYNCING JAR FILE AND LIB'
@@ -16,10 +20,9 @@ case $yn in
     * ) echo "Canceled"; exit;;
 esac
 
-#echo ''
-#echo 'SYNCING EXTERNAL FILES AND FOLDERS'
-#rsync -arv . $dest --files-from=DEPLOY.TXT
-#
-#echo ''
-#echo 'SYNCING JAR FILE AND LIB'
-#rsync -arv ./dist/ $dest
+echo ""
+echo ""
+
+# Copy to deployment machine
+rsync -avz /usr/local/palomar/deployment/NGPS_GUI developer@ngps.caltech.edu:/usr/local/palomar/deployment
+
