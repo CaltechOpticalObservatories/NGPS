@@ -304,6 +304,7 @@ public void configureUserTableListener(){
         if(logged_in_state == NGPSdatabase.LOGIN_SUCCESSFUL){
             dbms.setLoggedInState(NGPSdatabase.NOT_LOGGED_IN);
             frame.getAccountMenu().setText("User Account");
+            dbms.setOWNER("GUEST");
         }
         if(logged_in_state == NGPSdatabase.NOT_LOGGED_IN | logged_in_state == NGPSdatabase.LOGIN_UNSUCCESSFUL){
             java.lang.String submitted_password = new java.lang.String(PasswordField.getPassword());
