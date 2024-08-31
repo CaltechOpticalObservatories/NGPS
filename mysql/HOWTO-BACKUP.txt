@@ -8,3 +8,13 @@ Remove the --no-data option for a full backup.
 To restore, create an empty database with the correct name e.g. ngps.  Then:
 
 mysql --user=root -p ngps < backup-structure-ngps.sql
+
+
+BACKING UP USER PERMISSIONS
+
+To restore users, log into mysql as root and do  
+mysql> source mysql-users.sql;
+
+select Host, password from user ;
+SHOW GRANTS FOR 'user'@'localhost';
+

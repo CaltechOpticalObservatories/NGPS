@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Run this script to copy the development version of the GUI in this directory
+# Once you CLEAN and BUILD the development version of the GUI, 
+# run this script to copy the development version of the GUI in this directory
 # to the public deployment directory and then rsync with the main ngps computer
 
 synclist=DEPLOY.TXT

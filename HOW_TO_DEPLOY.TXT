@@ -1,0 +1,39 @@
+HOW TO COPY LATEST DEV VERSION OF NGPS SOFTWARE TO DEPLOYMENT COMPUTER
+
+1) Push C++ and Python code on ngps-devel and pull from ngps
+
+Push/pull /home/developer/Software
+Push/pull /home/developer/Software/Python/***   (acam_skyinfo, OTM, ETC)
+
+
+2) Deploy latest GUI to both NGPS computers.  From ngps-devel:
+
+cd /home/developer/Software/java/ngps/ngps
+./deploy   # copies built version, not the dev version in netbeans
+
+
+3) Sync Desktops.  From ngps-devel:
+
+su observer
+rsync -avz ~/Desktop/ ngps.caltech.edu:~/Desktop  ## keep / in source path
+su developer
+rsync -avz ~/Desktop/ ngps.caltech.edu:~/Desktop  ## keep / in source path
+
+
+4) Sync MYSQL. This will REPLACE the deployed database.
+If that's not what you want, mysql changes have to be synced manually
+From ngps-devel:
+
+mysqldump --user=root -p ngps > backup-ngps.sql
+mysqldump --user=root -p telemetry > backup-telemetry.sql
+
+scp these files to ngps
+
+On the deployment computer:
+
+To restore, create an empty database with the correct name e.g. ngps.  Then:
+mysql --user=root -p ngps < backup-ngps.sql
+
+To restore users, log into mysql as root and do  
+mysql> source mysql-users.sql;
+
