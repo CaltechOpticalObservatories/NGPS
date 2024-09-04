@@ -1,4 +1,7 @@
 /* 
+
+"Users" here means logging in to mysql -- not to be confused with users of the NGPS GUI
+
 User permissions are set on a “need to have” basis to increase security and reduce accidental data loss.  
 Except for root, user passwords will generally be exposed in the code.
 

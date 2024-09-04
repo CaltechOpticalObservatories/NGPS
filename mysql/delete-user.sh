@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-# Script to delete a user (and their data) from NGPS mySQL
+# Script to delete a user (and their data) from NGPS GUI -- not to be confused with mysql users
 # mySQL login will be for user=gui, not the same as user being deleted
 
 user=$1
