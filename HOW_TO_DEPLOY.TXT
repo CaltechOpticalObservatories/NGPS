@@ -20,20 +20,15 @@ su developer
 rsync -avz ~/Desktop/ ngps.caltech.edu:~/Desktop  ## keep / in source path
 
 
-4) Sync MYSQL. This will REPLACE the deployed database.
-If that's not what you want, mysql changes have to be synced manually
-From ngps-devel:
+4) Sync MYSQL. You must first backup the deployed database.
+Details in .../Software/mysql/HOWTO-BACKUP.txt
 
-mysqldump --user=root -p ngps > backup-ngps.sql
-mysqldump --user=root -p telemetry > backup-telemetry.sql
+cd /home/developer/Software/mysql
+./backup-all.sh
 
-scp these files to ngps
+STOP if any errors occur during backup.  Database changes (next steps) cannot be easily rewinded.
 
-On the deployment computer:
+cd local-schema
 
-To restore, create an empty database with the correct name e.g. ngps.  Then:
-mysql --user=root -p ngps < backup-ngps.sql
-
-To restore users, log into mysql as root and do  
-mysql> source mysql-users.sql;
-
+skeema diff deploy -p  # Compares local copy to remote -- try as test
+skeema push deploy -p  # Replaces remote schema with local copy.  !! CAN'T UNDO !!
