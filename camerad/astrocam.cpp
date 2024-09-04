@@ -4197,6 +4197,7 @@ logwrite(function, message.str());
 //    interface.pFits[expbuf]->close_file( true, interface.camera_info );
 //    message.str(""); message << "ERROR opening \"" << interface.camera_info.fits_name << "\". FITS handler exiting";
       interface.pFits[expbuf]->close_file( true, *interface.fitsinfo[expbuf] );
+      interface.camera.increment_imnum();
       message.str(""); message << "ERROR opening \"" << interface.fitsinfo[expbuf]->fits_name << "\". FITS handler exiting";
       logwrite( function, message.str() );
       return;
@@ -4230,6 +4231,7 @@ logwrite(function, message.str());
 
 //  interface.pFits[expbuf]->close_file( true, interface.camera_info );
     interface.pFits[expbuf]->close_file( true, *interface.fitsinfo[expbuf] );
+    interface.camera.increment_imnum();
 
     return;
   }

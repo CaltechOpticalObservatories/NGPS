@@ -8,8 +8,11 @@ Push/pull /home/developer/Software/Python/***   (acam_skyinfo, OTM, ETC)
 
 2) Deploy latest GUI to both NGPS computers.  From ngps-devel:
 
+First, build the local version: On VNC, open project in Netbeans and do Run > Clean and Build Project.
+Now copy this built version to deployment locations in /usr/local/ on both machines:
+
 cd /home/developer/Software/java/ngps/ngps
-./deploy   # copies built version, not the dev version in netbeans
+./deploy   # copies built version, not the dev version you get with the Netbeans "play" or "run" button
 
 
 3) Sync Desktops.  From ngps-devel:

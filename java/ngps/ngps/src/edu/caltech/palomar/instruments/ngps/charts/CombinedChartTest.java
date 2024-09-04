@@ -360,7 +360,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             sunrise_annotation.setRotationAngle(rotation_radians);         
         plot.addAnnotation(sunrise_annotation); 
  
-       XYTextAnnotation evening_twilight_annotation = new XYTextAnnotation("Evening Twilight = "+evening_twilight,evening_twilight_minutes-10, 2.0);
+       XYTextAnnotation evening_twilight_annotation = new XYTextAnnotation("Evening Twilight = "+evening_twilight,-20.0, 2.0);
             evening_twilight_annotation.setFont(font);
             evening_twilight_annotation.setPaint(java.awt.Color.black);
             evening_twilight_annotation.setTextAnchor(TextAnchor.CENTER);
@@ -368,7 +368,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             evening_twilight_annotation.setRotationAngle(rotation_radians);         
         plot.addAnnotation(evening_twilight_annotation); 
         
-       XYTextAnnotation morning_twilight_annotation = new XYTextAnnotation("Morning Twilight = "+morning_twilight,morning_twilight_minutes-10, 2.0);
+       XYTextAnnotation morning_twilight_annotation = new XYTextAnnotation("Morning Twilight = "+morning_twilight,-30.0, 2.0);
             morning_twilight_annotation.setFont(font);
             morning_twilight_annotation.setPaint(java.awt.Color.black);
             morning_twilight_annotation.setTextAnchor(TextAnchor.CENTER);
