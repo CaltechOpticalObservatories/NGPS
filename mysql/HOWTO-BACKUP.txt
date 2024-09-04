@@ -1,20 +1,67 @@
-mysqldump --user=root -p --no-data ngps > backup-structure-ngps.sql
-mysqldump --user=root -p --no-data telemetry > backup-structure-telemetry.sql
+HOW TO BACKUP EVERYTHING
 
-This creates a file that can be run in mysql to restore all the tables without data. You will need the mysql root password.
+SQL files are ASCII files with mysql commands that construct/populate databases and tables.  They can be sourced by mysql from the shell or the mysql CL.
 
-Remove the --no-data option for a full backup.
+You will need the mysql root password.
 
-To restore, create an empty database with the correct name e.g. ngps.  Then:
+tag=`date -Iminutes`
+savedir=/home/developer/Software/mysql  # schema backups to track in git
+skeedir=$savedir/local-schema  # skeema-style backup for pushing changes
+backupdir=/tmp  # full backups to protect against mistakes
 
-mysql --user=root -p ngps < backup-structure-ngps.sql
+
+1. FULL BACKUP (do before making or pushing ANY changes to a db with important DATA)
+
+mysqldump -u root -p --all-databases > $backupdir/mysql-fullbackup_$tag.sql
+mysqldump -u root -p mysql user > $backupdir/mysql-allusers_$tag.sql
 
 
-BACKING UP USER PERMISSIONS
+2. SCHEMA and USER BACKUP (use to log changes to dev version)
 
-To restore users, log into mysql as root and do  
-mysql> source mysql-users.sql;
+mysqlpump -u root -p --exclude-databases=% --add-drop-user --users > $savedir/pump-all-users_privileges.sql  # dump and pump are different commands, not a typo
 
-select Host, password from user ;
-SHOW GRANTS FOR 'user'@'localhost';
+Use --no-data option to backup schema only (table structures, no entries):
+
+mysqldump -u root -p --no-data --all-databases > $savedir/mysql-allschema.sql
+
+cd $skeedir
+skeema pull local -p
+cd $savedir
+
+~~ Now commit changes to git ~~
+
+
+3. PUSHING SCHEMA CHANGES TO REMOTE
+
+cd $skeedir
+skeema diff deploy -p  # Compares local copy to remote schema
+skeema push deploy -p  # Replaces remote schema with local copy.  !! CAN'T UNDO !!
+
+Skeema will warn about changes that lose data.  Add --allow-unsafe if you're sure you want to make an unsafe change.
+
+To delete a table and push the change, just delete the table's .SQL file in $skeedir.
+
+Advanced skeema usage:  https://www.skeema.io/docs/commands/
+
+
+4. RESTORING from SQL files
+
+mysql -u root -p
+mysql> use ngps  # if restoring only a particular db, e.g. ngps
+mysql> source SQLFILE.SQL;   
+mysql> flush privileges;
+
+Alternatively,
+
+mysql -u root -p  < SQLFILE.SQL
+mysql -u root -p ngps < SQLFILE.SQL   # e.g. restoring for the ngps database only
+mysql -u root -p -e "flush privileges;"  # if updating user settings
+
+You may need to first create empty databases with the correct names e.g. ngps.
+
+Verify users
+
+mysql> use mysql
+mysql> select Host, user from mysql.user ;
+mysql> SHOW GRANTS FOR '<username>'@'localhost';
 

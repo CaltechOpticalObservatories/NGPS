@@ -1,0 +1,16 @@
+/* 
+User permissions are set on a “need to have” basis to increase security and reduce accidental data loss.  
+Except for root, user passwords will generally be exposed in the code.
+
+•	root
+•	maybe we need a secure user with read-only on all tables?
+•	telemlogger – write-only to any table in telemetry
+•	obseq – permissions needed by Observation Sequencer on ngps
+•	gui – most permissions allowed on ngps
+•	grafana – read only from telemetry
+•	drp – write-only to science
+
+If EXECUTE is needed, must apply to db not 1 table:
+GRANT EXECUTE ON db.* TO user@'%';
+*/
+
