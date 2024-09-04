@@ -29,6 +29,11 @@ PUT ON SLIT
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh | $text
 #############
+CALIBRATE
+*
+button
+$message(yesno,Calibrate ACAM?) | acam acquire here | $text
+#############
 GUI HELP
 *
 button
