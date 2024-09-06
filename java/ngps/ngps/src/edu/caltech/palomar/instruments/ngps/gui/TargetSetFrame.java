@@ -5,10 +5,7 @@
 package edu.caltech.palomar.instruments.ngps.gui;
 
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
-import javax.swing.ImageIcon;
-import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.instruments.ngps.object.ObservationSet;
-import edu.caltech.palomar.instruments.ngps.object.Target;
 import edu.caltech.palomar.instruments.ngps.tables.ObservationSetTableModel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -179,7 +176,7 @@ public void configureUserTableListener(){
                     } else {
                         selected_table_row = lsm.getMinSelectionIndex();
                         selectedSet = ((ObservationSetTableModel)observation_set_Table.getModel()  ).getRecord(selected_table_row);
-                        dbms.setSelectedObservationSet(selectedSet);
+                        //dbms.setSelectedObservationSet(selectedSet);
                     }
                 }
             });
@@ -224,9 +221,9 @@ public void configureUserTableListener(){
         ));
         jScrollPane1.setViewportView(observation_set_Table);
 
-        jLabel1.setText("Selected Target Set");
+        jLabel1.setText("Current Set Name");
 
-        jLabel2.setText("Selected Target Set ID");
+        jLabel2.setText("Current Set ID");
 
         selected_set_nameLabel.setForeground(new java.awt.Color(0, 153, 102));
 

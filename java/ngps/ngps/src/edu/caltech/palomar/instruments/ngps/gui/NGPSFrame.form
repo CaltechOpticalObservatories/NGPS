@@ -495,7 +495,7 @@
                           <Group type="102" alignment="0" attributes="0">
                               <Component id="jLabel17" min="-2" max="-2" attributes="0"/>
                               <EmptySpace max="32767" attributes="0"/>
-                              <Component id="sekected_target_listjLabel" min="-2" pref="166" max="-2" attributes="0"/>
+                              <Component id="selected_target_listjLabel" min="-2" pref="166" max="-2" attributes="0"/>
                           </Group>
                       </Group>
                       <Group type="102" alignment="0" attributes="0">
@@ -568,7 +568,7 @@
                           <EmptySpace type="unrelated" max="-2" attributes="0"/>
                           <Group type="103" groupAlignment="0" max="-2" attributes="0">
                               <Component id="jLabel17" max="32767" attributes="0"/>
-                              <Component id="sekected_target_listjLabel" alignment="0" max="32767" attributes="0"/>
+                              <Component id="selected_target_listjLabel" alignment="0" max="32767" attributes="0"/>
                           </Group>
                       </Group>
                       <Group type="102" alignment="0" attributes="0">
@@ -775,7 +775,7 @@
             <Property name="text" type="java.lang.String" value="Target List:"/>
           </Properties>
         </Component>
-        <Component class="javax.swing.JLabel" name="sekected_target_listjLabel">
+        <Component class="javax.swing.JLabel" name="selected_target_listjLabel">
           <Properties>
             <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
               <Font name="DejaVu Sans" size="14" style="1"/>

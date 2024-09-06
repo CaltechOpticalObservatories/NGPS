@@ -233,27 +233,9 @@ return timestamp;
 /=================================================================================================*/
 public boolean isCellEditable(int rowIndex, int vColIndex) {
     boolean editable = false;
-    if(vColIndex == 0){
-        editable = true;
-    }
-    if(vColIndex == 1){
-        editable = true;
-    }
-    if(vColIndex == 2){
-        editable = true;
-    }
-    if(vColIndex == 3){
-        editable = true;
-    }
-    if(vColIndex == 4){
-        editable = true;
-    }
-    if(vColIndex == 5){
-        editable = true;
-    }
-    if(vColIndex == 6){
-        editable = true;
-    }
+    //if(vColIndex == 0){
+    //    editable = true;
+    //}
     return editable;
 }
 /*================================================================================================

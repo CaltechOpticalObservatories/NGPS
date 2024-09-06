@@ -1233,7 +1233,7 @@ public JTable constructTable(){
     }
     if(propertyName.matches("selected_set_name")){
         java.lang.String current_value = (java.lang.String)e.getNewValue(); 
-        sekected_target_listjLabel.setText(current_value);
+        selected_target_listjLabel.setText(current_value);
     }
     if(propertyName.matches("owner")){
 //        java.lang.String current_value = (java.lang.String)e.getNewValue();
@@ -1346,7 +1346,7 @@ public JTable constructTable(){
         cancelButton = new javax.swing.JButton();
         jLabel7 = new javax.swing.JLabel();
         jLabel17 = new javax.swing.JLabel();
-        sekected_target_listjLabel = new javax.swing.JLabel();
+        selected_target_listjLabel = new javax.swing.JLabel();
         detailsPanel = new javax.swing.JPanel();
         detailedTabbedPane = new javax.swing.JTabbedPane();
         observationTab = new javax.swing.JPanel();
@@ -1542,8 +1542,8 @@ public JTable constructTable(){
         jLabel17.setFont(new java.awt.Font("Arial", 1, 14)); // NOI18N
         jLabel17.setText("Target List:");
 
-        sekected_target_listjLabel.setFont(new java.awt.Font("DejaVu Sans", 1, 14)); // NOI18N
-        sekected_target_listjLabel.setForeground(new java.awt.Color(5, 180, 7));
+        selected_target_listjLabel.setFont(new java.awt.Font("DejaVu Sans", 1, 14)); // NOI18N
+        selected_target_listjLabel.setForeground(new java.awt.Color(5, 180, 7));
 
         javax.swing.GroupLayout planningPanelLayout = new javax.swing.GroupLayout(planningPanel);
         planningPanel.setLayout(planningPanelLayout);
@@ -1567,7 +1567,7 @@ public JTable constructTable(){
                         .addGroup(planningPanelLayout.createSequentialGroup()
                             .addComponent(jLabel17)
                             .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(sekected_target_listjLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 166, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                            .addComponent(selected_target_listjLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 166, javax.swing.GroupLayout.PREFERRED_SIZE)))
                     .addGroup(planningPanelLayout.createSequentialGroup()
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel13)
@@ -1622,7 +1622,7 @@ public JTable constructTable(){
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                             .addComponent(jLabel17, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(sekected_target_listjLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                            .addComponent(selected_target_listjLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                     .addGroup(planningPanelLayout.createSequentialGroup()
                         .addGroup(planningPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                             .addComponent(auto_start_timeCheckBox)
@@ -2700,8 +2700,8 @@ public JTable constructTable(){
     private javax.swing.JMenuItem saveMenuItem;
     private javax.swing.JMenuItem save_asMenuItem;
     private javax.swing.JTextField seeingTextField;
-    private javax.swing.JLabel sekected_target_listjLabel;
     private javax.swing.JTextField selectedTargetNameTextField;
+    private javax.swing.JLabel selected_target_listjLabel;
     private javax.swing.JMenuItem shutdownMenuItem;
     private javax.swing.JMenuItem ten_day_weatherMenuItem;
     private javax.swing.JMenu toolsMenu;
