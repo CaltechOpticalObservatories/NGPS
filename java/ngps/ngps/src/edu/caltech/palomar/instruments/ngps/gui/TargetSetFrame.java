@@ -341,6 +341,7 @@ public void configureUserTableListener(){
     }// </editor-fold>//GEN-END:initComponents
 
     private void OKButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_OKButtonActionPerformed
+        dbms.setSelectedObservationSet(selectedSet);
         query_target_set();
     }//GEN-LAST:event_OKButtonActionPerformed
 
