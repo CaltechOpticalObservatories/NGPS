@@ -675,7 +675,7 @@ namespace AstroCam {
 
     // Help
     //
-    if ( devices_in == "?" ) {
+    if ( devices_in == "?" || devices_in == "help" ) {
       retstring = CAMERAD_OPEN;
       retstring.append( " [ <devlist> ]\n" );
       retstring.append( "  Opens a connection to the indicated PCI/e device(s) where <devlist>\n" );
@@ -697,7 +697,7 @@ namespace AstroCam {
     if (this->numdev == 0) {
       logwrite(function, "ERROR: no devices found");
       retstring="no_devices";
-      return(ERROR);
+      return ERROR;
     }
 
     // Log all PCI devices found
@@ -718,7 +718,7 @@ namespace AstroCam {
     if ( this->configdev.empty() ) {
       logwrite( function, "ERROR: no devices configured. Need CONTROLLER keyword in config file." );
       retstring="not_configured";
-      return( ERROR );
+      return ERROR;
     }
 
     for ( const auto &dev : this->configdev ) {
@@ -731,13 +731,14 @@ namespace AstroCam {
     // are stored in a public vector "devlist".
     //
 
-    // If no string is given then use vector of configured devices
+    // If no string is given then use vector of configured devices. The configdev
+    // vector contains a list of devices defined in the config file with the
+    // keyword CONTROLLER=(<PCIDEV> <CHAN> <FT> <FIRMWARE>).
     //
     if ( devices_in.empty() ) this->devlist = this->configdev;
-
-    // Otherwise, tokenize the device list string and build devlist from the tokens
-    //
     else {
+      // Otherwise, tokenize the device list string and build devlist from the tokens
+      //
       std::vector<std::string> tokens;
       Tokenize(devices_in, tokens, " ");
       for ( const auto &n : tokens ) {                // For each token in the devices_in string,
@@ -747,19 +748,17 @@ namespace AstroCam {
             this->devlist.push_back( dev );                                                            // then push into devlist vector.
           }
         }
-        catch (std::invalid_argument &) {
-          message.str(""); message << "ERROR: invalid device number: " << n << ": unable to convert to integer";
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing device number " << n << ": " << e.what();
           logwrite(function, message.str());
           retstring="invalid_argument";
           return(ERROR);
         }
-        catch (std::out_of_range &) {
-          message.str(""); message << "ERROR: device number " << n << ": out of integer range";
-          logwrite(function, message.str());
-          retstring="out_of_range";
-          return(ERROR);
+        catch(...) {
+          logwrite(function, "ERROR unknown exception getting device number");
+          retstring="exception";
+          return ERROR;
         }
-        catch(...) { logwrite(function, "unknown error getting device number"); retstring="exception"; return(ERROR); }
       }
     }
 
@@ -773,7 +772,7 @@ namespace AstroCam {
     }
 
     // The size of devlist at this point is the number of devices that will
-    // be requested to be opened. This should match the number of opened
+    // be _requested_ to be opened. This should match the number of opened
     // devices at the end of this function.
     //
     size_t requested_device_count = this->devlist.size();
@@ -862,12 +861,17 @@ namespace AstroCam {
       }
     }
 
-    // Update the devlist vector with connected controllers only
+    // Update the controller map and devlist vector with connected controllers only
     //
-    for ( auto &dev : this->devlist ) { if ( ! this->controller[dev].connected ) dev = -1; }
+    for ( auto &dev : this->devlist ) {
+      if ( ! this->controller[dev].connected ) {
+        this->controller.erase( dev );  // erase the non-connected controller from the controller map
+        dev = -1;                       // flag the devnum for removal from the devlist vector
+      }
+    }
 
     // Now remove the marked devices (those not connected) 
-    // by erasing them from the this->devlist STL map.
+    // by erasing them from the this->devlist vector.
     //
     this->devlist.erase( std::remove (this->devlist.begin(), this->devlist.end(), -1), this->devlist.end() );
 
