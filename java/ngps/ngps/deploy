@@ -7,7 +7,7 @@
 synclist=DEPLOY.TXT
 dest=/usr/local/palomar/deployment/NGPS_GUI/
 
-read -p "Do you wish to deploy to $dest ? [y/N]:  " yn
+read -p "This will deploy to $dest on both ngps computers.  Continue? [y/N]:  " yn
 case $yn in
     [Yy]* ) 
 	echo ''
