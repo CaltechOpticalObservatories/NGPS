@@ -18,6 +18,13 @@ cd $guipath
 # Form the java command
 cmd="$java_exec -jar ngps.jar $opt" 
 
+# "Splash screen" to let users know something's happening
+zenity --info \
+  --title "Welcome to NGPS" \
+  --text "The GUI will start in a moment..." \
+  --width 300 \
+  --timeout=3
+
 # If OBSERVE, use file lock
 if [ "$opt" = "OBSERVE" ]; then
     flock -n /tmp/ngps-obsserve-lock $cmd
