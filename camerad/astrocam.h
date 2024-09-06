@@ -868,6 +868,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
           bool connected;                  //!< true if controller connected (requires successful TDL command)
+          bool inactive;                   //!< set true to skip future use of controllers when unable to connect
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
           std::string firmware;            //!< name of firmware (.lod) file
           std::string channel;             //!< name of spectrographic channel

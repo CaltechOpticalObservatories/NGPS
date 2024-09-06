@@ -220,6 +220,7 @@ namespace AstroCam {
   void Interface::state_monitor_thread(Interface& interface) {
     std::string function = "AstroCam::Interface::state_monitor_thread";
     std::stringstream message;
+    std::vector<uint32_t> selectdev;
 
     // notify that the thread is running
     //
@@ -236,8 +237,19 @@ namespace AstroCam {
       interface.state_monitor_condition.wait(state_lock);
 
       while ( interface.camera_idle() ) {
-        logwrite(function, "NOTICE: detector idling enabled");
-        interface.do_native("IDL");
+        selectdev.clear();
+        message.str(""); message << "enabling detector idling for channel(s)";
+        for ( const auto &dev : interface.devlist ) {
+          logwrite(function, std::to_string(dev));
+          if ( interface.controller[dev].connected ) {
+            selectdev.push_back(dev);
+            message << " " << interface.controller[dev].channel;
+          }
+        }
+        if ( selectdev.size() > 0 ) {
+          long ret = interface.do_native( selectdev, std::string("IDL") );
+          logwrite( function, (ret==NO_ERROR ? "NOTICE: " : "ERROR")+message.str() );
+        }
         // Wait for the conditions to change before checking again
         interface.state_monitor_condition.wait( state_lock );
       }
@@ -375,6 +387,7 @@ namespace AstroCam {
     this->controller[dev].devname = "";             // device name
     this->controller[dev].connected = false;        // not yet connected
     this->controller[dev].firmwareloaded = false;   // no firmware loaded
+    this->controller[dev].inactive = false;         // assume active unless shown otherwise
 
     this->controller[dev].info.readout_name = amp;
     this->controller[dev].info.readout_type = readout_type;
@@ -473,6 +486,7 @@ namespace AstroCam {
     // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
     for ( const auto &con : this->controller ) {
+      if ( con.second.inactive ) continue;   // skip controllers flagged as inactive
       if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
         chan = tryme;
@@ -539,6 +553,7 @@ namespace AstroCam {
       message.str("");
       message << "row col ";
 //    for ( const auto &con : this->controller ) {
+//      if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
 //      message << con.second.channel << " ";
 //    }
       message << "}\n";
@@ -739,6 +754,7 @@ namespace AstroCam {
     else {
       // Otherwise, tokenize the device list string and build devlist from the tokens
       //
+      this->devlist.clear();                          // empty the devlist since it's being built here
       std::vector<std::string> tokens;
       Tokenize(devices_in, tokens, " ");
       for ( const auto &n : tokens ) {                // For each token in the devices_in string,
@@ -776,16 +792,16 @@ namespace AstroCam {
     // devices at the end of this function.
     //
     size_t requested_device_count = this->devlist.size();
-
     // Open only the devices specified by the devlist vector
     //
-    for ( auto dev_it = this->devlist.begin(); dev_it != this->devlist.end(); ++dev_it ) {
-      int dev = *dev_it;
+    for ( size_t i = 0; i < this->devlist.size(); ) {
+      int dev = this->devlist[i];
       auto dev_found = this->controller.find( dev );
 
       if ( dev_found == this->controller.end() ) {
         message.str(""); message << "ERROR: devnum " << dev << " not found in controller definition. check config file";
         logwrite( function, message.str() );
+        this->controller[dev].inactive=true;      // flag the non-connected controller as inactive
         this->do_disconnect_controller(dev);
         retstring="unknown_device";
         error = ERROR;
@@ -847,6 +863,7 @@ namespace AstroCam {
         if ( this->image_size( args.str(), retstring ) != NO_ERROR ) {  // set IMAGE_SIZE here after opening
           message.str(""); message << "ERROR setting image size for " << this->controller[dev].devname << ": " << retstring;
           this->camera.async.enqueue_and_log( function, message.str() );
+          this->controller[dev].inactive=true;      // flag the non-connected controller as inactive
           this->do_disconnect_controller(dev);
           error = ERROR;
         }
@@ -855,25 +872,17 @@ namespace AstroCam {
         message.str(""); message << "ERROR opening " << this->controller[dev].devname
                                  << " channel " << this->controller[dev].channel << ": " << e.what();
         this->camera.async.enqueue_and_log( function, message.str() );
+        this->controller[dev].inactive=true;      // flag the non-connected controller as inactive
         this->do_disconnect_controller(dev);
         retstring="exception";
         error = ERROR;
       }
+      // A call to do_disconnect_controller() can modify the size of devlist,
+      // so only if the loop index i is still valid with respect to the current
+      // size of devlist should it be incremented.
+      //
+      if ( i < devlist.size() ) ++i;
     }
-
-    // Update the controller map and devlist vector with connected controllers only
-    //
-    for ( auto &dev : this->devlist ) {
-      if ( ! this->controller[dev].connected ) {
-        this->controller.erase( dev );  // erase the non-connected controller from the controller map
-        dev = -1;                       // flag the devnum for removal from the devlist vector
-      }
-    }
-
-    // Now remove the marked devices (those not connected) 
-    // by erasing them from the this->devlist vector.
-    //
-    this->devlist.erase( std::remove (this->devlist.begin(), this->devlist.end(), -1), this->devlist.end() );
 
     // Log the list of connected devices
     //
@@ -900,15 +909,18 @@ namespace AstroCam {
       error = ERROR;
     }
 
-    // Start a thread to monitor the state of things
+    // Start a thread to monitor the state of things (if not already running)
     //
-    std::thread( std::ref(AstroCam::Interface::state_monitor_thread), std::ref(*this) ).detach();
-    std::unique_lock<std::mutex> state_lock( this->state_lock );
-    if ( !this->state_monitor_condition.wait_for( state_lock,
-                                                  std::chrono::milliseconds(1000), [this] { return this->state_monitor_thread_running.load(); } ) ) {
-      logwrite( function, "ERROR: state_monitor_thread did not start" );
-      retstring="internal_error";
-      error = ERROR;
+    if ( !this->state_monitor_thread_running.load() ) {
+      std::thread( std::ref(AstroCam::Interface::state_monitor_thread), std::ref(*this) ).detach();
+      std::unique_lock<std::mutex> state_lock( this->state_lock );
+      if ( !this->state_monitor_condition.wait_for( state_lock,
+                                                    std::chrono::milliseconds(1000),
+                                                    [this] { return this->state_monitor_thread_running.load(); } ) ) {
+        logwrite( function, "ERROR: state_monitor_thread did not start" );
+        retstring="internal_error";
+        error = ERROR;
+      }
     }
 
     // As the last step to opening the controller, this is where I've chosen
@@ -938,25 +950,35 @@ namespace AstroCam {
 
     if ( !this->camera_idle() ) {
       logwrite( function, "ERROR: cannot close controller while camera is active" );
-      return( ERROR );
+      return ERROR;
     }
 
-    // close indicated PCI device
+    // close indicated PCI device and remove dev from devlist
     //
     try {
+      if ( this->controller.at(dev).pArcDev == nullptr ) {
+        message.str(""); message << "ERROR no ARC device for dev " << dev;
+        logwrite( function, message.str() );
+        return ERROR;
+      }
       message.str(""); message << "closing " << this->controller.at(dev).devname;
       logwrite(function, message.str());
       this->controller.at(dev).pArcDev->close();  // throws nothing, no error handling
       this->controller.at(dev).connected=false;
-      this->devlist.at( dev ) = -1;               // flag for removal
+      // remove dev from devlist
+      //
+      auto it = std::find( this->devlist.begin(), this->devlist.end(), dev );
+      if ( it != this->devlist.end() ) {
+        this->devlist.erase(it);
+      }
     }
     catch ( std::out_of_range &e ) {
       message.str(""); message << "dev " << dev << " not found: " << e.what();
       this->camera.log_error( function, message.str() );
-      return(ERROR);
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** AstroCam::Interface::do_disconnect_controller ************************/
 
@@ -1189,7 +1211,8 @@ namespace AstroCam {
     std::string retstring;
     std::vector<uint32_t> selectdev;
     for ( const auto &dev : this->devlist ) {
-      selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
+      // build selectdev vector from all connected controllers
+      if ( this->controller[dev].connected ) selectdev.push_back( dev );
     }
     return this->do_native( selectdev, cmdstr, retstring );
   }
@@ -1205,6 +1228,12 @@ namespace AstroCam {
    *
    */
   long Interface::do_native(std::vector<uint32_t> selectdev, std::string cmdstr) {
+    // Use the erase-remove idiom to remove disconnected devices from selectdev
+    //
+    selectdev.erase( std::remove_if( selectdev.begin(), selectdev.end(),
+                     [this](uint32_t dev) { return !this->controller[dev].connected; } ),
+                     selectdev.end() );
+
     std::string retstring;
     return this->do_native( selectdev, cmdstr, retstring );
   }
@@ -1222,7 +1251,7 @@ namespace AstroCam {
    */
   long Interface::do_native( int dev, std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
-    selectdev.push_back( dev );
+    if ( this->controller[dev].connected ) selectdev.push_back( dev );
     return this->do_native( selectdev, cmdstr, retstring );
   }
   /***** AstroCam::Interface::do_native ***************************************/
@@ -2572,6 +2601,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // to load each controller with the specified file.
     //
     for ( const auto &con : this->controller ) {
+      if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
       // But only use it if the device is open
       //
       if ( con.second.connected ) {
@@ -2866,6 +2896,7 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -2873,6 +2904,7 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -2992,6 +3024,7 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -2999,6 +3032,7 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -3567,6 +3601,7 @@ logwrite(function, message.str());
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -3574,6 +3609,7 @@ logwrite(function, message.str());
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -3642,6 +3678,7 @@ logwrite(function, message.str());
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -3649,6 +3686,7 @@ logwrite(function, message.str());
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -3886,6 +3924,7 @@ logwrite(function, message.str());
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -3893,6 +3932,7 @@ logwrite(function, message.str());
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -4907,6 +4947,7 @@ logwrite(function, message.str());
     if ( testname == "controller" ) {
 
       for ( auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
         message.str(""); message << "controller[" << con.second.devnum << "] connected:" << ( con.second.connected ? "T" : "F" )
                                  << " bufsize:" << con.second.get_bufsize()
                                  << " rows:" << con.second.rows << " cols:" << con.second.cols
