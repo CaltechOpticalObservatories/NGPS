@@ -2429,6 +2429,7 @@ public JTable constructTable(){
                     JOptionPane.showMessageDialog(this, "Invalid set ID, initialization failure.");
                 }
                 dbms.queryObservations(dbms.selectedObservationSet.getSET_ID());
+                dbms.delete_stack.clear();
             }
         }catch(Exception e){
             System.out.println(e.toString());
