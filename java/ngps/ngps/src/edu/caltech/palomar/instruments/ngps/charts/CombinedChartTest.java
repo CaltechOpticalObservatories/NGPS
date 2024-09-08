@@ -20,6 +20,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.StringTokenizer;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.LocalDateTime;
 
 import javax.swing.JPanel;
 import org.jfree.chart.ChartMouseEvent;
@@ -121,7 +124,13 @@ public class CombinedChartTest extends JFrame implements ChartMouseListener, Mou
    public long                          morning_twilight_milli;
    public double                        evening_twilight_minutes;
    public double                        morning_twilight_minutes;
-
+   public Date                          sunset_time_hhmm;
+   public Date                          sunrise_time_hhmm;
+   public Date                          evening_twilight_time_hhmm;
+   public Date                          morning_twilight_time_hhmm;
+   public Date                          sunset_time_lower;
+   public Date                          sunrise_time_upper;
+   
      /**
      * Constructs a new demonstration application.
      *
@@ -161,6 +170,8 @@ public class CombinedChartTest extends JFrame implements ChartMouseListener, Mou
         System.out.println("Sunset Minutes = "+sunset_minutes+" Sunrise Minutes = "+sunrise_minutes);
         System.out.println("Evening Twilight Minutes = "+evening_twilight_minutes+" Morning Twilight Minutes = "+morning_twilight_minutes);
         
+        sunset_time_lower = new Date((long)(sunset_milli - 600000));
+        sunrise_time_upper = new Date((long)(sunrise_milli + 600000));
 //        initializeDBMS();
         chart_panel = createDemoPanel();
         chart_panel.addOverlay(crosshair_overlay);
@@ -248,7 +259,10 @@ public void setDBMS(NGPSdatabase new_dbms){
 //        renderer1. setDefaultStroke(new BasicStroke(1.0f));
 //        renderer1.setAutoPopulateSeriesStroke(false);
         
-        NumberAxis domainAxis = new NumberAxis("Time (minutes)");
+//      NumberAxis domainAxis = new NumberAxis("Time (minutes)");
+        DateAxis domainAxis = new DateAxis("Time");
+        domainAxis.setDateFormatOverride(new SimpleDateFormat("HH:mm"));
+        domainAxis.setVerticalTickLabels(true);
         int series_count_bars = myDefaultIntervalXYDataset.getSeriesCount();
         int series_count_xy   = myXYSeriesCollection.getSeriesCount();
  //       domainAxis.setRange(myDefaultIntervalXYDataset.getStartXValue(0,0),myDefaultIntervalXYDataset.getEndXValue(series_count-1,0));
@@ -262,7 +276,7 @@ public void setDBMS(NGPSdatabase new_dbms){
         XYPlot plot = new XYPlot(data1, domainAxis, rangeAxis, renderer1);
         domainAxis.setAutoRange(false);
         double upper_bound = domainAxis.getRange().getUpperBound();
-        domainAxis.setRange(sunset_minutes - 10, sunrise_minutes+10);
+        domainAxis.setRange(sunset_time_lower, sunrise_time_upper);
 
         StandardXYItemRenderer renderer2 = new StandardXYItemRenderer();
         StandardXYToolTipGenerator xy_tooltip =  new StandardXYToolTipGenerator(StandardXYToolTipGenerator.DEFAULT_TOOL_TIP_FORMAT,new SimpleDateFormat("d-MMM-yyyy hh:mm:ss.s"), new DecimalFormat("0.00"));
@@ -312,47 +326,47 @@ public void setDBMS(NGPSdatabase new_dbms){
         }        
         renderer1.setDefaultOutlineStroke(new BasicStroke(0.5f));
         BasicStroke dotted_line = new BasicStroke( 2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,1.0f, new float[] {6.0f, 6.0f}, 0.0f);
-        XYLineAnnotation reference_time = new XYLineAnnotation(0, 1.0, 0.0, 3.0, new BasicStroke(3.0f), java.awt.Color.blue);
-        XYLineAnnotation sunset_time    = new XYLineAnnotation(sunset_minutes, 1.0,sunset_minutes, 3.0, new BasicStroke(3.0f), java.awt.Color.red);
-        XYLineAnnotation sunrise_time   = new XYLineAnnotation(sunrise_minutes, 1.0,sunrise_minutes, 3.0, new BasicStroke(3.0f), java.awt.Color.red);
-        XYLineAnnotation evening_twilight_time   = new XYLineAnnotation(evening_twilight_minutes, 1.0,evening_twilight_minutes, 3.0, dotted_line, java.awt.Color.BLUE);
-        XYLineAnnotation morning_twilight_time   = new XYLineAnnotation(morning_twilight_minutes, 1.0,morning_twilight_minutes, 3.0, dotted_line, java.awt.Color.BLUE);
+        XYLineAnnotation reference_time = new XYLineAnnotation(reference_milli, 1.0, reference_milli, 3.0, new BasicStroke(3.0f), java.awt.Color.blue);
+        XYLineAnnotation sunset_time    = new XYLineAnnotation(sunset_milli, 1.0,sunset_milli, 3.0, new BasicStroke(3.0f), java.awt.Color.red);
+        XYLineAnnotation sunrise_time   = new XYLineAnnotation(sunrise_milli, 1.0,sunrise_milli, 3.0, new BasicStroke(3.0f), java.awt.Color.red);
+        XYLineAnnotation evening_twilight_time   = new XYLineAnnotation(evening_twilight_milli, 1.0,evening_twilight_milli, 3.0, dotted_line, java.awt.Color.BLUE);
+        XYLineAnnotation morning_twilight_time   = new XYLineAnnotation(morning_twilight_milli, 1.0,morning_twilight_milli, 3.0, dotted_line, java.awt.Color.BLUE);
        
 //        XYPointerAnnotation sunset_pointer = new XYPointerAnnotation( "Sunset = "+sunset, sunset_minutes, 2.5, 3.0 * Math.PI / 4.0);
-        XYPointerAnnotation sunset_pointer = new XYPointerAnnotation( "Sunset", sunset_minutes, 2.5, 3.0 * Math.PI / 4.0);
+        XYPointerAnnotation sunset_pointer = new XYPointerAnnotation( "Sunset", sunset_milli, 2.5, 3.0 * Math.PI / 4.0);
          sunset_pointer.setTipRadius(10.0); 
          sunset_pointer.setBaseRadius(35.0);
          sunset_pointer.setFont(new Font("Ariel", Font.BOLD, 14)); sunset_pointer.setPaint(java.awt.Color.red);
          sunset_pointer.setTextAnchor(TextAnchor.CENTER_RIGHT);          
-        XYPointerAnnotation sunrise_pointer = new XYPointerAnnotation( "Sunrise", sunrise_minutes, 2.5, 3.0 * Math.PI / 4.0);
+        XYPointerAnnotation sunrise_pointer = new XYPointerAnnotation( "Sunrise", sunrise_milli, 2.5, 3.0 * Math.PI / 4.0);
          sunrise_pointer.setTipRadius(10.0);
          sunrise_pointer.setBaseRadius(35.0);
          sunrise_pointer.setFont(new Font("Ariel", Font.BOLD, 14));
          sunrise_pointer.setPaint(java.awt.Color.green);
          sunrise_pointer.setTextAnchor(TextAnchor.HALF_ASCENT_RIGHT); 
 
-        XYPointerAnnotation reference_pointer = new XYPointerAnnotation( "Start of Observations", 0, 2.5, 3.0 * Math.PI / 4.0);
+        XYPointerAnnotation reference_pointer = new XYPointerAnnotation( "Start of Observations", reference_milli, 2.5, 3.0 * Math.PI / 4.0);
          reference_pointer.setTipRadius(10.0);
          reference_pointer.setBaseRadius(35.0);
          reference_pointer.setFont(new Font("Ariel", Font.BOLD, 14)); 
          reference_pointer.setPaint(java.awt.Color.blue);
          reference_pointer.setTextAnchor(TextAnchor.HALF_ASCENT_RIGHT); 
          
-       XYTextAnnotation sunset_annotation = new XYTextAnnotation("Sunset = "+sunset,sunset_minutes+15 , 2.0);
+       XYTextAnnotation sunset_annotation = new XYTextAnnotation("Sunset = "+sunset,(sunset_milli)+(15*60000) , 2.0);
             sunset_annotation.setFont(font);
             sunset_annotation.setPaint(java.awt.Color.black);
             sunset_annotation.setTextAnchor(TextAnchor.CENTER);
             sunset_annotation.setRotationAnchor(TextAnchor.CENTER);
             sunset_annotation.setRotationAngle(rotation_radians);         
         plot.addAnnotation(sunset_annotation); 
-       XYTextAnnotation reference_annotation = new XYTextAnnotation("Observation start time = "+reference,-10 , 2.0);
+     /*  XYTextAnnotation reference_annotation = new XYTextAnnotation("Observation start time = "+reference,-10 , 2.0);
             reference_annotation.setFont(font);
             reference_annotation.setPaint(java.awt.Color.black);
             reference_annotation.setTextAnchor(TextAnchor.CENTER);
             reference_annotation.setRotationAnchor(TextAnchor.CENTER);
             reference_annotation.setRotationAngle(rotation_radians);         
-        plot.addAnnotation(reference_annotation); 
-       XYTextAnnotation sunrise_annotation = new XYTextAnnotation("Sunrise = "+sunrise,sunrise_minutes-10, 2.0);
+        plot.addAnnotation(reference_annotation);  */
+       XYTextAnnotation sunrise_annotation = new XYTextAnnotation("Sunrise = "+sunrise,(sunrise_milli)-(10*60000), 2.0);
             sunrise_annotation.setFont(font);
             sunrise_annotation.setPaint(java.awt.Color.black);
             sunrise_annotation.setTextAnchor(TextAnchor.CENTER);
@@ -360,7 +374,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             sunrise_annotation.setRotationAngle(rotation_radians);         
         plot.addAnnotation(sunrise_annotation); 
  
-       XYTextAnnotation evening_twilight_annotation = new XYTextAnnotation("Evening Twilight = "+evening_twilight,-20.0, 2.0);
+       XYTextAnnotation evening_twilight_annotation = new XYTextAnnotation("Evening Twilight = "+evening_twilight,(evening_twilight_milli)-(10.0*60000), 2.0);
             evening_twilight_annotation.setFont(font);
             evening_twilight_annotation.setPaint(java.awt.Color.black);
             evening_twilight_annotation.setTextAnchor(TextAnchor.CENTER);
@@ -368,7 +382,7 @@ public void setDBMS(NGPSdatabase new_dbms){
             evening_twilight_annotation.setRotationAngle(rotation_radians);         
         plot.addAnnotation(evening_twilight_annotation); 
         
-       XYTextAnnotation morning_twilight_annotation = new XYTextAnnotation("Morning Twilight = "+morning_twilight,-30.0, 2.0);
+       XYTextAnnotation morning_twilight_annotation = new XYTextAnnotation("Morning Twilight = "+morning_twilight,(morning_twilight_milli)+(10.0*60000), 2.0);
             morning_twilight_annotation.setFont(font);
             morning_twilight_annotation.setPaint(java.awt.Color.black);
             morning_twilight_annotation.setTextAnchor(TextAnchor.CENTER);
@@ -589,8 +603,8 @@ public void updateChartColors(){
 /   constructTask(Target current)
 /=============================================================================================*/
 public void addXIntervalXYDataset(Target current){
-    long start_time = (current.otm.getOTMstart().getTime() - start_first_exposure)/(1000*60);
-    long end_time   = (current.otm.getOTMend().getTime() - start_first_exposure)/(1000*60);
+    long start_time = (current.otm.getOTMstart().getTime());
+    long end_time   = (current.otm.getOTMend().getTime());
 //    long start_time = (current.otm.getOTMstart().getTime());
 //    long end_time   = (current.otm.getOTMend().getTime());
     long center_of_observation = (end_time - start_time)/2;
@@ -608,8 +622,8 @@ public void addXIntervalXYDataset(Target current){
 }
 public void constructXYSeries(int sequence_number,Target current){
       XYSeries series = new XYSeries(current.getName()+"-"+sequence_number);
-      long start_time = (current.otm.getOTMstart().getTime() - start_first_exposure)/(1000*60);
-      long end_time   = (current.otm.getOTMend().getTime() - start_first_exposure)/(1000*60);      
+      long start_time = (current.otm.getOTMstart().getTime());
+      long end_time   = (current.otm.getOTMend().getTime());      
       series.add(start_time,current.otm.getOTMAirmass_start());
       series.add(end_time,current.otm.getOTMAirmass_end());
       myXYSeriesCollection.addSeries(series);
@@ -619,8 +633,8 @@ public void constructXYSeries(int sequence_number,Target current){
 /=================================================================================================*/
 public TimeSeries constructTimeSeries(Target current){
     TimeSeries current_time_series = new TimeSeries(current.getName());
-    Millisecond start = new Millisecond(new Date((current.otm.getOTMstart().getTime() - start_first_exposure)/(1000*60)));
-    Millisecond end   = new Millisecond(new Date((current.otm.getOTMend().getTime() - start_first_exposure)/(1000*60)));
+    Millisecond start = new Millisecond(new Date((current.otm.getOTMstart().getTime())));
+    Millisecond end   = new Millisecond(new Date((current.otm.getOTMend().getTime())));
     current_time_series.add(start,current.otm.getOTMAirmass_start(), true);
     current_time_series.add(end,current.otm.getOTMAirmass_end(), true);
     return current_time_series;

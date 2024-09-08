@@ -565,8 +565,8 @@ public void readOTMoutput(){
 /   constructTask(Target current)
 /=============================================================================================*/
 public void addXIntervalXYDataset(Target current){
-    long start_time = (current.otm.getOTMstart().getTime() - start_first_exposure)/(1000*60);
-    long end_time   = (current.otm.getOTMend().getTime() - start_first_exposure)/(1000*60);
+    long start_time = (current.otm.getOTMstart().getTime());
+    long end_time   = (current.otm.getOTMend().getTime());
     long center_of_observation = (end_time - start_time)/2;
     double airmass_start = current.otm.getOTMAirmass_start();
     double airmass_end   = current.otm.getOTMAirmass_end();
@@ -585,15 +585,15 @@ public void addXIntervalXYDataset(Target current){
 }
 public void constructXYSeries(int sequence_number,Target current){
       XYSeries series = new XYSeries(current.getName()+"-"+sequence_number);
-      long start_time = (current.otm.getOTMstart().getTime() - start_first_exposure)/(1000*60);
-      long end_time   = (current.otm.getOTMend().getTime() - start_first_exposure)/(1000*60);      
+      long start_time = (current.otm.getOTMstart().getTime());
+      long end_time   = (current.otm.getOTMend().getTime());      
       series.add(start_time,current.otm.getOTMAirmass_start());
       series.add(end_time,current.otm.getOTMAirmass_end());
       myXYSeriesCollection.addSeries(series);
 }
 public void constructChartData(int sequence_number,Target current){
-    long start_time = (current.otm.getOTMstart().getTime() - start_first_exposure)/(1000*60);
-    long end_time   = (current.otm.getOTMend().getTime() - start_first_exposure)/(1000*60);
+    long start_time = (current.otm.getOTMstart().getTime());
+    long end_time   = (current.otm.getOTMend().getTime());
     long center_of_observation = (end_time - start_time)/2;
     double airmass_start = current.otm.getOTMAirmass_start();
     double airmass_end   = current.otm.getOTMAirmass_end();
