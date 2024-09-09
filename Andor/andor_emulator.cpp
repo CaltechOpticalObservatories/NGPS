@@ -814,13 +814,14 @@ namespace Andor {
    * @param[in]  headerfile
    * @param[in]  outputfile
    * @param[in]  exptime
+   * @param[in]  simsize
+   * @return     ERROR | NO_ERROR
    *
    */
   long SkySim::generate_image( const std::string_view &headerfile,
                                const std::string_view &outputfile,
                                const double exptime,
-                               const int simsize,
-                               const double conebuffer ) {
+                               const int simsize ) {
     std::string function = "Andor::SkySim::generate_image";
     std::stringstream message;
     long error = NO_ERROR;
@@ -872,7 +873,6 @@ namespace Andor {
     }
 
     PyDict_SetItemString( pKwArgs, "IMAGE_SIZE", PyLong_FromLong( simsize ) );
-    PyDict_SetItemString( pKwArgs, "coneBuffer", PyLong_FromLong( conebuffer ) );
 
     PyObject* pArgs   = PyTuple_Pack( 2, pHeaderfile, pOutputfile );
 

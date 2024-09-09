@@ -1065,8 +1065,7 @@ logwrite( function, message.str() );
     //
     for ( const auto &pair : this->andor ) {
       if ( pair.second->is_emulated() && _tcs_online ) pair.second->simulate_frame( fitsinfo.fits_name,
-                                                                                    this->simsize,
-                                                                                    this->conesize );
+                                                                                    this->simsize );
     }
 
     outfile = fitsinfo.fits_name;
@@ -1208,26 +1207,6 @@ logwrite( function, message.str() );
         logwrite( function, message.str() );
         applied++;
       }
-
-      if ( config.param[entry] == "SKYSIM_CONE_BUFFER" ) {
-        try {
-          this->camera.set_conesize( std::stod( config.arg[entry] ) );
-        }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid CONE_BUFFER " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        catch ( std::out_of_range &e ) {
-          message.str(""); message << "ERROR invalid CONE_BUFFER " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        applied++;
-      }
-
     }
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
     logwrite(function, message.str());

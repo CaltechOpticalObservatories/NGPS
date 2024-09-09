@@ -416,7 +416,7 @@ namespace Andor {
       inline bool is_initialized() { return this->initialized; };
 
       long simulate_frame( std::string name_in );
-      long simulate_frame( std::string name_in, const int simsize, const double conebuffer );
+      long simulate_frame( std::string name_in, const int simsize );
 
       long simandor( std::string args, std::string &retstring );
       long open( std::string args );
@@ -427,7 +427,7 @@ namespace Andor {
       long set_exptime( std::string exptime, std::string &retstring );
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
-      long save_acquired( std::string wcs_in, std::string &imgname, const int simsize, const double conebuffer );
+      long save_acquired( std::string wcs_in, std::string &imgname, const int simsize );
       unsigned int start_acquisition();
       long get_detector( int &x, int &y );
       long get_status();

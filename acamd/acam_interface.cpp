@@ -834,8 +834,7 @@ namespace Acam {
     // This is the one extra call that is outside the normal workflow.
     //
     if ( andor.is_emulated() && _tcs_online ) andor.simulate_frame( fitsinfo.fits_name,
-                                                                    this->simsize,
-                                                                    this->conesize );
+                                                                    this->simsize );
 
     outfile = fitsinfo.fits_name;
 
@@ -1547,25 +1546,6 @@ namespace Acam {
         }
         catch ( std::out_of_range &e ) {
           message.str(""); message << "ERROR invalid SKYSIM_IMAGE_SIZE " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        applied++;
-      }
-
-      if ( config.param[entry] == "SKYSIM_CONE_BUFFER" ) {
-        try {
-          this->camera.set_conesize( std::stod( config.arg[entry] ) );
-        }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid CONE_BUFFER " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        catch ( std::out_of_range &e ) {
-          message.str(""); message << "ERROR invalid CONE_BUFFER " << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;
         }

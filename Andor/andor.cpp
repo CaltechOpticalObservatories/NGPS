@@ -2091,14 +2091,14 @@ namespace Andor {
    * @brief      save an acquired image to FITS file
    * @details    This saves the image stored in the class. See also acquire_one().
    *             This function is overloaded. This version uses hard-coded
-   *             default values of simsize=1024 conebuffer=1
+   *             default values of simsize=1024
    * @param[in]  wcs_in   optional input image contains WCS header info to re-use
    * @param[out] imgname  output filename
    * @return     ERROR | NO_ERROR
    *
    */
   long Interface::save_acquired( std::string wcs_in, std::string &imgname ) {
-    return( save_acquired( wcs_in, imgname, 1024, 1 ) );
+    return( save_acquired( wcs_in, imgname, 1024 ) );
   }
   /***** Andor::Interface::save_acquired **************************************/
 
@@ -2107,17 +2107,16 @@ namespace Andor {
   /**
    * @brief      save an acquired image to FITS file
    * @details    This saves the image stored in the class. See also acquire_one().
-   *             This function is overloaded. This version accepts simsize and
-   *             conebuffer as free paramters which will be passed as keyword
+   *             This function is overloaded. This version accepts simsize as a
+   *             free paramter which will be passed as keyword
    *             arguments to Python.
    * @param[in]  wcs_in      optional input image contains WCS header info to re-use
    * @param[out] imgname     output filename
    * @param[in]  simsize     IMAGE_SIZE keyword value for simFromHeader
-   * @param[in]  conebuffer  coneBuffer keyword value for simFromHeader
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::save_acquired( std::string wcs_in, std::string &imgname, const int simsize, const double conebuffer ) {
+  long Interface::save_acquired( std::string wcs_in, std::string &imgname, const int simsize ) {
     std::string function = "Andor::Interface::save_acquired";
     std::stringstream message;
     long error = NO_ERROR;
@@ -2159,7 +2158,7 @@ namespace Andor {
     //
     if ( is_emulated() ) error = emulator.skysim.generate_image( imgname, "/tmp/andorout2.fits",
                                                                  emulator.get_exptime(),
-                                                                 simsize, conebuffer);
+                                                                 simsize );
 
     return error;
   }
@@ -2170,13 +2169,13 @@ namespace Andor {
   /**
    * @brief      calls the skysim generator to create a simulated image
    * @details    This function is overloaded. This version uses hard-coded
-   *             default values of simsize=1024 conebuffer=1
+   *             default values of simsize=1024
    * @param[in]  name_in  input to skysim, gets overwritten with simulated output
    * @return     ERROR | NO_ERROR
    *
    */
   long Interface::simulate_frame( std::string name_in ) {
-    return( simulate_frame( name_in, 1024, 1 ) );
+    return( simulate_frame( name_in, 1024 ) );
   }
   /***** Andor::Interface::simulate_frame *************************************/
 
@@ -2184,16 +2183,15 @@ namespace Andor {
   /***** Andor::Interface::simulate_frame *************************************/
   /**
    * @brief      calls the skysim generator to create a simulated image
-   * @details    This function is overloaded. This version accepts simsize and
-   *             conebuffer as free paramters which will be passed as keyword
-   *             arguments to Python.
+   * @details    This function is overloaded. This version accepts simsize as
+   *             a free paramter which will be passed as a keyword
+   *             argument to Python.
    * @param[in]  name_in     input to skysim, gets overwritten with simulated output
    * @param[in]  simsize     IMAGE_SIZE keyword value for simFromHeader
-   * @param[in]  conebuffer  coneBuffer keyword value for simFromHeader
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::simulate_frame( std::string name_in, const int simsize, const double conebuffer ) {
+  long Interface::simulate_frame( std::string name_in, const int simsize ) {
     std::string function = "Andor::Interface::simulate_frame";
     std::stringstream message;
 
@@ -2201,8 +2199,7 @@ namespace Andor {
       std::string simfile = generate_temp_filename( "skysim" );    // create a temporary filename for skysim output
       long error = emulator.skysim.generate_image( name_in, simfile,
                                                    emulator.get_exptime(),
-                                                   simsize,
-                                                   conebuffer );   // generate simulated image with temp filename
+                                                   simsize);       // generate simulated image with temp filename
       if ( error == NO_ERROR ) {
         std::filesystem::rename( simfile, name_in );               // rename this temp filename as input filename
       }

@@ -128,10 +128,8 @@ ACQUIRE_TCS_MAX_OFFSET=30     # the maximum allowable offset sent to the TCS, in
 
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
-#   SKYSIM_CONE_BUFFER=<cb>  where <cb> is double-precision float
-# Sets the keyword arguments "IMAGE_SIZE=<is> coneBuffer=<cb>"
+# Sets the keyword argument "IMAGE_SIZE=<is>"
 # used for the Python skysim module.
 #
 SKYSIM_IMAGE_SIZE=1024
-SKYSIM_CONE_BUFFER=1.0
 
