@@ -814,6 +814,7 @@ namespace Andor {
    * @param[in]  headerfile
    * @param[in]  outputfile
    * @param[in]  exptime
+   * @param[in]  ismex
    * @param[in]  simsize
    * @return     ERROR | NO_ERROR
    *
@@ -821,6 +822,7 @@ namespace Andor {
   long SkySim::generate_image( const std::string_view &headerfile,
                                const std::string_view &outputfile,
                                const double exptime,
+                               const bool ismex,
                                const int simsize ) {
     std::string function = "Andor::SkySim::generate_image";
     std::stringstream message;
@@ -843,9 +845,11 @@ namespace Andor {
 
     PyGILState_STATE gstate = PyGILState_Ensure();   // Acquire the GIL
 
-    // Build Python function name
+    // Build Python function name. The function depends on the state of ismex.
     //
-    PyObject* pFunction = PyObject_GetAttrString( pSkySimModule, PYTHON_SKYSIM_FUNCTION );
+    PyObject* pFunction;
+    pFunction = ( ismex ? PyObject_GetAttrString( pSkySimModule, PYTHON_SKYSIM_MULTI_FUNCTION )
+                        : PyObject_GetAttrString( pSkySimModule, PYTHON_SKYSIM_FUNCTION ) );
 
     if ( !pFunction || !PyCallable_Check( pFunction ) ) {
       logwrite( function, "ERROR Python skysim function not callable" );

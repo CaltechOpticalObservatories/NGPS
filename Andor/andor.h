@@ -416,7 +416,7 @@ namespace Andor {
       inline bool is_initialized() { return this->initialized; };
 
       long simulate_frame( std::string name_in );
-      long simulate_frame( std::string name_in, const int simsize );
+      long simulate_frame( std::string name_in, const bool ismex, const int simsize );
 
       long simandor( std::string args, std::string &retstring );
       long open( std::string args );

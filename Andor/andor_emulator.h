@@ -20,6 +20,7 @@ namespace Andor {
   constexpr const char* PYTHON_PATH = "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo";
   constexpr const char* PYTHON_SKYSIM_MODULE = "skysim";
   constexpr const char* PYTHON_SKYSIM_FUNCTION = "simFromHeader";
+  constexpr const char* PYTHON_SKYSIM_MULTI_FUNCTION = "simFromHeaderMulti";
 
   /***** Andor::SkySim ********************************************************/
   /**
@@ -41,7 +42,7 @@ namespace Andor {
       PyObject* pSkySimModule;
 
       long generate_image( const std::string_view &headerfile, const std::string_view &outputfile,
-                           const double exptime, const int simsize );
+                           const double exptime, const bool ismex, const int simsize );
 
       inline bool is_initialized() { return this->python_initialized; }
   };

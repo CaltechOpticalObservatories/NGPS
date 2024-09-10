@@ -397,7 +397,7 @@ namespace Acam {
       inline const std::string get_pointmode() { return this->pointmode; };
 
       void set_pointmode( const std::string pm ) {
-        if ( pm != Acam::POINTMODE_SLIT || pm != Acam::POINTMODE_ACAM ) {
+        if ( pm != Acam::POINTMODE_SLIT && pm != Acam::POINTMODE_ACAM ) {
           std::stringstream message;
           message << "ERROR invalid pointmode \"" << pm << "\". expected { "
                   << POINTMODE_SLIT << " " << POINTMODE_ACAM << " }";
@@ -429,8 +429,6 @@ namespace Acam {
     private:
       std::mutex framegrab_mutex;
       std::atomic<Acam::FocusThreadStates> monitor_focus_state;
-      std::atomic<bool> framegrab_run;      ///< set if framegrab loop should run
-      std::atomic<bool> framegrab_running;  ///< set if framegrab loop is running
       std::atomic<bool> tcs_online;         ///< set if TCS is online / connected
       std::string imagename;
       std::string wcsname;
@@ -441,19 +439,20 @@ namespace Acam {
       std::string motion_host;
       int motion_port;
 
+      std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
+      std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
+
       GuideManager guide_manager;
 
       Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
-                    framegrab_run(false),
-                    framegrab_running(false),
                     tcs_online(false),
-                    motion_port(-1) {
+                    motion_port(-1),
+                    should_framegrab_run(false),
+                    is_framegrab_running(false) {
         target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
       inline bool target_acquired()      { return this->target.acquired; }
-      inline bool is_framegrab_running() { return this->framegrab_running.load( std::memory_order_acquire ); }  ///< is it running?
-      inline bool should_framegrab_run() { return this->framegrab_run.load( std::memory_order_acquire ); }      ///< should it run?
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 

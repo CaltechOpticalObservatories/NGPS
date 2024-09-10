@@ -832,8 +832,13 @@ namespace Acam {
     fits_file.close_file();                           // close the file
 
     // This is the one extra call that is outside the normal workflow.
+    // If emulator is enabled then the skysim generator will create a simulated
+    // image. The image written above by fits_file.write_image() is used as
+    // input to skysim because it contains the correct WCS headers, but will
+    // ultimately be overwritten by the simulated image.
     //
     if ( andor.is_emulated() && _tcs_online ) andor.simulate_frame( fitsinfo.fits_name,
+                                                                    false, // not multi-extension
                                                                     this->simsize );
 
     outfile = fitsinfo.fits_name;
@@ -1990,7 +1995,7 @@ namespace Acam {
     }
 
     if ( args.empty() || args == "status" ) {
-      retstring = ( this->is_framegrab_running() ? "true" : "false" );
+      retstring = ( this->is_framegrab_running.load() ? "true" : "false" );
       return NO_ERROR;
     }
 
@@ -2029,9 +2034,8 @@ namespace Acam {
   /**
    * @brief      performs continuous acquisition
    * @details    This should be spawned in a thread.
-   *             Set framegrab_run true if the loop should run continuously,
-   *             check with should_framegrab_run(). Set framegrab_running true
-   *             when the loop is running, check with is_framegrab_running().
+   *             Set should_framegrab_run true if the loop should run continuously.
+   *             Set is_framegrab_running true when the loop is running.
    * @param[in]  iface       reference to Acam::Interface object
    *
    */
@@ -2041,29 +2045,29 @@ namespace Acam {
     long error = NO_ERROR;
 
     if ( whattodo == "one" ) {
-      // Clear framegrab_run which means the framegrab loop should not run.
+      // Clear should_framegrab_run which means the framegrab loop should not run.
       // If it's already running then return, the existing framegrab loop will
       // stop. If it's not already running then drop through, and a single
       // frame will be grabbed.
       //
-      iface.framegrab_run.store( false, std::memory_order_seq_cst );
-      if ( iface.is_framegrab_running() ) return;
+      iface.should_framegrab_run.store( false );
+      if ( iface.is_framegrab_running.load() ) return;
     }
     else
     if ( whattodo == "start" ) {
-      if ( iface.is_framegrab_running() ) {
+      if ( iface.is_framegrab_running.load() ) {
         logwrite( function, "thread already running, exiting" );
         return;
       }
       else {
         logwrite( function, "set thread running" );
-        iface.framegrab_run.store( true, std::memory_order_seq_cst );
+        iface.should_framegrab_run.store( true );
       }
     }
     else
     if ( whattodo == "stop" ) {
       logwrite( function, "set thread to stop, exiting" );
-      iface.framegrab_run.store( false, std::memory_order_seq_cst );
+      iface.should_framegrab_run.store( false );
       return;
     }
     else {
@@ -2080,13 +2084,13 @@ namespace Acam {
     // In other words, it will acquire images as fast as it needs to, but no
     // faster.
     //
-    // If I can get the lock then BoolState sets framegrab_running true,
+    // If I can get the lock then BoolState sets is_framegrab_running true,
     // and clears it (false) automatically when it goes out of scope.
     //
     {
     std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
-      BoolState loop_running( iface.framegrab_running );    // sets state true here, clears when it goes out of scope
+      BoolState loop_running( iface.is_framegrab_running );    // sets state true here, clears when it goes out of scope
       do {
         std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
@@ -2104,7 +2108,7 @@ namespace Acam {
 
         if (error==NO_ERROR) error = iface.target.do_acquire();                              // acquire target (if needed)
 
-      } while ( error==NO_ERROR && iface.should_framegrab_run() );
+      } while ( error==NO_ERROR && iface.should_framegrab_run.load() );
     }
     else {                                                                                   // this shouldn't even happen
       logwrite( function, "ERROR another thread is already running" );
@@ -2114,7 +2118,7 @@ namespace Acam {
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR starting thread" );
-      iface.framegrab_run.store( false, std::memory_order_seq_cst );  // disable frame grabbing
+      iface.should_framegrab_run.store( false );  // disable frame grabbing
       iface.target.acquire( Acam::TARGET_NOP );                       // disable acquisition
     }
     else logwrite( function, "leaving thread" );
@@ -2422,7 +2426,7 @@ namespace Acam {
 
     // If the frame grab thread isn't running then try to start it
     //
-    if ( ! iface->is_framegrab_running() && iface->should_framegrab_run() ) {
+    if ( ! iface->is_framegrab_running.load() && iface->should_framegrab_run.load() ) {
 
       logwrite( function, "starting frame grabber" );
       std::string dontcare;
@@ -2430,13 +2434,13 @@ namespace Acam {
 
       auto start = std::chrono::steady_clock::now();
 
-      while ( ! iface->is_framegrab_running()  ) {     // shouldn't take long but wait up to 100 msec
+      while ( ! iface->is_framegrab_running.load()  ) {     // shouldn't take long but wait up to 100 msec
         auto now = std::chrono::steady_clock::now();
         if ( now - start > std::chrono::milliseconds( 100 ) ) break;
         std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
       }
 
-      if ( ! iface->is_framegrab_running() ) {
+      if ( ! iface->is_framegrab_running.load() ) {
         iface->async.enqueue_and_log( function, "ERROR: failed to start frame grabber" );
         return ERROR;
       }
@@ -2455,7 +2459,7 @@ namespace Acam {
     // acquisition loop and prevent further acquisitions from starting.
     //
     if ( requested_mode == Acam::TARGET_NOP ) {
-      this->stop_acquisition.store( true, std::memory_order_seq_cst );
+      this->stop_acquisition.store( true );
       logwrite( function, "stop requested" );
     }
 
@@ -2513,7 +2517,7 @@ namespace Acam {
     // Do nothing, return immediately if no acquisition mode selected
     // or if stop_acquisition is set.
     //
-    if ( this->acquire_mode == Acam::TARGET_NOP || this->stop_acquisition.load(std::memory_order_seq_cst) ) {
+    if ( this->acquire_mode == Acam::TARGET_NOP || this->stop_acquisition.load() ) {
       return NO_ERROR;
     }
 
@@ -3023,6 +3027,7 @@ namespace Acam {
       retstring.append( "   fpoffsets ? | <from> <to> <ra> <dec> <angle> (see help for units)\n" );
       retstring.append( "   getemgain\n" );
       retstring.append( "   monitorfocus [ ? | stop | start ]\n" );
+      retstring.append( "   pointmode\n" );
       retstring.append( "   sleep\n" );
       retstring.append( "   solverargs [ ? | <key=val> [...<keyn=valn>] ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
@@ -3223,6 +3228,10 @@ namespace Acam {
                                               break;
         }
       }
+    }
+    else
+    if ( testname == "pointmode" ) {
+      retstring = "pointmode " + this->target.get_pointmode() + " selected";
     }
     else
     if ( testname == "sleep" ) {
