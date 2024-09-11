@@ -331,11 +331,7 @@ namespace Slicecam {
           error |= future.get(); // This will block until the thread finishes
         }
       }
-      catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR reading arguments: " << e.what();
-        error = ERROR;
-      }
-      catch ( std::invalid_argument &e ) {
+      catch ( const std::exception &e ) {
         message.str(""); message << "ERROR reading arguments: " << e.what();
         error = ERROR;
       }
@@ -447,11 +443,7 @@ namespace Slicecam {
           error |= future.get(); // This will block until the thread finishes
         }
       }
-      catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR reading arguments: " << e.what();
-        error = ERROR;
-      }
-      catch ( std::invalid_argument &e ) {
+      catch ( const std::exception &e ) {
         message.str(""); message << "ERROR reading arguments: " << e.what();
         error = ERROR;
       }
@@ -726,11 +718,7 @@ namespace Slicecam {
       try {
         gain = std::stoi( tokens.at(0) );
       }
-      catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR setting gain: " << e.what();
-        error = ERROR;
-      }
-      catch ( std::invalid_argument &e ) {
+      catch ( const std::exception &e ) {
         message.str(""); message << "ERROR setting gain: " << e.what();
         error = ERROR;
       }
@@ -805,8 +793,7 @@ namespace Slicecam {
     try {
       ivalue=std::stoi( svalue );
     }
-    catch( std::out_of_range &e )     { logwrite( "Slicecam::Camera::gain", "ERROR "+std::string(e.what()) ); }
-    catch( std::invalid_argument &e ) { logwrite( "Slicecam::Camera::gain", "ERROR "+std::string(e.what()) ); }
+    catch( const std::exception &e ) { logwrite( "Slicecam::Camera::gain", "ERROR "+std::string(e.what()) ); }
     return ivalue;
   }
   /***** Slicecam::Camera::gain ***********************************************/
@@ -1168,12 +1155,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
           this->camera.andor[idx]->camera_info.serial_number = sn;
           this->camera.andor[idx]->camera_info.pixel_scale   = std::stod( tokens.at(2) );
         }
-        catch( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR parsing \"" << config.arg[entry] << "\": " << e.what();
-          logwrite( function, message.str() );
-          error |= ERROR;
-        }
-        catch( std::out_of_range &e ) {
+        catch( const std::exception &e ) {
           message.str(""); message << "ERROR parsing \"" << config.arg[entry] << "\": " << e.what();
           logwrite( function, message.str() );
           error |= ERROR;
@@ -1203,12 +1185,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid TCSD_PORT " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return(ERROR);
-        }
-        catch ( std::out_of_range &e ) {
+        catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid TCSD_PORT " << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return(ERROR);
@@ -1223,12 +1200,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
         try {
           this->camera.set_simsize( std::stoi( config.arg[entry] ) );
         }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid SKYSIM_IMAGE_SIZE " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        catch ( std::out_of_range &e ) {
+        catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid SKYSIM_IMAGE_SIZE " << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;
@@ -1463,7 +1435,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
             return ERROR;
           }
         }
-        catch( std::exception &e ) {
+        catch( const std::exception &e ) {
           message.str(""); message << "ERROR invalid reply \"" << retstring << "\" from tcsd: " << e.what();
           logwrite( function, message.str() );
           return ERROR;
@@ -1864,13 +1836,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
 
         set=true;
       }
-      catch( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
-        logwrite( function, message.str() );
-        retstring="invalid_argument";
-        error = ERROR;
-      }
-      catch( std::out_of_range &e ) {
+      catch( const std::exception &e ) {
         message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
         logwrite( function, message.str() );
         retstring="invalid_argument";
@@ -1942,6 +1908,96 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
   /***** Slicecam::Interface::dothread_fpoffset *******************************/
 
 
+  /***** Slicecam::Interface::put_on_slit *************************************/
+  /**
+   * @brief      put target on slit
+   * @details    Intended to be called by the GUI to move the clicked-on
+   *             target to the slit.
+   * @param[in]  args       test name and arguments
+   * @param[out] retstring  reference to string for any return values
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::put_on_slit( std::string args, std::string &retstring ) {
+    std::string function = "Slicecam::Interface::put_on_slit";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_PUTONSLIT;
+      retstring.append( " <crossra> <crossdec> <slitra> <slitdec>\n" );
+      retstring.append( "   Move selected target to the slit. Intended to be called by the GUI to\n" );
+      retstring.append( "   move the clicked-on target to the slit. The call must supply the RA,DEC\n" );
+      retstring.append( "   coordinates of the crosshairs, and the RA,DEC coordinates of the slit.\n" );
+      retstring.append( "   This will result in a PT command to send the required offsets to the TCS.\n" );
+      return HELP;
+    }
+
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 4 ) {
+      logwrite( function, "ERROR expected <crossra> <crossdec> <slitra> <slitdec>" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // outputs: result from solve_offset in degrees
+    //
+    double ra_off, dec_off;
+
+    try {
+      // inputs
+      //
+      double crossra  = std::stod( tokens.at(0) );
+      double crossdec = std::stod( tokens.at(1) );
+      double slitra   = std::stod( tokens.at(2) );
+      double slitdec  = std::stod( tokens.at(3) );
+
+      // call solve_offset from SkyInfo::FPOffsets class which uses Python
+      //
+      if ( this->fpoffsets.solve_offset( crossra, crossdec, slitra, slitdec, ra_off, dec_off ) != NO_ERROR ) {
+        logwrite( function, "ERROR from Python solve_offset" );
+        retstring="fpoffsets_failed";
+        return ERROR;
+      }
+    }
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing input \"" << args << "\": " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    // offsets are in degrees, convert to arcsec (required for PT command)
+    //
+    ra_off  *= 3600.;
+    dec_off *= 3600.;
+
+    // send the offset to the TCS
+    //
+    if ( this->tcs_online.load() && this->tcsd.client.is_open() ) {
+      if ( this->tcsd.pt_offset( ra_off, dec_off ) != NO_ERROR ) {
+        logwrite( function, "ERROR offsetting telescope" );
+        retstring="tcs_error";
+        return ERROR;
+      }
+    }
+    else {
+      logwrite( function, "ERROR not connected to tcsd" );
+      retstring="tcs_not_connected";
+      return ERROR;
+    }
+
+    message.str(""); message << "moved ra " << ra_off << ", dec " << dec_off << " arcsec";
+    logwrite( function, message.str() );
+
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::put_on_slit *************************************/
+
+
   /***** Slicecam::Interface::test ********************************************/
   /**
    * @brief      test routines
@@ -1955,10 +2011,12 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
    *
    * Valid test names are:
    *
-   * fpoffsets <from> <to> <ra> <dec> <angle>
    * adchans
    * emgainrange
+   * fpoffsets <from> <to> <ra> <dec> <angle>
    * getemgain
+   * sleep
+   * threadoffset
    *
    */
   long Interface::test( std::string args, std::string &retstring ) {
@@ -2059,16 +2117,10 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
                 << ra_from << " " << dec_from << " " << angle_from << " -> " << ra_to << " " << dec_to << " " << angle_to;
         retstring = message.str();
       }
-      catch ( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR invalid argument parsing \"" << args << "\" : " << e.what();
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing \"" << args << "\" : " << e.what();
         logwrite( function, message.str() );
-        retstring="invalid_argument";
-        return ERROR;
-      }
-      catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR out of range parsing \"" << args << "\" : " << e.what();
-        logwrite( function, message.str() );
-        retstring="out_of_range";
+        retstring="argument_exception";
         return ERROR;
       }
     }

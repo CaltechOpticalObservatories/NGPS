@@ -27,6 +27,7 @@ const std::string SLICECAMD_INIT     = "init";      ///< ***
 const std::string SLICECAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
 const std::string SLICECAMD_ISOPEN   = "isopen";    ///< *** close connection to all devices
 const std::string SLICECAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
+const std::string SLICECAMD_PUTONSLIT= "putonslit"; ///< put target on slit
 const std::string SLICECAMD_TCSGET = "tcsget";      ///< 
 const std::string SLICECAMD_TCSINIT = "tcsinit";    ///< initialize slicecamd's connection to tcsd
 const std::string SLICECAMD_TCSISCONNECTED = "tcsisconnected";  ///< 
@@ -57,6 +58,7 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_IMFLIP+" [ ? | <hflip> <vflip> ]",
                                                 SLICECAMD_IMROT+" [ ? | <rotdir> ]",
                                                 SLICECAMD_INIT,
+                                                SLICECAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> <slitra> <slitdec> ]",
                                                 SLICECAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 SLICECAMD_TEMP+" [ ? | <setpoint> ]",
                                                 "  OTHER:",

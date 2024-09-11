@@ -1102,7 +1102,7 @@ namespace TCS {
   /**
    * @brief      wrapper for the native PT command
    * @details    wraps the PT command to provide a friendly reply
-   * @param[in]  args       contains <ra> <dec> in degrees
+   * @param[in]  args       contains <ra> <dec> in decimal arcsec
    * @param[out] retstring  reference to return string for the command sent to the TCS
    * @return     ERROR | NO_ERROR | HELP
    *

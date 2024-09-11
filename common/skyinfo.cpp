@@ -276,8 +276,8 @@ namespace SkyInfo {
    * @param[in]  dec_acam  current solution for ACAM DEC
    * @param[in]  ra_goal   RA goal
    * @param[in]  dec_goal  DEC goal
-   * @param[in]  ra_off    reference to computed offset in RA to reach goal
-   * @param[in]  dec_off   reference to computed offset in DEC to reach goal
+   * @param[out] ra_off    reference to computed offset in RA to reach goal
+   * @param[out] dec_off   reference to computed offset in DEC to reach goal
    * @return     ERROR or NO_ERROR
    *
    * @details    The TCS "PT" command moves the telescope along a great circle.

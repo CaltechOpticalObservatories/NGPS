@@ -543,6 +543,10 @@ namespace Slicecam {
                       ret = this->interface.framegrab_fix( args, retstring );
       }
       else
+      if ( cmd == SLICECAMD_PUTONSLIT ) {
+                      ret = this->interface.put_on_slit( args, retstring );
+      }
+      else
       if ( cmd == SLICECAMD_INIT ) {
                       this->interface.init_names();
                       ret = NO_ERROR;  // init_names() returns void, never fails

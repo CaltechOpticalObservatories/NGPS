@@ -317,6 +317,7 @@ namespace Slicecam {
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
+      long put_on_slit( std::string args, std::string &retstring );  /// put target on slit
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long gui_settings_control();          /// get gui settings and push to Guider GUI display
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
