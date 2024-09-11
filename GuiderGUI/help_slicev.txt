@@ -16,7 +16,7 @@ Buttons:
 [grab fits] -- Copy current FITS frame to a separate DS9 window for analysis
   (also saves in /data/sliceview/grab/)
 
-[put on slit] -- NOT IMPLEMENTED.  Move the spectrograph slit to the coordinates of the
+[put on slit] -- Move the spectrograph slit to the coordinates of the
   crosshairs. User can zoom in first for more precision.
 
 [gui help] -- This message

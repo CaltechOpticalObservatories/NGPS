@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Get the celestial coordinates of the slit center and crosshairs as displayed on the sliceviewer GUI.
-# Subtract and send offsets to a daemon in units of arcsec
+# Send to daemon in units of deg
+# Daemon computes offsets (account for spherical geometry) in arcsec
 
 camera=slicev
 
@@ -38,9 +39,10 @@ crossDEC_deg=$(echo $crosscenter | cut -f2 -d ' ')
 echo "(slitRA, slitDEC, crossRA, crossDEC)"
 echo $slitRA_deg $slitDEC_deg $crossRA_deg $crossDEC_deg
 
-# Arithmetic
-# dRA=`echo "($crossRA_deg - $slitRA_deg)*3600."  | bc -l`
-# dDEC=`echo "($crossDEC_deg - $slitDEC_deg)*3600."  | bc -l`
+# slice camera command
+scam putonslit $slitRA_deg $slitDEC_deg $crossRA_deg $crossDEC_deg
 
-# Use the result
-# echo $dRA $dDEC arcsec # offsets in arcsec
+# Use the result:
+# import from FPoffsets:  solve_offset_deg(slitRA, slitDEC, crossRA, crossDEC)
+# Returns (offsetRA, offsetDEC) in degrees
+# You can convert to arcsec and use in PT i.e. PT offsetRA*3600 offsetDEC*3600

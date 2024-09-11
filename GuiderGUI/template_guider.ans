@@ -21,8 +21,7 @@ $param(guiderSettings) ; acam guideset $exptime $gain $filter $focus # | $text
 GRAB FITS
 *
 button
-$dir/grabfits.sh guider | $text
-#$message(yesno,Save frame to FITS file?) | $dir/save_fits.sh | $text
+$dir/grabfits.sh guider # | $text
 #############
 PUT ON SLIT
 *

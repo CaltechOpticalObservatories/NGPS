@@ -13,19 +13,31 @@ DEFzoom=.5
 
 xpaset -p $id save mosaicimage $fname  # save the FITS file
 
-xpaset -p $newID frame new && startup=1  # startup=1 if there's an error
+process_running=`ps aux | grep ds9 | grep " $newID "`  # should be empty string if no matches
 
-if [ -z "$startup" ]; then  # if startup is 0 or null, start new ds9 with the FITS file
+# If the ds9 window exists, make a new frame and load the new FITS file into it
+if xpaget $newID xpa connect; then
 
+	xpaset -p $newID frame new && error=1  # error=1 if there's an error
+	cat $fname | xpaset $newID mosaicimage wcs
+
+# If the process is running (string is not empty), show linux message
+elif [ -n "$process_running" ]; then
+
+	# Pop-up on linux OS
+	zenity --notification --text "$newID GUI (ds9) is launching.  Please wait longer..."
+
+# Otherwise, start new ds9 with the saved FITS file
+else
+	
 	nohup ds9 -mosaicimage wcs $fname -title $newID -mode none -tile yes \
 	  -zoom $DEFzoom -scale linear -scale mode zscale \
 	  -view object no -view colorbar no \
 	   >&- 2>&- &  # this stuff "closes stdout" to make ds9 parent DS9 process stop waiting for child DS9 to finish
 	   				# https://stackoverflow.com/questions/20338162/how-can-i-launch-a-new-process-that-is-not-a-child-of-the-original-process
 
-	echo "Launching a new DS9 window for grabbed frames..."
+	zenity --notification \
+       --title "$camera frame grab" \
+       --text "Launching a new DS9 window for grabbed frames..." \
 
-else # load file into the new frame
-	#xpaset -p $newID fits $fname
-	cat $fname | xpaset $newID mosaicimage wcs
 fi
