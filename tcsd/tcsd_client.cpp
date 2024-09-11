@@ -68,7 +68,6 @@
     // if connected.
     //
     error = this->client.send( TCSD_ISOPEN, reply );
-
     // Daemon is connected but an error sending ISOPEN to the TCS.
     // Close connection to daemon.
     //
@@ -98,27 +97,29 @@
     // and I want to extract the state true|false so remove the " DONE" from the reply.
     // std::string::erase can throw an exception
     //
-    try {
-      reply.erase( reply.find( " DONE" ) );
+    std::string::size_type pos = reply.find(" DONE");
+    if (pos != std::string::npos) {
+      reply.erase(pos);
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR invalid reply \"" << reply << "\" from tcsd. Expected true|false DONE : " << e.what();
+    else {
+      message.str(""); message << "ERROR invalid reply \"" << reply << "\" from tcsd. Expected true|false DONE";
       logwrite( function, message.str() );
       return ERROR;
     }
 
     if ( !connected_to_tcs ) {
-      message.str(""); message << "tcsd not connected to TCS";
+      logwrite( function, "tcsd not connected to TCS" );
       tcsname = "offline";
     }
     else {
       // reply is "true DONE" here, and this removes the "true " and " DONE"
       //
       error = this->client.send( TCSD_GET_NAME, tcsname );
-      message.str(""); message << "tcsd connected to TCS " << tcsname;
+      std::string::size_type pos = tcsname.find(" DONE");
+      if (pos != std::string::npos) {
+        tcsname.erase(pos);
+      }
     }
-
-    logwrite( function, message.str() );
 
     // If no arg supplied then just return connection status.
     //

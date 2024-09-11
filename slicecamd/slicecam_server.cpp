@@ -490,12 +490,12 @@ namespace Slicecam {
       else
       if ( cmd == SLICECAMD_EXPTIME ) {
                       ret  = this->interface.camera.exptime( args, retstring );  // set exptime
-                             this->interface.gui_settings_control();             // update GUI display igores ret
+          if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
       }
       else
       if ( cmd == SLICECAMD_GAIN ) {
                       ret  = this->interface.camera.gain( args, retstring );     // set gain
-                             this->interface.gui_settings_control();             // update GUI display igores ret
+          if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
       }
       else
       if ( cmd == SLICECAMD_GUISET ) {

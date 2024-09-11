@@ -129,12 +129,13 @@ namespace Slicecam {
     if ( which.empty() ) {
       long ret;
       for ( const auto &pair : this->andor ) {
-        if ( !pair.second->is_initialized() ) ret = pair.second->open( args );
-        if ( ret != NO_ERROR ) {
-          message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
-                                   << " S/N " << pair.second->camera_info.serial_number;
-          logwrite( function, message.str() );
-          error = ret;  // preserve the error state for the return value but try all
+        if ( !pair.second->is_initialized() ) {
+          if ( ( ret=pair.second->open( args )) != NO_ERROR ) {
+            message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
+                                     << " S/N " << pair.second->camera_info.serial_number;
+            logwrite( function, message.str() );
+            error = ret;  // preserve the error state for the return value but try all
+          }
         }
       }
     }
@@ -813,8 +814,6 @@ namespace Slicecam {
     long error = NO_ERROR;
     float hori=-1, vert=-1;
 
-logwrite( function, "ERROR not yet implemented" ); return ERROR;
-/***
     // Help
     //
     if ( args == "?" || args == "help" ) {
@@ -822,17 +821,18 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       retstring.append( " [ <hori> <vert> ]\n" );
       retstring.append( "   Set or get CCD clocking speeds for horizontal <hori> and vertical <vert>\n" );
       retstring.append( "   If speeds are omitted then the current speeds are returned.\n" );
-      if ( this->andor.is_initialized() ) {
+      if ( !this->andor.empty() && this->andor.begin()->second->is_initialized() ) {
+        auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
         retstring.append( "   Current amp type is " );
-        retstring.append( ( this->andor.camera_info.amptype == Andor::AMPTYPE_EMCCD ? "EMCCD\n" : "conventional\n" ) );
+        retstring.append( ( cam->camera_info.amptype == Andor::AMPTYPE_EMCCD ? "EMCCD\n" : "conventional\n" ) );
         retstring.append( "   Select <hori> from {" );
-        for ( const auto &hspeed : this->andor.camera_info.hsspeeds[ this->andor.camera_info.amptype] ) {
+        for ( const auto &hspeed : cam->camera_info.hsspeeds[ cam->camera_info.amptype] ) {
           retstring.append( " " );
           retstring.append( std::to_string( hspeed ) );
         }
         retstring.append( " }\n" );
         retstring.append( "   Select <vert> from {" );
-        for ( const auto &vspeed : this->andor.camera_info.vsspeeds ) {
+        for ( const auto &vspeed : cam->camera_info.vsspeeds ) {
           retstring.append( " " );
           retstring.append( std::to_string( vspeed ) );
         }
@@ -854,12 +854,19 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       return ERROR;
     }
 
-    // Andor must be connected
+    // all configured Andors must have been initialized
     //
-    if ( !this->andor.is_initialized() ) {
-      logwrite( function, "ERROR no connection to camera" );
-      return ERROR;
+    for ( const auto &pair : this->andor ) {
+      if ( ! pair.second->is_initialized() ) {
+        message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
+                                 << " S/N " << pair.second->camera_info.serial_number;
+        logwrite( function, message.str() );
+        error=ERROR;
+      }
     }
+    if ( error==ERROR ) return ERROR;
+
+    auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
 
     // Parse args if present
     //
@@ -891,23 +898,24 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       }
       if (error==ERROR) logwrite( function, message.str() );
 
-      if (error!=ERROR ) error = this->andor.set_hsspeed( hori );
-      if (error!=ERROR ) error = this->andor.set_vsspeed( vert );
+      for ( const auto &pair : this->andor ) {
+        if (error!=ERROR ) error = pair.second->set_hsspeed( hori );
+        if (error!=ERROR ) error = pair.second->set_vsspeed( vert );
+      }
     }
 
-    if ( ( this->andor.camera_info.hspeed < 0 ) ||
-         ( this->andor.camera_info.vspeed < 0 ) ) {
+    if ( ( cam->camera_info.hspeed < 0 ) ||
+         ( cam->camera_info.vspeed < 0 ) ) {
       logwrite( function, "ERROR speeds not set" );
       error = ERROR;
     }
 
-    retstring = std::to_string( this->andor.camera_info.hspeed ) + " "
-              + std::to_string( this->andor.camera_info.vspeed );
+    retstring = std::to_string( cam->camera_info.hspeed ) + " "
+              + std::to_string( cam->camera_info.vspeed );
 
     logwrite( function, retstring );
 
     return error;
-***/
   }
   /***** Slicecam::Camera::speed **********************************************/
 
@@ -926,19 +934,18 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     long error = NO_ERROR;
     int temp = 999;
 
-logwrite( function, "ERROR not yet implemented" ); return ERROR;
-/***
     // Help
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_TEMP;
       retstring.append( " [ <setpoint> ]\n" );
       retstring.append( "  Set or get camera temperature in integer degrees C,\n" );
-      if ( this->andor.is_initialized() ) {
+      if ( !this->andor.empty() && this->andor.begin()->second->is_initialized() ) {
+        auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
         retstring.append( "  where <setpoint> is in range { " );
-        retstring.append( std::to_string( this->andor.camera_info.temp_min ) );
+        retstring.append( std::to_string( cam->camera_info.temp_min ) );
         retstring.append( "  " );
-        retstring.append( std::to_string( this->andor.camera_info.temp_max ) );
+        retstring.append( std::to_string( cam->camera_info.temp_max ) );
         retstring.append( " }.\n" );
       }
       else {
@@ -960,12 +967,17 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       return ERROR;
     }
 
-    // Andor must be connected
+    // all configured Andors must have been initialized
     //
-    if ( !this->andor.is_initialized() ) {
-      logwrite( function, "ERROR no connection to camera" );
-      return ERROR;
+    for ( const auto &pair : this->andor ) {
+      if ( ! pair.second->is_initialized() ) {
+        message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
+                                 << " S/N " << pair.second->camera_info.serial_number;
+        logwrite( function, message.str() );
+        error=ERROR;
+      }
     }
+    if ( error==ERROR ) return ERROR;
 
     // Parse args if present
     //
@@ -986,17 +998,11 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       //
       try {
         temp = static_cast<int>( std::round( std::stof( tokens.at(0) ) ) );
-        error = this->andor.set_temperature( temp );
+        for ( const auto &pair : this->andor ) {
+          error |= pair.second->set_temperature( temp );
+        }
       }
-      catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR setting temperature: " << e.what();
-        error = ERROR;
-      }
-      catch ( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR setting temperature: " << e.what();
-        error = ERROR;
-      }
-      catch ( std::bad_alloc &e ) {
+      catch ( const std::exception &e ) {
         message.str(""); message << "ERROR setting temperature: " << e.what();
         error = ERROR;
       }
@@ -1005,15 +1011,15 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
 
     // Regardless of setting the temperature, always read it.
     //
-    error |= this->andor.get_temperature( temp );
+    auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
+    error |= cam->get_temperature( temp );
 
-    message.str(""); message << temp << " " << this->andor.camera_info.setpoint << " " << this->andor.camera_info.temp_status;
+    message.str(""); message << temp << " " << cam->camera_info.setpoint << " " << cam->camera_info.temp_status;
     logwrite( function, message.str() );
 
     retstring = message.str();
 
     return error;
-***/
   }
   /***** Slicecam::Camera::temperature ****************************************/
 
@@ -1257,7 +1263,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     long error;
 
     if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
-      error |= this->framegrab( "start", retstring );      // start frame grabbing if open succeeds
+      error = this->framegrab( "start", retstring );       // start frame grabbing if open succeeds
     }
     else error=ERROR;
 
