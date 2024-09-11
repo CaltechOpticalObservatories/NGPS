@@ -106,10 +106,12 @@ namespace Slicecam {
   /***** Slicecam::Camera::open ***********************************************/
   /**
    * @brief      open connection to Andor and initialize SDK
-   * @return     ERROR or NO_ERROR
+   * @param[in]  which  optionally specify which camera to open
+   * @param[in]  args   optional args to send to camera(s)
+   * @return     ERROR | NO_ERROR
    * 
    */
-  long Camera::open( std::string args ) {
+  long Camera::open( std::string which, std::string args ) {
     std::string function = "Slicecam::Camera::open";
     std::stringstream message;
     long error=NO_ERROR;
@@ -122,16 +124,36 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // loop through all Andors, opening if not already open
+    // no args is open both cameras in map
     //
-    for ( const auto &pair : this->andor ) {
-      long ret=NO_ERROR;
-      if ( ! pair.second->is_initialized() ) ret = pair.second->open( args );
-      if ( ret != NO_ERROR ) {
-        message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
-                                 << " S/N " << pair.second->camera_info.serial_number;
+    if ( which.empty() ) {
+      long ret;
+      for ( const auto &pair : this->andor ) {
+        if ( !pair.second->is_initialized() ) ret = pair.second->open( args );
+        if ( ret != NO_ERROR ) {
+          message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
+                                   << " S/N " << pair.second->camera_info.serial_number;
+          logwrite( function, message.str() );
+          error = ret;  // preserve the error state for the return value but try all
+        }
+      }
+    }
+    else {
+      // make sure requested camera is in the map
+      //
+      auto it = this->andor.find( which );
+      if ( it == this->andor.end() ) {
+        message.str(""); message << "ERROR Andor camera name \"" << which << "\" not found";
         logwrite( function, message.str() );
-        error = ret;  // preserve the error state for the return value
+        return ERROR;
+      }
+      // then open only that camera
+      //
+      if ( !this->andor[which]->is_initialized() ) error = this->andor[which]->open( args );
+      if ( error != NO_ERROR ) {
+        message.str(""); message << "ERROR opening slicecam " << this->andor[which]->camera_info.camera_name
+                                 << " S/N " << this->andor[which]->camera_info.serial_number;
+        logwrite( function, message.str() );
       }
     }
 
@@ -612,8 +634,9 @@ namespace Slicecam {
     try {
       dvalue=std::stod( svalue );
     }
-    catch( std::out_of_range &e )     { logwrite( "Slicecam::Camera::exptime", "ERROR "+std::string(e.what()) ); }
-    catch( std::invalid_argument &e ) { logwrite( "Slicecam::Camera::exptime", "ERROR "+std::string(e.what()) ); }
+    catch( const std::exception &e ) {
+      logwrite( "Slicecam::Camera::exptime", "ERROR "+std::string(e.what()) );
+    }
     return dvalue;
   }
   /***** Slicecam::Camera::exptime ********************************************/
@@ -642,20 +665,20 @@ namespace Slicecam {
       retstring = SLICECAMD_GAIN;
       retstring.append( " [ <gain> ]\n" );
       retstring.append( "   Set or get CCD Gain.\n" );
-/***
-      if ( this->andor.is_initialized() ) {
-        int low, high;
-        this->andor.get_emgain_range( low, high );
-        retstring.append( "   Select <gain> = 1 for conventional or in range { " );
-        retstring.append( std::to_string( low ) );
-        retstring.append( " " );
-        retstring.append( std::to_string( high ) );
-        retstring.append( " } for EMCCD.\n" );
+      if ( !this->andor.empty() ) {
+        if ( this->andor.begin()->second->is_initialized() ) {
+          int low, high;
+          this->andor.begin()->second->get_emgain_range( low, high );
+          retstring.append( "   Select <gain> = 1 for conventional or in range { " );
+          retstring.append( std::to_string( low ) );
+          retstring.append( " " );
+          retstring.append( std::to_string( high ) );
+          retstring.append( " } for EMCCD.\n" );
+        }
+        else {
+          retstring.append( "   Open connection to camera to see gain range.\n" );
+        }
       }
-      else {
-        retstring.append( "   Open connection to camera to see gain range.\n" );
-      }
-***/
       retstring.append( "   If <gain> is omitted then the current gain is returned.\n" );
       retstring.append( "   Output amplifier is automatically selected as conventional for unity gain,\n" );
       retstring.append( "   or EM for non-unity gain.\n" );
@@ -683,9 +706,6 @@ namespace Slicecam {
     }
     if ( error==ERROR ) return ERROR;
 
-logwrite( function, "ERROR not yet implemented" ); return ERROR;
-
-/***
     // Parse args if present
     //
     if ( !args.empty() ) {
@@ -718,7 +738,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       if (error==ERROR) logwrite( function, message.str() );
 
       int low, high;
-      this->andor.get_emgain_range( low, high );
+      this->andor.begin()->second->get_emgain_range( low, high );
 
       // set gain and output amplifier as necessary
       //
@@ -729,16 +749,22 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
       }
       else
       if ( error==NO_ERROR && gain == 1 ) {
-        error = this->andor.set_output_amplifier( Andor::AMPTYPE_CONV );
-        if (error==NO_ERROR) this->andor.camera_info.gain = gain;
+        error = this->andor.begin()->second->set_output_amplifier( Andor::AMPTYPE_CONV );
+        if (error==NO_ERROR) {
+          for ( const auto &pair : this->andor ) {
+            pair.second->camera_info.gain = gain;
+          }
+        }
         else { message << "ERROR gain not set"; }
       }
       else
       if ( error==NO_ERROR && gain >= low && gain <= high ) {
-        error = this->andor.set_output_amplifier( Andor::AMPTYPE_EMCCD );
-        if (error==NO_ERROR) this->andor.set_emgain( gain );
-        if (error==NO_ERROR) this->andor.camera_info.gain = gain;
-        else { message << "ERROR gain not set"; }
+        for ( const auto &pair : this->andor ) {
+          error |= pair.second->set_output_amplifier( Andor::AMPTYPE_EMCCD );
+          if (error==NO_ERROR) pair.second->set_emgain( gain );
+          if (error==NO_ERROR) pair.second->camera_info.gain = gain;
+          else { message << "ERROR gain not set"; }
+        }
       }
       else
       if ( error==NO_ERROR ) {
@@ -751,17 +777,16 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
 
     // Regardless of setting the gain, always return it.
     //
-    if ( this->andor.camera_info.gain < 1 ) {
+    if ( this->andor.begin()->second->camera_info.gain < 1 ) {
       retstring = "ERR";
     }
     else {
-      retstring = std::to_string( this->andor.camera_info.gain );
+      retstring = std::to_string( this->andor.begin()->second->camera_info.gain );
     }
 
     logwrite( function, retstring );
 
     return error;
-***/
   }
   /***** Slicecam::Camera::gain ***********************************************/
 
@@ -1027,10 +1052,6 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
         logwrite( function, message.str() );
         return ERROR;
       }
-message.str(""); message << "[DEBUG] camera=" << pair.second->camera_info.camera_name
-                         << " axes[0]=" << pair.second->camera_info.axes[0]
-                         << " axes[1]=" << pair.second->camera_info.axes[1];
-logwrite( function, message.str() );
     }
 
     fitsinfo.fits_name = "/tmp/slicecam.fits";
@@ -1055,17 +1076,26 @@ logwrite( function, message.str() );
         error = ERROR;
         break;
       }
-//    fits_file.write_image( pair.second->get_image_data() );  // write the image data
       fits_file.write_image( pair.second );                    // write the image data
     }
 
     fits_file.close_file();               // close the file
 
     // This is the one extra call that is outside the normal workflow.
+    // If emulator is enabled then the skysim generator will create a simulated
+    // image. The image written above by fits_file.write_image() is used as
+    // input to skysim because it contains the correct WCS headers, but will
+    // ultimately be overwritten by the simulated image.
     //
-    for ( const auto &pair : this->andor ) {
-      if ( pair.second->is_emulated() && _tcs_online ) pair.second->simulate_frame( fitsinfo.fits_name,
-                                                                                    this->simsize );
+    // Need only to make one call since it will generate a multi-extension
+    // image.
+    //
+    if ( !this->andor.empty() ) {
+      if ( this->andor.begin()->second->is_emulated() && _tcs_online ) {
+        this->andor.begin()->second->simulate_frame( fitsinfo.fits_name,
+                                                     true,  // multi-extension
+                                                     this->simsize );
+      }
     }
 
     outfile = fitsinfo.fits_name;
@@ -1207,6 +1237,7 @@ logwrite( function, message.str() );
         logwrite( function, message.str() );
         applied++;
       }
+
     }
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
     logwrite(function, message.str());
@@ -1226,87 +1257,39 @@ logwrite( function, message.str() );
   long Interface::open( std::string args, std::string &retstring ) {
     std::string function = "Slicecam::Interface::open";
     std::stringstream message;
-    long error = NO_ERROR;
-    std::vector<std::string> arglist;
-    std::string component, camarg;
 
-    // No args opens everything (motion and camera)...
-    //
-    if ( args.empty() ) {
-      component = "all";
-      camarg.clear();
-    }
-    else if ( args == "?" ) {
+    if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_OPEN;
-      retstring.append( " [ [camera [args]] ]\n" );
-      retstring.append( "  Open connections to all slice cameras (by default).\n" );
-      retstring.append( "  The camera component can take an optional arg to pass to the camera.\n" );
+      retstring.append( " [ [ <which> [ <args> ]] ]\n" );
+      retstring.append( "  Open connections to all slice cameras (default) or the specified camera\n" );
+      retstring.append( "  where <which> is { L R }. The optional args are passed to the camera.\n" );
       return HELP;
     }
-    else { // ...otherwise look at the arg(s):
 
-      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
+    std::vector<std::string> tokens;
+    std::string which;
+    Tokenize( args, tokens, " "  );
 
-      Tokenize( args, arglist, " " );
-
-      // args can be [ [motion] [camera [args]] ]
+    // If there is at least one token,
+    //
+    if ( tokens.size() > 0 ) {
+      // and if that first token is a camera name, then
+      // assign that to "which" and remove it from the args string.
       //
-      int ccount=0;
-      for ( size_t i=0; i < arglist.size(); i++ ) {
-        size_t next = i+1;
-        // If one arg is motion then any following args must be camera...
-        //
-        if ( arglist[i] == "motion" ) {
-          component = arglist[i]; ccount++;
-          if ( next < arglist.size() && arglist[next] != "camera" ) {
-            message.str(""); message << "ERROR: unrecognized arg \"" << arglist[next]
-                                     << "\". Expected { [ [motion] [camera [args]] ] }";
-            logwrite( function, message.str() );
-            retstring="invalid_argument";
-            return ERROR;
-          }
-        }
-        // If one arg is camera then the following args are passed to the camera
-        //
-        if ( arglist[i] == "camera" ) {
-          component = arglist[i]; ccount++;
-          if ( next < arglist.size() && arglist[next] != "motion" ) {
-            camarg.append( arglist[ next ] );
-          }
-        }
-      }
-
-      if ( ccount == 2 ) component = "all";
-
-      if ( component.empty() ) {
-        message.str(""); message << "ERROR: unrecognized arg \"" << args
-                                 << "\". Expected { [ [motion] [camera [args]] ] }";
-        logwrite( function, message.str() );
-        retstring="invalid_argument";
-        return ERROR;
+      if ( tokens[0] == "L" || tokens[0] == "R" ) {
+        which = tokens[0];
+        args.erase(args.begin());
       }
     }
 
-    if ( component != "all" && component != "motion" && component != "camera" ) {
-      message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
-                               << "Expected { motion | camera }";
-      logwrite( function, message.str() );
-      retstring="invalid_argument";
-      return ERROR;
+    long error;
+
+    if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
+      error |= this->framegrab( "start", retstring );      // start frame grabbing if open succeeds
     }
+    else error=ERROR;
 
-    if ( component == "all" || component == "camera" ) {
-      if ( this->camera.open( camarg ) == NO_ERROR ) {    // open the camera
-        error |= this->framegrab( "start", retstring );   // start frame grabbing if open succeeds
-      }
-      else error=ERROR;
-    }
-
-    if ( error != NO_ERROR ) logwrite( function, "ERROR: one or more components failed to open" );
-
-    bool state = this->isopen( component );
-
-    retstring = ( state ? "true" : "false" );
+    retstring = ( this->isopen( args ) ? "true" : "false" );
 
     return error;
   }
@@ -1315,80 +1298,74 @@ logwrite( function, message.str() );
 
   /***** Slicecam::Interface::isopen ******************************************/
   /**
-   * @brief      wrapper for slicecam hardware components to check if connection open
-   * @param[in]  component  optional string contains which component to check { camera | motion }
-   * @param[out] state      reference to bool to indicate open {true} or not {false}
+   * @brief      wrapper for slicecam cameras to check if connection open
+   * @param[in]  which  optional string contains which camera to check { L R }
+   * @param[out] state  reference to bool to indicate open {true} or not {false}
    * @param[out] retstring  reference to return string
    * @return     ERROR | NO_ERROR | HELP
    *
    * This function is overloaded
    *
    */
-  long Interface::isopen( std::string component, bool &state, std::string &retstring ) {
+  long Interface::isopen( std::string which, bool &state, std::string &retstring ) {
     std::string function = "Slicecam::Interface::isopen";
     std::stringstream message;
 
-logwrite( function, "ERROR not yet implemented" ); return ERROR;
-/***
     // Help
     //
-    if ( component == "?" ) {
+    if ( which == "?" ) {
       retstring = SLICECAMD_ISOPEN;
       retstring.append( " [ <which> ]\n" );
-      retstring.append( "  Returns the open state of both, or optionally the specified camera.\n" );
+      retstring.append( "  Returns the open state of both, or optionally the specified camera,\n" );
+      retstring.append( "  where <which> is { L R }. If no argument is supplied then both are\n" );
+      retstring.append( "  checked and both must be open to return true.\n" );
       return HELP;
     }
 
-    if ( component.empty() ) {  // No component checks everything (motion and camera)...
-      component = "all";
+    // set false, require positive response(s) to be true
+    //
+    state=false;
+
+    // no args is check both cameras in map
+    //
+    if ( which.empty() ) {
+      for ( const auto &pair : this->camera.andor ) {
+        state |= pair.second->is_initialized();
+      }
     }
     else {
-      std::transform( component.begin(), component.end(), component.begin(), ::tolower );
-    }
-
-    if ( component != "all" && component != "motion" && component != "camera" ) {
-      message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
-                               << "Expected { motion | camera }";
-      logwrite( function, message.str() );
-      state = false;
-      retstring="invalid_argument";
-      return ERROR;
-    }
-
-    if ( component == "all" ) {
-      state  = this->motion.is_open();
-      state &= this->camera.andor.is_initialized();
-    }
-    else
-    if ( component == "camera" ) {
-      state  = this->camera.andor.is_initialized();
-    }
-    else
-    if ( component == "motion" ) {
-      state  = this->motion.is_open();
+      // make sure requested camera is in the map
+      //
+      auto it = this->camera.andor.find( which );
+      if ( it == this->camera.andor.end() ) {
+        message.str(""); message << "ERROR Andor camera name \"" << which << "\" not found";
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+      state  = this->camera.andor[which]->is_initialized();
     }
 
     retstring = ( state ? "true" : "false" );
 
     return NO_ERROR;
-***/
   }
   /***** Slicecam::Interface::isopen ******************************************/
 
 
   /***** Slicecam::Interface::isopen ******************************************/
   /**
-   * @brief      returns simple boolean for open state of specified component
-   * @param[in]  component  optional string contains which component to check { camera | motion }
+   * @brief      returns simple boolean for open state of specified camera
+   * @param[in]  which  optional string contains which camera to check { L R }
    * @return     true | false
    *
    * This function is overloaded
    *
    */
-  bool Interface::isopen( std::string component ) {
+  bool Interface::isopen( std::string which ) {
     bool state=false;
     std::string dontcare;
-    long error = this->isopen( component, state, dontcare );
+    long error = this->isopen( which, state, dontcare );
     if (error==NO_ERROR) return state; else return false;
   }
   /***** Slicecam::Interface::isopen ******************************************/
@@ -1597,7 +1574,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     }
 
     if ( args.empty() || args == "status" ) {
-      retstring = ( this->is_framegrab_thread_running() ? "true" : "false" );
+      retstring = ( this->is_framegrab_running.load() ? "true" : "false" );
       return NO_ERROR;
     }
 
@@ -1622,45 +1599,13 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     if ( whattodo != "stop" && ! this->tcsd.client.is_open() ) {
       this->async.enqueue_and_log( function, "NOTICE: not connected to TCS" );
       retstring="tcs_offline";
-      this->tcs_online.store( true );
+//    this->tcs_online.store( true );  // TODO
     }
 
-    std::lock_guard<std::mutex> lock( this->framegrab_mutex );     // protect this section
-
-    bool running = this->is_framegrab_thread_running();            // thread already running
-    bool spawn_thread = false;
-
-    if ( running && ( whattodo == "one" || whattodo == "start" ) ) {  // thread running and request to run more
-      logwrite( function, "thread already running, exiting" );
-    }
-    else
-    if ( !running && whattodo == "one" ) {                            // thread not running and request for single
-      this->set_framegrab_continuous( false );
-      spawn_thread = true;
-    }
-    else
-    if ( !running && whattodo == "start" ) {                          // thread not running and request for continuous
-      this->set_framegrab_continuous( true );
-      spawn_thread = true;
-    }
-    else
-    if ( whattodo == "stop" ) {                                    // always allow stop
-      logwrite( function, "set thread to stop, exiting" );
-      this->set_framegrab_continuous( false );
-    }
-    else {                                                         // everything other than { start stop one }
-      message.str(""); message << "ERROR invalid argument \"" << whattodo << "\". exiting.";
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    // Spawn frame grab thread if required
+    // spawn a thread which will perform the continuous acquisition,
+    // or not, based on whattodo
     //
-    if ( spawn_thread ) {
-      this->wcsname.clear();
-      this->wcsfix_time = std::chrono::steady_clock::time_point::min();
-      std::thread( &Interface::dothread_framegrab, this, whattodo, sourcefile ).detach();
-    }
+    std::thread( &Slicecam::Interface::dothread_framegrab, this, whattodo, sourcefile ).detach();
 
     return NO_ERROR;
   }
@@ -1671,7 +1616,11 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
   /**
    * @brief      performs continuous acquisition
    * @details    This should be spawned in a thread.
+   *             Set should_framegrab_run true if the loop should run continuously.
+   *             Set is_framegrab_running true when the loop is running.
    * @param[in]  iface       reference to Slicecam::Interface object
+   * @param[in]  whattodo    what to do
+   * @param[in]  sourcefile
    *
    */
   void Interface::dothread_framegrab( const std::string whattodo, const std::string sourcefile ) {
@@ -1679,39 +1628,87 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     std::stringstream message;
     long error = NO_ERROR;
 
-    this->set_framegrab_thread_running( true );    // this thread is running
+    if ( whattodo == "one" ) {
+      // Clear should_framegrab_run which means the framegrab loop should not run.
+      // If it's already running then return, the existing framegrab loop will
+      // stop. If it's not already running then drop through, and a single
+      // frame will be grabbed.
+      //
+      this->should_framegrab_run.store( false );
+      if ( this->is_framegrab_running.load() ) return;
+    }
+    else
+    if ( whattodo == "start" ) {
+      if ( this->is_framegrab_running.load() ) {
+        logwrite( function, "thread already running, exiting" );
+        return;
+      }
+      else {
+        logwrite( function, "set thread running" );
+        this->should_framegrab_run.store( true );
+      }
+    }
+    else
+    if ( whattodo == "stop" ) {
+      logwrite( function, "set thread to stop, exiting" );
+      this->should_framegrab_run.store( false );
+      return;
+    }
+    else {
+      message.str(""); message << "ERROR invalid argument \"" << whattodo << "\". exiting.";
+      logwrite( function, message.str() );
+      return;
+    }
+
+    this->wcsname.clear();
+    this->wcsfix_time = std::chrono::steady_clock::time_point::min();
 
     // The speed of this do loop can potentially be limited by either the
     // exposure time or the acquisition, which can be limited by the solver.
     // In other words, it will acquire images as fast as it needs to, but no
     // faster.
     //
-    do {
-      if (error==NO_ERROR) error = this->acquire_one_threaded();          // grab frame from both cameras
-      if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
-      if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
-                                                             this->imagename,
-                                                             this->tcs_online.load() );    // write to FITS file
-
-      this->framegrab_time = std::chrono::steady_clock::time_point::min();
-
-/*
-      this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
-*/
-
-      std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
-
-    } while ( error==NO_ERROR && this->is_framegrab_continuous() );
-
-    // Any errors will disable frame grabbing
+    // If I can get the lock then BoolState sets is_framegrab_running true,
+    // and clears it (false) automatically when it goes out of scope.
     //
+    {
+    std::unique_lock<std::mutex> lock( this->framegrab_mutex, std::defer_lock );             // try to get the mutex
+    if ( lock.try_lock() ) {
+      BoolState loop_running( this->is_framegrab_running );    // sets state true here, clears when it goes out of scope
+      do {
+        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
+
+        // they will both have the same exptime so just get the first one
+        //
+        double exptime=0;
+        if ( !this->camera.andor.empty() ) {
+          exptime = this->camera.andor.begin()->second->camera_info.exposure_time;
+        }
+        if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
+
+        if (error==NO_ERROR) error = this->acquire_one_threaded();          // grab frame from both cameras
+        if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
+        if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
+                                                               this->imagename,
+                                                               this->tcs_online.load() );    // write to FITS file
+
+        this->framegrab_time = std::chrono::steady_clock::time_point::min();
+
+        this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
+
+      } while ( error==NO_ERROR && this->should_framegrab_run.load() );
+    }
+    else {                                                                                   // this shouldn't even happen
+      logwrite( function, "ERROR another thread is already running" );
+      return;
+    }
+    }
+
     if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR detected, disabling continuous frame grabbing" );
-      this->set_framegrab_continuous( false );
+      logwrite( function, "ERROR starting thread" );
+      this->should_framegrab_run.store( false );  // disable frame grabbing
     }
     else logwrite( function, "leaving thread" );
-
-    this->set_framegrab_thread_running( false );   // this thread has terminated
 
     return;
   }
@@ -2188,7 +2185,7 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     if ( _tcs ) this->tcsd.get_cass( angle_scope );
     if ( _tcs ) this->tcsd.get_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
 
-    // Compute FP offsets from TCS coordinates (SCOPE) to ACAM coodinates.
+    // Compute FP offsets from TCS coordinates (SCOPE) to SLIT coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
     // Results in degrees.
     //
@@ -2206,6 +2203,8 @@ logwrite( function, "ERROR not yet implemented" ); return ERROR;
     // either a prioi or from the Andor::Information class
     //
     slicecam->fitskeys.erase_db();
+
+    slicecam->fitskeys.addkey( "BOB",  "hello", "world" );
 
     slicecam->fitskeys.addkey( "TCS",  tcsname, "" );
 

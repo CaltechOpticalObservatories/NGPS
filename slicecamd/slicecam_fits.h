@@ -45,6 +45,7 @@ namespace Slicecam {
     private:
       std::mutex fits_mutex;                        ///< used to block writing_file semaphore in multiple threads
       std::unique_ptr<CCfits::FITS> pFits;          ///< pointer to FITS data container
+      CCfits::ExtHDU* imageExt;                       ///< image extension header unit
       std::string fits_name;
       std::atomic<bool> file_open;                  ///< semaphore indicates file is open
 

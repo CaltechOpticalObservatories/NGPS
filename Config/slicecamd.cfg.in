@@ -50,4 +50,4 @@ PUSH_GUI_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 # Sets the keyword argument "IMAGE_SIZE=<is>"
 # used for the Python skysim module.
 #
-SKYSIM_IMAGE_SIZE=2100
+SKYSIM_IMAGE_SIZE=1024

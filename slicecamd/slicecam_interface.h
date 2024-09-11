@@ -73,7 +73,7 @@ namespace Slicecam {
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
 
       long emulator( std::string args, std::string &retstring );
-      long open( std::string args );
+      long open( std::string which, std::string args );
       long close();
       long get_frame();
       long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
@@ -174,7 +174,7 @@ namespace Slicecam {
    */
   class GUIManager {
     private:
-      std::string camera_name = "guider";
+      const std::string camera_name = "slicev";
       std::atomic<bool> update;  ///<! set if the menus need to be updated
       std::string push_settings; ///<! name of script to push settings to GUI
       std::string push_image;    ///<! name of script to push an image to GUI
@@ -267,11 +267,9 @@ namespace Slicecam {
    */
   class Interface {
     private:
-      std::atomic<int> framegrab_thread_running;
-      std::atomic<bool> framegrab_continuous;
+      std::mutex framegrab_mutex;
       std::atomic<bool> tcs_online;
       std::atomic<bool> err;
-      std::mutex framegrab_mutex;
       std::string imagename;
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
@@ -279,20 +277,18 @@ namespace Slicecam {
 
     public:
 
+      std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
+      std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
+
       GUIManager gui_manager;
 
-      Interface() : framegrab_thread_running(false),
-                    framegrab_continuous(false),
-                    tcs_online(false),
-                    err(false) {
+      Interface() : tcs_online(false),
+                    err(false),
+                    should_framegrab_run(false),
+                    is_framegrab_running(false) {
       }
 
       inline long read_error() { return( this->err.exchange( false ) ? ERROR : NO_ERROR ); };
-
-      inline bool is_framegrab_thread_running() { return this->framegrab_thread_running.load( std::memory_order_acquire ); }
-      inline void set_framegrab_thread_running( bool state ) { this->framegrab_thread_running.store( state, std::memory_order_acquire ); }
-      inline bool is_framegrab_continuous() { return this->framegrab_continuous.load( std::memory_order_acquire ); }
-      inline void set_framegrab_continuous( bool state ) { this->framegrab_continuous.store( state, std::memory_order_acquire ); }
 
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
@@ -314,9 +310,9 @@ namespace Slicecam {
 
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
-      long isopen( std::string component, bool &state, std::string &help );     /// wrapper for slicecams
-      bool isopen( std::string component );     /// wrapper for slicecams
-      long close( std::string component, std::string &help );      /// wrapper to open all slicecams
+      long isopen( std::string which, bool &state, std::string &help );     /// wrapper for slicecams
+      bool isopen( std::string which );     /// wrapper for slicecams
+      long close( std::string which, std::string &help );      /// wrapper to open all slicecams
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
