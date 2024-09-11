@@ -1820,7 +1820,9 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // Get the original exptime and gain
+    // Get the original exptime and gain, which will be used
+    // to determine if the requested values are different.
+    // If they are the same then the display won't be updated.
     //
     double exptime_og = camera.exptime();
     int gain_og = camera.gain();
@@ -1828,26 +1830,15 @@ namespace Slicecam {
     long error = NO_ERROR;
     bool set = false;
 
-    // If all args are supplied then set all parameters
+    std::string reply;
+
+    // If two args were supplied then use them to set
+    // exposure time and gain.
     //
-    if ( tokens.size() == 4 ) {
-      try {
-        std::string reply;
-
-        // set the exposure time here
-        error |= camera.exptime( tokens.at(0), reply );
-
-        // set the gain here
-        error |= camera.gain( tokens.at(1), reply );
-
-        set=true;
-      }
-      catch( const std::exception &e ) {
-        message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
-        logwrite( function, message.str() );
-        retstring="invalid_argument";
-        error = ERROR;
-      }
+    if ( tokens.size() == 2 ) {
+      error |= camera.exptime( tokens[0], reply );
+      error |= camera.gain( tokens[1], reply );
+      set=true;
     }
 
     // Set or not, now read the current values and use the gui_manager
@@ -1932,10 +1923,10 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_PUTONSLIT;
-      retstring.append( " <crossra> <crossdec> <slitra> <slitdec>\n" );
+      retstring.append( " <slitra> <slitdec> <crossra> <crossdec>\n" );
       retstring.append( "   Move selected target to the slit. Intended to be called by the GUI to\n" );
       retstring.append( "   move the clicked-on target to the slit. The call must supply the RA,DEC\n" );
-      retstring.append( "   coordinates of the crosshairs, and the RA,DEC coordinates of the slit.\n" );
+      retstring.append( "   coordinates of the slit, and the RA,DEC coordinates of the crosshairs.\n" );
       retstring.append( "   This will result in a PT command to send the required offsets to the TCS.\n" );
       return HELP;
     }
@@ -1944,7 +1935,7 @@ namespace Slicecam {
     Tokenize( args, tokens, " " );
 
     if ( tokens.size() != 4 ) {
-      logwrite( function, "ERROR expected <crossra> <crossdec> <slitra> <slitdec>" );
+      logwrite( function, "ERROR expected <slitra> <slitdec> <crossra> <crossdec>" );
       retstring="invalid_argument";
       return ERROR;
     }
@@ -1956,14 +1947,14 @@ namespace Slicecam {
     try {
       // inputs
       //
-      double crossra  = std::stod( tokens.at(0) );
-      double crossdec = std::stod( tokens.at(1) );
-      double slitra   = std::stod( tokens.at(2) );
-      double slitdec  = std::stod( tokens.at(3) );
+      double slitra   = std::stod( tokens.at(0) );
+      double slitdec  = std::stod( tokens.at(1) );
+      double crossra  = std::stod( tokens.at(2) );
+      double crossdec = std::stod( tokens.at(3) );
 
       // call solve_offset from SkyInfo::FPOffsets class which uses Python
       //
-      if ( this->fpoffsets.solve_offset( crossra, crossdec, slitra, slitdec, ra_off, dec_off ) != NO_ERROR ) {
+      if ( this->fpoffsets.solve_offset( slitra, slitdec, crossra, crossdec, ra_off, dec_off ) != NO_ERROR ) {
         logwrite( function, "ERROR from Python solve_offset" );
         retstring="fpoffsets_failed";
         return ERROR;
@@ -2261,8 +2252,6 @@ namespace Slicecam {
     // either a prioi or from the Andor::Information class
     //
     slicecam->fitskeys.erase_db();
-
-    slicecam->fitskeys.addkey( "BOB",  "hello", "world" );
 
     slicecam->fitskeys.addkey( "TCS",  tcsname, "" );
 
