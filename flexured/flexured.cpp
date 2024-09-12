@@ -131,41 +131,33 @@ int main(int argc, char **argv) {
   //
   // TcpSocket objects are instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
   //
-  std::vector<Network::TcpSocket> socklist;          // create a vector container to hold N_THREADS TcpSocket objects
-  socklist.reserve(N_THREADS);
-
-  Network::TcpSocket s(flexured.blkport, true, -1, 0); // instantiate TcpSocket object with blocking port
-  if ( s.Listen() < 0 ) {                            // create a listening socket
-    message.str(""); message << "ERROR: cannot create listening socket on port " << flexured.blkport;
-    logwrite( function, message.str() );
-    flexured.exit_cleanly();
-  }
-  socklist.push_back(s);                             // add it to the socklist vector
-  std::thread( std::ref(Flexure::Server::block_main),
-               std::ref(flexured),
-               std::ref(socklist[0]) ).detach();     // spawn a thread to handle requests on this socket
 
   // pre-thread N_THREADS-1 detached threads to handle requests on the non-blocking port
   // thread #0 is reserved for the blocking port (above)
   //
-  for (int i=1; i<N_THREADS; i++) {                  // create N_THREADS-1 non-blocking socket objects
-    if (i==1) {                                      // first one only
-      Network::TcpSocket s(flexured.nbport, false, CONN_TIMEOUT, i);  // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
-      if ( s.Listen() < 0 ) {                        // create a listening socket
-        message.str(""); message << "ERROR: cannot create listening socket on port " << flexured.nbport;
-        logwrite( function, message.str() );
-        flexured.exit_cleanly();
-      }
-      socklist.push_back(s);
-    }
-    else {                                           // subsequent socket objects are copies of the first
-      Network::TcpSocket s = socklist[1];            // copy the first one, which has a valid listening socket
-      s.id = i;
-      socklist.push_back(s);
-    }
-    std::thread( std::ref(Flexure::Server::thread_main),
+
+  // First create the threads and add them to the map container
+  //
+  Network::TcpSocket sock_main(flexured.nbport, false, CONN_TIMEOUT, 1);     // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
+
+  if ( sock_main.Listen() < 0 ) {                                            // create a listening socket
+    logwrite( function, "ERROR could not create listening socket" );
+    flexured.exit_cleanly();
+  }
+
+  flexured.socklist[1] = std::make_shared<Network::TcpSocket>(sock_main);    // add it to the socklist map
+
+  for ( int i=2; i<Flexure::N_THREADS; i++ ) {
+    flexured.socklist[i] = std::make_shared<Network::TcpSocket>(sock_main);  // copy the first one, which has valid listening socket
+    flexured.socklist[i]->id = i;                                            // update the id of the copied socket
+  }
+
+  // create the threads for the above sockets
+  //
+  for ( int i=1; i<Flexure::N_THREADS; i++ ) {
+    std::thread( Flexure::Server::thread_main,
                  std::ref(flexured),
-                 std::ref(socklist[i]) ).detach();  // spawn a thread to handle each non-blocking socket request
+                 flexured.socklist[i] ).detach();
   }
 
   // Instantiate a multicast UDP object and spawn a thread to send asynchronous messages
@@ -178,6 +170,36 @@ int main(int argc, char **argv) {
   // thread to start a new logbook each day
   //
   std::thread( std::ref(Flexure::Server::new_log_day), logpath ).detach();
+
+  // Dynamically create a new listening socket and thread to handle each
+  // connection request on the blocking port. Each socket will be added
+  // to the socklist with an id from a pool of numbers. After that connection
+  // is closed then its id will go back into the pool.
+  //
+  Network::TcpSocket sock_block(flexured.blkport, true, -1, 0);  // instantiate TcpSocket object with blocking port
+  if ( sock_block.Listen() < 0 ) {                               // create a listening socket
+    logwrite( function, "ERROR could not create listening socket" );
+    flexured.exit_cleanly();
+  }
+
+  while (true) {
+    auto newid = flexured.id_pool.get_next_number(); // get the next available number from the pool
+
+    // lock the mutex before creating and initiating the new socket
+    //
+    {
+    std::lock_guard<std::mutex> lock(flexured.sock_block_mutex);
+    flexured.socklist[newid] = std::make_shared<Network::TcpSocket>(sock_block);  // create a new socket
+    flexured.socklist[newid]->id = newid;            // set new socket's id
+    flexured.socklist[newid]->Accept();              // accept connections on the new socket
+    }
+
+    // create a new thread to handle the connection
+    //
+    std::thread( Flexure::Server::block_main,
+                 std::ref(flexured),
+                 flexured.socklist[newid] ).detach();
+  }
 
   for (;;) pause();                                  // main thread suspends
   return 0;

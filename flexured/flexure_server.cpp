@@ -207,22 +207,20 @@ namespace Flexure {
   /***** Server::block_main ***************************************************/
   /**
    * @brief      main function for blocking connection thread
-   * @param[in]  flexure  reference to Flexure::Server object
-   * @param[in]  sock     Network::TcpSocket socket object
+   * @param[in]  server  reference to Flexure::Server object
+   * @param[in]  sock    shared pointer to Network::TcpSocket socket object
    *
    * This function is run in a separate thread spawned by main() and
    * accepts a socket connection and processes the request by
    * calling function Flexure::Server::doit()
    *
-   * This thread never terminates.
-   *
    */
-  void Server::block_main( Flexure::Server &flexure, Network::TcpSocket sock ) {
-    while(1) {
-      sock.Accept();
-      flexure.doit(sock);           // call function to do the work
-      sock.Close();
-    }
+  void Server::block_main( Flexure::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
+    server.threads_active.fetch_add(1);  // atomically increment thread_busy counter
+    server.doit(*sock);
+    sock->Close();
+    server.threads_active.fetch_sub(1);  // atomically decrement threads_active counter
+    server.id_pool.release_number( sock->id );
     return;
   }
   /***** Server::block_main ***************************************************/
@@ -231,8 +229,8 @@ namespace Flexure {
   /***** Server::thread_main **************************************************/
   /**
    * @brief      main function for all non-blocked threads
-   * @param[in]  flexure  reference to Flexure::Server object
-   * @param[in]  sock     Network::TcpSocket socket object
+   * @param[in]  server  reference to Flexure::Server object
+   * @param[in]  sock    shared pointer to Network::TcpSocket socket object
    *
    * This function is run in a separate thread spawned by main() and
    * accepts a socket connection and processes the request by
@@ -241,17 +239,15 @@ namespace Flexure {
    * There are N_THREADS-1 of these, one for each non-blocking connection.
    * These threads never terminate.
    *
-   * This function differs from block_main only in that the call to Accept
-   * is mutex-protected.
-   *
    */
-  void Server::thread_main( Flexure::Server &flexure, Network::TcpSocket sock ) {
+  void Server::thread_main( Flexure::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
     while (1) {
-      flexure.conn_mutex.lock();
-      sock.Accept();
-      flexure.conn_mutex.unlock();
-      flexure.doit(sock);        // call function to do the work
-      sock.Close();
+      {
+      std::lock_guard<std::mutex> lock(server.conn_mutex);
+      sock->Accept();
+      }
+      server.doit(*sock);
+      sock->Close();
     }
     return;
   }
@@ -304,7 +300,7 @@ namespace Flexure {
   /***** Server::doit *********************************************************/
   /**
    * @brief      the workhorse of each thread connetion
-   * @param[in]  sock  Network::UdpSocket socket object
+   * @param[in]  sock  reference to Network::TcpSocket socket object
    *
    * stays open until closed by client
    *
@@ -314,7 +310,7 @@ namespace Flexure {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit(Network::TcpSocket sock) {
+  void Server::doit(Network::TcpSocket &sock) {
     std::string function = "Flexure::Server::doit";
     long  ret;
     std::stringstream message;
@@ -323,14 +319,8 @@ namespace Flexure {
 
     bool connection_open=true;
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] accepted connection on fd " << sock.getfd();
-    logwrite( function, message.str() );
-#endif
-
     while (connection_open) {
 
-message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwrite( function, message.str() );
       // Wait (poll) connected socket for incoming data...
       //
       int pollret;

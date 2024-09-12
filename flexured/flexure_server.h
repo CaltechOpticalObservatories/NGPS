@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef FLEXURE_SERVER_H
-#define FLEXURE_SERVER_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -37,6 +36,8 @@
  */
 namespace Flexure {
 
+  constexpr int N_THREADS = 10;
+
   /***** Flexure::Server ******************************************************/
   /**
    * @class Server
@@ -49,12 +50,7 @@ namespace Flexure {
       /**
        * @brief  class constructor
        */
-      Server() {
-        this->nbport=-1;
-        this->blkport=-1;
-        this->asyncport=-1;
-        this->cmd_num=0;
-      }
+      Server() : nbport(-1), blkport(-1), asyncport(-1), cmd_num(0), threads_active(0), id_pool(Flexure::N_THREADS) { }
 
       /***** Flexure::Server::~Server *****************************************/
       /**
@@ -76,25 +72,38 @@ namespace Flexure {
       int blocking_socket;
 
       std::atomic<int> cmd_num;
+      std::atomic<int> threads_active;      ///< number of blocking threads that exist
+
+      NumberPool id_pool;                   ///< creates a number pool used for socket ids
 
       Config config;
 
       Interface interface;                  ///< the Interface class connects to the hardware
 
       std::mutex conn_mutex;                ///< mutex to protect against simultaneous access to Accept()
+      std::mutex sock_block_mutex;          ///< mutex to protect against simultaneous access to Accept()
+      std::mutex socklist_mutex;            ///< mutex to protect against simultaneous access to socklist
+
+      std::map<int, std::shared_ptr<Network::TcpSocket>> socklist;             ///< container to hold TcpSocket object pointers
+
+      void remove_socket( int id ) {                                           ///< removes a socket object from socklist
+        std::lock_guard<std::mutex> lock( socklist_mutex );
+        auto it = socklist.find( id );
+        if ( it != socklist.end() ) socklist.erase( it );
+        return;
+      }
 
       static void new_log_day( std::string logpath );                          ///< creates a new logbook each day
-      static void block_main( Flexure::Server &tcs, Network::TcpSocket sock ); ///< main function for blocking connection thread
-      static void thread_main( Flexure::Server &tcs, Network::TcpSocket sock );  ///< main function for all non-blocked threads
+      static void block_main( Flexure::Server &tcs, std::shared_ptr<Network::TcpSocket> sock ); ///< main function for blocking connection thread
+      static void thread_main( Flexure::Server &tcs, std::shared_ptr<Network::TcpSocket> sock );  ///< main function for all non-blocked threads
       static void async_main( Flexure::Server &tcs, Network::UdpSocket sock );   ///< asynchronous message sending thread
 
       void exit_cleanly(void);              ///< exit
       long configure_flexured();            ///< read and apply the configuration file
-      void doit(Network::TcpSocket sock);   ///< the workhorse of each thread connetion
+      void doit(Network::TcpSocket &sock);  ///< the workhorse of each thread connetion
 
   };
   /***** Flexure::Server ******************************************************/
 
 }
 /***** Flexure ****************************************************************/
-#endif
