@@ -442,7 +442,7 @@ public void export(java.lang.String new_export_file){
         "SLIT_WIDTH"+","+"SLIT_OFFSET"+","+"CCDMODE"+","+"BIN_SPEC"+","+"BIN_SPAC"+","+"AIRMASS_MAX"+","+"SLIT_ANGLE"+","+"WRANGE_HIGH"+","+"WRANGE_LOW"+","+"CHANNEL"+","+       
         "MAGNITUDE"+","+"MAGREF_SYSTEM"+","+"MAGREF_FILTER"+","+"SRCMODEL"+","+"OTMexpt"+","+"OTMslitwidth"+","+"OTMcass"+","+"AIRMASS_START"+","+"AIRMASS_END"+","+       
         "OTMskymag"+","+"OTMdead"+","+"OTMslewgo"+","+"OTMstart"+","+"OTMend"+","+"OTMpa"+","+"OTMwait"+","+"OTMflag"+","+"OTMlast"+","+       
-        "OTMslew"+","+"OTMmoon"+","+"OTMSNR"+","+"OTMres"+","+"OTMseeing"+","+"OTMslitangle"+","+"NOTE"+","+"COMMENT";         
+        "OTMslew"+","+"OTMmoon"+","+"OTMSNR"+","+"OTMres"+","+"OTMseeing"+","+"OTMslitangle"+","+"NOTE"+","+"COMMENT"+","+"POINTMODE";         
          output.println(header_row);                
          for(int i=0;i<num_observations;i++){
             Target current = myTargetDBMSTableModel.getRecord(i);
@@ -495,9 +495,9 @@ public void export(java.lang.String new_export_file){
                 current.otm.getOTMslitangle()+","+
                 current.getNOTE()+","+
                 current.getCOMMENT()+","+    
-                current.getOWNER()+","+ 
-                current.otm.getOTMAirmass_start()+","+ 
-                current.otm.getOTMpointmode();
+                //current.getOWNER()+","+ 
+                //current.otm.getOTMAirmass_start()+","+ 
+                current.otm.getOTMpointmode();  // Should not be from OTM
             output.println(current_record);
          }  
        output.flush();

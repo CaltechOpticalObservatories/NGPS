@@ -2008,7 +2008,7 @@ public JTable constructTable(){
         fileMenu.add(importMenuItem);
 
         exportMenuItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_E, java.awt.event.InputEvent.CTRL_DOWN_MASK));
-        exportMenuItem.setText("Export");
+        exportMenuItem.setText("Export CSV");
         exportMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 exportMenuItemActionPerformed(evt);
@@ -2296,19 +2296,22 @@ public JTable constructTable(){
     }//GEN-LAST:event_save_asMenuItemActionPerformed
 
     private void exportMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_exportMenuItemActionPerformed
-        java.lang.String user_home = System.getProperty("user.home");
-        java.lang.String ngps_directory = user_home+SEP+"ngps";
-        java.lang.String set_name = dbms.getSelectedSetName();
-        File check_directory = new File(ngps_directory);
+        String user_home = System.getProperty("user.home");
+        String savedir = user_home+SEP+"Desktop/CSV_export";
+        String set_name = dbms.getSelectedSetName();
+        File check_directory = new File(savedir);
         if(!check_directory.exists()){
             check_directory.mkdir();
         } 
-        if(set_name.isEmpty()){
-            java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter file name for exported tabe.","",JOptionPane.QUESTION_MESSAGE);
-            dbms.export(ngps_directory+SEP+current_set_name);
-        }else{
-           dbms.export(ngps_directory+SEP+set_name); 
-        }       
+        String filename = JOptionPane.showInputDialog(this,"Enter CSV filename",set_name);
+        if(filename != null && !filename.trim().isEmpty()){ 
+            if(!filename.toLowerCase().endsWith(".csv")){
+                filename = filename+".csv";
+            }
+            String path_and_filename = savedir+SEP+filename;
+            dbms.export(path_and_filename);
+            JOptionPane.showMessageDialog(this,"Saved to "+savedir,"",JOptionPane.INFORMATION_MESSAGE);
+        }
     }//GEN-LAST:event_exportMenuItemActionPerformed
 
     private void zoomInMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_zoomInMenuItemActionPerformed
