@@ -745,16 +745,19 @@ namespace Network {
     std::stringstream message;
     int error = -1;
 
-    if ( !this->connection_open ) return 0;
-
     if (this->fd >= 0) {               // if the file descriptor is valid
       if (close(this->fd) == 0) {      // then close it
-        message.str(""); message << "connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
+#ifdef LOGLEVEL_DEBUG
+        message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
         logwrite( function, message.str() );
+#endif
         error = 0;
         this->fd = -1;
       }
       else {
+        message.str(""); message << "ERROR closing fd " << this->fd << " on port " << this->port
+                                 << " returned " << errno << ": " << strerror(errno);
+        logwrite( function, message.str() );
         error = -1;                    // error closing file descriptor
      }
     }
@@ -769,7 +772,7 @@ namespace Network {
 
     this->connection_open = false;     // clear the connection_open flag
 
-    return (error);
+    return error;
   }
   /***** Network::TcpSocket::Close ********************************************/
 
@@ -896,10 +899,12 @@ namespace Network {
         return -1;                       // indicates error
       }
       if ( nread == 0 ) {
-        message << "no data on socket " << this->host << ":" << this->port << " fd " << this->fd << ". closing connection";
+#ifdef LOGLEVEL_DEBUG
+        message << "[DEBUG] no data on socket " << this->host << ":" << this->port << " fd " << this->fd << ". closing connection";
         logwrite( function, message.str() );
+#endif
         this->Close();
-        return -1;                       // indicates error
+        return 0;                        // not an error
       }
       bytesread++;                       // keep count of total bytes read
 
@@ -922,7 +927,7 @@ namespace Network {
       }
     }
 
-    return( bytesread );                 // return bytes read
+    return bytesread;                    // return bytes read
   }
   /***** Network::TcpSocket::Read *********************************************/
 
