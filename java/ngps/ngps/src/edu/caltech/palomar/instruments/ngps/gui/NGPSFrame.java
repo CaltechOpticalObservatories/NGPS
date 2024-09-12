@@ -1499,7 +1499,7 @@ public JTable constructTable(){
         });
 
         jLabel12.setFont(new java.awt.Font("Arial", 1, 12)); // NOI18N
-        jLabel12.setText("Start Time:");
+        jLabel12.setText("UTC Start Time:");
 
         HoursSpinner.setPreferredSize(new java.awt.Dimension(28, 35));
         HoursSpinner.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -2208,7 +2208,7 @@ public JTable constructTable(){
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addComponent(detailsPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(planningPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 464, Short.MAX_VALUE))
+                    .addComponent(planningPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 477, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(

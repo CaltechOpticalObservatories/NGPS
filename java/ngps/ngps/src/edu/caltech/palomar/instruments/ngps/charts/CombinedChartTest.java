@@ -260,7 +260,7 @@ public void setDBMS(NGPSdatabase new_dbms){
 //        renderer1.setAutoPopulateSeriesStroke(false);
         
 //      NumberAxis domainAxis = new NumberAxis("Time (minutes)");
-        DateAxis domainAxis = new DateAxis("Time");
+        DateAxis domainAxis = new DateAxis("UTC Time");
         domainAxis.setDateFormatOverride(new SimpleDateFormat("HH:mm"));
         domainAxis.setVerticalTickLabels(true);
         int series_count_bars = myDefaultIntervalXYDataset.getSeriesCount();

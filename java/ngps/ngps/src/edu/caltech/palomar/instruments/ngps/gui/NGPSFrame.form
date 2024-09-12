@@ -434,7 +434,7 @@
               <EmptySpace type="unrelated" max="-2" attributes="0"/>
               <Group type="103" groupAlignment="0" max="-2" attributes="0">
                   <Component id="detailsPanel" max="32767" attributes="0"/>
-                  <Component id="planningPanel" pref="464" max="32767" attributes="0"/>
+                  <Component id="planningPanel" pref="477" max="32767" attributes="0"/>
               </Group>
               <EmptySpace max="-2" attributes="0"/>
           </Group>
@@ -707,7 +707,7 @@
             <Property name="font" type="java.awt.Font" editor="org.netbeans.beaninfo.editors.FontEditor">
               <Font name="Arial" size="12" style="1"/>
             </Property>
-            <Property name="text" type="java.lang.String" value="Start Time:"/>
+            <Property name="text" type="java.lang.String" value="UTC Start Time:"/>
           </Properties>
         </Component>
         <Component class="javax.swing.JSpinner" name="HoursSpinner">
