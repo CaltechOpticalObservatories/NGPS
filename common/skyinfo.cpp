@@ -416,7 +416,7 @@ namespace SkyInfo {
    */
   long FPOffsets::apply_offset( const double ra_in, const double dec_in, const double ra_off, const double dec_off,
                                 double &ra_out, double &dec_out ) {
-    std::string function = "  (SkyInfo::FPOffsets::apply_offset) ";
+    std::string function = "SkyInfo::FPOffsets::apply_offset";
     std::stringstream message;
 
     // Check for valid inputs before passing something to Python that
@@ -521,5 +521,114 @@ namespace SkyInfo {
     return NO_ERROR;
   }
   /***** SkyInfo::FPOffsets::apply_offset *************************************/
+
+
+  /***** SkyInfo::FPOffsets::get_slicecam_params ******************************/
+  /**
+   * @brief      get parameters needed for slicecam image headers
+   * @details    This calls Python function getSlicevParams in the FPOffsets
+   *             module and stores the results in the class. The call needs no
+   *             arguments and returns a nested dictionary of the form:
+   *'''
+   *             "L":{ "CDELT1"  : 1.667E-05,
+   *                   "CDELT2"  : 1.667E-05,
+   *                   "CRPIX1"  : 1025,
+   *                   "CRPIX2"  : 512,
+   *                   "THETADEG" : 0 },
+   *             "R":{ "CDELT1"  : 1.667E-05,
+   *                   "CDELT2"  : 1.667E-05,
+   *                   "CRPIX1"  : -1,
+   *                   "CRPIX2"  : 512,
+   *                   "THETADEG" : 0 }
+   *'''
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long FPOffsets::get_slicecam_params() {
+    std::string function = "SkyInfo::FPOffsets::get_slicecam_params";
+    std::stringstream message;
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return ERROR;
+    }
+
+    if ( this->pModule==NULL ) {
+      logwrite( function, "ERROR: Python module not imported" );
+      return ERROR;
+    }
+
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_GETSLICEPARAMS_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      message.str(""); message << "ERROR Python function " << PYTHON_GETSLICEPARAMS_FUNCTION << " not callable";;
+      logwrite( function, message.str() );
+      Py_XDECREF( pFunction );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Call the Python function here
+    //
+    PyObject* pReturn = PyObject_CallObject( pFunction, NULL );
+    Py_XDECREF( pFunction );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      message.str(""); message << "ERROR calling Python function: " << PYTHON_GETSLICEPARAMS_FUNCTION;
+      logwrite( function, message.str() );
+      PyErr_Print();
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Expect a dictionary
+    //
+    if ( !PyDict_Check( pReturn ) ) {
+      logwrite( function, "ERROR Python function did not return expected dictionary" );
+      Py_DECREF( pReturn );
+      PyGILState_Release(gstate);
+      return ERROR;
+    }
+
+    // vector of camera names, suitable for PyDict_GetItemString
+    //
+    std::vector<const char*> camera_names = { "L", "R" };
+
+    // Get the values out of the nested dictionary
+    //
+    for ( const auto &cam : camera_names ) {                   // loop over the camera names
+
+      PyObject* pDict = PyDict_GetItemString( pReturn, cam );  // dictionary for this camera
+
+      // Now extract the named values from this sub-dictionary,
+      // and store them in a class map indexed by camera name.
+      //
+      if ( pDict && PyDict_Check(pDict) ) {
+        // extract the values
+        PyObject* pCDELT1   = PyDict_GetItemString( pDict, "CDELT1" );
+        PyObject* pCDELT2   = PyDict_GetItemString( pDict, "CDELT2" );
+        PyObject* pCRPIX1   = PyDict_GetItemString( pDict, "CRPIX1" );
+        PyObject* pCRPIX2   = PyDict_GetItemString( pDict, "CRPIX2" );
+        PyObject* pTHETADEG = PyDict_GetItemString( pDict, "THETADEG" );
+
+        // store them in sliceparams map
+        if ( pCDELT1   && PyFloat_Check(pCDELT1) )  this->sliceparams[std::string(cam)].cdelt1   = PyFloat_AsDouble( pCDELT1 );
+        if ( pCDELT2   && PyFloat_Check(pCDELT2) )  this->sliceparams[std::string(cam)].cdelt2   = PyFloat_AsDouble( pCDELT2 );
+        if ( pCRPIX1   && PyLong_Check(pCRPIX1) )   this->sliceparams[std::string(cam)].crpix1   = PyLong_AsLong( pCRPIX1 );
+        if ( pCRPIX2   && PyLong_Check(pCRPIX2) )   this->sliceparams[std::string(cam)].crpix2   = PyLong_AsLong( pCRPIX2 );
+        if ( pTHETADEG && PyLong_Check(pTHETADEG) ) this->sliceparams[std::string(cam)].thetadeg = PyLong_AsLong( pTHETADEG );
+      }
+    }
+
+    Py_DECREF( pReturn );
+    PyGILState_Release( gstate );
+
+    return NO_ERROR;
+  }
+  /***** SkyInfo::FPOffsets::get_slicecam_params ******************************/
 
 }

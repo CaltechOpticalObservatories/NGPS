@@ -17,6 +17,7 @@
 #define PYTHON_FPOFFSETS_FUNCTION "compute_offset"
 #define PYTHON_SOLVEOFFSETDEG_FUNCTION "solve_offset_deg"
 #define PYTHON_APPLYOFFSETDEG_FUNCTION "apply_offset_deg"
+#define PYTHON_GETSLICEPARAMS_FUNCTION "getSlicevParams"
 
 namespace SkyInfo {
 
@@ -40,6 +41,20 @@ namespace SkyInfo {
       FPOffsets();
 
       inline bool is_initialized() { return this->python_initialized; };
+
+      // slicecam parameters
+      //
+      typedef struct {
+        double cdelt1;
+        double cdelt2;
+        long crpix1;
+        long crpix2;
+        long thetadeg;
+      } sliceparam_t;
+
+      // this map holds the output of get_slicecam_params()
+      //
+      std::map<std::string, sliceparam_t> sliceparams;
 
       // store the in/out coordinates in the class
       //
@@ -92,6 +107,8 @@ namespace SkyInfo {
       long apply_offset( const double ra_in, const double dec_in,
                          const double ra_off, const double dec_off,
                          double &ra_out, double &dec_out );
+
+      long get_slicecam_params();
 
   };
   /***** SkyInfo::FPOffsets ***************************************************/
