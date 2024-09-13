@@ -82,29 +82,32 @@ public void setObservationSequencerController(ObservationSequencerController cur
 /     save_to_database()
 /=============================================================================================*/
 public void save_to_database(){
-    java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
-    int set_id = myTargetListParser.commitFileToDBMS_2(myTargetListParser.currentObservationSet,current_set_name); 
-    myTargetListParser.getNGPSdatabase().queryObservations(set_id);
-    setVisible(false);
-  //  myNGPSFrame.getMainTable().setModel(myTargetListParser.getNGPSdatabase().myTargetDBMSTableModel);
-//        double seeing     = 1.25;
-//        int    wavelength = 500;
-        java.lang.String start_time_string = "2022-01-01T03:00:00.000";
-//        java.lang.String start_time_string = OTMstartTimeTextField.getText();
-//        2022-01-01T03:00:00.000  Example good start time.
-//        java.sql.Timestamp current_timestamp = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T02:33:20.369");
-       double seeing     = dbms.myOTMlauncher.getSeeing();
-       int    wavelength = dbms.myOTMlauncher.getWavelength();
- //      java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.getStartTimestamp();       
+    
+    String current_set_name = "";
+    // Loop until we get a string or null (cancel)
+    while(current_set_name.trim().isEmpty()){
+        current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);        
+    }
+    setVisible(false); //Hide the label input dialog either way
 
-        java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp(start_time_string);
+    if(current_set_name != null){
+        int set_id = myTargetListParser.commitFileToDBMS_2(myTargetListParser.currentObservationSet,current_set_name); 
+        myTargetListParser.getNGPSdatabase().queryObservations(set_id);
+      //  myNGPSFrame.getMainTable().setModel(myTargetListParser.getNGPSdatabase().myTargetDBMSTableModel);
+    //     java.lang.String start_time_string = OTMstartTimeTextField.getText();
+        double seeing = dbms.myOTMlauncher.getSeeing();
+        int wavelength = dbms.myOTMlauncher.getWavelength();
+     //      java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.getStartTimestamp();       
+        java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T03:00:00.000");
         dbms.myOTMlauncher.OTM(current_timestamp_otm,seeing,wavelength);
         dbms.setTablePopulated(true);
         if(myObservationSequencerController.getSTATE().matches("READY_NO_TARGETS")){
-        if(dbms.myTargetDBMSTableModel.getRowCount() != 0){
-           myObservationSequencerController.setSTATE("READY");
+            if(dbms.myTargetDBMSTableModel.getRowCount() != 0){
+               myObservationSequencerController.setSTATE("READY");
+            }
         }
-    }
+    }    
+ 
 }       
 /*=============================================================================================
 /     initializeDatabase()
