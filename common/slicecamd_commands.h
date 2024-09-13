@@ -58,9 +58,9 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_IMFLIP+" [ ? | <hflip> <vflip> ]",
                                                 SLICECAMD_IMROT+" [ ? | <rotdir> ]",
                                                 SLICECAMD_INIT,
-                                                SLICECAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> <slitra> <slitdec> ]",
                                                 SLICECAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 SLICECAMD_TEMP+" [ ? | <setpoint> ]",
                                                 "  OTHER:",
+                                                SLICECAMD_PUTONSLIT+" [ ? | <slitra> <slitdec> <crossra> <crossdec> ]",
                                                 SLICECAMD_TEST+" ? | <testname> ..."
                                               };

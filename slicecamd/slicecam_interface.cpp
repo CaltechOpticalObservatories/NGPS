@@ -1665,6 +1665,7 @@ namespace Slicecam {
         if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
 
         if (error==NO_ERROR) error = this->acquire_one_threaded();          // grab frame from both cameras
+        if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
         if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
         if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                                this->imagename,
@@ -1910,7 +1911,7 @@ namespace Slicecam {
    * @brief      put target on slit
    * @details    Intended to be called by the GUI to move the clicked-on
    *             target to the slit.
-   * @param[in]  args       test name and arguments
+   * @param[in]  args       string expects "<slitra> <slitdec> <crossra> <crossdec>"
    * @param[out] retstring  reference to string for any return values
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -1926,8 +1927,9 @@ namespace Slicecam {
       retstring.append( " <slitra> <slitdec> <crossra> <crossdec>\n" );
       retstring.append( "   Move selected target to the slit. Intended to be called by the GUI to\n" );
       retstring.append( "   move the clicked-on target to the slit. The call must supply the RA,DEC\n" );
-      retstring.append( "   coordinates of the slit, and the RA,DEC coordinates of the crosshairs.\n" );
-      retstring.append( "   This will result in a PT command to send the required offsets to the TCS.\n" );
+      retstring.append( "   coordinates of the slit, and the RA,DEC coordinates of the crosshairs,\n" );
+      retstring.append( "   all units in decimal degrees. This will result in a PT command to send\n" );
+      retstring.append( "   the required offsets to the TCS.\n" );
       return HELP;
     }
 
@@ -2013,6 +2015,7 @@ namespace Slicecam {
    * fpoffsets <from> <to> <ra> <dec> <angle>
    * getemgain
    * sleep
+   * sliceparams
    * threadoffset
    *
    */
@@ -2033,6 +2036,7 @@ namespace Slicecam {
       retstring.append( "   fpoffsets ? | <from> <to> <ra> <dec> <angle> (see help for units)\n" );
       retstring.append( "   getemgain\n" );
       retstring.append( "   sleep\n" );
+      retstring.append( "   sliceparams [ ? ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
       return HELP;
     }
@@ -2183,6 +2187,29 @@ namespace Slicecam {
         std::this_thread::sleep_for( std::chrono::seconds(1) );
       }
     }
+    else
+    if ( testname == "sliceparams" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = SLICECAMD_TEST;
+        retstring.append( " sliceparams\n" );
+        retstring.append( "  Show the slicecam params calculated by Python getSlicevParams function.\n" );
+        error=HELP;
+      }
+      // reads slicecam params into fpoffsets class
+      this->fpoffsets.get_slicecam_params();
+      // log those params
+      message.str("");
+      for ( const auto &pair : this->camera.andor ) {
+        std::string cam = pair.second->camera_info.camera_name;
+        message << "camera " << cam << " cdelta1=" << this->fpoffsets.sliceparams[cam].cdelt1
+                << " cdelta2=" << this->fpoffsets.sliceparams[cam].cdelt2
+                << " crpix1=" << this->fpoffsets.sliceparams[cam].crpix1
+                << " crpix2=" << this->fpoffsets.sliceparams[cam].crpix2
+                << " thetadeg=" << this->fpoffsets.sliceparams[cam].thetadeg << "\n";
+      }
+      retstring = message.str();
+      return HELP;
+    }
     else {
       message.str(""); message << "ERROR unknown testname \"" << testname << "\"";
       logwrite( function, message.str() );
@@ -2211,6 +2238,8 @@ namespace Slicecam {
     std::string function = "Slicecam::Interface::collect_header_info";
     std::stringstream message;
 
+    std::string cam = slicecam->camera_info.camera_name;
+
     bool _tcs = this->tcs_online.load();
     std::string tcsname;
 
@@ -2236,10 +2265,12 @@ namespace Slicecam {
 
     // Compute FP offsets from TCS coordinates (SCOPE) to SLIT coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
-    // Results in degrees.
+    // Results in degrees. Add thetadeg to the slit angle.
     //
     if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "SLIT", (ra_scope*TO_DEGREES), dec_scope, angle_scope,
                                                                              ra_slit, dec_slit, angle_slit );
+
+    angle_slit += this->fpoffsets.sliceparams[cam].thetadeg;
 
     // Get some info from the Andor::Information class,
     // which is stored in its camera_info object.
@@ -2263,7 +2294,7 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "MJD0",     slicecam->camera_info.mjd0, "exposure start time (modified Julian Date)" );
     slicecam->fitskeys.addkey( "EXPTIME",  slicecam->camera_info.exposure_time, "exposure time (sec)" );
     slicecam->fitskeys.addkey( "SERNO",    slicecam->camera_info.serial_number, "camera serial number" );
-    slicecam->fitskeys.addkey( "NAME",     slicecam->camera_info.camera_name, "camera name" );
+    slicecam->fitskeys.addkey( "NAME",     cam, "camera name" );
     slicecam->fitskeys.addkey( "READMODE", slicecam->camera_info.readmodestr, "read mode" );
     slicecam->fitskeys.addkey( "TEMPSETP", slicecam->camera_info.setpoint, "detector temperature setpoint deg C" );
     slicecam->fitskeys.addkey( "TEMPREAD", slicecam->camera_info.ccdtemp, "CCD temperature deg C" );
@@ -2290,16 +2321,18 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "CTYPE2",    "DEC--TAN", "" );
 
 
-    slicecam->fitskeys.addkey( "CRPIX1",    ( slicecam->camera_info.camera_name=="L" ? slicecam->camera_info.hend : 0 ), "" );
-    slicecam->fitskeys.addkey( "CRPIX2",    slicecam->camera_info.vend/2, "" );
+    slicecam->fitskeys.addkey( "CRPIX1",    this->fpoffsets.sliceparams[cam].crpix1, "" );
+    slicecam->fitskeys.addkey( "CRPIX2",    this->fpoffsets.sliceparams[cam].crpix2, "" );
 
     slicecam->fitskeys.addkey( "CRVAL1",    ra_slit, "" );
     slicecam->fitskeys.addkey( "CRVAL2",    dec_slit, "" );
     slicecam->fitskeys.addkey( "CUNIT1",    "deg", "" );
     slicecam->fitskeys.addkey( "CUNIT2",    "deg", "" );
 
-    slicecam->fitskeys.addkey( "CDELT1",    slicecam->camera_info.pixel_scale/3600., "" );
-    slicecam->fitskeys.addkey( "CDELT2",    slicecam->camera_info.pixel_scale/3600., "" );
+    slicecam->fitskeys.addkey( "CDELT1",    this->fpoffsets.sliceparams[cam].cdelt1, "" );
+    slicecam->fitskeys.addkey( "CDELT2",    this->fpoffsets.sliceparams[cam].cdelt2, "" );
+
+    slicecam->fitskeys.addkey( "THETADEG",  this->fpoffsets.sliceparams[cam].thetadeg, "slice camera angle relative to slit in deg" );
 
     slicecam->fitskeys.addkey( "PC1_1",     ( -1.0 * cos( angle_slit * PI / 180. ) ), "" );
     slicecam->fitskeys.addkey( "PC1_2",     (        sin( angle_slit * PI / 180. ) ), "" );

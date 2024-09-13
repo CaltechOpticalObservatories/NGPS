@@ -589,7 +589,6 @@ namespace Slicecam {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** doit *****************************************************************/
