@@ -97,8 +97,9 @@ public void save_to_database(){
     //     java.lang.String start_time_string = OTMstartTimeTextField.getText();
         double seeing = dbms.myOTMlauncher.getSeeing();
         int wavelength = dbms.myOTMlauncher.getWavelength();
-     //      java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.getStartTimestamp();       
-        java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T03:00:00.000");
+           java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.getStartTimestamp();       
+ //       java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T03:00:00.000");
+ //       java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T03:00:00.000");
         dbms.myOTMlauncher.OTM(current_timestamp_otm,seeing,wavelength);
         dbms.setTablePopulated(true);
         if(myObservationSequencerController.getSTATE().matches("READY_NO_TARGETS")){
