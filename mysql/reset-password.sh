@@ -1,14 +1,15 @@
 #!/usr/bin/bash
 
-# Script to delete a user (and their data) from NGPS GUI -- not to be confused with mysql users
+# Script to reset a user's password in NGPS GUI -- not to be confused with mysql users
 # mySQL login will be for user=gui, not the same as user being deleted
 
 user=$1
 admin=gui
+newpassword=RESET123
 
 # -z checks if var is empty
 if [ -z "$user" ]; then
-    echo "USAGE: ./delete-user.sh <USERNAME>"
+    echo "USAGE: ./reset-password.sh <USERNAME>"
     exit 1
 fi
 
@@ -38,19 +39,16 @@ fi
 cat $sqlout
 
 echo ""
-echo ""
-read -p "Are you sure you want to DELETE user $1? (yes/no) " yn
+read -p "Are you sure you want to RESET PASSWORD for user $user? (yes/no) " yn
 
 case $yn in 
-	yes ) echo Re-enter mysql $admin password to delete...;;
+	yes ) echo Re-enter mysql $admin password to continue...;;
 	* ) echo Exiting...;
 		exit;;
 esac
 
-# Do the delete
-mysql -u$admin -Dngps -p -t -e "set @username='${user}'; \
-                  DELETE FROM owner WHERE owner_id=@username; \
-                  DELETE FROM target_sets WHERE owner=@username; \
-                  DELETE FROM targets WHERE owner=@username; 
-                  SELECT owner_id FROM owner;"
+echo ""
 
+# Do it
+mysql -u$admin -Dngps -p -t -e "UPDATE owner SET password = '${newpassword}' WHERE owner_id = '${user}'; \
+							SELECT * FROM owner WHERE owner_id = '${user}';" 
