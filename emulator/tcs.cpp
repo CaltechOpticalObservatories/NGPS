@@ -553,7 +553,6 @@ namespace TcsEmulator {
     std::string function = "  (TcsEmulator::Telescope::do_pt) ";
 
     double ra_off, dec_off;                 // offsets read in (arcsec)
-    double newra, newdec;                   // these will be the new RA (hr), DEC (deg) after offsetting
     double ra_now  = telescope.ra.load();   // (hr)
     double dec_now = telescope.dec.load();  // (deg)
 
@@ -579,20 +578,22 @@ namespace TcsEmulator {
 
     // Call FPOffsets::apply_offset_deg() to calculate the new RA, DEC coordinates
     // after applying the offsets.
-    // newra,newdec is where we want to end up, after offset is complete
+    // ra_now, dec_now will be modified by the offsets.
     //
     std::cerr << get_timestamp() << function << "[DEBUG] before apply_offset call ra_now=" << ra_now << " dec_now=" << dec_now << "\n";
 
-    telescope.fpoffsets.apply_offset( (ra_now * 15.0), dec_now, ra_off, dec_off, newra, newdec );
+    ra_now *= 15.0; // convert to degrees
 
-    newra /= 15.0;                                 // apply_offset returns deg, tcs uses hr so convert from deg to hours
+    telescope.fpoffsets.apply_offset( ra_now, ra_off, dec_now, dec_off );
 
-    std::cerr << get_timestamp() << function << "[DEBUG] after apply_offset call newra=" << newra << " newdec=" << newdec << "\n";
+    ra_now /= 15.0;                                // apply_offset returns deg, tcs uses hr so convert from deg to hours
+
+    std::cerr << get_timestamp() << function << "[DEBUG] after apply_offset call newra=" << ra_now << " newdec=" << dec_now << "\n";
 
     // calculate the offset distance and the offset time for each of RA, DEC
     //
-    double offsetdistance_ra  = std::abs( telescope.ra  - newra  );
-    double offsetdistance_dec = std::abs( telescope.dec - newdec );
+    double offsetdistance_ra  = std::abs( telescope.ra  - ra_now  );
+    double offsetdistance_dec = std::abs( telescope.dec - dec_now );
 
     double offsettime_ra      = offsetdistance_ra  / telescope.offsetrate_ra;
     double offsettime_dec     = offsetdistance_dec / telescope.offsetrate_dec;
@@ -626,8 +627,8 @@ namespace TcsEmulator {
       // add the slewrate to ra, dec
       // store it permanently as long as we don't overshoot
       //
-      if ( ( ra  += telescope.offsetrate_ra/1000.0 )  <= newra )  telescope.ra.store( ra  );
-      if ( ( dec += telescope.offsetrate_dec/1000.0 ) <= newdec ) telescope.dec.store( dec );
+      if ( ( ra  += telescope.offsetrate_ra/1000.0 )  <= ra_now )  telescope.ra.store( ra  );
+      if ( ( dec += telescope.offsetrate_dec/1000.0 ) <= dec_now ) telescope.dec.store( dec );
 
       std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
       if ( get_clock_time() >= clock_end ) break;
@@ -635,9 +636,9 @@ namespace TcsEmulator {
 
     // then set the ra,dec to those requested (because the granularity above is not perfect)
     //
-    std::cerr << get_timestamp() << function << "[DEBUG] store in telescope class: newra=" << newra << " newdec=" << newdec << "\n";
-    telescope.ra.store( newra );
-    telescope.dec.store( newdec );
+    std::cerr << get_timestamp() << function << "[DEBUG] store in telescope class: newra=" << ra_now << " newdec=" << dec_now << "\n";
+    telescope.ra.store( ra_now );
+    telescope.dec.store( dec_now );
 
     // clear the moving flag now
     //

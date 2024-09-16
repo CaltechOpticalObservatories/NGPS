@@ -680,6 +680,14 @@ namespace Acam {
                       }
       }
       else
+      if ( cmd == ACAMD_OFFSETGOAL ) {
+                      ret = this->interface.offset_goal( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_PUTONSLIT ) {
+                      ret = this->interface.put_on_slit( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_FRAMEGRAB ) {
                       ret = this->interface.framegrab( args, retstring );
       }
@@ -763,7 +771,6 @@ namespace Acam {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** doit *****************************************************************/

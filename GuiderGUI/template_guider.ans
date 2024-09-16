@@ -26,7 +26,7 @@ $dir/grabfits.sh guider # | $text
 PUT ON SLIT
 *
 button
-$message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh | $text
+$message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | $text
 #############
 CALIBRATE
 *

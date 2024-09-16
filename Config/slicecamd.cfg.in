@@ -14,6 +14,7 @@ MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
 # These are the ports for other daemons that slicecamd talks to
 #
 TCSD_PORT=@TCSD_BLK_PORT@
+ACAMD_PORT=@ACAMD_BLK_PORT@
 
 # ANDOR=( <name> <sn> <scale> )
 # For each slice camera specify:

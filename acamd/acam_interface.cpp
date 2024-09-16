@@ -2106,7 +2106,12 @@ namespace Acam {
 
         iface.guide_manager.push_guider_image( iface.imagename );                            // send frame to Guider GUI
 
-        if (error==NO_ERROR) error = iface.target.do_acquire();                              // acquire target (if needed)
+        if (error==NO_ERROR) {
+          long did_acquire = iface.target.do_acquire();                                      // acquire target (if needed)
+          if ( did_acquire != NO_ERROR ) {
+            iface.target.acquire( Acam::TARGET_NOP );                                        // disable acquire on failure
+          }
+        }
 
       } while ( error==NO_ERROR && iface.should_framegrab_run.load() );
     }
@@ -2296,7 +2301,7 @@ namespace Acam {
       retstring.append( "   Returns ACQUIRE_TIMEOUT, the number of seconds before acquisition sequence\n" );
       retstring.append( "   aborts on failure to acquire.\n" );
       retstring.append( "   If no args supplied then the current status is returned in the form of\n" );
-      retstring.append( "   <mode_num> <mode> where <mode> = { stopped acquiring guiding }\n" );
+      retstring.append( "   <mode> where <mode> = { stopped acquiring guiding }\n" );
       retstring.append( "   Acquisition requires knowing what to acquire so the coords must be supplied\n" );
       retstring.append( "   via one of the following:\n" );
       retstring.append( "\n" );
@@ -2321,8 +2326,11 @@ namespace Acam {
       return HELP;
     }
 
-    if ( args.empty() ) {                                      // status request only
-      message.str(""); message << this->target.acquire_mode << " " << this->target.acquire_mode_string();
+    // No args is a status request only,
+    // returns acquire_mode_string = { stopped | acquiring | guiding }
+    //
+    if ( args.empty() ) {
+      message.str(""); message << this->target.acquire_mode_string();
       logwrite( function, message.str() );
       retstring = message.str();
       return NO_ERROR;
@@ -2568,6 +2576,13 @@ namespace Acam {
                                                                       this->coords_slit.ra, this->coords_slit.dec,
                                                                       acam_ra_goal, acam_dec_goal, acam_angle_goal );
 
+      // Apply any goal offsets from the "put on slit" action, which
+      // can come from either the ACAM or slicecam GUIs. These offsets
+      // are stored in the Target class.
+      //
+      error = iface->fpoffsets.apply_offset( acam_ra_goal,  iface->target.dRA,
+                                             acam_dec_goal, iface->target.dDEC );
+
       {  // this local section is just for display purposes and its variables are not used elsewhere
       std::string rastr, decstr;
       decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
@@ -2644,11 +2659,38 @@ namespace Acam {
 
       // There is a maximum offset allowed to the TCS.
       // This is not a TCS limit (their limit is very large).
-      // This is our limit so that we don't accidentally move too far off the slit.
+      // This is our limit so that we don't accidentally move too far off the
+      // slit. However, "putonslit" can include a desired offset which is
+      // outside this limit, so when checking the calculated offset, include a
+      // delta which is the change introduced by putonslit.
       //
-      if ( offset >= this->tcs_max_offset ) {
+
+      // this is the solution plus dRA, dDEC
+      //
+      double acam_ra_dRA   = acam_ra;
+      double acam_dec_dDEC = acam_dec;
+
+      iface->fpoffsets.apply_offset( acam_ra_dRA,   iface->target.dRA,
+                                     acam_dec_dDEC, iface->target.dDEC );
+
+      // the offset introduced by putonslit is therefore
+      //
+      this->putonslit_offset = angular_separation( acam_ra_dRA, acam_dec_dDEC, acam_ra, acam_dec );
+
+      // and the delta is the difference between this and the last time,
+      // which gets added to the tcs_max_offset.
+      //
+      double maxoffset = this->tcs_max_offset + std::fabs(this->putonslit_offset - this->last_putonslit_offset);
+
+      // so remember this for next time
+      //
+      this->last_putonslit_offset = this->putonslit_offset;
+
+      // Finally, check the requested offset against this putonslit-modified max allowed offset
+      //
+      if ( offset >= maxoffset ) {
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
-                                 << this->tcs_max_offset << " and will not be sent to the TCS";
+                                 << maxoffset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
 
         // Match found but failure to send an offset is considered an attempt
@@ -2706,7 +2748,7 @@ namespace Acam {
         this->acquired.store( true, std::memory_order_seq_cst );                      // Target Acquired!
       }
 
-    } while ( false );  // the do-loop is executed only once
+    } while ( false );  // the do-loop is executed only once. used to allow breaks.
     }                   // end of acquisition sequence
 
     // If target acquired, and if acquisition mode was to acquire,
@@ -3684,5 +3726,163 @@ namespace Acam {
     return NO_ERROR;
   }
   /***** Acam::Interface::target_coords ***************************************/
+
+
+  /***** Acam::Interface::offset_goal *****************************************/
+  /**
+   * @brief      sets the dRA,dDEC offsets to apply to goal
+   * @details    The offset is not applied here, this only stores the offsets
+   *             in the class. Offsets are applied only while guiding.
+   * @param[in]  args       input string expected "<dRA> <dDEC>"
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::offset_goal( const std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::offset_goal";
+    std::stringstream message;
+
+    if ( args.empty() ) {
+      message << this->target.dRA << " " << this->target.dDEC;
+      retstring = message.str();
+      return NO_ERROR;
+    }
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_OFFSETGOAL;
+      retstring.append( " [ <dRA> <dDEC> ]\n" );
+      retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
+      retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
+      retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
+      return HELP;
+    }
+
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 2 ) {
+      logwrite( function, "ERROR expected <dRA> <dDEC>" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // Convert the input string to double and save in the class
+    //
+    try {
+      double dRA  = std::stod( tokens.at(0) );
+      double dDEC = std::stod( tokens.at(1) );
+
+      if (std::isnan(dRA) || std::isnan(dDEC)) throw std::invalid_argument("NaN value encountered");
+
+      this->target.dRA  = dRA;
+      this->target.dDEC = dDEC;
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing " << args << ": " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    message.str(""); message << this->target.dRA << " " << this->target.dDEC;
+    retstring = message.str();
+
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::offset_goal *****************************************/
+
+
+  /***** Acam::Interface::put_on_slit *****************************************/
+  /**
+   * @brief      move target under crosshairs to slit
+   * @param[in]  args       input string expected "<crossra> <crossdec>"
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::put_on_slit( const std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::put_on_slit";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = ACAMD_PUTONSLIT;
+      retstring.append( " [ <crossra> <decra> ]\n" );
+      retstring.append( "  Moves the target located at <crossra> <crossdec> to the slit.\n" );
+      retstring.append( "  This is intended to be called from the GUI where the coordinates\n" );
+      retstring.append( "  are supplied by the ds9 crosshairs. The move is performed immediately\n" );
+      retstring.append( "  using a PT offset command to the TCS. Units are decimal degrees.\n" );
+      return HELP;
+    }
+
+    // Nothing to do if no TCS.
+    //
+    if ( ! this->tcs_online.load() ) {
+      logwrite( function, "ERROR TCS is not connected" );
+      retstring="tcs_offline";
+      return ERROR;
+    }
+
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 2 ) {
+      logwrite( function, "ERROR expected <crossra> <crossdec>" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // Convert the input string of crosshair coords to double
+    //
+    double cross_ra=NAN;
+    double cross_dec=NAN;
+    try {
+      cross_ra  = std::stod( tokens.at(0) );
+      cross_dec = std::stod( tokens.at(1) );
+      if (std::isnan(cross_ra) || std::isnan(cross_ra)) throw std::invalid_argument("NaN value encountered");
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing " << args << ": " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    // Get the coordinates of the slit by first getting them from the TCS
+    // then translate into slit coordinates.
+    //
+    double scope_angle=NAN, scope_ra=NAN, scope_dec=NAN,
+           slit_angle=NAN,  slit_ra=NAN,  slit_dec=NAN;
+
+    // Get the current pointing from the TCS
+    //
+    this->tcsd.get_cass( scope_angle );
+    this->tcsd.get_coords( scope_ra, scope_dec );  // returns RA in decimal hours, DEC in decimal degrees
+
+    // and translate that into slit coordinates.
+    //
+    error = this->fpoffsets.compute_offset( "SCOPE", "SLIT",
+                                            scope_ra, scope_dec, scope_angle,
+                                            slit_ra,  slit_dec,  slit_angle );
+
+    // calculate the offset (dRA,dDEC) between the crosshairs and the slit
+    //
+    double dRA, dDEC;
+    if (error==NO_ERROR) error = this->fpoffsets.solve_offset( cross_ra, cross_dec,
+                                                               slit_ra,  slit_dec,
+                                                               dRA,      dDEC );
+    if (error==NO_ERROR) error = this->tcsd.pt_offset( dRA*3600., dDEC*3600. );
+
+    message.str(""); message << ( error==ERROR ? "ERROR moving " : "moved " )
+                             << "target to slit";
+    logwrite( function, message.str() );
+
+    return error;
+  }
+  /***** Acam::Interface::put_on_slit *****************************************/
 
 }

@@ -406,11 +406,17 @@ namespace Acam {
         this->pointmode = pm;
       }
 
+      double dRA, dDEC;  /// offsets from put_on_slit will be applied to goal while guiding
+
+      double putonslit_offset, last_putonslit_offset;
+
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  acquired(false),
                  stop_acquisition(false),
                  pointmode(Acam::POINTMODE_SLIT),
-                 acquire_mode(Acam::TARGET_NOP) { }
+                 acquire_mode(Acam::TARGET_NOP),
+                 dRA(0), dDEC(0),
+                 putonslit_offset(0), last_putonslit_offset(0) { }
   };
   /***** Acam::Target *********************************************************/
 
@@ -494,6 +500,8 @@ namespace Acam {
       long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long acquire( std::string args, std::string &retstring );
       long target_coords( std::string args, std::string &retstring );  /// set or get target coords for acquire
+      long offset_goal( const std::string args, std::string &retstring );
+      long put_on_slit( const std::string args, std::string &retstring );
       long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
 

@@ -21,6 +21,7 @@
 #include "slicecam_fits.h"
 #include "config.h"
 #include "tcsd_commands.h"
+#include "acamd_commands.h"
 #include "tcsd_client.h"
 #include "skyinfo.h"
 
@@ -306,6 +307,8 @@ namespace Slicecam {
 
       TcsDaemonClient tcsd;                    /// for communicating with the TCS daemon, defined in ~/Software/tcsd/tcsd_client.h
 
+      Common::DaemonClient acamd { "acamd" };  /// for communicating with acamd
+
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
       long test_image();                       ///
@@ -322,6 +325,8 @@ namespace Slicecam {
       long gui_settings_control();          /// get gui settings and push to Guider GUI display
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long test( std::string args, std::string &retstring );
+
+      long get_acam_guide_state( bool &is_guiding );
 
       long collect_header_info( std::shared_ptr<Andor::Interface> slicecam );
 

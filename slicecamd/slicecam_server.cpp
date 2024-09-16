@@ -157,6 +157,23 @@ namespace Slicecam {
         applied++;
       }
 
+      // ACAMD_PORT
+      if ( config.param[entry] == "ACAMD_PORT" ) {
+        int port;
+        try {
+          port = std::stoi( config.arg[entry] );
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR bad ACAMD_PORT: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        this->interface.acamd.port =  port;
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
