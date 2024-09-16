@@ -104,9 +104,8 @@ namespace SkyInfo {
                          const double ra_goal, const double dec_goal,
                          double &ra_off, double &dec_off );
 
-      long apply_offset( const double ra_in, const double dec_in,
-                         const double ra_off, const double dec_off,
-                         double &ra_out, double &dec_out );
+      long apply_offset( double &ra_in,  const double ra_off,
+                         double &dec_in, const double dec_off );
 
       long get_slicecam_params();
 

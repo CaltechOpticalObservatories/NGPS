@@ -405,33 +405,37 @@ namespace SkyInfo {
   /***** SkyInfo::FPOffsets::apply_offset *************************************/
   /**
    * @brief      calculate offsets to apply to the telescope
-   * @param[in]  ra_in    current RA in deg
-   * @param[in]  dec_in   current DEC in deg
+   * @details    The ra, dec arguments are modified, so they are also the outputs.
+   *             All units are in degrees.
+   * @param[out] ra       reference to current RA is modified by ra_off
    * @param[in]  ra_off   RA offset in deg
+   * @param[out] dec      reference to current DEC is modified by dec_off
    * @param[in]  dec_off  DEC offset in deg
-   * @param[in]  ra_out   reference to new telescope RA
-   * @param[in]  dec_out  reference to new telescope DEC
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR
    *
    */
-  long FPOffsets::apply_offset( const double ra_in, const double dec_in, const double ra_off, const double dec_off,
-                                double &ra_out, double &dec_out ) {
+  long FPOffsets::apply_offset( double &ra,  const double ra_off,
+                                double &dec, const double dec_off ) {
     std::string function = "SkyInfo::FPOffsets::apply_offset";
     std::stringstream message;
 
     // Check for valid inputs before passing something to Python that
     // it won't like.
     //
-    if ( std::isnan( ra_in )   ||
-         std::isnan( dec_in )  ||
+    if ( std::isnan( ra    )   ||
+         std::isnan( dec    )  ||
          std::isnan( ra_off )  ||
          std::isnan( dec_off ) ) {
       logwrite( function, "ERROR one or more input values is NaN" );
-      message.str(""); message << "ra_in=" << ra_in << " dec_in=" << dec_in
+      message.str(""); message << "ra=" << ra << " dec=" << dec
                                << " ra_off=" << ra_off << " dec_off=" << dec_off;
       logwrite( function, message.str() );
       return ERROR;
     }
+
+    // Nothing to do if both offsets are zero so get out now.
+    //
+    if ( ra_off == 0.0 && dec_off == 0.0 ) return NO_ERROR;
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -459,7 +463,7 @@ namespace SkyInfo {
 
     // Build up the PyObject argument list that will be passed to the function
     //
-    PyObject* pArgList = Py_BuildValue( "(dddd)", ra_in, dec_in, ra_off, dec_off );
+    PyObject* pArgList = Py_BuildValue( "(dddd)", ra, dec, ra_off, dec_off );
 
     // Call the Python function here
     //
@@ -493,9 +497,9 @@ namespace SkyInfo {
       PyObject* pItem = PyTuple_GetItem( pReturn, tuplen );  // grab an item
       if ( PyFloat_Check( pItem ) ) {
         switch ( tuplen ) {
-          case 0: ra_out  = PyFloat_AsDouble( pItem );
+          case 0: ra  = PyFloat_AsDouble( pItem );
                   break;
-          case 1: dec_out = PyFloat_AsDouble( pItem );
+          case 1: dec = PyFloat_AsDouble( pItem );
                   break;
           default:
             message.str(""); message << "ERROR unexpected tuple item " << tuplen << ": expected {0,1}";
