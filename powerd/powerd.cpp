@@ -565,7 +565,6 @@ void doit(Network::TcpSocket sock) {
                                          // Keep blocking connection open for interactive session.
   }
 
-  sock.Close();
   return;
 }
 /***** doit *******************************************************************/

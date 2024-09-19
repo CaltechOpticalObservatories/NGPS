@@ -561,7 +561,7 @@ namespace Power {
     //
     auto loc_unit = this->nps_info.find( unit );
 
-    if ( loc_unit == this->nps_info.end() ) {
+    if ( loc_unit == this->nps_info.end() || this->npsmap.find(unit)==this->npsmap.end() ) {
       message.str(""); message << "ERROR requested nps unit " << unit << " not found in configuration";
       logwrite( function, message.str() );
       return( ERROR );
@@ -573,6 +573,7 @@ namespace Power {
       return( ERROR );
     }
 
+    try {
     // Must be connected to this NPS unit
     //
     if ( ! this->npsmap.at(unit).isconnected() ) {
@@ -608,8 +609,13 @@ namespace Power {
                return( ERROR );
                break;
     }
-
     return( error );
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR exception addressing nps unit " << unit << ": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
   }
   /***** Power::Interface::command ********************************************/
 
