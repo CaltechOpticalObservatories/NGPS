@@ -280,7 +280,7 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
              readOTMoutput();
           }
            if(exitValue != 0){
-               displayScreenMessage("OTM existed with an error. Please see execution log.");
+               displayScreenMessage("OTM exited with an error. Please see execution log.");
            }                     
        }catch(Exception e){                      
          setProcessingState(IDLE);
@@ -657,15 +657,16 @@ public ArrayList parseHeaderLine(java.lang.String header_line){
 /     string_to_timestamp(java.lang.String current_datetime)
 /=================================================================================================*/
 public java.sql.Timestamp string_to_timestamp(java.lang.String current_datetime){
-java.sql.Timestamp timestamp =new java.sql.Timestamp(System.currentTimeMillis());
- try {
-    java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss.SSS");
-    java.util.Date parsedDate = dateFormat.parse(current_datetime);
-    timestamp = new java.sql.Timestamp(parsedDate.getTime());
-} catch(Exception e) { //this generic but you can control another types of exception
-    System.out.println("timestamp Error:  "+e.toString());
-}
-return timestamp;
+
+     java.sql.Timestamp timestamp = null;
+     try {
+        java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+        java.util.Date parsedDate = dateFormat.parse(current_datetime);
+        timestamp = new java.sql.Timestamp(parsedDate.getTime());
+        } catch(Exception e) { //this generic but you can control another types of exception
+        System.out.println("timestamp Error:  "+e.toString());
+        }
+    return timestamp;
 }
 public java.lang.String timestamp_to_string(java.sql.Timestamp current){
 //    java.sql.Timestamp timestamp = java.sql.Timestamp.valueOf("2018-12-12 01:02:03.123456789");
@@ -694,6 +695,7 @@ return timestampAsString;
         if(field.matches("name")){
             current_target.otm.setOTMname(current_value);
         }        
+        
         if(field.matches("OTMpa")){
            try{
               java.lang.Double value = Double.valueOf(current_value);
@@ -735,7 +737,6 @@ return timestampAsString;
         }
         if(field.matches("OTMslewgo")){
             java.sql.Timestamp current_timestamp = string_to_timestamp(NULLDATETIME);
-            
             if (!current_value.toUpperCase().contains("NONE")){
                 try{
                     current_timestamp = string_to_timestamp(current_value);

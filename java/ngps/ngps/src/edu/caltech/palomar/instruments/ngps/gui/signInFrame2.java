@@ -90,8 +90,11 @@ public void sign_in(java.lang.String currentOwner,java.lang.String submitted_pas
     }
     if(matching_owner != null){
        try{
-          java.lang.String encrypted_password_stored = matching_owner.getEncryptedPassword();
-          java.lang.String encrypted_password = dbms.encrypt(submitted_password,dbms.originalKey); 
+          String encrypted_password_stored = matching_owner.getEncryptedPassword();
+          
+          // If the submitted and stored passwords match without decrypting, that's good enough
+          String encrypted_password = submitted_password.equals(encrypted_password_stored) ? encrypted_password_stored : dbms.encrypt(submitted_password,dbms.originalKey); 
+           
           boolean compare = java.security.MessageDigest.isEqual(encrypted_password_stored.getBytes(),encrypted_password.getBytes()) ;
           if(compare){
               dbms.setOWNER_OBJECT(matching_owner);

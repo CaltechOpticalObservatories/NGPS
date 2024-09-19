@@ -204,24 +204,24 @@ public class NGPSFrame extends javax.swing.JFrame {
         initializeSpinners();        
         initializeTimestamp();    
         initializeConnectionsFrame();
+        initializeObservationSequencerController(); // PLAN doesn't need OScontroller but still references it e.g. state changes
+                                                    // Initializing doesn't seem to cause problems; skipping it causes NullPointerExceptions
+        myConnectionsFrame.setDBMS(dbms);
+
         if(CONFIGURATION == OBSERVE){
-            initializeObservationSequencerController();
             initializeEngineeringFrame();
-            myConnectionsFrame.setDBMS(dbms);
             setTitle("OBSERVING");
-            pack();
         }
         if(CONFIGURATION == PLAN){
             left_mainPanel.remove(myOScontrolsPanel);
-            myConnectionsFrame.setDBMS(dbms);
             planningPanel.remove(fetchLiveButton);
             planningPanel.remove(auto_start_timeCheckBox);
             planningPanel.remove(auto_fetchCheckBox);
             connectionsMenuItem.setEnabled(false);
             shutdownMenuItem.setEnabled(false);
             setTitle("PLANNING");
-            pack();
-        }        
+        }
+        pack();
         initializeGlobalPreferences();
         initializeQueryTargetsTool();
         initializeAboutFrame();
@@ -2280,6 +2280,7 @@ public JTable constructTable(){
         if(n == 1){   
             try{
               dbms.createNewTargetList();
+              dbms.setSelectedSetName(null);
             }catch(Exception e){
                System.out.println(e.toString());
             }
@@ -2288,8 +2289,13 @@ public JTable constructTable(){
 
     private void save_asMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_save_asMenuItemActionPerformed
         try{
-          java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
-          dbms.executeSaveAs(current_set_name);
+            String current_set_name = "";
+            while(current_set_name.trim().isEmpty()){
+                current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
+            }
+            if(current_set_name!=null){
+              dbms.executeSaveAs(current_set_name);
+            }
         }catch(Exception e){
            System.out.println(e.toString());
         }       // TODO add your handling code here:
