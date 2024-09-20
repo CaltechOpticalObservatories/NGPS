@@ -30,9 +30,6 @@ public class TargetSetFrame extends javax.swing.JFrame {
     public java.lang.String  USERDIR           = System.getProperty("user.dir");
     public java.lang.String  SEP               = System.getProperty("file.separator");
     public java.lang.String  IMAGE_CACHE       = new java.lang.String(SEP + "images" + SEP);
-    public ImageIcon         ON;
-    public ImageIcon         OFF;
-    public ImageIcon         UNKNOWN;  
     public ObservationSet selectedSet;
     private int           selected_table_row;
     public ObservationSequencerController myObservationSequencerController;
@@ -43,7 +40,6 @@ public class TargetSetFrame extends javax.swing.JFrame {
      */
     public TargetSetFrame() {
         initComponents();
-        initialize();
         setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
     }
 /*=============================================================================================
@@ -52,14 +48,6 @@ public class TargetSetFrame extends javax.swing.JFrame {
 public void setObservationSequencerController(ObservationSequencerController current){
     myObservationSequencerController = current;
 }
-/*=============================================================================================
-/     initialize()
-/=============================================================================================*/
-private void initialize(){
-    ON           = new ImageIcon(USERDIR + IMAGE_CACHE + "ON.png");
-    OFF          = new ImageIcon(USERDIR + IMAGE_CACHE + "OFF.png");
-    UNKNOWN      = new ImageIcon(USERDIR + IMAGE_CACHE + "UNKNOWN.gif");    
-}    
 /*=============================================================================================
 /     setDBMS(NGPS_Database new_dbms)
 /=============================================================================================*/
@@ -348,42 +336,6 @@ public void configureUserTableListener(){
     private void CancelButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_CancelButtonActionPerformed
         this.setVisible(false);
     }//GEN-LAST:event_CancelButtonActionPerformed
-
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
-        try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(TargetSetFrame.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(TargetSetFrame.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(TargetSetFrame.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(TargetSetFrame.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
-
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                new TargetSetFrame().setVisible(true);
-            }
-        });
-    }
-
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton CancelButton;
     private javax.swing.JButton OKButton;

@@ -885,7 +885,7 @@ private void initialize(){
                 String async_message = new String(buffer, 0, response.getLength());
                 parseAsyncMessage(async_message);
  
-                System.out.println(async_message);
+                // System.out.println(async_message); // We don't need to repeat every message
 //                waitForResponseMilliseconds(1);
             }
  

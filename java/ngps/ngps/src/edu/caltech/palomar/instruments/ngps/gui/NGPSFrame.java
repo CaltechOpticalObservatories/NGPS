@@ -112,8 +112,8 @@ public class NGPSFrame extends javax.swing.JFrame {
   public  JButton                  RESUME;
   private JMenu                    accountMenu;
   private JMenuItem                myaccount_MenuItem;
-  private JMenuItem                switch_account_MenuItem;
-  private JMenuItem                sign_out_MenuItem;  
+  private JMenuItem                create_user_MenuItem;
+  private JMenuItem                signin_MenuItem;  
   private ButtonGroup              do_one_do_all_ButtonGroup;
   private TargetSetFrame           myTargetSetFrame;
   private signInFrame2             my_signInFrame;
@@ -634,33 +634,31 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
 /=============================================================================================*/
  private void initializeRightMenu(){
      mainMenuBar.add(Box.createHorizontalGlue());
-     accountMenu = new javax.swing.JMenu();
-     accountMenu.setText("User Account");
-     myaccount_MenuItem = new javax.swing.JMenuItem();
-     myaccount_MenuItem.setText("My Account");
-     switch_account_MenuItem = new javax.swing.JMenuItem();
-     switch_account_MenuItem.setText("Create Users");
-     sign_out_MenuItem = new javax.swing.JMenuItem();
-     sign_out_MenuItem.setText("Sign In");
+     accountMenu = new javax.swing.JMenu("User Account");
+     myaccount_MenuItem = new javax.swing.JMenuItem("My Account");
+     create_user_MenuItem = new javax.swing.JMenuItem("Create User");
+     signin_MenuItem = new javax.swing.JMenuItem("Sign In");
      accountMenu.add(myaccount_MenuItem);
-     accountMenu.add(switch_account_MenuItem);
-     accountMenu.add(sign_out_MenuItem);
+     accountMenu.add(create_user_MenuItem);
+     accountMenu.add(signin_MenuItem);
      mainMenuBar.add(accountMenu);
-         myaccount_MenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                myaccount_MenuItemActionPerformed(evt);
-            }
-         });
-         switch_account_MenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                switch_account_MenuItemActionPerformed(evt);
-            }
-        });
-        sign_out_MenuItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                sign_out_MenuItemActionPerformed(evt);
-            }
-        });
+     
+     myaccount_MenuItem.addActionListener(new java.awt.event.ActionListener() {
+        public void actionPerformed(java.awt.event.ActionEvent evt) {
+            myaccount_MenuItemActionPerformed(evt);
+        }
+     });
+     create_user_MenuItem.addActionListener(new java.awt.event.ActionListener() {
+        public void actionPerformed(java.awt.event.ActionEvent evt) {
+            create_user_MenuItemActionPerformed(evt);
+        }
+    });
+    signin_MenuItem.addActionListener(new java.awt.event.ActionListener() {
+        public void actionPerformed(java.awt.event.ActionEvent evt) {
+            signin_MenuItemActionPerformed(evt);
+        }
+    });
+    
     saveMenuItem.setEnabled(false);
     save_asMenuItem.setEnabled(false);
     exportMenuItem.setEnabled(false);
@@ -671,10 +669,10 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
  private void myaccount_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
     this.myChangePasswordFrame.setVisible(true);
  } 
- private void switch_account_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
+ private void create_user_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
     myCreateOwnerFrame.setVisible(true);
  }
- private void sign_out_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
+ private void signin_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
      my_signInFrame.setVisible(true);    
  } 
 /*=============================================================================================
