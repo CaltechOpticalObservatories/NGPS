@@ -1,0 +1,142 @@
+package edu.jhu.htm.parsers;
+
+import java.io.*;
+/**
+ * <p>Description:  for io of convexes etc</p>
+ * @author wil
+ * @version $Revision: 1.1.1.1 $
+</**********************************************************************
+* Current Version
+* ===============
+* ID:	$Id: Htmio.java,v 1.1.1.1 2003/01/23 19:23:49 womullan Exp $
+*
+* Revision: 	$Revision: 1.1.1.1 $
+* Date/time:	$Date: 2003/01/23 19:23:49 $
+* Status:	$State: Exp $
+********************************************************************
+ */
+
+public class Htmio {
+	/** read from a stream as X Y Z D
+	@see java.io.Reader
+	@param in takes a Reader (an input stream)
+ */
+ static public void read(Reader in, SpatialConstraint c) throws IOException {
+    StreamTokenizer tokens = new StreamTokenizer(in);
+
+    tokens.parseNumbers();
+    tokens.commentChar('#');
+    double x,y,z;
+    //	try {
+    tokens.nextToken();
+    if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+    x = tokens.nval;
+    tokens.nextToken();
+    if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+    y = tokens.nval;
+    tokens.nextToken();
+    if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+    z = tokens.nval;
+    tokens.nextToken();
+    if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+    c.d_ = tokens.nval;
+    c.a_ = new Vector3d(x,y,z);
+    c.a_.normalize();
+    c.s_ = Math.acos(c.d_);
+    if(c.d_ <= -HTMfunc.gEpsilon) c.sign_ = SpatialConstraint.nEG;
+    if(c.d_ >= HTMfunc.gEpsilon ) c.sign_ = SpatialConstraint.pOS;
+  }
+
+/** read from a stream as RA DEC D*/
+static  public void readRaDec(Reader in,SpatialConstraint c) throws IOException {
+  StreamTokenizer tokens = new StreamTokenizer(in);
+
+  tokens.parseNumbers();
+  tokens.commentChar('#');
+  double ra,dec;
+  //	try {
+  tokens.nextToken();
+  if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+  ra = tokens.nval;
+  tokens.nextToken();
+  if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+  dec = tokens.nval;
+  tokens.nextToken();
+  if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+  c.d_ = tokens.nval;
+  c.a_ = new Vector3d(ra,dec);
+	c.s_ = Math.acos(c.d_);
+	if(c.d_ <= -HTMfunc.gEpsilon) c.sign_ = SpatialConstraint.nEG;
+	if(c.d_ >= HTMfunc.gEpsilon ) c.sign_ = SpatialConstraint.pOS;
+  }
+
+ static public void read(Reader in, RangeConvex rc) throws IOException {
+  StreamTokenizer tokens = new StreamTokenizer(in);
+  int i,nConstraints;
+  tokens.parseNumbers();
+  tokens.commentChar('#');
+
+  tokens.nextToken();
+  if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+  nConstraints = (int)tokens.nval;
+  for ( i = 0; i < nConstraints; i++) {
+	  SpatialConstraint constr = new SpatialConstraint();
+	  read(in,constr);
+	  rc.add(constr);
+  }
+  }
+
+  static public void readRaDec(Reader in, RangeConvex rc) throws IOException {
+  StreamTokenizer tokens = new StreamTokenizer(in);
+  int i,nConstraints;
+  tokens.parseNumbers();
+  tokens.commentChar('#');
+
+  tokens.nextToken();
+  if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+  nConstraints = (int)tokens.nval;
+  for ( i = 0; i < nConstraints; i++) {
+	  SpatialConstraint constr = new SpatialConstraint();
+	  readRaDec(in,constr);
+	  rc.add(constr);
+  }
+  }
+
+  /** read from a stream as X Y Z*/
+   public void read(Reader in, Vector3d vec) throws IOException {
+   StreamTokenizer tokens = new StreamTokenizer(in);
+	double x,y,z ;
+   tokens.parseNumbers();
+   tokens.commentChar('#');
+
+   tokens.nextToken();
+   if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+   x = tokens.nval;
+   tokens.nextToken();
+   if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+   y = tokens.nval;
+   tokens.nextToken();
+   if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+   z = tokens.nval;
+    vec.set(x,y,z);
+   }
+
+ /** read from a stream as RA DEC*/
+   public void readRaDec(Reader in, Vector3d vec) throws IOException {
+   StreamTokenizer tokens = new StreamTokenizer(in);
+	double ra,dec;
+   tokens.parseNumbers();
+   tokens.commentChar('#');
+
+   tokens.nextToken();
+   if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+   ra = tokens.nval;
+   tokens.nextToken();
+   if ( tokens.ttype != StreamTokenizer.TT_NUMBER) return;
+   dec = tokens.nval;
+
+   vec.set(ra,dec);
+   }
+
+
+}

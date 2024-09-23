@@ -1,0 +1,53 @@
+#
+#   JSkyCalc site data file "skycalcsites.dat" 
+# 
+# Each line contains parameters of a single site, and consists of 9 
+# comma-separated parameters, which must be in this order:
+# 1) Name, in quotation marks; keep it succinct; must be unique.
+# 2) Longitude, expressed in DECIMAL HOURS, POSITIVE WESTWARD (dammit!)
+# 3) Latitude, in decimal degrees, positive northward
+# 4) Offset of standard time from UT, in decimal hours with decimal included
+#    positive -> west of Greenwich, negative -> east
+# 5) Integer code for the convention used for daylight savings time; 
+#    0 -> off, 1 -> USA (keyed to year, includes 1987 revisions), 
+#    2 -> a Spanish convention (I think), -1 -> Chilean (negative sign for
+#    southern hemisphere logic), -2 -> Australian.
+# 6) Name of the time zone in quotation marks
+# 7) A 1- or 2-character code for the timezone (e.g. "C" for central)
+# 8) The elevation of the observatory above sea level, in meters
+# 9) An estimate of the elevation of the obs. around the terrain that forms its
+#    horizon, used for adjusting rise-set times.  THIS CANNOT BE NEGATIVE
+#    (negative values cause a square-root domain error and are ignored).
+#
+# No blank lines are allowed, a pound sign '#' in first column indicates a 
+# comment.  I suggest commenting out an unused site each time you add one, 
+# as illustrated with Obs. Haute-Provence below (if you're at O H-P, my
+# apologies!)
+#
+# Note that while the geographic information here should be good, there's
+# some guessing about timezone abbreviations, DST conventions, terrain elevations,
+# and other items.  
+#
+# The first site in the list will be the default site on startup.  Sites will
+# be presented on the menu in the order given here. 
+#
+"Kitt Peak [MDM Obs.]",  7.44111,  31.9533,  7.,  0,  "Mountain",  "M",  1925,  700.
+"Shattuck, Dartmouth",  4.81907,  43.705,  5.,  1,  "Eastern",  "E",  183.,  0.
+"SAAO, Sutherland",  -1.38744,  -32.3873,  -2.,  0,  "SAST",  "S",  1771.,  0. 
+"VLT, Paranal",  4.69356,  -24.625,  4.,  -1,  "Chilean",  "C",  1706.,  1706. 
+"Mauna Kea",  10.36478,  19.8267,  10.,  0,  "Hawaiian",  "H",  4215.,  4215. 
+"Cerro Tololo",  4.721,  -30.165,  4.,  -1,  "Chilean",  "C",  2215.,  2215. 
+"Gemini South, Pachon",  4.71489,  -30.2283,  4.,  -1,  "Chilean",  "C",  2725.,  2725. 
+"Las Campanas",  4.7133,  -29.0083,  4.,  -1,  "Chilean",  "C",  2282.,  2282. 
+"ESO, La Silla",  4.71533,  -29.2567,  4.,  -1,  "Chilean",  "C",  2347.,  2347. 
+"Palomar Mountain",  7.79089,  33.35667,  8.,  1,  "Pacific",  "P",  1706.,  1706. 
+"Lick Observatory",  8.10911,  37.3433,  8.,  1,  "Pacific",  "P",  1290.,  1290. 
+"McDonald Obs.",  6.93478,  30.6717,  6.,  1,  "Central",  "C",  2075.,  1000. 
+"Anglo-Australian Tel.",  -9.937739,  -31.277039,  -10,  -2,  "Australian",  "A",  1149.,  670. 
+"DAO, Victoria, BC",  8.22778,  48.52,  8,  1,  "Pacific",  "P",  74.,  74. 
+"Mont Megantic, Que.",  4.74356,  45.455,  5,  1,  "Eastern",  "E",  1114.,  400.
+"Mount Hopkins, AZ",  7.39233,  31.6883,  7,  0,  "Mountain",  "M",  2608.,  500.
+"Mount Graham, AZ",  7.32611 ,  32.7017,  7,  0,  "Mountain",  "M",  3181.,  1000.
+"La Palma",  1.192,  28.75833,  0.,  2,  "Spanish",  "S",  2326.,  2326.
+# "Obs. Haute-Provence", -0.380889, 43.9317, -1., 2, "C.European","CE",665,200.
+"Calar Alto, Spain",  0.16911,  37.23,  0.,  2,  "Spanish",  "S",  2168.,  500.

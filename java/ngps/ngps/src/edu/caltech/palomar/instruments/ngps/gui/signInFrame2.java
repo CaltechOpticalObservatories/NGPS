@@ -27,9 +27,6 @@ public class signInFrame2 extends javax.swing.JFrame {
     public   java.lang.String      USERDIR           = System.getProperty("user.dir");
     public   java.lang.String      SEP               = System.getProperty("file.separator");
     public   java.lang.String      IMAGE_CACHE       = new java.lang.String(SEP + "images" + SEP);
-    public  ImageIcon              ON;
-    public  ImageIcon              OFF;
-    public  ImageIcon              UNKNOWN;  
     public  NGPSdatabase           dbms;
     public  NGPSFrame              frame;
     private boolean                ALLOW_ROW_SELECTION = true;
@@ -61,11 +58,6 @@ public class signInFrame2 extends javax.swing.JFrame {
 private void initialize(){
     setTitle("Sign In");
     setResizable(false);
-    ON           = new ImageIcon(USERDIR + IMAGE_CACHE + "ON.png");
-    OFF          = new ImageIcon(USERDIR + IMAGE_CACHE + "OFF.png");
-    UNKNOWN      = new ImageIcon(USERDIR + IMAGE_CACHE + "UNKNOWN.gif");   
-    CANCELButton.setToolTipText("Exit this dialog without signing in.");
-    signInButton.setToolTipText("Sign into the seleced account using the provided password");
 } 
 /*=============================================================================================
 /     setDBMS(NGPS_Database new_dbms)
@@ -117,6 +109,43 @@ public void sign_in(java.lang.String currentOwner,java.lang.String submitted_pas
        }
     }
 }
+
+public boolean checkLogin(String currentOwner,String submitted_password){
+    java.lang.String password = new java.lang.String();
+    Owner matching_owner = new Owner();
+    dbms.setOWNER(currentOwner);
+    int rows = dbms.myOwnerTableModel.getRowCount();
+    for(int i=0;i<rows;i++){
+       Owner current = (Owner)dbms.myOwnerTableModel.getRecord(i);
+       java.lang.String current_owner = current.getOwner_ID();
+       if(current_owner.matches(currentOwner)){
+           matching_owner = current;
+       }
+    }
+    
+    boolean compare = false;
+    if(matching_owner != null){
+       try{
+          String encrypted_password_stored = matching_owner.getEncryptedPassword();
+          // If the submitted and stored passwords match without decrypting, that's good enough
+          String encrypted_password = submitted_password.equals(encrypted_password_stored) ? encrypted_password_stored : dbms.encrypt(submitted_password,dbms.originalKey); 
+           
+          compare = java.security.MessageDigest.isEqual(encrypted_password_stored.getBytes(),encrypted_password.getBytes()) ;
+          
+        if(compare){
+            dbms.setOWNER_OBJECT(matching_owner);
+            dbms.setLoggedIn(true);
+            dbms.setLoggedInState(NGPSdatabase.LOGIN_SUCCESSFUL);
+            frame.getAccountMenu().setText("Logged in as: "+matching_owner.getOwner_ID());
+          }
+
+       }catch(Exception e){
+          System.out.println(e.toString());
+       }
+    }
+    return compare;
+}
+
 /*=============================================================================================
 /     setDBMS(NGPS_Database new_dbms)
 /=============================================================================================*/
@@ -127,42 +156,8 @@ public void sign_in(java.lang.String currentOwner,java.lang.String submitted_pas
                  dbms_propertyChange(e);
           }
       });
-//    ownersTable.setModel(dbms.myOwnerTableModel);
-//    ownersTable.getColumnModel().getColumn(0).setMinWidth(160);//NAME
-//    ownersTable.getColumnModel().getColumn(1).setMinWidth(100);//RA
-//    ownersTable.getColumnModel().getColumn(2).setMinWidth(500);//DEC
-//    ownersTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-//    ownersTable.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-//    ownersTable.setRowSelectionAllowed(true);  
-//     configureUserTableListener();           
+
    } 
- /*================================================================================================
-/     configureUserTableListener()
-/=================================================================================================*/
-public void configureUserTableListener(){
-//  ownersTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        if (ALLOW_ROW_SELECTION) { // true by default
-            ListSelectionModel rowSM = ownersTable.getSelectionModel();
-            rowSM.addListSelectionListener(new ListSelectionListener() {
-                public void valueChanged(ListSelectionEvent e) {
-                    //Ignore extra messages.
-                    if (e.getValueIsAdjusting()) return;
- 
-                    ListSelectionModel lsm = (ListSelectionModel)e.getSource();
-                    if (lsm.isSelectionEmpty()) {
-                        System.out.println("No rows are selected.");
-                    } else {
-                        int selectedRow = lsm.getMinSelectionIndex();
-                        Owner selectedOwner = ((OwnerTableModel)ownersTable.getModel()).getRecord(selectedRow);
-                        dbms.setOWNER(selectedOwner.getOwner_ID());
-                        dbms.queryObservationSets(selectedOwner.getOwner_ID());
-                        System.out.println("Row " + selectedRow + " is now selected.");
-                        System.out.println("OWNER_ID = " + selectedOwner.getOwner_ID() + " is now selected.");
-                    }
-                }
-            });
-        }
-}  
 /*=============================================================================================
 /     Property Change Listener for the Ephemeris_propertyChange
 /=============================================================================================*/
@@ -184,18 +179,18 @@ public void configureUserTableListener(){
     }
     if(propertyName.matches("owner")){
         java.lang.String current_value = (java.lang.String)e.getNewValue();
-        selectedOwnerTextField.setText(current_value);
+        ownerField.setText(current_value);
         LoggedInAsLabel.setText(current_value);
     }
     if(propertyName.matches("logged_in_state")){
         java.lang.Integer current_value = (java.lang.Integer)e.getNewValue();
         if(current_value == NGPSdatabase.LOGIN_SUCCESSFUL){
-            LoginStatusLabel.setText("Login Successful");
+            LoginStatusLabel.setText("Login OK");
             LoginStatusLabel.setForeground(new Color(0,150,50));
              signInButton.setText("Sign Out");
        }
         if(current_value == NGPSdatabase.LOGIN_UNSUCCESSFUL){
-            LoginStatusLabel.setText("Login Not Successful");
+            LoginStatusLabel.setText("Login Invalid");
             LoginStatusLabel.setForeground(Color.red);
             signInButton.setText("Sign In");
         }
@@ -215,49 +210,34 @@ public void configureUserTableListener(){
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
-        jTabbedPane1 = new javax.swing.JTabbedPane();
-        jPanel1 = new javax.swing.JPanel();
-        selectedOwnerTextField = new javax.swing.JTextField();
+        jPanel2 = new javax.swing.JPanel();
+        ownerField = new javax.swing.JTextField();
         jLabel32 = new javax.swing.JLabel();
         PasswordField = new javax.swing.JPasswordField();
         Owner_ID_label4 = new javax.swing.JLabel();
-        LoggedInAsLabel = new javax.swing.JLabel();
         signInButton = new javax.swing.JButton();
         Owner_ID_label5 = new javax.swing.JLabel();
         LoginStatusLabel = new javax.swing.JLabel();
         CANCELButton = new javax.swing.JButton();
         jLabel33 = new javax.swing.JLabel();
+        LoggedInAsLabel = new javax.swing.JLabel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
-        jPanel1.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 3, true));
-        jPanel1.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
-
-        selectedOwnerTextField.setFont(new java.awt.Font("Copperplate", 1, 14)); // NOI18N
-        jPanel1.add(selectedOwnerTextField, new org.netbeans.lib.awtextra.AbsoluteConstraints(158, 9, 285, -1));
+        ownerField.setFont(new java.awt.Font("Copperplate", 1, 14)); // NOI18N
 
         jLabel32.setFont(new java.awt.Font("Copperplate", 1, 14)); // NOI18N
-        jLabel32.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        jLabel32.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         jLabel32.setText("Password");
-        jPanel1.add(jLabel32, new org.netbeans.lib.awtextra.AbsoluteConstraints(10, 40, 141, -1));
 
-        PasswordField.setText("password");
         PasswordField.setMinimumSize(new java.awt.Dimension(11, 400));
         PasswordField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 PasswordFieldActionPerformed(evt);
             }
         });
-        jPanel1.add(PasswordField, new org.netbeans.lib.awtextra.AbsoluteConstraints(160, 40, 280, -1));
 
         Owner_ID_label4.setText("SIGNED IN AS:");
-        jPanel1.add(Owner_ID_label4, new org.netbeans.lib.awtextra.AbsoluteConstraints(50, 100, -1, -1));
-
-        LoggedInAsLabel.setFont(new java.awt.Font("Copperplate", 1, 18)); // NOI18N
-        LoggedInAsLabel.setForeground(new java.awt.Color(0, 153, 51));
-        LoggedInAsLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        jPanel1.add(LoggedInAsLabel, new org.netbeans.lib.awtextra.AbsoluteConstraints(160, 100, 280, 20));
 
         signInButton.setText("Sign In");
         signInButton.addActionListener(new java.awt.event.ActionListener() {
@@ -265,16 +245,13 @@ public void configureUserTableListener(){
                 signInButtonActionPerformed(evt);
             }
         });
-        jPanel1.add(signInButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(50, 130, -1, -1));
 
         Owner_ID_label5.setText("STATUS:");
-        jPanel1.add(Owner_ID_label5, new org.netbeans.lib.awtextra.AbsoluteConstraints(50, 70, -1, -1));
 
         LoginStatusLabel.setFont(new java.awt.Font("Copperplate", 1, 18)); // NOI18N
         LoginStatusLabel.setForeground(new java.awt.Color(0, 153, 51));
         LoginStatusLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         LoginStatusLabel.setText("NOT SIGNED IN");
-        jPanel1.add(LoginStatusLabel, new org.netbeans.lib.awtextra.AbsoluteConstraints(110, 70, 250, -1));
 
         CANCELButton.setText("CANCEL");
         CANCELButton.addActionListener(new java.awt.event.ActionListener() {
@@ -282,16 +259,93 @@ public void configureUserTableListener(){
                 CANCELButtonActionPerformed(evt);
             }
         });
-        jPanel1.add(CANCELButton, new org.netbeans.lib.awtextra.AbsoluteConstraints(130, 130, -1, -1));
 
         jLabel33.setFont(new java.awt.Font("Copperplate", 1, 14)); // NOI18N
-        jLabel33.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
-        jLabel33.setText("Owner");
-        jPanel1.add(jLabel33, new org.netbeans.lib.awtextra.AbsoluteConstraints(11, 14, 141, -1));
+        jLabel33.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+        jLabel33.setText("Username");
 
-        jTabbedPane1.addTab("Sign In", jPanel1);
+        LoggedInAsLabel.setFont(new java.awt.Font("Copperplate", 1, 18)); // NOI18N
+        LoggedInAsLabel.setForeground(new java.awt.Color(0, 153, 51));
+        LoggedInAsLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
 
-        getContentPane().add(jTabbedPane1, new org.netbeans.lib.awtextra.AbsoluteConstraints(12, 12, 470, 230));
+        javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
+        jPanel2.setLayout(jPanel2Layout);
+        jPanel2Layout.setHorizontalGroup(
+            jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addGap(31, 31, 31)
+                .addComponent(jLabel33)
+                .addGap(18, 18, 18)
+                .addComponent(ownerField, javax.swing.GroupLayout.PREFERRED_SIZE, 210, javax.swing.GroupLayout.PREFERRED_SIZE))
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addGap(33, 33, 33)
+                .addComponent(jLabel32)
+                .addGap(18, 18, 18)
+                .addComponent(PasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 210, javax.swing.GroupLayout.PREFERRED_SIZE))
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addGap(54, 54, 54)
+                .addComponent(Owner_ID_label5)
+                .addGap(18, 18, 18)
+                .addComponent(LoginStatusLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 208, javax.swing.GroupLayout.PREFERRED_SIZE))
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(Owner_ID_label4, javax.swing.GroupLayout.PREFERRED_SIZE, 99, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(18, 18, 18)
+                .addComponent(LoggedInAsLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 208, javax.swing.GroupLayout.PREFERRED_SIZE))
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addGap(41, 41, 41)
+                .addComponent(signInButton)
+                .addGap(147, 147, 147)
+                .addComponent(CANCELButton))
+        );
+        jPanel2Layout.setVerticalGroup(
+            jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel2Layout.createSequentialGroup()
+                .addGap(10, 10, 10)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGap(2, 2, 2)
+                        .addComponent(jLabel33, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(ownerField, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(15, 15, 15)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGap(5, 5, 5)
+                        .addComponent(jLabel32))
+                    .addComponent(PasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 25, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(15, 15, 15)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGap(2, 2, 2)
+                        .addComponent(Owner_ID_label5))
+                    .addComponent(LoginStatusLabel))
+                .addGap(12, 12, 12)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(Owner_ID_label4)
+                    .addComponent(LoggedInAsLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(12, 12, 12)
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(signInButton)
+                    .addComponent(CANCELButton)))
+        );
+
+        ownerField.getAccessibleContext().setAccessibleName("");
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
+        getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap())
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addGap(10, 10, 10)
+                .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(20, Short.MAX_VALUE))
+        );
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
@@ -301,17 +355,18 @@ public void configureUserTableListener(){
     }//GEN-LAST:event_PasswordFieldActionPerformed
 
     private void signInButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_signInButtonActionPerformed
-        java.lang.String current_ownner = selectedOwnerTextField.getText();
-        current_ownner = current_ownner.trim();
+        String owner_id = ownerField.getText();
+        owner_id = owner_id.trim();
         int logged_in_state = dbms.getLoggedInState();
         if(logged_in_state == NGPSdatabase.LOGIN_SUCCESSFUL){
             dbms.setLoggedInState(NGPSdatabase.NOT_LOGGED_IN);
-            frame.getAccountMenu().setText("User Account");
-            dbms.setOWNER("GUEST");
+            //frame.getAccountMenu().setText("User Account");
+            //dbms.setOWNER("GUEST");
+        sign_in("GUEST","guest");
         }
         if(logged_in_state == NGPSdatabase.NOT_LOGGED_IN | logged_in_state == NGPSdatabase.LOGIN_UNSUCCESSFUL){
             java.lang.String submitted_password = new java.lang.String(PasswordField.getPassword());
-            sign_in(current_ownner,submitted_password);
+            sign_in(owner_id,submitted_password);
             PasswordField.setText("");
             if(dbms.isLoggedIn()){
                 setVisible(false);
@@ -367,9 +422,8 @@ public void configureUserTableListener(){
     private javax.swing.JPasswordField PasswordField;
     private javax.swing.JLabel jLabel32;
     private javax.swing.JLabel jLabel33;
-    private javax.swing.JPanel jPanel1;
-    private javax.swing.JTabbedPane jTabbedPane1;
-    private javax.swing.JTextField selectedOwnerTextField;
+    private javax.swing.JPanel jPanel2;
+    private javax.swing.JTextField ownerField;
     private javax.swing.JButton signInButton;
     // End of variables declaration//GEN-END:variables
 }

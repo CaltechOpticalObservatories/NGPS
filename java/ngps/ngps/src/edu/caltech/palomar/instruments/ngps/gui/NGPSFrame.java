@@ -5,6 +5,10 @@
  */
 package edu.caltech.palomar.instruments.ngps.gui; 
 
+import edu.caltech.palomar.instruments.ngps.object.Owner;
+import edu.caltech.palomar.instruments.ngps.tables.OwnerTableModel;
+
+
 import edu.caltech.palomar.dhe2.ObservationSequencerObject;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.instruments.ngps.dbms.edit_monitor;
@@ -51,6 +55,7 @@ import java.sql.Timestamp;
 import java.util.Properties;
 import java.util.Stack;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.time.Instant;
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
@@ -79,6 +84,8 @@ import org.jdatepicker.impl.JDatePickerImpl;
 import org.jdatepicker.impl.UtilDateModel;
 import javax.swing.KeyStroke;
 import java.awt.event.KeyEvent;
+import java.awt.GridLayout;
+import java.awt.BorderLayout;
 import javax.swing.AbstractAction;
 //import javax.swing.JFileChooser.FileNameExtensionFilter;
         /**.
@@ -117,7 +124,8 @@ public class NGPSFrame extends javax.swing.JFrame {
   private ButtonGroup              do_one_do_all_ButtonGroup;
   private TargetSetFrame           myTargetSetFrame;
   private signInFrame2             my_signInFrame;
-  private CreateOwnerFrame         myCreateOwnerFrame;
+  private String                    signinText="Signed in as: ";
+  private CreateOwnerFrameDEV         myCreateOwnerFrame;
   public P200Component             myP200Component;
   public DateTimeChooserFrame      myDateTimeChooserFrame;
   public NightlyAlmanac            myNightlyAlmanac;
@@ -189,7 +197,7 @@ public class NGPSFrame extends javax.swing.JFrame {
 //        initializeActionButtons(); 
         mySimulationServer.myObservationSequencerObject.setSTATE("STOPPED");
         initializeCSVFrame(); 
-        initializeRightMenu();
+//        initializeRightMenu();
 //        initializeJSkyCalcModel();
         readProperties();
         initializeIcons();
@@ -204,11 +212,12 @@ public class NGPSFrame extends javax.swing.JFrame {
         initializeSpinners();        
         initializeTimestamp();    
         initializeConnectionsFrame();
-        initializeObservationSequencerController(); // PLAN doesn't need OScontroller but still references it e.g. state changes
+//        initializeObservationSequencerController(); // PLAN doesn't need OScontroller but still references it e.g. state changes
                                                     // Initializing doesn't seem to cause problems; skipping it causes NullPointerExceptions
         myConnectionsFrame.setDBMS(dbms);
 
         if(CONFIGURATION == OBSERVE){
+            initializeObservationSequencerController();
             initializeEngineeringFrame();
             setTitle("OBSERVING");
         }
@@ -225,6 +234,11 @@ public class NGPSFrame extends javax.swing.JFrame {
         initializeGlobalPreferences();
         initializeQueryTargetsTool();
         initializeAboutFrame();
+        
+        login("GUEST",""); // Default login
+        signoutMenuItem.setEnabled(false);
+        signinMenuItem.setEnabled(true);
+        myAccountMenuItem.setEnabled(false);
 
         centreWindow(this);
     }
@@ -252,7 +266,7 @@ public class NGPSFrame extends javax.swing.JFrame {
       my_signInFrame.setNGPSFrame(this);
   }
   public void initializeCreateOwnerFrame(){
-      myCreateOwnerFrame = new CreateOwnerFrame();
+      myCreateOwnerFrame = new CreateOwnerFrameDEV();
       myCreateOwnerFrame.setVisible(false);
   }
   public void initializeOTMoutputFrame(){
@@ -1310,6 +1324,82 @@ public JTable constructTable(){
        }
     }
 }
+  
+public HashMap<String, String> loginPrompt(javax.swing.JFrame frame) {
+    HashMap<String, String> logininformation = new HashMap<String, String>();
+
+    javax.swing.JPanel panel = new javax.swing.JPanel(new BorderLayout(5, 5));
+
+    javax.swing.JPanel label = new javax.swing.JPanel(new GridLayout(0, 1, 2, 2));
+    label.add(new javax.swing.JLabel("Username", javax.swing.SwingConstants.RIGHT));
+    label.add(new javax.swing.JLabel("Password", javax.swing.SwingConstants.RIGHT));
+    panel.add(label, BorderLayout.WEST);
+
+    javax.swing.JPanel controls = new javax.swing.JPanel(new GridLayout(0, 1, 2, 2));
+    javax.swing.JTextField username = new javax.swing.JTextField();
+    controls.add(username);
+    javax.swing.JPasswordField password = new javax.swing.JPasswordField();
+    controls.add(password);
+    panel.add(controls, BorderLayout.CENTER);
+
+    int OKCancel = JOptionPane.showConfirmDialog(frame, panel, "SIGN IN", JOptionPane.OK_CANCEL_OPTION);
+    
+    if(OKCancel==JOptionPane.YES_OPTION){
+        logininformation.put("user", username.getText());
+        logininformation.put("pass", new String(password.getPassword()));
+        return logininformation;
+    }
+    return null;
+}
+
+
+public boolean login(String currentOwner,String submitted_password){
+    Owner matching_owner = new Owner();
+    boolean matchFound = false;
+    int rows = dbms.myOwnerTableModel.getRowCount();
+    for(int i=0;i<rows;i++){
+       Owner current = (Owner)dbms.myOwnerTableModel.getRecord(i);
+       String current_owner = current.getOwner_ID();
+       if(current_owner.matches(currentOwner)){
+           matching_owner = current;
+           matchFound=true;
+           break;
+       }
+    }
+    
+    if(!matchFound){
+        JOptionPane.showMessageDialog(null, "Username not found: "+currentOwner,"ERROR", JOptionPane.ERROR_MESSAGE);
+        return false;
+    }
+    
+    boolean compare = false;
+    if(matching_owner != null){
+       try{
+          String encrypted_password_stored = matching_owner.getEncryptedPassword();
+          // If the submitted and stored passwords match without decrypting, that's good enough
+          String encrypted_password = submitted_password.equals(encrypted_password_stored) ? encrypted_password_stored : dbms.encrypt(submitted_password,dbms.originalKey); 
+           
+          compare = java.security.MessageDigest.isEqual(encrypted_password_stored.getBytes(),encrypted_password.getBytes()) ;
+          
+        if(compare){
+            dbms.setOWNER_OBJECT(matching_owner);
+            dbms.setLoggedIn(true);
+            dbms.setLoggedInState(NGPSdatabase.LOGIN_SUCCESSFUL);
+            signinMenu.setText(signinText+matching_owner.getOwner_ID());
+            dbms.setOWNER(currentOwner);
+        }
+        else{
+            JOptionPane.showMessageDialog(null, "Invalid password for "+currentOwner,"ERROR", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+       }catch(Exception e){
+          System.out.println(e.toString());
+       }
+    }
+    return compare;
+}
+
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -1408,6 +1498,12 @@ public JTable constructTable(){
         etcMenuItem = new javax.swing.JMenuItem();
         errors_diagnosticsMenuItem = new javax.swing.JMenuItem();
         reportBugMenuItem = new javax.swing.JMenuItem();
+        mainSpacer = new javax.swing.JMenu();
+        signinMenu = new javax.swing.JMenu();
+        signinMenuItem = new javax.swing.JMenuItem();
+        signoutMenuItem = new javax.swing.JMenuItem();
+        myAccountMenuItem = new javax.swing.JMenuItem();
+        jMenuItem5 = new javax.swing.JMenuItem();
 
         jMenu3.setText("jMenu3");
 
@@ -2194,6 +2290,53 @@ public JTable constructTable(){
 
         mainMenuBar.add(helpMenu);
 
+        mainSpacer.setText("   ");
+        mainSpacer.setEnabled(false);
+        mainSpacer.setFocusable(false);
+        mainSpacer.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+        mainSpacer.setMaximumSize(new java.awt.Dimension(1500, 32767));
+        mainSpacer.setMinimumSize(new java.awt.Dimension(1000, 23));
+        mainSpacer.setPreferredSize(new java.awt.Dimension(1000, 23));
+        mainMenuBar.add(mainSpacer);
+
+        signinMenu.setText("Signed in as: ");
+        signinMenu.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
+        signinMenu.setHorizontalTextPosition(javax.swing.SwingConstants.LEFT);
+
+        signinMenuItem.setText("Sign in");
+        signinMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                signinMenuItemActionPerformed(evt);
+            }
+        });
+        signinMenu.add(signinMenuItem);
+
+        signoutMenuItem.setText("SIgn out");
+        signoutMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                signoutMenuItemActionPerformed(evt);
+            }
+        });
+        signinMenu.add(signoutMenuItem);
+
+        myAccountMenuItem.setText("My Account");
+        myAccountMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                myAccountMenuItemActionPerformed(evt);
+            }
+        });
+        signinMenu.add(myAccountMenuItem);
+
+        jMenuItem5.setText("Create User");
+        jMenuItem5.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem5ActionPerformed(evt);
+            }
+        });
+        signinMenu.add(jMenuItem5);
+
+        mainMenuBar.add(signinMenu);
+
         setJMenuBar(mainMenuBar);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -2554,6 +2697,46 @@ public JTable constructTable(){
             //insert_copiedMenuItem.setEnabled(false);         }
     }//GEN-LAST:event_pasteMenuItemActionPerformed
 
+    private void signoutMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_signoutMenuItemActionPerformed
+        int confirm = JOptionPane.showConfirmDialog(null, "Are you sure?", "SIGN OUT", JOptionPane.YES_NO_OPTION);
+        if(confirm==JOptionPane.YES_OPTION){
+            login("GUEST","");
+            signoutMenuItem.setEnabled(false);
+            signinMenuItem.setEnabled(true);
+            myAccountMenuItem.setEnabled(false);
+            dbms.createNewTargetList();
+            dbms.setSelectedSetName(null);
+        }
+    }//GEN-LAST:event_signoutMenuItemActionPerformed
+
+    private void jMenuItem5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem5ActionPerformed
+        myCreateOwnerFrame.setVisible(true);
+    }//GEN-LAST:event_jMenuItem5ActionPerformed
+
+    private void myAccountMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_myAccountMenuItemActionPerformed
+        myChangePasswordFrame.setVisible(true);
+    }//GEN-LAST:event_myAccountMenuItemActionPerformed
+
+    private void signinMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_signinMenuItemActionPerformed
+        HashMap<String,String> loginInfo = loginPrompt(null);
+        
+        if(loginInfo==null){return;}
+        
+        String username = loginInfo.get("user");
+        if(username.isBlank()){
+            JOptionPane.showMessageDialog(null, "Invalid Username","ERROR", JOptionPane.ERROR_MESSAGE);
+        }
+        boolean success =  login(username, loginInfo.get("pass"));
+        System.out.println(success);
+        if(success){
+            signoutMenuItem.setEnabled(true);
+            signinMenuItem.setEnabled(false);
+            myAccountMenuItem.setEnabled(true);
+        }
+        
+        
+    }//GEN-LAST:event_signinMenuItemActionPerformed
+
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
 
@@ -2674,6 +2857,7 @@ public JTable constructTable(){
     private javax.swing.JLabel jLabel9;
     private javax.swing.JMenu jMenu3;
     private javax.swing.JMenuItem jMenuItem1;
+    private javax.swing.JMenuItem jMenuItem5;
     private javax.swing.JPanel jPanel10;
     private javax.swing.JPanel jPanel9;
     private javax.swing.JScrollPane jScrollPane3;
@@ -2684,8 +2868,10 @@ public JTable constructTable(){
     private javax.swing.JPopupMenu.Separator jSeparator3;
     private javax.swing.JPanel left_mainPanel;
     private javax.swing.JMenuBar mainMenuBar;
+    private javax.swing.JMenu mainSpacer;
     private javax.swing.JTable mainTable;
     private javax.swing.JScrollPane main_tableScrollPane;
+    private javax.swing.JMenuItem myAccountMenuItem;
     private edu.caltech.palomar.instruments.ngps.gui.OScontrolsPanel myOScontrolsPanel;
     private javax.swing.JMenuItem new_target_from_databaseMenuItem;
     private javax.swing.JMenuItem new_target_listMenuItem;
@@ -2710,6 +2896,9 @@ public JTable constructTable(){
     private javax.swing.JTextField selectedTargetNameTextField;
     private javax.swing.JLabel selected_target_listjLabel;
     private javax.swing.JMenuItem shutdownMenuItem;
+    private javax.swing.JMenu signinMenu;
+    private javax.swing.JMenuItem signinMenuItem;
+    private javax.swing.JMenuItem signoutMenuItem;
     private javax.swing.JMenuItem ten_day_weatherMenuItem;
     private javax.swing.JMenu toolsMenu;
     private javax.swing.JButton twilightButton;

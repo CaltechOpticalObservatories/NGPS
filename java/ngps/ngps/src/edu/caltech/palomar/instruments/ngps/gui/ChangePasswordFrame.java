@@ -10,7 +10,6 @@ import edu.caltech.palomar.instruments.ngps.object.Owner;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import javax.swing.JFrame;
 /**
  *
  * @author developer
@@ -78,22 +77,6 @@ public class ChangePasswordFrame extends javax.swing.JFrame {
         Owner_ID_label.setText(current_value);
     }
 }    
-/*================================================================================================
-/      validatePasswords()
-/=================================================================================================*/
-     private void validatePasswords(){
-       int logged_in_state = dbms.getLoggedInState();
-       if(logged_in_state == NGPSdatabase.LOGIN_SUCCESSFUL){
-           dbms.setLoggedInState(NGPSdatabase.NOT_LOGGED_IN);
-//           OwnerList.setEnabled(true);
-//           frame.getAccountMenu().setText("Not Logged In");
-       }
-       if(logged_in_state == NGPSdatabase.NOT_LOGGED_IN | logged_in_state == NGPSdatabase.LOGIN_UNSUCCESSFUL){
-          java.lang.String submitted_password = new java.lang.String(PasswordField.getPassword());
-          sign_in(submitted_password);          
-          PasswordField.setText("");           
-       }  
-    }
 /*================================================================================================
 /      add and remove Property Change Listeners
 /=================================================================================================*/
@@ -180,26 +163,30 @@ public boolean sign_in(java.lang.String submitted_password){
         messageLabel = new javax.swing.JLabel();
         ChangePasswordButton = new javax.swing.JButton();
 
-        PasswordField.setText("password");
-        PasswordField.setMinimumSize(new java.awt.Dimension(11, 400));
+        setTitle("My Account");
 
-        Owner_ID_label3.setText("CONFIRM NEW PASSWORD");
+        PasswordField.setMinimumSize(new java.awt.Dimension(11, 400));
+        PasswordField.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                PasswordFieldActionPerformed(evt);
+            }
+        });
+
+        Owner_ID_label3.setText("CONFIRM  PASSWORD");
 
         Owner_ID_label4.setText("PASSWORD");
 
         Owner_ID_label5.setText("NEW PASSWORD");
 
-        newPasswordField.setText("password");
         newPasswordField.setMinimumSize(new java.awt.Dimension(11, 400));
 
-        new_confirmPasswordField.setText("password");
         new_confirmPasswordField.setMinimumSize(new java.awt.Dimension(11, 400));
 
-        Owner_ID_label6.setText("LOGGED IN AS:  ");
+        Owner_ID_label6.setText("LOGGED IN AS");
 
         Owner_ID_label.setForeground(new java.awt.Color(10, 171, 19));
 
-        OKButton.setText("OK");
+        OKButton.setText("Done");
         OKButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 OKButtonActionPerformed(evt);
@@ -219,34 +206,29 @@ public boolean sign_in(java.lang.String submitted_password){
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(messageLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addGroup(layout.createSequentialGroup()
-                                .addComponent(Owner_ID_label3)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(new_confirmPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addGroup(layout.createSequentialGroup()
-                                .addComponent(Owner_ID_label5)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(newPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                        .addComponent(messageLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                         .addGroup(layout.createSequentialGroup()
-                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                                    .addComponent(Owner_ID_label4)
-                                    .addGap(117, 117, 117))
-                                .addGroup(layout.createSequentialGroup()
-                                    .addComponent(Owner_ID_label6)
-                                    .addGap(87, 87, 87)))
-                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                                .addComponent(PasswordField, javax.swing.GroupLayout.DEFAULT_SIZE, 170, Short.MAX_VALUE)
-                                .addComponent(Owner_ID_label, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
+                            .addComponent(ChangePasswordButton, javax.swing.GroupLayout.PREFERRED_SIZE, 202, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(OKButton)))
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(ChangePasswordButton, javax.swing.GroupLayout.PREFERRED_SIZE, 202, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(OKButton)))
-                .addGap(0, 24, Short.MAX_VALUE))
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                .addComponent(Owner_ID_label3)
+                                .addComponent(Owner_ID_label5, javax.swing.GroupLayout.Alignment.TRAILING))
+                            .addComponent(Owner_ID_label6, javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(Owner_ID_label4, javax.swing.GroupLayout.Alignment.TRAILING))
+                        .addGap(18, 18, 18)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addComponent(new_confirmPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(newPasswordField, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addComponent(PasswordField, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addComponent(Owner_ID_label, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE)))))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -264,9 +246,9 @@ public boolean sign_in(java.lang.String submitted_password){
                     .addComponent(Owner_ID_label5)
                     .addComponent(newPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(Owner_ID_label3)
-                    .addComponent(new_confirmPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(new_confirmPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(Owner_ID_label3))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(messageLabel, javax.swing.GroupLayout.DEFAULT_SIZE, 20, Short.MAX_VALUE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -314,6 +296,10 @@ public boolean sign_in(java.lang.String submitted_password){
            }
        }
     }//GEN-LAST:event_ChangePasswordButtonActionPerformed
+
+    private void PasswordFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_PasswordFieldActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_PasswordFieldActionPerformed
 
     /**
      * @param args the command line arguments= 

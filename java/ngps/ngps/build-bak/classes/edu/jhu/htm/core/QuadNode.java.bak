@@ -1,0 +1,29 @@
+package edu.jhu.htm.core;
+/**********************************************************************
+* Current Version
+* ===============
+* ID:	$Id: QuadNode.java,v 1.1.1.1 2003/01/23 19:23:49 womullan Exp $
+*
+* Revision: 	$Revision: 1.1.1.1 $
+* Date/time:	$Date: 2003/01/23 19:23:49 $
+	 QuadNode structure
+	 Author:  		 Peter Z. Kunszt
+			  		 initial java port by William O'Mullane
+QuadNode is used as an internal structure in HTMIndexImp.
+*/
+
+  class QuadNode {
+	int index_;				// its own index
+	int v_[] = new int[3];		// The three vertex vector indices
+	int w_[] = new int[3];		// The three middlepoint vector indices
+	int childID_[] = new int[4];	// ids of children
+	int parent_;				// id of the parent node (sorting)
+	long id_;				// numeric id -> name
+  };
+
+/**********************************************************************
+* Revision History
+* ================
+*
+* $Log: QuadNode.java,v $
+************************************************************************/
