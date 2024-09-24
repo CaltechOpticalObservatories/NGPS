@@ -21,6 +21,7 @@ exptime=$2
 gain=$3
 filter=$4
 focus=$5
+status=$6  # acquiring, guiding etc.  Not available in menu
 
 # create new analysis file from template and new parameters
 sed -e "s/DEFexptime/$exptime/" \
@@ -38,9 +39,13 @@ fi
 width=`xpaget $id fits width`
 XCENTER=$(($width/2))
 YCENTER=30
+YCENTER_STATUS=1000
 
 xpaset -p $id region delete all
 echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   GAIN=${gain}   FILTER=${filter}   FOCUS=${focus}} \
-  color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} normal}" \
+  color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
   | xpaset $id region 2>&1
 
+echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}} \
+  color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
+  | xpaset $id region 2>&1

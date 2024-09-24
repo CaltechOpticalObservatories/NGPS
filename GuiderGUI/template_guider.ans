@@ -31,7 +31,7 @@ $message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | 
 CALIBRATE
 *
 button
-$message(yesno,Calibrate ACAM?) | acam acquire here | $text
+$message(yesno,Calibrate ACAM?) | acam offsetcal | $text
 #############
 GUI HELP
 *
