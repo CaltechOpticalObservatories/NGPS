@@ -5,10 +5,6 @@
  */
 package edu.caltech.palomar.instruments.ngps.gui; 
 
-import edu.caltech.palomar.instruments.ngps.object.Owner;
-import edu.caltech.palomar.instruments.ngps.tables.OwnerTableModel;
-
-
 import edu.caltech.palomar.dhe2.ObservationSequencerObject;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.instruments.ngps.dbms.edit_monitor;
@@ -45,7 +41,6 @@ import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
@@ -86,7 +81,9 @@ import javax.swing.KeyStroke;
 import java.awt.event.KeyEvent;
 import java.awt.GridLayout;
 import java.awt.BorderLayout;
+import java.sql.Statement;
 import javax.swing.AbstractAction;
+import javax.swing.UIManager;
 //import javax.swing.JFileChooser.FileNameExtensionFilter;
         /**.
  *
@@ -123,28 +120,25 @@ public class NGPSFrame extends javax.swing.JFrame {
   private JMenuItem                signin_MenuItem;  
   private ButtonGroup              do_one_do_all_ButtonGroup;
   private TargetSetFrame           myTargetSetFrame;
-  private signInFrame2             my_signInFrame;
-  private String                    signinText="Signed in as: ";
-  private CreateOwnerFrameDEV         myCreateOwnerFrame;
+  final private String             signinText="Signed in as: ";
+  final private String              defaultUser="GUEST";
+  final private String              defaultPassword="";
   public P200Component             myP200Component;
   public DateTimeChooserFrame      myDateTimeChooserFrame;
   public NightlyAlmanac            myNightlyAlmanac;
   public NightlyWindow             myNightlyWindow;
   public JDatePanelImpl            datePanel;
   public JDatePickerImpl           datePicker;
-//  private JTextField               timeTextField;
-//  private JTextField               seeingTextField;
-//  private JTextField               sky_backgroundTextField;
   public java.lang.String          USERDIR = System.getProperty("user.dir");
   public java.lang.String          SEP     = System.getProperty("file.separator");
-  public java.lang.String          CONFIG  = new java.lang.String("config");
-  public java.lang.String          NGPS_PROPERTIES = new java.lang.String("ngps.ini");
-  public java.lang.String          IMAGE_CACHE     = new java.lang.String("images");
+  public java.lang.String          CONFIG  = "config";
+  public java.lang.String          NGPS_PROPERTIES = "ngps.ini";
+  public java.lang.String          IMAGE_CACHE     = "images";
   public double                    DEFAULT_SEEING;
   public int                       DEFAULT_WAVELENGTH;
   public double                    DEFAULT_AIRMASS_LIMIT;
-  private int                      DEFAULT_FONT = 12;
-  private String                   DEFAULT_FONT_NAME = "Ariel";
+  final private int                DEFAULT_FONT = 12;
+  final private String             DEFAULT_FONT_NAME = "Ariel";
   private ImageIcon                ON;
   private ImageIcon                OFF;
   private ImageIcon                UNKNOWN;
@@ -172,7 +166,6 @@ public class NGPSFrame extends javax.swing.JFrame {
   public static int                OBSERVE = 1;
   public static int                PLAN = 2;
   public BrowserDisplay            myBrowserDisplay = new BrowserDisplay();
-//  public OScontrolsPanel           myOScontrolsPanel;
   public ChangePasswordFrame       myChangePasswordFrame; 
   public Timer                     startTimer;
 /*=============================================================================================
@@ -186,18 +179,13 @@ public class NGPSFrame extends javax.swing.JFrame {
             CONFIGURATION = PLAN;   
          } 
         initComponents();
-//        initializePanels();
         initializeTargetSetFrame();
-        initializeSignInFrame();
-        initializeCreateOwnerFrame();
         initializeDatabase();
         initializeParser();   
         initializeMainTable();
         initializeStateMonitor();
-//        initializeActionButtons(); 
         mySimulationServer.myObservationSequencerObject.setSTATE("STOPPED");
         initializeCSVFrame(); 
-//        initializeRightMenu();
 //        initializeJSkyCalcModel();
         readProperties();
         initializeIcons();
@@ -234,22 +222,15 @@ public class NGPSFrame extends javax.swing.JFrame {
         initializeGlobalPreferences();
         initializeQueryTargetsTool();
         initializeAboutFrame();
+        UIManager.put("OptionPane.minimumSize", new Dimension(400,100)); // Set size of input prompts
         
-        login("GUEST",""); // Default login
+        login(defaultUser,defaultPassword); // Default login
         signoutMenuItem.setEnabled(false);
         signinMenuItem.setEnabled(true);
         myAccountMenuItem.setEnabled(false);
 
         centreWindow(this);
     }
-/*=============================================================================================
-/     initializePanels()
-/=============================================================================================*/
-  public void initializePanels(){
-//      myimportCSVPanel = new importCSVPanel();
-//      myTargetSetPanel = new TargetSetPanel();
-//      myretrieveDatabasePanel = new retrieveDatabasePanel();
-  }   
   public void initializeCSVFrame(){
       myImportFrame = new ImportFrame();
       myImportFrame.setDBMS(dbms);
@@ -259,15 +240,6 @@ public class NGPSFrame extends javax.swing.JFrame {
   public void initializeTargetSetFrame(){
       myTargetSetFrame = new TargetSetFrame();    
       myTargetSetFrame.setVisible(false);
-  }
-  public void initializeSignInFrame(){
-      my_signInFrame = new signInFrame2();
-      my_signInFrame.setVisible(false);
-      my_signInFrame.setNGPSFrame(this);
-  }
-  public void initializeCreateOwnerFrame(){
-      myCreateOwnerFrame = new CreateOwnerFrameDEV();
-      myCreateOwnerFrame.setVisible(false);
   }
   public void initializeOTMoutputFrame(){
       myOTMoutputFrame = new OTMoutputFrame();
@@ -308,12 +280,6 @@ public void increaseFontSize(){
 public void decreaseFontSize(){
     changeFontSize(-2);
 }
-/*=============================================================================================ls
-/     initializePanels()
-/=============================================================================================*/ 
-public JMenu getAccountMenu(){
-    return accountMenu;
-}  
 /*================================================================================================
 /     initializeSpinners()
 /=================================================================================================*/
@@ -662,16 +628,6 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
             myaccount_MenuItemActionPerformed(evt);
         }
      });
-     create_user_MenuItem.addActionListener(new java.awt.event.ActionListener() {
-        public void actionPerformed(java.awt.event.ActionEvent evt) {
-            create_user_MenuItemActionPerformed(evt);
-        }
-    });
-    signin_MenuItem.addActionListener(new java.awt.event.ActionListener() {
-        public void actionPerformed(java.awt.event.ActionEvent evt) {
-            signin_MenuItemActionPerformed(evt);
-        }
-    });
     
     saveMenuItem.setEnabled(false);
     save_asMenuItem.setEnabled(false);
@@ -682,12 +638,6 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
 /=============================================================================================*/
  private void myaccount_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
     this.myChangePasswordFrame.setVisible(true);
- } 
- private void create_user_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
-    myCreateOwnerFrame.setVisible(true);
- }
- private void signin_MenuItemActionPerformed(java.awt.event.ActionEvent evt) {                                                    
-     my_signInFrame.setVisible(true);    
  } 
 /*=============================================================================================
 /     initializeDatabase()`````````
@@ -700,8 +650,6 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
                  dbms_propertyChange(e);
               }
             });
-            my_signInFrame.setDBMS(dbms);
-            myCreateOwnerFrame.setDBMS(dbms);
             dbms.initializeOTMlauncher();
             dbms.myOTMlauncher.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
                public void propertyChange(java.beans.PropertyChangeEvent e) {
@@ -1353,51 +1301,50 @@ public HashMap<String, String> loginPrompt(javax.swing.JFrame frame) {
 }
 
 
-public boolean login(String currentOwner,String submitted_password){
-    Owner matching_owner = new Owner();
-    boolean matchFound = false;
-    int rows = dbms.myOwnerTableModel.getRowCount();
-    for(int i=0;i<rows;i++){
-       Owner current = (Owner)dbms.myOwnerTableModel.getRecord(i);
-       String current_owner = current.getOwner_ID();
-       if(current_owner.matches(currentOwner)){
-           matching_owner = current;
-           matchFound=true;
-           break;
-       }
-    }
+public boolean login(String username,String submitted_password){
     
-    if(!matchFound){
-        JOptionPane.showMessageDialog(null, "Username not found: "+currentOwner,"ERROR", JOptionPane.ERROR_MESSAGE);
-        return false;
+    boolean success = dbms.verifyLogin(username, submitted_password);      
+    if(success){
+//        dbms.setOWNER_OBJECT(username); //sets a string
+        dbms.setOWNER(username);
+        signinMenu.setText(signinText+username);
     }
-    
-    boolean compare = false;
-    if(matching_owner != null){
-       try{
-          String encrypted_password_stored = matching_owner.getEncryptedPassword();
-          // If the submitted and stored passwords match without decrypting, that's good enough
-          String encrypted_password = submitted_password.equals(encrypted_password_stored) ? encrypted_password_stored : dbms.encrypt(submitted_password,dbms.originalKey); 
-           
-          compare = java.security.MessageDigest.isEqual(encrypted_password_stored.getBytes(),encrypted_password.getBytes()) ;
-          
-        if(compare){
-            dbms.setOWNER_OBJECT(matching_owner);
-            dbms.setLoggedIn(true);
-            dbms.setLoggedInState(NGPSdatabase.LOGIN_SUCCESSFUL);
-            signinMenu.setText(signinText+matching_owner.getOwner_ID());
-            dbms.setOWNER(currentOwner);
-        }
-        else{
-            JOptionPane.showMessageDialog(null, "Invalid password for "+currentOwner,"ERROR", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
 
-       }catch(Exception e){
-          System.out.println(e.toString());
-       }
-    }
-    return compare;
+    return success;
+}
+
+public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
+    
+    javax.swing.JPanel panel = new javax.swing.JPanel(new BorderLayout(5, 5));
+
+    javax.swing.JPanel label = new javax.swing.JPanel(new GridLayout(0, 1, 2, 2));
+    label.add(new javax.swing.JLabel("Username", javax.swing.SwingConstants.RIGHT));
+    label.add(new javax.swing.JLabel("Password", javax.swing.SwingConstants.RIGHT));
+    label.add(new javax.swing.JLabel("Confirm Password", javax.swing.SwingConstants.RIGHT));
+    label.add(new javax.swing.JLabel("Email", javax.swing.SwingConstants.RIGHT));
+    panel.add(label, BorderLayout.WEST);
+
+    javax.swing.JPanel controls = new javax.swing.JPanel(new GridLayout(0, 1, 2, 2));
+    javax.swing.JTextField username = new javax.swing.JTextField();
+    javax.swing.JPasswordField password = new javax.swing.JPasswordField();
+    javax.swing.JPasswordField confirmPassword = new javax.swing.JPasswordField();
+    javax.swing.JTextField email = new javax.swing.JTextField();
+    controls.add(username);
+    controls.add(password);
+    controls.add(confirmPassword);
+    controls.add(email);
+    panel.add(controls, BorderLayout.CENTER);
+
+    int OKCancel = JOptionPane.showConfirmDialog(frame, panel, "CREATE USER", JOptionPane.OK_CANCEL_OPTION);
+    
+    if(OKCancel!=JOptionPane.YES_OPTION){ return null; } // Canceled
+    
+    HashMap<String, String> logininformation = new HashMap<String, String>();
+    logininformation.put("owner_id", username.getText());
+    logininformation.put("password", new String(password.getPassword()));
+    logininformation.put("confirmPassword", new String(confirmPassword.getPassword()));
+    logininformation.put("email", new String(password.getPassword()));
+    return logininformation;
 }
 
     /**
@@ -1503,7 +1450,7 @@ public boolean login(String currentOwner,String submitted_password){
         signinMenuItem = new javax.swing.JMenuItem();
         signoutMenuItem = new javax.swing.JMenuItem();
         myAccountMenuItem = new javax.swing.JMenuItem();
-        jMenuItem5 = new javax.swing.JMenuItem();
+        createUserMenuItem2 = new javax.swing.JMenuItem();
 
         jMenu3.setText("jMenu3");
 
@@ -2010,6 +1957,7 @@ public boolean login(String currentOwner,String submitted_password){
         NGPSMenu.setText("NGPS");
 
         aboutNGPSMenuItem.setText("About NGPS GUI");
+        aboutNGPSMenuItem.setEnabled(false);
         aboutNGPSMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 aboutNGPSMenuItemActionPerformed(evt);
@@ -2327,13 +2275,13 @@ public boolean login(String currentOwner,String submitted_password){
         });
         signinMenu.add(myAccountMenuItem);
 
-        jMenuItem5.setText("Create User");
-        jMenuItem5.addActionListener(new java.awt.event.ActionListener() {
+        createUserMenuItem2.setText("Create User");
+        createUserMenuItem2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jMenuItem5ActionPerformed(evt);
+                createUserMenuItem2ActionPerformed(evt);
             }
         });
-        signinMenu.add(jMenuItem5);
+        signinMenu.add(createUserMenuItem2);
 
         mainMenuBar.add(signinMenu);
 
@@ -2700,7 +2648,7 @@ public boolean login(String currentOwner,String submitted_password){
     private void signoutMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_signoutMenuItemActionPerformed
         int confirm = JOptionPane.showConfirmDialog(null, "Are you sure?", "SIGN OUT", JOptionPane.YES_NO_OPTION);
         if(confirm==JOptionPane.YES_OPTION){
-            login("GUEST","");
+            login(defaultUser,defaultPassword);
             signoutMenuItem.setEnabled(false);
             signinMenuItem.setEnabled(true);
             myAccountMenuItem.setEnabled(false);
@@ -2708,10 +2656,6 @@ public boolean login(String currentOwner,String submitted_password){
             dbms.setSelectedSetName(null);
         }
     }//GEN-LAST:event_signoutMenuItemActionPerformed
-
-    private void jMenuItem5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem5ActionPerformed
-        myCreateOwnerFrame.setVisible(true);
-    }//GEN-LAST:event_jMenuItem5ActionPerformed
 
     private void myAccountMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_myAccountMenuItemActionPerformed
         myChangePasswordFrame.setVisible(true);
@@ -2723,11 +2667,11 @@ public boolean login(String currentOwner,String submitted_password){
         if(loginInfo==null){return;}
         
         String username = loginInfo.get("user");
-        if(username.isBlank()){
+        if(username.isBlank() || username.toUpperCase().matches(defaultUser)){
             JOptionPane.showMessageDialog(null, "Invalid Username","ERROR", JOptionPane.ERROR_MESSAGE);
+            return;
         }
         boolean success =  login(username, loginInfo.get("pass"));
-        System.out.println(success);
         if(success){
             signoutMenuItem.setEnabled(true);
             signinMenuItem.setEnabled(false);
@@ -2736,6 +2680,58 @@ public boolean login(String currentOwner,String submitted_password){
         
         
     }//GEN-LAST:event_signinMenuItemActionPerformed
+
+    private void createUserMenuItem2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_createUserMenuItem2ActionPerformed
+        HashMap<String,String> loginInfo = createUserPrompt(null);
+
+        if(loginInfo==null){return;} // Cancel
+        
+        String username = loginInfo.get("owner_id");
+        if(username.isBlank()){
+            JOptionPane.showMessageDialog(null, "Invalid Username","ERROR", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if(dbms.userExists(username)){
+            JOptionPane.showMessageDialog(null, "Username already exists","ERROR", JOptionPane.ERROR_MESSAGE);
+            return;            
+        }
+        if(loginInfo.get("email").isEmpty()){
+            JOptionPane.showMessageDialog(null, "Invalid email","ERROR", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if(!loginInfo.get("password").matches(loginInfo.get("confirmPassword"))){
+            JOptionPane.showMessageDialog(null, "Passwords don't match","ERROR", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        loginInfo.remove("confirmPassword");
+        
+        // ENCRYPT PASSWORD
+        try{
+        loginInfo.put("password", dbms.encrypt(loginInfo.get("password"),dbms.originalKey));            
+        } catch(Exception e){ System.out.println(e.toString()); }
+        
+        // Ready mysql 
+        Statement statement;
+        String allKeys = String.join(", ", loginInfo.keySet());
+        String allVals = String.join("', '" ,loginInfo.values()); // looks like 'val1', 'val2', ...
+        allVals = "'" + allVals + "'"; // add 1st and last quotes to list
+
+        try{        
+            statement = dbms.conn.createStatement();
+            String cmd = "INSERT INTO ngps.owner (%1$s) VALUES (%2$s) ;"; //HARDCODE
+            cmd = String.format(cmd, allKeys, allVals);
+            int success = statement.executeUpdate(cmd); // number of rows added to owner
+
+            if(success==0){
+                JOptionPane.showMessageDialog(null, "Problem adding user: "+username);
+                return;            
+            } else{
+                JOptionPane.showMessageDialog(null, "User added: "+username);
+            }
+        } catch(Exception e){ System.out.println(e.toString()); }
+        
+    dbms.queryOwners(); // update owner table in the GUI
+    }//GEN-LAST:event_createUserMenuItem2ActionPerformed
 
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
@@ -2823,6 +2819,7 @@ public boolean login(String currentOwner,String submitted_password){
     private javax.swing.JButton cancelButton;
     private javax.swing.JMenuItem connectionsMenuItem;
     private javax.swing.JMenuItem copyMenuItem;
+    private javax.swing.JMenuItem createUserMenuItem2;
     private javax.swing.JLabel dbms_stateLabel;
     private javax.swing.JMenuItem deleteMenuItem;
     private javax.swing.JTabbedPane detailedTabbedPane;
@@ -2857,7 +2854,6 @@ public boolean login(String currentOwner,String submitted_password){
     private javax.swing.JLabel jLabel9;
     private javax.swing.JMenu jMenu3;
     private javax.swing.JMenuItem jMenuItem1;
-    private javax.swing.JMenuItem jMenuItem5;
     private javax.swing.JPanel jPanel10;
     private javax.swing.JPanel jPanel9;
     private javax.swing.JScrollPane jScrollPane3;

@@ -40,6 +40,7 @@ import java.util.Stack;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import edu.caltech.palomar.instruments.ngps.charts.CombinedChartTest;
+import javax.swing.JOptionPane;
 import javax.swing.UIManager;
 
 /**
@@ -1066,11 +1067,11 @@ public void constructUpdateOwnerPreparedStatement(){
 /*================================================================================================
 /     executeUpdateOwnerPreparedStatement(Owner current)
 /=================================================================================================*/
-public void executeUpdateOwnerPreparedStatement(Owner current){
+public void executeUpdateOwnerPreparedStatement(String username, String encrypted_password){
     try{
         UPDATE_OWNER_PREP_STATEMENT.clearParameters();
-        UPDATE_OWNER_PREP_STATEMENT.setString(1,current.getEncryptedPassword());
-        UPDATE_OWNER_PREP_STATEMENT.setString(2,current.getOwner_ID());
+        UPDATE_OWNER_PREP_STATEMENT.setString(1,encrypted_password);
+        UPDATE_OWNER_PREP_STATEMENT.setString(2,username);
         System.out.println(UPDATE_OWNER_PREP_STATEMENT.toString());
         UPDATE_OWNER_PREP_STATEMENT.executeUpdate();
    }catch(Exception e){
@@ -1131,6 +1132,68 @@ public OwnerTableModel queryOwners(){
      }
   return myOwnerTableModel;
 }
+
+public boolean userExists(String username){
+    for(int i=0;i<myOwnerTableModel.getRowCount();i++){
+       Owner current = (Owner)myOwnerTableModel.getRecord(i);
+       if(username.matches(current.getOwner_ID())){ return true; }
+    }
+    return false;
+}
+
+// DIRECT MYSQL WAY for userExists():
+//        statement = dbms.conn.createStatement();
+//        
+//        rs = statement.executeQuery("SELECT COUNT(*) from ngps.owner WHERE owner_id = "+"'"+owner_id+"'"); //HARDCODE
+//        rs.next();
+//        int userExists = rs.getInt(1); // value on row 1 
+//        rs.close();
+//        if(userExists>0){
+//            JOptionPane.showMessageDialog(null, "Username already exists: "+owner_id);
+//            return;
+//        }        
+
+public boolean verifyLogin(String username, String password){
+    
+    String encrypted_password_stored = null;
+    boolean matchFound = false;
+
+    for(int i=0;i<myOwnerTableModel.getRowCount();i++){
+       Owner current = (Owner)myOwnerTableModel.getRecord(i);
+       if(username.matches(current.getOwner_ID())){ 
+           matchFound = true;
+           encrypted_password_stored = current.getEncryptedPassword();
+           break;  
+       }
+    }
+    if(!matchFound){
+        JOptionPane.showMessageDialog(null, "Username not found: "+username,"ERROR", JOptionPane.ERROR_MESSAGE);
+        return false;
+    }
+    
+    if(encrypted_password_stored == null){
+        return false;
+    }
+    // If the submitted and stored passwords match without decrypting, that's good enough
+    if(password.matches(encrypted_password_stored)){
+        return true;
+    }
+    try{          
+        // If the submitted and stored passwords match without decrypting, that's good enough
+        String encrypted_password = encrypt(password,originalKey);
+        boolean compare = java.security.MessageDigest.isEqual(encrypted_password_stored.getBytes(),encrypted_password.getBytes()) ;
+        if(!compare){
+            JOptionPane.showMessageDialog(null, "Invalid password for "+username,"ERROR", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        return compare;
+    }
+    catch(Exception e){
+           System.out.println(e.toString());
+           return false;
+       }
+    }
+
 /*================================================================================================
 /      transformResultSetToObservationSet(java.sql.ResultSet results)
 /=================================================================================================*/

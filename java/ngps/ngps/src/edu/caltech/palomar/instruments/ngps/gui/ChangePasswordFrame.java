@@ -6,10 +6,10 @@ package edu.caltech.palomar.instruments.ngps.gui;
 
 
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
-import edu.caltech.palomar.instruments.ngps.object.Owner;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import javax.swing.JOptionPane;
 /**
  *
  * @author developer
@@ -17,7 +17,6 @@ import java.beans.PropertyChangeSupport;
 public class ChangePasswordFrame extends javax.swing.JFrame {
   transient protected PropertyChangeSupport propertyChangeListeners = new PropertyChangeSupport(this);
   public NGPSdatabase dbms;
-  private java.lang.String message;
     /**
      * Creates new form ChangePasswordFrame
      */
@@ -35,43 +34,14 @@ public class ChangePasswordFrame extends javax.swing.JFrame {
                  dbms_propertyChange(e);
               }
             });
-       this.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
-              public void propertyChange(java.beans.PropertyChangeEvent e) {
-                 message_propertyChange(e);
-              }
-            });
     }
- /*=============================================================================================
-/     Property Change Listener for the Ephemeris_propertyChange
-/=============================================================================================*/
-  private void message_propertyChange(PropertyChangeEvent e)  {
-     java.lang.String propertyName = e.getPropertyName();
-     System.out.println("message_propertyChange "+propertyName);
-    if(propertyName.matches("message")){
-        java.lang.String current_value = (java.lang.String)e.getNewValue();
-        messageLabel.setText(current_value);
-    }
-}      
+     
 /*=============================================================================================
 /     Property Change Listener for the Ephemeris_propertyChange
 /=============================================================================================*/
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
      System.out.println("passwordFrame: "+propertyName);
-    if(propertyName.matches("connected")){
-        java.lang.Boolean current_value = (java.lang.Boolean)e.getNewValue(); 
-        if(current_value){
-//            database_connect_ToggleButton.setIcon(ON);
-//            database_connect_ToggleButton.setText("CONNECTED TO NGPS DATABASE");
-//            commit_to_dbms_Button.setEnabled(true);
-//            commit_to_dbms_Button.setIcon(ON);
-        }else if(!current_value){
-//            database_connect_ToggleButton.setIcon(OFF);
-//            database_connect_ToggleButton.setText("CONNECT TO NGPS DATABASE");
-//            commit_to_dbms_Button.setEnabled(false);
-//            commit_to_dbms_Button.setIcon(OFF);
-        }
-    }
     if(propertyName.matches("owner")){
         java.lang.String current_value = (java.lang.String)e.getNewValue();
         Owner_ID_label.setText(current_value);
@@ -86,62 +56,7 @@ public class ChangePasswordFrame extends javax.swing.JFrame {
   public synchronized void addPropertyChangeListener(PropertyChangeListener l) {
     propertyChangeListeners.addPropertyChangeListener(l);
   } 
- /*================================================================================================
-/      setOWNER(java.lang.String new_owner)
-/=================================================================================================*/
-  public void setMessage(java.lang.String new_message) {
-    java.lang.String  old_message = this.message;
-    this.message = new_message;
-   propertyChangeListeners.firePropertyChange("message", (old_message), (new_message));
-  }
-  public java.lang.String getMessage() {
-    return message;
-  }      
-/*=============================================================================================
-/     setDBMS(NGPS_Database new_dbms)
-/=============================================================================================*/
-public boolean sign_in(java.lang.String submitted_password){
-    boolean matched = false;
-    java.lang.String password = new java.lang.String();
-    Owner matching_owner = new Owner();
-    java.lang.String selected_owner = dbms.getOWNER();
-    int rows = dbms.myOwnerTableModel.getRowCount();
-    for(int i=0;i<rows;i++){
-       Owner current = (Owner)dbms.myOwnerTableModel.getRecord(i);
-       java.lang.String current_owner = current.getOwner_ID();
-       if(current_owner.matches(selected_owner)){
-           matching_owner = current;
-       }
-    }
-    if(matching_owner != null){
-       try{
-          java.lang.String encrypted_password_stored = matching_owner.getEncryptedPassword();
-          
-          // If the submitted and stored passwords match without decrypting, that's good enough
-          String encrypted_password = submitted_password.equals(encrypted_password_stored) ? encrypted_password_stored : dbms.encrypt(submitted_password,dbms.originalKey); 
-
-          boolean          compare                   = java.security.MessageDigest.isEqual(encrypted_password_stored.getBytes(),encrypted_password.getBytes()) ;
-          if(compare){
-              matched = true;
-              dbms.setOWNER(matching_owner.getOwner_ID());
-              dbms.setOWNER_OBJECT(matching_owner);
-              dbms.setLoggedIn(true);
-              dbms.setLoggedInState(NGPSdatabase.LOGIN_SUCCESSFUL);
-          }
-          if(!compare){
-              dbms.setLoggedIn(false);
-              dbms.setLoggedInState(NGPSdatabase.LOGIN_UNSUCCESSFUL);
-              matched = false;
-          }         
-       }catch(Exception e){
-           dbms.setLoggedIn(false);
-           dbms.setLoggedInState(NGPSdatabase.NOT_LOGGED_IN);
-           System.out.println(e.toString());
-           matched = false;
-       }
-    }
-    return matched;
-}
+   
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -159,11 +74,11 @@ public boolean sign_in(java.lang.String submitted_password){
         new_confirmPasswordField = new javax.swing.JPasswordField();
         Owner_ID_label6 = new javax.swing.JLabel();
         Owner_ID_label = new javax.swing.JLabel();
-        OKButton = new javax.swing.JButton();
-        messageLabel = new javax.swing.JLabel();
         ChangePasswordButton = new javax.swing.JButton();
 
         setTitle("My Account");
+        setLocation(new java.awt.Point(900, 300));
+        setResizable(false);
 
         PasswordField.setMinimumSize(new java.awt.Dimension(11, 400));
         PasswordField.addActionListener(new java.awt.event.ActionListener() {
@@ -186,13 +101,6 @@ public boolean sign_in(java.lang.String submitted_password){
 
         Owner_ID_label.setForeground(new java.awt.Color(10, 171, 19));
 
-        OKButton.setText("Done");
-        OKButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                OKButtonActionPerformed(evt);
-            }
-        });
-
         ChangePasswordButton.setText("CHANGE PASSWORD");
         ChangePasswordButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -205,15 +113,9 @@ public boolean sign_in(java.lang.String submitted_password){
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                        .addComponent(messageLabel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addGroup(layout.createSequentialGroup()
-                            .addComponent(ChangePasswordButton, javax.swing.GroupLayout.PREFERRED_SIZE, 202, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(OKButton)))
                     .addGroup(layout.createSequentialGroup()
+                        .addContainerGap()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                 .addComponent(Owner_ID_label3)
@@ -227,8 +129,11 @@ public boolean sign_in(java.lang.String submitted_password){
                                 .addComponent(newPasswordField, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE))
                             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                                 .addComponent(PasswordField, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(Owner_ID_label, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE)))))
-                .addContainerGap())
+                                .addComponent(Owner_ID_label, javax.swing.GroupLayout.PREFERRED_SIZE, 170, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(93, 93, 93)
+                        .addComponent(ChangePasswordButton)))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -249,52 +154,38 @@ public boolean sign_in(java.lang.String submitted_password){
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(new_confirmPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(Owner_ID_label3))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(messageLabel, javax.swing.GroupLayout.DEFAULT_SIZE, 20, Short.MAX_VALUE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(OKButton)
-                    .addComponent(ChangePasswordButton))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 32, Short.MAX_VALUE)
+                .addComponent(ChangePasswordButton)
                 .addContainerGap())
         );
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void OKButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_OKButtonActionPerformed
-       setVisible(false);
-    }//GEN-LAST:event_OKButtonActionPerformed
-
     private void ChangePasswordButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ChangePasswordButtonActionPerformed
-       char[] new_password_array         = this.newPasswordField.getPassword();
-       char[] confirm_password_array     = this.new_confirmPasswordField.getPassword();
-       java.lang.String new_password     = String.valueOf(new_password_array);
-       java.lang.String confirm_password = String.valueOf(confirm_password_array);
-       boolean isSame = new_password.matches(confirm_password);
-       System.out.println(isSame);
-       char[] current_password_array     = this.PasswordField.getPassword();
-       java.lang.String current_password = String.valueOf(current_password_array);
-       boolean state = sign_in(current_password);
-       if(!isSame){
-           setMessage("New passwords do not match");
+       String username = dbms.getOWNER();       
+       boolean success = dbms.verifyLogin( username, String.valueOf(PasswordField.getPassword()) );
+       
+       if(!success){ return; }
+       
+       String new_password     = String.valueOf(newPasswordField.getPassword());
+       String confirm_password = String.valueOf(new_confirmPasswordField.getPassword());
+       
+       if(!new_password.matches(confirm_password)){
+           JOptionPane.showMessageDialog(null, "New passwords do not match","ERROR", JOptionPane.ERROR_MESSAGE);
+           return;
        }
-       if(!state){
-           setMessage("Current password is incorrect");
-       }
-       if(isSame){
-           if(state){
-               try{
-                   setMessage("Changing password");
-                   java.lang.String encrypted_password = dbms.encrypt(new_password,dbms.originalKey); 
-                   dbms.current_owner.setPassword(new_password);
-                   dbms.current_owner.setEncryptedPassword(encrypted_password);
-                   dbms.executeUpdateOwnerPreparedStatement(dbms.current_owner);
-                   setMessage("Password Changed");
-               }catch(Exception e){
-                  System.out.println(e.toString());
-               }              
-           }
-       }
+
+       try{
+           String encrypted_password = dbms.encrypt(new_password,dbms.originalKey); 
+//           dbms.current_owner.setPassword(new_password);
+//           dbms.current_owner.setEncryptedPassword(encrypted_password);
+           dbms.executeUpdateOwnerPreparedStatement(username, encrypted_password);
+           JOptionPane.showMessageDialog(null, "Password changed","INFO", JOptionPane.INFORMATION_MESSAGE);
+           dbms.queryOwners();
+       }catch(Exception e){ System.out.println(e.toString()); }
+           
+       
     }//GEN-LAST:event_ChangePasswordButtonActionPerformed
 
     private void PasswordFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_PasswordFieldActionPerformed
@@ -338,14 +229,12 @@ public boolean sign_in(java.lang.String submitted_password){
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton ChangePasswordButton;
-    private javax.swing.JButton OKButton;
     private javax.swing.JLabel Owner_ID_label;
     private javax.swing.JLabel Owner_ID_label3;
     private javax.swing.JLabel Owner_ID_label4;
     private javax.swing.JLabel Owner_ID_label5;
     private javax.swing.JLabel Owner_ID_label6;
     private javax.swing.JPasswordField PasswordField;
-    private javax.swing.JLabel messageLabel;
     private javax.swing.JPasswordField newPasswordField;
     private javax.swing.JPasswordField new_confirmPasswordField;
     // End of variables declaration//GEN-END:variables

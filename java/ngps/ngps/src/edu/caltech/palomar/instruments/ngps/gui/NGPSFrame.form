@@ -79,6 +79,7 @@
             <MenuItem class="javax.swing.JMenuItem" name="aboutNGPSMenuItem">
               <Properties>
                 <Property name="text" type="java.lang.String" value="About NGPS GUI"/>
+                <Property name="enabled" type="boolean" value="false"/>
               </Properties>
               <Events>
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="aboutNGPSMenuItemActionPerformed"/>
@@ -449,12 +450,12 @@
                 <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="myAccountMenuItemActionPerformed"/>
               </Events>
             </MenuItem>
-            <MenuItem class="javax.swing.JMenuItem" name="jMenuItem5">
+            <MenuItem class="javax.swing.JMenuItem" name="createUserMenuItem2">
               <Properties>
                 <Property name="text" type="java.lang.String" value="Create User"/>
               </Properties>
               <Events>
-                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="jMenuItem5ActionPerformed"/>
+                <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="createUserMenuItem2ActionPerformed"/>
               </Events>
             </MenuItem>
           </SubComponents>
