@@ -4,25 +4,15 @@
  */
 package edu.caltech.palomar.instruments.ngps.gui;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
-import edu.caltech.palomar.instruments.ngps.object.Target;
 import edu.caltech.palomar.instruments.ngps.os.ObservationSequencerController;
 import edu.caltech.palomar.instruments.ngps.parser.TargetListParser2;
 import static edu.caltech.palomar.instruments.ngps.parser.TargetListParser2.DEFAULT_MODEL;
 import static edu.caltech.palomar.instruments.ngps.parser.TargetListParser2.ETC_MODEL;
 import edu.caltech.palomar.instruments.ngps.tables.EditTableInterface;
 import edu.caltech.palomar.instruments.ngps.util.TableRowTransferHandler;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.util.Stack;
 import javax.swing.ButtonGroup;
-import javax.swing.DropMode;
-import javax.swing.ImageIcon;
-import javax.swing.JFrame;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.event.ListSelectionEvent;
@@ -34,19 +24,10 @@ import javax.swing.JOptionPane;
  */
 public class ImportFrame extends javax.swing.JFrame {
     public   TargetListParser2 myTargetListParser;
-    public   Stack             copy_stack          = new Stack();
-    private  int               selected_table_row;
-    private  boolean           paste_state;
     private  JTable            extendedTargetTable;
     public   NGPSdatabase      dbms;
     public   java.lang.String  USERDIR           = System.getProperty("user.dir");
     public   java.lang.String  SEP               = System.getProperty("file.separator");
-    public   java.lang.String  IMAGE_CACHE       = new java.lang.String(SEP + "images" + SEP);
-    public   ImageIcon         ON;
-    public   ImageIcon         OFF;
-    public   ImageIcon         UNKNOWN;  
-    public   ImageIcon         ARROW;
-    public   ImageIcon         ARROW_GREY;
     public   ButtonGroup       simple_extended_buttongroup = new ButtonGroup();
     public   NGPSFrame         myNGPSFrame;
     public ObservationSequencerController myObservationSequencerController;
@@ -99,8 +80,6 @@ public void save_to_database(){
         int wavelength = dbms.myOTMlauncher.getWavelength();
         myNGPSFrame.updateStarTime();
            java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.getStartTimestamp();       
- //       java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T03:00:00.000");
- //       java.sql.Timestamp current_timestamp_otm = dbms.myOTMlauncher.string_to_timestamp("2022-01-01T03:00:00.000");
         dbms.myOTMlauncher.OTM(current_timestamp_otm,seeing,wavelength);
         dbms.setTablePopulated(true);
         if(myObservationSequencerController.getSTATE().matches("READY_NO_TARGETS")){
@@ -115,11 +94,6 @@ public void save_to_database(){
 /     initializeDatabase()
 /=============================================================================================*/
 private void initialize(){
-    ON           = new ImageIcon(USERDIR + IMAGE_CACHE + "ON.png");
-    OFF          = new ImageIcon(USERDIR + IMAGE_CACHE + "OFF.png");
-    UNKNOWN      = new ImageIcon(USERDIR + IMAGE_CACHE + "UNKNOWN.gif");
-    ARROW        = new ImageIcon(USERDIR + IMAGE_CACHE + "ArrowsGreenRight.gif");
-    ARROW_GREY   = new ImageIcon(USERDIR + IMAGE_CACHE + "ArrowsGreyRight.gif");
     simple_extended_buttongroup.add(simpleRadioButton);
     simple_extended_buttongroup.add(extendedRadioButton);
     simpleRadioButton.setSelected(true);
@@ -142,29 +116,8 @@ public void setModelType(int model_type){
      extendedTargetTable = new JTable();
      simpleTargetTable.setModel(myTargetListParser.myTargetSimpleTableModel);
      extendedTargetTable.setModel(myTargetListParser.myTargetExtendedTableModel);
-        simpleTargetTable.getSelectionModel().addListSelectionListener(new ListSelectionListener(){
-        public void valueChanged(ListSelectionEvent event) {
-             if(!event.getValueIsAdjusting() && simpleTargetTable.getSelectedRow() != -1){
-                 selected_table_row = simpleTargetTable.getSelectedRow();
-              }
-        }
-        });
-        extendedTargetTable.getSelectionModel().addListSelectionListener(new ListSelectionListener(){
-        public void valueChanged(ListSelectionEvent event) {
-             if(!event.getValueIsAdjusting() && simpleTargetTable.getSelectedRow() != -1){
-                 selected_table_row = extendedTargetTable.getSelectedRow();
-              }
-        }
-        });
      initializeTableModel(simpleTargetTable,myTargetListParser.myTargetSimpleTableModel);  
      initializeTableModel(extendedTargetTable,myTargetListParser.myTargetExtendedTableModel); 
-     initializeTreeControl();
- } 
- /*=============================================================================================
-/    initializeTreeControl()
-/=============================================================================================*/
- public void initializeTreeControl(){
-//     target_set_Tree.setModel(myTargetListParser.myDefaultTreeModel);
  } 
 /*=============================================================================================
 /     initializeDatabase()`````````
@@ -209,85 +162,14 @@ public void setModelType(int model_type){
       });
    } 
 /*=============================================================================================
-/     setPaste(boolean state)
-/=============================================================================================*/
-    public void setPaste(boolean state){
-        paste_state = state;
-    }
-/*=============================================================================================
 /     initializeDatabase()`````````
 /=============================================================================================*/
     public void initializeTableModel(JTable current_table,EditTableInterface current_table_model){
         current_table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         current_table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        current_table.setRowSelectionAllowed(true);  
-        current_table.setDragEnabled(true);
-        current_table.setDropMode(DropMode.INSERT_ROWS);
+        current_table.setRowSelectionAllowed(false);  
+        current_table.setDragEnabled(false);
         current_table.setTransferHandler(new TableRowTransferHandler(current_table)); 
-        JMenuItem insert_menu_item  = new JMenuItem("Insert");
-        JMenuItem delete_menu_item  = new JMenuItem("Delete");
-        JMenuItem copy_menu_item    = new JMenuItem("Copy");
-        JMenuItem paste_menu_item   = new JMenuItem("Paste");
-        paste_menu_item.setEnabled(false);
-           JPopupMenu popup          = new JPopupMenu("Editing Functions");
-                      popup.add(insert_menu_item);
-                      popup.add(delete_menu_item);
-                      popup.add(copy_menu_item);
-                      popup.add(paste_menu_item);
-           insert_menu_item.addActionListener(new ActionListener() {
-              public void actionPerformed(ActionEvent ev) {
-                 System.out.println("Insert Menu Item pressed");
-                 current_table_model.insert(selected_table_row, new Target());
-              }
-           });
-           delete_menu_item.addActionListener(new ActionListener() {
-              public void actionPerformed(ActionEvent ev) {
-                 System.out.println("Delete Menu Item pressed"); 
-                 current_table_model.delete(selected_table_row);
-              }
-           });
-           copy_menu_item.addActionListener(new ActionListener() {
-              public void actionPerformed(ActionEvent ev) {
-                 System.out.println("Copy Menu Item pressed");
-                 Target selected_copy_target = current_table_model.getRecord(selected_table_row);
-                 copy_stack.push(selected_copy_target);
-                 paste_menu_item.setEnabled(true);
-//                         myTableModel.delete(selected_table_row);
-              }
-           });
-           paste_menu_item.addActionListener(new ActionListener() {
-              public void actionPerformed(ActionEvent ev) {
-                 System.out.println("Paste Menu Item pressed"); 
-                 Target current_target = (Target)copy_stack.pop();
-                 current_table_model.delete(selected_table_row);
-                 current_table_model.insert(selected_table_row, current_target);
-                 current_table_model.reorder_table();
-                 boolean state = copy_stack.empty();
-                 if(state){
-                    setPaste(false); 
-                    paste_menu_item.setEnabled(false);
-                 }
-              }
-           });
-        current_table.setComponentPopupMenu(popup);
-        current_table.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                int r = current_table.rowAtPoint(e.getPoint());
-                if (r >= 0 && r < current_table.getRowCount()) {
-                    current_table.setRowSelectionInterval(r, r);
-                } else {
-                    current_table.clearSelection();
-                }
-                int rowindex = current_table.getSelectedRow();
-                if (rowindex < 0)
-                    return;
-                if (e.isPopupTrigger() && e.getComponent() instanceof JTable ) {
-                    
-                    popup.show(e.getComponent(), e.getX(), e.getY());
-                }
-            }
-        });
     } 
 /*=============================================================================================
 /     Property Change Listener for the Ephemeris_propertyChange
@@ -295,30 +177,9 @@ public void setModelType(int model_type){
   private void dbms_propertyChange(PropertyChangeEvent e)  {
      java.lang.String propertyName = e.getPropertyName();
      System.out.println("importFrame: "+propertyName);
-/*=============================================================================================
-/    PARAMETERS FROM THE JSKYCALCMODEL
-/=============================================================================================*/
-    if(propertyName.matches("connected")){
-        java.lang.Boolean current_value = (java.lang.Boolean)e.getNewValue(); 
-        if(current_value){
-//            database_connect_ToggleButton.setIcon(ON);
-//            database_connect_ToggleButton.setText("CONNECTED TO NGPS DATABASE");
-//            commit_to_dbms_Button.setEnabled(true);
-//            commit_to_dbms_Button.setIcon(ARROW);
-        }else if(!current_value){
-//            database_connect_ToggleButton.setIcon(OFF);
-//            database_connect_ToggleButton.setText("CONNECT TO NGPS DATABASE");
-//            commit_to_dbms_Button.setEnabled(false);
-//            commit_to_dbms_Button.setIcon(ARROW_GREY);
-        }
-    }
+
     if(propertyName.matches("selected_set_id")){
         java.lang.Integer current_value = (java.lang.Integer)e.getNewValue(); 
- //       this.selectedSetIDLabel.setText(current_value.toString());
-    }
-    if(propertyName.matches("owner")){
-//        java.lang.String current_value = (java.lang.String)e.getNewValue();
-//        selectedOwnerTextField.setText(current_value);
     }
 }
 /*=============================================================================================
@@ -345,17 +206,16 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
         jPanel8 = new javax.swing.JPanel();
         targetScrollPane = new javax.swing.JScrollPane();
         simpleTargetTable = new javax.swing.JTable();
-        OKButton = new javax.swing.JButton();
-        CanelButton = new javax.swing.JButton();
         jPanel7 = new javax.swing.JPanel();
         jScrollPane6 = new javax.swing.JScrollPane();
         observationTextEditorPane = new javax.swing.JTextPane();
-        parseTextButton = new javax.swing.JButton();
         jPanel2 = new javax.swing.JPanel();
         extendedRadioButton = new javax.swing.JRadioButton();
         simpleRadioButton = new javax.swing.JRadioButton();
         jLabel1 = new javax.swing.JLabel();
         selectedFileLabel = new javax.swing.JLabel();
+        CanelButton = new javax.swing.JButton();
+        OKButton = new javax.swing.JButton();
 
         jTabbedPane2.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0), 3));
 
@@ -380,45 +240,21 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
         });
         targetScrollPane.setViewportView(simpleTargetTable);
 
-        OKButton.setText("OK");
-        OKButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                OKButtonActionPerformed(evt);
-            }
-        });
-
-        CanelButton.setText("Cancel");
-        CanelButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                CanelButtonActionPerformed(evt);
-            }
-        });
-
         javax.swing.GroupLayout jPanel8Layout = new javax.swing.GroupLayout(jPanel8);
         jPanel8.setLayout(jPanel8Layout);
         jPanel8Layout.setHorizontalGroup(
             jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel8Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(targetScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 655, Short.MAX_VALUE)
+                .addComponent(targetScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 1026, Short.MAX_VALUE)
                 .addContainerGap())
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel8Layout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(OKButton)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(CanelButton)
-                .addGap(25, 25, 25))
         );
         jPanel8Layout.setVerticalGroup(
             jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel8Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(targetScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 383, Short.MAX_VALUE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(jPanel8Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(OKButton)
-                    .addComponent(CanelButton))
-                .addContainerGap())
+                .addComponent(targetScrollPane, javax.swing.GroupLayout.DEFAULT_SIZE, 386, Short.MAX_VALUE)
+                .addGap(4, 4, 4))
         );
 
         jTabbedPane2.addTab("Table View", jPanel8);
@@ -427,34 +263,21 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
         jScrollPane6.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         jScrollPane6.setViewportView(observationTextEditorPane);
 
-        parseTextButton.setText("Parse Text");
-        parseTextButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                parseTextButtonActionPerformed(evt);
-            }
-        });
-
         javax.swing.GroupLayout jPanel7Layout = new javax.swing.GroupLayout(jPanel7);
         jPanel7.setLayout(jPanel7Layout);
         jPanel7Layout.setHorizontalGroup(
             jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel7Layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanel7Layout.createSequentialGroup()
-                        .addComponent(parseTextButton)
-                        .addGap(0, 546, Short.MAX_VALUE))
-                    .addComponent(jScrollPane6, javax.swing.GroupLayout.DEFAULT_SIZE, 655, Short.MAX_VALUE))
+                .addComponent(jScrollPane6, javax.swing.GroupLayout.DEFAULT_SIZE, 1026, Short.MAX_VALUE)
                 .addContainerGap())
         );
         jPanel7Layout.setVerticalGroup(
             jPanel7Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel7Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane6, javax.swing.GroupLayout.DEFAULT_SIZE, 376, Short.MAX_VALUE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(parseTextButton)
-                .addContainerGap())
+                .addComponent(jScrollPane6, javax.swing.GroupLayout.DEFAULT_SIZE, 386, Short.MAX_VALUE)
+                .addGap(4, 4, 4))
         );
 
         jTabbedPane2.addTab("Text View", jPanel7);
@@ -504,20 +327,44 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
                 .addGap(0, 9, Short.MAX_VALUE))
         );
 
+        CanelButton.setText("Cancel");
+        CanelButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                CanelButtonActionPerformed(evt);
+            }
+        });
+
+        OKButton.setText("OK");
+        OKButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                OKButtonActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-            .addComponent(jTabbedPane2)
+            .addComponent(jTabbedPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 1058, Short.MAX_VALUE)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(OKButton)
+                .addGap(18, 18, 18)
+                .addComponent(CanelButton)
+                .addGap(23, 23, 23))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
                 .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jTabbedPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 482, Short.MAX_VALUE)
-                .addContainerGap())
+                .addComponent(jTabbedPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 440, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(OKButton)
+                    .addComponent(CanelButton))
+                .addGap(4, 4, 4))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -533,7 +380,7 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 544, Short.MAX_VALUE)
+            .addGap(0, 541, Short.MAX_VALUE)
             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                 .addGroup(layout.createSequentialGroup()
                     .addGap(6, 6, 6)
@@ -551,10 +398,6 @@ private void parser_propertyChange(PropertyChangeEvent e)  {
     private void CanelButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_CanelButtonActionPerformed
        setVisible(false);       
     }//GEN-LAST:event_CanelButtonActionPerformed
-
-    private void parseTextButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_parseTextButtonActionPerformed
-        //        myTargetListParser.parseText();
-    }//GEN-LAST:event_parseTextButtonActionPerformed
 
     private void extendedRadioButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_extendedRadioButtonActionPerformed
         change_to_extendedTable();
@@ -631,7 +474,6 @@ public class ExecuteSaveToDMBSThread  implements Runnable{
     private javax.swing.JScrollPane jScrollPane6;
     private javax.swing.JTabbedPane jTabbedPane2;
     private javax.swing.JTextPane observationTextEditorPane;
-    private javax.swing.JButton parseTextButton;
     private javax.swing.JLabel selectedFileLabel;
     private javax.swing.JRadioButton simpleRadioButton;
     private javax.swing.JTable simpleTargetTable;

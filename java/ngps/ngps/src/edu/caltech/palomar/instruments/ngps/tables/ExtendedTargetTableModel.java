@@ -108,12 +108,12 @@ private void initializeTableColumns(){
      addColumn("OFFSET_DEC");    
      addColumn("EXPTIME");
      addColumn("NEXP");
-     addColumn("SLITW");
+     addColumn("SLITWIDTH");
      addColumn("SLITOFFSET");
      addColumn("CCDMODE");
      addColumn("BINSPECT");
      addColumn("BINSPAT");
-     addColumn("CASSANGLE");
+     addColumn("SLITANGLE");
      addColumn("WRANGE_START");
      addColumn("WRANGE_END");
      addColumn("CHANNEL");
@@ -121,28 +121,12 @@ private void initializeTableColumns(){
      addColumn("MAGSYSTEM");
      addColumn("MAGFILTER");
      addColumn("SRCMODEL");
-     editable_array[0] = true;
-     editable_array[1] = true;
-     editable_array[2] = true;
-     editable_array[3] = true;
-     editable_array[4] = true;
-     editable_array[5] = true;
-     editable_array[6] = true;
-     editable_array[7] = true;
-     editable_array[8] = true;
-     editable_array[9] = true;
-     editable_array[10] = true;
-     editable_array[11] = true;
-     editable_array[12] = true;
-     editable_array[13] = true;
-     editable_array[14] = true;
-     editable_array[15] = true;
-     editable_array[16] = true;
-     editable_array[17] = true;
-     editable_array[18] = true;
-     editable_array[19] = true;
-     editable_array[20] = true;
-     editable_array[21] = true;
+     
+     for(boolean ear : editable_array){
+         ear = true;
+     }          
+//     editable_array[0] = false;
+//     editable_array[1] = false; // etc.
   }
 /*================================================================================================
 /      reorder(int fromIndex, int toIndex)

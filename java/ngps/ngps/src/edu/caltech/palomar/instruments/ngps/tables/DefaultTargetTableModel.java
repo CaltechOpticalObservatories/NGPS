@@ -107,29 +107,18 @@ private void initializeTableColumns(){
      addColumn("OFFSET_DEC");   //6
      addColumn("EXPTIME");      //7
      addColumn("NEXP");         //8
-     addColumn("SLITW");        //9
+     addColumn("SLITWIDTH");    //9
      addColumn("SLITOFFSET");   //10
      addColumn("CCDMODE");      //11
      addColumn("BINSPECT");     //12
      addColumn("BINSPAT");      //13
-     addColumn("CASSANGLE");    //14
+     addColumn("SLITANGLE");    //14
      
-     
-     editable_array[0] = true;
-     editable_array[1] = true;
-     editable_array[2] = true;
-     editable_array[3] = true;
-     editable_array[4] = true;
-     editable_array[5] = true;
-     editable_array[6] = true;
-     editable_array[7] = true;
-     editable_array[8] = true;
-     editable_array[9] = true;
-     editable_array[10] = true;
-     editable_array[11] = true;
-     editable_array[12] = true;
-     editable_array[13] = true;
-     editable_array[14] = true;
+     for(boolean ear : editable_array){
+         ear = true;
+     }          
+//     editable_array[0] = false;
+//     editable_array[1] = false; // etc.
   }
 /*================================================================================================
 /      reorder(int fromIndex, int toIndex)
