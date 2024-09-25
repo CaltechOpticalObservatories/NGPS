@@ -599,6 +599,40 @@ std::mutex generate_tmpfile_mtx;
   /***** timeout **************************************************************/
 
 
+  /***** precise_sleep ********************************************************/
+  void precise_sleep( long microseconds ) {
+    struct timespec start_time;
+    struct timespec current_time;
+    struct timespec ts;
+
+    // Get the starting time
+    //
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    // Loop until the total elapsed time reaches the requested sleep time
+    //
+    long remaining_time = microseconds;
+    while ( remaining_time > 0 ) {
+      // Calculate remaining time
+      //
+      ts.tv_sec = remaining_time / 1000000;
+      ts.tv_nsec = (remaining_time % 1000000) * 1000;
+
+      // Sleep for the remaining time
+      //
+      clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+
+      // check current time and calculate elapsed and remaining time
+      //
+      clock_gettime(CLOCK_MONOTONIC, &current_time);
+      long elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000000 +
+                          (current_time.tv_nsec - start_time.tv_nsec) / 1000;
+      remaining_time = microseconds - elapsed_time;
+    }
+  }
+  /***** precise_sleep ********************************************************/
+
+
   /***** mjd_from *************************************************************/
   /**
    * @brief      return Modified Julian Date for time in a timespec struct
@@ -1090,3 +1124,4 @@ std::mutex generate_tmpfile_mtx;
     return sep;
   }
   /***** angular_separation ***************************************************/
+

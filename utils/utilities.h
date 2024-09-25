@@ -31,6 +31,8 @@
 #include <cctype>
 #include <set>
 #include <limits>
+#include <ctime>
+#include "time.h"
 
 #define TO_DEGREES ( 360. / 24. )
 #define TO_HOURS   ( 24. / 360. )
@@ -82,8 +84,9 @@ std::string get_system_date( const std::string &tmzone_in );
 std::string get_file_time();                        /// return current time in formatted string "YYYYMMDDHHMMSS" used for filenames
 std::string get_file_time( const std::string &tmzone_in );
 
-
 double get_clock_time();
+
+void precise_sleep( long microseconds );             /// precise, non-interruptable sleep timer for short durrations
 
 long timeout( int wholesec=0, std::string next="" );  /// wait until next integral second or minute
 
@@ -325,4 +328,101 @@ class BoolState {
     ~BoolState() { _state.store( false, std::memory_order_seq_cst ); }
 };
 /***** BoolState **************************************************************/
+
+
+/***** PreciseTimer ***********************************************************/
+/**
+ * @class   PreciseTimer
+ * @brief   creates an interruptable, precise sleep timer object
+ * @details This is a utility class to create a reasonably accurate
+ *          interruptable sleep timer (precision approx 100 microseconds).
+ *          This is done by making repeated calls to precise_sleep(),
+ *          while checking for a cancel flag.
+ *
+ */
+class PreciseTimer {
+  private:
+    std::atomic<bool> cancelled;
+
+    /***** PreciseTimer::precise_sleep ****************************************/
+    void precise_sleep(long microseconds) {
+      struct timespec start_time;
+      struct timespec current_time;
+      struct timespec ts;
+
+      // remaining time starts as requested time
+      //
+      long remaining_time = microseconds;
+
+      // Loop until the total elapsed time reaches the requested sleep time
+      //
+      clock_gettime(CLOCK_MONOTONIC, &start_time);  // start time
+      while ( remaining_time > 0 ) {
+        // Calculate remaining time
+        //
+        ts.tv_sec = remaining_time / 1000000;
+        ts.tv_nsec = (remaining_time % 1000000) * 1000;
+
+        // Sleep for the remaining time
+        //
+        clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+
+        // check current time and calculate elapsed and remaining time
+        //
+        clock_gettime(CLOCK_MONOTONIC, &current_time);
+        long elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000000 +
+                            (current_time.tv_nsec - start_time.tv_nsec) / 1000;
+        remaining_time = microseconds - elapsed_time;
+      }
+    }
+
+    /***** PreciseTimer::long_precise_sleep ***********************************/
+    void long_precise_sleep(long microseconds) {
+      // max_short_sleep is the largest sleep time for precise_sleep()
+      // This should be kept small, a few seconds or less.
+      //
+      const long max_short_sleep = 3000000;         // units are microseconds
+      struct timespec start_time;
+      struct timespec current_time;
+
+      // remaining time starts as requested time
+      //
+      long remaining_time = microseconds;
+
+      // loop forever until broken
+      //
+      clock_gettime(CLOCK_MONOTONIC, &start_time);  // start time
+      while ( true ) {
+        if (cancelled) return;                      // break if cancelled
+
+        // sleep for the shorter of max_short_sleep or remaining time
+        //
+        long to_sleep = std::min( remaining_time, max_short_sleep );
+        precise_sleep(to_sleep);
+
+        // calculate elapsed time and time remaining
+        //
+        clock_gettime(CLOCK_MONOTONIC, &current_time);
+        long elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000000 +
+                            (current_time.tv_nsec - start_time.tv_nsec) / 1000;
+        remaining_time = microseconds - elapsed_time;
+
+        if ( remaining_time <= 0 ) break;           // break when time is up
+      }
+    }
+
+  public:
+    PreciseTimer() : cancelled(false) { }
+
+    /***** PreciseTimer::delay ************************************************/
+    void delay(long milliseconds) {
+      cancelled=false;
+      long microseconds = milliseconds * 1000;
+      long_precise_sleep( microseconds );
+    }
+
+    /***** PreciseTimer::stop *************************************************/
+    void stop() { cancelled=true; }
+};
+/***** PreciseTimer ***********************************************************/
 

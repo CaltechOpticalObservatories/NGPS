@@ -803,6 +803,36 @@ namespace Network {
   /***** Network::TcpSocket::Write ********************************************/
 
 
+  /***** Network::TcpSocket::Write ********************************************/
+  /**
+   * @brief      write a single char to a socket
+   * @param[in]  c  const char pointer
+   * @return     number of bytes written or -1 on error
+   *
+   */
+  ssize_t TcpSocket::Write( const char* c ) {
+    if (!c) {                                // need non-null char
+      logwrite( "Network::TcpSocket::Write", "ERROR requested write nullptr" );
+      return -1;
+    }
+    ssize_t ret;
+    if ( this->fd < 0 ) {                    // need valid file descriptor
+      logwrite( "Network::TcpSocket::Write", "ERROR invalid file descriptor" );
+      ret=-1;
+    }
+    else {
+      ret = write( this->fd, (void*)c, 1 );  // write the single char
+      if (ret<0) {
+        std::stringstream message;
+        message << "ERROR write \"" << c << "\" to fd " << this->fd << " failed: " << strerror(errno);
+        logwrite( "Network::TcpSocket::Write", message.str() );
+      }
+    }
+    return ret;                              // return value of write() or -1
+  }
+  /***** Network::TcpSocket::Write ********************************************/
+
+
   /***** Network::TcpSocket::Read *********************************************/
   /**
    * @brief      read data from connected socket
