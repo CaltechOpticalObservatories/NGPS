@@ -286,12 +286,14 @@ void block_main(Network::TcpSocket sock) {
  */
 void thread_main(Network::TcpSocket &sock) {
   while (1) {
-    server.conn_mutex.lock();
+    {
+    std::lock_guard<std::mutex> lock(server.conn_mutex);
     sock.Accept();
-    server.conn_mutex.unlock();
+    }
 #ifdef LOGLEVEL_DEBUG
     std::stringstream message;
-    message.str(""); message << "[DEBUG] thread " << sock.id << " spawning doit to handle connection on fd " << sock.getfd();
+    message.str(""); message << "[DEBUG] thread " << sock.id
+                             << " spawning doit to handle connection on fd " << sock.getfd();
     logwrite( "Server::thread_main", message.str() );
 #endif
     std::thread(doit, std::ref(sock)).detach();  // spawn a thread to handle this connection
@@ -792,7 +794,6 @@ void doit(Network::TcpSocket &sock) {
                                          // Keep blocking connection open for interactive session.
   }
 
-  sock.Close();
   return;
 }
 /***** Server::doit *********************************************************/

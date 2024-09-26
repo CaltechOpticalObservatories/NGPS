@@ -25,6 +25,7 @@
 namespace Camera {
 
   Camera::Camera() {
+    this->shutter_delay = 0;
     this->is_mexamps = false;            // don't force amplifiers to be written as multi-extension
     this->is_longerror = false;
     this->is_mex = false;
@@ -76,20 +77,71 @@ namespace Camera {
   /***** Camera::Camera::abort ************************************************/
 
 
-void Camera::set_abortstate(bool state) {
-  this->abort_mutex.lock();
-  this->abortstate = state;
-  this->_abortstate = state;
-  this->abort_mutex.unlock();
-}
+  void Camera::set_abortstate(bool state) {
+    std::lock_guard<std::mutex> lock(this->abort_mutex);
+    this->abortstate = state;
+    this->_abortstate = state;
+  }
 
-bool Camera::get_abortstate() {
-  bool state;
-  this->abort_mutex.lock();
-  state = this->abortstate;
-  this->abort_mutex.unlock();
-  return( state );
-}
+  bool Camera::get_abortstate() {
+    bool state;
+    std::lock_guard<std::mutex> lock(this->abort_mutex);
+    state = this->abortstate;
+    return( state );
+  }
+
+
+  /***** Camera::Camera::set_shutter_delay ************************************/
+  /**
+   * @brief      interface for setting shutter delay from input string
+   * @details    This uses the overloaded version which accepts a long and
+   *             does the range checks.
+   * @param[in]  shdel_str  string representation of shutter delay in ms
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::set_shutter_delay( const std::string shdel_str ) {
+    try {
+      return set_shutter_delay( std::stod( shdel_str ) );
+    }
+    catch( const std::exception &e ) {
+      std::stringstream message;
+      message << "ERROR parsing \"" << shdel_str << "\" as double: " << e.what();
+      logwrite( "Camera::Camera::set_shutter_delay", message.str() );
+      return ERROR;
+    }
+  }
+  /***** Camera::Camera::set_shutter_delay ************************************/
+
+
+  /***** Camera::Camera::set_shutter_delay ************************************/
+  /**
+   * @brief      interface for setting the shutter delay
+   * @param[in]  shdel  requested shutter delay in milliseconds
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Camera::set_shutter_delay( long shdel ) {
+    std::string function = "Camera::Camera::set_shutter_delay";
+    std::stringstream message;
+
+    // If shutter delay within range {0:MAX} then save it to the class
+    // and broadcast the change.
+    //
+    if ( shdel < 0 || shdel > MAX_SHUTTER_DELAY ) {
+      message << "ERROR " << shdel << " outside range { 0 : " << MAX_SHUTTER_DELAY << " } ms";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    this->shutter_delay = shdel;
+
+    message << "changed SHUTTER_DELAY = " << this->shutter_delay;
+    this->async.enqueue_and_log( "NOTICE", function, message.str() );
+
+    return NO_ERROR;
+  }
+  /***** Camera::Camera::set_shutter_delay ************************************/
 
 
   /***** Camera::Camera::log_error ********************************************/

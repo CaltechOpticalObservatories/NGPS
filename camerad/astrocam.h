@@ -638,7 +638,15 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       inline int get_framethread_count();
       inline void init_framethread_count();
 
-      inline bool camera_idle( int dev ) {
+      /**
+       * @brief      is the specified camera idle?
+       * @details    Asking if a camera is idle refers to its activity
+       *             status -- actively reading out or in frame transfer.
+       * @param[in]  dev  device number to check
+       * @return     true|false
+       *
+       */
+      inline bool is_camera_idle( int dev ) {
         int num=0;
         num += ( this->controller[dev].in_readout ? 1 : 0 );
         num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
@@ -647,7 +655,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
         return ( num>0 ? false : true );
       }
 
-      inline bool camera_idle() {
+      inline bool is_camera_idle() {
         int num=0;
         for ( auto dev : this->devlist ) {
           num += ( this->controller[dev].in_readout ? 1 : 0 );
@@ -658,19 +666,19 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
         return ( num>0 ? false : true );
       }
 
-      inline bool in_readout() {
+      inline bool in_readout() const {
         int num=0;
         for ( auto dev : this->devlist ) {
-          num += ( this->controller[dev].in_readout ? 1 : 0 );
-          num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+          num += ( this->controller.at(dev).in_readout ? 1 : 0 );
+          num += ( this->controller.at(dev).in_frametransfer ? 1 : 0 );
         }
         return( num==0 ? false : true );
       }
 
-      inline bool in_frametransfer() {
+      inline bool in_frametransfer() const {
         int num=0;
         for ( auto dev : this->devlist ) {
-          num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+          num += ( this->controller.at(dev).in_frametransfer ? 1 : 0 );
         }
         return( num==0 ? false : true );
       }
@@ -936,6 +944,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long parse_controller_config( std::string args );
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
       long test(std::string args, std::string &retstring);                 ///< test routines
+      void dothread_test_shutter_timer(long ms);
       long interface(std::string &iface);                                  ///< returns the interface
       long do_abort();                                                     ///< 
       long abort();                                                        ///< 

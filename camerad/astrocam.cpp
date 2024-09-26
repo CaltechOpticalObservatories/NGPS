@@ -236,7 +236,7 @@ namespace AstroCam {
       std::unique_lock<std::mutex> state_lock(interface.state_lock);
       interface.state_monitor_condition.wait(state_lock);
 
-      while ( interface.camera_idle() ) {
+      while ( interface.is_camera_idle() ) {
         selectdev.clear();
         message.str(""); message << "enabling detector idling for channel(s)";
         for ( const auto &dev : interface.devlist ) {
@@ -503,6 +503,11 @@ namespace AstroCam {
     if ( dev < 0 || chan.empty() || this->controller.find(dev)==this->controller.end() ) {
       message.str(""); message << "ERROR: unrecognized channel or device \"" << tryme << "\"";
       logwrite( function, message.str() );
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] dev=" << dev << " chan=" << chan << " controller.find(dev)==controller.end ? "
+                               << ((this->controller.find(dev)==this->controller.end()) ? "true" : "false" );
+      logwrite( function, message.str() );
+#endif
       retstring="invalid_argument";
       return( ERROR );
     }
@@ -948,7 +953,7 @@ namespace AstroCam {
     std::string function = "AstroCam::Interface::do_disconnect_controller";
     std::stringstream message;
 
-    if ( !this->camera_idle() ) {
+    if ( !this->is_camera_idle() ) {
       logwrite( function, "ERROR: cannot close controller while camera is active" );
       return ERROR;
     }
@@ -996,7 +1001,7 @@ namespace AstroCam {
     std::stringstream message;
     long error = NO_ERROR;
 
-    if ( !this->camera_idle() ) {
+    if ( !this->is_camera_idle() ) {
       logwrite( function, "ERROR: cannot close controller while camera is active" );
       return( ERROR );
     }
@@ -1159,6 +1164,17 @@ namespace AstroCam {
         logwrite( function, message.str() );
         this->camera.async.enqueue( message.str() );
         applied++;
+      }
+
+      if ( this->config.param[entry] == "SHUTTER_DELAY" ) {
+        if ( !config.arg[entry].empty() ) {
+          error = this->camera.set_shutter_delay( config.arg[entry] );
+          message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+          message << (error==ERROR ? " (ERROR)" : "" );
+          logwrite( function, message.str() );
+          this->camera.async.enqueue( message.str() );
+          applied++;
+        }
       }
 
       // If an external shutter has been enabled ( = "yes" ) then add a FITS keyword
@@ -1553,7 +1569,7 @@ namespace AstroCam {
 
     // Here is the shutter timer
     //
-    std::this_thread::sleep_for( std::chrono::milliseconds( interface.camera.exposure_time ) );
+    interface.camera.shutter_timer.delay( interface.camera.exposure_time );
 
     // close the Bonn shutter
     //
@@ -1630,6 +1646,10 @@ namespace AstroCam {
     }
     logwrite(function, message.str());
 #endif
+
+    // Wait for any shutter delay before reading out.
+    //
+    if ( cam.get_shutter_delay() > 0 ) cam.wait_shutter_delay();
 
     // Trigger the readout waveforms here.
     // A callback function triggered by the ARC API will perform the writing of frames to disk.
@@ -2156,7 +2176,7 @@ namespace AstroCam {
     // with readout because it would require sending a command which cannot
     // be handled during readout.
     //
-    if ( this->camera.ext_shutter && !this->camera_idle() ) {
+    if ( this->camera.ext_shutter && !this->is_camera_idle() ) {
       this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: overlapping exposure cannot be started when using ARC shutter" );
       return( ERROR );
     }
@@ -2283,7 +2303,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     //
     std::string retstr;
     for ( const auto &dev : this->devlist ) {
-      if ( this->camera_idle( dev ) ) {
+      if ( this->is_camera_idle( dev ) ) {
         error = this->do_native( dev, "CLR", retstr );  // send the clear command here to this dev
         if ( error != NO_ERROR ) {
           message.str(""); message << "ERROR clearing chan " << this->controller[dev].channel << " CCD: " << retstr;
@@ -3696,7 +3716,7 @@ logwrite(function, message.str());
 
     // Don't allow any changes while any exposure activity is running.
     //
-    if ( !this->camera_idle() ) {
+    if ( !this->is_camera_idle() ) {
       logwrite( function, "ERROR: all exposure activity must be stopped before changing image parameters" );
       retstring="camera_busy";
       return( ERROR );
@@ -4288,9 +4308,8 @@ logwrite(function, message.str());
    *
    */
   inline void Interface::add_framethread() {
-    this->framethreadcount_mutex.lock();
+    std::lock_guard<std::mutex> lock(this->framethreadcount_mutex);
     this->framethreadcount++;
-    this->framethreadcount_mutex.unlock();
   }
   /***** AstroCam::Interface::add_framethread *********************************/
 
@@ -4301,9 +4320,8 @@ logwrite(function, message.str());
    *
    */
   inline void Interface::remove_framethread() {
-    this->framethreadcount_mutex.lock();
+    std::lock_guard<std::mutex> lock(this->framethreadcount_mutex);
     this->framethreadcount--;
-    this->framethreadcount_mutex.unlock();
   }
   /***** AstroCam::Interface::remove_framethread ******************************/
 
@@ -4316,9 +4334,8 @@ logwrite(function, message.str());
    */
   inline int Interface::get_framethread_count() {
     int count;
-    this->framethreadcount_mutex.lock();
+    std::lock_guard<std::mutex> lock(this->framethreadcount_mutex);
     count = this->framethreadcount;
-    this->framethreadcount_mutex.unlock();
     return( count );
   }
   /***** AstroCam::Interface::get_framethread *********************************/
@@ -4330,9 +4347,8 @@ logwrite(function, message.str());
    *
    */
   inline void Interface::init_framethread_count() {
-    this->framethreadcount_mutex.lock();
+    std::lock_guard<std::mutex> lock(this->framethreadcount_mutex);
     this->framethreadcount = 0;
-    this->framethreadcount_mutex.unlock();
   }
   /***** AstroCam::Interface::init_framethread_count **************************/
 
@@ -4428,9 +4444,8 @@ logwrite(function, message.str());
    *
    */
   inline void Interface::Controller::init_framecount() {
-    server.framecount_mutex.lock();
+    std::lock_guard<std::mutex> lock(server.framecount_mutex);
     this->framecount = 0;
-    server.framecount_mutex.unlock();
   }
   /***** AstroCam::Interface::Controller::init_framecount *********************/
 
@@ -4443,9 +4458,8 @@ logwrite(function, message.str());
    */
   inline int Interface::Controller::get_framecount() {
     int count;
-    server.framecount_mutex.lock();
+    std::lock_guard<std::mutex> lock(server.framecount_mutex);
     count = this->framecount;
-    server.framecount_mutex.unlock();
     return( count );
   }
   /***** AstroCam::Interface::Controller::get_framecount **********************/
@@ -4457,9 +4471,8 @@ logwrite(function, message.str());
    *
    */
   inline void Interface::Controller::increment_framecount() {
-    server.framecount_mutex.lock();
+    std::lock_guard<std::mutex> lock(server.framecount_mutex);
     this->framecount++;
-    server.framecount_mutex.unlock();
   }
   /***** AstroCam::Interface::Controller::increment_framecount ****************/
 
@@ -4632,7 +4645,10 @@ logwrite(function, message.str());
       retstring.append( "   bw [ ? ]\n" );
       retstring.append( "   fitsname [ ? ]\n" );
       retstring.append( "   frametransfer ? | R | I | U | G \n" );
+      retstring.append( "   lpsleep ? | <ms> | stop\n" );
       retstring.append( "   pending [ ? ]\n" );
+      retstring.append( "   psleep ? | <ms>\n" );
+      retstring.append( "   shdelay ? | <delay> | test\n" );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       return HELP;
     }
@@ -4681,6 +4697,7 @@ logwrite(function, message.str());
         logwrite( function, msg );                                   // log ths fitsname
       }
     } // end if (testname == fitsname)
+    else
 
     // ----------------------------------------------------
     // async [message]
@@ -4688,7 +4705,6 @@ logwrite(function, message.str());
     // queue an asynchronous message
     // The [message] param is optional. If not provided then "test" is queued.
     //
-    else
     if (testname == "async") {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
         retstring = CAMERAD_TEST;
@@ -4710,6 +4726,7 @@ logwrite(function, message.str());
         this->camera.async.enqueue("test");
       }
     } // end if (testname == async)
+    else
 
     // ----------------------------------------------------
     // bw <nseq>
@@ -4719,7 +4736,6 @@ logwrite(function, message.str());
     // of exposures, including reading the frame buffer -- everything except
     // for the fits file writing.
     //
-    else
     if (testname == "bw") {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
         retstring = CAMERAD_TEST;
@@ -4733,6 +4749,97 @@ logwrite(function, message.str());
       logwrite(function, message.str());
       error = ERROR;
     } // end if (testname==bw)
+    else
+
+    // ----------------------------------------------------
+    // lpsleep
+    // ----------------------------------------------------
+    //
+    if (testname == "lpsleep") {
+      long ms;
+      if ( tokens.size() > 1 ) {
+        if ( tokens[1] == "?" ) {
+          retstring = CAMERAD_TEST;
+          retstring.append( " lpsleep <ms> | stop\n" );
+          retstring.append( "  Tests the Long Precise Sleep timer by spawning a thread that sleeps\n" );
+          retstring.append( "  using the shutter_timer object. Delay time <ms> is a whole number of\n" );
+          retstring.append( "  milliseconds and can be any value. This can be interrupted using the\n" );
+          retstring.append( "  stop argument.\n" );
+          error = HELP;
+        }
+        else
+        if ( tokens[1] == "stop" ) {
+          this->camera.shutter_timer.stop();
+          logwrite( function, "TEST: stopped timer test early" );
+          retstring="stopped";
+          return NO_ERROR;
+        }
+        else {
+          try {
+            ms = std::stol( tokens[1] );
+            logwrite( function, "TEST: spawning timer test thread" );
+            std::thread( &AstroCam::Interface::dothread_test_shutter_timer, this, ms ).detach();
+            retstring="running";
+            return NO_ERROR;
+          }
+          catch ( const std::exception &e ) {
+            message.str(""); message << "ERROR parsing long from \"" << ms << "\": " << e.what();
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+      }
+      else {
+        logwrite( function, "ERROR expected <ms> | stop" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+    else
+
+    // ----------------------------------------------------
+    // psleep
+    // ----------------------------------------------------
+    //
+    if (testname == "psleep") {
+      long ms;
+      if ( tokens.size() > 1 ) {
+        if ( tokens[1] == "?" ) {
+          retstring = CAMERAD_TEST;
+          retstring.append( " psleep <ms>\n" );
+          retstring.append( "  Tests the (short) precise sleep timer directly, not in a thread.\n" );
+          retstring.append( "  Delay time <ms> is a whole number of milliseconds and is limited to\n" );
+          retstring.append( "  " );
+          retstring.append( std::to_string(Camera::MAX_SHUTTER_DELAY) );
+          retstring.append( "  ms. This cannot be interrupted.\n" );
+          error = HELP;
+        }
+        else {
+          try {
+            long ms = std::stol( tokens.at(1) );
+            if ( ms > Camera::MAX_SHUTTER_DELAY ) {
+              logwrite( function, "ERROR delay cannot exceed 2000 ms" );
+              retstring="invalid_argument";
+              return ERROR;
+            }
+            logwrite( function, "TEST: precise sleep started" );
+            precise_sleep( 1000*ms );  // precise_sleep() accepts microseconds
+            logwrite( function, "TEST: precise sleep ended" );
+          }
+          catch ( const std::exception &e ) {
+            message.str(""); message << "ERROR parsing long from \"" << ms << "\": " << e.what();
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+      }
+      else {
+        logwrite( function, "ERROR expected <ms> delay" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+    else
 
     // ----------------------------------------------------
     // shutter
@@ -4740,7 +4847,6 @@ logwrite(function, message.str());
     // Shutter control (see help below)
     // init, open, close, get, time, expose
     //
-    else
     if (testname == "shutter") {
       if ( tokens.size() == 2 ) {
         error = NO_ERROR;
@@ -4809,12 +4915,45 @@ logwrite(function, message.str());
         error = ERROR;
       }
     } // end if (testname==shutter)
+    else
+
+    // ----------------------------------------------------
+    // shdelay
+    // ----------------------------------------------------
+    // set shutter delay
+    //
+    if (testname == "shdelay") {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = CAMERAD_TEST;
+        retstring.append( " shdelay [ <delay> | test ]\n" );
+        retstring.append( "  Set/get the delay in whole milliseconds between the close of shutter\n" );
+        retstring.append( "  and start of readout. If no argument supplied then the current delay is\n" );
+        retstring.append( "  returned.\n" );
+        retstring.append( "  Use \'test\' to spawn a thread which tests the delay by logging a message\n" );
+        retstring.append( "  at the start and stop of the delay period.\n" );
+        return HELP;
+      }
+
+      if ( tokens.size() > 1 ) {
+        if ( tokens[1] == "test" ) {
+          message.str(""); message << "TEST: spawning shutter timer test thread to check shdelay = " << this->camera.get_shutter_delay();
+          logwrite( function, message.str() );
+          std::thread( &AstroCam::Interface::dothread_test_shutter_timer, this, this->camera.get_shutter_delay() ).detach();
+          retstring="running";
+          return NO_ERROR;
+        }
+        else {
+          error = this->camera.set_shutter_delay( tokens[1] );
+        }
+      }
+      retstring = std::to_string( this->camera.get_shutter_delay() );
+    }
+    else
 
     // ----------------------------------------------------
     // pending
     // ----------------------------------------------------
     //
-    else 
     if ( testname == "pending" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = CAMERAD_TEST;
@@ -4828,7 +4967,7 @@ logwrite(function, message.str());
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "camera_idle=" << ( this->camera_idle() ? "true" : "false" );
+      message.str(""); message << "is_camera_idle=" << ( this->is_camera_idle() ? "true" : "false" );
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
@@ -4868,13 +5007,13 @@ logwrite(function, message.str());
       }
       error = NO_ERROR;
     } // end if (testname==pending)
+    else
 
     // ----------------------------------------------------
     // frametransfer
     // ----------------------------------------------------
     // run the frame transfer waveforms on the indicated device
     //
-    else
     if ( testname == "frametransfer" ) {
 
       if ( tokens.size()==1 || ( tokens.size() > 1 && tokens[1] == "?" ) ) {
@@ -4938,12 +5077,12 @@ logwrite(function, message.str());
       retstring=this->controller[dev].channel;
       return( NO_ERROR );
     }
+    else
 
     // ----------------------------------------------------
     // controller
     // ----------------------------------------------------
     //
-    else
     if ( testname == "controller" ) {
 
       for ( auto &con : this->controller ) {
@@ -4957,24 +5096,21 @@ logwrite(function, message.str());
       }
       return( NO_ERROR );
     }
-
     else
     if ( testname == "monnotify" ) {
       this->state_monitor_condition.notify_all();
       return( NO_ERROR );
     }
-
     else
     if ( testname == "monthread" ) {
       std::thread( std::ref(AstroCam::Interface::state_monitor_thread), std::ref(*this) ).detach();
       return( NO_ERROR );
     }
-
+    else {
     // ----------------------------------------------------
     // invalid test name
     // ----------------------------------------------------
     //
-    else {
       message.str(""); message << "ERROR: test " << testname << " unknown";;
       logwrite(function, message.str());
       error = ERROR;
@@ -4983,6 +5119,24 @@ logwrite(function, message.str());
     return error;
   }
   /**** AstroCam::Interface::test *********************************************/
+
+
+  /**** AstroCam::Interface::dothread_test_shutter_timer **********************/
+  /**
+   * @brief      test thread for testing shutter timer
+   * @details    This thread sleeps for the specified number of milliseconds
+   *             using the shutter timer, a PreciseTimer object, logging before
+   *             and after the sleep.
+   * @param[in]  ms  number of milliseconds to sleep
+   *
+   */
+  void Interface::dothread_test_shutter_timer(long ms) {
+    logwrite( "AstroCam::Interface::dothread_test_shutter_timer", "TEST: starting timer" );
+    this->camera.shutter_timer.delay( ms );
+    logwrite( "AstroCam::Interface::dothread_test_shutter_timer", "TEST: ending timer" );
+    return;
+  }
+  /**** AstroCam::Interface::dothread_test_shutter_timer **********************/
 
 
   /**** AstroCam::Interface::Controller::write ********************************/

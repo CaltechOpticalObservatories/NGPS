@@ -38,6 +38,8 @@
  */
 namespace Camera {
 
+  constexpr long MAX_SHUTTER_DELAY = 3000;  // maximum shutter delay in ms
+
   class InterfaceBase {
     public:
       InterfaceBase() = default;
@@ -75,9 +77,9 @@ namespace Camera {
       std::condition_variable condition;
       std::mutex lock;
 
-      inline bool isopen()   { return ( this->state==1 ? true : false ); }
-      inline bool isclosed() { return ( this->state==0 ? true : false ); }
-      inline void arm()      { this->state = -1; }
+      inline bool isopen()   const { return ( this->state==1 ? true : false ); }
+      inline bool isclosed() const { return ( this->state==0 ? true : false ); }
+      inline void arm()            { this->state = -1; }
 
       /***** Camera::Shutter:init *********************************************/
       /*
@@ -179,7 +181,7 @@ namespace Camera {
        * @return     double precision duration in msec
        *
        */
-      inline double duration() {
+      inline double duration() const {
         return( std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
                                                                    - this->open_time).count() / 1000000. );
       }
@@ -308,6 +310,7 @@ namespace Camera {
       std::atomic<bool> _abortstate;
       std::mutex abort_mutex;
       std::stringstream lasterrorstring;     //!< a place to preserve an error message
+      long shutter_delay;                    /// shutter delay in milliseconds
 
     public:
       Camera();
@@ -324,7 +327,12 @@ namespace Camera {
 
       Common::Queue async;                   /// message queue object
       Shutter shutter;                       /// Bonn Shutter object
+      PreciseTimer shutter_timer;            /// precise timer object for shutter timing
 
+      inline long get_shutter_delay() const { return this->shutter_delay; }
+      long set_shutter_delay( const std::string shdel_str );
+      long set_shutter_delay( long shdel );
+      void wait_shutter_delay() { precise_sleep( this->shutter_delay * 1000 ); }  /// uses the precise_sleep timer in utils
       void set_abortstate(bool state);
       bool get_abortstate();
 

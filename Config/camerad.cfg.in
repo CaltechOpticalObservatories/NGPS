@@ -16,7 +16,7 @@ DAEMON=no                        # run as a daemon? {yes,no}
 
 # -----------------------------------------------------------------------------
 # The following are for simulated ARC controllers
-ARCSIM_NUMDEV=2
+ARCSIM_NUMDEV=0
 
 # -----------------------------------------------------------------------------
 # Each camera controller is defined by
@@ -79,6 +79,12 @@ DET_AXIS_LABEL_Y=spat
 # attempt will be made to initialize or communicate with the shutter.
 #
 BONN_SHUTTER=yes
+
+# -----------------------------------------------------------------------------
+# SHUTTER_DELAY is a whole number in milliseconds to wait after closing the
+# shuter before reading out. Max delay is 3000 ms.
+#
+SHUTTER_DELAY=0
 
 # -----------------------------------------------------------------------------
 # An external shutter trigger can be enabled. If EXT_SHUTTER is yes, then
