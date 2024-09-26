@@ -33,6 +33,7 @@ const std::string ACAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?
 const std::string ACAMD_ISOPEN   = "isopen";    ///< *** close connection to all devices
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
+const std::string ACAMD_OFFSETCAL = "offsetcal";  ///< perform TCS offset calibration
 const std::string ACAMD_OFFSETGOAL = "offsetgoal";  ///< add dRA,dDEC offset to goal
 const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_PUTONSLIT= "putonslit"; ///< put target on slit
@@ -83,6 +84,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_ACQUIRE+" [ ? | [ <ra> <dec> <angle> | target | guide | stop ] ]",
                                                 ACAMD_COORDS+" [ ? | [ <ra> <dec> <angle> ] ]",
                                                 ACAMD_ISACQUIRED,
+                                                ACAMD_OFFSETCAL+" [ ? ]",
                                                 ACAMD_OFFSETGOAL+" [ ? | <dRA> <dDEC> ]",
                                                 ACAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> ]",
                                                 ACAMD_SHUTDOWN+" [ ? ]",

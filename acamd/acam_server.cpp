@@ -680,6 +680,10 @@ namespace Acam {
                       }
       }
       else
+      if ( cmd == ACAMD_OFFSETCAL ) {
+                      ret = this->interface.offset_cal( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_OFFSETGOAL ) {
                       ret = this->interface.offset_goal( args, retstring );
       }

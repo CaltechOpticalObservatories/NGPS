@@ -196,6 +196,7 @@ namespace Acam {
       std::atomic<bool> update;  ///<! set if the menus need to be updated
       std::string push_settings; ///<! name of script to push settings to GUI
       std::string push_image;    ///<! name of script to push an image to GUI
+      std::string push_message;  ///<! name of script to push a message to GUI
 
     public:
       GuideManager() : update(false), exptime(NAN), gain(-1), filter("undef"), focus(NAN) { }
@@ -212,6 +213,9 @@ namespace Acam {
 
       // sets the private variable push_image, call on config
       inline void set_push_image( std::string sh ) { this->push_image=sh; }
+
+      // sets the private variable push_image, call on config
+      inline void set_push_message( std::string sh ) { this->push_message=sh; }
 
       // sets the update flag true
       inline void set_update() { this->update.store( true ); return; }
@@ -273,6 +277,24 @@ namespace Acam {
 
         if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
           logwrite( function, "ERROR pushing image to GUI" );
+        }
+
+        return;
+      }
+
+      /**
+       * @brief      calls the push_message script with the supplied message string
+       * @param[in]  message  message to send
+       */
+      void push_guider_message( std::string_view message ) {
+        std::string function = "Acam::GuideManager::push_guider_message";
+        std::stringstream cmd;
+        cmd << push_message << " "
+            << camera_name << " "
+            << message;
+
+        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
+          logwrite( function, "ERROR pushing message to GUI" );
         }
 
         return;
@@ -355,6 +377,8 @@ namespace Acam {
           return NO_ERROR;
         }
       }
+
+      inline double get_tcs_max_offset() { return this->tcs_max_offset; }
 
       inline void set_max_attempts( int _max ) { this->max_attempts = _max; }
       inline void set_min_repeat( int _repeat ) { this->min_repeat = _repeat; }
@@ -500,6 +524,7 @@ namespace Acam {
       long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long acquire( std::string args, std::string &retstring );
       long target_coords( std::string args, std::string &retstring );  /// set or get target coords for acquire
+      long offset_cal( const std::string args, std::string &retstring );
       long offset_goal( const std::string args, std::string &retstring );
       long put_on_slit( const std::string args, std::string &retstring );
       long shutdown( std::string args, std::string &retstring );

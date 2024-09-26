@@ -42,6 +42,12 @@ PUSH_GUIDER_SETTINGS=/home/developer/Software/GuiderGUI/push_settings_guider.sh
 #
 PUSH_GUIDER_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 
+# PUSH_GUIDER_MESSAGE
+# This defines the shell script which pushes guider message to the
+# SAOimage GUIDER display.
+#
+PUSH_GUIDER_MESSAGE=/home/developer/Software/GuiderGUI/message.sh
+
 # ASTRONOMY SOLVER
 #
 # Optional key=value args to pass to the astrometry solver.

@@ -1410,6 +1410,13 @@ namespace Acam {
         applied++;
       }
 
+      if ( starts_with( config.param[entry], "PUSH_GUIDER_MESSAGE" ) ) {
+        this->guide_manager.set_push_message( config.arg[entry] );
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
       if ( starts_with( config.param[entry], "ANDOR_SN" ) ) {
 
         // When the SN is set to "emulate" (case-insensitive) then this enables the Andor emulator
@@ -3692,16 +3699,10 @@ namespace Acam {
       //
       if ( tokens.size() == 4 ) _name = tokens.at(3);
     }
-    catch ( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR invalid argument parsing \"" << args << "\" : " << e.what();
+    catch ( std::exception &e ) {
+      message.str(""); message << "ERROR exception parsing \"" << args << "\" : " << e.what();
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return ERROR;
-    }
-    catch ( std::out_of_range &e ) {
-      message.str(""); message << "ERROR out of range parsing \"" << args << "\" : " << e.what();
-      logwrite( function, message.str() );
-      retstring="out_of_range";
       return ERROR;
     }
 
@@ -3726,6 +3727,120 @@ namespace Acam {
     return NO_ERROR;
   }
   /***** Acam::Interface::target_coords ***************************************/
+
+
+  /***** Acam::Interface::offset_cal ******************************************/
+  /**
+   * @brief      performs the TCS offset calibration, as much as we're allowed
+   * @details    The default offsets on the P200 TCS periodically need to be
+   *             calibrated and "zeroed". Palomar policy forbids us to send the
+   *             needed commands so this procedure cannot be fully automated but
+   *             this function performs the needed acquisition and prompts the
+   *             user to give the needed verbal queues to the telescope operator.
+   * @param[in]  args       none, help only
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::offset_cal( const std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::offset_cal";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_OFFSETCAL;
+      retstring.append( " \n" );
+      retstring.append( "  Performs as much of the TCS offset calibration as is allowed by policy.\n" );
+      retstring.append( "  This will attempt to acquire a target on the ACAM using the current TCS\n" );
+      retstring.append( "  coordinates as the target coordinates to acquire. The solver results and\n" );
+      retstring.append( "  offsets are logged, displayed (if run on the command line) and pushed to\n" );
+      retstring.append( "  the ACAM GUI (if active). The user must provide verbal instruction to the\n" );
+      retstring.append( "  telescope operator to zero the offsets.\n" );
+      return HELP;
+    }
+    else if ( !args.empty() ) {
+      logwrite( function, "ERROR no arguments expected" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // Nothing to do if no TCS.
+    //
+    if ( ! this->tcs_online.load() ) {
+      logwrite( function, "ERROR TCS is not connected" );
+      retstring="tcs_offline";
+      return ERROR;
+    }
+
+    // get the current TCS coordinates
+    // then translate into ACAM coordinates.
+    //
+    double scope_angle=NAN, scope_ra=NAN, scope_dec=NAN,
+           acam_angle=NAN,  acam_ra=NAN,  acam_dec=NAN;
+    long error=NO_ERROR;
+
+    // Get the current pointing from the TCS
+    //
+    if (error==NO_ERROR) error = this->tcsd.get_cass( scope_angle );
+    if (error==NO_ERROR) error = this->tcsd.get_coords( scope_ra, scope_dec );  // returns RA in decimal hours, DEC in decimal degrees
+
+    // and translate that into acam coordinates.
+    //
+    if (error==NO_ERROR) error = this->fpoffsets.compute_offset( "SCOPE", "ACAM",
+                                                                 scope_ra, scope_dec, scope_angle,
+                                                                 acam_ra,  acam_dec,  acam_angle );
+    if ( error != NO_ERROR ) {
+      logwrite( function, "ERROR getting current TCS coordinates" );
+      retstring="tcs_fault";
+      return ERROR;
+    }
+
+    // Before starting the acquire, temporarily increase the max TCS offset limit
+    // to the field of view of the ACAM. This needs to be restored on completion.
+    //
+    double max_offset = this->target.get_tcs_max_offset();  // remember the current max
+    this->target.set_tcs_max_offset(300.);                  // increase to 300 arcsec
+    message.str(""); message << "changed max offset limit to " << this->target.get_tcs_max_offset() << " arcsec";
+    logwrite( function, message.str() );
+
+    // form and send the acquire command
+    //
+    std::stringstream cmd;
+    cmd << std::fixed << std::setprecision(6) << acam_ra << " " << acam_dec << " " << acam_angle << " acam";
+
+    error = this->acquire( cmd.str(), retstring );
+
+    // restore the max offset limit
+    //
+    this->target.set_tcs_max_offset(max_offset);
+    message.str(""); message << "changed max offset limit to " << this->target.get_tcs_max_offset() << " arcsec";
+    logwrite( function, message.str() );
+
+    std::string result;
+
+    if (error==NO_ERROR) this->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
+
+    if (error==NO_ERROR) {
+      retstring = "ACAM CALIBRATION RESULT\n";
+      retstring.append( "Astrometry result = "+result+" // GOOD, NOISY, etc.\n" );
+      message.str(""); message << "ACAM center = " << acam_ra << " " << acam_dec << " // RA, DEC from solver\n\n";
+      retstring.append( message.str() );
+      message.str(""); message << "Offset RA = <TBD> arcsec // reqstat\n";
+      retstring.append( message.str() );
+      message.str(""); message << "Offset DEC = <TBD> arcsec // reqstat\n";
+      retstring.append( message.str() );
+      message.str(""); message << "Total Offset = <TBD> arcsec // hypotenuse\n\n";
+      retstring.append( message.str() );
+      retstring.append( "Total Offset GOAL = <TBD>\n\n" );
+      retstring.append( "If the total offset is larger than the goal, ask the operator to zero them now.  Then slew off the target, slew back, and press CALIBRATE again to verify offsets are still small.\n\n" );
+      retstring.append( "Calibrating and zeroing the offset improves the efficiency of the Acquisition and Guide system but does not affect accuracy.\n" );
+      this->guide_manager.push_guider_message( retstring );
+      return HELP;
+    }
+    else return error;
+  }
+  /***** Acam::Interface::offset_cal ******************************************/
 
 
   /***** Acam::Interface::offset_goal *****************************************/
