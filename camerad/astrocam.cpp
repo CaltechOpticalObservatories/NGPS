@@ -239,7 +239,7 @@ namespace AstroCam {
       while ( interface.is_camera_idle() ) {
         selectdev.clear();
         message.str(""); message << "enabling detector idling for channel(s)";
-        for ( const auto &dev : interface.devlist ) {
+        for ( const auto &dev : interface.devnums ) {
           logwrite(function, std::to_string(dev));
           if ( interface.controller[dev].connected ) {
             selectdev.push_back(dev);
@@ -361,7 +361,7 @@ namespace AstroCam {
 
     // Create a vector of configured device numbers
     //
-    this->configdev.push_back( dev );
+    this->configured_devnums.push_back( dev );
 
     // The Controller class holds the Camera::Information class and the FITS_file class,
     // as well as wrappers for calling the functions inside the FITS_file class.
@@ -439,11 +439,11 @@ namespace AstroCam {
     // make sure input references are initialized
     //
     dev=-1;
-    chan.empty();
-    retstring.empty();
+    chan.clear();
+    retstring.clear();
 
     std::vector<std::string> tokens;
-    std::string tryme;
+    std::string tryme;                  // either a dev or chan, TBD
 
     // Tokenize args to extract requested <dev>|<chan> and <string>, as appropriate
     //
@@ -452,7 +452,7 @@ namespace AstroCam {
     if ( ntok < 1 ) {                   // need at least one token
       logwrite( function, "ERROR: bad arguments. expected <dev> | <chan> [ <string> ]" );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
     else
     if ( ntok == 1 ) {                  // dev|chan only
@@ -475,17 +475,22 @@ namespace AstroCam {
       if ( dev < 0 ) {            // don't let the user input a negative number
         logwrite( function, "ERROR: dev# must be >= 0" );
         retstring="invalid_argument";
-        return( ERROR );
+        return ERROR;
       }
     }
     catch ( std::out_of_range & ) { logwrite( function, "ERROR: out of range" ); retstring="exception"; return ERROR; }
-    catch ( std::invalid_argument & ) { }    // ignore this for now, it just means it's not a number
+    catch ( std::invalid_argument & ) { }    // ignore this for now, it just means "tryme" is not a number
 
     // If the stoi conversion failed then we're out here with a negative dev.
     // If it succeeded then all we have is a number >= 0.
     // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
     for ( const auto &con : this->controller ) {
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] con.first=" << con.first << " con.second.channel=" << con.second.channel
+                               << " .devnum=" << con.second.devnum << " .inactive=" << (con.second.inactive?"T":"F");
+      logwrite( function, message.str() );
+#endif
       if ( con.second.inactive ) continue;   // skip controllers flagged as inactive
       if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
@@ -521,7 +526,7 @@ namespace AstroCam {
     std::string function = "AstroCam::Interface::do_abort";
     std::stringstream message;
 //  int this_expbuf = this->get_expbuf();
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       this->exposure_pending( dev, false );
       for ( int buf=0; buf < NUM_EXPBUF; ++buf ) this->write_pending( buf, dev, false );
     }
@@ -631,7 +636,7 @@ namespace AstroCam {
         // must be resized for binning, set the image size for each device.
         // This uses the existing image size parameters and the new binning.
         //
-        for ( const auto &dev : this->devlist ) {
+        for ( const auto &dev : this->devnums ) {
           message.str("");
           message << dev << " "
                   << this->controller[dev].detrows << " "
@@ -678,7 +683,7 @@ namespace AstroCam {
    * connect to all detected devices.
    *
    * If devices_in is specified (and not empty) then it must contain a space-delimited
-   * list of device numbers to open. A public vector devlist will hold these device
+   * list of device numbers to open. A public vector devnums will hold these device
    * numbers. This vector will be updated here to represent only the devices that
    * are actually connected.
    *
@@ -688,7 +693,7 @@ namespace AstroCam {
    * call with the specific device(s). In other words, it's all (requested) or nothing.
    *
    */
-  long Interface::do_connect_controller( std::string devices_in, std::string &retstring ) {
+  long Interface::do_connect_controller( const std::string devices_in, std::string &retstring ) {
     std::string function = "AstroCam::Interface::do_connect_controller";
     std::stringstream message;
     long error = NO_ERROR;
@@ -697,8 +702,8 @@ namespace AstroCam {
     //
     if ( devices_in == "?" || devices_in == "help" ) {
       retstring = CAMERAD_OPEN;
-      retstring.append( " [ <devlist> ]\n" );
-      retstring.append( "  Opens a connection to the indicated PCI/e device(s) where <devlist>\n" );
+      retstring.append( " [ <devnums> ]\n" );
+      retstring.append( "  Opens a connection to the indicated PCI/e device(s) where <devnums>\n" );
       retstring.append( "  is an optional space-delimited list of device numbers.\n" );
       retstring.append( "  e.g. \"0 1\" to open PCI devices 0 and 1\n" );
       retstring.append( "  If no list is provided then all detected devices will be opened.\n" );
@@ -735,38 +740,38 @@ namespace AstroCam {
 
     // Log PCI devices configured
     //
-    if ( this->configdev.empty() ) {
+    if ( this->configured_devnums.empty() ) {
       logwrite( function, "ERROR: no devices configured. Need CONTROLLER keyword in config file." );
       retstring="not_configured";
       return ERROR;
     }
 
-    for ( const auto &dev : this->configdev ) {
+    for ( const auto &dev : this->configured_devnums ) {
       message.str(""); message << "device " << dev << " configured";
       logwrite( function, message.str() );
     }
 
     // Look at the requested device(s) to open, which are in the
     // space-delimited string devices_in. The devices to open
-    // are stored in a public vector "devlist".
+    // are stored in a public vector "devnums".
     //
 
-    // If no string is given then use vector of configured devices. The configdev
+    // If no string is given then use vector of configured devices. The configured_devnums
     // vector contains a list of devices defined in the config file with the
     // keyword CONTROLLER=(<PCIDEV> <CHAN> <FT> <FIRMWARE>).
     //
-    if ( devices_in.empty() ) this->devlist = this->configdev;
+    if ( devices_in.empty() ) this->devnums = this->configured_devnums;
     else {
-      // Otherwise, tokenize the device list string and build devlist from the tokens
+      // Otherwise, tokenize the device list string and build devnums from the tokens
       //
-      this->devlist.clear();                          // empty the devlist since it's being built here
+      this->devnums.clear();                          // empty devnums vector since it's being built here
       std::vector<std::string> tokens;
       Tokenize(devices_in, tokens, " ");
       for ( const auto &n : tokens ) {                // For each token in the devices_in string,
         try {
           int dev = std::stoi( n );                   // convert to int
-          if ( std::find( this->devlist.begin(), this->devlist.end(), dev ) == this->devlist.end() ) { // If it's not already in the vector,
-            this->devlist.push_back( dev );                                                            // then push into devlist vector.
+          if ( std::find( this->devnums.begin(), this->devnums.end(), dev ) == this->devnums.end() ) { // If it's not already in the vector,
+            this->devnums.push_back( dev );                                                            // then push into devnums vector.
           }
         }
         catch (const std::exception &e) {
@@ -783,24 +788,25 @@ namespace AstroCam {
       }
     }
 
-    // For each requested dev in devlist, if there is a matching controller in the config file,
+    // For each requested dev in devnums, if there is a matching controller in the config file,
     // then get the devname and store it in the controller map.
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       if ( this->controller.find( dev ) != this->controller.end() ) {
         this->controller[ dev ].devname = devNames[dev];
       }
     }
 
-    // The size of devlist at this point is the number of devices that will
+    // The size of devnums at this point is the number of devices that will
     // be _requested_ to be opened. This should match the number of opened
     // devices at the end of this function.
     //
-    size_t requested_device_count = this->devlist.size();
-    // Open only the devices specified by the devlist vector
+    size_t requested_device_count = this->devnums.size();
+
+    // Open only the devices specified by the devnums vector
     //
-    for ( size_t i = 0; i < this->devlist.size(); ) {
-      int dev = this->devlist[i];
+    for ( size_t i = 0; i < this->devnums.size(); ) {
+      int dev = this->devnums[i];
       auto dev_found = this->controller.find( dev );
 
       if ( dev_found == this->controller.end() ) {
@@ -812,6 +818,7 @@ namespace AstroCam {
         error = ERROR;
         break;
       }
+      else this->controller[dev].inactive=false;
 
       try {
         // Open the PCI device if not already open
@@ -882,23 +889,23 @@ namespace AstroCam {
         retstring="exception";
         error = ERROR;
       }
-      // A call to do_disconnect_controller() can modify the size of devlist,
+      // A call to do_disconnect_controller() can modify the size of devnums,
       // so only if the loop index i is still valid with respect to the current
-      // size of devlist should it be incremented.
+      // size of devnums should it be incremented.
       //
-      if ( i < devlist.size() ) ++i;
+      if ( i < devnums.size() ) ++i;
     }
 
     // Log the list of connected devices
     //
     message.str(""); message << "connected devices { ";
-    for (const auto &devcheck : this->devlist) { message << devcheck << " "; } message << "}";
+    for (const auto &devcheck : this->devnums) { message << devcheck << " "; } message << "}";
     logwrite(function, message.str());
 
-    // check the size of the devlist now, against the size requested
+    // check the size of the devnums now, against the size requested
     //
-    if ( this->devlist.size() != requested_device_count ) {
-      message.str(""); message << "ERROR: " << this->devlist.size() <<" connected device(s) but "
+    if ( this->devnums.size() != requested_device_count ) {
+      message.str(""); message << "ERROR: " << this->devnums.size() <<" connected device(s) but "
                                << requested_device_count << " requested";
       logwrite( function, message.str() );
 
@@ -948,6 +955,8 @@ namespace AstroCam {
    * @brief      closes the connection to the specified PCI/e device
    * @return     ERROR or NO_ERROR
    *
+   * This function is overloaded
+   *
    */
   long Interface::do_disconnect_controller( int dev ) {
     std::string function = "AstroCam::Interface::do_disconnect_controller";
@@ -958,7 +967,7 @@ namespace AstroCam {
       return ERROR;
     }
 
-    // close indicated PCI device and remove dev from devlist
+    // close indicated PCI device and remove dev from devnums
     //
     try {
       if ( this->controller.at(dev).pArcDev == nullptr ) {
@@ -970,11 +979,11 @@ namespace AstroCam {
       logwrite(function, message.str());
       this->controller.at(dev).pArcDev->close();  // throws nothing, no error handling
       this->controller.at(dev).connected=false;
-      // remove dev from devlist
+      // remove dev from devnums
       //
-      auto it = std::find( this->devlist.begin(), this->devlist.end(), dev );
-      if ( it != this->devlist.end() ) {
-        this->devlist.erase(it);
+      auto it = std::find( this->devnums.begin(), this->devnums.end(), dev );
+      if ( it != this->devnums.end() ) {
+        this->devnums.erase(it);
       }
     }
     catch ( std::out_of_range &e ) {
@@ -995,6 +1004,8 @@ namespace AstroCam {
    *
    * no error handling. can only fail if the camera is busy.
    *
+   * This function is overloaded
+   *
    */
   long Interface::do_disconnect_controller() {
     std::string function = "AstroCam::Interface::do_disconnect_controller";
@@ -1009,15 +1020,13 @@ namespace AstroCam {
     // close all of the PCI devices
     //
     for ( auto &con : this->controller ) {
-      if ( con.second.connected ) {
-        message.str(""); message << "closing " << con.second.devname;
-        logwrite(function, message.str());
-        if ( con.second.pArcDev != nullptr ) con.second.pArcDev->close();  // throws nothing
-        con.second.connected=false;
-      }
+      message.str(""); message << "closing " << con.second.devname;
+      logwrite(function, message.str());
+      if ( con.second.pArcDev != nullptr ) con.second.pArcDev->close();  // throws nothing
+      con.second.connected=false;
     }
 
-    this->devlist.clear();   // no devices open
+    this->devnums.clear();   // no devices open
     this->numdev = 0;        // no devices open
     return error;
   }
@@ -1035,12 +1044,12 @@ namespace AstroCam {
     std::string function = "AstroCam::Interface::is_connected";
     std::stringstream message;
 
-    size_t ndev = this->devlist.size();  /// number of connected devices
+    size_t ndev = this->devnums.size();  /// number of connected devices
     size_t nopen=0;                      /// number of open devices (should be equal to ndev if all are open)
 
     // look through all connected devices
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       if ( this->controller.find( dev ) != this->controller.end() )
         if ( this->controller[dev].connected ) nopen++;
 #ifdef LOGLEVEL_DEBUG
@@ -1049,7 +1058,7 @@ namespace AstroCam {
 #endif
     }
 
-    // If all devices in (non-empty) devlist are connected then return true,
+    // If all devices in (non-empty) devnums are connected then return true,
     // otherwise return false.
     //
     if ( ndev !=0 && ndev == nopen ) {
@@ -1081,7 +1090,7 @@ namespace AstroCam {
     // Initialize the vector of configured device numbers,
     // which will get built up from parse_controller_config() below.
     //
-    this->configdev.clear();
+    this->configured_devnums.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -1226,7 +1235,7 @@ namespace AstroCam {
   long Interface::do_native( std::string cmdstr ) {
     std::string retstring;
     std::vector<uint32_t> selectdev;
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       // build selectdev vector from all connected controllers
       if ( this->controller[dev].connected ) selectdev.push_back( dev );
     }
@@ -1283,7 +1292,7 @@ namespace AstroCam {
    */
   long Interface::do_native( std::string cmdstr, std::string &retstring ) {
     std::vector<uint32_t> selectdev;
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
     }
     return this->do_native( selectdev, cmdstr, retstring );
@@ -2020,7 +2029,7 @@ namespace AstroCam {
       logwrite(function, message.str());
       return(ERROR);
     }
-    for (const auto &dev : this->devlist) {        // spawn a thread for each device in devlist
+    for (const auto &dev : this->devnums) {        // spawn a thread for each device in devnums
       try {
         int rows = this->controller[dev].rows;
         int cols = this->controller[dev].cols;
@@ -2084,7 +2093,7 @@ namespace AstroCam {
       }
       catch( std::out_of_range & ) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for ( const auto &check : this->devlist ) message << check << " ";
+        for ( const auto &check : this->devnums ) message << check << " ";
         message << "}";
         logwrite( function, message.str() );
         return( ERROR );
@@ -2220,7 +2229,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
     // check readout type
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       if ( this->controller[ dev ].info.readout_name.empty() ) {
         message.str(""); message << "ERROR: readout undefined";
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
@@ -2254,7 +2263,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
       // Set the extension = 0 for each controller
       //
-      for ( const auto &dev : this->devlist ) { this->controller[ dev ].info.extension = 0; }
+      for ( const auto &dev : this->devnums ) { this->controller[ dev ].info.extension = 0; }
     }
 
     if ( nseq > 1 ) {
@@ -2293,7 +2302,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // Each thread gets the exposure buffer number for the current exposure,
     // and a reference to "this" Interface object.
     //
-    for ( const auto &dev : this->devlist ) this->write_pending( this_expbuf, dev, true );
+    for ( const auto &dev : this->devnums ) this->write_pending( this_expbuf, dev, true );
     std::thread( std::ref(AstroCam::Interface::FITS_handler), this_expbuf, std::ref(*this) ).detach();
 
     {
@@ -2302,7 +2311,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // If it IS in frame transfer then only clear the CCD if the cameras are idle.
     //
     std::string retstr;
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       if ( this->is_camera_idle( dev ) ) {
         error = this->do_native( dev, "CLR", retstr );  // send the clear command here to this dev
         if ( error != NO_ERROR ) {
@@ -2358,13 +2367,13 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // and spawn a thread to monitor it, which will provide a notification
     // when ready for the next exposure.
     //
-    for ( const auto &dev : this->devlist ) this->exposure_pending( dev, true );
+    for ( const auto &dev : this->devnums ) this->exposure_pending( dev, true );
     this->state_monitor_condition.notify_all();
     std::thread( std::ref(AstroCam::Interface::dothread_monitor_exposure_pending), std::ref(*this) ).detach();
 
     // prepare the camera info class object for each controller
     //
-    for (const auto &dev : this->devlist) {        // spawn a thread for each device in devlist
+    for (const auto &dev : this->devnums) {        // spawn a thread for each device in devnums
       try {
 
         // Initialize a frame counter for each device. 
@@ -2382,10 +2391,10 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
         // then set the filename for this specific dev
         // Assemble the FITS filename.
         // If naming type = "time" then this will use this->fitstime so that must be set first.
-        // If there are multiple devices in the devlist then force the fitsname to include the dev number
+        // If there are multiple devices in the devnums then force the fitsname to include the dev number
         // in order to make it unique for each device.
         //
-        if ( this->devlist.size() > 1 ) {
+        if ( this->devnums.size() > 1 ) {
           devstr = std::to_string( dev );  // passing a non-empty devstr will put that in the fitsname
         }
         else {
@@ -2408,7 +2417,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for (const auto &check : this->devlist) message << check << " ";
+        for (const auto &check : this->devnums) message << check << " ";
         message << "}";
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
@@ -2434,7 +2443,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "CUNIT1A", "Angstrom", "" );
     this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "CUNIT2A", "arcsec", "" );
 
-    for (const auto &dev : this->devlist) {        // spawn a thread for each device in devlist
+    for (const auto &dev : this->devnums) {        // spawn a thread for each device in devnums
       try {
         // copy the info class from controller[dev] to controller[dev].expinfo[expbuf]  -- kludge for now
         //
@@ -2470,7 +2479,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
-        for (const auto &check : this->devlist) message << check << " ";
+        for (const auto &check : this->devnums) message << check << " ";
         message << "}";
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return(ERROR);
@@ -2489,7 +2498,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
     logwrite( function, "[DEBUG] expose is done now!" );
 
-    for (const auto &dev : this->devlist) {
+    for (const auto &dev : this->devnums) {
       message.str(""); 
       message << std::dec
               << "** dev=" << dev << " type_set=" << this->controller[dev].info.type_set << " frame_type=" << this->controller[dev].info.frame_type
@@ -2506,7 +2515,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       logwrite( function, message.str() );
     }
 
-    for (const auto &dev : this->devlist) {
+    for (const auto &dev : this->devnums) {
       for ( int ii=0; ii<NUM_EXPBUF; ii++ ) {
         message.str(""); 
         message << std::dec
@@ -2539,7 +2548,7 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // That error would have been logged, but not returned here, since the thread functions
     // are necessarily static void.
     //
-    for (const auto &dev : this->devlist) {
+    for (const auto &dev : this->devnums) {
       try {
         if ( ( error = this->controller[dev].error ) != NO_ERROR ) break;
       }
@@ -2564,14 +2573,14 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
 
     // close the FITS file
     //
-    for (const auto &dev : this->devlist) {
+    for (const auto &dev : this->devnums) {
       try {
         this->controller[dev].close_file( this->camera.writekeys_when );
         if ( this->controller[dev].pFits->iserror() ) error = ERROR;   // allow error to be set (but not cleared)
       }
       catch(std::out_of_range &) {
         message.str(""); message << "ERROR closing FITS file: unable to find device " << dev << " in list: { ";
-        for (const auto &check : this->devlist) message << check << " ";
+        for (const auto &check : this->devnums) message << check << " ";
         message << "}";
         logwrite(function, message.str());
         error = ERROR;
@@ -2705,10 +2714,10 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     }
 
     // If there's only one token then it's the lodfile and load
-    // into all controllers in the devlist.
+    // into all controllers in the devnums.
     //
     if (tokens.size() == 1) {
-      for (const auto &dev : this->devlist) {
+      for (const auto &dev : this->devnums) {
         selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
       }
     }
@@ -3240,7 +3249,7 @@ logwrite(function, message.str());
     }
     catch (std::out_of_range &) {
       message.str(""); message << "ERROR: unable to find device " << devnum << " in list: { ";
-      for (const auto &check : this->devlist) message << check << " ";
+      for (const auto &check : this->devnums) message << check << " ";
       message << "}";
       logwrite(function, message.str());
       error = ERROR;
@@ -3551,14 +3560,14 @@ logwrite(function, message.str());
 
       // Set shutterenable the same for all devices
       //
-      if ( error == NO_ERROR ) for ( const auto &dev : this->devlist ) {
+      if ( error == NO_ERROR ) for ( const auto &dev : this->devnums ) {
         this->controller[dev].info.shutterenable = shutten;
       }
     }
 
     // Get shutterenable state from the controller class
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       this->camera_info.shutterenable = this->controller[dev].info.shutterenable;
       shutter_out = this->camera_info.shutterenable ? "enabled" : "disabled";
       break;  // just need one since they're all the same
@@ -4684,8 +4693,8 @@ logwrite(function, message.str());
       }
       std::string msg;
       this->camera.set_fitstime( get_timestamp( ) );                 // must set camera.fitstime first
-      if ( this->devlist.size() > 1 ) {
-        for (const auto &dev : this->devlist) {
+      if ( this->devnums.size() > 1 ) {
+        for (const auto &dev : this->devnums) {
           this->camera.get_fitsname( std::to_string(dev), msg );     // get the fitsname (by reference)
           this->camera.async.enqueue( msg );                         // queue the fitsname
           logwrite( function, msg );                                 // log ths fitsname
@@ -4981,12 +4990,12 @@ logwrite(function, message.str());
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "in readout: ";
-      for ( const auto &dev : this->devlist ) if ( this->controller[dev].in_readout ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : this->devnums ) if ( this->controller[dev].in_readout ) message << this->controller[dev].channel << " ";
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "in frametransfer: ";
-      for ( const auto &dev : this->devlist ) if ( this->controller[dev].in_frametransfer ) message << this->controller[dev].channel << " ";
+      for ( const auto &dev : this->devnums ) if ( this->controller[dev].in_frametransfer ) message << this->controller[dev].channel << " ";
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
@@ -5022,10 +5031,10 @@ logwrite(function, message.str());
         retstring.append( "  Initiate the frame transfer waveforms on the indicated device.\n" );
         retstring.append( "  Supply dev# or chan from { " );
         message.str("");
-        for ( const auto &dd : this->devlist ) {
+        for ( const auto &dd : this->devnums ) {
           message << dd << " " << this->controller[dd].channel << " ";
         }
-        if ( this->devlist.empty() ) message << "no_devices_open ";
+        if ( this->devnums.empty() ) message << "no_devices_open ";
         message << "}";
         retstring.append( message.str() );
         return HELP;
@@ -5033,16 +5042,16 @@ logwrite(function, message.str());
 
       // must have at least one device open
       //
-      if ( this->devlist.empty() ) {
+      if ( this->devnums.empty() ) {
         logwrite( function, "ERROR: no open devices" );
         retstring="no_devices";
         return( ERROR );
       }
 
-      // check if arg is a channel by comparing to all the defined channels in the devlist
+      // check if arg is a channel by comparing to all the defined channels in the devnums
       //
       int dev=-1;
-      for ( const auto &dd : this->devlist ) {
+      for ( const auto &dd : this->devnums ) {
         if ( this->controller[dd].channel == tokens[1] ) {
           dev = dd;
           break;

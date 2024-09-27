@@ -587,8 +587,8 @@ namespace AstroCam {
 //    void* workbuf;               //!< workspace for performing deinterlacing
       int num_deinter_thr;         //!< number of threads that can de-interlace an image
       int numdev;                  //!< total number of Arc devices detected in system
-      std::vector<int> configdev;  //!< vector of configured Arc devices (from camerad.cfg file)
-      std::vector<int> devlist;    //!< vector of all opened and connected devices
+      std::vector<int> configured_devnums;  //!< vector of configured Arc devices (from camerad.cfg file)
+      std::vector<int> devnums;    //!< vector of all opened and connected devices
 
       std::mutex epend_mutex;
       std::vector<int> exposures_pending;  //!< vector of devnums that have a pending exposure (which needs to be stored)
@@ -657,7 +657,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       inline bool is_camera_idle() {
         int num=0;
-        for ( auto dev : this->devlist ) {
+        for ( auto dev : this->devnums ) {
           num += ( this->controller[dev].in_readout ? 1 : 0 );
           num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
         }
@@ -668,7 +668,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       inline bool in_readout() const {
         int num=0;
-        for ( auto dev : this->devlist ) {
+        for ( auto dev : this->devnums ) {
           num += ( this->controller.at(dev).in_readout ? 1 : 0 );
           num += ( this->controller.at(dev).in_frametransfer ? 1 : 0 );
         }
@@ -677,7 +677,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       inline bool in_frametransfer() const {
         int num=0;
-        for ( auto dev : this->devlist ) {
+        for ( auto dev : this->devnums ) {
           num += ( this->controller.at(dev).in_frametransfer ? 1 : 0 );
         }
         return( num==0 ? false : true );
@@ -950,7 +950,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long abort();                                                        ///< 
       long do_bin( std::string args, std::string &retstring );             ///< set/get binning factor
       long bin( std::string args, std::string &retstring );                ///< set/get binning factor
-      long do_connect_controller(std::string devices_in, std::string &retstring); ///< opens a connection to the PCI/e device(s)
+      long do_connect_controller(const std::string devices_in, std::string &retstring); ///< opens a connection to the PCI/e device(s)
       long connect_controller(std::string devices_in, std::string &help);  ///< wrapper for do_connect_controller
       long is_connected( std::string &retstring );                         ///< are all selected controllers connected?
       long do_disconnect_controller( int dev );                            ///< closes the connection to the named PCI/e device
