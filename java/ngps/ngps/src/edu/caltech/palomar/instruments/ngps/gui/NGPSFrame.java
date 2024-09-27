@@ -1057,7 +1057,7 @@ public JTable constructTable(){
               public void actionPerformed(ActionEvent ev) {
                   // Form a URL for airmass.org out of the target parameters
                  Target selected_target = current_table_model.getRecord(selected_table_row);
-                 String ra = String.valueOf(selected_target.sky.getRA());
+                 String ra = String.valueOf(selected_target.sky.getRA()*15.); // convert hours to deg
                  String dec = String.valueOf(selected_target.sky.getDEC());
                  String name = selected_target.name;
                  String datetime = dbms.myOTMlauncher.getStartTimestamp().toString();
