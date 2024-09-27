@@ -64,6 +64,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.JTable;
+import javax.swing.JSeparator;
 import javax.swing.ListSelectionModel;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.border.MatteBorder;
@@ -869,11 +870,11 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(11).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(11).setMaxWidth(100);
   
-  main_editor_table.getTableHeader().setReorderingAllowed(false);
-  main_editor_table.getTableHeader().setResizingAllowed(false);
-  main_editor_table.getTableHeader().setToolTipText("THIS IS A TIP!");
-//  TableColumn tColumn_otm16 = main_editor_table.getColumnModel().getColumn(0);
-//              tColumn_otm16.setCellRenderer(new ColumnColorRenderer(java.awt.Color.lightGray, java.awt.Color.BLACK));     
+  for( JTable tab : new JTable[]{main_editor_table, etcTable, planTable, observationTable} ){
+      tab.getTableHeader().setReorderingAllowed(false);
+      tab.getTableHeader().setResizingAllowed(false);
+  }
+  
 }
 /*=============================================================================================
 /     Property Change Listener for the Ephemeris_propertyChange
@@ -1033,6 +1034,8 @@ public JTable constructTable(){
         JMenuItem copy_menu_item    = new JMenuItem("Copy");
         paste_menu_item   = new JMenuItem("Paste");
         insert_copied_menu_item   = new JMenuItem("Insert Copied row");
+        JSeparator s = new JSeparator();
+        JMenuItem airmass_menu_item    = new JMenuItem("Plot airmass");
         //paste_menu_item.setEnabled(false);
         //insert_copied_menu_item.setEnabled(false);
            JPopupMenu popup          = new JPopupMenu("Editing Functions");
@@ -1041,12 +1044,30 @@ public JTable constructTable(){
                       popup.add(copy_menu_item);
                       popup.add(paste_menu_item);
                       popup.add(insert_copied_menu_item);
+                      popup.add(s);
+                      popup.add(airmass_menu_item);
            insert_menu_item.addActionListener(new ActionListener() {
               public void actionPerformed(ActionEvent ev) {
                  System.out.println("Insert Menu Item pressed");
                  current_table_model.insert(selected_table_row+1, new Target());
               }
            });
+           
+           airmass_menu_item.addActionListener(new ActionListener() {
+              public void actionPerformed(ActionEvent ev) {
+                  // Form a URL for airmass.org out of the target parameters
+                 Target selected_target = current_table_model.getRecord(selected_table_row);
+                 String ra = String.valueOf(selected_target.sky.getRA());
+                 String dec = String.valueOf(selected_target.sky.getDEC());
+                 String name = selected_target.name;
+                 String datetime = dbms.myOTMlauncher.getStartTimestamp().toString();
+                 String date = datetime.split(" ")[0];
+                 String url = "airmass.org/chart/obsid:palomar/date:%1$s/object:%2$s/ra:%3$s/dec:%4$s#dailyheading";
+                 url = String.format(url, date, name, ra, dec);
+                 myBrowserDisplay.executeFirefox(url);              
+              }
+           });
+           
            delete_menu_item.addActionListener(new ActionListener() {
               public void actionPerformed(ActionEvent ev) {
                  System.out.println("Delete Menu Item pressed"); 

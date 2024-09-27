@@ -120,11 +120,11 @@ public DefaultMutableTreeNode constructTreeNode(){
 /=================================================================================================*/
   public void setChannel(java.lang.String new_channel) {
     java.lang.String  old_channel = this.channel;
-    channel = new_channel;
+    channel = new_channel.toUpperCase();
     propertyChangeListeners.firePropertyChange("channel", old_channel, new_channel);
   }
   public java.lang.String getChannel() {
-    return channel;
+    return channel.toUpperCase();
   } 
 /*================================================================================================
 /     setMagnitude(double new_magnitude)
