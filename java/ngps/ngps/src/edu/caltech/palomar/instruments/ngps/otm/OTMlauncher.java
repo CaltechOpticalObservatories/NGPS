@@ -284,7 +284,7 @@ public void OTM(java.sql.Timestamp start_time,double seeing,int wavelength){
            }                     
        }catch(Exception e){                      
          setProcessingState(IDLE);
-         logMessage(INFO,"EXCEPTION IN OTM EXECUTION  "+e.toString());
+         logMessage(INFO,"OTM EXCEPTION: "+e.toString());
        }
        setProcessingState(IDLE);
        logMessage(INFO,"OTM program complete ");
@@ -1021,7 +1021,7 @@ public class OutputHandler  extends LogOutputStream{
         level = CommandLogModel.RESPONSE;        
         if(output_line.contains("ERROR")){
             level = CommandLogModel.ERROR;
-            displayScreenMessage("ERROR in OTM execution. "+output_line);
+            displayScreenMessage("OTM: "+output_line);
         }
         myCommandLogModel.insertMessage(level, output_line);  
     }

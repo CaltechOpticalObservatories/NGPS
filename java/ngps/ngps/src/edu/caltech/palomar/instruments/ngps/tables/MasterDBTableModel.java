@@ -242,7 +242,7 @@ public void setEdited(boolean new_edited){
      addColumn("Slit Width\n(arcsec)");//8
      addColumn("AIRMASS");
      addColumn("OTMSNR");//10
-     addColumn("NOTE");
+     addColumn("Observer's\nPriority");
      minimal_editable_array[0] = true;
      minimal_editable_array[1] = true;
      minimal_editable_array[2] = true;

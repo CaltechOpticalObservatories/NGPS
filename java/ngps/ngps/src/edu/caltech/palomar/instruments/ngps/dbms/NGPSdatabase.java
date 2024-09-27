@@ -77,6 +77,8 @@ public class NGPSdatabase {
     public String                       TARGET_TABLE;
     public String                       TARGETSET_TABLE;
     public String                       ACCOUNT_TABLE;
+    public String                       COMPLETED_TABLE;
+    Properties                          dbms_properties = new Properties();
     public Connection                conn = null;
     private boolean                  connected;
     private boolean                  table_populated;
@@ -90,7 +92,7 @@ public class NGPSdatabase {
     public DefaultListModel          ownerslist                    = new DefaultListModel();
     public ObservationSetTableModel  myObservationSetTableModel    = new ObservationSetTableModel();
     public int                       selected_set_id;
-    private java.lang.String         owner                      = new java.lang.String();
+    private java.lang.String         owner = new java.lang.String();
     private boolean                  logged_in;
     public  Owner                    current_owner;
     private int                      logged_in_state;
@@ -157,7 +159,6 @@ public void initializeDBMS(){
    try{
       java.lang.String DBMS_CONNECTION_PROPERTIES_FILE = USERDIR + SEP + CONFIG + SEP + DBMS_CONNECTION_PROPERTIES;
       FileInputStream  dbms_properties_file            = new FileInputStream(DBMS_CONNECTION_PROPERTIES_FILE);
-      Properties       dbms_properties                 = new Properties();
       dbms_properties.load(dbms_properties_file);
       dbms_properties_file.close();
       
@@ -165,6 +166,7 @@ public void initializeDBMS(){
       TARGET_TABLE = MYSQLDB+"."+dbms_properties.getProperty("TARGET_TABLE");
       TARGETSET_TABLE = MYSQLDB+"."+dbms_properties.getProperty("TARGETSET_TABLE");
       ACCOUNT_TABLE = MYSQLDB+"."+dbms_properties.getProperty("ACCOUNT_TABLE");
+      COMPLETED_TABLE = MYSQLDB+"."+dbms_properties.getProperty("COMPLETED_TABLE");
 
       String SYSTEM             = dbms_properties.getProperty("SYSTEM");
       String USERNAME           = dbms_properties.getProperty("USERNAME");
@@ -688,7 +690,8 @@ public void executeTargetsInsertStatement(Target current){
         INSERT_OBSERVATION_PREP_STATEMENT.setDouble(45,current.otm.getOTMslitangle());                          
         INSERT_OBSERVATION_PREP_STATEMENT.setString(46,current.getNOTE());  
         INSERT_OBSERVATION_PREP_STATEMENT.setString(47,current.getCOMMENT());  
-        INSERT_OBSERVATION_PREP_STATEMENT.setString(48,current.getOWNER());  
+//        INSERT_OBSERVATION_PREP_STATEMENT.setString(48,current.getOWNER());  
+        INSERT_OBSERVATION_PREP_STATEMENT.setString(48,owner);  // should match logged in user
         INSERT_OBSERVATION_PREP_STATEMENT.setTimestamp(49,current.otm.getOTMnotbefore()); 
         INSERT_OBSERVATION_PREP_STATEMENT.setString(50,current.otm.getOTMpointmode());  
         System.out.println(INSERT_OBSERVATION_PREP_STATEMENT.toString());
@@ -935,7 +938,8 @@ public void executeTargetsUpdateStatement(Target current){
         UPDATE_OBSERVATION_PREP_STATEMENT.setDouble(45,current.otm.getOTMslitangle());          
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(46,current.getNOTE());  
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(47,current.getCOMMENT());  
-        UPDATE_OBSERVATION_PREP_STATEMENT.setString(48,current.getOWNER());  
+//        UPDATE_OBSERVATION_PREP_STATEMENT.setString(48,current.getOWNER());  
+        UPDATE_OBSERVATION_PREP_STATEMENT.setString(48,owner);  //should match logged in user
         UPDATE_OBSERVATION_PREP_STATEMENT.setTimestamp(49,current.otm.getOTMnotbefore());  
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(50,current.otm.getOTMpointmode());         
         UPDATE_OBSERVATION_PREP_STATEMENT.setInt(51,current.getObservationID());
@@ -1141,6 +1145,15 @@ public boolean userExists(String username){
     return false;
 }
 
+public Object getSetNameFromID(int id){
+    for(int i=0;i<myObservationSetTableModel.getRowCount();i++){
+        int id_i = (Integer)myObservationSetTableModel.getValueAt(i, 0); // column 0, 1 is ID, set name
+        if(id==id_i){
+            return myObservationSetTableModel.getValueAt(i, 1);
+        } 
+    }
+    return null;
+}
 // DIRECT MYSQL WAY for userExists():
 //        statement = dbms.conn.createStatement();
 //        
@@ -1246,7 +1259,8 @@ public Target transformResultSetToObservation(java.sql.ResultSet results){
           current.otm.setOTMslitangle(results.getDouble("OTMslitangle"));
           current.setNOTE(results.getString("NOTE"));
           current.setCOMMENT(results.getString("COMMENT"));
-          current.setOWNER(results.getString("OWNER"));
+          current.setOWNER(owner); // should match logged in user
+//          current.setOWNER(results.getString("OWNER"));
           current.otm.setOTMnotbefore(results.getTimestamp("NOTBEFORE"));
           current.otm.setOTMpointmode(results.getString("POINTMODE"));
        }catch(Exception e){

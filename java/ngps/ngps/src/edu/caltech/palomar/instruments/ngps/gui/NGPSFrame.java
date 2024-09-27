@@ -84,12 +84,16 @@ import java.awt.BorderLayout;
 import java.sql.Statement;
 import javax.swing.AbstractAction;
 import javax.swing.UIManager;
+import java.util.List;
+import java.util.Arrays;
 //import javax.swing.JFileChooser.FileNameExtensionFilter;
         /**.
  *
  * @author jennifermilburn
  */
 public class NGPSFrame extends javax.swing.JFrame {
+  public CompletedFrame            cf;
+  public OpenFrame                 of;
   public NGPSdatabase              dbms;
   public TargetListParser2         myTargetListParser;
   public ObservationSequencerController myObservationSequencerController;
@@ -168,6 +172,7 @@ public class NGPSFrame extends javax.swing.JFrame {
   public BrowserDisplay            myBrowserDisplay = new BrowserDisplay();
   public ChangePasswordFrame       myChangePasswordFrame; 
   public Timer                     startTimer;
+  private List<String>             admins = Arrays.asList("dhale","cshapiro");
 /*=============================================================================================
 /     NGPSFrame()
 /=============================================================================================*/
@@ -846,12 +851,13 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(8).setCellRenderer(centerRenderer);
   main_editor_table.getColumnModel().getColumn(9).setCellRenderer(centerRenderer);
   main_editor_table.getColumnModel().getColumn(10).setCellRenderer(centerRenderer);
+  main_editor_table.getColumnModel().getColumn(11).setCellRenderer(centerRenderer);
   
-  main_editor_table.getColumnModel().getColumn(0).setMinWidth(20);
-  main_editor_table.getColumnModel().getColumn(0).setMaxWidth(20);
+  main_editor_table.getColumnModel().getColumn(0).setMinWidth(0);  
+  main_editor_table.getColumnModel().getColumn(0).setMaxWidth(0);  // Hide Checkboxes
   main_editor_table.getColumnModel().getColumn(1).setMinWidth(0);
-  main_editor_table.getColumnModel().getColumn(1).setMaxWidth(0);  
-  main_editor_table.getColumnModel().getColumn(2).setMinWidth(120);
+  main_editor_table.getColumnModel().getColumn(1).setMaxWidth(0);  // Hide STATE
+  main_editor_table.getColumnModel().getColumn(2).setMinWidth(200);
   main_editor_table.getColumnModel().getColumn(3).setMinWidth(120);
   main_editor_table.getColumnModel().getColumn(4).setMinWidth(120);
   main_editor_table.getColumnModel().getColumn(5).setMinWidth(100);
@@ -860,7 +866,12 @@ public void initializeMainTable(){
   main_editor_table.getColumnModel().getColumn(8).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(9).setMinWidth(100);
   main_editor_table.getColumnModel().getColumn(10).setMinWidth(100);
-  main_editor_table.getColumnModel().getColumn(11).setMinWidth(160);
+  main_editor_table.getColumnModel().getColumn(11).setMinWidth(100);
+  main_editor_table.getColumnModel().getColumn(11).setMaxWidth(100);
+  
+  main_editor_table.getTableHeader().setReorderingAllowed(false);
+  main_editor_table.getTableHeader().setResizingAllowed(false);
+  main_editor_table.getTableHeader().setToolTipText("THIS IS A TIP!");
 //  TableColumn tColumn_otm16 = main_editor_table.getColumnModel().getColumn(0);
 //              tColumn_otm16.setCellRenderer(new ColumnColorRenderer(java.awt.Color.lightGray, java.awt.Color.BLACK));     
 }
@@ -1308,6 +1319,8 @@ public boolean login(String username,String submitted_password){
 //        dbms.setOWNER_OBJECT(username); //sets a string
         dbms.setOWNER(username);
         signinMenu.setText(signinText+username);
+        
+        DEVMENU.setVisible(admins.contains(username)); // Only enable for admins
     }
 
     return success;
@@ -1445,6 +1458,9 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         etcMenuItem = new javax.swing.JMenuItem();
         errors_diagnosticsMenuItem = new javax.swing.JMenuItem();
         reportBugMenuItem = new javax.swing.JMenuItem();
+        DEVMENU = new javax.swing.JMenu();
+        completedMenuItem = new javax.swing.JMenuItem();
+        jMenuItem2 = new javax.swing.JMenuItem();
         mainSpacer = new javax.swing.JMenu();
         signinMenu = new javax.swing.JMenu();
         signinMenuItem = new javax.swing.JMenuItem();
@@ -2238,7 +2254,26 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
 
         mainMenuBar.add(helpMenu);
 
-        mainSpacer.setText("   ");
+        DEVMENU.setText("DEV");
+
+        completedMenuItem.setText("Completed");
+        completedMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                completedMenuItemActionPerformed(evt);
+            }
+        });
+        DEVMENU.add(completedMenuItem);
+
+        jMenuItem2.setText("OPEN_DEV");
+        jMenuItem2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jMenuItem2ActionPerformed(evt);
+            }
+        });
+        DEVMENU.add(jMenuItem2);
+
+        mainMenuBar.add(DEVMENU);
+
         mainSpacer.setEnabled(false);
         mainSpacer.setFocusable(false);
         mainSpacer.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
@@ -2710,7 +2745,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         loginInfo.put("password", dbms.encrypt(loginInfo.get("password"),dbms.originalKey));            
         } catch(Exception e){ System.out.println(e.toString()); }
         
-        // Ready mysql 
+        // Ready mysql  // MOVE THIS TO DBMS
         Statement statement;
         String allKeys = String.join(", ", loginInfo.keySet());
         String allVals = String.join("', '" ,loginInfo.values()); // looks like 'val1', 'val2', ...
@@ -2732,6 +2767,14 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         
     dbms.queryOwners(); // update owner table in the GUI
     }//GEN-LAST:event_createUserMenuItem2ActionPerformed
+
+    private void completedMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_completedMenuItemActionPerformed
+        cf = new CompletedFrame(dbms);
+    }//GEN-LAST:event_completedMenuItemActionPerformed
+
+    private void jMenuItem2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem2ActionPerformed
+        of = new OpenFrame(dbms, dbms.getOWNER());
+    }//GEN-LAST:event_jMenuItem2ActionPerformed
 
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
@@ -2806,6 +2849,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JMenu DEVMENU;
     private javax.swing.JPanel ETCTab;
     public javax.swing.JSpinner HoursSpinner;
     public javax.swing.JSpinner MinutesSpinner;
@@ -2817,6 +2861,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
     private javax.swing.JCheckBox auto_fetchCheckBox;
     private javax.swing.JCheckBox auto_start_timeCheckBox;
     private javax.swing.JButton cancelButton;
+    private javax.swing.JMenuItem completedMenuItem;
     private javax.swing.JMenuItem connectionsMenuItem;
     private javax.swing.JMenuItem copyMenuItem;
     private javax.swing.JMenuItem createUserMenuItem2;
@@ -2854,6 +2899,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
     private javax.swing.JLabel jLabel9;
     private javax.swing.JMenu jMenu3;
     private javax.swing.JMenuItem jMenuItem1;
+    private javax.swing.JMenuItem jMenuItem2;
     private javax.swing.JPanel jPanel10;
     private javax.swing.JPanel jPanel9;
     private javax.swing.JScrollPane jScrollPane3;
