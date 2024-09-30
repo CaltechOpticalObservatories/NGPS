@@ -1175,6 +1175,9 @@ return timestamp;
  public void setValueAt(Object value, int row, int col) {
 //   Target selectedTarget = vector_to_target(row,getDataVector().get(row));  
    Target selectedTarget = (Target)getDataVector().get(row);  
+    Object oldValue = this.getValueAt(row, col);
+    if(value.toString().equals(oldValue.toString())) {return;}
+   
     if(configuration == EXTENDED_TABLE){
         if(col == 0){
             selectedTarget.setActive(((java.lang.Boolean)value).booleanValue());
@@ -1195,7 +1198,7 @@ return timestamp;
            selectedTarget.name = ((java.lang.String)value);
         }
         if(col == 5){
-           selectedTarget.setOrder(((java.lang.Integer)value).intValue()); 
+           selectedTarget.setOrder(((Integer)value)); 
         }
         if(col == 6){
            selectedTarget.sky.setRightAscension((java.lang.String)value);
@@ -1204,10 +1207,10 @@ return timestamp;
            selectedTarget.sky.setDeclination(((java.lang.String)value));
         }
         if(col == 8){
-           selectedTarget.sky.setOFFSET_RA(((java.lang.Double)value).doubleValue());
+           selectedTarget.sky.setOFFSET_RA(((Double)value));
         }    
         if(col == 9){
-           selectedTarget.sky.setOFFSET_DEC(((java.lang.Double)value).doubleValue());
+           selectedTarget.sky.setOFFSET_DEC(((Double)value));
         }    
         if(col == 10){
            selectedTarget.instrument.setExposuretime(((java.lang.String)value));
@@ -1216,34 +1219,34 @@ return timestamp;
            selectedTarget.instrument.setSlitwidth_string(((java.lang.String)value));
         }
         if(col == 12){
-           selectedTarget.instrument.setSlitOffset(((java.lang.Double)value).doubleValue());
+           selectedTarget.instrument.setSlitOffset(((Double)value));
         }
         if(col == 13){
            selectedTarget.instrument.setOBSMODE(((java.lang.String)value));
         }
         if(col == 14){
-           selectedTarget.instrument.setBIN_SPEC(((java.lang.Integer)value).intValue());
+           selectedTarget.instrument.setBIN_SPEC(((Integer)value));
         }
         if(col == 15){
-           selectedTarget.instrument.setBIN_SPACE(((java.lang.Integer)value).intValue());
+           selectedTarget.instrument.setBIN_SPACE(((Integer)value));
         }  
         if(col == 16){
            selectedTarget.instrument.setRequestedSlitAngle(((java.lang.String)value));
         } 
         if(col == 17){
-            selectedTarget.sky.setAIRMASS_MAX((java.lang.String)value);
+            selectedTarget.sky.setAIRMASS_MAX((java.lang.String)value); //CHAZ should be float?
         }
         if(col == 18){
-           selectedTarget.etc.setWRANGE_LOW(((java.lang.Integer)value).intValue());
+           selectedTarget.etc.setWRANGE_LOW(((Float)value));
         }      
         if(col == 19){
-           selectedTarget.etc.setWRANGE_HIGH(((java.lang.Integer)value).intValue());
+           selectedTarget.etc.setWRANGE_HIGH(((Float)value));
         }     
         if(col == 20){
            selectedTarget.etc.setChannel(((java.lang.String)value));
         }     
         if(col == 21){
-           selectedTarget.etc.setMagnitude(((java.lang.Double)value).doubleValue());
+           selectedTarget.etc.setMagnitude(((Double)value));
         }     
         if(col == 22){
            selectedTarget.etc.setMagref_system(((java.lang.String)value));
@@ -1255,22 +1258,22 @@ return timestamp;
            selectedTarget.etc.setSrcmodel(((java.lang.String)value));
         } 
         if(col == 25){
-           selectedTarget.otm.setOTMexpt(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMexpt(((Double)value));
         } 
         if(col == 26){
-           selectedTarget.otm.setOTMslitwidth(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMslitwidth(((Double)value));
         }     
         if(col == 27){
-           selectedTarget.otm.setOTMcass(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMcass(((Double)value));
         }
         if(col == 28){
-           selectedTarget.otm.setOTMAirmass_start(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMAirmass_start(((Double)value));
         }      
         if(col == 29){
-           selectedTarget.otm.setOTMAirmass_end(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMAirmass_end(((Double)value));
         }      
         if(col == 30){
-           selectedTarget.otm.setSkymag(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setSkymag(((Double)value));
         }      
         if(col == 31){        
            selectedTarget.otm.setOTMslewgo(string_to_timestamp((java.lang.String)value));
@@ -1282,10 +1285,10 @@ return timestamp;
            selectedTarget.otm.setOTMend(string_to_timestamp((java.lang.String)value));
         }         
         if(col == 34){
-           selectedTarget.otm.setOTMpa(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMpa(((Double)value));
         }
         if(col == 35){
-           selectedTarget.otm.setOTMwait(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMwait(((Double)value));
         }
         if(col == 36){
            selectedTarget.otm.setOTMflag(((java.lang.String)value));
@@ -1294,13 +1297,13 @@ return timestamp;
            selectedTarget.otm.setOTMlast(((java.lang.String)value));
         }
         if(col == 38){
-           selectedTarget.otm.setOTMslew(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMslew(((Double)value));
         }   
         if(col == 39){
            selectedTarget.otm.setOTMmoon(((java.lang.String)value));
         }  
         if(col == 40){
-           selectedTarget.otm.setOTMslitangle(((java.lang.Double)value));
+           selectedTarget.otm.setOTMslitangle(((Double)value));
         } 
         if(col == 41){
            selectedTarget.otm.setOTMSNR(((java.lang.String)value));
@@ -1335,16 +1338,16 @@ return timestamp;
            selectedTarget.instrument.setExposuretime(((java.lang.String)value));
         }
         if(col == 6){
-           selectedTarget.otm.setOTMexpt(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMexpt(((java.lang.Double)value));
         }  
         if(col == 7){
            selectedTarget.instrument.setSlitwidth_string(((java.lang.String)value));
         }
         if(col == 8){
-           selectedTarget.otm.setOTMslitwidth(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMslitwidth(((java.lang.Double)value));
         }     
         if(col == 9){
-           selectedTarget.otm.setOTMAirmass_start(((java.lang.Double)value).doubleValue());
+           selectedTarget.otm.setOTMAirmass_start(((java.lang.Double)value));
         }      
         if(col == 10){
            selectedTarget.otm.setOTMSNR(((java.lang.String)value));
@@ -1355,7 +1358,7 @@ return timestamp;
     }
     getDataVector().setElementAt(selectedTarget,row);
     fireTableCellUpdated(row, col);
-    fireTableDataChanged();   
+    fireTableDataChanged();
     setEdited(true); 
    }
 /*================================================================================================
@@ -1442,15 +1445,15 @@ return timestamp;
             return myClass;
          }
          if(c == 17){
-            myClass =  (new String()).getClass(); //WRANGE_LOW
+            myClass =  (new String()).getClass(); //AIRMASS_MAX
             return myClass;
          }          
          if(c == 18){
-            myClass =  (Integer.valueOf(0)).getClass(); //WRANGE_LOW
+            myClass =  (Double.valueOf(0.0)).getClass(); //WRANGE_LOW
             return myClass;
          }
          if(c == 19){
-             myClass =  (Integer.valueOf(0)).getClass(); // WRANGE_HIGH
+             myClass =  (Double.valueOf(0.0)).getClass(); // WRANGE_HIGH
             return myClass;
          }   
          if(c == 20){

@@ -396,8 +396,8 @@ public int getModelType(){
               java.util.StringTokenizer st4 = new java.util.StringTokenizer(current_value," ");
               java.lang.String    start_w = st4.nextToken();
               java.lang.String    end_w   = st4.nextToken();              
-              current_observation.etc.setWRANGE_LOW((Integer.valueOf(start_w)).intValue());
-              current_observation.etc.setWRANGE_HIGH((Integer.valueOf(end_w)).intValue());
+              current_observation.etc.setWRANGE_LOW((Float.valueOf(start_w)));
+              current_observation.etc.setWRANGE_HIGH((Float.valueOf(end_w)));
             }catch(Exception e){
                 System.out.println(e.toString());
             }            

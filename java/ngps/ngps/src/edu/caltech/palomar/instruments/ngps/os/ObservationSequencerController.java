@@ -21,6 +21,7 @@ import org.apache.log4j.DailyRollingFileAppender;
 import org.apache.log4j.Layout;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PatternLayout;
+import java.util.concurrent.TimeUnit;
         
 //=== File Prolog =============================================================
 //	This code was developed by California Institute of Technology
@@ -119,6 +120,9 @@ public  ObservationSequencerController(){
        connect();
        while(test){
           state();
+          try{
+          TimeUnit.SECONDS.sleep(1);
+          } catch (Exception e){ System.out.println(e.toString()); }
        }
     }
 } 

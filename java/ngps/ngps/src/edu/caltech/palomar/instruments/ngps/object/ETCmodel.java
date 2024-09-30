@@ -15,8 +15,8 @@ import javax.swing.tree.DefaultMutableTreeNode;
 public class ETCmodel extends java.lang.Object{
     transient protected PropertyChangeSupport propertyChangeListeners = new PropertyChangeSupport(this);
     private double SNR;
-    private int WRANGE_LOW;
-    private int WRANGE_HIGH;
+    private float WRANGE_LOW;
+    private float WRANGE_HIGH;
     private java.lang.String channel = new java.lang.String();
     private double magnitude;    
     private java.lang.String magref  = new java.lang.String();
@@ -88,7 +88,7 @@ public DefaultMutableTreeNode constructTreeNode(){
   public void setSNR(double new_SNR) {
     double  old_SNR = this.SNR;
     SNR = new_SNR;
-   propertyChangeListeners.firePropertyChange("SNR", Double.valueOf(old_SNR), Double.valueOf(new_SNR));
+   propertyChangeListeners.firePropertyChange("SNR", old_SNR, new_SNR);
   }
   public double getSNR() {
     return SNR;
@@ -96,23 +96,23 @@ public DefaultMutableTreeNode constructTreeNode(){
 /*================================================================================================
 /     setWRANGE_LOW(double new_WRANGE_LOW)
 /=================================================================================================*/
-  public void setWRANGE_LOW(int new_WRANGE_LOW) {
-    int  old_WRANGE_LOW = this.WRANGE_LOW;
+  public void setWRANGE_LOW(float new_WRANGE_LOW) {
+    float  old_WRANGE_LOW = this.WRANGE_LOW;
     WRANGE_LOW = new_WRANGE_LOW;
-   propertyChangeListeners.firePropertyChange("WRANGE_LOW", Integer.valueOf(old_WRANGE_LOW), Integer.valueOf(new_WRANGE_LOW));
+   propertyChangeListeners.firePropertyChange("WRANGE_LOW", old_WRANGE_LOW, new_WRANGE_LOW);
   }
-  public int getWRANGE_LOW() {
+  public float getWRANGE_LOW() {
     return WRANGE_LOW;
   }  
 /*================================================================================================
 /     setWRANGE_HIGH(double new_WRANGE_HIGH)
 /=================================================================================================*/
-  public void setWRANGE_HIGH(int new_WRANGE_HIGH) {
-    int  old_WRANGE_HIGH = this.WRANGE_HIGH;
+  public void setWRANGE_HIGH(float new_WRANGE_HIGH) {
+    float  old_WRANGE_HIGH = this.WRANGE_HIGH;
     WRANGE_HIGH = new_WRANGE_HIGH;
-   propertyChangeListeners.firePropertyChange("WRANGE_HIGH", Integer.valueOf(old_WRANGE_HIGH), Integer.valueOf(new_WRANGE_HIGH));
+   propertyChangeListeners.firePropertyChange("WRANGE_HIGH", old_WRANGE_HIGH, new_WRANGE_HIGH);
   }
-  public int getWRANGE_HIGH() {
+  public float getWRANGE_HIGH() {
     return WRANGE_HIGH;
   }   
 /*================================================================================================
@@ -132,7 +132,7 @@ public DefaultMutableTreeNode constructTreeNode(){
   public void setMagnitude(double new_magnitude) {
     double  old_magnitude = this.magnitude;
     magnitude = new_magnitude;
-   propertyChangeListeners.firePropertyChange("magnitude", Double.valueOf(old_magnitude), Double.valueOf(new_magnitude));
+   propertyChangeListeners.firePropertyChange("magnitude", old_magnitude, new_magnitude);
   }
   public double getMagnitude() {
     return magnitude;
@@ -185,7 +185,7 @@ public DefaultMutableTreeNode constructTreeNode(){
   public void setSeeing(double new_seeing) {
     double  old_seeing = this.seeing;
     seeing = new_seeing;
-   propertyChangeListeners.firePropertyChange("seeing", Double.valueOf(old_seeing), Double.valueOf(new_seeing));
+   propertyChangeListeners.firePropertyChange("seeing", old_seeing, new_seeing);
   }
   public double getSeeing() {
     return seeing;

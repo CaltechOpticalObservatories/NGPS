@@ -229,19 +229,23 @@ public boolean isCellEditable(int rowIndex, int vColIndex) {
 /     setValueAt(Object value, int row, int col)
 /=================================================================================================*/
  public void setValueAt(Object value, int row, int col) {
+     
+    Object oldValue = this.getValueAt(row, col);
+    if(value.toString().equals(oldValue.toString())) {return;}
+
     if(col == 1){
         if(row == 0){
            
         }         
         if(row == 1){
            try{
-           current.etc.setWRANGE_LOW(Integer.valueOf((java.lang.String)value));
+           current.etc.setWRANGE_LOW(Float.valueOf((java.lang.String)value));
            }catch(Exception e){
            }               
         }  
         if(row == 2){
            try{
-           current.etc.setWRANGE_HIGH(Integer.valueOf((java.lang.String)value));
+           current.etc.setWRANGE_HIGH(Float.valueOf((java.lang.String)value));
            }catch(Exception e){
            }               
         }  

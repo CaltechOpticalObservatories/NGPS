@@ -286,6 +286,16 @@ public void increaseFontSize(){
 public void decreaseFontSize(){
     changeFontSize(-2);
 }
+
+public void resetTableDisplays(){
+    // Clear Detail pane and unselect main table
+     dbms.setSelectedTargetName(null);
+     myParametersTableModel.setTarget(null);
+     myOTMParametersTableModel.setTarget(null);
+     myETCParameterTableModel.setTarget(null);
+     selected_table_row = -1;
+     main_editor_table.repaint();    
+}
 /*================================================================================================
 /     initializeSpinners()
 /=================================================================================================*/
@@ -2410,6 +2420,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
                dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
                dbms.executeUpdateTargetTable(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);
        } 
+       resetTableDisplays(); // Clear Detail Pane and unselect main table
     }//GEN-LAST:event_saveMenuItemActionPerformed
 
     private void openMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_openMenuItemActionPerformed
@@ -2443,7 +2454,8 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
             }
         }catch(Exception e){
            System.out.println(e.toString());
-        }       // TODO add your handling code here:
+        }
+        resetTableDisplays(); // Clear Detail pane and unselect main table
     }//GEN-LAST:event_save_asMenuItemActionPerformed
 
     private void exportMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_exportMenuItemActionPerformed
@@ -2592,21 +2604,20 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
 
     private void acceptButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_acceptButtonActionPerformed
         try{
+            double airmass_limit = Double.parseDouble(airmass_limitTextField.getText());
+            dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
+
             if(dbms.selectedObservationSet == null){
                 java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
-                java.lang.String airmass_limit_string = airmass_limitTextField.getText();
-                double airmass_limit = Double.parseDouble(airmass_limit_string);
-                dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
                 dbms.SaveAs(current_set_name);
             }else{
-                java.lang.String airmass_limit_string = airmass_limitTextField.getText();
-                double airmass_limit = Double.parseDouble(airmass_limit_string);
-                dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
                 dbms.executeUpdateTargetTable(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);
             }
         }catch(Exception e){
             System.out.println("Error Updating the DBMS table"+e.toString());
         }
+        // Clear Detail pane and unselect main table
+        resetTableDisplays();
     }//GEN-LAST:event_acceptButtonActionPerformed
 
     private void seeingTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_seeingTextFieldActionPerformed

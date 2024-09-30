@@ -238,6 +238,10 @@ return timestampAsString;
 /     setValueAt(Object value, int row, int col)
 /=================================================================================================*/
  public void setValueAt(Object value, int row, int col) {
+     
+    Object oldValue = this.getValueAt(row, col);
+    if(value.toString().equals(oldValue.toString())) {return;}
+
     if(col == 1){
         if(row == 0){
            current.sky.setRightAscension((java.lang.String)value);

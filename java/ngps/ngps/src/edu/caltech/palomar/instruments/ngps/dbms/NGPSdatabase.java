@@ -661,8 +661,8 @@ public void executeTargetsInsertStatement(Target current){
         INSERT_OBSERVATION_PREP_STATEMENT.setInt(16,current.instrument.getBIN_SPACE());
         INSERT_OBSERVATION_PREP_STATEMENT.setString(17,current.instrument.getRequestedSlitAngle());    
         INSERT_OBSERVATION_PREP_STATEMENT.setString(18,current.sky.getAIRMASS_MAX());       
-        INSERT_OBSERVATION_PREP_STATEMENT.setInt(19,current.etc.getWRANGE_LOW());       
-        INSERT_OBSERVATION_PREP_STATEMENT.setInt(20,current.etc.getWRANGE_HIGH());       
+        INSERT_OBSERVATION_PREP_STATEMENT.setFloat(19,current.etc.getWRANGE_LOW());       
+        INSERT_OBSERVATION_PREP_STATEMENT.setFloat(20,current.etc.getWRANGE_HIGH());       
         INSERT_OBSERVATION_PREP_STATEMENT.setString(21,current.etc.getChannel());       
         INSERT_OBSERVATION_PREP_STATEMENT.setDouble(22,current.etc.getMagnitude());       
         INSERT_OBSERVATION_PREP_STATEMENT.setString(23,current.etc.getMagref_system());       
@@ -909,8 +909,8 @@ public void executeTargetsUpdateStatement(Target current){
         UPDATE_OBSERVATION_PREP_STATEMENT.setInt(16,current.instrument.getBIN_SPACE());
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(17,current.instrument.getRequestedSlitAngle()); 
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(18,current.sky.getAIRMASS_MAX());         
-        UPDATE_OBSERVATION_PREP_STATEMENT.setInt(19,current.etc.getWRANGE_LOW());       
-        UPDATE_OBSERVATION_PREP_STATEMENT.setInt(20,current.etc.getWRANGE_HIGH());       
+        UPDATE_OBSERVATION_PREP_STATEMENT.setFloat(19,current.etc.getWRANGE_LOW());       
+        UPDATE_OBSERVATION_PREP_STATEMENT.setFloat(20,current.etc.getWRANGE_HIGH());       
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(21,current.etc.getChannel());       
         UPDATE_OBSERVATION_PREP_STATEMENT.setDouble(22,current.etc.getMagnitude());       
         UPDATE_OBSERVATION_PREP_STATEMENT.setString(23,current.etc.getMagref_system());       
@@ -1230,8 +1230,8 @@ public Target transformResultSetToObservation(java.sql.ResultSet results){
           current.instrument.setBIN_SPACE(results.getInt("BINSPAT"));
           current.instrument.setRequestedSlitAngle(results.getString("SLITANGLE"));
           current.sky.setAIRMASS_MAX(results.getString("AIRMASS_MAX"));
-          current.etc.setWRANGE_LOW(results.getInt("WRANGE_LOW"));
-          current.etc.setWRANGE_HIGH(results.getInt("WRANGE_HIGH"));
+          current.etc.setWRANGE_LOW(results.getFloat("WRANGE_LOW"));
+          current.etc.setWRANGE_HIGH(results.getFloat("WRANGE_HIGH"));
           current.etc.setChannel(results.getString("CHANNEL"));
           current.etc.setMagnitude(results.getDouble("MAGNITUDE"));
           current.etc.setMagref_system(results.getString("MAGSYSTEM"));
