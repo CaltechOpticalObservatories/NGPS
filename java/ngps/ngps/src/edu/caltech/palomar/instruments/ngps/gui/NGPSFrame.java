@@ -1499,10 +1499,11 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         selectedTargetNameTextField = new javax.swing.JTextField();
         jLabel1 = new javax.swing.JLabel();
         jLabel2 = new javax.swing.JLabel();
-        jLabel3 = new javax.swing.JLabel();
-        jLabel4 = new javax.swing.JLabel();
         jLabel5 = new javax.swing.JLabel();
-        jLabel6 = new javax.swing.JLabel();
+        jLabel10 = new javax.swing.JLabel();
+        jLabel14 = new javax.swing.JLabel();
+        jLabel16 = new javax.swing.JLabel();
+        jLabel3 = new javax.swing.JLabel();
         left_mainPanel = new javax.swing.JPanel();
         myOScontrolsPanel = new edu.caltech.palomar.instruments.ngps.gui.OScontrolsPanel();
         main_tableScrollPane = new javax.swing.JScrollPane();
@@ -1944,21 +1945,24 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         selectedTargetNameTextField.setFont(new java.awt.Font("Arial", 1, 14)); // NOI18N
 
         jLabel1.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
-        jLabel1.setText("Dispersion Scales (Å/pixel) ");
+        jLabel1.setText("Range           Dispersion        Plate Scale");
 
         jLabel2.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
-        jLabel2.setText("U  0.308         R  0.569");
-
-        jLabel3.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
-        jLabel3.setText("G  0.422         I  0.693");
-
-        jLabel4.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
-        jLabel4.setText("Plate Scale");
+        jLabel2.setText("U:  310-436            0.308                  0.191");
 
         jLabel5.setFont(new java.awt.Font("Cantarell", 3, 14)); // NOI18N
 
-        jLabel6.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
-        jLabel6.setText("0.191\"/pixel");
+        jLabel10.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
+        jLabel10.setText("G:  417-590            0.422                  0.191");
+
+        jLabel14.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
+        jLabel14.setText("R:  561-794             0.569                  0.191");
+
+        jLabel16.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
+        jLabel16.setText("I:  756-1040            0.693                  0.191");
+
+        jLabel3.setFont(new java.awt.Font("Cantarell", 1, 18)); // NOI18N
+        jLabel3.setText("(nm)             (Å/pixel)         (arcsec/pixel)");
 
         javax.swing.GroupLayout detailsPanelLayout = new javax.swing.GroupLayout(detailsPanel);
         detailsPanel.setLayout(detailsPanelLayout);
@@ -1966,11 +1970,6 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
             detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(detailsPanelLayout.createSequentialGroup()
                 .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(detailsPanelLayout.createSequentialGroup()
-                        .addGap(38, 38, 38)
-                        .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel2)
-                            .addComponent(jLabel3)))
                     .addGroup(detailsPanelLayout.createSequentialGroup()
                         .addGap(8, 8, 8)
                         .addComponent(jLabel9)
@@ -1980,14 +1979,21 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
                         .addContainerGap()
                         .addComponent(detailedTabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 438, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(detailsPanelLayout.createSequentialGroup()
-                        .addGap(18, 18, 18)
-                        .addComponent(jLabel1)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jLabel5)
-                        .addGap(62, 62, 62)
-                        .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel6)
-                            .addComponent(jLabel4))))
+                        .addGap(33, 33, 33)
+                        .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
+                                .addComponent(jLabel16, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addComponent(jLabel14, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addComponent(jLabel10, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addComponent(jLabel2, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 389, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(detailsPanelLayout.createSequentialGroup()
+                                .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addGroup(detailsPanelLayout.createSequentialGroup()
+                                        .addGap(12, 12, 12)
+                                        .addComponent(jLabel3))
+                                    .addComponent(jLabel1))
+                                .addGap(18, 18, 18)
+                                .addComponent(jLabel5)))))
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         detailsPanelLayout.setVerticalGroup(
@@ -2000,17 +2006,20 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(detailedTabbedPane, javax.swing.GroupLayout.PREFERRED_SIZE, 412, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel1)
-                    .addComponent(jLabel5)
-                    .addComponent(jLabel4))
+                .addComponent(jLabel1)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel2)
-                    .addComponent(jLabel6))
+                    .addComponent(jLabel3)
+                    .addComponent(jLabel5))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jLabel3)
-                .addGap(58, 58, 58))
+                .addComponent(jLabel2)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(jLabel10)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(jLabel14)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(jLabel16)
+                .addContainerGap())
         );
 
         left_mainPanel.setBorder(new javax.swing.border.LineBorder(new java.awt.Color(0, 0, 0), 2, true));
@@ -2495,6 +2504,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
             try{
               dbms.createNewTargetList();
               dbms.setSelectedSetName(null);
+              resetTableDisplays(); // Clear Detail Pane and unselect main table
             }catch(Exception e){
                System.out.println(e.toString());
             }
@@ -2975,16 +2985,17 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
     private javax.swing.JMenuItem insert_copiedMenuItem;
     private javax.swing.JCheckBox jCheckBox2;
     private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel10;
     private javax.swing.JLabel jLabel11;
     private javax.swing.JLabel jLabel12;
     private javax.swing.JLabel jLabel13;
+    private javax.swing.JLabel jLabel14;
     private javax.swing.JLabel jLabel15;
+    private javax.swing.JLabel jLabel16;
     private javax.swing.JLabel jLabel17;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
-    private javax.swing.JLabel jLabel4;
     private javax.swing.JLabel jLabel5;
-    private javax.swing.JLabel jLabel6;
     private javax.swing.JLabel jLabel7;
     private javax.swing.JLabel jLabel8;
     private javax.swing.JLabel jLabel9;
