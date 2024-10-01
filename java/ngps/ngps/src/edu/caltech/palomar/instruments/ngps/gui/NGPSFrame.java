@@ -234,6 +234,10 @@ public class NGPSFrame extends javax.swing.JFrame {
         signoutMenuItem.setEnabled(false);
         signinMenuItem.setEnabled(true);
         myAccountMenuItem.setEnabled(false);
+        
+        dbms.createNewTargetList();
+        dbms.setSelectedSetName(null);
+        resetTableDisplays();
 
         centreWindow(this);
     }

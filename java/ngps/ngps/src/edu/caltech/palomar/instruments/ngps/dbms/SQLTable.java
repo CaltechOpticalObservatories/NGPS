@@ -17,8 +17,12 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import java.util.Arrays;
-import java.util.List;
 import java.util.ArrayList;
+
+import java.io.FileReader;
+import java.io.PrintWriter;
+import com.Ostermiller.util.CSVParser;
+import com.Ostermiller.util.CSVPrinter;
 
 /**
  *
@@ -36,6 +40,23 @@ public class SQLTable extends JTable{
            TableColumn tableColumn = getColumnModel().getColumn(column);
            tableColumn.setPreferredWidth(Math.max(rendererWidth + getIntercellSpacing().width, tableColumn.getPreferredWidth()));
            return component;
+        }
+        
+        public SQLTable(String CSVfilename){
+            
+            super(); // JTable constructor
+            String[][] csvstring = null;
+            
+            try(var reader = new FileReader(CSVfilename)){
+               csvstring = CSVParser.parse(reader);
+            } catch (Exception e) { System.out.println(e.toString()); }
+           
+           int Nrows = csvstring.length;
+           String[] columns = csvstring[0];
+           String[][] data = Arrays.copyOfRange(csvstring, 1, Nrows);
+                      
+           JTable CSVdata = new JTable(data, columns);
+           this.setModel(CSVdata.getModel());
         }
 
         public SQLTable(ResultSet resultSet){
@@ -116,6 +137,30 @@ public class SQLTable extends JTable{
         public TableColumn getNamedColumnModel(String colname){
                 int col = getColumn(colname).getModelIndex();
                 return getColumnModel().getColumn(col);
+        }
+        
+        public void toCSVfile(String filename){
+            // Dump the table contents to a CSV file
+            int Nrows = this.getRowCount();
+            int Ncols = this.getColumnCount();
+            
+            try(var out = new PrintWriter(filename)){
+                
+                // Print Header row
+                var line = new String[Ncols];
+                for(int col=0; col<Ncols; col++){
+                    line[col] = this.getColumnName(col);
+                }
+                out.println( String.join(",", line) );
+
+                // Print each data row
+                for(int row=0; row<Nrows; row++){
+                    for(int col=0; col<Ncols; col++){
+                        line[col] = this.getValueAt(row, col).toString();
+                    }
+                    out.println( String.join(",", line) );
+                }
+            } catch (Exception e){ System.out.println(e.toString()); }
         }
         
    public static Timestamp stringToTimestamp(String dateString) { 

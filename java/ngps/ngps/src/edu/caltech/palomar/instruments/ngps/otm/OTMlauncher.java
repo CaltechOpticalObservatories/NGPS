@@ -48,7 +48,9 @@ import edu.dartmouth.jskycalc.objects.NightlyAlmanac;
 import edu.dartmouth.jskycalc.objects.WhenWhere;
 import java.io.FileInputStream;
 import java.util.Properties;
-import edu.caltech.palomar.instruments.ngps.otm.OTMErrorsLog;
+
+import edu.caltech.palomar.instruments.ngps.dbms.SQLTable;
+
 //=== File Prolog =============================================================
 //	This code was developed by California Institute of Technology
 //      Caltech Optical Observatories, Palomar Observatory
@@ -175,6 +177,10 @@ public class OTMlauncher {
         setAirmass_limit(DEFAULT_AIRMASS_LIMIT);
         
         loadconfig();
+        
+//        SQLTable stab = new SQLTable("/tmp/OTM_JAVA_OUTPUT.csv");        
+//        stab.toCSVfile("/tmp/csvtest.csv");
+ 
     }
 /*================================================================================================
 /      bootstrap()

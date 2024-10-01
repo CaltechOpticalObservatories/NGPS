@@ -140,6 +140,7 @@ public void query_target_set(){
     System.out.println("Observation Set ID = " + selectedSet.getSET_ID() + " is now selected.");  
     setVisible(false);
     dbms.setTablePopulated(true);
+    if(myObservationSequencerController==null){return;}
     if(myObservationSequencerController.getSTATE().matches("READY_NO_TARGETS")){
        if(dbms.myTargetDBMSTableModel.getRowCount() != 0){
            myObservationSequencerController.setSTATE("READY");
