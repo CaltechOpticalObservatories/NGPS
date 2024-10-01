@@ -2655,6 +2655,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
                 dbms.queryObservations(dbms.selectedObservationSet.getSET_ID());
                 dbms.delete_stack.clear();
             }
+            dbms.myTargetDBMSTableModel.setEdited(false);
         }catch(Exception e){
             System.out.println(e.toString());
         }
