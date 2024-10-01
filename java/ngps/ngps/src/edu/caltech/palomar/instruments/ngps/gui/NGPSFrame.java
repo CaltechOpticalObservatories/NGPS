@@ -87,6 +87,7 @@ import javax.swing.AbstractAction;
 import javax.swing.UIManager;
 import java.util.List;
 import java.util.Arrays;
+import java.util.HashMap;
 //import javax.swing.JFileChooser.FileNameExtensionFilter;
         /**.
  *
@@ -690,7 +691,7 @@ public java.lang.String[] constructJSkyCalcDateTime(java.sql.Timestamp current_t
         }
     }
 /*================================================================================================
-/     logPublicMessage(int code,java.lang.String message)
+/     logPublicMessage(int flags,java.lang.String message)
 /=================================================================================================*/
 public void logPublicMessage(int code,java.lang.String message){
    myCommandLogModel.insertMessage(code, message);
@@ -1022,6 +1023,59 @@ public JTable constructTable(){
                 }
                 return c;
         }
+
+            //Implement table cell tool tips.        
+            @Override
+            public String getToolTipText(MouseEvent e) {
+                
+                // Find where the mouse is pointing
+                java.awt.Point p = e.getPoint();
+                int rowIndex = rowAtPoint(p);
+                int colIndex = columnAtPoint(p);
+                
+                // Retrieve the OTMflag for that row
+                String flags = null;                
+                try {
+                    //comment row, exclude heading
+                    if(rowIndex >= 0){
+//                      tip = getValueAt(rowIndex, colIndex).toString();
+                      flags = dbms.myTargetDBMSTableModel.getRecord(rowIndex).otm.getOTMflag();
+                    }
+                } catch (RuntimeException e1) {
+                    //catch null pointer exception if mouse is over an empty line
+                }
+                
+                //// HARDCODE - MAYBE MOVE THIS SOMEWHERE
+                var codeMeaning = new HashMap<String, String>();
+                codeMeaning.put("ALT", "Altitude out of range.");
+                codeMeaning.put("AIR", "Airmass out of range.");
+                codeMeaning.put("HA", "Hour Angle out of range.");
+                codeMeaning.put("DAY", "Observation during daylight.");
+                codeMeaning.put("SKY", "Sky background model may be inaccurate at airmass>3.");
+                codeMeaning.put("EXPT", "Long exposure, consider stacking shorter exposures.");
+                
+                String NL = "<br><br>";
+                
+                // For each code found in the flag string, add to the tip text. 
+                String tip="";
+                for(String k : codeMeaning.keySet()){
+                    if(flags.contains(k)){
+                        tip = tip + codeMeaning.get(k) + NL;
+                    }
+                }
+                if(tip.isBlank()){ tip=null; } // go back to null to avoid a blank tip
+                else{ 
+                    if(flags.contains("-0")){
+                        tip = "Problem at start of observation (delay)."+NL+tip;
+                    }
+                    if(flags.contains("-1")){
+                        tip = tip+"Problem at end of observation.";
+                    }
+                    tip = "<html><b>OTMflags:</b>"+NL+tip+"</html>"; }
+
+                return tip;
+            }        
+        
     };
   return current;
  }
@@ -2586,7 +2640,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
     }//GEN-LAST:event_mainTableKeyPressed
 
     private void jMenuItem1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jMenuItem1ActionPerformed
-        // TODO add your handling code here:
+        // TODO add your handling flags here:
     }//GEN-LAST:event_jMenuItem1ActionPerformed
 
     private void cancelButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cancelButtonActionPerformed
@@ -2638,11 +2692,11 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         minutes = ((Integer)MinutesSpinner.getValue()).intValue();
         updateStarTime();
         //        updateSelectedTimeDate();
-        // TODO add your handling code here:
+        // TODO add your handling flags here:
     }//GEN-LAST:event_MinutesSpinnerStateChanged
 
     private void HoursSpinnerStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_HoursSpinnerStateChanged
-        // TODO add your handling code here:
+        // TODO add your handling flags here:
         hours = ((Integer)HoursSpinner.getValue()).intValue();
         updateStarTime();
         //        updateSelectedTimeDate();
@@ -2854,7 +2908,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
      */
     public static void main(String args[]) {
         /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
+        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting flags (optional) ">
         /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
          * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
          */
