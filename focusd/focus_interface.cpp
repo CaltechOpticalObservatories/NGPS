@@ -58,6 +58,14 @@ namespace Focus {
     error |= this->motorinterface.clear_errors();
     error |= this->motorinterface.set_servo( true );
 
+    // Focus controllers interface via a terminal server, so it's possible to
+    // have open a socket connection and not actually be connected to the motor
+    // controllers. Therefore, determine connection success by ensuring that
+    // .clear_error() and .set_servo() succeed. If there's any error then close
+    // the connection.
+    //
+    if ( error != NO_ERROR ) this->close();
+
     return( error );
   }
   /***** Focus::Interface::open ***********************************************/
