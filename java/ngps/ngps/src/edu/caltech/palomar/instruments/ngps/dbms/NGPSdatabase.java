@@ -430,6 +430,16 @@ public int SaveAs(java.lang.String set_name){
   logMessage(CommandLogModel.COMMAND, "Saving target set to the dmbs complete.");
   return set_id;
 }
+
+    public String promptForSetName(){
+        String current_set_name = "";
+        while(current_set_name.isBlank()){
+            current_set_name = JOptionPane.showInputDialog(null,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
+            if(current_set_name==null){ return null; }  // Return NULL on Cancel
+        }
+        return current_set_name;
+    }
+
 /*================================================================================================
 /      constructDeleteTargetPreparedStatement()
 /=================================================================================================*/

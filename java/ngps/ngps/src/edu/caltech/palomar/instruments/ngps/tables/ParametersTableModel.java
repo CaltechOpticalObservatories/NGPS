@@ -180,6 +180,7 @@ return timestamp;
 
 public java.lang.String timestamp_to_string(java.sql.Timestamp current){
 //    java.sql.Timestamp timestamp = java.sql.Timestamp.valueOf("2018-12-12 01:02:03.123456789");
+    if(current==null){ return ""; }
      String timestampAsString = new java.lang.String();
      try{
           java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;

@@ -43,8 +43,8 @@ public SkyCoordinates(){
 }
 public void initializeValues(){
 //    setEPOCH("J2000"); 
-    setRightAscension(null);
-    setDeclination(null);
+    setRightAscension("0:0:0.0");
+    setDeclination("0:0:0.0");
 }
 /*================================================================================================
 /          DefaultMutableTreeNode constructTreeNode()

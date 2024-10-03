@@ -201,7 +201,7 @@ public class NGPSFrame extends javax.swing.JFrame {
         dbms_stateLabel.setIcon(UNKNOWN);
         acceptButton.setIcon(ACCEPT_OFF);
         cancelButton.setIcon(CANCEL_OFF);
-        initializeJSkyCalcModel();
+        initializeJSkyCalcModel();  // Throws NullPointerException bc time spinners are null
         initializeOTMoutputFrame();
         initializeChangePasswordFrame();
         initializeSpinners();        
@@ -888,6 +888,7 @@ public void initializeMainTable(){
   for( JTable tab : new JTable[]{main_editor_table, etcTable, planTable, observationTable} ){
       tab.getTableHeader().setReorderingAllowed(false);
       tab.getTableHeader().setResizingAllowed(false);
+      tab.putClientProperty("terminateEditOnFocusLost", true);
   }
   
 }
@@ -898,11 +899,12 @@ public void initializeMainTable(){
      java.lang.String propertyName = e.getPropertyName();
      System.out.println("table_edited_propertyChange "+propertyName);
     if(propertyName.matches("edited")){
-       java.lang.Boolean current_value = (java.lang.Boolean)e.getNewValue();  
+        resetTableDisplays();
+       var current_value = (Boolean)e.getNewValue();  
        if(current_value){
-           this.acceptButton.setIcon(ACCEPT_SAVE_NEEDED);
-       }else if(!current_value){
-           this.acceptButton.setIcon(ACCEPT_OFF);
+           acceptButton.setIcon(ACCEPT_SAVE_NEEDED);
+       }else {
+           acceptButton.setIcon(ACCEPT_OFF);
        }
     }
   }
@@ -1188,8 +1190,15 @@ public JTable constructTable(){
               }
            });
         current_table.setComponentPopupMenu(popup);
+        
         current_table.getSelectionModel().addListSelectionListener(new ListSelectionListener(){
             public void valueChanged(ListSelectionEvent event) {
+                if(observationTable.isEditing()){
+                    observationTable.getCellEditor().stopCellEditing();
+                }
+                if(etcTable.isEditing()){
+                    etcTable.getCellEditor().stopCellEditing();
+                }
                  if(!event.getValueIsAdjusting() && current_table.getSelectedRow() != -1){
                      try{
                        int count = current_table_model.getRowCount();
@@ -2476,11 +2485,12 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
 
     private void saveMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveMenuItemActionPerformed
        if(dbms.selectedObservationSet == null){
-                java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
-                java.lang.String airmass_limit_string = airmass_limitTextField.getText();
-                double airmass_limit = Double.parseDouble(airmass_limit_string);
-                dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
-                dbms.SaveAs(current_set_name);
+            String current_set_name = dbms.promptForSetName();
+            if(current_set_name==null){ return; } // Stop this if user selected CANCEL 
+            java.lang.String airmass_limit_string = airmass_limitTextField.getText();
+            double airmass_limit = Double.parseDouble(airmass_limit_string);
+            dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
+            dbms.SaveAs(current_set_name);
        }else{          
                java.lang.String airmass_limit_string = airmass_limitTextField.getText();
                double airmass_limit = Double.parseDouble(airmass_limit_string);
@@ -2513,13 +2523,9 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
 
     private void save_asMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_save_asMenuItemActionPerformed
         try{
-            String current_set_name = "";
-            while(current_set_name.trim().isEmpty()){
-                current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
-            }
-            if(current_set_name!=null){
-              dbms.executeSaveAs(current_set_name);
-            }
+            String current_set_name = dbms.promptForSetName();
+            if(current_set_name==null){ return; } // Stop this if user selected CANCEL 
+            dbms.executeSaveAs(current_set_name);
         }catch(Exception e){
            System.out.println(e.toString());
         }
@@ -2677,7 +2683,8 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
             dbms.myOTMlauncher.setAirmass_limit(airmass_limit);
 
             if(dbms.selectedObservationSet == null){
-                java.lang.String current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);
+                String current_set_name = dbms.promptForSetName();
+                if(current_set_name==null){ return; } // Stop this if user selected CANCEL 
                 dbms.SaveAs(current_set_name);
             }else{
                 dbms.executeUpdateTargetTable(dbms.selectedObservationSet,dbms.myTargetDBMSTableModel);

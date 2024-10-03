@@ -64,11 +64,7 @@ public void setObservationSequencerController(ObservationSequencerController cur
 /=============================================================================================*/
 public void save_to_database(){
     
-    String current_set_name = "";
-    // Loop until we get a string or null (cancel)
-    while(current_set_name.trim().isEmpty()){
-        current_set_name = JOptionPane.showInputDialog(this,"Enter label for this Target List","",JOptionPane.QUESTION_MESSAGE);        
-    }
+    String current_set_name = dbms.promptForSetName();
     setVisible(false); //Hide the label input dialog either way
 
     if(current_set_name != null){
