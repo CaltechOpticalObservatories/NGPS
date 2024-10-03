@@ -899,7 +899,7 @@ public void initializeMainTable(){
      java.lang.String propertyName = e.getPropertyName();
      System.out.println("table_edited_propertyChange "+propertyName);
     if(propertyName.matches("edited")){
-        resetTableDisplays();
+        //resetTableDisplays();
        var current_value = (Boolean)e.getNewValue();  
        if(current_value){
            acceptButton.setIcon(ACCEPT_SAVE_NEEDED);

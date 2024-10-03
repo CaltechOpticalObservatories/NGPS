@@ -199,13 +199,14 @@ return timestampAsString;
     java.lang.Object returnObject = null;
     if(col == 1){
         if(current != null){
-        if(row == 0){ returnObject = current.sky.getRightAscension();}        
-        if(row == 1){ returnObject = current.sky.getDeclination();}        
-        if(row == 2){ returnObject = current.sky.getOFFSET_RA();} 
-        if(row == 3){ returnObject = current.sky.getOFFSET_DEC();}        
-        if(row == 4){ returnObject = current.instrument.getExposuretime();}        
-        if(row == 5){ returnObject = current.instrument.getSlitwidth_string();}        
-        if(row == 6){ returnObject = current.instrument.getSlitOffset();}        
+        returnObject = "";
+//        if(row == 0){ returnObject = current.sky.getRightAscension();}        
+//        if(row == 1){ returnObject = current.sky.getDeclination();}        
+//        if(row == 2){ returnObject = current.sky.getOFFSET_RA();} 
+//        if(row == 3){ returnObject = current.sky.getOFFSET_DEC();}        
+//        if(row == 4){ returnObject = current.instrument.getExposuretime();}        
+//        if(row == 5){ returnObject = current.instrument.getSlitwidth_string();}        
+//        if(row == 6){ returnObject = current.instrument.getSlitOffset();}        
         if(row == 7){ returnObject = current.instrument.getOBSMODE();}        
         if(row == 8){ returnObject = current.instrument.getBIN_SPEC();}        
         if(row == 9){ returnObject = current.instrument.getBIN_SPACE();}           
@@ -217,16 +218,17 @@ return timestampAsString;
        }        
     }
     if(col == 0){
-        if(row == 0){returnObject = "RA (hh:mm:ss.s)";}        
-        if(row == 1){returnObject = "DEC (dd:mm:ss.s)";}        
-        if(row == 2){returnObject = " --- ";}  //"RA offset (arcsec)"
-        if(row == 3){returnObject = " --- ";}  //"DEC offset (arcsec)"
-        if(row == 4){returnObject = "EXPTIME Request";}        
-        if(row == 5){returnObject = "SLITWIDTH Request";}        
-        if(row == 6){returnObject = " --- ";} //Slit offset (arcsec)
+        String blank = " --- ";
+        if(row == 0){returnObject = blank;}   //"RA (hh:mm:ss.s)"
+        if(row == 1){returnObject = blank;}  //  "DEC (dd:mm:ss.s)"
+        if(row == 2){returnObject = blank;}  //"RA offset (arcsec)"
+        if(row == 3){returnObject = blank;}  //"DEC offset (arcsec)"
+        if(row == 4){returnObject = blank;}  //"EXPTIME Request"
+        if(row == 5){returnObject = blank;}  //"SLITWIDTH Request"
+        if(row == 6){returnObject = blank;} //Slit offset (arcsec)
         if(row == 7){returnObject = "CCD Mode";}        
         if(row == 8){returnObject = "Bin Spectral (int)";}        
-        if(row == 9){returnObject =  "Bin Spatial (int)";}  
+        if(row == 9){returnObject = "Bin Spatial (int)";}  
         if(row == 10){returnObject =  "Slit Angle Request (deg)";} 
         if(row == 11){returnObject =  "Airmass limit";} 
         if(row == 12){returnObject =  "Point Mode";}  
@@ -240,33 +242,37 @@ return timestampAsString;
 /=================================================================================================*/
  public void setValueAt(Object value, int row, int col) {
      
+     if(current==null){ return; } // No target selected
+     
     Object oldValue = this.getValueAt(row, col);
-    if(value.toString().equals(oldValue.toString())) {return;}
+    if(oldValue!=null){
+        if(value.toString().equals(oldValue.toString())) {return;}        
+    }
 
     if(col == 1){
-        if(row == 0){
-           current.sky.setRightAscension((java.lang.String)value);
-        }        
-        if(row == 1){
-           current.sky.setDeclination((java.lang.String)value);
-        }        
-        if(row == 2){
-           try{
-           current.sky.setOFFSET_RA(Double.valueOf((java.lang.String)value));
-           }catch(Exception e){
-           }
-        } 
-        if(row == 3){
-           try{
-           current.sky.setOFFSET_DEC(Double.valueOf((java.lang.String)value));
-           }catch(Exception e){
-           }        }        
-        if(row == 4){
-           current.instrument.setExposuretime((java.lang.String)value);
-        }        
-        if(row == 5){
-           current.instrument.setSlitwidth_string((java.lang.String)value);
-        }        
+//        if(row == 0){
+//           current.sky.setRightAscension((java.lang.String)value);
+//        }        
+//        if(row == 1){
+//           current.sky.setDeclination((java.lang.String)value);
+//        }        
+//        if(row == 2){
+//           try{
+//           current.sky.setOFFSET_RA(Double.valueOf((java.lang.String)value));
+//           }catch(Exception e){
+//           }
+//        } 
+//        if(row == 3){
+//           try{
+//           current.sky.setOFFSET_DEC(Double.valueOf((java.lang.String)value));
+//           }catch(Exception e){
+//           }        }        
+//        if(row == 4){
+//           current.instrument.setExposuretime((java.lang.String)value);
+//        }        
+//        if(row == 5){
+//           current.instrument.setSlitwidth_string((java.lang.String)value);
+//        }        
         if(row == 6){
            try{
            current.instrument.setSlitOffset(Double.valueOf((java.lang.String)value));
