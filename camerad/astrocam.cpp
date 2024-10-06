@@ -2210,22 +2210,15 @@ namespace AstroCam {
 logwrite( function, "userkeys:" );
 this->camera_info.userkeys.primary().listkeys();
 
+    // Collect telemetry, which will be stored in camera_info.telemkeys
+    //
+    this->collect_telemetry();
+
     // Make a copy of this->camera_info for this particular exposure buffer number.
     // This expinfo will be used for this particular exposure.
     // Any changes to camera_info hereafter will not be used for this exposure.
     //
     this->fitsinfo[this_expbuf] = std::make_shared<Camera::Information>( this->camera_info );
-
-logwrite( function, "fitskeys:" );
-this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
-
-    this->fitsinfo[this_expbuf]->telemkeys.primary().addkey( "ALPHA", true, "test telemetry primary key" );
-    this->fitsinfo[this_expbuf]->telemkeys.extension().addkey( "BRAVO", true, "test telemetry extension key" );
-
-//  this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "BINSPEC", this->camera.binning[_COL_], "binning in spectral direction" ); // TODO
-//  this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "BINSPAT", this->camera.binning[_ROW_], "binning in spatial direction" );  // TODO
-//  this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "BINSPEC", this->camera_info.binning[_COL_], "binning in spectral direction" ); // TODO
-//  this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "BINSPAT", this->camera_info.binning[_ROW_], "binning in spatial direction" );  // TODO
 
     // check readout type
     //
@@ -2351,11 +2344,6 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       timespec timenow       = Time::getTimeNow();         // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
       double mjd             = mjd_from( timenow );        // modified Julian date of start
-//    this->camera_info.prikeys.addkey( "EXPSTART", timestring, "exposure start time" );
-//    this->camera_info.prikeys.addkey( "MJD0", mjd, "exposure start time (modified Julian Date)" );
-//    this->camera_info.prikeys.addkey( "MJD1", mjd, "exposure stop time (modified Julian Date)" );
-//    this->camera_info.prikeys.addkey( "MJD", mjd, "average of MJD0 and MJD1" );
-//    this->camera_info.prikeys.addkey( "SHUTTIME", 0.0, "actual shutter open time in msec", 3 );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD0", mjd, "exposure start time (modified Julian Date)" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD1", mjd, "exposure stop time (modified Julian Date)" );
@@ -2434,8 +2422,9 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
     // These threads may block (if needed) until the shutter has closed, but
     // it's OK if the shutter thread is so quick that it ends first.
     //
-    // This is where camera_info keywords are "locked-in". They are copied here to
-    // to the expinfo object.
+    // This is where camera_info keywords are "locked-in", when they are copied to
+    // to the expinfo object. After copying camera_info, erase the telemkeys and
+    // conditionally erase the userkeys from it.
     //
 
     this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "WCSNAME", "DISPLAY", "" );
@@ -2449,25 +2438,37 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
         //
         this->controller[dev].expinfo[this_expbuf] = this->controller[dev].info;
 
-        this->controller[dev].expinfo[this_expbuf].systemkeys.primary().keydb = this->fitsinfo[this_expbuf]->systemkeys.primary().keydb;
-
+        // copy the systemkeys databases from fitsinfo to expinfo
+        //
+        this->controller[dev].expinfo[this_expbuf].systemkeys.primary().keydb   = this->fitsinfo[this_expbuf]->systemkeys.primary().keydb;
         this->controller[dev].expinfo[this_expbuf].systemkeys.extension().keydb = this->fitsinfo[this_expbuf]->systemkeys.extension().keydb;
 
         this->controller[dev].expinfo[this_expbuf].systemkeys.extension().merge( this->controller[dev].info.systemkeys.extension() );
 
-        this->controller[dev].expinfo[this_expbuf].telemkeys.primary().keydb = this->fitsinfo[this_expbuf]->telemkeys.primary().keydb;
-        this->controller[dev].expinfo[this_expbuf].telemkeys.extension().keydb = this->fitsinfo[this_expbuf]->telemkeys.extension().keydb;
+        this->controller[dev].expinfo[this_expbuf].telemkeys.primary().keydb    = this->fitsinfo[this_expbuf]->telemkeys.primary().keydb;
+        this->controller[dev].expinfo[this_expbuf].telemkeys.extension().keydb  = this->fitsinfo[this_expbuf]->telemkeys.extension().keydb;
 
-        this->controller[dev].expinfo[this_expbuf].userkeys.primary().keydb = this->fitsinfo[this_expbuf]->userkeys.primary().keydb;
-        this->controller[dev].expinfo[this_expbuf].userkeys.extension().keydb = this->fitsinfo[this_expbuf]->userkeys.extension().keydb;
+        this->controller[dev].expinfo[this_expbuf].userkeys.primary().keydb     = this->fitsinfo[this_expbuf]->userkeys.primary().keydb;
+        this->controller[dev].expinfo[this_expbuf].userkeys.extension().keydb   = this->fitsinfo[this_expbuf]->userkeys.extension().keydb;
 
         this->controller[dev].expinfo[this_expbuf].fits_name="not_needed";
 
         std::string hash;
         md5_file( this->controller[dev].firmware, hash );                 // compute the md5 hash
 
-        this->controller[dev].expinfo[this_expbuf].systemkeys.primary().keydb = this->camera_info.systemkeys.primary().keydb;
+        // Copy camera_info then erase the per-exposure keyword databases.
+        //
+        this->controller[dev].expinfo[this_expbuf].systemkeys.primary().keydb   = this->camera_info.systemkeys.primary().keydb;
 
+        // telemkeys are refreshed for each exposure
+        this->camera_info.telemkeys.primary().erase_db();
+        this->camera_info.telemkeys.extension().erase_db();
+
+        // userkeys are confitionally persistent
+        if ( !this->camera.is_userkeys_persist ) {
+          this->camera_info.userkeys.primary().erase_db();
+          this->camera_info.userkeys.extension().erase_db();
+        }
 
         // ... then spawn a thread to trigger the appropriate readout waveforms in the ARC controller
         //
@@ -2532,68 +2533,47 @@ this->fitsinfo[this_expbuf]->userkeys.primary().listkeys();
       }
     }
 
-    return( error );
-
-
-    /// - - - - OLD - - - - ///
-/*****************************
-
-    // As frames are received, threads are created and a counter keeps track of them,
-    // incrementing on creation and decrementing on destruction. Wait here for that
-    // counter to be zero, indicating all the threads have completed.
-    //
-    while ( this->get_framethread_count() > 0 ) ;
-
-    // Check each Controller object for errors that may have occured in the expose threads.
-    // That error would have been logged, but not returned here, since the thread functions
-    // are necessarily static void.
-    //
-    for (const auto &dev : this->devnums) {
-      try {
-        if ( ( error = this->controller[dev].error ) != NO_ERROR ) break;
-      }
-      catch(std::out_of_range &) {
-      }
-    }
-
-    if ( error == NO_ERROR ) {
-      this->camera.increment_imnum();                                 // increment image_num when fitsnaming == "number"
-      logwrite(function, "all frames written");
-    }
-    else {
-      logwrite( function, "ERROR one or more devices failed to start an exposure" );
-//    if ( this->camera.get_abortstate() ) {
-//      logwrite( function, "ABORTED" );
-//      error = NO_ERROR;
-//    }
-//    else {
-//      logwrite(function, "ERROR: writing image");
-//    }
-    }
-
-    // close the FITS file
-    //
-    for (const auto &dev : this->devnums) {
-      try {
-        this->controller[dev].close_file( this->camera.writekeys_when );
-        if ( this->controller[dev].pFits->iserror() ) error = ERROR;   // allow error to be set (but not cleared)
-      }
-      catch(std::out_of_range &) {
-        message.str(""); message << "ERROR closing FITS file: unable to find device " << dev << " in list: { ";
-        for (const auto &check : this->devnums) message << check << " ";
-        message << "}";
-        logwrite(function, message.str());
-        error = ERROR;
-      }
-      catch(...) { logwrite(function, "unknown error closing FITS file(s)"); }
-    }
-
-    logwrite( function, (error==ERROR ? "ERROR" : "complete") );
-
-    return( error );
-*****************************/
+    return error;
   }
   /***** AstroCam::Interface::do_expose ***************************************/
+
+
+  /***** AstroCam::Interface::collect_telemetry *******************************/
+  /**
+   * @brief      send the "telem" command to each configured daemon to get telemetry
+   *
+   */
+  void Interface::collect_telemetry() {
+    std::string retstring;
+
+    // Instantiate a client to communicate with each daemon,
+    // constructed with no name, newline termination on command writes,
+    // and JEOF termination on reply reads.
+    //
+    Common::DaemonClient jclient("", "\n", JEOF );
+
+    // Loop through each configured telemetry provider, which is a map of
+    // ports indexed by daemon name, both of which are used to update
+    // the jclient object.
+    //
+    // Send the command "telem" to each daemon and read back the reply into
+    // retstring, which will be the serialized JSON telemetry message.
+    //
+    // handle_json_message() will parse the reply and set the FITS header
+    // keys in the telemkeys database.
+    //
+    for ( const auto &[name, port] : this->telemetry_providers ) {
+      jclient.set_name(name);
+      jclient.set_port(port);
+      jclient.connect();
+      jclient.command("telem", retstring);
+      jclient.disconnect();
+      handle_json_message(retstring);
+    }
+
+    return;
+  }
+  /***** AstroCam::Interface::collect_telemetry *******************************/
 
 
   /***** AstroCam::Interface::do_load_firmware ********************************/
@@ -4659,6 +4639,7 @@ logwrite(function, message.str());
       retstring.append( "   psleep ? | <ms>\n" );
       retstring.append( "   shdelay ? | <delay> | test\n" );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
+      retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
       return HELP;
     }
 
@@ -5114,6 +5095,83 @@ logwrite(function, message.str());
     if ( testname == "monthread" ) {
       std::thread( std::ref(AstroCam::Interface::state_monitor_thread), std::ref(*this) ).detach();
       return( NO_ERROR );
+    }
+    else
+    // ----------------------------------------------------
+    // telem
+    // ----------------------------------------------------
+    // test sending the telem command
+    //
+    if ( testname == "telem" ) {
+      if ( tokens.size() < 2 ) {
+        logwrite( function, "ERROR expected an argument" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      if ( tokens[1] == "?" || tokens[1] == "help" ) {
+        retstring = CAMERAD_TEST;
+        retstring.append( " telem collect | test | calibd | flexured | focusd | tcsd\n" );
+        retstring.append( "  collect   collects telemetry from all daemons\n" );
+        retstring.append( "  test      sends a test JSON message back to myself (camerad)\n" );
+        retstring.append( "  <xxx>     all other args collect telemetry from named daemon only\n" );
+        return HELP;
+      }
+
+      if ( tokens[1] == "collect" ) {
+        this->collect_telemetry();
+        return NO_ERROR;
+      }
+
+      Common::DaemonClient jclient("", "\n", JEOF );
+
+      if ( tokens[1]=="calibd" ) {
+        jclient.set_name("calibd");
+        jclient.set_port(9101);
+        jclient.connect();
+        jclient.command("telem", retstring);
+        jclient.disconnect();
+      }
+      else
+      if ( tokens[1]=="flexured" ) {
+        jclient.set_name("flexured");
+        jclient.set_port(9103);
+        jclient.connect();
+        jclient.command("telem", retstring);
+        jclient.disconnect();
+      }
+      else
+      if ( tokens[1]=="focusd" ) {
+        jclient.set_name("focusd");
+        jclient.set_port(9104);
+        jclient.connect();
+        jclient.command("telem", retstring);
+        jclient.disconnect();
+      }
+      else
+      if ( tokens[1]=="tcsd" ) {
+        jclient.set_name("tcsd");
+        jclient.set_port(9107);
+        jclient.connect();
+        jclient.command("telem", retstring);
+        jclient.disconnect();
+      }
+      else
+      if ( tokens[1]=="test" ) {
+        nlohmann::json jmessage;
+        jmessage["messagetype"] = "test";
+        jmessage["test"]  = "Hello, world!";
+        logwrite( function, "returning JSON test message" );
+        retstring = jmessage.dump();
+      }
+      else {
+        jclient.set_name("camerd");
+        jclient.set_port(server.nbport);
+        jclient.connect();
+        jclient.command("test json test", retstring);
+        jclient.disconnect();
+      }
+      this->handle_json_message( retstring );
     }
     else {
     // ----------------------------------------------------

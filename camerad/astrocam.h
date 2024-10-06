@@ -939,8 +939,11 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       std::map< std::string, readout_info_t > readout_source;  //!< STL map of readout sources indexed by readout name
 
+      std::map<std::string, int> telemetry_providers;  //!< a map of port[daemon_name] for telemetry providers
+
       // Functions
       //
+      long handle_json_message( std::string message_in );
       long parse_controller_config( std::string args );
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
       long test(std::string args, std::string &retstring);                 ///< test routines
@@ -985,6 +988,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       long expose(std::string nseq_in);
       long do_expose(std::string nseq_in);
+      void collect_telemetry();
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);
       long do_native(std::string cmdstr);

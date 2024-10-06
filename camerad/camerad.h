@@ -63,12 +63,7 @@ namespace Camera {
       /**
        * @brief  class constructor
        */
-      Server() {
-        this->nbport=-1;
-        this->blkport=-1;
-        this->asyncport=-1;
-        this->cmd_num=0;
-      }
+      Server() : nbport(-1), blkport(-1), asyncport(-1), cmd_num(0) { }
       /***** Camera::Server ***************************************************/
 
 
@@ -92,6 +87,8 @@ namespace Camera {
       int blocking_socket;
 
       std::atomic<int> cmd_num;
+
+      std::vector<int> jclient_ports;
 
       Network::TcpSocket nonblocking;
 
@@ -171,6 +168,31 @@ namespace Camera {
             applied++;
           }
 
+          // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
+          //
+          if ( config.param[entry] == "TELEM_PROVIDER" ) {
+            std::vector<std::string> tokens;
+            Tokenize( config.arg[entry], tokens, " " );
+            try {
+              if ( tokens.size() == 2 ) {
+                this->telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
+              }
+              else {
+                message.str(""); message << "bad format \"" << config.arg[entry] << "\": expected <name> <port>";
+                this->camera.log_error( function, message.str() );
+                return ERROR;
+              }
+            }
+            catch ( const std::exception &e ) {
+              message.str(""); message << "parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
+              this->camera.log_error( function, message.str() );
+              return ERROR;
+            }
+            message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+            this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+            applied++;
+          }
+
           // ASYNCPORT
           if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
             int port;
@@ -198,6 +220,15 @@ namespace Camera {
             message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
             logwrite( function, message.str() );
             this->camera.async.enqueue( message.str() );
+            applied++;
+          }
+
+          // USERKEYS_PERSIST: should userkeys persist or be cleared after each exposure
+          //
+          if ( config.param[entry] == "USERKEYS_PERSIST" ) {
+            this->camera.is_userkeys_persist = caseCompareString( config.arg[entry], "yes" );
+            message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+            this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
             applied++;
           }
 

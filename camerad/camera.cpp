@@ -28,6 +28,7 @@ namespace Camera {
     this->shutter_delay = 0;
     this->is_mexamps = false;            // don't force amplifiers to be written as multi-extension
     this->is_longerror = false;
+    this->is_userkeys_persist=false;     // clear userkeys after each exposure by default
     this->is_mex = false;
     this->image_dir = "/tmp";
     this->dirmode = 0;                   // user specified mode to OR with 0700 for imdir creation

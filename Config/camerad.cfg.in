@@ -120,3 +120,21 @@ CONSTKEY_EXT=(WCSNAME DISPLAY)
 CONSTKEY_EXT=(PCOUNT 0)
 CONSTKEY_EXT=(GCOUNT 1)
 
+# Should user-supplied keywords persist, or be cleared
+# after each exposure?
+# USERKEYS_PERSIST=yes|no
+#
+USERKEYS_PERSIST=no
+
+# -----------------------------------------------------------------------------
+# TELEM_PROVIDER=( <name> <port> )
+#
+# This is a list of telemetry providers where <name> is the daemon name,
+# and <port> is the port on which to send the telemetry request. These are the
+# sources for telemetry information for FITS headers. Provide one per line.
+#
+TELEM_PROVIDER=(calibd   @CALIBD_NB_PORT@)
+TELEM_PROVIDER=(flexured @FLEXURED_NB_PORT@)
+TELEM_PROVIDER=(focusd   @FOCUSD_NB_PORT@)
+TELEM_PROVIDER=(tcsd     @TCSD_NB_PORT@)
+TELEM_PROVIDER=(powerd   @POWERD_NB_PORT@)

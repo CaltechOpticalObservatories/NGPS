@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
+#include <json.hpp>
 
 #include "common.h"
 #include "logentry.h"
@@ -69,8 +70,8 @@ namespace Camera {
    */
   class Shutter {
     private:
-      int state;
-      int RTS_bit;
+      int state;    //!< shutter open state: 1=open, 0=closed, -1=uninitialized
+      int RTS_bit;  //!< bitmask representing RTS line
       int fd;
       std::chrono::time_point<std::chrono::high_resolution_clock> open_time, close_time;
     public:
@@ -144,15 +145,16 @@ namespace Camera {
       /***** Camera::Shutter:set_open *****************************************/
       /*
        * @brief      opens the shutter
-       * @details    uses iotcl( TIOCMBIS ) to set modem control register RTS bit
+       * @details    Uses iotcl( TIOCMBIS ) to set modem control register RTS bit.
+       *             Sets the class variable open_time to record the time it opened.
        * @return     ERROR or NO_ERROR
        *
        * If this returns ERROR then it means the shutter class has not been initialized.
        *
        */
       inline long set_open() {
-        this->open_time = std::chrono::high_resolution_clock::now();
         this->state=1;
+        this->open_time = std::chrono::high_resolution_clock::now();
         return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
       }
       /***** Camera::Shutter:set_open *****************************************/
@@ -161,15 +163,16 @@ namespace Camera {
       /***** Camera::Shutter:set_close ****************************************/
       /*
        * @brief      closes the shutter
-       * @details    uses iotcl( TIOCMBIC ) to clear modem control register RTS bit
+       * @details    Uses iotcl( TIOCMBIC ) to clear modem control register RTS bit.
+       *             Sets the class variable close_time to record the time it closed.
        * @return     ERROR or NO_ERROR
        *
        * If this returns ERROR then it means the shutter class has not been initialized.
        *
        */
       inline long set_close() {
-        this->close_time = std::chrono::high_resolution_clock::now();
         this->state=0;
+        this->close_time = std::chrono::high_resolution_clock::now();
         return( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
       }
       /***** Camera::Shutter:set_close ****************************************/
@@ -207,7 +210,9 @@ namespace Camera {
       /***** Camera::Shutter:get_state ****************************************/
       /*
        * @brief      reads the shutter state
-       * @details    Uses ioctl( TIOCMGET ) to read modem control status bits
+       * @details    Uses ioctl( TIOCMGET ) to read modem control status bits,
+       *             but since the Bonn signals are active low, a loss of power
+       *             could trigger an active state.
        * @param[out] state  reference to int to contain state, where {-1,0,1}={error,closed,open}
        * @return     ERROR or NO_ERROR
        *
@@ -222,7 +227,7 @@ namespace Camera {
         std::stringstream message;
         int serial;
 
-        // get all modem status bits
+        // get all modem status bits (TIOCMGET) and store in serial
         //
         int err = ioctl( this->fd, TIOCMGET, &serial );
 
@@ -230,7 +235,7 @@ namespace Camera {
           message.str(""); message << "ERROR: ioctl system call: " << std::strerror(errno);
           logwrite( function, message.str() );
           state = -1;
-          return( ERROR );
+          return ERROR;
         }
 
 #ifdef LOGLEVEL_DEBUG
@@ -250,35 +255,49 @@ namespace Camera {
         logwrite( function, message.str() );
 #endif
 
+        // Check if all bits are low, which is an indicator of a power or connection problem,
+        // since both blades can't be closed at the same time (but they can both be open).
+        //
+        if ( (serial & TIOCM_CAR)==0 &&
+             (serial & TIOCM_DSR)==0 &&
+             (serial & TIOCM_CTS)==0 ) {
+          logwrite( function, "ERROR: all Bonn status bits are LO, indicating possible power loss or connection fault" );
+          state = -1;
+          return ERROR;
+        }
+
+        // If the CAR bit is not set in serial then this is a Bonn error (active low)
+        //
         if ( (serial & TIOCM_CAR) == 0 ) {
           logwrite( function, "ERROR: Bonn shutter fatal error" );
           state = -1;
-          return( ERROR );
+          return ERROR;
         }
 
+        // If either DSR or CTS are not set then then shutter is closed
+        //
         if ( ( (serial & TIOCM_DSR) == 0 ) || ( (serial & TIOCM_CTS) == 0 ) ) {  // shutter closed
           state = 0;
-          return( NO_ERROR );
+          return NO_ERROR;
         }
         else
+        // If both DSR and CTS are set then the shutter is open
+        //
         if ( ( serial & TIOCM_DSR ) && ( serial & TIOCM_CTS ) ) {                // shutter open
           state = 1;
-          return( NO_ERROR );
+          return NO_ERROR;
         }
         else {
           message.str(""); message << "ERROR: unknown state 0x" << std::hex << serial;
           logwrite( function, message.str() );
           state = -1;
-          return( ERROR );
+          return ERROR;
         }
       }
       /***** Camera::Shutter:get_state ****************************************/
 
 
-      Shutter() {
-        this->RTS_bit = TIOCM_RTS;
-        this->fd = -1;
-        this->state = -1;
+      Shutter() : state(-1), RTS_bit(TIOCM_RTS), fd(-1) {
         this->open_time = this->close_time = std::chrono::high_resolution_clock::now();
       }
 
@@ -319,6 +338,7 @@ namespace Camera {
       int32_t       exposure_time;           //!< exposure time in exposure_unit
 //    int           binning[2];              //!< bin factor. element 0=cols (serial), element 1=rows (parallel)
 
+      bool          is_userkeys_persist;     //!< should userkeys persist or be cleared after each exposure?
       bool          autodir_state;           //!< if true then images are saved in a date subdir below image_dir, i.e. image_dir/YYYYMMDD/
       bool          abortstate;              //!< set true to abort the current operation (exposure, readout, etc.)
       bool          bonn_shutter;            //!< set false if Bonn shutter is not connected (defaults true)

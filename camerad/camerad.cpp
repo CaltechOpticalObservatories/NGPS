@@ -542,8 +542,6 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_KEY ) {
                     if ( args.substr(0, 4) == "list" ) {
-//                    logwrite( function, "prikeys:" );  ret = server.camera_info.prikeys.listkeys();
-//                    logwrite( function, "extkeys:" );  ret = server.camera_info.extkeys.listkeys();
                       for ( std::size_t i=0; i<server.fitsinfo.size(); ++i ) {
                         const auto &info = server.fitsinfo[i];
                         message.str(""); message << "fitsinfo[" << i << "] primary systemkeys:"; logwrite( function, message.str() );
@@ -558,9 +556,14 @@ void doit(Network::TcpSocket &sock) {
                         ret = info != nullptr && info->userkeys.extension().listkeys();
                         if ( info != nullptr ) break; // one expbuf is enough
                       }
-                      message.str(""); message << "extension userkeys:"; logwrite( function, message.str() );
+                      message.str(""); message << "camera_info primary userkeys:"; logwrite( function, message.str() );
                       ret = server.camera_info.userkeys.primary().listkeys();
-//                    logwrite( function, "userkeys:" ); ret = server.camera_info.userkeys.listkeys();
+                      message.str(""); message << "camera_info extension userkeys:"; logwrite( function, message.str() );
+                      ret = server.camera_info.userkeys.extension().listkeys();
+                      message.str(""); message << "camera_info primary telemkeys:"; logwrite( function, message.str() );
+                      ret = server.camera_info.telemkeys.primary().listkeys();
+                      message.str(""); message << "camera_info extension telemkeys:"; logwrite( function, message.str() );
+                      ret = server.camera_info.telemkeys.extension().listkeys();
                     }
                     else {
                       ret = server.camera_info.userkeys.primary().addkey(args);
