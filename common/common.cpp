@@ -536,7 +536,12 @@ namespace Common {
 
     // send the command
     //
-    command += this->term_write;
+    if ( this->term_with_string ) {
+      command += this->term_str_write;
+    }
+    else {
+      command += this->term_write;
+    }
     this->socket.Write( command );
 
     // Wait (poll) connected socket for incoming data...
@@ -578,9 +583,11 @@ namespace Common {
 
     this->num_send.store(2);                       // successful send resets the num_send counter
 
-    // read the response
+    // read the response, using either term_read or term_str_read as the terminator
     //
-    if ( ( ret = this->socket.Read( reply, this->term_read ) ) <= 0 ) {
+    ret = ( term_with_string ? socket.Read( reply, term_str_read ) : socket.Read( reply, term_read ) );
+
+    if ( ret <= 0 ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
         message.str(""); message << "ERROR reading from socket " << this->socket.gethost() << "/" << this->socket.getport()
                                  << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
@@ -605,7 +612,7 @@ namespace Common {
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
         message.str(""); message << "[TEST] I read this: " << reply << " but I'm going to read again!";
         logwrite( function, message.str() );
-        ret = this->socket.Read( reply, this->term_read );
+        ret = ( term_with_string ? socket.Read( reply, term_str_read ) : socket.Read( reply, term_read ) );
         reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
         message.str(""); message << "[TEST] and the 2nd read was this: " << reply;
@@ -614,7 +621,18 @@ namespace Common {
       this->timedout=false;
     }
 
-    // assign the response to the reply string, passed in by reference
+    // remove the read terminator
+    //
+    if ( term_with_string ) {
+      size_t termpos = reply.find(term_str_read);
+      if ( termpos != std::string::npos ) reply.erase(termpos);
+    }
+    else {
+      size_t termpos = reply.find(term_read);
+      if ( termpos != std::string::npos ) reply.erase(termpos);
+    }
+
+    // remove all carriage returns and newlines -- @TODO really?
     //
     reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
     reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );

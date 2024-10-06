@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef COMMON_H
-#define COMMON_H
+#pragma once
 
 #include <sstream>
 #include <queue>
@@ -15,6 +14,7 @@
 #include <map>
 #include <condition_variable>
 #include <regex>
+#include <json.hpp>
 
 #include "logentry.h"
 #include "network.h"
@@ -24,8 +24,10 @@ const long NO_ERROR = 0;
 const long ERROR = 1;
 const long BUSY = 2;
 const long TIMEOUT = 3;
-const long HELP = 3;
+const long HELP = 4;
+const long JSON = 5;
 const long EXIT = 999;
+const std::string JEOF = "EOF\n";  ///< used to terminate JSON messages
 
 /***** Common *****************************************************************/
 /**
@@ -214,10 +216,13 @@ void merge( Common::FitsKeys from ) {
 
   /**************** Common::Header ********************************************/
   /*
-   * @class  Header
-   * @brief  encapsulates two FitsKeys classes to hold primary & extension databases
+   * @class   Header
+   * @brief   encapsulates FitsKeys classes to hold primary & extension databases
+   * @details contains template functions to add key,value,comment passed by
+   *          reference or from a JSON message
    *
    */
+  using json = nlohmann::json;
   class Header {
     private:
       FitsKeys _primary;
@@ -226,6 +231,81 @@ void merge( Common::FitsKeys from ) {
     public:
       FitsKeys &primary()   { return _primary;   }
       FitsKeys &extension() { return _extension; }
+
+      /**
+       * @brief      template class adds key,value,comment to indicated keydb
+       * @param[in]  keydb    reference to FitsKeys database map
+       * @param[in]  keyword  name of header keyword
+       * @param[in]  value    value of template type <T>
+       * @param[in]  comment  comment string for header keyword
+       *
+       */
+      template <typename T>
+      void add_key( FitsKeys &keydb,
+                    const std::string &keyword, const T &value, const std::string &comment ) {
+        keydb.addkey( keyword, value, comment );
+      }
+
+      /**
+       * @brief      template class adds key,value,comment to indicated keydb from json message
+       * @details    This extracts the value from a JSON message and uses add_key to add the
+       *             keyword to the indicated database map.
+       * @param[in]  type      reference to FitsKeys database object
+       * @param[in]  jmessage  JSON message is the source of the value
+       * @param[in]  comment   comment string for header keyword
+       *
+       */
+      template <typename HeaderType, typename T=nlohmann::json>
+      void add_json_key( HeaderType type,
+                         const T &jmessage,
+                         const std::string &keyword, const std::string &comment ) {
+        const std::string function="Common::Header::add_json_key";
+        std::stringstream message;
+
+        try {
+          // extract the value from the JSON message using keyword as the key
+          //
+          auto jvalue = jmessage.at( keyword );
+
+          // use this object's db type
+          //
+          FitsKeys &keydb = (this->*type)();
+
+          // type check each value to call add_key with the correct type
+          //
+          if ( jvalue.type() == json::value_t::boolean ) {
+            this->add_key( keydb, keyword, jvalue.template get<bool>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::number_integer ) {
+            this->add_key( keydb, keyword, jvalue.template get<int>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::number_unsigned ) {
+            this->add_key( keydb, keyword, jvalue.template get<uint16_t>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::number_float ) {
+            this->add_key( keydb, keyword, jvalue.template get<double>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::string ) {
+            this->add_key( keydb, keyword, jvalue.template get<std::string>(), comment );
+          }
+          else {
+            message << "ERROR unknown type for keyword " << keyword << "=" << jvalue;
+            logwrite( function, message.str() );
+          }
+        }
+        catch( const json::exception &e ) {
+          message << "JSON exception adding keyword " << keyword << ": " << e.what();
+          logwrite( function, message.str() );
+        }
+        catch( const std::exception &e ) {
+          message << "ERROR exception adding keyword " << keyword << ": " << e.what();
+          logwrite( function, message.str() );
+        }
+      }
   };
   /**************** Common::Header ********************************************/
 
@@ -270,21 +350,36 @@ void merge( Common::FitsKeys from ) {
       std::mutex client_access;
       char term_write;            ///< send adds this char on Writes
       char term_read;             ///< send looks for this char on Reads (if reply requested)
+      std::string term_str_write; ///< optional terminating string for writes
+      std::string term_str_read;  ///< optional terminating string for reads
+      bool term_with_string;      ///< set true if using termating string (else terminating char)
       bool timedout;
       std::atomic<int> num_send;
 
     public:
-      DaemonClient() : term_write('\n'), term_read('\n'), timedout(false), num_send(2), name("unconfigured_daemon"), port(-1), nbport(-1) {
+      DaemonClient()
+        : term_write('\n'), term_read('\n'), term_with_string(false),
+          timedout(false), num_send(2), name("unconfigured_daemon"), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };
 
-      DaemonClient( std::string name_in ) : term_write('\n'), term_read('\n'), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
+      DaemonClient( std::string name_in )
+        : term_write('\n'), term_read('\n'), term_with_string(false),
+          timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< preferred constructor with name to identify daemon
 
-      DaemonClient( std::string name_in, char write_in, char read_in ) : term_write(write_in), term_read(read_in), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
+      DaemonClient( std::string name_in, char write_in, char read_in )
+        : term_write(write_in), term_read(read_in), term_with_string(false),
+          timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< preferred constructor with name to identify daemon
+
+      DaemonClient( std::string name_in, const std::string &write_in, const std::string &read_in )
+        : term_str_write(write_in), term_str_read(read_in), term_with_string(true),
+          timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
+        this->socket.sethost( "localhost" );
+      };   ///< construct with terminating strings
 
       std::string name;             ///< name of the daemon
       std::string host;             ///< host where the daemon is running
@@ -302,8 +397,8 @@ void merge( Common::FitsKeys from ) {
       long send( std::string command, std::string &reply );        ///< for internal use only
       long connect();                                              ///< initialize socket connection to daemon
       void disconnect();                                           ///< close socket connection to daemon
-      void set_name( std::string name_in ) { this->name=name_in; } ///< name this daemon
-      void set_port( int port );                                   ///< set the port number
+      inline void set_name( const std::string &name_in ) { this->name=name_in; } ///< name this daemon
+      inline void set_port( const int &port ) { this->port=port; }               ///< set the port number
 
       long is_connected( std::string &reply );
       bool is_open();                                              ///< is device open?
@@ -312,4 +407,3 @@ void merge( Common::FitsKeys from ) {
 
 }
 /***** Common *****************************************************************/
-#endif
