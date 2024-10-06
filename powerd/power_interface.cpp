@@ -332,7 +332,7 @@ namespace Power {
   /**
    * @brief      list status of all plug devices
    * @param[out] retstring  reference to string to contain the status of plug devices
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    */
   long Interface::status( std::string args, std::string &retstring ) {
@@ -341,16 +341,16 @@ namespace Power {
 
     // Help
     //
-    if ( args=="?" ) {
+    if ( args=="?" || args=="help" ) {
       retstring = POWERD_STATUS;
       retstring.append( "\n" );
       retstring.append( "  displays the on/off status of each plug, in order of unit and plug\n" );
-      return( NO_ERROR );
+      return HELP;
     }
 
     if ( ! this->isopen() ) {
       logwrite( function, "ERROR:connection not open" );
-      return( ERROR );
+      return ERROR;
     }
 
     message << "u p s   plugname\n";
@@ -369,24 +369,20 @@ namespace Power {
           int status = std::stoi( tokens.at(tok) );
           message << plugid.str() << " " << ( status==1 ? "\e[1mon\e[0m " : "off" ) 
                                   << " " << this->plugname[ plugid.str() ] << "\n";
+          this->telemetry_map[this->plugname[plugid.str()]] = status;
         }
       }
       message << this->missing;  // notify of missing hardware, if any
     }
-    catch ( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR: invalid argument exception: " << e.what();
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR: " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR: out of range exception: " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     retstring = message.str();
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Power::Interface::status *********************************************/
 
@@ -618,5 +614,41 @@ namespace Power {
     }
   }
   /***** Power::Interface::command ********************************************/
+
+
+  /***** Power::Interface::make_telemetry_message *****************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    const std::string function="Power::Interface::make_telemetry_message";
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"]="powerinfo";
+
+    // get power status
+    //
+    this->status("", retstring);
+
+    // fill the jmessage with the key/val pairs just retrieved
+    //
+    for ( const auto &[key,val] : this->telemetry_map ) {
+      jmessage[key]=val;
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Power::Interface::make_telemetry_message *****************************/
 
 }

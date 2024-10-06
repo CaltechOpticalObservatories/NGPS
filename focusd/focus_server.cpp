@@ -280,9 +280,10 @@ namespace Focus {
    */
   void Server::thread_main( Focus::Server &focus, Network::TcpSocket sock ) {
     while (1) {
-      focus.conn_mutex.lock();
+      {
+      std::lock_guard<std::mutex> lock(focus.conn_mutex);
       sock.Accept();
-      focus.conn_mutex.unlock();
+      }
       focus.doit(sock);          // call function to do the work
       sock.Close();
     }
@@ -527,6 +528,22 @@ namespace Focus {
       }
       else
 
+      // send telemetry upon request
+      //
+      if ( cmd == FOCUSD_TELEMREQUEST ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=FOCUSD_TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with EOF\\n.\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        this->interface.make_telemetry_message( retstring );
+                        ret = JSON;
+                      }
+      }
+      else
+
       // test routines
       //
       if ( cmd == FOCUSD_TEST ) {
@@ -548,14 +565,19 @@ namespace Focus {
       //
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+        if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
+        if ( ret == JSON ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
+          logwrite( function, message.str() );
+        }
+        else
         if ( ! retstring.empty() && ret != HELP ) {
+          retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
         }
 
-        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
@@ -563,7 +585,6 @@ namespace Focus {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** Server::doit *********************************************************/

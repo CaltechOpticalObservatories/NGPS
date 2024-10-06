@@ -476,6 +476,22 @@ namespace Flexure {
       }
       else
 
+      // send telemetry upon request
+      //
+      if ( cmd == FLEXURED_TELEMREQUEST ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=FLEXURED_TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with EOF\\n.\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        this->interface.make_telemetry_message( retstring );
+                        ret = JSON;
+                      }
+      }
+      else
+
       // test routines
       //
       if ( cmd == FLEXURED_TEST ) {
@@ -497,14 +513,19 @@ namespace Flexure {
       //
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+        if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
+        if ( ret == JSON ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
+          logwrite( function, message.str() );
+        }
+        else
         if ( ! retstring.empty() && ret != HELP ) {
+          retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
         }
 
-        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
@@ -512,7 +533,6 @@ namespace Flexure {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** Server::doit *********************************************************/

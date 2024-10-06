@@ -65,6 +65,7 @@ namespace Flexure {
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
       long send_command( const std::string &name, std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
+      void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message
       long test( std::string args, std::string &retstring );                 ///< test routines
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller

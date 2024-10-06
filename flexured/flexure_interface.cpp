@@ -219,7 +219,7 @@ namespace Flexure {
   /***** Flexure::Interface::get **********************************************/
   /**
    * @brief      get the position of the indicated channel and axis
-   * @param[in]  args       string containing <name> <axis> <pos>
+   * @param[in]  args       string containing <name> <axis>
    * @param[out] retstring  reference to return string
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -233,8 +233,8 @@ namespace Flexure {
     // Help
     //
     if ( args == "?" ) {
-      retstring = FLEXURED_SET;
-      retstring.append( " <chan> <axis> <pos>\n" );
+      retstring = FLEXURED_GET;
+      retstring.append( " <chan> <axis>\n" );
       retstring.append( "  Get position of indicated <chan> and <axis>,\n" );
       retstring.append( "  where <chan> <axis> are as follows:\n" );
       for ( const auto &mot : _motormap ) {
@@ -355,6 +355,62 @@ namespace Flexure {
     }
   }
   /***** Flexure::Interface::send_command *************************************/
+
+
+  /***** Flexure::Interface::make_telemetry_message ***************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    const std::string function="Flexure::Interface::make_telemetry_message";
+    std::stringstream message;
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"]="flexureinfo";
+
+    // get all flexure actuator positions
+    //
+    auto _motormap = this->motorinterface.get_motormap();
+
+    // loop through all motors in motormap
+    for ( const auto &mot : _motormap ) {
+      // loop through all axes for each motor
+      for ( const auto &axis : mot.second.axes ) {
+        auto chan = mot.second.name;
+        auto addr = mot.second.addr;
+        float position = NAN;
+        std::string posname;
+        std::string key;
+        this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
+        switch ( axis.second.axisnum ) {
+          case 1 : key = "FLXPIS_" + chan; break;
+          case 2:  key = "FLXSPE_" + chan; break;
+          case 3:  key = "FLXSPA_" + chan; break;
+          default: key = "error";
+                   message.str(""); message << "ERROR unknown axis " << axis.second.axisnum;
+                   logwrite( function, message.str() );
+        }
+
+        // assign the position or NaN to a key in the JSON jmessage
+        //
+        if ( !std::isnan(position) ) jmessage[key]=position; else jmessage[key]="NAN";
+      }
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Flexure::Interface::make_telemetry_message ***************************/
 
 
   /***** Flexure::Interface::test *********************************************/

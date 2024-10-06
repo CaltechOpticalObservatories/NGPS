@@ -14,6 +14,7 @@ const std::string FLEXURED_ISOPEN = "isopen";  const int FLEXURED_ISOPEN_TIMEOUT
 const std::string FLEXURED_NATIVE = "native";  const int FLEXURED_NATIVE_TIMEOUT = 3000;
 const std::string FLEXURED_OPEN = "open";      const int FLEXURED_OPEN_TIMEOUT = 3000;
 const std::string FLEXURED_SET  = "set";       const int FLEXURED_SET_TIMEOUT = 15000;
+const std::string FLEXURED_TELEMREQUEST = "telem";
 const std::string FLEXURED_TEST  = "test";     const int FLEXURED_TEST_TIMEOUT = 15000;
 
 const std::vector<std::string> FLEXURED_SYNTAX = {
@@ -23,6 +24,7 @@ const std::vector<std::string> FLEXURED_SYNTAX = {
                                                  FLEXURED_NATIVE+" ? | <chan> <cmd>",
                                                  FLEXURED_OPEN,
                                                  FLEXURED_SET+" ? | <chan> <axis> <pos>",
+                                                 FLEXURED_TELEMREQUEST+" [ ? ]",
                                                  FLEXURED_TEST+" ? | <testname> ...",
                                                  "   motormap",
                                                  "   posmap",

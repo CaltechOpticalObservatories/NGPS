@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef CALIB_SERVER_H
-#define CALIB_SERVER_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -20,6 +19,7 @@
 #include <vector>
 #include <atomic>
 #include <climits>
+#include <json.hpp>
 
 #include "logentry.h"
 #include "config.h"
@@ -99,4 +99,3 @@ namespace Calib {
 
 }
 /***** Calib ******************************************************************/
-#endif

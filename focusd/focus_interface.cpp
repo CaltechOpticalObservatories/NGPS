@@ -536,6 +536,50 @@ namespace Focus {
   /***** Focus::Interface::send_command ***************************************/
 
 
+  /***** Focus::Interface::make_telemetry_message *****************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    const std::string function="Focus::Interface::make_telemetry_message";
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"]="focusinfo";
+
+    // get focus position for each motor
+    //
+    auto _motormap = this->motorinterface.get_motormap();
+    for ( const auto &mot : _motormap ) {
+      auto name = mot.second.name;
+      int axis=1;
+      auto addr = mot.second.addr;
+      float position = NAN;
+      std::string posname;
+      this->motorinterface.get_pos( name, axis, addr, position, posname );
+
+      std::string key = "FOCUS" + mot.first;
+
+      // assign the position or NaN to a key in the JSON jmessage
+      //
+      if ( !std::isnan(position) ) jmessage[key]=position; else jmessage[key]="NAN";
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Focus::Interface::make_telemetry_message *****************************/
+
+
   /***** Focus::Interface::test ***********************************************/
   /**
    * @brief      test commands

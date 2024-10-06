@@ -183,6 +183,7 @@ namespace Power {
     private:
       bool   class_initialized;
       size_t numdev;                                       ///< number of NPS devices, or "units"
+      std::map<std::string, int> telemetry_map;            ///< map of plug status 0|1 indexed by plug nam
 
     public:
       Interface();
@@ -217,6 +218,7 @@ namespace Power {
       long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
       void list( std::string args, std::string &retstring );   ///< list plug devices
       long status( std::string args, std::string &retstring ); ///< status of all plug devices
+      void make_telemetry_message( std::string &retstring );   ///< make serialized JSON telemetry message
 
   };
   /***** Power::Interface *****************************************************/

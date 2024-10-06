@@ -533,6 +533,22 @@ void doit(Network::TcpSocket sock) {
                     if ( isopen ) retstring = "true"; else retstring = "false";
                     ret = NO_ERROR;
     }
+    else
+
+    // send telemetry upon request
+    //
+    if ( cmd == POWERD_TELEMREQUEST ) {
+                    if ( args=="?" || args=="help" ) {
+                      retstring=POWERD_TELEMREQUEST+"\n";
+                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                      retstring.append( "  information, terminated with EOF\\n.\n" );
+                      ret=HELP;
+                    }
+                    else {
+                      powerd.interface.make_telemetry_message( retstring );
+                      ret = JSON;
+                    }
+    }
 
     // all other commands go to the powerd interface for parsing
     //
@@ -549,15 +565,20 @@ void doit(Network::TcpSocket sock) {
 
     if (ret != NOTHING) {
       if ( ! retstring.empty() ) retstring.append( " " );
-      retstring.append( ret == 0 ? "DONE" : "ERROR" );
+      if ( ret != HELP && ret != JSON ) retstring.append( ret == 0 ? "DONE" : "ERROR" );
 
-      if ( ! retstring.empty() && cmd != "help" && cmd != "?"
+      if ( ret == JSON ) {
+        message.str(""); message << "command (" << powerd.cmd_num << ") reply with JSON message";
+        logwrite( function, message.str() );
+      }
+      else
+      if ( ! retstring.empty() && ret != HELP
                                && cmd != POWERD_STATUS && cmd != POWERD_LIST ) {
+        retstring.append( "\n" );
         message.str(""); message << "command (" << powerd.cmd_num << ") reply: " << retstring;
         logwrite( function, message.str() );
       }
 
-      retstring.append( "\n" );
       if ( sock.Write( retstring ) < 0 ) connection_open=false;
     }
 

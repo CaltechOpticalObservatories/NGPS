@@ -340,18 +340,18 @@ namespace Calib {
     //
     if ( name_in == "?" ) {
       retstring = CALIBD_GET;
-      retstring.append( " [ <actuator> ]\n" );
+      retstring.append( " all | [ <actuator> ]\n" );
       retstring.append( "  where <actuator> is { " );
       for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
-      retstring.append( "  If no arg is supplied then the position of both is returned.\n" );
+      retstring.append( "  If all is supplied then the position of both is returned.\n" );
       retstring.append( "  Supplying an actuator name returns the position of only the specified actuator.\n" );
       return HELP;
     }
 
     // If no name(s) supplied then create a vector of all defined actuator names
     //
-    if ( name_in.empty() ) {
+    if ( name_in == "all" ) {
       for ( const auto &mot : _motormap ) {
         name_list.push_back( mot.first );
       }
@@ -383,7 +383,17 @@ namespace Calib {
           logwrite( function, message.str() );
         }
       }
-      retstream << name << "=" << posname << " ";
+
+      // If more than one requested then include the name with each posname
+      //
+      if ( name_list.size() > 1 ) {
+        retstream << name << "=" << posname << " ";
+      }
+      // otherwise just the posname
+      //
+      else {
+        retstream << posname;
+      }
     }
 
     retstring = retstream.str();
@@ -431,6 +441,67 @@ namespace Calib {
     }
   }
   /***** Calib::Motion::send_command ******************************************/
+
+
+  /***** Calib::Interface::make_telemetry_message *****************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    const std::string function="Calib::Interface::make_telemetry_message";
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"]="calibinfo";
+
+    // get the status for each modulator in the map
+    // assemble message string of "pow dut per" indexed by name
+    //
+    for ( const auto &[num,name] : this->modulator.modmap_num ) {
+      // initialize these on each pass
+      double dut=NAN;
+      double per=NAN;
+      int pow=-1;
+      std::stringstream retstream;
+
+      this->modulator.status( num, dut, per, pow );
+
+      switch(pow) {
+        case 0 : retstream << "off "; break;
+        case 1 : retstream << "on " ; break;
+        default: retstream << "err "; break;
+      }
+
+      if ( std::isnan(dut) ) retstream << "nan "; else retstream << dut << " ";
+      if ( std::isnan(per) ) retstream << "nan "; else retstream << per;
+
+      jmessage[name] = retstream.str();
+    }
+
+    // get a copy of the motormap and
+    // loop through all motors, getting their actuator position
+    //
+    auto _motormap = this->motion.motorinterface.get_motormap();  // local copy of motormap
+    for ( const auto &mot : _motormap ) {
+      this->motion.get( mot.first, retstring );                   // get position of actuator
+      std::string key="CAL"+mot.first;                            // key = CALxxxx
+      make_uppercase(key);                                        // make key uppercase
+      jmessage[ key ] = retstring;                                // store in JSON message
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Calib::Interface::make_telemetry_message *****************************/
 
 
   /***** Calib::Modulator::configure_host *************************************/
@@ -573,9 +644,10 @@ namespace Calib {
 
     // By this point, all values are valid so save them in the class
 
-    this->mod_nums.push_back( trynum );                        // used to validate modulator number <n>
+    this->mod_nums.push_back( trynum );                           // used to validate modulator number <n>
 
-    this->mod_map[ tryname ] = { trynum, trydc, tryperiod };   // used to set defaults
+    this->modmap_name[ tryname ] = { trynum, trydc, tryperiod };  // map settings indexed by name, used to set defaults
+    this->modmap_num[ trynum ] = tryname;                         // map of names indexed by number
 
     return( NO_ERROR );
 
@@ -709,7 +781,7 @@ namespace Calib {
        return( ERROR );
       }
     }
-    catch ( std::invalid_argument &e ) {
+    catch ( const std::invalid_argument &e ) {
       message.str(""); message << "ERROR invalid argument \"" << tokens[0] << "\" : " << e.what()
                                << ": expected integer {0:" << MOD_MAX << "}";
       logwrite( function, message.str() );
@@ -877,7 +949,7 @@ namespace Calib {
 
     // Set all configured modulators
     //
-    for ( const auto &modit : this->mod_map ) {
+    for ( const auto &modit : this->modmap_name ) {
       if ( this->mod( modit.second.num, modit.second.dut, modit.second.per ) != NO_ERROR ) {
         message.str(""); message << "ERROR setting modulator " << modit.second.num;
         logwrite( function, message.str() );

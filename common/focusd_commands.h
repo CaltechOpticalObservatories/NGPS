@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef FOCUSD_COMMANDS_H
-#define FOCUSD_COMMANDS_H
+#pragma once
 
 const std::string FOCUSD_CLOSE = "close";    const int FOCUSD_CLOSE_TIMEOUT = 3000;
 const std::string FOCUSD_GET = "get";        const int FOCUSD_GET_TIMEOUT = 3000;
@@ -17,6 +16,7 @@ const std::string FOCUSD_ISOPEN = "isopen";  const int FOCUSD_ISOPEN_TIMEOUT = 3
 const std::string FOCUSD_NATIVE = "native";  const int FOCUSD_NATIVE_TIMEOUT = 3000;
 const std::string FOCUSD_OPEN = "open";      const int FOCUSD_OPEN_TIMEOUT = 3000;
 const std::string FOCUSD_SET  = "set";       const int FOCUSD_SET_TIMEOUT = 15000;
+const std::string FOCUSD_TELEMREQUEST="telem";
 const std::string FOCUSD_TEST  = "test";     const int FOCUSD_TEST_TIMEOUT = 15000;
 
 const std::vector<std::string> FOCUSD_SYNTAX = {
@@ -28,9 +28,9 @@ const std::vector<std::string> FOCUSD_SYNTAX = {
                                                  FOCUSD_NATIVE+" ? | <chan> <cmd>",
                                                  FOCUSD_OPEN,
                                                  FOCUSD_SET+" ? | <chan> { <pos> | nominal }",
+                                                 FOCUSD_TELEMREQUEST+" [ ? ]",
                                                  FOCUSD_TEST+" <testname> ...",
                                                  "   motormap",
                                                  "   posmap",
                                                };
 
-#endif

@@ -55,7 +55,8 @@ namespace Calib {
         double per;  ///< period
       } mod_info_t;
 
-      std::map<std::string, mod_info_t> mod_map;                   ///< map of modulator info indexed by modulator name
+      std::map<std::string, mod_info_t> modmap_name;               ///< map of modulator info indexed by modulator name
+      std::map<int, std::string> modmap_num;                       ///< map of modulator names indexed by number
       std::vector<int> mod_nums;                                   ///< vector of configured modulator numbers
 
       long configure_host( std::string input );                    ///< configure lamp modulator host
@@ -148,6 +149,8 @@ namespace Calib {
       Motion motion;                             ///< motion object
 
       Modulator modulator;                       ///< lamp modulator object
+
+      void make_telemetry_message( std::string &retstring );  ///< assembles telemetry message
   };
   /***** Calib::Interface *****************************************************/
 

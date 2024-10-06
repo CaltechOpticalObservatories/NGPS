@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef CALIBD_COMMANDS_H
-#define CALIBD_COMMANDS_H
+#pragma once
+
 const std::string CALIBD_CLOSE = "close";    ///< close connection to calibd hardware
 const std::string CALIBD_EXIT = "exit";      ///< is calib open
 const std::string CALIBD_GET = "get";        ///< get state of both actuators
@@ -18,6 +18,7 @@ const std::string CALIBD_LAMPMOD = "lampmod";///< lamp modulator control
 const std::string CALIBD_NATIVE = "native";  ///< send native commands to PI controller
 const std::string CALIBD_OPEN = "open";      ///< open connection to calib
 const std::string CALIBD_SET = "set";        ///< set state of both actuators
+const std::string CALIBD_TELEMREQUEST = "telem";  ///< request telemetry info
 
 const std::vector<std::string> CALIBD_SYNTAX = {
                                                  CALIBD_CLOSE,
@@ -31,7 +32,7 @@ const std::vector<std::string> CALIBD_SYNTAX = {
                                                  CALIBD_OPEN,
                                                  CALIBD_SET+" [ <actuator>=open|close ... ] | [?]",
                                                  "  LAMP MODULATOR CONTROL",
-                                                 CALIBD_LAMPMOD+" ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]"
+                                                 CALIBD_LAMPMOD+" ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]",
+                                                 "  OTHER",
+                                                 CALIBD_TELEMREQUEST+" [ ? ]"
                                                };
-
-#endif

@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef FOCUS_SERVER_H
-#define FOCUS_SERVER_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -20,6 +19,7 @@
 #include <vector>
 #include <atomic>
 #include <climits>
+#include <json.hpp>
 
 #include "logentry.h"
 #include "config.h"
@@ -97,4 +97,3 @@ namespace Focus {
 
 }
 /***** Focus ******************************************************************/
-#endif

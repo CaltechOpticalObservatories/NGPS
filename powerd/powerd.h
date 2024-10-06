@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef POWERD_H
-#define POWERD_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -21,6 +20,7 @@
 #include <vector>
 #include <atomic>
 #include <climits>
+#include <json.hpp>
 
 #include "logentry.h"
 #include "config.h"
@@ -328,4 +328,3 @@ namespace Power {
 
 }
 /***** Power ******************************************************************/
-#endif
