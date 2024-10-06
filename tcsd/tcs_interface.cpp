@@ -12,6 +12,83 @@
 
 namespace TCS {
 
+  /***** TCS::Interface::make_telemetry_message *******************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    const std::string function="TCS::Interface::make_telemetry_message";
+
+    // fill the tcs_info class with current info
+    //
+    this->get_tcs_info();
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"] = "tcsinfo";
+
+    jmessage["CASANGLE"] = this->tcs_info.cassangle;
+    jmessage["HA"]       = this->tcs_info.ha;
+    jmessage["RAOFFS"]   = this->tcs_info.offsetra;
+    jmessage["DECOFFS"]  = this->tcs_info.offsetdec;
+    jmessage["TELRA"]    = this->tcs_info.ra_hms;
+    jmessage["TELDEC"]   = this->tcs_info.dec_dms;
+    jmessage["AZIMUTH"]  = this->tcs_info.azimuth;
+    jmessage["ZENANGLE"] = this->tcs_info.zenithangle;
+    jmessage["DOMEAZ"]   = this->tcs_info.domeazimuth;
+    jmessage["DOMESTAT"] = this->tcs_info.domeshutters;
+    jmessage["FOCUS"]    = this->tcs_info.focus;
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** TCS::Interface::make_telemetry_message *******************************/
+
+
+  /***** TCS::Interface::get_tcs_info *****************************************/
+  /**
+   * @brief      fills the tcs_info class
+   * @return     NO_ERROR | ERROR
+   *
+   */
+  long Interface::get_tcs_info() {
+    long error = NO_ERROR;
+    std::string retstring;
+
+    // erase the class because it's all or nothing. If something fails partway
+    // through, we don't want to mix values from a command now with values from
+    // an earlier command. E.G. if reqpos fails here but reqstat and weather
+    // succeed, we don't want the class to contain values from this reqstat and
+    // an earlier call to reqpos.
+    //
+    this->tcs_info.init();
+
+    // Call the three native functions and the associated parsing function,
+    // which will populate the tcs_info class.
+    //
+    error |= this->native( "REQPOS", retstring );
+    this->tcs_info.parse_reqpos( retstring );
+
+    error |= this->native( "REQSTAT", retstring );
+    this->tcs_info.parse_reqstat( retstring );
+
+    error |= this->native( "?WEATHER", retstring );
+    this->tcs_info.parse_weather( retstring );
+
+    return error;
+  }
+  /***** TCS::Interface::get_tcs_info *****************************************/
+
+
   /***** TCS::Interface::list *************************************************/
   /**
    * @brief      list configured TCS devices
@@ -840,6 +917,124 @@ namespace TCS {
   /***** TCS::Interface::get_focus ********************************************/
 
 
+  /***** TCS::Interface::get_offsets ******************************************/
+  /**
+   * @brief      get the current offsets
+   * @details    This calls the overloaded function which returns the offsets
+   *             by reference.
+   * @param[in]  arg     input arg { help }
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::get_offsets( const std::string &arg, std::string &retstring ) {
+    std::string function = "TCS::Interface::get_offsets";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( arg == "?" || arg == "help" ) {
+      retstring = TCSD_GET_OFFSETS;
+      retstring.append( " \n" );
+      retstring.append( "  Return the current telescope offsets in decimal arcseconds\n" );
+      return HELP;
+    }
+
+    double raoff, decoff;
+    if ( this->get_offsets( raoff, decoff ) == ERROR ) {
+      return ERROR;
+    }
+    else {
+      message << std::fixed << std::setprecision(4) << raoff << " " << decoff;
+      retstring = message.str();
+      logwrite( function, retstring );
+    }
+
+    message.str(""); message << "TCSD:offsets:" << ( !retstring.empty() ? retstring : "ERROR" );
+    this->async.enqueue( message.str() );
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_offsets ******************************************/
+
+
+  /***** TCS::Interface::get_offsets ******************************************/
+  /**
+   * @brief      get the current offsets
+   * @details    This overloaded function sends the REQSTAT command to the TCS
+   *             and parses the reply to obtain raoff, decoff.
+   * @param[out] raoff   reference to ra offset
+   * @param[out] decoff  reference to dec offset
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::get_offsets( double &raoff, double &decoff ) {
+    std::string function = "TCS::Interface::get_offsets";
+    std::stringstream message;
+    std::stringstream reply;
+
+    // Send the REQSTAT command to the TCS. This returns a string that looks like:
+    //
+    // tcsreply = "UTC = 127 21:58:7.0\n
+    //             telescope ID = 200, focus = 36.71 mm, tube length = 22.11 mm\n
+    //             offset RA = 45.00 arcsec, DEC = 45.00 arcsec\n
+    //             rate RA = 0.00 arcsec/hr, DEC = 0.00 arcsec/hr\n
+    //             Cass ring angle = 18.00
+    //
+    std::string tcsreply;
+    if ( this->send_command( "REQSTAT", tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting status from TCS" );
+      return ERROR;
+    }
+
+    // First tokenize on newline
+    //
+    std::vector<std::string> lines;
+    Tokenize( tcsreply, lines, "\n" );
+
+    if ( lines.size() != 5 ) {
+      message.str(""); message << "ERROR expected 5 lines from REQSTAT string but received " << lines.size()
+                               << " in reply \"" << tcsreply << "\"";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // Then the 3rd token, lines[2], contains the "offset RA = 45.00 arcsec, DEC = 45.00 arcsec\n"
+    //
+    try {
+      // remove the "=" and "," so the only delimiter is " "
+      //
+      std::string line = lines.at(2);                                          // copy the line
+      line.erase( std::remove( line.begin(), line.end(), '=' ), line.end() );  // remove all = from copy
+      line.erase( std::remove( line.begin(), line.end(), ',' ), line.end() );  // remove all , from copy
+
+      // now line = "offset RA 45.00 arcsec DEC 45.00 arcsec\n"
+      // so tokenize on space and take the 3rd and 6th tokens
+      //
+      std::vector<std::string> tokens;
+      Tokenize( line, tokens, " " );
+
+      if ( tokens.size() != 7 ) {
+        message.str(""); message << "ERROR expected 7 params on line 3 but received " << tokens.size();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+
+      // convert those tokens to double and assign to the reference arguments
+      //
+      raoff  = std::stod( tokens.at(2) );
+      decoff = std::stod( tokens.at(5) );
+    }
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing offsets from TCS reply string: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_offsets ******************************************/
+
+
   /***** TCS::Interface::offsetrate *******************************************/
   /**
    * @brief      set the offset tracking rates
@@ -1185,6 +1380,63 @@ namespace TCS {
   /***** TCS::Interface::pt_offset ********************************************/
 
 
+  /***** TCS::Interface::ret_offsets ******************************************/
+  /**
+   * @brief      wrapper for the native RET command
+   * @param[in]  args       for optional help only
+   * @param[out] retstring  reference to return string for the command sent to the TCS
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::ret_offsets( std::string args, std::string &retstring ) {
+    std::string function = "TCS::Interface::ret_offset";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = TCSD_RETOFFSETS;
+      retstring.append( "\n" );
+      retstring.append( "  Send RET command to the TCS. This moves the telescope so the DRA\n" );
+      retstring.append( "  and DDEC offsets on the telescope status display go to zero.\n" );
+      return HELP;
+    }
+
+    // Before sending PT command, check for non-zero offset rates.
+    //
+    if ( this->offsetrate_ra  < 1 || this->offsetrate_ra >  50 ||
+         this->offsetrate_dec < 1 || this->offsetrate_dec > 50 ) {
+      message.str(""); message << "ERROR offset rate(s) " << this->offsetrate_ra
+                               << "  " << this->offsetrate_dec << " outside range {1:50}";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // read the current offsets in order to estimate the time to offset
+    //
+    double raoff, decoff;
+    if ( this->get_offsets( raoff, decoff ) == ERROR ) {
+      logwrite( function, "ERROR getting current offsets" );
+      return ERROR;
+    }
+
+    // offsetrate_ra, offsetrate_dec are offset rates in arcsec/sec
+    // so ra_t/offsetrate_ra and dec_t/offsetrate_dec are arcsec / arcsec / sec = sec
+    //
+    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate_ra  );  // time (ms) to offset RA
+    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate_dec );  // time (ms) to offset DEC
+    int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );         // greater of those two times + 50%
+    max_t = std::max( max_t, 100 );                                        // minimum 100 msec
+
+    long error = this->send_command( "RET", retstring );                   // perform the offset here
+
+    std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
+
+    return error;
+  }
+  /***** TCS::Interface::ret_offsets ******************************************/
+
+
   /***** TCS::Interface::send_command *****************************************/
   /**
    * @brief      writes the raw command, as received, to the TCS
@@ -1257,6 +1509,39 @@ namespace TCS {
     }
   }
   /***** TCS::Interface::send_command *****************************************/
+
+
+  /***** TCS::Interface::native ***********************************************/
+  /**
+   * @brief      send a command directly to the TCS
+   * @param[in]  args       command to send to TCS
+   * @param[out] retstring  return from TCS
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::native( std::string args, std::string &retstring ) {
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = TCSD_NATIVE;
+      retstring.append( " <cmd>\n" );
+      retstring.append( "  Send command <cmd> directly to the TCS and return the reply, which is\n" );
+      retstring.append( "  not parsed. The cmd will be converted to uppercase before sending.\n" );
+      return HELP;
+    }
+
+    make_uppercase( args );
+
+    long error = this->send_command( args, retstring );
+
+    // The TCS contains messages that have fields separated by newlines. Replace those with commas.
+    //
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
+
+    return error;
+  }
+  /***** TCS::Interface::native ***********************************************/
 
 
   /***** TCS::Interface::parse_reply_code *************************************/
@@ -1362,4 +1647,141 @@ namespace TCS {
     }
   }
   /***** TCS::Interface::parse_motion_code ************************************/
+
+
+  /***** TCS::TcsInfo::parse_weather ******************************************/
+  void TcsInfo::parse_weather( std::string &input ) {
+    const std::string function="TCS::TcsInfo::parse_weather";
+    std::stringstream message;
+
+    // input string is expected to be:
+    //
+    // RA=0.00000000,DEC=0.00000000,HA=0,LST=0,Air mass=1.000,Azimuth=0,
+    // Zenith angle=0,Focus Point=36.710,Dome Azimuth=0,Dome shutters=0,
+    // Windscreen position=0,InstPos=0,Instrument=NGPS0,Pumps=0 DONE
+    //
+    // Remove "DONE"
+    //
+    size_t pos = input.find("DONE");
+    if ( pos != std::string::npos ) input.erase( pos, 4 );
+
+    // Tokenize on the comma "," and expect 14 tokens
+    //
+    std::vector<std::string> tokens;
+    Tokenize( input, tokens, "," );
+
+    if ( tokens.size() != 14 ) {
+      message << "ERROR expected 14 tokens but got " << tokens.size() << " from \"" << input << "\"";
+      logwrite( function, message.str() );
+      return;
+    }
+
+    // For each token of interest the value is from the equal sign "="
+    // to the end of the string.
+    //
+    try {
+      pos = tokens.at(0).find("=");  this->ra_h_dec     = std::stod(tokens.at(0).substr(pos+1));
+      pos = tokens.at(1).find("=");  this->dec_d_dec    = std::stod(tokens.at(1).substr(pos+1));
+      pos = tokens.at(6).find("=");  this->azimuth      = std::stod(tokens.at(6).substr(pos+1));
+      pos = tokens.at(7).find("=");  this->zenithangle  = std::stod(tokens.at(7).substr(pos+1));
+      pos = tokens.at(9).find("=");  this->domeazimuth  = std::stod(tokens.at(9).substr(pos+1));
+      pos = tokens.at(10).find("="); this->domeshutters = std::stoi(tokens.at(10).substr(pos+1));
+    }
+    catch ( const std::exception &e ) {
+      message << "ERROR parsing input: " << e.what();
+      logwrite( function, message.str() );
+      return;
+    }
+    return;
+  }
+
+  void TcsInfo::parse_reqstat( std::string &input ) {
+    const std::string function="TCS::TcsInfo::parse_weather";
+    std::stringstream message;
+
+    // input string is expected to be:
+    //
+    // UTC = 278 23:53:48.0,telescope ID = 200, focus = 36.71 mm,
+    // tube length = 22.11 mm,offset RA = 45.00 arcsec, DEC = 45.00 arcsec,
+    // rate RA = 0.00 arcsec/hr, DEC = 0.00 arcsec/hr,Cass ring angle = 0.00 DONE
+    //
+    // Remove "DONE"
+    //
+    size_t pos = input.find("DONE");
+    if ( pos != std::string::npos ) input.erase( pos, 4 );
+
+    // Tokenize on the comma "," and expect 9 tokens
+    //
+    std::vector<std::string> tokens;
+    Tokenize( input, tokens, "," );
+
+    if ( tokens.size() != 9 ) {
+      message << "ERROR expected 9 tokens but got " << tokens.size() << " from \"" << input << "\"";
+      logwrite( function, message.str() );
+      return;
+    }
+
+    // For each token of interest the value is from the equal sign "="
+    // to the end of the string.
+    //
+    try {
+      pos = tokens.at(2).find("="); this->focus          = std::stod(tokens.at(2).substr(pos+1));
+      pos = tokens.at(4).find("="); this->offsetra       = std::stod(tokens.at(4).substr(pos+1));
+      pos = tokens.at(5).find("="); this->offsetdec      = std::stod(tokens.at(5).substr(pos+1));
+      pos = tokens.at(6).find("="); this->offsetrate_ra  = std::stod(tokens.at(6).substr(pos+1));
+      pos = tokens.at(7).find("="); this->offsetrate_dec = std::stod(tokens.at(7).substr(pos+1));
+      pos = tokens.at(8).find("="); this->cassangle      = std::stod(tokens.at(8).substr(pos+1));
+    }
+    catch ( const std::exception &e ) {
+      message << "ERROR parsing input: " << e.what();
+      logwrite( function, message.str() );
+      return;
+    }
+    return;
+  }
+
+  void TcsInfo::parse_reqpos( std::string &input ) {
+    const std::string function="TCS::TcsInfo::parse_weather";
+    std::stringstream message;
+
+    // input string is expected to be:
+    //
+    // UTC = 278 23:56:11.0, LST = 00:00:00,RA = +00:00:00.000,
+    // DEC = +00:00:00.000, HA=W00:00:00.0,air mass = 1.000 DONE
+    //
+    // Remove "DONE"
+    //
+    size_t pos = input.find("DONE");
+    if ( pos != std::string::npos ) input.erase( pos, 4 );
+
+    // Tokenize on the comma "," and expect 6 tokens
+    //
+    std::vector<std::string> tokens;
+    Tokenize( input, tokens, "," );
+
+    if ( tokens.size() != 6 ) {
+      message << "ERROR expected 6 tokens but got " << tokens.size() << " from \"" << input << "\"";
+      logwrite( function, message.str() );
+      return;
+    }
+
+    // For each token of interest the value is from the equal sign "="
+    // to the end of the string.
+    //
+    try {
+      pos = tokens.at(0).find("="); this->utc     = tokens.at(0).substr(pos+1);
+      pos = tokens.at(1).find("="); this->lst     = tokens.at(1).substr(pos+1);
+      pos = tokens.at(2).find("="); this->ra_hms  = tokens.at(2).substr(pos+1);
+      pos = tokens.at(3).find("="); this->dec_dms = tokens.at(3).substr(pos+1);
+      pos = tokens.at(4).find("="); this->ha      = tokens.at(4).substr(pos+1);
+      pos = tokens.at(5).find("="); this->airmass = std::stod(tokens.at(5).substr(pos+1));
+    }
+    catch ( const std::exception &e ) {
+      message << "ERROR parsing input: " << e.what();
+      logwrite( function, message.str() );
+      return;
+    }
+    return;
+  }
+
 }

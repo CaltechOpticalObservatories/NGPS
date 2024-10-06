@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef TCS_SERVER_H
-#define TCS_SERVER_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -20,6 +19,7 @@
 #include <vector>
 #include <atomic>
 #include <climits>
+#include <json.hpp>
 
 #include "logentry.h"
 #include "config.h"
@@ -122,4 +122,3 @@ namespace TCS {
 
 }
 /***** TCS ********************************************************************/
-#endif

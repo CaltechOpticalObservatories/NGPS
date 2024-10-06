@@ -747,11 +747,11 @@ namespace TcsEmulator {
         << std::fixed << std::setprecision(2) 
         << this->tubelength << " mm\n"
         << "offset RA = " 
-        << this->offsetrate_ra << " arcsec, DEC = "
-        << this->offsetrate_dec << " arcsec\n"
+        << this->offset_ra << " arcsec, DEC = "
+        << this->offset_dec << " arcsec\n"
         << "rate RA = "
-        << this->trackrate_ra << " arcsec/hr, DEC = "
-        << this->trackrate_dec << " arcsec/hr\n"
+        << this->offsetrate_ra << " arcsec/hr, DEC = "
+        << this->offsetrate_dec << " arcsec/hr\n"
         << "Cass ring angle = "
         << std::fixed << std::setprecision(2)
         << this->casangle;
@@ -866,7 +866,7 @@ namespace TcsEmulator {
    * Always set retstring, don't ever return it empty.
    *
    */
-  long Interface::parse_command( std::string cmd, std::string &retstring ) {
+  long Interface::parse_command( const std::string cmd, std::string &retstring ) {
     std::string function = "  (TcsEmulator::Interface::parse_command) ";
 
     // The real TCS allows an empty command but I don't,
@@ -1092,6 +1092,10 @@ namespace TcsEmulator {
                      myargs.str() ).detach();
         retstring = "0";               // successful completion
       }
+    }
+    else
+    if ( mycmd == "RET" ) {
+      retstring = "0";                 // successful completion
     }
     else
     if ( mycmd == "N" ) {

@@ -318,6 +318,31 @@
   /***** TcsDaemonClient::pt_offset *******************************************/
 
 
+  /***** TcsDaemonClient::ret_offsets *****************************************/
+  /**
+   * @brief      send RET command to tcsd
+   * @details    The RET command moves the telescope so the DRA and DDEC offsets
+   *             on the telescope status display go to zero.
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long TcsDaemonClient::ret_offsets() {
+    std::string function = "TcsDaemonClient::ret_offsets";
+    std::string tcsreply;
+
+    if ( this->client.send( TCSD_RETOFFSETS, tcsreply ) != NO_ERROR ) {
+      logwrite( function, "ERROR sending RET command" );
+      return ERROR;
+    }
+
+    logwrite( function, tcsreply );
+
+    if ( ends_with( tcsreply, "DONE" ) ) return NO_ERROR;
+    else return ERROR;
+  }
+  /***** TcsDaemonClient::ret_offsets *****************************************/
+
+
   /***** TcsDaemonClient::set_focus *******************************************/
   /**
    * @brief      send command to tcsd to set telescope focus value

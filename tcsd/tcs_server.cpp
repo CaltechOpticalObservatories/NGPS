@@ -628,6 +628,11 @@ namespace TCS {
       }
       else
 
+      if ( cmd.compare( TCSD_GET_OFFSETS ) == 0 ) {
+                      ret = this->interface.get_offsets( args, retstring );
+      }
+      else
+
       if ( cmd.compare( TCSD_SET_FOCUS ) == 0 ) {
                       ret = this->interface.set_focus( args, retstring );
       }
@@ -648,6 +653,11 @@ namespace TCS {
       }
       else
 
+      if ( caseCompareString( cmd, TCSD_RETOFFSETS ) ) {
+                      ret = this->interface.ret_offsets( args, retstring );
+      }
+      else
+
       if ( caseCompareString( cmd, TCSD_RINGGO ) ) {
                       ret = this->interface.ringgo( args, retstring );
       }
@@ -658,24 +668,34 @@ namespace TCS {
       }
       else
 
+      if ( caseCompareString( cmd, TCSD_TELEMREQUEST ) ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=TCSD_TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with EOF\\n.\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        this->interface.make_telemetry_message( retstring );
+                        ret = JSON;
+                      }
+      }
+      else
+
       if ( caseCompareString( cmd, TCSD_PTOFFSET ) ) {
                       ret = this->interface.pt_offset( args, retstring );
       }
+      else
 
-      // all other commands go straight to the TCS interface
+      if ( caseCompareString( cmd, TCSD_NATIVE ) ) {
+                      ret = this->interface.native( args, retstring );
+      }
+      // Unknown commands generate an error
       //
       else {
-        try {
-          std::transform( buf.begin(), buf.end(), buf.begin(), ::toupper );     // make uppercase
-        }
-        catch (...) {
-          logwrite( function, "error converting command to uppercae" );
-          ret=ERROR;
-        }
-        ret = this->interface.send_command( buf, retstring );
-        // The TCS contains messages that have fields separated by newlines. Replace those with commas.
-        //
-        std::replace( retstring.begin(), retstring.end(), '\n', ',');
+        message.str(""); message << "ERROR: unknown command: " << cmd;
+        logwrite( function, message.str() );
+        ret = ERROR;
       }
 
       // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
@@ -685,14 +705,19 @@ namespace TCS {
       //
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+        if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
+        if ( ret == JSON ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
+          logwrite( function, message.str() );
+        }
+        else
         if ( ! retstring.empty() && ret != HELP && !polling ) {
+          retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
         }
 
-        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
@@ -700,7 +725,6 @@ namespace TCS {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** Server::doit *********************************************************/

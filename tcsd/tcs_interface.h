@@ -27,6 +27,73 @@
 namespace TCS {
 
 
+  /***** TCS::TcsInfo *********************************************************/
+  /**
+   * @class   TcsInfo
+   * @brief   TCS information class
+   * @details This class contains functions which can parse the output from
+   *          TCS-native commands REQSTAT, REQPOS, and ?WEATHER, which then
+   *          store the parsed results into class variables.
+   *
+   */
+  class TcsInfo {
+    public:
+      std::string utc;      /// ddd hh:mm:ss
+      std::string lst;      /// hh:mm:ss
+      std::string ha;       /// hh:mm:ss.s
+      std::string ra_hms;   /// hh:mm:ss.ss
+      std::string dec_dms;  /// dd:mm:ss.ss
+
+      double ra_h_dec;      /// h.hhhhh (decimal hours)
+      double dec_d_dec;     /// d.ddddd (decimal degrees)
+      double azimuth;
+      double zenithangle;
+      double domeazimuth;
+
+      double airmass;
+      double focus;
+      double offsetra;
+      double offsetdec;
+      double offsetrate_ra;
+      double offsetrate_dec;
+      double cassangle;
+
+      int domeshutters;
+
+      TcsInfo() { this->init(); }
+
+      /**
+       * @brief  initialize all class member variables to "non-values"
+       */
+      void init() {
+        utc.clear();
+        lst.clear();
+        ha.clear();
+        ra_hms.clear();
+        dec_dms.clear();
+        ra_h_dec=NAN;
+        dec_d_dec=NAN;
+        azimuth=NAN;
+        zenithangle=NAN;
+        domeazimuth=NAN;
+        airmass=NAN;
+        focus=NAN;
+        offsetrate_ra=NAN;
+        offsetrate_dec=NAN;
+        cassangle=NAN;
+        domeshutters=-1;
+      }
+
+      // These functions parse the return string from native TCS commands
+      // and store the results in the class variables.
+      //
+      void parse_weather( std::string &input );  ///< parse retstring from native ?WEATHER
+      void parse_reqstat( std::string &input );  ///< parse retstring from native REQSTAT
+      void parse_reqpos( std::string &input );   ///< parse retstring from native REQPOS
+  };
+  /***** TCS::TcsInfo *********************************************************/
+
+
   /***** TCS::TcsIO ***********************************************************/
   /**
    * @class   TcsIO
@@ -96,6 +163,8 @@ namespace TCS {
 
       Interface() : offsetrate_ra(-1), offsetrate_dec(-1), publish_enable(false), collect_enable(false) { };
 
+      void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message from tcs_info
+
       /**
        * These are the functions for communicating with the TCS
        */
@@ -114,16 +183,23 @@ namespace TCS {
       long set_focus( const std::string &arg, std::string &retstring );
       long get_focus( std::string &retstring );
       long get_focus( const std::string &arg, std::string &retstring );
+      long get_offsets( const std::string &arg, std::string &retstring );
+      long get_offsets( double &raoff, double &decoff );
       long offsetrate( const std::string &arg, std::string &retstring );
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
       long pt_offset( std::string args, std::string &retstring );
+      long ret_offsets( std::string args, std::string &retstring );
       long send_command( std::string cmd, std::string &retstring );
+      long native( std::string args, std::string &retstring );
       long parse_reply_code( std::string codein, std::string &retstring );
       long parse_motion_code( std::string codein, std::string &retstring );
 
-      Common::Queue async;                                 ///< asynchronous message queue object
+      TcsInfo tcs_info;                            ///< contains information from the tcs
+      long get_tcs_info();                         ///< fills the tcs_info class
+
+      Common::Queue async;                         ///< asynchronous message queue object
   };
   /***** TCS::Interface *******************************************************/
 

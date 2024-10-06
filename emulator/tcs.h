@@ -135,7 +135,7 @@ namespace TcsEmulator {
       std::map<int, std::string> map_returnval;
       std::map<int, std::string> map_motionval;
 
-      long parse_command( std::string cmd, std::string &retstring );  ///< parse commands for the TCS
+      long parse_command( const std::string cmd, std::string &retstring );  ///< parse commands for the TCS
 
   };
   /***** TcsEmulator::Interface ***********************************************/
