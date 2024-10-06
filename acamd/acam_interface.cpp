@@ -2113,8 +2113,14 @@ namespace Acam {
 
         iface.guide_manager.push_guider_image( iface.imagename );                            // send frame to Guider GUI
 
+        // acquire target if needed
+        //
         if (error==NO_ERROR) {
-          long did_acquire = iface.target.do_acquire();                                      // acquire target (if needed)
+          // do_acquire() is called with each frame grab and will return NO_ERROR
+          // each time, unless it reaches the max number of retries or otherwise
+          // fails.
+          //
+          long did_acquire = iface.target.do_acquire();                                      // acquire target here (if needed)
           if ( did_acquire != NO_ERROR ) {
             iface.target.acquire( Acam::TARGET_NOP );                                        // disable acquire on failure
           }
@@ -2130,8 +2136,8 @@ namespace Acam {
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR starting thread" );
-      iface.should_framegrab_run.store( false );  // disable frame grabbing
-      iface.target.acquire( Acam::TARGET_NOP );                       // disable acquisition
+      iface.should_framegrab_run.store( false );      // disable frame grabbing
+      iface.target.acquire( Acam::TARGET_NOP );       // disable acquisition
     }
     else logwrite( function, "leaving thread" );
 
@@ -2287,7 +2293,8 @@ namespace Acam {
   /**
    * @brief      outside interface to set or get the target acquisition
    * @details    This uses the target.acquire() function to gain access to
-   *             the Acam::Target class.
+   *             the Acam::Target class. The input coordinates are validated
+   *             and set using the target_coords() function.
    * @param[in]  args       string,  [ <ra> <dec> <angle> | guide | stop ]
    * @param[out] retstring  contains timeout in seconds
    * @return     ERROR | NO_ERROR | HELP
@@ -2465,7 +2472,7 @@ namespace Acam {
     // must start with ACQUIRE, because this will send different args to
     // the solver.
     //
-    if ( requested_mode == Acam::TARGET_GUIDE && ! this->acquired ) {
+    if ( requested_mode == Acam::TARGET_GUIDE && ! this->is_acquired ) {
       logwrite( function, "ERROR: cannot start guiding until target has been acquired" );
       return ERROR;
     }
@@ -2484,7 +2491,7 @@ namespace Acam {
       this->nacquired = 0;
       this->attempts = 0;
       this->sequential_failures = 0;
-      this->acquired.store( false, std::memory_order_seq_cst );
+      this->is_acquired.store( false, std::memory_order_seq_cst );
 
       // Start the timeout clock, initialized as the time now plus the
       // configured timeout in seconds (duration defaults to seconds).
@@ -2544,6 +2551,12 @@ namespace Acam {
     // ACQUIRE and GUIDE are the same except that GUIDE doesn't time-out,
     // and they send different arguments to the solver.
     //
+
+    // "error" is reserved here for success of the do_acquire() function and is not used
+    // for each internal function call. If any function call fails in this do-loop then
+    // break immediately (without setting error). This will cause it to get counted as
+    // an attempt and will keep trying until max attempts.
+    //
     long error = NO_ERROR;
 
     if ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_GUIDE ) {
@@ -2571,24 +2584,26 @@ namespace Acam {
       // for just computing the angle. pointmode_string() returns a string of the
       // current pointmode.
       //
-      if (!error) error = iface->fpoffsets.compute_offset( "SCOPE", pointmode,
-                                                           0, 0, this->tcs_casangle );
+      if ( iface->fpoffsets.compute_offset( "SCOPE", pointmode,
+                                            0, 0, this->tcs_casangle ) == ERROR ) break;
 
       // Now convert the target coordinates (from the database) using this angle,
       // from the <pointmode> to the ACAM reference frame.
       //
       double acam_ra_goal, acam_dec_goal, acam_angle_goal;
 
-      if (!error) error = iface->fpoffsets.compute_offset_last_angle( pointmode, "ACAM",
-                                                                      this->coords_slit.ra, this->coords_slit.dec,
-                                                                      acam_ra_goal, acam_dec_goal, acam_angle_goal );
+      if ( iface->fpoffsets.compute_offset_last_angle( pointmode, "ACAM",
+                                                       this->coords_slit.ra, this->coords_slit.dec,
+                                                       acam_ra_goal, acam_dec_goal, acam_angle_goal ) == ERROR ) break;
 
-      // Apply any goal offsets from the "put on slit" action, which
-      // can come from either the ACAM or slicecam GUIs. These offsets
-      // are stored in the Target class.
+      // Apply any dRA, dDEC goal offsets from the "put on slit" action to
+      // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
+      // either the ACAM or slicecam GUIs and are stored in the Target class.
       //
-      error = iface->fpoffsets.apply_offset( acam_ra_goal,  iface->target.dRA,
-                                             acam_dec_goal, iface->target.dDEC );
+      // The supplied acam_ra_goal,acam_dec_goal are modified by dRA,dDEC
+      //
+      if ( iface->fpoffsets.apply_offset( acam_ra_goal,  iface->target.dRA,
+                                          acam_dec_goal, iface->target.dDEC ) == ERROR ) break;
 
       {  // this local section is just for display purposes and its variables are not used elsewhere
       std::string rastr, decstr;
@@ -2608,9 +2623,9 @@ namespace Acam {
 
       std::string last_imagename = iface->get_imagename();
 
-      if (!error) error = iface->astrometry.solve( last_imagename, this->ext_solver_args );
+      if ( iface->astrometry.solve( last_imagename, this->ext_solver_args ) == ERROR ) break;
 
-      if (!error) iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
+      iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
 
       if ( result=="GOOD" || result=="NOISY" ) {   // treat GOOD and NOISY the same for now
         match_found = true;
@@ -2633,11 +2648,11 @@ namespace Acam {
         break;
       }
 
-      // Also get out on any error, or no match found
+      // get out in any case if no match found
       //
-      if ( error != NO_ERROR || !match_found ) break;
+      if ( !match_found ) break;
 
-      // Continue only if there was a match and no errors
+      // Continue only if there was a match
 
       // Calculate the offsets to send to the TCS.
       //
@@ -2647,9 +2662,9 @@ namespace Acam {
       //
       double ra_off, dec_off;  // calculated offsets will be in degrees
 
-      error = iface->fpoffsets.solve_offset( acam_ra, acam_dec,
-                                             acam_ra_goal, acam_dec_goal,
-                                             ra_off, dec_off );
+      if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
+                                          acam_ra_goal, acam_dec_goal,
+                                          ra_off, dec_off ) == ERROR ) break;
 
       {  // this local section is just for display purposes and its variables are not used elsewhere
       double __ra, __dec;
@@ -2662,6 +2677,8 @@ namespace Acam {
       //
       double offset = angular_separation( acam_ra_goal, acam_dec_goal, acam_ra, acam_dec );
 
+      this->offset_cal_offset += offset;
+
       message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
 
       // There is a maximum offset allowed to the TCS.
@@ -2672,15 +2689,19 @@ namespace Acam {
       // delta which is the change introduced by putonslit.
       //
 
-      // this is the solution plus dRA, dDEC
+      // this will be the solution plus dRA, dDEC
+      // start by initializing with acam_ra,acam_dec
       //
       double acam_ra_dRA   = acam_ra;
       double acam_dec_dDEC = acam_dec;
 
+      // Then acam_ra_dRA, acam_dec_dDEC will be modified by applying dRA, dDEC
+      //
       iface->fpoffsets.apply_offset( acam_ra_dRA,   iface->target.dRA,
                                      acam_dec_dDEC, iface->target.dDEC );
 
-      // the offset introduced by putonslit is therefore
+      // the offset introduced by putonslit is therefore the separation between
+      // acam_ra,acam_dec and acam_ra_dRA,acam_dec_dDEC
       //
       this->putonslit_offset = angular_separation( acam_ra_dRA, acam_dec_dDEC, acam_ra, acam_dec );
 
@@ -2709,16 +2730,15 @@ namespace Acam {
           error = ERROR;
           break;
         }
-      } else
+      }
       // otherwise send the offsets to the TCS and keep looping.
       //
-      if (error==NO_ERROR) {
-        error = iface->tcsd.pt_offset( ra_off*3600., dec_off*3600. );  // send offset to TCS here (returns when offset is complete)
-        if (error==NO_ERROR) attempts = 0;                             // reset retry counter if match found and offset < max and no errors
-      }
       else {
-        iface->async.enqueue_and_log( function, "ERROR solving offsets" );
-        break;
+        // send offset to TCS here (returns when offset is complete)
+        if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600. )==ERROR) break;
+
+        // reset retry counter if match found and offset < max and no errors
+        attempts = 0;
       }
 
       // If the offset is below ACQUIRE_OFFSET_THRESHOLD then increment the nacquired
@@ -2734,36 +2754,30 @@ namespace Acam {
         nacquired=0;     // if an acquire is not below threshold then reset the counter
       }
 
-      if ( this->nacquired == 0 && this->max_attempts > 0 ) {
-        if ( ++this->sequential_failures >= this->max_attempts ) {
-          error = ERROR;
-        }
-      }
-
-      // Either an error or reaching our requirement of nacquired sequential solves
-      // will determine the failure or success of the acquisition.
-      //
-      if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR acquisition failed after " << this->sequential_failures << " sequential failures";
-        logwrite( function, message.str() );
-        this->acquired.store( false, std::memory_order_seq_cst );
-      }
-
-      if ( this->acquire_mode == Acam::TARGET_ACQUIRE &&
-           this->nacquired >= this->min_repeat ) {
-        logwrite( function, "NOTICE: target acquired" );
-        this->acquired.store( true, std::memory_order_seq_cst );                      // Target Acquired!
-      }
-
     } while ( false );  // the do-loop is executed only once. used to allow breaks.
     }                   // end of acquisition sequence
+
+    if ( this->nacquired == 0 && this->max_attempts > 0 ) {
+      if ( ++this->sequential_failures >= this->max_attempts ) {
+        logwrite( function, "ERROR sequential failures exceeds max attempts" );
+        error = ERROR;
+      }
+    }
 
     // If target acquired, and if acquisition mode was to acquire,
     // then disable acquisition mode.
     //
-    if ( this->acquired.load( std::memory_order_seq_cst ) &&
-         this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+    if ( this->acquire_mode == Acam::TARGET_ACQUIRE &&
+         this->nacquired >= this->min_repeat ) {
+      logwrite( function, "NOTICE: target acquired" );
+      this->is_acquired.store( true, std::memory_order_seq_cst );                   // Target Acquired!
       this->acquire_mode = Acam::TARGET_NOP;
+    }
+
+    // Leaving this function with an error means target acquisition has failed
+    //
+    if ( error != NO_ERROR ) {
+      iface->async.enqueue_and_log( "ERROR", function, "failed to acquire target" );
     }
 
     return error;
@@ -3171,7 +3185,7 @@ namespace Acam {
           dec_from = radec_to_decimal( dec_str );             // convert to decimal degrees
         }
         else {                                                // leaves onnly decimal degrees
-          dec_from = std::stod( dec_str ) * TO_DEGREES;
+          dec_from = std::stod( dec_str );
         }
 
         // Parse Angle
@@ -3688,7 +3702,7 @@ namespace Acam {
         _dec = radec_to_decimal( dec_str );              // convert to decimal degrees
       }
       else {                                             // leaves onnly decimal degrees
-        _dec = std::stod( dec_str ) * TO_DEGREES;
+        _dec = std::stod( dec_str );
       }
 
       // Parse Angle
@@ -3773,6 +3787,11 @@ namespace Acam {
       return ERROR;
     }
 
+    // Move the telescope so the DRA and DDEC offsets on the telescope
+    // status display go to zero (this is the RET command).
+    //
+    tcsd.ret_offsets();
+
     // get the current TCS coordinates
     // then translate into ACAM coordinates.
     //
@@ -3788,13 +3807,16 @@ namespace Acam {
     // and translate that into acam coordinates.
     //
     if (error==NO_ERROR) error = this->fpoffsets.compute_offset( "SCOPE", "ACAM",
-                                                                 scope_ra, scope_dec, scope_angle,
+                                                                 scope_ra*TO_DEGREES, scope_dec, scope_angle,
                                                                  acam_ra,  acam_dec,  acam_angle );
+
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR getting current TCS coordinates" );
       retstring="tcs_fault";
       return ERROR;
     }
+
+    this->target.offset_cal_offset=0.;
 
     // Before starting the acquire, temporarily increase the max TCS offset limit
     // to the field of view of the ACAM. This needs to be restored on completion.
@@ -3804,12 +3826,20 @@ namespace Acam {
     message.str(""); message << "changed max offset limit to " << this->target.get_tcs_max_offset() << " arcsec";
     logwrite( function, message.str() );
 
-    // form and send the acquire command
+    // Form and send the acquire command.
+    // This will change the target.acquire_mode to TARGET_ACQUIRE while it's acquiring.
     //
     std::stringstream cmd;
     cmd << std::fixed << std::setprecision(6) << acam_ra << " " << acam_dec << " " << acam_angle << " acam";
-
     error = this->acquire( cmd.str(), retstring );
+
+    // wait for acquire success or failure
+    //
+    this->async.enqueue_and_log( "NOTICE", function, "waiting for acquisition" );
+    while ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ) {
+      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+    }
+    this->async.enqueue_and_log( "NOTICE", function, this->target.is_acquired ? "target acquired" : "target not acquired" );
 
     // restore the max offset limit
     //
@@ -3823,20 +3853,26 @@ namespace Acam {
 
     if (error==NO_ERROR) {
       retstring = "ACAM CALIBRATION RESULT\n";
-      retstring.append( "Astrometry result = "+result+" // GOOD, NOISY, etc.\n" );
+      retstring.append( "Astrometry result = "+result+"\n" );
       message.str(""); message << "ACAM center = " << acam_ra << " " << acam_dec << " // RA, DEC from solver\n\n";
       retstring.append( message.str() );
-      message.str(""); message << "Offset RA = <TBD> arcsec // reqstat\n";
+      message.str(""); message << "Offset RA = <TBD> arcsec\n";
       retstring.append( message.str() );
-      message.str(""); message << "Offset DEC = <TBD> arcsec // reqstat\n";
+      message.str(""); message << "Offset DEC = <TBD> arcsec\n";
       retstring.append( message.str() );
-      message.str(""); message << "Total Offset = <TBD> arcsec // hypotenuse\n\n";
+      message.str(""); message << "Total Offset = " << this->target.offset_cal_offset << " arcsec\n\n";
       retstring.append( message.str() );
       retstring.append( "Total Offset GOAL = <TBD>\n\n" );
-      retstring.append( "If the total offset is larger than the goal, ask the operator to zero them now.  Then slew off the target, slew back, and press CALIBRATE again to verify offsets are still small.\n\n" );
-      retstring.append( "Calibrating and zeroing the offset improves the efficiency of the Acquisition and Guide system but does not affect accuracy.\n" );
-      this->guide_manager.push_guider_message( retstring );
-      return HELP;
+      retstring.append( "If the total offset is larger than the goal, ask the operator to zero them now.\n" );
+      retstring.append( "Then slew off the target, slew back, and press CALIBRATE again to verify offsets\n" );
+      retstring.append( "are still small.\n\n" );
+      retstring.append( "Calibrating and zeroing the offset improves the efficiency of the Acquisition\n" );
+      retstring.append( "and Guide system but does not affect accuracy.\n" );
+
+      // write this to STDOUT and the GUI will pick it up
+      //
+      std::cout << retstring;
+      return HELP;             // returning HELP suppresses DONE|ERROR from being written
     }
     else return error;
   }

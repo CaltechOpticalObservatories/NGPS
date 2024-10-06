@@ -329,10 +329,12 @@ namespace Acam {
       int attempts;
       int sequential_failures;
 
-      std::atomic<bool> acquired;          ///< set if target acquired successfully
+      std::atomic<bool> is_acquired;       ///< set if target acquired successfully
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
 
       double tcs_max_offset;
+
+      double offset_cal_offset;
 
       std::chrono::time_point<std::chrono::steady_clock,
                               std::chrono::duration<double>> timeout_time;
@@ -435,8 +437,9 @@ namespace Acam {
       double putonslit_offset, last_putonslit_offset;
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
-                 acquired(false),
+                 is_acquired(false),
                  stop_acquisition(false),
+                 offset_cal_offset(0),
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
                  dRA(0), dDEC(0),
@@ -482,7 +485,7 @@ namespace Acam {
         target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
-      inline bool target_acquired()      { return this->target.acquired; }
+      inline bool is_target_acquired()   { return this->target.is_acquired; }
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 

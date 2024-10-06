@@ -543,7 +543,7 @@ namespace Acam {
       }
       else
       if ( cmd == ACAMD_ISACQUIRED ) {
-                      retstring = ( this->interface.target_acquired() ? "true" : "false" );
+                      retstring = ( this->interface.is_target_acquired() ? "true" : "false" );
                       ret = NO_ERROR;
       }
       else
