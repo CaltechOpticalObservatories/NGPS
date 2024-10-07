@@ -638,6 +638,7 @@ namespace Sequencer {
         // Start the exposure in a thread...
         //
         seq.set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
+        logwrite( function, "[DEBUG] spawning dothread_trigger_exposure" );
         std::thread( dothread_trigger_exposure, std::ref(seq) ).detach();  // trigger exposure in a thread
 
         seq.set_reqstate_bit( Sequencer::SEQ_RUNNING );                    // set the requested state
@@ -950,12 +951,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
     // Turn on power to slit hardware.
     //
+/***** TEMPORARY
     for ( const auto &plug : seq.power_switch[POWER_SLIT].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to slit hardware" );
     }
+*****/
 
     // if not connected to the slit daemon then connect
     //
@@ -1052,7 +1055,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     // TCS must have been initialized
     //
     if ( seq.tcs_name == "offline" ) {
-      seq.async.enqueue_and_log( function, "ERROR tcs not initialized" );
+      seq.async.enqueue_and_log( function, "ERROR sequencer has not initialized a TCS connection" );
       error = ERROR;
     }
 
@@ -1079,6 +1082,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       logwrite( function, "connecting to acam hardware" );
       error = seq.acamd.send( ACAMD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to acam hardware" );
+    }
+
+    // turn on cooling
+    //
+    if ( error==NO_ERROR && !isopen ) {
+      logwrite( function, "turning on acam cooling" );
+      error = seq.acamd.send( ACAMD_TEMP+" -100", reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR requesting acam preamble" );
     }
 
     // atomically set thr_error so the main thread knows we had an error
@@ -1183,6 +1194,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
     // Turn on power to calib hardware.
     //
+/*****  TEMPORARY
     for ( const auto &plug : seq.power_switch[POWER_CALIB].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
@@ -1192,6 +1204,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
         break;
       }
     }
+*****/
 
     // if not connected to the calib daemon then connect
     //
@@ -1398,7 +1411,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     // set the offset rates
     //
     if ( error==NO_ERROR && isconnected && isopen && !which.empty() ) {
-      message.str(""); message << "MRATES " << seq.tcs_offsetrate_ra << " " << seq.tcs_offsetrate_dec;
+      message.str(""); message << TCSD_OFFSETRATE << " " << seq.tcs_offsetrate_ra << " " << seq.tcs_offsetrate_dec;
       error  = seq.tcsd.send( message.str(), reply );
     }
 
@@ -1860,13 +1873,13 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
       // Wait for on-target signal
       //
-      logwrite( function, "waiting for TCS to be on target" );
+      seq.async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
       while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_ontarget.load()==false ) {
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       }
 
-      logwrite( function, "received on-target signal" );
+      seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
 
 /***
       // Target coords have been sent to the TCS but they don't actually go to the TCS,
@@ -2293,6 +2306,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
     seq.arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
 
+    logwrite( function, "[DEBUG] sending expose command" );
     error = seq.camerad.async( CAMERAD_EXPOSE );  // Send the EXPOSE command to camera daemon on the non-blocking port and don't wait for reply
 
     if ( error == NO_ERROR ) {
@@ -4142,7 +4156,7 @@ logwrite( function, message.str() );
         return HELP;
       }
 
-      if ( tokens.size() != 2 ) {
+      if ( tokens.size() < 2 ) {
         logwrite( function, "ERROR expected startup <module>" );
         retstring="invalid_argument";
         return( ERROR );
@@ -4216,7 +4230,11 @@ logwrite( function, message.str() );
       }
       else
       if ( tokens[1] == "tcs" && tokens.size()==3 ) {
-        this->tcs_init( tokens[2], retstring );
+        if ( tokens.size() == 3 ) this->tcs_init( tokens[2], retstring );
+        else {
+          logwrite( function, "ERROR missing tcs type { real sim }" );
+          return ERROR;
+        }
       }
       else {
         message.str(""); message << "ERROR invalid module \"" << tokens[1] << "\". expected power|acam|slit|calib|camera|focus|flexure|tcs <which>";

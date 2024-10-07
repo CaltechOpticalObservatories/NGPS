@@ -818,13 +818,13 @@ namespace Sequencer {
     std::stringstream message;
 
     if ( !is_db_configured() ) {
-      logwrite( function, "ERROR: database not configured (check .cfg file)" );
-      return( ERROR );
+      logwrite( function, "ERROR database not configured (check .cfg file)" );
+      return ERROR;
     }
 
     if ( this->name.empty() ) {
-      logwrite( function, "ERROR: no record selected" );
-      return( ERROR );
+      logwrite( function, "ERROR no record selected" );
+      return ERROR;
     }
 
     try {
@@ -916,22 +916,20 @@ namespace Sequencer {
                 .execute();
     }
     catch ( const mysqlx::Error &err ) {
-      message.str(""); message << "ERROR from mySQL: " << err;
+      message.str(""); message << "ERROR mySQL exception: " << err;
       logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
-    catch ( std::exception &ex ) {
-      message.str(""); message << "ERROR std exception: " << ex.what();
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR std exception: " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch ( const char *ex ) {
-      message.str(""); message << "ERROR other exception: " << ex;
-      logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    message.str(""); message << "target " << this->name << " inserted into completed table";
+    logwrite( function, message.str() );
+
+    return NO_ERROR;
   }
   /***** Sequencer::TargetInfo::insert_completed ******************************/
 
