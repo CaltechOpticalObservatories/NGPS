@@ -166,6 +166,7 @@ namespace Andor {
     public:
       virtual ~AndorBase() {}
       virtual long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) = 0;
+      virtual long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) = 0;
       virtual long _GetAvailableCameras( int &number ) = 0;
       virtual long _GetCameraHandle( int index, int* handle ) = 0;
       virtual long _GetCameraSerialNumber( int &number ) = 0;
@@ -194,11 +195,13 @@ namespace Andor {
       virtual long _SetAcquisitionMode( int mode ) = 0;
       virtual long _SetCurrentCamera( int handle ) = 0;
       virtual long _SetExposureTime( double exptime ) = 0;
+      virtual long _SetKineticCycleTime( float time ) = 0;
       virtual long _SetImageFlip( int hflip, int vflip ) = 0;
       virtual long _SetImageRotate( int rotdir ) = 0;
       virtual long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) = 0;
       virtual long _SetReadMode( int mode ) = 0;
       virtual long _SetShutter( int type, int mode, int closetime, int opentime ) = 0;
+      virtual long _AbortAcquisition( ) = 0;
       virtual long _StartAcquisition( ) = 0;
   };
   /***** Andor::AndorBase *****************************************************/
@@ -214,6 +217,7 @@ namespace Andor {
   class SDK : public AndorBase {
     public:
       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
+      long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) override;
       long _GetAvailableCameras( int &number ) override;
       long _GetCameraHandle( int index, int* handle ) override;
       long _GetCameraSerialNumber( int &number ) override;
@@ -242,11 +246,13 @@ namespace Andor {
       long _SetAcquisitionMode( int mode ) override;
       long _SetCurrentCamera( int handle ) override;
       long _SetExposureTime( double exptime ) override;
+      long _SetKineticCycleTime( float time ) override;
       long _SetImageFlip( int hflip, int vflip ) override;
       long _SetImageRotate( int rotdir ) override;
       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
       long _SetReadMode( int mode ) override;
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
+      long _AbortAcquisition( ) override;
       long _StartAcquisition( ) override;
   };
   /***** Andor::SDK ***********************************************************/
@@ -272,6 +278,7 @@ namespace Andor {
       inline double get_exptime() { return this->exptime; }
 
       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
+      long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) override;
       long _GetAvailableCameras( int &number ) override;
       long _GetCameraHandle( int index, int* handle ) override;
       long _GetCameraSerialNumber( int &number ) override;
@@ -300,11 +307,13 @@ namespace Andor {
       long _SetAcquisitionMode( int mode ) override;
       long _SetCurrentCamera( int handle ) override;
       long _SetExposureTime( double exptime ) override;
+      long _SetKineticCycleTime( float time ) override;
       long _SetImageFlip( int hflip, int vflip ) override;
       long _SetImageRotate( int rotdir ) override;
       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
       long _SetReadMode( int mode ) override;
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
+      long _AbortAcquisition( ) override;
       long _StartAcquisition( ) override;
 
       SkySim skysim;
@@ -358,6 +367,16 @@ namespace Andor {
       Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
                             andor( &sdk ), image_data( nullptr ), err( false ), emulator( sn ) { }
       /***** Andor::Interface::Interface **************************************/
+
+      /**
+       * @brief      Interface destructor cleans up image_data buffer
+       */
+      ~Interface() {
+        if ( this->image_data != nullptr ) {
+          delete[] this->image_data;
+          this->image_data = nullptr;
+        }
+      };
 
       /***** Andor::Interface::andor_emulator *********************************/
       /**
@@ -424,12 +443,15 @@ namespace Andor {
       long open( std::string args );
       long close();
       long test();
-      long shutter();
+      long shutter( const std::string &state );
+      long set_shutter( const int type, const int mode, const int closingtime, const int openingtime );
       long set_exptime( int exptime );
       long set_exptime( std::string exptime, std::string &retstring );
+      long get_recent();
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
       long save_acquired( std::string wcs_in, std::string &imgname, const int simsize );
+      unsigned int abort_acquisition();
       unsigned int start_acquisition();
       long get_detector( int &x, int &y );
       long get_status();

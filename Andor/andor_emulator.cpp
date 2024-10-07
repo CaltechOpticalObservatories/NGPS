@@ -36,6 +36,23 @@ namespace Andor {
   /***** Andor::Emulator::_GetAcquiredData16 **********************************/
 
 
+  /***** Andor::Emulator::_GetMostRecentImage16 *******************************/
+  /**
+   * @brief      get most recent image
+   * @details    16-bit version of GetMostRecentImage16. buf must be large enough
+   *             to hold the complete data set.
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) {
+    std::string function = "Andor::Emulator::_GetMostRecentImage16";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_GetMostRecentImage16 *******************************/
+
+
   /***** Andor::Emulator::_GetAvailableCameras ********************************/
   /**
    * @brief      wrapper for Andor Sim GetAvailableCameras
@@ -637,6 +654,22 @@ namespace Andor {
   /***** Andor::Emulator::_SetExposureTime ************************************/
 
 
+  /***** Andor::Emulator::_SetKineticCycleTime ********************************/
+  /**
+   * @brief      wrapper for Andor Sim SetKineticCycleTime
+   * @param[in]  time
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_SetKineticCycleTime( float time ) {
+    std::string function = "Andor::Emulator::_SetKineticCycleTime";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetKineticCycleTime ********************************/
+
+
   /***** Andor::Emulator::_SetImageFlip ***************************************/
   /**
    * @brief      wrapper for Andor Sim SetImageFlip
@@ -741,6 +774,23 @@ namespace Andor {
     return NO_ERROR;
   }
   /***** Andor::Emulator::_SetShutter *****************************************/
+
+
+  /***** Andor::Emulator::_AbortAcquisition ***********************************/
+  /**
+   * @brief      wrapper for Andor Sim AbortAcquisition
+   * @details    aborts the acquisition
+   * @details    this simply checks return value
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_AbortAcquisition() {
+    std::string function = "Andor::Emulator::_AbortAcquisition";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_StartAcquisition ***********************************/
 
 
   /***** Andor::Emulator::_StartAcquisition ***********************************/

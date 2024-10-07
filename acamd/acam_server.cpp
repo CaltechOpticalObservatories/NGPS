@@ -553,18 +553,6 @@ namespace Acam {
       else
       // commands for the Andor camera direct
       //
-      if ( cmd == "cameraacquire" ) {
-                      ret = this->interface.camera.start_acquisition( );
-      }
-      else
-      if ( cmd == "camerastat" ) {
-                      ret = this->interface.camera.get_status( );
-      }
-      else
-      if ( cmd == "camerashutter" ) {
-                      ret = this->interface.camera.andor.shutter( );
-      }
-      else
       if ( cmd == "camerafits" ) {
                       ret = this->interface.test_image( );
       }

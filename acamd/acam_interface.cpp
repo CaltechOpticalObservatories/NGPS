@@ -107,30 +107,6 @@ namespace Acam {
   /***** Acam::Camera::close **************************************************/
 
 
-  /***** Acam::Camera::start_acquisition **************************************/
-  /**
-   * @brief      
-   * @return     ERROR or NO_ERROR
-   * 
-   */
-  long Camera::start_acquisition() {
-    return ERROR;
-  }
-  /***** Acam::Camera::start_acquisition **************************************/
-
-
-  /***** Acam::Camera::get_status *********************************************/
-  /**
-   * @brief      
-   * @return     ERROR or NO_ERROR
-   * 
-   */
-  long Camera::get_status() {
-    return this->andor.get_status();
-  }
-  /***** Acam::Camera::get_status *********************************************/
-
-
   /***** Acam::Camera::bin ****************************************************/
   /**
    * @brief      set or get camera binning
@@ -3139,10 +3115,14 @@ namespace Acam {
       retstring = ACAMD_TEST;
       retstring.append( "\n" );
       retstring.append( "  Test Routines\n" );
+      retstring.append( "   acqmode [ ? ]\n" );
       retstring.append( "   adchans [ ? ]\n" );
+      retstring.append( "   camera \n" );
+      retstring.append( "   collect [ ? ] \n" );
       retstring.append( "   emgainrange\n" );
       retstring.append( "   fpoffsets ? | <from> <to> <ra> <dec> <angle> (see help for units)\n" );
       retstring.append( "   getemgain\n" );
+      retstring.append( "   mode\n" );
       retstring.append( "   monitorfocus [ ? | stop | start ]\n" );
       retstring.append( "   pointmode\n" );
       retstring.append( "   sleep\n" );
@@ -3161,6 +3141,7 @@ namespace Acam {
 
     std::string testname = tokens[0];
 
+    // --------------------------------
     // set optional external solver args
     //
     if ( testname == "solverargs" ) {
@@ -3188,6 +3169,9 @@ namespace Acam {
       error=NO_ERROR;
     }
     else
+    // --------------------------------
+    // fpoffsets
+    //
     if ( testname == "fpoffsets" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
         retstring = ACAMD_TEST;
@@ -3269,6 +3253,9 @@ namespace Acam {
       }
     }
     else
+    // --------------------------------
+    // threadoffset
+    //
     if ( testname == "threadoffset" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = ACAMD_TEST;
@@ -3285,6 +3272,103 @@ namespace Acam {
       }
     }
     else
+    // --------------------------------
+    // camera
+    //
+    if ( testname == "camera" ) {
+      if ( tokens.size() < 2 ) {
+        logwrite( function, "ERROR expected argument" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+      else
+      if ( tokens[1] == "?" ) {
+        retstring = ACAMD_TEST;
+        retstring.append( " camera acquireone | abort | start | status\n" );
+        retstring.append( "  acquireone  starts acquisition, and gets the acquired image\n" );
+        retstring.append( "  abort       aborts acquisition\n" );
+        retstring.append( "  getrecent   gets the most recent image\n" );
+        retstring.append( "  start       starts acquisition\n" );
+        retstring.append( "  status      Andor status\n" );
+        error=HELP;
+      }
+      else
+      if ( tokens[1]=="acquireone" ) {
+        error  = this->camera.andor.acquire_one();                     // acquire a single image
+        error |= this->collect_header_info();                          // collect header information
+        error |= this->camera.write_frame( "",
+                                           this->imagename,
+                                           this->tcs_online.load() );  // write to FITS file
+        this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
+      }
+      else
+      if ( tokens[1]=="abort" ) {
+        error = this->camera.andor.abort_acquisition();
+      }
+      else
+      if ( tokens[1]=="getrecent" ) {
+        error = this->camera.andor.get_recent();
+        error |= this->collect_header_info();                          // collect header information
+        error |= this->camera.write_frame( "",
+                                           this->imagename,
+                                           this->tcs_online.load() );  // write to FITS file
+        this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
+      }
+      else
+      if ( tokens[1]=="start" ) {
+        error = this->camera.andor.start_acquisition();
+      }
+      else
+      if ( tokens[1]=="status" ) {
+        error = this->camera.andor.get_status();
+      }
+    }
+    else
+    // --------------------------------
+    // mode
+    //
+    if ( testname == "mode" ) {
+      if ( tokens.size() < 2 ) {
+        logwrite( function, "ERROR expected argument" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+      else
+      if ( tokens[1] == "?" ) {
+        retstring = ACAMD_TEST;
+        retstring.append( " mode auto | cont\n" );
+        retstring.append( "  Sets Andor acquisition mode\n" );
+        error=HELP;
+      }
+      else
+      if ( tokens[1] == "single" ) {
+        error  = this->camera.andor.set_acquisition_mode( 1 );       // single scan
+        error |= this->camera.andor.shutter( std::string("auto") );  // shutter auto open,close with each exposure
+      }
+      else
+      if ( tokens[1] == "cont" ) {
+        error  = this->camera.andor.set_acquisition_mode( 5 );       // run till abort
+        error |= this->camera.andor.sdk._SetKineticCycleTime( 0 );
+        error |= this->camera.andor.shutter( std::string("open") );  // shutter always open
+      }
+    }
+    else
+    // --------------------------------
+    // collect
+    //
+    if ( testname == "collect" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = ACAMD_TEST;
+        retstring.append( " collect\n" );
+        retstring.append( "  Gather information and add it to the internal keyword database.\n" );
+        error=HELP;
+      }
+      else error = this->collect_header_info();             // collect header information
+    }
+    else
+    // --------------------------------
+    // adchans
+    //
     if ( testname == "adchans" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = ACAMD_TEST;
@@ -3300,18 +3384,27 @@ namespace Acam {
       }
     }
     else
+    // --------------------------------
+    // emgainrange
+    //
     if ( testname == "emgainrange" ) {
       int low, high;
       error = this->camera.andor.get_emgain_range( low, high );
       retstring = std::to_string(low) + " " + std::to_string(high);
     }
     else
+    // --------------------------------
+    // getemgain
+    //
     if ( testname == "getemgain" ) {
       int gain;
       error = this->camera.andor.get_emgain( gain );
       retstring = std::to_string( gain );
     }
     else
+    // --------------------------------
+    // monitorfocus
+    //
     if ( testname == "monitorfocus" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = ACAMD_TEST;
@@ -3347,10 +3440,16 @@ namespace Acam {
       }
     }
     else
+    // --------------------------------
+    // pointmode
+    //
     if ( testname == "pointmode" ) {
       retstring = "pointmode " + this->target.get_pointmode() + " selected";
     }
     else
+    // --------------------------------
+    // sleep
+    //
     if ( testname == "sleep" ) {
       for ( int i=0; i<10; i++ ) {
         logwrite( function, "sleeping . . ." );

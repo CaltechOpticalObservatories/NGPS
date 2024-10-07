@@ -48,6 +48,41 @@ namespace Andor {
   /***** Andor::SDK::_GetAcquiredData16 ***************************************/
 
 
+  /***** Andor::SDK::_GetMostRecentImage16 ************************************/
+  /**
+   * @brief      wrapper for Andor SDK GetMostRecentImage16
+   * @details    16-bit version of GetMostRecentImage. buf must be large enough
+   *             to hold the complete data set.
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long SDK::_GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) {
+    std::string function = "Andor::SDK::_GetMostRecentImage16";
+    std::stringstream message;
+
+    unsigned int ret = GetMostRecentImage16( buf, bufsize );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         /* silent on success */                               break;
+      case DRV_NOT_INITIALIZED: message << "ERROR system not initialized";            break;
+      case DRV_ERROR_ACK:       message << "ERROR unable to communicate with device"; break;
+      case DRV_P1INVALID:       message << "ERROR invalid pointer";                   break;
+      case DRV_P2INVALID:       message << "ERROR wrong array size";                  break;
+      case DRV_NO_NEW_DATA:     message << "ERROR no acquisition has taken place";    break;
+      default:                  message << "ERROR unrecognized return code " << ret;
+    }
+
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
+
+    if ( buf == nullptr ) {
+      logwrite( function, "ERROR buffer is empty" );
+    }
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_GetMostRecentImage16 ************************************/
+
+
   /***** Andor::SDK::_GetAvailableCameras *************************************/
   /**
    * @brief      wrapper for Andor SDK GetAvailableCameras
@@ -892,6 +927,37 @@ namespace Andor {
   /***** Andor::SDK::_SetExposureTime *****************************************/
 
 
+  /***** Andor::SDK::_SetKineticCycleTime *************************************/
+  /**
+   * @brief      wrapper for Andor SDK SetKineticCycleTime 
+   * @details    This function will set the kinetic cycle time to the nearest
+   *             valid value not less than the given value. The actual time
+   *             used is obtained by GetAcquisitionTimings.
+   * @param[in]  time  kinetic cycle time in seconds
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long SDK::_SetKineticCycleTime( float time ) {
+    std::string function = "Andor::SDK::SetKineticCycleTime";
+    std::stringstream message;
+
+    unsigned int ret = SetKineticCycleTime( time );
+
+    switch (ret) {
+      case DRV_SUCCESS:          message << time;                                  break;
+      case DRV_NOT_INITIALIZED:  message << "ERROR: system not initialized";       break;
+      case DRV_ACQUIRING:        message << "ERROR: acquisition in progress";      break;
+      case DRV_P1INVALID:        message << "ERROR: time " << time << " invalid";  break;
+      default:                   message << "ERROR: unknown error " << ret;        break;
+    }
+
+    logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_SetKineticCycleTime *************************************/
+
+
   /***** Andor::SDK::_SetImageFlip ********************************************/
   /**
    * @brief      wrapper for Andor SDK SetImageFlip
@@ -1067,6 +1133,35 @@ namespace Andor {
   /***** Andor::SDK::_SetShutter **********************************************/
 
 
+  /***** Andor::SDK::_AbortAcquisition ****************************************/
+  /**
+   * @brief      wrapper for Andor SDK AbortAcquisition
+   * @details    aborts the acquisition
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long SDK::_AbortAcquisition() {
+    std::string function = "Andor::SDK::_AbortAcquisition";
+    std::stringstream message;
+
+    unsigned int ret = AbortAcquisition();
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         /* silent on success */                                          break;
+      case DRV_NOT_INITIALIZED: message << "ERROR not initialized";                              break;
+      case DRV_IDLE:            message << "ERROR not acquiring";                                break;
+      case DRV_VXDNOTINSTALLED: message << "ERROR VxD not loaded";                               break;
+      case DRV_ERROR_ACK:       message << "ERROR unable to communicate with device";            break;
+      default:                  message << "ERROR unrecognized return code " << ret;
+    }
+
+    if ( ret != DRV_SUCCESS ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_AbortAcquisition ****************************************/
+
+
   /***** Andor::SDK::_StartAcquisition ****************************************/
   /**
    * @brief      wrapper for Andor SDK StartAcquisition
@@ -1094,7 +1189,7 @@ namespace Andor {
       default:                  message << "ERROR unrecognized return code " << ret;
     }
 
-    logwrite( function, message.str() );
+    if ( ret != DRV_SUCCESS ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
@@ -1268,6 +1363,11 @@ namespace Andor {
     this->is_andor_open=false;
     ShutDown();
 
+    if ( this->image_data != nullptr ) {
+      delete[] this->image_data;
+      this->image_data = nullptr;
+    }
+
     return NO_ERROR;
   }
   /***** Andor::Interface::close **********************************************/
@@ -1297,13 +1397,38 @@ namespace Andor {
   /***** Andor::Interface::start_acquisition **********************************/
 
 
-  /***** Andor::Interface::shutter ********************************************/
+  /***** Andor::Interface::abort_acquisition **********************************/
   /**
-   * @brief      right now this just closes the shutter
+   * @brief      abort acquisition
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::shutter() {
+  unsigned int Interface::abort_acquisition() {
+    std::string function = "Andor::Interface::abort_acquisition";
+    std::stringstream message;
+
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
+      return ERROR;
+    }
+
+    long error = ( andor ? andor->_AbortAcquisition() : ERROR );
+
+    if ( error != NO_ERROR ) logwrite( function, "ERROR aborting acquisition" );
+
+    return error;
+  }
+  /***** Andor::Interface::abort_acquisition **********************************/
+
+
+  /***** Andor::Interface::shutter ********************************************/
+  /**
+   * @brief      set shutter open/close/auto by string
+   * @param[in]  state  string can be { auto open close }
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::shutter( const std::string &state ) {
     std::string function = "Andor::Interface::shutter";
     std::stringstream message;
 
@@ -1312,13 +1437,81 @@ namespace Andor {
       return ERROR;
     }
 
-    long error = ( andor ? andor->_SetShutter( 0, 2, 0, 0 ) : ERROR );
+    long error;
 
-    logwrite( function, "shutter closed" );
+    if ( state == "auto" ) {
+      error = ( andor ? andor->_SetShutter( 1, 0, 50, 50 ) : ERROR );
+    }
+    else
+    if ( state == "open" ) {
+      error = ( andor ? andor->_SetShutter( 1, 2, 0, 0 ) : ERROR );
+    }
+    else
+    if ( state == "close" ) {
+      error = ( andor ? andor->_SetShutter( 0, 2, 0, 0 ) : ERROR );
+    }
+    else {
+      error = ERROR;
+      message << "ERROR invalid state \"" << state << "\": expected { auto open close }";
+    }
+
+    if ( error == NO_ERROR ) message << "shutter set to " << state;
+
+    logwrite( function, message.str() );
 
     return error;
   }
   /***** Andor::Interface::start_acquisition **********************************/
+
+
+  /***** Andor::Interface::set_shutter ****************************************/
+  /**
+   * @brief      wrapper provides full control setting shutter state
+   * @param[in]  type         output TTL {0=low 1=high} signal to open shutter
+   * @param[in]  mode         0=auto, 1=open, 2=close
+   * @param[in]  closingtime  time shutter takes to close in msec
+   * @param[in]  openingtime  time shutter takes to open in msec
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_shutter( const int type, const int mode, const int closingtime, const int openingtime ) {
+    std::string function = "Andor::Interface::set_shutter";
+    std::stringstream message;
+
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
+      return ERROR;
+    }
+
+    // change inputs are within valid ranges
+    //
+    if ( type < 0 || type > 1 ) {
+      message.str(""); message << "ERROR invalid type " << type << ": expected {0 1}";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    if ( mode < 0 || mode > 2 ) {
+      message.str(""); message << "ERROR invalid mode " << mode << ": expected {0 1 2}";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    if ( closingtime<0 || openingtime<0 ) {
+      message.str(""); message << "ERROR closing,opening times " << closingtime << "," << openingtime
+                               << " must not be negative";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // send the SetShutter command
+    //
+    long error = ( andor ? andor->_SetShutter( type, mode, closingtime, openingtime ) : ERROR );
+
+    if ( error==ERROR ) logwrite( function, "ERROR setting shutter" );
+    else logwrite( function, "shutter set" );
+
+    return error;
+  }
+  /***** Andor::Interface::set_shutter ****************************************/
 
 
   /***** Andor::Interface::get_detector ***************************************/
@@ -1601,6 +1794,21 @@ namespace Andor {
       this->camera_info.vstart = vstart;
       this->camera_info.vend   = vend;
     }
+
+    // allocate a buffer for saving images
+    //
+    std::lock_guard<std::mutex> lock(image_data_mutex);
+
+    if ( this->image_data != nullptr ) {
+      delete[] this->image_data;
+      this->image_data = nullptr;
+    }
+
+    auto bufsz = ( (hend-hstart+1)/hbin ) * ( (vend-vstart+1)/vbin );
+    this->image_data = new uint16_t[ bufsz ];
+
+    message.str(""); message << "allocated " << bufsz << " bytes for image_data buffer";
+    logwrite( function, message.str() );
 
     return error;
   }
@@ -2035,6 +2243,52 @@ namespace Andor {
   /***** Andor::Interface::set_acquisition_mode *******************************/
 
 
+  /***** Andor::Interface::get_recent *****************************************/
+  /**
+   * @brief      get the most recent image
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_recent() {
+    std::string function = "Andor::Interface::get_recent";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
+      return ERROR;
+    }
+
+    // Make sure the camera is in single scan mode
+    //
+    if ( this->camera_info.acqmode != 5 ) {
+      logwrite( function, "ERROR not in run till abort mode" );
+      return ERROR;
+    }
+
+    // Get the acquired image
+    //
+    std::lock_guard<std::mutex> lock( image_data_mutex );
+    if ( this->image_data == nullptr ) {
+      logwrite( function, "ERROR image_data buffer not initialized: no image saved" );
+      return ERROR;
+    }
+
+    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
+
+    // Store the exposure start time
+    //
+    timespec timenow             = Time::getTimeNow();         // get the time NOW
+    this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+    this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
+
+//  if (error==NO_ERROR) error = sdk._GetTemperature();
+
+    return error;
+  }
+  /***** Andor::Interface::get_recent *****************************************/
+
+
   /***** Andor::Interface::acquire_one ****************************************/
   /**
    * @brief      acquire a single scan single frame
@@ -2054,7 +2308,7 @@ namespace Andor {
 
     // Make sure the camera is in single scan mode
     //
-    if ( this->camera_info.acqmode != 1 && this->set_acquisition_mode( 1 ) != NO_ERROR ) {
+    if ( this->camera_info.acqmode != 1 ) {
       logwrite( function, "ERROR not in single scan mode" );
       return ERROR;
     }
@@ -2079,15 +2333,11 @@ namespace Andor {
     // Get the acquired image
     //
     std::lock_guard<std::mutex> lock( image_data_mutex );
-    if ( this->image_data != nullptr ) {
-//    this->image_data.reset();
-      delete [] this->image_data;
-      this->image_data = nullptr;
+    if ( this->image_data == nullptr ) {
+      logwrite( function, "ERROR image_data buffer not initialized: no image saved" );
+      return ERROR;
     }
-//  this->image_data = std::make_unique<uint16_t[]>( this->camera_info.axes[0] * this->camera_info.axes[1] );
-    this->image_data = new uint16_t[ this->camera_info.axes[0] * this->camera_info.axes[1] ];
 
-//  if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data.get(), this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
 
     // Store the exposure start time
@@ -2095,10 +2345,6 @@ namespace Andor {
     timespec timenow             = Time::getTimeNow();         // get the time NOW
     this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
-
-    if ( this->image_data == nullptr ) {
-      logwrite( function, "ERROR image_data is null" );
-    }
 
 //  if (error==NO_ERROR) error = sdk._GetTemperature();
 
