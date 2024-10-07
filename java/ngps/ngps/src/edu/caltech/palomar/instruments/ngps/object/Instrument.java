@@ -26,18 +26,8 @@ public class Instrument extends java.lang.Object{
   public int              bin_space;
   public java.lang.String requestedSlitAngle;
   public double           slitangle;
-  public  DefaultMutableTreeNode  instrument_node;
-  public  DefaultMutableTreeNode  exposuretime_node;
-  public  DefaultMutableTreeNode  nexp_node;
-  public  DefaultMutableTreeNode  slit_node;
-  public  DefaultMutableTreeNode  slitwidth_node;
-  public  DefaultMutableTreeNode  slitoffset_node;
-  public  DefaultMutableTreeNode  ccdmode_node;
-  public  DefaultMutableTreeNode  binning_node; 
-  public  DefaultMutableTreeNode  bin_spec_node;
-  public  DefaultMutableTreeNode  bin_space_node;
-  public  DefaultMutableTreeNode  cassangle_node;
-/*================================================================================================
+
+  /*================================================================================================
 /      Instrument() CONSTRUCTOR
 /=================================================================================================*/
 public Instrument(){
@@ -54,33 +44,7 @@ private void initializeValues(){
     setSlitwidth_string("SET 1");
     setRequestedSlitAngle("PA");
 }
-/*================================================================================================
-/          DefaultMutableTreeNode constructTreeNode()
-/=================================================================================================*/
-public DefaultMutableTreeNode constructTreeNode(){
-    instrument_node     = new DefaultMutableTreeNode("INSTRUMENT");
-    slit_node           = new DefaultMutableTreeNode("SLIT");
-    binning_node        = new DefaultMutableTreeNode("BINNING");
-    exposuretime_node   = new DefaultMutableTreeNode("EXPTIME = "+exposuretime);
-    nexp_node           = new DefaultMutableTreeNode("NEXP = "+nexp);
-    slitwidth_node      = new DefaultMutableTreeNode("SLIT WIDTH = "+slitwidth_string);
-    slitoffset_node     = new DefaultMutableTreeNode("SLIT OFFSET = "+slitoffset);
-    ccdmode_node        = new DefaultMutableTreeNode("CCDMODE = "+ccdmode);
-    bin_spec_node       = new DefaultMutableTreeNode("BIN SPATIAL = "+bin_spec);
-    bin_space_node      = new DefaultMutableTreeNode("BIN SPECTRAL = "+bin_space);
-    cassangle_node      = new DefaultMutableTreeNode("SLIT ANGLE = "+requestedSlitAngle);
-    instrument_node.add(exposuretime_node);
-    instrument_node.add(nexp_node);
-    slit_node.add(slitwidth_node);
-    slit_node.add(slitoffset_node);
-    instrument_node.add(slit_node);
-    instrument_node.add(ccdmode_node);
-    binning_node.add(bin_spec_node);
-    binning_node.add(bin_space_node);
-    instrument_node.add(binning_node);
-    instrument_node.add(cassangle_node);
-  return instrument_node;
-}
+
 /*================================================================================================
 /      setExposuretime(double new)
 /=================================================================================================*/

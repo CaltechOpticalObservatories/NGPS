@@ -50,7 +50,6 @@ public class Target extends java.lang.Object{
 /      Observation()
 /=================================================================================================*/
   public Target(){   
-      constructTreeNode();
       initializeValues();
       setObservationID(MISSING_ID);
   }
@@ -59,38 +58,15 @@ public class Target extends java.lang.Object{
 /=================================================================================================*/
   public Target(java.lang.String new_name){      
      setName(new_name);
-     constructTreeNode();
      initializeValues();
   }
  private void initializeValues(){
      setSTATE(PENDING);
      setSelected(false);
      setActive(true);
+     setName("myTarget");
  }
-/*================================================================================================
-/          DefaultMutableTreeNode constructTreeNode()
-/=================================================================================================*/
-public DefaultMutableTreeNode constructTreeNode(){
-    target_node             = new DefaultMutableTreeNode("TARGET: "+name);
-    name_node               = new DefaultMutableTreeNode("NAME = "+name);
-    state_node              = new DefaultMutableTreeNode("STATE = "+state);
-    indexes_node            = new DefaultMutableTreeNode("INDEXES");
-    obsid_node              = new DefaultMutableTreeNode("OBSID"+observationID);
-    setid_node              = new DefaultMutableTreeNode("SET_ID +"+set_id);
-    target_number_node      = new DefaultMutableTreeNode("TARGET NUMBER = "+target_number); 
-    sequence_number_node    = new DefaultMutableTreeNode("SEQUENCE NUMBER = "+sequence_number); 
-    target_node.add(name_node);
-    target_node.add(state_node);
-    indexes_node.add(obsid_node);
-    indexes_node.add(setid_node);
-    indexes_node.add(target_number_node);
-    indexes_node.add(sequence_number_node);
-    target_node.add(indexes_node);
-    target_node.add(sky.constructTreeNode());
-    target_node.add(instrument.constructTreeNode());
-    target_node.add(etc.constructTreeNode());
-  return target_node;
-}
+
 /*================================================================================================
 /      setExposuretime(double new)
 /=================================================================================================*/

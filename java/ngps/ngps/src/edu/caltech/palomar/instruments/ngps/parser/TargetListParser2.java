@@ -218,14 +218,10 @@ public int getModelType(){
      Target               currentObservation;    
      myTargetSimpleTableModel.clearTable();
      myTargetExtendedTableModel.clearTable();
-//     myDefaultTableModel2.clearTable();
- //    myDefaultTableModel2.initializeTableColumns();
      currentObservationSet = new ObservationSet();
      currentObservationSet.getObservationHashMap().clear();
      currentObservationSet.setSET_NAME(getFileName());
      currentObservationSet.setSTATE(ObservationSet.PENDING);
-     myDefaultTreeModel = currentObservationSet.getTreeModel();
-     DefaultMutableTreeNode root_node = (DefaultMutableTreeNode)myDefaultTreeModel.getRoot();
      java.lang.String          CommentString    = new java.lang.String();
      BufferedReader br           = null;
      String         current_line = new java.lang.String();
@@ -257,8 +253,6 @@ public int getModelType(){
                      currentObservationSet.getObservationHashMap().put(currentObservation.name, currentObservation);
                      myTargetSimpleTableModel.addTarget(currentObservation);  
                      myTargetExtendedTableModel.addTarget(currentObservation);  
-//                     myDefaultTableModel2.addTarget(currentObservation);
-                     myDefaultTreeModel.insertNodeInto(currentObservation.constructTreeNode(), root_node,root_node.getChildCount());
                      myTargetListDocumentModel.insertMessage(TargetListDocumentModel.COMMAND, current_line);                     
                    }
                    if(currentObservation== null){
