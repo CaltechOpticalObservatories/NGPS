@@ -6,7 +6,6 @@ package edu.caltech.palomar.instruments.ngps.object;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import javax.swing.tree.DefaultMutableTreeNode;
 
 /**
  *

@@ -25,9 +25,6 @@ import edu.caltech.palomar.instruments.ngps.object.*;
 import edu.caltech.palomar.instruments.ngps.dbms.NGPSdatabase;
 import edu.caltech.palomar.instruments.ngps.tables.DefaultTargetTableModel;
 import edu.caltech.palomar.instruments.ngps.tables.ExtendedTargetTableModel;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.JTree;
 /**
  *
  * @author jennifermilburn
@@ -38,7 +35,6 @@ public class TargetListParser2 {
   public ExtendedTargetTableModel     myTargetExtendedTableModel  = new ExtendedTargetTableModel();
 //  public DefaultTableModel2           myDefaultTableModel2        = new DefaultTableModel2();
   public TargetListDocumentModel      myTargetListDocumentModel   = new TargetListDocumentModel();
-  public DefaultTreeModel             myDefaultTreeModel;
   private java.lang.String            currentFileName             = new java.lang.String();
   private java.io.File                currentFile;
   private  java.lang.String TERMINATOR     = new java.lang.String("\n");
@@ -56,7 +52,6 @@ public class TargetListParser2 {
   public int                     model_type;
   public static int              DEFAULT_MODEL  = 1;
   public static int              ETC_MODEL      = 2;
-  public JTree                   myJTree;
 /*=============================================================================================
 /        TargetListParser()
 /=============================================================================================*/
@@ -85,9 +80,6 @@ public void setJEditorPane(JEditorPane newEditorPane){
 }
 public void setJTable(JTable newJTable){
    currentJTable = newJTable; 
-}
-public void setJTree(JTree newJTree){
-    myJTree = newJTree;
 }
 /*=============================================================================================
 /   commitFileToDBMS(ObservationSet current)
@@ -266,7 +258,6 @@ public int getModelType(){
           } catch (IOException e){
               System.out.printf("Problem parsing selected Target Definition File.\n" + e.toString());
           } 
-//       myJTree.setModel(myDefaultTreeModel);
 //    commitFileToDBMS(currentObservationSet);      
  }     
 /*=============================================================================================

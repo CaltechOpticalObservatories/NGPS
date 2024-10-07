@@ -6,7 +6,6 @@ package edu.caltech.palomar.instruments.ngps.object;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import javax.swing.tree.DefaultMutableTreeNode;
 
 /**
  *
@@ -24,26 +23,11 @@ public class ETCmodel extends java.lang.Object{
     private java.lang.String magref_filter  = new java.lang.String();   
     private double seeing;    
     private java.lang.String srcmodel  = new java.lang.String();
-    public static java.lang.String CHANNEL_U = "U";
-    public static java.lang.String CHANNEL_G = "G";
-    public static java.lang.String CHANNEL_R = "R";
-    public static java.lang.String CHANNEL_I = "I";
-    public DefaultMutableTreeNode etc_node;
-    public DefaultMutableTreeNode snr_node;
-    public DefaultMutableTreeNode wrange_node;
-    public DefaultMutableTreeNode wrange_low_node;
-    public DefaultMutableTreeNode wrange_high_node;
-    public DefaultMutableTreeNode channel_node;
-    public DefaultMutableTreeNode magnitude_node;
-    public DefaultMutableTreeNode magrefsystem_node;
-    public DefaultMutableTreeNode magreffilter_node;
-    public DefaultMutableTreeNode srcmodel_node;
 /*================================================================================================
 /   Constructor
 /=================================================================================================*/
  public ETCmodel(){
      initializeValues();
-     constructTreeNode();
  }   
 /*================================================================================================
 /     setSNR(double new_SNR)
@@ -58,30 +42,6 @@ public class ETCmodel extends java.lang.Object{
     setSeeing(1.25);
     setSrcmodel(" "); //-model constant
  } 
- /*================================================================================================
-/          DefaultMutableTreeNode constructTreeNode()
-/=================================================================================================*/
-public DefaultMutableTreeNode constructTreeNode(){
-    etc_node          = new DefaultMutableTreeNode("EXPOSURE TIME CALCULATOR");
-    snr_node          = new DefaultMutableTreeNode("SNR = "+SNR);
-    wrange_node       = new DefaultMutableTreeNode("WRANGE");
-    wrange_low_node   = new DefaultMutableTreeNode("WAVELENGTH LOW"+WRANGE_LOW);
-    wrange_high_node  = new DefaultMutableTreeNode("WAVELENGTH HIGH"+WRANGE_HIGH);
-    channel_node      = new DefaultMutableTreeNode("CHANNEL = "+channel);    
-    magnitude_node    = new DefaultMutableTreeNode("MAGNITUDE = "+magnitude);
-    magrefsystem_node = new DefaultMutableTreeNode("MAGNITUDE REFERENCE SYSTEM = "+magref_system);
-    magreffilter_node = new DefaultMutableTreeNode("MAGNITUDE REFERENCE FILTER = "+magref_filter);    
-    srcmodel_node     = new DefaultMutableTreeNode("SRCMODEL = "+srcmodel);
-    etc_node.add(snr_node);
-    wrange_node.add(wrange_low_node);
-    wrange_node.add(wrange_high_node);
-    etc_node.add(wrange_node);
-    etc_node.add(magnitude_node);
-    etc_node.add(magrefsystem_node);
-    etc_node.add(magreffilter_node);
-    etc_node.add(srcmodel_node);
-  return etc_node;
-}
 /*================================================================================================
 /     setSNR(double new_SNR)
 /=================================================================================================*/

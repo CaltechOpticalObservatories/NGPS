@@ -10,9 +10,6 @@ import java.sql.Timestamp;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeSelectionModel;
-import javax.swing.tree.DefaultTreeModel;
 
 /**
  *
@@ -31,49 +28,17 @@ public class ObservationSet {
    public static java.lang.String PENDING   = "PENDING";
    public static java.lang.String COMPLETED = "COMPLETED";
    public static java.lang.String RUNNING   = "RUNNING";
-   public DefaultMutableTreeNode observation_set_node;
-   public DefaultMutableTreeNode owner_node;
-   public DefaultMutableTreeNode setid_node;
-   public DefaultMutableTreeNode state_node;
-   public DefaultMutableTreeNode creation_date_node;
-   public DefaultMutableTreeNode last_updated_node;
-   public DefaultTreeModel observation_set_tree_model;
 /*================================================================================================
 /     ObservationSet()
 /=================================================================================================*/
    public ObservationSet(){
-       constructTreeNode();
    } 
-/*================================================================================================
-/     HashMap<String, Observation> getObservationHashMap()
-/=================================================================================================*/
- public DefaultTreeModel getTreeModel(){
-    return observation_set_tree_model; 
- }
 /*================================================================================================
 /     HashMap<String, Observation> getObservationHashMap()
 /=================================================================================================*/
 public  HashMap<String, Target> getObservationHashMap(){
    return observationHashMap; 
 } 
- /*================================================================================================
-/          DefaultMutableTreeNode constructTreeNode()
-/=================================================================================================*/
-public DefaultMutableTreeNode constructTreeNode(){
-    observation_set_node = new DefaultMutableTreeNode("TARGET SET = "+set_name);
-    owner_node           = new DefaultMutableTreeNode("OWNER = "+owner);
-    setid_node           = new DefaultMutableTreeNode("SET ID = "+set_id);
-    state_node           = new DefaultMutableTreeNode("STATE = "+state);
- //   creation_date_node   = new DefaultMutableTreeNode("CREATION DATE = "+creation_timestamp.toString());
- //   last_updated_node    = new DefaultMutableTreeNode("LAST UPDATE DATE = "+last_updated_node.toString());
-    observation_set_node.add(owner_node);
-    observation_set_node.add(setid_node);
-    observation_set_node.add(state_node);
-//    observation_set_node.add(creation_date_node);
-//    observation_set_node.add(last_updated_node);
-    observation_set_tree_model = new DefaultTreeModel(observation_set_node);
-  return observation_set_node;
-}
 /*================================================================================================
 /     Timestamp constructTimestamp()
 /=================================================================================================*/

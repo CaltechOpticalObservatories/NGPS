@@ -9,7 +9,6 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import edu.caltech.palomar.instruments.ngps.object.Instrument;
 import edu.caltech.palomar.instruments.ngps.object.SkyCoordinates;
-import javax.swing.tree.DefaultMutableTreeNode;
 /**
  *
  * @author jennifermilburn
@@ -28,15 +27,6 @@ public class Target extends java.lang.Object{
   public OTMmodel         otm        = new OTMmodel();
   public ETCmodel         etc        = new ETCmodel();
   private int             index;
-  public DefaultMutableTreeNode target_node;
-  public DefaultMutableTreeNode name_node;
-  public DefaultMutableTreeNode state_node;
-  public DefaultMutableTreeNode obsid_node;
-  public DefaultMutableTreeNode order_node;
-  public DefaultMutableTreeNode setid_node;
-  public DefaultMutableTreeNode target_number_node;
-  public DefaultMutableTreeNode sequence_number_node;
-  public DefaultMutableTreeNode indexes_node;
   public static java.lang.String PENDING   = "PENDING";
   public static java.lang.String COMPLETED = "COMPLETED";
   public static java.lang.String EXPOSING  = "EXPOSING";

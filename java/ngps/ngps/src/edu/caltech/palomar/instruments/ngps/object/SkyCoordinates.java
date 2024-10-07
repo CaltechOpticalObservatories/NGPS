@@ -7,7 +7,6 @@ package edu.caltech.palomar.instruments.ngps.object;
 import edu.caltech.palomar.instruments.ngps.object.*;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import javax.swing.tree.DefaultMutableTreeNode;
 import jsky.science.Coordinates;
 import jsky.coords.DMS;
 import jsky.coords.HMS;
@@ -19,7 +18,6 @@ public class SkyCoordinates extends java.lang.Object{
   transient protected PropertyChangeSupport propertyChangeListeners = new PropertyChangeSupport(this);
   private double      RA;
   private double      DEC;
-//  private String      EPOCH;
   private String      right_ascension;
   private String      declination;
   private Coordinates myCoordinates       = new Coordinates();
@@ -27,43 +25,16 @@ public class SkyCoordinates extends java.lang.Object{
   private double      OFFSET_DEC;
   private double      OFFSET_RA;
   private String      airmass_max;
-  public  DefaultMutableTreeNode  sky_node;
-  public  DefaultMutableTreeNode  ra_node;
-  public  DefaultMutableTreeNode  dec_node;
-  public  DefaultMutableTreeNode  epoch_node;
-  public  DefaultMutableTreeNode  offset_node;
-  public  DefaultMutableTreeNode  ra_offset_node;
-  public  DefaultMutableTreeNode  dec_offset_node;
 /*================================================================================================
 /        CONSTRUCTOR
 /=================================================================================================*/
 public SkyCoordinates(){
     initializeValues();
-    constructTreeNode();
 }
 public void initializeValues(){
 //    setEPOCH("J2000"); 
     setRightAscension("0:0:0.0");
     setDeclination("0:0:0.0");
-}
-/*================================================================================================
-/          DefaultMutableTreeNode constructTreeNode()
-/=================================================================================================*/
-public DefaultMutableTreeNode constructTreeNode(){
-    sky_node        = new DefaultMutableTreeNode("SKY COORDINATES");
-    ra_node         = new DefaultMutableTreeNode("RA = "+right_ascension);
-    dec_node        = new DefaultMutableTreeNode("DEC = "+declination);
-//S    epoch_node      = new DefaultMutableTreeNode("EPOCH = "+EPOCH);
-    offset_node     = new DefaultMutableTreeNode("OFFSETS");
-    ra_offset_node  = new DefaultMutableTreeNode("RA OFFSET = "+OFFSET_RA);
-    dec_offset_node = new DefaultMutableTreeNode("DEC OFFSET = "+OFFSET_DEC);
-    sky_node.add(ra_node);
-    sky_node.add(dec_node);
-//    sky_node.add(epoch_node);
-    sky_node.add(offset_node);
-    offset_node.add(ra_offset_node);
-    offset_node.add(ra_offset_node);
-  return sky_node;
 }
 /*================================================================================================
 /      setRA(double newRA)

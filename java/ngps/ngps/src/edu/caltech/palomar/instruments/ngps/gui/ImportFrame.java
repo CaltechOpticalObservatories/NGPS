@@ -138,7 +138,6 @@ public void setModelType(int model_type){
         myTargetListParser.setJEditorPane(observationTextEditorPane);
         myTargetListParser.setJTable(simpleTargetTable);
         observationTextEditorPane.setDocument(myTargetListParser.myTargetListDocumentModel.getDocument());
-//        myTargetListParser.setJTree(target_set_Tree);
         initializeTables();
         myTargetListParser.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
           public void propertyChange(java.beans.PropertyChangeEvent e) {
