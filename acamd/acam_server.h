@@ -104,6 +104,8 @@ namespace Acam {
 
       std::mutex conn_mutex;             ///< mutex to protect against simultaneous access to Accept()
 
+      std::vector<std::string> db_info;                 ///< info for constructing telemetry Database object
+
       static void new_log_day( std::string logpath );                          ///< creates a new logbook each day
       static void block_main( Acam::Server &acam, Network::TcpSocket sock );   ///< main function for blocking connection thread
       static void thread_main( Acam::Server &acam, Network::TcpSocket sock );  ///< main function for all non-blocked threads
@@ -112,6 +114,7 @@ namespace Acam {
       void doit(Network::TcpSocket sock);                                      ///< the workhorse of each thread connetion
       void exit_cleanly();                                                     ///< exit
       long configure_acamd();                                                  ///< read and apply the configuration file
+      long configure_telemetry();                                              ///< read and apply telem configuration
 
       inline long initialize_python_objects() {                                ///< allows for initializing Python objects by the child process
         return( this->interface.initialize_python_objects() );

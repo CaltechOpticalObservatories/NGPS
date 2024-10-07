@@ -266,6 +266,105 @@ namespace Acam {
   /***** Acam::Server::configure_acam *****************************************/
 
 
+  /***** Acam::Server::configure_telemetry ************************************/
+  /**
+   * @brief      read and apply the configuration file for the telemetry
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Server::configure_telemetry() {
+    std::string function = "Acam::Server::configure_telemetry";
+    std::stringstream message;
+    int applied=0;
+    long error;
+
+    std::string db_host;
+    std::string db_port;
+    std::string db_user;
+    std::string db_pass;
+    std::string db_schema;
+    std::string db_table;
+
+    this->db_info.clear();
+
+    // loop through the entries in the configuration file, stored in config class
+    //
+    for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      // DB_HOST
+      if (config.param[entry] == "DB_HOST") {
+        db_host = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // DB_PORT
+      if (config.param[entry] == "DB_PORT") {
+        try { std::stoi( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing DB_PORT: " << e.what();
+          logwrite(function, message.str());
+          return(ERROR);
+        }
+        db_port = config.arg[entry];
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( DAEMON_NAME, function, message.str() );
+        applied++;
+      }
+
+      // DB_USER
+      if (config.param[entry] == "DB_USER") {
+        db_user = config.arg[entry];
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( DAEMON_NAME, function, message.str() );
+        applied++;
+      }
+
+      // DB_PASS
+      if (config.param[entry] == "DB_PASS") {
+        db_pass = config.arg[entry];
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( DAEMON_NAME, function, message.str() );
+        applied++;
+      }
+
+      // DB_SCHEMA
+      if (config.param[entry] == "DB_SCHEMA") {
+        db_schema = config.arg[entry];
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( DAEMON_NAME, function, message.str() );
+        applied++;
+      }
+
+      // DB_TABLE
+      if (config.param[entry] == "DB_TABLE") {
+        db_table = config.arg[entry];
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( DAEMON_NAME, function, message.str() );
+        applied++;
+      }
+
+    } // end loop through the entries in the configuration file
+
+    this->db_info = { db_host, db_port, db_user, db_pass, db_schema, db_table };
+
+    message.str("");
+    if (applied!=6) {
+      message << "ERROR: expected 6 but ";
+      error = ERROR;
+    }
+    else {
+      error = NO_ERROR;
+    }
+    message << "applied " << applied << " configuration lines to thermald";
+    logwrite(function, message.str());
+
+    return error;
+  }
+  /***** Acam::Server::configure_telemetry ************************************/
+
+
   /***** new_log_day **********************************************************/
   /**
    * @brief      creates a new logbook each day

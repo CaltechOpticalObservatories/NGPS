@@ -133,6 +133,7 @@ int main(int argc, char **argv) {
   logwrite(function, message.str());
 
   if (ret==NO_ERROR) ret=acamd.configure_acamd();          // get needed values out of read-in configuration file for the daemon
+  if (ret==NO_ERROR) ret=acamd.configure_telemetry();      // get needed values out of read-in configuration file for telemetry
 
   if (ret==NO_ERROR) ret=acamd.interface.configure_interface( acamd.config );
 
