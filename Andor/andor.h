@@ -212,8 +212,6 @@ namespace Andor {
    *
    */
   class SDK : public AndorBase {
-    private:
-      bool initialized;
     public:
       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
       long _GetAvailableCameras( int &number ) override;
@@ -263,13 +261,13 @@ namespace Andor {
    */
   class Emulator : public AndorBase {
     private:
-      bool initialized;
+      bool is_initialized;
       double exptime;
       int serial_number;
 
     public:
-      Emulator() : initialized(false), exptime(0), serial_number( -1 ) { }
-      Emulator( int sn ) : initialized(false), exptime(0), serial_number( sn ) { }
+      Emulator() : is_initialized(false), exptime(0), serial_number( -1 ) { }
+      Emulator( int sn ) : is_initialized(false), exptime(0), serial_number( sn ) { }
 
       inline double get_exptime() { return this->exptime; }
 
@@ -325,7 +323,10 @@ namespace Andor {
    */
   class Interface {
     private:
-      bool initialized;           ///< is the Andor SDK initialized?
+      std::atomic<bool> is_sdk_initialized;
+      std::atomic<bool> is_andor_open;  ///< is the Andor open?
+      std::atomic<bool> is_acquiring;   ///< is acquisition in progress?
+
       int  serial;                ///< serial number to use
       bool andor_emulated;        ///< is the Andor emulator in use?
       Andor::AndorBase* andor;    ///< pointer to the Andor object to use
@@ -333,6 +334,7 @@ namespace Andor {
       std::mutex image_data_mutex;
       uint16_t* image_data;
       std::atomic<bool> err;
+      std::map<int,int> device_map;  ///< map of device numbers indexed by serial number
 
     public:
       Andor::SDK sdk;             ///< object for the real Andor SDK
@@ -344,7 +346,7 @@ namespace Andor {
        * @brief      default Interface constructor
        *
        */
-      Interface() : initialized( false ), serial( -1 ), andor_emulated( false ),
+      Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( false ),
                     andor( &sdk ), image_data( nullptr ), err( false ), emulator( -1 ) { }
       /***** Andor::Interface::Interface **************************************/
 
@@ -353,7 +355,7 @@ namespace Andor {
        * @brief      Interface constructor accepts serial number
        *
        */
-      Interface( int sn ) : initialized( false ), serial( sn ), andor_emulated( false ),
+      Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
                             andor( &sdk ), image_data( nullptr ), err( false ), emulator( sn ) { }
       /***** Andor::Interface::Interface **************************************/
 
@@ -413,7 +415,7 @@ namespace Andor {
 
       inline bool is_emulated() { return this->andor_emulated; }
 
-      inline bool is_initialized() { return this->initialized; };
+      inline bool is_initialized() { return this->is_andor_open; }
 
       long simulate_frame( std::string name_in );
       long simulate_frame( std::string name_in, const bool ismex, const int simsize );

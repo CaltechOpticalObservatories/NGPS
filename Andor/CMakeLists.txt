@@ -10,7 +10,7 @@ set( ANDOR_DIR ${PROJECT_BASE_DIR}/Andor )
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -ansi -O0 -Wno-variadic-macros -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )

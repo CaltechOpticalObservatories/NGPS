@@ -777,6 +777,13 @@ namespace Andor {
       case DRV_ERROR_PAGELOCK:  message << "ERROR Unable to acquire lock on requested memory"; break;
       case DRV_USBERROR:        message << "ERROR Unable to detect USB device or not USB2.0";  break;
       case DRV_ERROR_NOCAMERA:  message << "ERROR no camera found";                            break;
+
+      // DRV_NOT_AVAILABLE is not a documented return code for Initialize() but it can
+      // return this code and experience has shown that when it does, the only
+      // recovery has been to power cycle the Andor camera.
+      //
+      case DRV_NOT_AVAILABLE:   message << "ERROR driver not available !!reboot camera!!";     break;
+
       default:                  message << "ERROR unrecognized return code: " << ret;          break;
     }
 
@@ -1097,7 +1104,8 @@ namespace Andor {
   /***** Andor::Interface::open ***********************************************/
   /**
    * @brief      open a connection to the Andor
-   * @param[in]  args  optional arg is the camera index to open { 0:ncameras-1 }
+   * @param[in]  args  Optional arg is the camera serial number to open. If not
+   *                   specified then open the first device found.
    * @return     ERROR or NO_ERROR
    *
    */
@@ -1106,68 +1114,21 @@ namespace Andor {
     std::stringstream message;
     long error=NO_ERROR;
     int ncameras=0;            // number of cameras
-    int index=-1;              // camera index given to
+    int index=-1;              // camera index number {0,1,2,...}
     int handle=0;              // camera handle
     int serial=-1;             // camera serial number
-    std::vector<int> serials;  // vector of all serial numbers
 
     // If there was an argument then get the camera index from it
     //
     if ( !args.empty() ) {
-      try { index = std::stoi( args ); }
-      catch ( std::invalid_argument & ) {
-        message.str(""); message << "ERROR: unable to convert requested index " << args << " to integer";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      catch ( std::out_of_range & ) {
-        message.str(""); message << "ERROR: requested index " << args << " outside integer range";
+      try { serial = std::stoi( args ); }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing serial number " << args << ": " << e.what();
         logwrite( function, message.str() );
         return ERROR;
       }
     }
-    else index=-1;   // indicates a specific index was not requested
-
-    // Get the number of installed cameras.
-    // This will be used to check the requested index and subsequently set
-    // the active camera handle.
-    //
-    error = ( andor ? andor->_GetAvailableCameras( ncameras ) : ERROR );
-    if ( error == NO_ERROR ) {
-      message.str(""); message << "detected " << ncameras << " cameras";
-      logwrite( function, message.str() );
-    }
-    else logwrite( function, "ERROR reading number of cameras" );
-
-    // Get the serial numbers of all installed cameras
-    //
-    for ( int idx=0; idx < ncameras-1; idx++ ) {
-      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( idx, &handle ) : ERROR );
-      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( serial ) : ERROR );
-      if (error==NO_ERROR) {
-        serials.push_back( serial );
-        message.str(""); message << "found s/n " << serial << " index " << idx;
-        logwrite( function, message.str() );
-      }
-    }
-
-    // If specific index was requested ( != -1 ) check that it's within range of ncameras.
-    //
-    if ( index != -1 && index > ncameras ) {
-      message.str(""); message << "ERROR requested index " << index << " must be in range {0:" << (ncameras-1) << "}";
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    // Set the current camera handle
-    //
-    if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( index, &handle ) : ERROR );
-    if (error==NO_ERROR) error = ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );
-    if (error!=NO_ERROR) {
-      message.str(""); message << "ERROR setting camera handle for camera " << index;
-      logwrite( function, message.str() );
-      return error;
-    }
+    else index=0;    // no serial number opens the first (only?) device
 
     char info[128];
     error = ( andor ? andor->_GetVersionInfo( AT_SDKVersion, info, 128 ) : ERROR );
@@ -1180,13 +1141,10 @@ namespace Andor {
     // Initialize the Andor SDK
     //
     logwrite( function, "initializing Andor SDK" );
-
-    if (error==NO_ERROR) error = ( andor ? andor->_Initialize() : ERROR );
+    error = ( andor ? andor->_Initialize() : ERROR );
 
     if ( error != NO_ERROR ) {
-      this->initialized = false;
-      message.str(""); message << "ERROR initializing Andor SDK for camera " << index;
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR initializing Andor SDK" );
       return error;
     }
 
@@ -1202,9 +1160,57 @@ namespace Andor {
     //
     std::this_thread::sleep_for( std::chrono::seconds(3) );
 
-    this->initialized = true;
+    // Get the number of installed cameras
+    //
+    error = ( andor ? andor->_GetAvailableCameras( ncameras ) : ERROR );
+    if ( error == NO_ERROR ) {
+      message.str(""); message << "detected " << ncameras << " cameras";
+      logwrite( function, message.str() );
+    }
+    else logwrite( function, "ERROR reading number of cameras" );
+
+    // Get the serial numbers of all installed cameras
+    //
+    for ( int idx=0; idx < ncameras; idx++ ) {
+      int sn;
+      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( idx, &handle ) : ERROR );
+      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( sn ) : ERROR );
+      if (error==NO_ERROR) {
+        this->device_map[sn] = idx;
+        message.str(""); message << "found s/n " << sn << " index " << idx;
+        logwrite( function, message.str() );
+      }
+    }
+
+    // Get the index for the requested serial number, if requested.
+    //
+    if ( serial != -1 ) {
+      if ( this->device_map.find( serial ) != this->device_map.end() ) {
+        index = this->device_map[serial];
+      }
+      else {
+        message.str(""); message << "ERROR requested serial number " << serial << " not found";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+
+    // Set the current camera handle
+    //
+    if (error==NO_ERROR) {logwrite(function,"GetCameraHandle");error = ( andor ? andor->_GetCameraHandle( index, &handle ) : ERROR );}
+    if (error==NO_ERROR) {logwrite(function,"SetCurrentCamera");error = ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );}
+    if (error!=NO_ERROR) {
+      message.str(""); message << "ERROR setting camera handle for camera " << index;
+      logwrite( function, message.str() );
+      return error;
+    }
 
     error = ( andor ? andor->_GetCameraSerialNumber( this->camera_info.serial_number ) : ERROR );
+
+    message.str(""); message << "opened s/n " << this->camera_info.serial_number << " index " << index;
+    logwrite( function, message.str() );
+
+    this->is_andor_open = true;
 
     // collect camera information
     //
@@ -1254,8 +1260,13 @@ namespace Andor {
     std::string function = "Andor::Interface::close";
     std::stringstream message;
 
+    if ( this->is_acquiring ) {
+      logwrite( function, "ERROR cannot close while acquisition in progress" );
+      return ERROR;
+    }
+
+    this->is_andor_open=false;
     ShutDown();
-    this->initialized = false;
 
     return NO_ERROR;
   }
@@ -1272,8 +1283,8 @@ namespace Andor {
     std::string function = "Andor::Interface::start_acquisition";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1296,8 +1307,8 @@ namespace Andor {
     std::string function = "Andor::Interface::shutter";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1322,8 +1333,8 @@ namespace Andor {
     std::string function = "Andor::Interface::get_detector";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1342,8 +1353,8 @@ namespace Andor {
     std::string function = "Andor::Interface::get_status";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1374,15 +1385,15 @@ namespace Andor {
     std::string function = "Andor::Interface::get_speeds";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
     long error = NO_ERROR;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1459,8 +1470,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_hsspeed";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1507,8 +1518,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_vsspeed";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1566,8 +1577,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_image";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1608,8 +1619,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_binning";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1645,8 +1656,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_imflip";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1686,8 +1697,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_imrot";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1722,8 +1733,8 @@ namespace Andor {
     std::string function = "Andor::Interface::get_emgain_range";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1744,8 +1755,8 @@ namespace Andor {
     std::string function = "Andor::Interface::get_emgain";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1773,8 +1784,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_output_amplifier";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1810,8 +1821,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_emgain";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1855,8 +1866,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_temperature";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1916,8 +1927,8 @@ namespace Andor {
     std::string function = "Andor::Interface::get_temperature";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1948,8 +1959,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_read_mode";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -1992,8 +2003,8 @@ namespace Andor {
     std::string function = "Andor::Interface::set_acquisition_mode";
     std::stringstream message;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
@@ -2036,24 +2047,34 @@ namespace Andor {
     std::stringstream message;
     long error = NO_ERROR;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
     // Make sure the camera is in single scan mode
     //
-    if ( this->camera_info.acqmode != 1 ) error = this->set_acquisition_mode( 1 );
+    if ( this->camera_info.acqmode != 1 && this->set_acquisition_mode( 1 ) != NO_ERROR ) {
+      logwrite( function, "ERROR not in single scan mode" );
+      return ERROR;
+    }
+
+    // BoolState constructor sets is_acquiring (true)
+    // and clears (false) when it goes out of scope.
+    {
+    BoolState acquire_state( this->is_acquiring );
 
     // Start Acquisition
     //
-    if ( error==NO_ERROR ) error = this->start_acquisition();
+    error = this->start_acquisition();
 
     // Wait for acquisition
     //
     int status;
     error = ( andor ? andor->_GetStatus( status ) : ERROR );
     while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = ( andor ? andor->_GetStatus( status ) : ERROR );
+    }
+    // acquire_state cleared
 
     // Get the acquired image
     //
@@ -2309,8 +2330,8 @@ return NO_ERROR;
     double exptime_try=NAN;
     long error = NO_ERROR;
 
-    if ( ! is_initialized() ) {
-      logwrite( function, "ERROR camera not initialized" );
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
 
