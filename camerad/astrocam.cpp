@@ -855,6 +855,10 @@ namespace AstroCam {
                                  << (this->controller[dev].connected ? this->controller[dev].channel : "" );
         logwrite(function, message.str());
 
+        // If not connected then this should remove it from the devnums list
+        //
+        if ( !this->controller[dev].connected ) this->do_disconnect_controller(dev);
+
         // Now that controller is open, update it with the current image size
         // that has been stored in the class. Create an arg string in the same
         // format as that found in the config file.

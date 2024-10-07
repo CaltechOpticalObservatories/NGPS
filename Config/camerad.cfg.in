@@ -32,8 +32,7 @@ ARCSIM_NUMDEV=0
 #CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
 #CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
 CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
-CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
-#CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
 
 # -----------------------------------------------------------------------------
 # This defines the default image size and binning for each controller.
