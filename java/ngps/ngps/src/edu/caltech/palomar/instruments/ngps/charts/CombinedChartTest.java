@@ -269,7 +269,7 @@ public void setDBMS(NGPSdatabase new_dbms){
  //       TickUnitSource units = NumberAxis.createIntegerTickUnits();
  //       domainAxis
  //       domainAxis.setTickMarkPosition(DateTickMarkPosition.MIDDLE);
-        NumberAxis rangeAxis = new NumberAxis("Value");
+        NumberAxis rangeAxis = new NumberAxis("Airmass");
         rangeAxis.setRange(1.0, 3.0);
 
         // add a second dataset and renderer...
