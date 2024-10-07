@@ -415,7 +415,7 @@ namespace Andor {
 
       inline bool is_emulated() { return this->andor_emulated; }
 
-      inline bool is_initialized() { return this->is_andor_open; }
+      inline bool is_open() { return this->is_andor_open; }
 
       long simulate_frame( std::string name_in );
       long simulate_frame( std::string name_in, const bool ismex, const int simsize );

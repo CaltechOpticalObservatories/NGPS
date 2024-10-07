@@ -72,6 +72,7 @@ namespace Acam {
   /***** Acam::Camera::open ***************************************************/
   /**
    * @brief      open connection to Andor and initialize SDK
+   * @param[in]  args  Andor s/n to open
    * @return     ERROR or NO_ERROR
    * 
    */
@@ -80,12 +81,15 @@ namespace Acam {
     std::stringstream message;
     long error=NO_ERROR;
 
-    if ( this->andor.is_initialized() ) {
+    if ( this->andor.is_open() ) {
       logwrite( function, "already initialized" );
     }
     else {
       error = this->andor.open( args );
     }
+
+    logwrite( function, (error==NO_ERROR ? "camera open" : "ERROR opening camera") );
+
     return error;
   }
   /***** Acam::Camera::open ***************************************************/
@@ -154,7 +158,7 @@ namespace Acam {
 
     // Andor must be connected
     //
-    if ( !this->andor.is_initialized() ) {
+    if ( !this->andor.is_open() ) {
       logwrite( function, "ERROR no connection to camera" );
       return ERROR;
     }
@@ -238,7 +242,7 @@ namespace Acam {
 
     // Andor must be connected
     //
-    if ( !this->andor.is_initialized() ) {
+    if ( !this->andor.is_open() ) {
       logwrite( function, "ERROR no connection to camera" );
       return ERROR;
     }
@@ -324,7 +328,7 @@ namespace Acam {
 
     // Andor must be connected
     //
-    if ( !this->andor.is_initialized() ) {
+    if ( !this->andor.is_open() ) {
       logwrite( function, "ERROR no connection to camera" );
       return ERROR;
     }
@@ -428,7 +432,7 @@ namespace Acam {
       retstring = ACAMD_GAIN;
       retstring.append( " [ <gain> ]\n" );
       retstring.append( "   Set or get CCD Gain.\n" );
-      if ( this->andor.is_initialized() ) {
+      if ( this->andor.is_open() ) {
         int low, high;
         this->andor.get_emgain_range( low, high );
         retstring.append( "   Select <gain> = 1 for conventional or in range { " );
@@ -448,7 +452,7 @@ namespace Acam {
 
     // Andor must be connected
     //
-    if ( !this->andor.is_initialized() ) {
+    if ( !this->andor.is_open() ) {
       logwrite( function, "ERROR no connection to camera" );
       retstring="not_open";
       return ERROR;
@@ -575,7 +579,7 @@ namespace Acam {
       retstring.append( " [ <hori> <vert> ]\n" );
       retstring.append( "   Set or get CCD clocking speeds for horizontal <hori> and vertical <vert>\n" );
       retstring.append( "   If speeds are omitted then the current speeds are returned.\n" );
-      if ( this->andor.is_initialized() ) {
+      if ( this->andor.is_open() ) {
         retstring.append( "   Current amp type is " );
         retstring.append( ( this->andor.camera_info.amptype == Andor::AMPTYPE_EMCCD ? "EMCCD\n" : "conventional\n" ) );
         retstring.append( "   Select <hori> from {" );
@@ -600,7 +604,7 @@ namespace Acam {
 
     // Andor must be connected
     //
-    if ( !this->andor.is_initialized() ) {
+    if ( !this->andor.is_open() ) {
       logwrite( function, "ERROR no connection to camera" );
       return ERROR;
     }
@@ -675,7 +679,7 @@ namespace Acam {
       retstring = ACAMD_TEMP;
       retstring.append( " [ <setpoint> ]\n" );
       retstring.append( "  Set or get camera temperature in integer degrees C,\n" );
-      if ( this->andor.is_initialized() ) {
+      if ( this->andor.is_open() ) {
         retstring.append( "  where <setpoint> is in range { " );
         retstring.append( std::to_string( this->andor.camera_info.temp_min ) );
         retstring.append( "  " );
@@ -694,7 +698,7 @@ namespace Acam {
 
     // Andor must be connected
     //
-    if ( !this->andor.is_initialized() ) {
+    if ( !this->andor.is_open() ) {
       logwrite( function, "ERROR no connection to camera" );
       return ERROR;
     }
@@ -1423,10 +1427,22 @@ namespace Acam {
         //
         if ( caseCompareString( config.arg[entry], "emulate" ) ) {
           this->camera.andor.andor_emulator( true );
+          applied++;
         }
         else {
           this->camera.andor.andor_emulator( false );
+          try {
+            this->camera.andor.camera_info.serial_number=std::stoi(config.arg[entry]);
+            applied++;
+          }
+          catch ( const std::exception &e ) {
+            message.str(""); message << "ERROR parsing ANDOR_SN: " << e.what();
+            logwrite( function, message.str() );
+            error=ERROR;
+          }
         }
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
       }
 
       if ( starts_with( config.param[entry], "TCSD_PORT" ) ) {
@@ -1597,10 +1613,13 @@ namespace Acam {
     }
     else if ( args == "?" ) {
       retstring = ACAMD_OPEN;
-      retstring.append( " [ [motion] [camera [args]] ]\n" );
+      retstring.append( " [ [motion] [camera [sn]] ]\n" );
       retstring.append( "  Open connections to all devices (by default).\n" );
       retstring.append( "  Optionally indicate motion | camera to open only the indicated component.\n" );
-      retstring.append( "  The camera component can take an optional arg to pass to the camera.\n" );
+      retstring.append( "  The camera component can take an optional serial number to specify which\n" );
+      retstring.append( "  Andor to open, which overrides \"ANDOR_SN="
+                           +std::to_string(this->camera.andor.camera_info.serial_number)
+                           +"\" from config file.");
       return HELP;
     }
     else { // ...otherwise look at the arg(s):
@@ -1655,12 +1674,21 @@ namespace Acam {
       return ERROR;
     }
 
+    // Open motion
+    //
     if ( component == "all" || component == "motion" ) {
       error |= this->motion.open();
     }
 
+    // Open camera
+    //
     if ( component == "all" || component == "camera" ) {
-      if ( this->camera.open( camarg ) == NO_ERROR ) {    // open the camera
+      // If serial number not specified as an arg then open the s/n specified
+      // in the config file.
+      //
+      if ( camarg.empty() ) camarg = std::to_string( this->camera.andor.camera_info.serial_number );
+
+      if ( this->camera.open( camarg ) == NO_ERROR ) {
         error |= this->framegrab( "start", retstring );   // start frame grabbing if open succeeds
       }
       else error=ERROR;
@@ -1721,11 +1749,11 @@ namespace Acam {
 
     if ( component == "all" ) {
       state  = this->motion.is_open();
-      state &= this->camera.andor.is_initialized();
+      state &= this->camera.andor.is_open();
     }
     else
     if ( component == "camera" ) {
-      state  = this->camera.andor.is_initialized();
+      state  = this->camera.andor.is_open();
     }
     else
     if ( component == "motion" ) {
@@ -1794,14 +1822,24 @@ namespace Acam {
       return ERROR;
     }
 
+    // close motion
+    //
     if ( component == "all" || component == "motion" ) {
 //    error |= this->motion.send_command( "close" );  // just needed for the emulator
       error |= this->motion.close();
     }
 
+    // close camera
+    //
     if ( component == "all" || component == "camera" ) {
+      // disable frame grabbing
+      // this won't return until framegrabbing has stopped (or timeout)
+      //
       std::string dontcare;
       error |= this->framegrab( "stop", dontcare );
+
+      // close the Andor
+      //
       error |= this->camera.close();
     }
 
@@ -1911,7 +1949,6 @@ namespace Acam {
     else {
       this->tcs_online.store( false );
     }
-
     return error;
   }
   /***** Acam::Interface::tcs_init ********************************************/
@@ -2032,6 +2069,23 @@ namespace Acam {
 
     std::thread( dothread_framegrab, std::ref(*this), whattodo, sourcefile ).detach();
 
+    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes.
+    // Always wait a minimum of 1 second in case exptime is 0.
+    //
+    if ( whattodo == "stop" ) {
+      auto start = std::chrono::steady_clock::now();
+      bool timedout=false;
+      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*camera.exptime()), 1.0 ) );
+      while ( this->is_framegrab_running ) {
+        auto now = std::chrono::steady_clock::now();
+        if ( now - start > timeout_time ) {
+          timedout=true;
+          break;
+        }
+        std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+      }
+      if ( timedout ) logwrite( function, "ERROR timeout waiting for framegrab to stop" );
+    }
     return error;
   }
   /***** Acam::Interface::framegrab *******************************************/

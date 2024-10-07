@@ -129,7 +129,7 @@ namespace Slicecam {
     if ( which.empty() ) {
       long ret;
       for ( const auto &pair : this->andor ) {
-        if ( !pair.second->is_initialized() ) {
+        if ( !pair.second->is_open() ) {
           if ( ( ret=pair.second->open( args )) != NO_ERROR ) {
             message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
                                      << " S/N " << pair.second->camera_info.serial_number;
@@ -150,7 +150,7 @@ namespace Slicecam {
       }
       // then open only that camera
       //
-      if ( !this->andor[which]->is_initialized() ) error = this->andor[which]->open( args );
+      if ( !this->andor[which]->is_open() ) error = this->andor[which]->open( args );
       if ( error != NO_ERROR ) {
         message.str(""); message << "ERROR opening slicecam " << this->andor[which]->camera_info.camera_name
                                  << " S/N " << this->andor[which]->camera_info.serial_number;
@@ -284,7 +284,7 @@ namespace Slicecam {
     // all configured Andors must have been initialized
     //
     for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_initialized() ) {
+      if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
@@ -396,7 +396,7 @@ namespace Slicecam {
     // all configured Andors must have been initialized
     //
     for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_initialized() ) {
+      if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
@@ -509,7 +509,7 @@ namespace Slicecam {
     // all configured Andors must have been initialized
     //
     for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_initialized() ) {
+      if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
@@ -659,7 +659,7 @@ namespace Slicecam {
       retstring.append( " [ <gain> ]\n" );
       retstring.append( "   Set or get CCD Gain.\n" );
       if ( !this->andor.empty() ) {
-        if ( this->andor.begin()->second->is_initialized() ) {
+        if ( this->andor.begin()->second->is_open() ) {
           int low, high;
           this->andor.begin()->second->get_emgain_range( low, high );
           retstring.append( "   Select <gain> = 1 for conventional or in range { " );
@@ -690,7 +690,7 @@ namespace Slicecam {
     // all configured Andors must have been initialized
     //
     for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_initialized() ) {
+      if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
@@ -821,7 +821,7 @@ namespace Slicecam {
       retstring.append( " [ <hori> <vert> ]\n" );
       retstring.append( "   Set or get CCD clocking speeds for horizontal <hori> and vertical <vert>\n" );
       retstring.append( "   If speeds are omitted then the current speeds are returned.\n" );
-      if ( !this->andor.empty() && this->andor.begin()->second->is_initialized() ) {
+      if ( !this->andor.empty() && this->andor.begin()->second->is_open() ) {
         auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
         retstring.append( "   Current amp type is " );
         retstring.append( ( cam->camera_info.amptype == Andor::AMPTYPE_EMCCD ? "EMCCD\n" : "conventional\n" ) );
@@ -857,7 +857,7 @@ namespace Slicecam {
     // all configured Andors must have been initialized
     //
     for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_initialized() ) {
+      if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
@@ -940,7 +940,7 @@ namespace Slicecam {
       retstring = SLICECAMD_TEMP;
       retstring.append( " [ <setpoint> ]\n" );
       retstring.append( "  Set or get camera temperature in integer degrees C,\n" );
-      if ( !this->andor.empty() && this->andor.begin()->second->is_initialized() ) {
+      if ( !this->andor.empty() && this->andor.begin()->second->is_open() ) {
         auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
         retstring.append( "  where <setpoint> is in range { " );
         retstring.append( std::to_string( cam->camera_info.temp_min ) );
@@ -970,7 +970,7 @@ namespace Slicecam {
     // all configured Andors must have been initialized
     //
     for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_initialized() ) {
+      if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
@@ -1308,7 +1308,7 @@ namespace Slicecam {
     //
     if ( which.empty() ) {
       for ( const auto &pair : this->camera.andor ) {
-        state |= pair.second->is_initialized();
+        state |= pair.second->is_open();
       }
     }
     else {
@@ -1321,7 +1321,7 @@ namespace Slicecam {
         retstring="invalid_argument";
         return ERROR;
       }
-      state  = this->camera.andor[which]->is_initialized();
+      state  = this->camera.andor[which]->is_open();
     }
 
     retstring = ( state ? "true" : "false" );
