@@ -172,8 +172,8 @@
     // set the offset rates
     //
     if ( error==NO_ERROR && connected_to_tcs && !which.empty() ) {
-//    message.str(""); message << "MRATES " << seq.tcs_offsetrate_ra << " " << seq.tcs_offsetrate_dec;
-      message.str(""); message << "MRATES " << 45 << " " << 45;  // TODO read from config file
+//    message.str(""); message << TCSD_OFFSETRATE << " " << seq.tcs_offsetrate_ra << " " << seq.tcs_offsetrate_dec;
+      message.str(""); message << TCSD_OFFSETRATE << " " << 45 << " " << 45;  // TODO read from config file
       error  = this->client.send( message.str(), reply );
     }
 

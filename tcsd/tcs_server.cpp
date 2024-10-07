@@ -718,6 +718,8 @@ namespace TCS {
           logwrite( function, message.str() );
         }
 
+        if ( polling ) retstring.append("\n");
+
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
