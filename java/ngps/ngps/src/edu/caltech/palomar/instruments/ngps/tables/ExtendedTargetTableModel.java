@@ -249,8 +249,8 @@ public void reorder(int[] fromIndex, int toIndex){
      current_target.instrument.setBIN_SPEC((Integer)current.get(12));
      current_target.instrument.setBIN_SPACE((Integer)current.get(13));
      current_target.instrument.setRequestedSlitAngle((String)current.get(14));
-     current_target.etc.setWRANGE_LOW((Integer)current.get(15));
-     current_target.etc.setWRANGE_HIGH((Integer)current.get(16));
+     current_target.etc.setWRANGE_LOW((Float)current.get(15));
+     current_target.etc.setWRANGE_HIGH((Float)current.get(16));
      current_target.etc.setChannel((String)current.get(17));
      current_target.etc.setMagnitude((Double)current.get(18));
      current_target.etc.setMagref_system((String)current.get(19));
@@ -263,6 +263,7 @@ public void reorder(int[] fromIndex, int toIndex){
 /         getRecord(int recordNumber)
 /=================================================================================================*/
   public synchronized Target getRecord(int recordNumber) {
+      
      Target current = vector_to_target(recordNumber,getDataVector().get(recordNumber));
     return current;
   }
@@ -391,10 +392,10 @@ public void reorder(int[] fromIndex, int toIndex){
        selectedRow.instrument.setRequestedSlitAngle(((java.lang.String)value));
     } 
     if(col == 15){
-       selectedRow.etc.setWRANGE_LOW(((java.lang.Integer)value).intValue());
+       selectedRow.etc.setWRANGE_LOW(((java.lang.Float)value).floatValue());
     }      
     if(col == 16){
-       selectedRow.etc.setWRANGE_HIGH(((java.lang.Integer)value).intValue());
+       selectedRow.etc.setWRANGE_HIGH(((java.lang.Float)value).floatValue());
     }     
     if(col == 17){
        selectedRow.etc.setChannel(((java.lang.String)value));
