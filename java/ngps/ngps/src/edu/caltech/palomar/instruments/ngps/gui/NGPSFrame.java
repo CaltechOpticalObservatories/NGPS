@@ -1542,6 +1542,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         deleteMenuItem = new javax.swing.JMenuItem();
         new_target_from_databaseMenuItem = new javax.swing.JMenuItem();
         jMenuItem1 = new javax.swing.JMenuItem();
+        resetTargetMenuItem = new javax.swing.JMenuItem();
         viewMenu = new javax.swing.JMenu();
         zoomInMenuItem = new javax.swing.JMenuItem();
         zoomOutMenuItem = new javax.swing.JMenuItem();
@@ -2017,7 +2018,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jLabel1)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addGroup(detailsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jLabel3)
                     .addComponent(jLabel5))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -2248,6 +2249,14 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
             }
         });
         editMenu.add(jMenuItem1);
+
+        resetTargetMenuItem.setText("Reset target state");
+        resetTargetMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                resetTargetMenuItemActionPerformed(evt);
+            }
+        });
+        editMenu.add(resetTargetMenuItem);
 
         mainMenuBar.add(editMenu);
 
@@ -2884,6 +2893,11 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
         of = new OpenFrame(dbms, dbms.getOWNER());
     }//GEN-LAST:event_jMenuItem2ActionPerformed
 
+    private void resetTargetMenuItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_resetTargetMenuItemActionPerformed
+         Target selected_target = dbms.myTargetDBMSTableModel.getRecord(selected_table_row);   
+         selected_target.setSTATE("PENDING");
+    }//GEN-LAST:event_resetTargetMenuItemActionPerformed
+
     private static class MyProgressUI extends BasicProgressBarUI {
         private Rectangle r = new Rectangle();
 
@@ -3041,6 +3055,7 @@ public HashMap<String, String> createUserPrompt(javax.swing.JFrame frame) {
     private javax.swing.JMenuItem quick_startMenuItem;
     private javax.swing.JMenuItem quitMenuItem;
     private javax.swing.JMenuItem reportBugMenuItem;
+    private javax.swing.JMenuItem resetTargetMenuItem;
     private javax.swing.JMenuItem saveMenuItem;
     private javax.swing.JMenuItem save_asMenuItem;
     private javax.swing.JTextField seeingTextField;

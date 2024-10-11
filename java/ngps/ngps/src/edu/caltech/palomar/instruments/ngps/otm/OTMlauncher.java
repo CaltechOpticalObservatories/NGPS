@@ -495,6 +495,11 @@ public void readOTMoutput(){
              current =  parseOTMRecord(current,header_list,current_line);
              myOTMTableModel.addRecord(current);
              java.lang.String flags = current.otm.getOTMflag();
+             
+             // don't touch completed targets
+             if(current.getSTATE().toUpperCase().matches("COMPLETED")){ // set by Sequencer
+                 continue;
+             }
 //             System.out.println(flags);
              current.setSTATE("PENDING");
              dbms.myTargetDBMSTableModel.fireTableDataChanged();
