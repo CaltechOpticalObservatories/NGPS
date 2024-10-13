@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef THERMAL_INTERFACE_H
-#define THERMAL_INTERFACE_H
+#pragma once
 
 #include "network.h"
 #include "logentry.h"
@@ -25,6 +24,11 @@
 #include <mutex>
 #include <thread>
 
+#include <fcntl.h>    // controls like O_RDWR
+#include <unistd.h>   // write(), read(), close()
+#include <termios.h>  // terminal control options
+#include <cstring>    // memset
+
 /***** Thermal ****************************************************************/
 /**
  * @namespace Thermal
@@ -32,6 +36,34 @@
  *
  */
 namespace Thermal {
+
+
+  /***** Thermal::Campbell ****************************************************/
+  /**
+   * @class  Campbell
+   * @brief  Campbell interface class
+   *
+   * This class defines the interface for a Campbell device.
+   *
+   */
+  class Campbell {
+    private:
+      int fd;              ///< for serial connection
+      std::string device;  ///< tty device name
+
+    public:
+      Campbell() : fd(-1) { }
+
+      void set_device( const std::string dev ) { this->device=dev; }
+
+      std::map<int, std::string> sensor_names;       ///< STL map of sensor_names indexed by Campbell channel number
+      std::map<std::string, mysqlx::Value> datamap;  ///< STL map of sensor values indexed by sensor name
+
+      long open_device();   ///< open serial connection to CR1000
+      long close_device();  ///< close serial connection to CR1000
+      long read_data();     ///< trigger CR1000 to send data, then read it
+  };
+  /***** Thermal::Campbell ****************************************************/
 
 
   /***** Thermal::Lakeshore ***************************************************/
@@ -82,9 +114,11 @@ namespace Thermal {
 
       std::map<int, Thermal::Lakeshore> lakeshore;      ///< STL map of all Lakeshores indexed by LKS#
 
-      std::map<std::string, std::string> lakeshoredata; ///< STL map of Lakeshore readings indexed by label
-      std::map<std::string, std::string> campbelldata;  ///< STL map of Campbell readings indexed by label
-      std::map<std::string, std::string> telemdata;     ///< STL map of all readings indexed by label (merge lakeshore+campbell)
+      Thermal::Campbell campbell;                       ///< Campbell object for datalogger
+
+      std::map<std::string, mysqlx::Value> lakeshoredata;  ///< map of Lakeshore readings indexed by label
+      std::map<std::string, mysqlx::Value> campbelldata;   ///< map of Campbell readings indexed by label
+      std::map<std::string, mysqlx::Value> telemdata;      ///< map of all readings (merge lakeshore+campbell)
 
       /**
        * @typedef thermal_t
@@ -102,6 +136,9 @@ namespace Thermal {
 
       long reconnect( std::string args, std::string &retstring );  ///< close,open hardware devices
 
+      long open_campbell();
+      long close_campbell();
+
       /**
        * Lakeshore functions
        */
@@ -118,4 +155,3 @@ namespace Thermal {
 
 }
 /***** Thermal ****************************************************************/
-#endif

@@ -64,26 +64,36 @@ LKS_CHAN="2 D TDEWAR_I"
 LKS_CHAN="2 H1 HEAT_G"
 LKS_CHAN="2 H2 HEAT_I"
 
-# Each Campbell unit is assigned a unit number, host, and port
-# set as follows: CAMP_UNIT="CAMP# NAME HOST PORT"
+# The Campbell unit is assigned a device name
+# set as follows: CAMP_UNIT="device"
 #
-CAMP_UNIT="1 @IP_CR1000X@ @CR1000X_PORT@"      # Campbell CR1000X
+CAMP_UNIT="/dev/cr1000"                      # Campbell CR1000X
 
-# Each Campbell channel is assigned using a Campbell Channel Key (CAMP_CHAN)
-# set as follows: CAMP_CHAN="CAMP# CHAN# NAME CALTYPE CAL_COEF..."
+# Each Campbell channel is set as follows:
+# CAMP_CHAN="CHAN# NAME CALTYPE CAL_COEF..."
+# Set NAME = "undef" if channel is not to be recorded.
 #
-# The CAMP# here must have a corresponding CAMP# set in an CAMP_UNIT above,
-# and the CAMP_UNIT must be defined first, before the Campebell channels are
-# assigned below.
-#
-# CHAN# can be a letter (A, B, C1, etc.) or number (1, 2, 3, etc.)
-# and should be preceeded by an "H" to designate a heater (H1, H2, etc.).
-
-# Campbell unit 1
-#
-CAMP_CHAN="1 1 RACK_SURF TEMP LIN 0.0 1.0"
-CAMP_CHAN="1 2 RACK_T1 TEMP LIN 0.0 1.0"
-CAMP_CHAN="1 3 RACK_T2 TEMP LIN 0.0 1.0"
-CAMP_CHAN="1 4 RACK_T3 TEMP LIN 0.0 1.0"
-CAMP_CHAN="1 5 RACK_RH1 TEMP LIN 0.0 1.0"
+CAMP_CHAN="1  TRACK_SURF TEMP LIN 0.0 1.0"
+CAMP_CHAN="2  TRACK_1 TEMP LIN 0.0 1.0"
+CAMP_CHAN="3  TRACK_2 TEMP LIN 0.0 1.0"
+CAMP_CHAN="4  TRACK_3 TEMP LIN 0.0 1.0"
+CAMP_CHAN="5  TCOLL_U TEMP LIN 0.0 1.0"
+CAMP_CHAN="6  TCOLL_G"
+CAMP_CHAN="7  TCOLL_R"
+CAMP_CHAN="8  RHRACL_1"
+CAMP_CHAN="9  RHRACL_2"
+CAMP_CHAN="10 ETA_RH1"
+CAMP_CHAN="11 ETA_RH2"
+CAMP_CHAN="12 TCOLL_I"
+CAMP_CHAN="13 FOCTEMPU"
+CAMP_CHAN="14 FOCTEMPG"
+CAMP_CHAN="15 FOCTEMPR"
+CAMP_CHAN="16 FOCTEMPI"
+CAMP_CHAN="17 undef"
+CAMP_CHAN="18 undef"
+CAMP_CHAN="19 undef"
+CAMP_CHAN="20 undef"
+CAMP_CHAN="21 undef"
+CAMP_CHAN="22 undef"
+CAMP_CHAN="23 undef"
 

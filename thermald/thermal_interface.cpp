@@ -32,6 +32,30 @@ namespace Thermal {
   /***** Thermal::Interface::~Interface ***************************************/
 
 
+  /***** Thermal::Interface::open_campbell ***********************************/
+  /**
+   * @brief      open connection to Cambpbell CR1000
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::open_campbell() {
+    return this->campbell.open_device();
+  }
+  /***** Thermal::Interface::open_campbell ***********************************/
+
+
+  /***** Thermal::Interface::close_campbell **********************************/
+  /**
+   * @brief      close connection to Cambpbell CR1000
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::close_campbell() {
+    return this->campbell.close_device();
+  }
+  /***** Thermal::Interface::close_campbell **********************************/
+
+
   /***** Thermal::Interface::open_lakeshores *********************************/
   /**
    * @brief      open connection to all configured Lakeshore devices
@@ -101,9 +125,11 @@ namespace Thermal {
    *
    */
   long Interface::reconnect( std::string args, std::string &retstring ) {
-    long error = NO_ERROR;
-    if ( error==NO_ERROR ) error = this->close_lakeshores();
+    long error;
+    error = this->close_lakeshores();
     if ( error==NO_ERROR ) error = this->open_lakeshores();
+    error = this->close_campbell();
+    if ( error==NO_ERROR ) error = this->open_campbell();
     return( error );
   }
   /***** Thermal::Interface::reconnect ***************************************/
@@ -205,8 +231,9 @@ namespace Thermal {
     // "?" or no arg displays usage and possible inputs, then return
     //
     if ( args=="?" || args.empty() ) {
-      retstream << THERMALD_GET << " <label> | <unit> <chan>\n"  // usage
-                << "  Returns temperature of channel specified by <label> or <unit> <chan> using...\n";
+      retstream << THERMALD_GET << " <label> | <unit> <chan> | camp\n"  // usage
+                << "  Returns all Cambpell CR1000 readings if arg is \"camp\" or\n"
+                << "  returns temperature of channel specified by <label> or <unit> <chan> using...\n";
 
       for ( const auto &lakeshore_it : this->lakeshore ) {          // loop through all lakeshores
         retstream << "\n";
@@ -227,6 +254,11 @@ namespace Thermal {
       retstream << "\n";
       retstring = retstream.str();
       return( NO_ERROR );
+    }
+
+    if ( args == "camp" ) {
+      this->campbell.read_data();
+      return NO_ERROR;
     }
 
     int unit;
@@ -412,7 +444,11 @@ namespace Thermal {
     long error = NO_ERROR;
 
     this->lakeshoredata.clear();
-    this->lakeshoredata["datetime"] = get_timestamp();
+
+    // lakeshoredata map stores double so store the time as a double,
+    // which can be converted back to a datetime string later
+    //
+    //this->lakeshoredata["time"] = get_time_as_double();
 
     // Iterate through all configured Lakeshores
     //
@@ -438,7 +474,7 @@ namespace Thermal {
         // If this reading is not NaN then save it in the lakeshoredata map,
         // which is indexed by label, converting to string on insertion.
         //
-        if ( ! std::isnan( fvalue ) ) { this->lakeshoredata[ temp.second ] = to_string_prec( fvalue, 2 ); }
+        if ( ! std::isnan( fvalue ) ) { this->lakeshoredata[ temp.second ] = fvalue; }
       }
 
       // Loop through all configured heater channels for this Lakeshore.
@@ -455,7 +491,7 @@ namespace Thermal {
         // If this reading is not NaN then save it in the lakeshoredata map,
         // which is indexed by label, converting to string on insertion.
         //
-        if ( ! std::isnan( fvalue ) ) { this->lakeshoredata[ heat.second ] = to_string_prec( fvalue, 2 ); }
+        if ( ! std::isnan( fvalue ) ) { this->lakeshoredata[ heat.second ] = fvalue; }
       }
 
     }
@@ -619,7 +655,212 @@ namespace Thermal {
     }
     return error;
   }
-  /***** Thermal::Lakeshore::get_setpoint ************************************/
+  /***** Thermal::Lakeshore::get_setpoint *************************************/
 
+
+  /***** Thermal::Campbell::open_device ***************************************/
+  /*
+   * @brief      open and initialize the serial port for the CR1000
+   * @details    The Campbell CR1000 is connected to a USB port using a
+   *             USB-RS232 serial converter. This requires a proper udev rule
+   *             to assign the appropriate USB device to /dev/cr1000.
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Campbell::open_device()  {
+    std::string function = "Thermal::Campbell::open_device";
+    std::stringstream message;
+
+    // don't re-open here
+    //
+    if ( this->fd>=0 ) {
+      logwrite( function, "already open" );
+      return NO_ERROR;
+    }
+
+    // open the USB device
+    //
+    this->fd = open( this->device.c_str(), O_RDWR | O_NOCTTY );
+
+    if ( this->fd<0 ) {
+      message << "ERROR: failed to open device " << this->device << ": " << strerror(errno);
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // Configure the serial port
+    //
+    struct termios tty;
+    memset( &tty, 0, sizeof(tty) );
+
+    if ( tcgetattr( this->fd, &tty ) != 0 ) {
+      message << "ERROR getting attributes for serial port: " << strerror(errno);
+      logwrite( function, message.str() );
+      close( this->fd );
+      this->fd = -1;
+      return ERROR;
+    }
+
+    // set baud rate to 19200
+    //
+    cfsetispeed( &tty, B115200 );
+    cfsetospeed( &tty, B115200 );
+
+    // 8N1
+    //
+    tty.c_cflag = ( tty.c_cflag & ~CSIZE ) | CS8;  // 8 data bits
+    tty.c_cflag &= ~PARENB;                        // no parity
+    tty.c_cflag &= ~CSTOPB;                        // 1 stop
+    tty.c_cflag &= ~CRTSCTS;                       // no flow control
+
+    // enable reading and ignore control line
+    //
+    tty.c_cflag |= ( CLOCAL | CREAD );
+
+    // set raw i/o mode
+    //
+    tty.c_iflag &= ~( IXON | IXOFF | IXANY );          // disable software flow control
+    tty.c_lflag &= ~( ICANON | ECHO | ECHOE | ISIG );  // raw input mode
+    tty.c_oflag &= ~OPOST;                             // raw output mode
+
+    // set timeout and min bytes
+    //
+    tty.c_cc[VMIN]  = 0;    // min number of chars for read
+    tty.c_cc[VTIME] = 30;   // 3s timeout (in deciseconds)
+
+    // apply the configuration
+    //
+    if ( tcsetattr( this->fd, TCSANOW, &tty ) != 0 ) {
+      message << "ERROR setting attributes for serial port: " << strerror(errno);
+      logwrite( function, message.str() );
+      close( this->fd );
+      this->fd = -1;
+      return ERROR;
+    }
+
+    logwrite( function, "opened serial connection to CR1000" );
+
+    return NO_ERROR;
+  }
+  /***** Thermal::Campbell::open_device ***************************************/
+
+
+  /***** Thermal::Campbell::close_device **************************************/
+  /*
+   * @brief      close serial port for the CR1000
+   * @return     NO_ERROR
+   *
+   */
+  long Campbell::close_device()  {
+    if ( this->fd >= 0 ) {
+      close( this->fd );
+      this->fd = -1;
+    }
+    return NO_ERROR;
+  }
+  /***** Thermal::Campbell::close_device **************************************/
+
+
+  /***** Thermal::Campbell::read_data *****************************************/
+  /*
+   * @brief      read data from CR1000
+   * @details    The Campbell CR1000 is programmed to transmit all values in a
+   *             CSV string terminated by newline on reception of any character.
+   *             This sends a character to the serial port and reads back the
+   *             response into map indexed by name. The names come from the
+   *             configuration file.
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Campbell::read_data()  {
+    std::string function = "Thermal::Campbell::read_data";
+    std::stringstream message;
+
+    // can't continue if fd not set, which means port not open
+    //
+    if ( this->fd < 0 ) {
+      logwrite( function, "ERROR device not open" );
+      return ERROR;
+    }
+
+    // send a newline character, which triggers the device to send data
+    //
+    write( this->fd, (const unsigned char*)"\n", 1 );
+
+    // this will hold the complete data string returned
+    //
+    std::string replystring;
+
+    // read the serial port one byte at a time to check for the
+    // terminating newline
+    //
+    char buf;
+    while (true) {
+      ssize_t bytes_read = read(this->fd, &buf, 1);
+      if (bytes_read < 0) {
+        logwrite( function, "ERROR reading from serial port " );
+        return ERROR;
+      }
+      if (bytes_read == 0) {  // Timeout reached
+        logwrite( function, "ERROR Read timeout occurred" );
+        return ERROR;
+      }
+      // build up the replystring with the byte just read,
+      // until newline, which signals the end of the stream
+      //
+      replystring += buf;
+      if (buf == '\n') {
+        break;
+      }
+    }
+
+    // The cr1000 returns a comma-separated-variable string (CSV).
+    // Tokenize on the command and put each value into the
+    // class vector which holds the data.
+    //
+    std::vector<std::string> tokens;
+    Tokenize( replystring, tokens, "," );
+
+    // There needs to be a configured sensor name for each data value
+    //
+    if ( tokens.size() != this->sensor_names.size() ) {
+      message.str(""); message << "ERROR sensor name mismatch: "
+                               << this->sensor_names.size() << " sensor names configured "
+                               << "and received " << tokens.size() << " data values ";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // If correct number of sensor values and names, convert the received
+    // strings to numeric values and store in the class along with the
+    // time they were read.
+    //
+    std::string tok;
+    try {
+      this->datamap.clear();  // erase the map
+
+      // Loop through tokens, which is a vector of sensor readings in order
+      // of channel number. datamap is a map of readings indexed by
+      // sensor name.
+      //
+      for ( size_t i=0; i<tokens.size(); i++ ) {
+        tok = tokens.at(i);
+        int chan = static_cast<int>(i+1);            // sensor_names indexed by int channel
+        std::string key = this->sensor_names[chan];  // map key is sensor name
+        if ( key == "undef" ) continue;              // don't save the reading if label is "undef"
+        double      val = std::stod(tok);            // map value is sensor reading
+        this->datamap[key] = val;                    // save this reading to the map
+      }
+    }
+    catch( const std::exception &e ) {
+      this->datamap.clear();  // all or nothing, to prevent mismatch with names
+      message.str(""); message << "ERROR parsing token \"" << tok << "\": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Thermal::Campbell::read_data *************************************/
 
 }

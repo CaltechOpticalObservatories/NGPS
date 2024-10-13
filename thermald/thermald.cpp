@@ -19,10 +19,28 @@
 int main(int argc, char **argv) {
   std::string function = "Thermal::main";
   std::stringstream message;
+  bool start_daemon = true;
+
+  // Allow running in the foreground
+  //
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
+  }
+
+  // TODO make configurable
+  //
+  std::string daemon_stdout="/dev/null";                             // where daemon sends stdout
+  std::string daemon_stderr="/tmp/"+Thermal::DAEMON_NAME+".stderr";  // where daemon sends stderr
+
+  if ( start_daemon ) {
+    logwrite( function, "starting daemon" );
+    Daemon::daemonize( Thermal::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "" );
+  }
+
+  logwrite( function, "daemonized. child process running" );
+
   std::string logpath;
   long ret=NO_ERROR;
-  std::string daemon_in;     // daemon setting read from config file
-  bool start_daemon = false; // don't start as daemon unless specifically requested
 
   // capture these signals
   //
@@ -58,7 +76,6 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < thermald.config.n_entries; entry++) {
     if (thermald.config.param[entry] == "LOGPATH") logpath = thermald.config.arg[entry];
-    if (thermald.config.param[entry] == "DAEMON")  daemon_in = thermald.config.arg[entry];
 
     if (thermald.config.param[entry] == "TM_ZONE") {
       if ( thermald.config.arg[entry] != "UTC" && thermald.config.arg[entry] != "local" ) {
@@ -78,27 +95,6 @@ int main(int argc, char **argv) {
     thermald.exit_cleanly();
   }
 
-  if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
-  else
-  if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
-    message.str(""); message << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }";
-    logwrite( function, message.str() );
-    thermald.exit_cleanly();
-  }
-
-  // check for "-d" command line option last so that the command line
-  // can override the config file to start as daemon
-  //
-  if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
-    start_daemon = true;
-  }
-
-  if ( start_daemon ) {
-    logwrite( function, "starting daemon" );
-    Daemon::daemonize( Thermal::DAEMON_NAME, "/tmp", "", "", "" );
-  }
-
   if ( ( init_log( logpath, Thermal::DAEMON_NAME ) != 0 ) ) {       // initialize the logging system
     logwrite(function, "ERROR: unable to initialize logging system");
     thermald.exit_cleanly();
@@ -110,11 +106,12 @@ int main(int argc, char **argv) {
   message.str(""); message << thermald.config.n_entries << " lines read from " << thermald.config.filename;
   logwrite(function, message.str());
 
-  if (ret==NO_ERROR) ret=thermald.configure_thermald();    // get needed values out of read-in configuration file for the daemon
-  if (ret==NO_ERROR) ret=thermald.configure_telemetry();   // get needed values out of read-in configuration file for the daemon
-  if (ret==NO_ERROR) ret=thermald.configure_lakeshore();   // get needed values out of read-in configuration file for the Lakeshores
+  if (ret==NO_ERROR) ret=thermald.configure_thermald();   // get values from config file for the daemon
+  if (ret==NO_ERROR) ret=thermald.configure_telemetry();  // get values from config file for telemetry
+  if (ret==NO_ERROR) ret=thermald.configure_devices();    // get values from config file for Campbell and Lakeshores
 
   if (ret==NO_ERROR) thermald.interface.open_lakeshores();  // open connection to all configured Lakeshore devices (allowed to fail)
+  if (ret==NO_ERROR) thermald.interface.open_campbell();    // open connection to Campbell CR1000 (allowed to fail)
 
   if (ret != NO_ERROR) {
     logwrite(function, "ERROR: unable to configure system");
@@ -217,7 +214,7 @@ void signal_handler(int signo) {
     case SIGHUP:
       logwrite(function, "caught SIGHUP");
       thermald.configure_telemetry();            // read and apply telemetry configuration
-      thermald.configure_lakeshore();            // read and apply lakeshore configuration
+      thermald.configure_devices();              // read and apply device configuration
       break;
     case SIGPIPE:
       logwrite(function, "caught SIGPIPE");

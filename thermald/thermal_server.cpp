@@ -20,6 +20,7 @@ namespace Thermal {
 
     logwrite( function, "closing Lakeshores" );
     this->interface.close_lakeshores();
+    this->interface.close_campbell();
 
     logwrite( function, "exiting" );
 
@@ -51,13 +52,10 @@ namespace Thermal {
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad NBPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "NBPORT number out of integer range");
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing NBPORT: " << e.what();
+          logwrite(function, message.str());
+          return ERROR;
         }
         this->nbport = port;
         message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
@@ -72,12 +70,9 @@ namespace Thermal {
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad BLKPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "BLKPORT number out of integer range");
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing BLKPORT: " << e.what();
+          logwrite(function, message.str());
           return(ERROR);
         }
         this->blkport = port;
@@ -93,13 +88,10 @@ namespace Thermal {
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad ASYNCPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "ASYNCPORT number out of integer range");
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ASYNCPORT: " << e.what();
+          logwrite(function, message.str());
+          return ERROR;
         }
         this->asyncport = port;
         message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
@@ -136,8 +128,13 @@ namespace Thermal {
 
   /***** Thermal::Server::parse_lks_unit **************************************/
   /**
-   * @brief      
-   * @return     ERROR or NO_ERROR
+   * @brief      parse a line of the config file for key LKS_UNIT
+   * @param[in]  input   line from config file
+   * @param[out] lksnum  LKS# which cross-references unit with chan
+   * @param[out] name    Lakeshore name, helpful identifier in logging and UI
+   * @param[out] host    hostname for connecting to this Lakeshore
+   * @param[out] port    port number on host for connecting to this Lakeshore
+   * @return     ERROR | NO_ERROR
    *
    */
   long Server::parse_lks_unit( std::string &input, 
@@ -160,15 +157,10 @@ namespace Thermal {
       host   = tokens.at(2);
       port   = std::stoi( tokens.at(3) );
     }
-    catch ( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing tokens from input: " << input << ": " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch ( std::out_of_range &e ) {
-      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     if ( lksnum < 0 ) {
@@ -185,8 +177,13 @@ namespace Thermal {
 
   /***** Thermal::Server::parse_lks_chan **************************************/
   /**
-   * @brief      
-   * @return     ERROR or NO_ERROR
+   * @brief      parse a line of the config file for LKS_CHAN
+   * @param[in]  input   line from config file
+   * @param[out] lksnum  LKS# which cross-references unit with chan
+   * @param[out] chan    standard Lakeshore channel name
+   * @param[out] heater  Lakeshore heater name
+   * @param[out] label   label for the channel must correspond to MySQL column
+   * @return     ERROR | NO_ERROR
    *
    */
   long Server::parse_lks_chan( std::string &input, 
@@ -208,15 +205,10 @@ namespace Thermal {
       chan   = tokens.at(1);
       label  = tokens.at(2);
     }
-    catch ( std::invalid_argument &e ) {
-      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing tokens from input: " << input << ": " << e.what();
       logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch ( std::out_of_range &e ) {
-      message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     if ( lksnum < 0 ) {
@@ -240,6 +232,59 @@ namespace Thermal {
     return( NO_ERROR );
   }
   /***** Thermal::Server::parse_lks_chan **************************************/
+
+
+  /***** Thermal::Server::parse_camp_chan *************************************/
+  /**
+   * @brief      parse a line of the config file for LKS_CHAN and add to channel_names map
+   * @param[in]  input  line from config file
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Server::parse_camp_chan( std::string &input ) {
+    std::string function = "Thermal::Server::parse_camp_chan";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    int chan=-1;
+    std::string label="undef";
+
+    Tokenize( input, tokens, " \"" );
+
+    if ( tokens.size() < 2 ) {
+      message.str(""); message << "ERROR bad number of tokens: " << tokens.size() << ". expected 2";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    try {
+      chan  = std::stoi( tokens.at(0) );
+      label = tokens.at(1);
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing tokens from input: " << input << ": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    if ( chan < 1 ) {
+      message.str(""); message << "ERROR bad Campbell channel number " << chan << ": must be >= 1";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // before adding this channel number to the map, make sure it doesn't already exist
+    //
+    if ( this->interface.campbell.sensor_names.find(chan) != this->interface.campbell.sensor_names.end() ) {
+      message.str(""); message << "ERROR duplicate channel \"" << chan << "\" already defined";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    this->interface.campbell.sensor_names[chan] = label;
+
+    return NO_ERROR;
+  }
+  /***** Thermal::Server::parse_camp_chan *************************************/
 
 
   /***** Thermal::Server::configure_telemetry *********************************/
@@ -349,19 +394,23 @@ namespace Thermal {
   /***** Thermal::Server::configure_telemetry *********************************/
 
 
-  /***** Thermal::Server::configure_lakeshore *********************************/
+  /***** Thermal::Server::configure_devices ***********************************/
   /**
-   * @brief      read and apply the configuration file for the Lakeshore(s)
-   * @details    This function reads and parses keys for LKS_UNIT and LKS_CHAN
+   * @brief      read and apply the configuration file for the hardware
+   * @details    This function reads and parses keys for the Lakeshore(s) and
+   *             the Campbell(s).
    * @return     ERROR or NO_ERROR
    *
    */
-  long Server::configure_lakeshore() {
-    std::string function = "Thermal::Server::configure_lakeshore";
+  long Server::configure_devices() {
+    std::string function = "Thermal::Server::configure_devices";
     std::stringstream message;
     int applied=0;
     long error;
 
+    // initialize all maps so they are built fresh with each read of the config file
+    //
+    this->interface.campbell.sensor_names.clear();
     this->interface.lakeshore.clear();
     this->interface.thermal_info.clear();
 
@@ -369,8 +418,8 @@ namespace Thermal {
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
 
-      // LKS_UNIT
-      if (config.param[entry].compare(0, 8, "LKS_UNIT")==0) {
+      // LKS_UNIT: Lakeshore units
+      if (config.param[entry]=="LKS_UNIT") {
         std::string name, host;
         int lksnum, port;
 
@@ -391,8 +440,8 @@ namespace Thermal {
         }
       }
 
-      // LKS_CHAN
-      if (config.param[entry].compare(0, 8, "LKS_CHAN")==0) {
+      // LKS_CHAN: Lakeshore channels for each unit
+      if (config.param[entry]=="LKS_CHAN") {
         int lksnum;
         std::string label, chan;
         bool heater;
@@ -439,11 +488,30 @@ namespace Thermal {
         applied++;
       }
 
+      // CAMP_UNIT: Campbell unit
+      if (config.param[entry]=="CAMP_UNIT") {
+        this->interface.campbell.set_device( config.arg[entry] );
+        message.str(""); message << "THERMALD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        this->interface.async.enqueue( message.str() );
+        applied++;
+      }
+
+      // CAMP_CHAN: Campbell channels
+      if (config.param[entry]=="CAMP_CHAN") {
+        if ( this->parse_camp_chan( config.arg[entry] ) == NO_ERROR ) {
+          message.str(""); message << "THERMALD:config:" << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          this->interface.async.enqueue( message.str() );
+          applied++;
+        }
+      }
+
     }  // end for entry=0; entry < n_entries
 
     return( NO_ERROR );
   }
-  /***** Thermal::Server::configure_lakeshore *********************************/
+  /***** Thermal::Server::configure_devices ***********************************/
 
 
   /***** Thermal::Server::telemetry_watchdog *********************************/
@@ -516,9 +584,11 @@ namespace Thermal {
         //
         while ( server.telem_sleeptimer.running() ) {
           server.interface.lakeshore_readall();
+//        server.interface.campbell.read_data();  TODO DISABLED UNTIL I GET THE COLUMN NAMES
 
           server.interface.telemdata.clear();
-          server.interface.telemdata.merge( server.interface.campbelldata );
+          server.interface.telemdata["datetime"] = get_datetime();
+          server.interface.telemdata.merge( server.interface.campbell.datamap );
           server.interface.telemdata.merge( server.interface.lakeshoredata );
 
           database.write( server.interface.telemdata );
@@ -842,7 +912,7 @@ namespace Thermal {
           logwrite(function, message.str());
         }
       }
-      catch ( std::runtime_error &e ) {
+      catch ( const std::runtime_error &e ) {
         std::stringstream errstream; errstream << e.what();
         message.str(""); message << "error parsing arguments: " << errstream.str();
         logwrite(function, message.str());
@@ -913,7 +983,7 @@ namespace Thermal {
                       }
                       else {
                         ret = this->telemetry( "stop", retstring );
-                        ret = this->configure_lakeshore();
+                        ret = this->configure_devices();
                         ret = this->interface.reconnect( args, retstring );
                         ret = this->telemetry( "start", retstring );
                       }
@@ -963,7 +1033,6 @@ namespace Thermal {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** Server::doit *********************************************************/
