@@ -560,79 +560,49 @@ namespace Slicecam {
   /***** Slicecam::Camera::imrot **********************************************/
 
 
-  /***** Slicecam::Camera::exptime ********************************************/
+  /***** Slicecam::Camera::set_exptime ****************************************/
   /**
-   * @brief      wrapper to set/get exposure time
-   * @param[in]  exptime_in  optional requested exposure time
-   * @param[out] retstring   return string contains current exposure time
-   * @return     ERROR | NO_ERROR | HELP
+   * @brief      set exposure time
+   * @details    This will stop an acquisition in progress before setting the
+   *             exposure time. The actual exposure time is returned in the
+   *             reference argument.
+   * @param[in]  fval  reference to exposure time
+   * @return     ERROR | NO_ERROR
+   *
+   * This function is overloaded
    *
    */
-  long Camera::exptime( std::string exptime_in, std::string &retstring ) {
-    std::string function = "Slicecam::Camera::exptime";
-    std::stringstream message;
+  long Camera::set_exptime( float &fval ) {
 
-    if ( exptime_in == "?" || exptime_in == "help" ) {
-      retstring = SLICECAMD_EXPTIME;
-      retstring.append( " [ <exptime> ]\n" );
-      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
-      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
-      retstring.append( "  else the current exposure time is returned.\n" );
-      return HELP;
-    }
-
-    // If the STL map of Andors is empty then something went wrong
-    // with the configuration.
-    //
-    if ( this->andor.empty() ) {
-      logwrite( function, "ERROR no cameras defined" );
-      retstring="bad_config";
-      return ERROR;
-    }
-
-    // Set the rotation now in separate threads.
-    // Use std::async to run the function asynchronously.
-    //
-    std::vector<std::future<long>> futures;
+    long error = NO_ERROR;
 
     for ( const auto &pair : this->andor ) {
-      futures.push_back( std::async( std::launch::async, [pair, exptime_in, &retstring]() {
-        return pair.second->set_exptime( exptime_in, retstring );
-      } ) );
-    }
+      // Ensure aquisition has stopped
+      //
+      error |= pair.second->abort_acquisition();
 
-    // Wait for all futures to complete
-    //
-    long error = NO_ERROR;
-    for ( auto &future : futures ) {
-      error |= future.get(); // This will block until the thread finishes
+      // Set the exposure time on the Andor.
+      // This will modify val with actual exptime.
+      //
+      if (error==NO_ERROR) error |= pair.second->set_exptime( fval );
     }
 
     return error;
   }
-  /***** Slicecam::Camera::exptime ********************************************/
-
-
-  /***** Slicecam::Camera::exptime ********************************************/
+  /***** Slicecam::Camera::set_exptime ****************************************/
   /**
-   * @brief      wrapper to get exposure time as a double
-   * @return     double exposure time
-   *
+   * @brief      set exposure time
+   * @details    This overloaded version takes an rvalue reference to accept a
+   *             temporary float used to call the other set_exptime function.
+   *             Use this to set exptime with an rvalue instead of an lvalue.
+   * @param[in]  fval  rvalue reference to exposure time
+   * @return     ERROR | NO_ERROR
    */
-  double Camera::exptime() {
-    std::string function = "Slicecam::Camera::exptime";
-    std::string svalue;
-    double dvalue=NAN;
-    this->exptime( "", svalue );
-    try {
-      dvalue=std::stod( svalue );
-    }
-    catch( const std::exception &e ) {
-      logwrite( "Slicecam::Camera::exptime", "ERROR "+std::string(e.what()) );
-    }
-    return dvalue;
+  long Camera::set_exptime( float &&fval ) {
+    float retval=fval;
+    return set_exptime(retval);
   }
-  /***** Slicecam::Camera::exptime ********************************************/
+  /***** Slicecam::Camera::set_exptime ****************************************/
 
 
   /***** Slicecam::Camera::gain ***********************************************/
@@ -1821,32 +1791,42 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // Get the original exptime and gain, which will be used
-    // to determine if the requested values are different.
-    // If they are the same then the display won't be updated.
+    // Get the original exptime and gain from the Andor Information class.
+    // These are used to determine if the requested values are different.
+    // If they are the same then the GUI display won't be updated.
     //
-    double exptime_og = camera.exptime();
-    int gain_og = camera.gain();
+    float exptime_og = this->camera.andor.begin()->second->camera_info.exptime;
+    int gain_og = this->camera.andor.begin()->second->camera_info.gain;
 
     long error = NO_ERROR;
     bool set = false;
-
-    std::string reply;
 
     // If two args were supplied then use them to set
     // exposure time and gain.
     //
     if ( tokens.size() == 2 ) {
-      error |= camera.exptime( tokens[0], reply );
-      error |= camera.gain( tokens[1], reply );
-      set=true;
+      try {
+        std::string reply;
+        float fval = std::stof( tokens.at(0) );
+
+        for ( const auto &pair : this->camera.andor ) {
+          error |= pair.second->set_exptime( fval );
+        }
+        error |= camera.gain( tokens[1], reply );
+        set=true;
+      }
+      catch( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing args \"" << args << "\": " << e.what();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
     }
 
     // Set or not, now read the current values and use the gui_manager
     // to set them in the class.
     //
-    gui_manager.exptime = camera.exptime();
-    gui_manager.gain = camera.gain();
+    gui_manager.exptime = this->camera.andor.begin()->second->camera_info.exptime;
+    gui_manager.gain = this->camera.andor.begin()->second->camera_info.gain;
 
     // If read-only (not set) or either exptime or gain changed, then set the flag for updating the GUI.
     //
@@ -2358,6 +2338,105 @@ namespace Slicecam {
   /***** Slicecam::Interface::test ********************************************/
 
 
+  /***** Slicecam::Interface::exptime *****************************************/
+  /**
+   * @brief      wrapper to set/get exposure time
+   * @param[in]  exptime_in  optional requested exposure time
+   * @param[out] retstring   return string contains current exposure time
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::exptime( std::string exptime_in, std::string &retstring ) {
+    std::string function = "Slicecam::Interface::exptime";
+    std::stringstream message;
+
+    if ( exptime_in == "?" || exptime_in == "help" ) {
+      retstring = SLICECAMD_EXPTIME;
+      retstring.append( " [ <exptime> ]\n" );
+      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
+      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
+      retstring.append( "  else the current exposure time is returned.\n" );
+      return HELP;
+    }
+
+    // If the STL map of Andors is empty then something went wrong
+    // with the configuration.
+    //
+    if ( this->camera.andor.empty() ) {
+      logwrite( function, "ERROR no cameras defined" );
+      retstring="bad_config";
+      return ERROR;
+    }
+
+    // No arg just return the exposure time stored in the Andor Information class
+    // without reading from the Andor
+    //
+    if ( exptime_in.empty() ) {
+      retstring = std::to_string( this->camera.andor.begin()->second->camera_info.exptime );
+      return NO_ERROR;
+    }
+
+    // make sure the input value is reasonable
+    //
+    float fval=NAN;
+    try {
+      fval = std::stof( exptime_in );
+      if ( std::isnan(fval) || fval < 0 ) {
+        logwrite( function, "ERROR invalid exposure time" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing exptime value " << exptime_in << ": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    // I have a potentially valid float value now
+
+    // If framegrab is running then stop it. This won't return until framegrabbing
+    // has stopped (or timeout).
+    //
+    long error = NO_ERROR;
+    bool was_framegrab_running = this->is_framegrab_running.load();
+    if ( was_framegrab_running ) {
+      std::string dontcare;
+      error = this->framegrab( "stop", dontcare );
+    }
+
+    // Set the exposure time now for each camera in separate threads.
+    // Use std::async to run the function asynchronously.
+    //
+    std::vector<std::future<long>> futures;
+
+    for ( const auto &pair : this->camera.andor ) {
+      futures.push_back( std::async( std::launch::async, [pair, &fval, &retstring]() {
+        return pair.second->set_exptime( fval );
+      } ) );
+    }
+
+    // Wait for all futures to complete
+    //
+    for ( auto &future : futures ) {
+      error |= future.get(); // This will block until the thread finishes
+    }
+
+    // If framegrab was previously running then restart it
+    //
+    if ( was_framegrab_running ) {
+      std::string dontcare;
+      error = this->framegrab( "start", dontcare );
+    }
+
+    retstring = std::to_string(fval);
+    message.str(""); message << fval << " sec";
+    logwrite( function, message.str() );
+
+    return error;
+  }
+  /***** Slicecam::Interface::exptime *****************************************/
+
+
   /***** Slicecam::Interface::collect_header_info *****************************/
   /**
    * @brief      gather information and add it to the internal keyword database
@@ -2381,8 +2460,8 @@ namespace Slicecam {
     // Check every time for the TCS because we don't ever want to save
     // an image with ambiguous keywords.
     //
-    if ( _tcs && this->tcsd.client.is_open() ) {
-      this->tcsd.get_name( tcsname );
+    if ( _tcs && this->tcsd.client.poll_open() ) {
+      this->tcsd.poll_name( tcsname );
     }
     else {
       tcsname = "offline";
@@ -2395,8 +2474,8 @@ namespace Slicecam {
 
     // Get the current pointing from the TCS
     //
-    if ( _tcs ) this->tcsd.get_cass( angle_scope );
-    if ( _tcs ) this->tcsd.get_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
+    if ( _tcs ) this->tcsd.poll_cass( angle_scope );
+    if ( _tcs ) this->tcsd.poll_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
 
     // Compute FP offsets from TCS coordinates (SCOPE) to SLIT coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.

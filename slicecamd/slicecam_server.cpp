@@ -506,7 +506,7 @@ namespace Slicecam {
       }
       else
       if ( cmd == SLICECAMD_EXPTIME ) {
-                      ret  = this->interface.camera.exptime( args, retstring );  // set exptime
+                      ret  = this->interface.exptime( args, retstring );         // set exptime
           if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
       }
       else

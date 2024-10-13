@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef ANDOR_H
-#define ANDOR_H
+#pragma once
 
 #include <CCfits/CCfits>           //!< needed here for types in set_axes()
 #include <type_traits>
@@ -57,6 +56,11 @@ namespace Andor {
       std::string amptypestr;                      ///< amp type string
       std::map<int, std::vector<float>> hsspeeds;  ///< vector of hori shift speeds for each amp type
       std::vector<float> vsspeeds;                 ///< vector of vert shift speeds
+
+      float exptime;                               ///< exposure time in sec
+      float acctime;                               ///< accumulate cycle time in sec
+      float kintime;                               ///< kinetic cycle time in sec
+
       float hspeed;                                ///< horizontal pixel speed
       float vspeed;                                ///< vertical pixel speed
       int hbin;                                    ///< horizontal binning
@@ -88,6 +92,7 @@ namespace Andor {
 
       Information() : serial_number(-1), acqmode(-1), readmode(-1), adchan(0), adchans(-1),
                       setpoint(20), ccdtemp(-1), temp_min(20), temp_max(20), amptype(-1),
+                      exptime(-1), acctime(-1), kintime(-1),
                       hspeed(-1), vspeed(-1), hbin(1), vbin(1),
                       hstart(1), vstart(1), hend(1), vend(1),
                       gain(-1), emgain(-1), emgain_low(-1), emgain_high(-1),
@@ -165,10 +170,11 @@ namespace Andor {
   class AndorBase {
     public:
       virtual ~AndorBase() {}
-      virtual long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) = 0;
-      virtual long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) = 0;
-      virtual long _GetAvailableCameras( int &number ) = 0;
-      virtual long _GetCameraHandle( int index, int* handle ) = 0;
+      virtual long _GetCapabilities( AndorCapabilities* caps ) = 0;
+      virtual long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) = 0;
+      virtual long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) = 0;
+      virtual long _GetAvailableCameras( at_32 &number ) = 0;
+      virtual long _GetCameraHandle( int index, at_32 &handle ) = 0;
       virtual long _GetCameraSerialNumber( int &number ) = 0;
       virtual long _GetDetector( int &xpix, int &ypix ) = 0;
       virtual long _GetStatus( std::string &status ) = 0;
@@ -185,6 +191,7 @@ namespace Andor {
       virtual long _GetEMCCDGain( int &gain ) = 0;
       virtual long _GetEMGainRange( int &low, int &high ) = 0;
       virtual long _SetOutputAmplifier( int type ) = 0;
+      virtual long _SetFrameTransferMode( int mode ) = 0;
       virtual long _GetTemperature( int &temp, std::string_view &status ) = 0;
       virtual long _GetTemperatureRange( int &min, int &max ) = 0;
       virtual long _CoolerON() = 0;
@@ -193,16 +200,23 @@ namespace Andor {
       virtual long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) = 0;
       virtual long _Initialize( ) = 0;
       virtual long _SetAcquisitionMode( int mode ) = 0;
-      virtual long _SetCurrentCamera( int handle ) = 0;
+      virtual long _SetCurrentCamera( at_32 handle ) = 0;
       virtual long _SetExposureTime( double exptime ) = 0;
       virtual long _SetKineticCycleTime( float time ) = 0;
+      virtual long _SetNumberAccumulations( int number ) = 0;
+      virtual long _SetAccumulationCycleTime( float time ) = 0;
+      virtual long _SetNumberKinetics( int number ) = 0;
+      virtual long _GetAcquisitionTimings( float &exp, float &acc, float &kin ) = 0;
       virtual long _SetImageFlip( int hflip, int vflip ) = 0;
       virtual long _SetImageRotate( int rotdir ) = 0;
       virtual long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) = 0;
       virtual long _SetReadMode( int mode ) = 0;
+      virtual long _GetShutterMinTimes( int &minclosing, int &minopening ) = 0;
       virtual long _SetShutter( int type, int mode, int closetime, int opentime ) = 0;
       virtual long _AbortAcquisition( ) = 0;
       virtual long _StartAcquisition( ) = 0;
+      virtual long _WaitForAcquisition( ) = 0;
+      virtual long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) = 0;
   };
   /***** Andor::AndorBase *****************************************************/
 
@@ -216,10 +230,11 @@ namespace Andor {
    */
   class SDK : public AndorBase {
     public:
-      long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
-      long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) override;
-      long _GetAvailableCameras( int &number ) override;
-      long _GetCameraHandle( int index, int* handle ) override;
+      long _GetCapabilities( AndorCapabilities* caps ) override;
+      long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
+      long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) override;
+      long _GetAvailableCameras( at_32 &number ) override;
+      long _GetCameraHandle( int index, at_32 &handle ) override;
       long _GetCameraSerialNumber( int &number ) override;
       long _GetDetector( int &xpix, int &ypix ) override;
       long _GetStatus( std::string &status ) override;
@@ -236,6 +251,7 @@ namespace Andor {
       long _GetEMCCDGain( int &gain ) override;
       long _GetEMGainRange( int &low, int &high ) override;
       long _SetOutputAmplifier( int type ) override;
+      long _SetFrameTransferMode( int mode ) override;
       long _GetTemperature( int &temp, std::string_view &status ) override;
       long _GetTemperatureRange( int &min, int &max ) override;
       long _CoolerON() override;
@@ -244,16 +260,23 @@ namespace Andor {
       long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) override;
       long _Initialize( ) override;
       long _SetAcquisitionMode( int mode ) override;
-      long _SetCurrentCamera( int handle ) override;
+      long _SetCurrentCamera( at_32 handle ) override;
       long _SetExposureTime( double exptime ) override;
       long _SetKineticCycleTime( float time ) override;
+      long _SetNumberAccumulations( int number ) override;
+      long _SetAccumulationCycleTime( float time ) override;
+      long _SetNumberKinetics( int number ) override;
+      long _GetAcquisitionTimings( float &exp, float &acc, float &kin ) override;
       long _SetImageFlip( int hflip, int vflip ) override;
       long _SetImageRotate( int rotdir ) override;
       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
       long _SetReadMode( int mode ) override;
+      long _GetShutterMinTimes( int &minclosing, int &minopening ) override;
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
       long _AbortAcquisition( ) override;
       long _StartAcquisition( ) override;
+      long _WaitForAcquisition( ) override;
+      long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) override;
   };
   /***** Andor::SDK ***********************************************************/
 
@@ -277,10 +300,11 @@ namespace Andor {
 
       inline double get_exptime() { return this->exptime; }
 
-      long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
-      long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) override;
-      long _GetAvailableCameras( int &number ) override;
-      long _GetCameraHandle( int index, int* handle ) override;
+      long _GetCapabilities( AndorCapabilities* caps ) override;
+      long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
+      long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) override;
+      long _GetAvailableCameras( at_32 &number ) override;
+      long _GetCameraHandle( int index, at_32 &handle ) override;
       long _GetCameraSerialNumber( int &number ) override;
       long _GetDetector( int &xpix, int &ypix ) override;
       long _GetStatus( std::string &status ) override;
@@ -297,6 +321,7 @@ namespace Andor {
       long _GetEMCCDGain( int &gain ) override;
       long _GetEMGainRange( int &low, int &high ) override;
       long _SetOutputAmplifier( int type ) override;
+      long _SetFrameTransferMode( int mode ) override;
       long _GetTemperature( int &temp, std::string_view &status ) override;
       long _GetTemperatureRange( int &min, int &max ) override;
       long _CoolerON() override;
@@ -305,16 +330,23 @@ namespace Andor {
       long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) override;
       long _Initialize( ) override;
       long _SetAcquisitionMode( int mode ) override;
-      long _SetCurrentCamera( int handle ) override;
+      long _SetCurrentCamera( at_32 handle ) override;
       long _SetExposureTime( double exptime ) override;
       long _SetKineticCycleTime( float time ) override;
+      long _SetNumberAccumulations( int number ) override;
+      long _SetAccumulationCycleTime( float time ) override;
+      long _SetNumberKinetics( int number ) override;
+      long _GetAcquisitionTimings( float &exp, float &acc, float &kin ) override;
       long _SetImageFlip( int hflip, int vflip ) override;
       long _SetImageRotate( int rotdir ) override;
       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
       long _SetReadMode( int mode ) override;
+      long _GetShutterMinTimes( int &minclosing, int &minopening ) override;
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
       long _AbortAcquisition( ) override;
       long _StartAcquisition( ) override;
+      long _WaitForAcquisition( ) override;
+      long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) override;
 
       SkySim skysim;
   };
@@ -341,9 +373,10 @@ namespace Andor {
       Andor::AndorBase* andor;    ///< pointer to the Andor object to use
 //    std::unique_ptr<uint16_t[]> image_data;
       std::mutex image_data_mutex;
-      uint16_t* image_data;
+      unsigned short* image_data;
       std::atomic<bool> err;
       std::map<int,int> device_map;  ///< map of device numbers indexed by serial number
+      at_32 handle;  ///< handle of the camera
 
     public:
       Andor::SDK sdk;             ///< object for the real Andor SDK
@@ -356,7 +389,7 @@ namespace Andor {
        *
        */
       Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( false ),
-                    andor( &sdk ), image_data( nullptr ), err( false ), emulator( -1 ) { }
+                    andor( &sdk ), image_data( nullptr ), err( false ), handle(-1), emulator( -1 ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /***** Andor::Interface::Interface **************************************/
@@ -365,7 +398,7 @@ namespace Andor {
        *
        */
       Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
-                            andor( &sdk ), image_data( nullptr ), err( false ), emulator( sn ) { }
+                            andor( &sdk ), image_data( nullptr ), err( false ), handle(-1), emulator( sn ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /**
@@ -443,11 +476,15 @@ namespace Andor {
       long open( std::string args );
       long close();
       long test();
-      long shutter( const std::string &state );
+      long set_shutter( const std::string &state );
       long set_shutter( const int type, const int mode, const int closingtime, const int openingtime );
-      long set_exptime( int exptime );
-      long set_exptime( std::string exptime, std::string &retstring );
-      long get_recent();
+      long set_exptime( float &exptime );
+      long set_exptime( float &&exptime );
+      long update_timings();
+      long read_exptime( float &exptime );
+      long read_exptime( float &exptime, float &acctime, float &kintime );
+      long wait_for_acquisition( int timeout );
+      long get_recent(int timeout);
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
       long save_acquired( std::string wcs_in, std::string &imgname, const int simsize );
@@ -459,12 +496,18 @@ namespace Andor {
       long set_temperature( int temp );
       long get_temperature( int &temp );
       long get_temperature();
+      long set_kinetic_cycle_time( float time );
+      long set_number_accumulations( int number );
+      long set_accumulation_cycle_time( float time );
+      long set_number_kinetics( int number );
+      long set_frame_transfer( std::string mode );
       long set_read_mode( int mode );
       long set_acquisition_mode( int mode );
       long set_output_amplifier( int type );
       long set_emgain( int gain );
       long get_emgain_range( int &low, int &high );
       long get_emgain( int &gain );
+      long hspeed( const std::string args, std::string &retstring );
       long set_hsspeed( float speed );
       long set_vsspeed( float speed );
       long set_image( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
@@ -534,4 +577,3 @@ namespace Andor {
 
 }
 /***** Andor ******************************************************************/
-#endif

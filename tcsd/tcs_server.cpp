@@ -532,7 +532,10 @@ namespace TCS {
         ++this->cmd_num;
         if ( this->cmd_num == INT_MAX ) this->cmd_num = 0;
 
-        if ( !polling ) {
+        if ( polling ) {
+          args="poll";
+        }
+        else {
           message.str(""); message << "received command on fd " << sock.getfd() << " (" << this->cmd_num << "): " << cmd << " " << args;
           logwrite(function, message.str());
         }
@@ -623,7 +626,6 @@ namespace TCS {
       else
 
       if ( cmd.compare( TCSD_GET_FOCUS ) == 0 ) {
-                      if ( polling ) args = "poll";
                       ret = this->interface.get_focus( args, retstring );
       }
       else

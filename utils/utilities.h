@@ -68,7 +68,6 @@ long get_time( const std::string &tmzone_in, int &year, int &mon, int &mday, int
 std::string timestamp_from( struct timespec &time_n );  /// return time from input timespec struct in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
 std::string timestamp_from( const std::string &tmzone_in, struct timespec &time_in );
 
-
 inline std::string get_timestamp(const std::string &tz) {  /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
   struct timespec timenow;
   clock_gettime( CLOCK_REALTIME, &timenow );
@@ -76,6 +75,12 @@ inline std::string get_timestamp(const std::string &tz) {  /// return current ti
 }
 inline std::string get_timestamp() {                /// return current time in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
   return get_timestamp(tmzone_cfg);
+}
+inline std::string get_datetime() {
+  /// return current time in formatted string "YYYY-MM-DD HH:MM:SS.sss"
+  std::string str = get_timestamp(tmzone_cfg);
+  str[10] = ' ';
+  return str;
 }
 
 std::string get_system_date();                      /// return current date in formatted string "YYYYMMDD"
@@ -85,6 +90,9 @@ std::string get_file_time();                        /// return current time in f
 std::string get_file_time( const std::string &tmzone_in );
 
 double get_clock_time();
+
+double get_time_as_double();
+std::string datetime_from_double( double &time );
 
 void precise_sleep( long microseconds );             /// precise, non-interruptable sleep timer for short durrations
 

@@ -401,7 +401,9 @@ void merge( Common::FitsKeys from ) {
       inline void set_port( const int &port ) { this->port=port; }               ///< set the port number
 
       long is_connected( std::string &reply );
+      bool poll_open();                                            ///< is device open?
       bool is_open();                                              ///< is device open?
+      bool is_open(bool silent);                                   ///< is device open?
   };
   /***** Common::DaemonClient *********************************************************/
 

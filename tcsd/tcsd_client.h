@@ -24,8 +24,12 @@
       Common::DaemonClient client { "tcsd", '\n', '\n' };
 
       long init( std::string_view which, std::string &retstring );
+      long get_name( std::string &name, bool poll );
       long get_name( std::string &name );
+      long poll_name( std::string &name );
+      long get_cass( double &cass, bool poll );
       long get_cass( double &cass );
+      long poll_cass( double &cass );
       long set_focus( double &value );
       long poll_focus( double &value );
       long get_focus( double &value );
@@ -35,7 +39,9 @@
       long poll_dome_position( double &domeazi, double &telazi );
       long get_dome_position( double &domeazi, double &telazi );
       long get_dome_position( bool poll, double &domeazi, double &telazi );
+      long poll_coords( double &ra_h, double &dec_d );
       long get_coords( double &ra_h, double &dec_d );
+      long get_coords( double &ra_h, double &dec_d, bool poll );
       long get_weather_coords( double &ra_h, double &dec_d );
       long get_coords_type( std::string cmd, double &ra_h, double &dec_d );
       long pt_offset( double ra_d, double dec_d );

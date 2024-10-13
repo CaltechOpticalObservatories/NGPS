@@ -901,7 +901,13 @@ namespace Common {
    * @return     true | false
    *
    */
+  bool Common::DaemonClient::poll_open() {
+    return is_open(true);
+  }
   bool Common::DaemonClient::is_open() {
+    return is_open(false);
+  }
+  bool Common::DaemonClient::is_open( bool silent ) {
     std::string function = "Common::DaemonClient::is_open";
     std::stringstream message;
     std::string reply;
@@ -913,7 +919,7 @@ namespace Common {
       return( false );
     }
 
-    if ( this->send( "isopen", reply ) != NO_ERROR ) {
+    if ( this->send( (silent?"poll isopen":"isopen"), reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending \"isopen\" to " << this->name
                                << " on " << this->host << ":" << this->port;
       logwrite( function, message.str() );

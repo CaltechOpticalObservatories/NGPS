@@ -18,40 +18,7 @@ namespace Database {
    *
    */
   Database::Database( std::vector<std::string> info ) {
-    std::string function = "Database::Database::Database";
-    _dbconfigured = false;
-    _dbconnected  = false;
-
-    if ( info.size() != 6 ) {
-      logwrite( function, "ERROR constructing: bad info vector. check config file" );
-      throw std::invalid_argument( "constructing Database object: bad info vector. check config file" );
-    }
-
-    try {
-      _dbhost   = info.at(0);
-      _dbport   = std::stoi( info.at(1) );
-      _dbuser   = info.at(2);
-      _dbpass   = info.at(3);
-      _dbschema = info.at(4);
-      _dbtable  = info.at(5);
-    }
-    catch( std::invalid_argument &e ) {
-      logwrite( function, "ERROR constructing Database object: invalid argument. check config file" );
-      throw std::invalid_argument( e );
-    }
-    catch( std::out_of_range &e ) {
-      logwrite( function, "ERROR constructing Database object: out of range. check config file" );
-      throw std::out_of_range( e );
-    }
-    _dbconfigured = true;
-
-    _create_connection();  // may throw exception
-
-#ifdef LOGLEVEL_DEBUG
-    logwrite( "Database::Database::Database", "[DEBUG] constructed" );
-#endif
-
-    return;
+    this->initialize_class( info );
   }
   /***** Database::Database ***************************************************/
 
@@ -81,13 +48,50 @@ namespace Database {
 
     _create_connection();  // may throw exception
 
-#ifdef LOGLEVEL_DEBUG
-    logwrite( "Database::Database::Database", "[DEBUG] constructed" );
-#endif
-
     return;
   }
   /***** Database::Database ***************************************************/
+
+
+  /***** Database::initialize_class *******************************************/
+  /**
+   * @brief      initialize database class object
+   * @details    may throw an exception on error
+   * @param[in]  info  vector of database parameters: {host,port,user,pass,schema,table}
+   *
+   */
+  void Database::initialize_class( std::vector<std::string> info ) {
+    std::string function = "Database::Database::initialize_class";
+    _dbconfigured = false;
+    _dbconnected  = false;  // set true in _create_connection()
+
+    if ( info.size() != 6 ) {
+      logwrite( function, "ERROR constructing: bad info vector. check config file" );
+      throw std::invalid_argument( "constructing Database object: bad info vector. check config file" );
+    }
+
+    try {
+      _dbhost   = info.at(0);
+      _dbport   = std::stoi( info.at(1) );
+      _dbuser   = info.at(2);
+      _dbpass   = info.at(3);
+      _dbschema = info.at(4);
+      _dbtable  = info.at(5);
+    }
+    catch( std::exception &e ) {
+      std::stringstream message;
+      message << "ERROR constructing Database object (check config file): " << e.what();
+      logwrite( function, message.str() );
+      throw std::exception( e );
+    }
+
+    _dbconfigured = true;  // configured now
+
+    _create_connection();  // may throw exception
+
+    return;
+  }
+  /***** Database::initialize_class *******************************************/
 
 
   /***** Database::_create_connection *****************************************/
@@ -142,7 +146,7 @@ namespace Database {
     std::stringstream message;
 
     try {
-      _session->close();
+      if ( _sessionopen ) _session->close();
       _sessionopen = false;
 
       _table.reset();
@@ -174,9 +178,6 @@ namespace Database {
     //
     try { if ( _sessionopen ) _session->close(); }
     catch ( const mysqlx::Error &err ) { }
-#ifdef LOGLEVEL_DEBUG
-    logwrite( "Database::Database::~Database", "[DEBUG] destroyed" );
-#endif
   }
   /***** Database::~Database **************************************************/
 
@@ -185,10 +186,13 @@ namespace Database {
   /**
    * @brief      write the supplied data to the indicated database table
    * @details    may throw an exception
-   * @param[in]  data  STL map containing data indexed by DB column name
+   * @param[in]  data  STL map containing mysqlx data indexed by DB column name
+   *
+   * This function is overloaded by a version that writes the data stored
+   * in the class.
    *
    */
-  void Database::write( std::map<std::string, std::string> data ) {
+  void Database::write( std::map<std::string, mysqlx::Value> data ) {
     std::string function = "Database::Database::write";
     std::stringstream message;
 
@@ -206,8 +210,8 @@ namespace Database {
     // Vectors are easily passed directly to the mysqlx API.
     //
     int ncols = data.size();
-    std::vector<std::string> cols; cols.reserve( ncols );
-    std::vector<std::string> vals; vals.reserve( ncols );
+    std::vector<std::string>   cols; cols.reserve( ncols );
+    std::vector<mysqlx::Value> vals; vals.reserve( ncols );
 
     for ( const auto &dat : data ) {
       cols.push_back( dat.first );   // database columns
@@ -240,6 +244,21 @@ namespace Database {
     }
 
     return;
+  }
+  /***** Database::write ******************************************************/
+
+
+  /***** Database::write ******************************************************/
+  /**
+   * @brief      write the class private _data to the MySQL database
+   * @details    may throw an exception
+   *             This function overloads the version which accepts a map,
+   *             by passing it the class map
+   *
+   */
+  void Database::write() {
+    this->write( this->_data );  // Write the record stored in the class,
+    this->_data.clear();         // then erase it.
   }
   /***** Database::write ******************************************************/
 

@@ -255,11 +255,11 @@ namespace SkyInfo {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[ACQUIRE] coords_out.ra=" << std::fixed << std::setprecision(6)
-                             << this->coords_out.ra << " .dec="
-                             << this->coords_out.dec << " .angle="
-                             << this->coords_out.angle << " deg";
-    logwrite( function, message.str() );
+//  message.str(""); message << "[ACQUIRE] coords_out.ra=" << std::fixed << std::setprecision(6)
+//                           << this->coords_out.ra << " .dec="
+//                           << this->coords_out.dec << " .angle="
+//                           << this->coords_out.angle << " deg";
+//  logwrite( function, message.str() );
 #endif
 
     PyGILState_Release( gstate );

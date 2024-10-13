@@ -104,8 +104,6 @@ namespace Acam {
 
       std::mutex conn_mutex;             ///< mutex to protect against simultaneous access to Accept()
 
-      std::vector<std::string> db_info;                 ///< info for constructing telemetry Database object
-
       static void new_log_day( std::string logpath );                          ///< creates a new logbook each day
       static void block_main( Acam::Server &acam, Network::TcpSocket sock );   ///< main function for blocking connection thread
       static void thread_main( Acam::Server &acam, Network::TcpSocket sock );  ///< main function for all non-blocked threads

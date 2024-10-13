@@ -81,12 +81,26 @@ namespace Acam {
     std::stringstream message;
     long error=NO_ERROR;
 
+    // Opens the Andor and initializes SDK
+    //
     if ( this->andor.is_open() ) {
       logwrite( function, "already initialized" );
     }
     else {
       error = this->andor.open( args );
     }
+
+    // Setup camera for continuous readout
+    //
+    error |= this->gain(2);
+    error |= this->andor.set_vsspeed( 4.33 );          // vertical shift speed
+    error |= this->andor.set_hsspeed( 30.0 );          // horizontal shift speed
+    error |= this->andor.set_read_mode( 4 );           // image mode
+    error |= this->andor.set_acquisition_mode( 5 );    // run till abort
+    error |= this->andor.set_frame_transfer( "off" );  // disable Frame Transfer mode
+    error |= this->andor.set_kinetic_cycle_time( 0 );
+    error |= this->andor.set_shutter( "open" );        // shutter always open
+    error |= this->set_exptime(0.00001);               // small but non-zero exptime
 
     logwrite( function, (error==NO_ERROR ? "camera open" : "ERROR opening camera") );
 
@@ -98,6 +112,8 @@ namespace Acam {
   /***** Acam::Camera::close **************************************************/
   /**
    * @brief      close connection to Andor
+   * @details    Any acquisition in progress will be stopped, the shutter will
+   *             be closed, and the Andor system will be shut down.
    * @return     ERROR or NO_ERROR
    * 
    */
@@ -338,51 +354,45 @@ namespace Acam {
   /***** Acam::Camera::imrot **************************************************/
 
 
-  /***** Acam::Camera::exptime ************************************************/
+  /***** Acam::Camera::set_exptime ********************************************/
   /**
-   * @brief      wrapper to set/get exposure time
-   * @param[in]  exptime_in  optional requested exposure time
-   * @param[out] retstring   return string contains current exposure time
-   * @return     ERROR | NO_ERROR | HELP
+   * @brief      set exposure time
+   * @details    This will stop an acquisition in progress before setting the
+   *             exposure time. The actual exposure time is returned in the
+   *             reference argument.
+   * @param[in]  fval  reference to exposure time
+   * @return     ERROR | NO_ERROR
+   *
+   * This function is overloaded
    *
    */
-  long Camera::exptime( std::string exptime_in, std::string &retstring ) {
-    std::string function = "Acam::Camera::exptime";
-    std::stringstream message;
+  long Camera::set_exptime( float &fval ) {
 
-    if ( exptime_in == "?" || exptime_in == "help" ) {
-      retstring = ACAMD_EXPTIME;
-      retstring.append( " [ <exptime> ]\n" );
-      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
-      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
-      retstring.append( "  else the current exposure time is returned.\n" );
-      return HELP;
-    }
+    // Ensure aquisition has stopped
+    //
+    long error = this->andor.abort_acquisition();
 
-    return this->andor.set_exptime( exptime_in, retstring );
+    // Set the exposure time on the Andor.
+    // This will modify fval with actual exptime.
+    //
+    if (error==NO_ERROR) error = this->andor.set_exptime( fval );
+
+    return error;
   }
-  /***** Acam::Camera::exptime ************************************************/
-
-
-  /***** Acam::Camera::exptime ************************************************/
+  /***** Acam::Camera::set_exptime ********************************************/
   /**
-   * @brief      wrapper to get exposure time as a double
-   * @return     double exposure time
-   *
+   * @brief      set exposure time
+   * @details    This overloaded version takes an rvalue reference to accept a
+   *             temporary float used to call the other set_exptime function.
+   *             Use this to set exptime with an rvalue instead of an lvalue.
+   * @param[in]  fval  rvalue reference to exposure time
+   * @return     ERROR | NO_ERROR
    */
-  double Camera::exptime() {
-    std::string function = "Acam::Camera::exptime";
-    std::string svalue;
-    double dvalue=NAN;
-    this->exptime( "", svalue );
-    try {
-      dvalue=std::stod( svalue );
-    }
-    catch( std::out_of_range &e )     { logwrite( "Acam::Camera::exptime", "ERROR "+std::string(e.what()) ); }
-    catch( std::invalid_argument &e ) { logwrite( "Acam::Camera::exptime", "ERROR "+std::string(e.what()) ); }
-    return dvalue;
+  long Camera::set_exptime( float &&fval ) {
+    float retval=fval;
+    return set_exptime(retval);
   }
-  /***** Acam::Camera::exptime ************************************************/
+  /***** Acam::Camera::set_exptime ********************************************/
 
 
   /***** Acam::Camera::gain ***************************************************/
@@ -392,7 +402,7 @@ namespace Acam {
    *             If gain=1 then set to conventional amp and if gain > 1
    *             then set the EMCCD gain register.
    * @param[in]  args       optionally contains new gain
-   * @param[out] retstring  return string contains temp, setpoint, and status
+   * @param[out] retstring  return string contains gain
    * @return     ERROR | NO_ERROR | HELP
    *
    */
@@ -465,6 +475,8 @@ namespace Acam {
 
       if (error==ERROR) logwrite( function, message.str() );
 
+      // get min/max values for gain
+      //
       int low, high;
       this->andor.get_emgain_range( low, high );
 
@@ -476,12 +488,17 @@ namespace Acam {
         error = ERROR;
       }
       else
+      // gain of 1 uses Conventional Amplifier, no EM gain
+      //
       if ( error==NO_ERROR && gain == 1 ) {
         error = this->andor.set_output_amplifier( Andor::AMPTYPE_CONV );
         if (error==NO_ERROR) this->andor.camera_info.gain = gain;
         else { message << "ERROR gain not set"; }
       }
       else
+      // gain > 1 switches to EMCCD output amplifier
+      // and sets the EM gain
+      //
       if ( error==NO_ERROR && gain >= low && gain <= high ) {
         error = this->andor.set_output_amplifier( Andor::AMPTYPE_EMCCD );
         if (error==NO_ERROR) this->andor.set_emgain( gain );
@@ -509,6 +526,16 @@ namespace Acam {
     logwrite( function, retstring );
 
     return error;
+  }
+  /***** Acam::Camera::gain ***************************************************/
+  /**
+   * @brief      overloaded version accepts int and no return value
+   * @param[in]  value  integer value of new gain
+   * @return     ERROR | NO_ERROR
+   */
+  long Camera::gain( int value ) {
+    std::string dontcare;
+    return this->gain( std::to_string(value), dontcare );
   }
   /***** Acam::Camera::gain ***************************************************/
 
@@ -1668,6 +1695,14 @@ namespace Acam {
         error |= this->framegrab( "start", retstring );   // start frame grabbing if open succeeds
       }
       else error=ERROR;
+
+      // Initialize the database class once the camera is open
+      //
+      if ( error == NO_ERROR ) {
+        this->database.initialize_class( this->db_info );
+      }
+
+      this->guider_settings_control("", retstring);
     }
 
     if ( error != NO_ERROR ) logwrite( function, "ERROR: one or more components failed to open" );
@@ -1817,6 +1852,10 @@ namespace Acam {
       // close the Andor
       //
       error |= this->camera.close();
+
+      // close the database connection
+      //
+      this->database.close();
     }
 
     return error;
@@ -1845,6 +1884,7 @@ namespace Acam {
     if ( args.empty() ) {
 
       if ( ! this->tcsd.client.is_open() ) {
+        // tcsd does not have a connection to the TCS
         retstring="offline";
         return NO_ERROR;
       }
@@ -2051,8 +2091,8 @@ namespace Acam {
     if ( whattodo == "stop" ) {
       auto start = std::chrono::steady_clock::now();
       bool timedout=false;
-      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*camera.exptime()), 1.0 ) );
-      while ( this->is_framegrab_running ) {
+      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*this->camera.andor.camera_info.exptime), 2.0 ) );
+      while ( this->is_framegrab_running.load() ) {
         auto now = std::chrono::steady_clock::now();
         if ( now - start > timeout_time ) {
           timedout=true;
@@ -2128,12 +2168,13 @@ namespace Acam {
     std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
       BoolState loop_running( iface.is_framegrab_running );    // sets state true here, clears when it goes out of scope
+      if (error==NO_ERROR) error = iface.camera.andor.start_acquisition();
       do {
         std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
-        if ( iface.camera.andor.camera_info.exposure_time == 0 ) continue;      // wait for non-zero exposure time
+        if ( iface.camera.andor.camera_info.exptime == 0 ) continue;            // wait for non-zero exposure time
 
-        if (error==NO_ERROR) error = iface.camera.andor.acquire_one();          // acquire a frame from camera into memory
+        if (error==NO_ERROR) error = iface.camera.andor.get_recent(3000);       // get latest frame from camera into memory
         if (error==NO_ERROR) error = iface.collect_header_info();                            // collect header information
         if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
                                                                iface.imagename,
@@ -2157,6 +2198,7 @@ namespace Acam {
         }
 
       } while ( error==NO_ERROR && iface.should_framegrab_run.load() );
+      error |= iface.camera.andor.abort_acquisition();
     }
     else {                                                                                   // this shouldn't even happen
       logwrite( function, "ERROR another thread is already running" );
@@ -2223,22 +2265,24 @@ namespace Acam {
       return ERROR;
     }
 
-    // Get the original exptime and gain
+    // Get the original exptime and gain from the Andor Information class
     //
-    double exptime_og = camera.exptime();
-    int gain_og = camera.gain();
+    float exptime_og = this->camera.andor.camera_info.exptime;
+    int gain_og = this->camera.andor.camera_info.gain;
 
     long error = NO_ERROR;
     bool set = false;
+    float exptime=NAN;
 
     // If all args are supplied then set all parameters
     //
     if ( tokens.size() == 4 ) {
       try {
         std::string reply;
+        exptime = std::stof( tokens.at(1) );
 
         // set the exposure time here
-        error |= camera.exptime( tokens.at(0), reply );
+        error |= camera.set_exptime( exptime );
 
         // set the gain here
         error |= camera.gain( tokens.at(1), reply );
@@ -2269,8 +2313,8 @@ namespace Acam {
     // Set or not, now read the current values and use the guide_manager
     // to set them in the class.
     //
-    guide_manager.exptime = camera.exptime();
-    guide_manager.gain = camera.gain();
+    guide_manager.exptime = camera.andor.camera_info.exptime;
+    guide_manager.gain = camera.andor.camera_info.gain;
 
     // If read-only (not set) or either exptime or gain changed, then set the flag for updating the GUI.
     //
@@ -2390,7 +2434,7 @@ namespace Acam {
 
     // If the exposure time is zero then there won't be any starlight
     //
-    if ( this->camera.exptime() == 0 ) {
+    if ( this->camera.andor.camera_info.exptime == 0 ) {
       logwrite( function, "ERROR exposure time cannot be zero." );
       retstring = "camera_exptime";
       return ERROR;
@@ -2635,14 +2679,14 @@ namespace Acam {
       if ( iface->fpoffsets.apply_offset( acam_ra_goal,  iface->target.dRA,
                                           acam_dec_goal, iface->target.dDEC ) == ERROR ) break;
 
-      {  // this local section is just for display purposes and its variables are not used elsewhere
-      std::string rastr, decstr;
-      decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
-      decimal_to_sexa( acam_dec_goal, decstr );
-      message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
-                                                         << std::fixed << std::setprecision(6) << acam_angle_goal;
-      logwrite( function, message.str() );
-      }
+//    {  // this local section is just for display purposes and its variables are not used elsewhere
+//    std::string rastr, decstr;
+//    decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
+//    decimal_to_sexa( acam_dec_goal, decstr );
+//    message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
+//                                                       << std::fixed << std::setprecision(6) << acam_angle_goal;
+//    logwrite( function, message.str() );
+//    }
 
       // Perform the astrometry calculations on the acquired image (and calculate image quality).
       // Optional solver args can be included here, which currently only come from the test commands.
@@ -2653,8 +2697,12 @@ namespace Acam {
 
       std::string last_imagename = iface->get_imagename();
 
+      // call wrapper for Astrometry::solve()
+      //
       if ( iface->astrometry.solve( last_imagename, this->ext_solver_args ) == ERROR ) break;
 
+      // this gets the solution from the solver
+      //
       iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
 
       if ( result=="GOOD" || result=="NOISY" ) {   // treat GOOD and NOISY the same for now
@@ -2663,11 +2711,21 @@ namespace Acam {
         double _ra = acam_ra * TO_HOURS;
         decimal_to_sexa( _ra, rastr );
         decimal_to_sexa( acam_dec, decstr );
-        message.str(""); message << "[ACQUIRE] solve " << result << ": match found with coords="
-                                 << rastr << "  " << decstr << "  " << acam_angle;
-        logwrite( function, message.str() );
+//      message.str(""); message << "[ACQUIRE] solve " << result << ": match found with coords="
+//                               << rastr << "  " << decstr << "  " << acam_angle;
+//      logwrite( function, message.str() );
         iface->astrometry.image_quality();
       }
+
+      // Add properly-typed telemetry keys/value pairs to a database map object,
+      // which accepts the name of the database column and the value, which can be
+      // any type of value (string, int, float, bool, etc.).
+      // This does not write them to the actual database yet.
+      //
+      iface->database.add_telem_entry( "result",   result );
+      iface->database.add_telem_entry( "RAsolve",  acam_ra );
+      iface->database.add_telem_entry( "DECsolve", acam_dec );
+      iface->database.add_telem_entry( "ANGsolve", acam_angle );
 
       // If no match found and exceeded number of attempts then give up and get out.
       // This counts as an attempt so attempts is incremented.
@@ -2696,20 +2754,26 @@ namespace Acam {
                                           acam_ra_goal, acam_dec_goal,
                                           ra_off, dec_off ) == ERROR ) break;
 
-      {  // this local section is just for display purposes and its variables are not used elsewhere
-      double __ra, __dec;
-      iface->tcsd.get_weather_coords( __ra, __dec );  // returns RA hours, DEC degrees
-      message.str(""); message << "[ACQUIRE] tcs coords before: " << __ra*TO_DEGREES << " " << __dec << " deg";
-      logwrite( function, message.str() );
-      }
+//    {  // this local section is just for display purposes and its variables are not used elsewhere
+//    double __ra, __dec;
+//    iface->tcsd.get_weather_coords( __ra, __dec );  // returns RA hours, DEC degrees
+//    message.str(""); message << "[ACQUIRE] tcs coords before: " << __ra*TO_DEGREES << " " << __dec << " deg";
+//    logwrite( function, message.str() );
+//    }
 
       // Compute the angular separation between the target (acam_ra_*) and calculated slit (acam_*)
       //
       double offset = angular_separation( acam_ra_goal, acam_dec_goal, acam_ra, acam_dec );
 
+      // Add properly-typed telemetry keys/value pairs to a database map object.
+      // This does not write them to the actual database yet.
+      //
+      iface->database.add_telem_entry( "RAoffset",   ra_off );
+      iface->database.add_telem_entry( "DECLoffset", dec_off );
+
       this->offset_cal_offset += offset;
 
-      message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
+//    message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
 
       // There is a maximum offset allowed to the TCS.
       // This is not a TCS limit (their limit is very large).
@@ -2809,6 +2873,27 @@ namespace Acam {
     if ( error != NO_ERROR ) {
       iface->async.enqueue_and_log( "ERROR", function, "failed to acquire target" );
     }
+
+    // Add properly-typed telemetry keys/value pairs to a database map object,
+    // which accepts the name of the database column and the value, which can be
+    // any type of value (string, int, float, bool, etc.).
+    // This does not write them to the actual database yet.
+    //
+    iface->database.add_telem_entry( "acquired",       this->is_acquired.load() );
+    iface->database.add_telem_entry( "pointmode",      this->get_pointmode() );
+    iface->database.add_telem_entry( "seeing",         iface->astrometry.get_seeing() );
+    iface->database.add_telem_entry( "seeing_zen",     iface->astrometry.get_seeing_zenith() );
+    iface->database.add_telem_entry( "extinction",     iface->astrometry.get_extinction() );
+    iface->database.add_telem_entry( "background",     iface->astrometry.get_background() );
+    iface->database.add_telem_entry( "background_std", iface->astrometry.get_background_std() );
+    iface->database.add_telem_entry( "filter",         iface->motion.get_current_filter_name() );
+
+    iface->database.add_telem_entry( "datetime",       get_datetime() );
+
+    // This will write the collected telemetry key/value pairs to the database,
+    // then will clear the map object once they are written.
+    //
+    iface->database.write();
 
     return error;
   }
@@ -3094,14 +3179,6 @@ namespace Acam {
    * @param[out] retstring  reference to string for any return values
    * @return     ERROR | NO_ERROR | HELP
    *
-   * Valid test names are:
-   *
-   * fpoffsets <from> <to> <ra> <dec> <angle>
-   * adchans
-   * emgainrange
-   * getemgain
-   * monitorfocus
-   *
    */
   long Interface::test( std::string args, std::string &retstring ) {
     std::string function = "Acam::Interface::test";
@@ -3115,16 +3192,14 @@ namespace Acam {
       retstring = ACAMD_TEST;
       retstring.append( "\n" );
       retstring.append( "  Test Routines\n" );
-      retstring.append( "   acqmode [ ? ]\n" );
-      retstring.append( "   adchans [ ? ]\n" );
-      retstring.append( "   camera \n" );
+      retstring.append( "   camera ? | <args...>\n" );
       retstring.append( "   collect [ ? ] \n" );
-      retstring.append( "   emgainrange\n" );
+      retstring.append( "   database\n" );
       retstring.append( "   fpoffsets ? | <from> <to> <ra> <dec> <angle> (see help for units)\n" );
-      retstring.append( "   getemgain\n" );
-      retstring.append( "   mode\n" );
+      retstring.append( "   mode ? | cont | single \n" );
       retstring.append( "   monitorfocus [ ? | stop | start ]\n" );
       retstring.append( "   pointmode\n" );
+      retstring.append( "   shouldframegrab [ ? | yes | no ]\n" );
       retstring.append( "   sleep\n" );
       retstring.append( "   solverargs [ ? | <key=val> [...<keyn=valn>] ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
@@ -3284,30 +3359,117 @@ namespace Acam {
       else
       if ( tokens[1] == "?" ) {
         retstring = ACAMD_TEST;
-        retstring.append( " camera acquireone | abort | start | status\n" );
-        retstring.append( "  acquireone  starts acquisition, and gets the acquired image\n" );
-        retstring.append( "  abort       aborts acquisition\n" );
-        retstring.append( "  getrecent   gets the most recent image\n" );
-        retstring.append( "  start       starts acquisition\n" );
-        retstring.append( "  status      Andor status\n" );
+        retstring.append( " camera ...\n" );
+        retstring.append( "  acquire         starts acquisition, and gets the acquired image\n" );
+        retstring.append( "  adchans         return number of AD converter channels\n" );
+        retstring.append( "  abort           aborts acquisition\n" );
+        retstring.append( "  acont [ n ]     switch to mode cont and acquire n continuous frame(s)\n" );
+        retstring.append( "  ft on|off       gets the most recent image\n" );
+        retstring.append( "  getrecent       get recent image from camera\n" );
+        retstring.append( "  mode ? | <m>    <m>=single | cont\n" );
+        retstring.append( "  shutter <s>     where <s> = open|close|auto\n" );
+        retstring.append( "  shuttertimes    gets the shutter minimum opening closing times in ms\n" );
+        retstring.append( "  start           starts acquisition\n" );
+        retstring.append( "  status          Andor status\n" );
         error=HELP;
       }
       else
-      if ( tokens[1]=="acquireone" ) {
-        error  = this->camera.andor.acquire_one();                     // acquire a single image
-        error |= this->collect_header_info();                          // collect header information
-        error |= this->camera.write_frame( "",
-                                           this->imagename,
-                                           this->tcs_online.load() );  // write to FITS file
-        this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
+      // --------------------------------
+      // camera acquire
+      //
+      if ( tokens[1]=="acquire" ) {
+        int nacquires=1;
+        if ( tokens.size() > 2 ) {
+          try { nacquires = std::stoi(tokens.at(2)); }
+          catch( const std::exception &e ) {
+            message.str(""); message << "ERROR parsing nacquires: " << e.what();
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        error = this->test("mode single",retstring);
+        do {
+          logwrite( function, std::to_string(nacquires) );
+          error |= this->camera.andor.acquire_one();                     // acquire a single image
+          error |= this->collect_header_info();                          // collect header information
+          error |= this->camera.write_frame( "",
+                                             this->imagename,
+                                             this->tcs_online.load() );  // write to FITS file
+          this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
+          std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+        } while (--nacquires > 0);
+      }
+      else
+      // --------------------------------
+      // camera adchans
+      //
+      if ( tokens[1] == "adchans" ) {
+        if ( tokens.size() > 2 && tokens[2] == "?" ) {
+          retstring = ACAMD_TEST;
+          retstring.append( " camera adchans\n" );
+          retstring.append( "  Calls Andor SDK wrapper to return the number of AD converter channels\n" );
+          retstring.append( "   available.\n" );
+          error=HELP;
+        }
+        else {
+          int chans;
+          error = this->camera.andor.sdk._GetNumberADChannels( chans );
+          retstring = std::to_string(chans);
+        }
+      }
+      else
+      // --------------------------------
+      // camera cont
+      //
+      if ( tokens[1]=="cont" ) {
+        int nacquires=1;
+        if ( tokens.size() > 2 ) {
+          try { nacquires = std::stoi(tokens.at(2)); }
+          catch( const std::exception &e ) {
+            message.str(""); message << "ERROR parsing nacquires: " << e.what();
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        error  = this->test("mode cont",retstring);
+        error |= this->camera.andor.start_acquisition();
+        do {
+          logwrite( function, std::to_string(nacquires) );
+          error |= this->camera.andor.get_recent(3000);                  // 
+          error |= this->collect_header_info();                          // collect header information
+          error |= this->camera.write_frame( "",
+                                             this->imagename,
+                                             this->tcs_online.load() );  // write to FITS file
+          this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
+        } while (--nacquires > 0);
+        error |= this->camera.andor.abort_acquisition();
       }
       else
       if ( tokens[1]=="abort" ) {
         error = this->camera.andor.abort_acquisition();
       }
       else
+      // --------------------------------
+      // camera ft on | off
+      //
+      if ( tokens[1]=="ft" ) {
+        if ( tokens.size() > 2 ) {
+          if ( tokens[2]=="on" || tokens[2]=="off" ) {
+            int mode = ( tokens[2]=="on" ? 1 : 0 );
+            error = this->camera.andor.sdk._SetFrameTransferMode( mode );
+          }
+          else {
+            logwrite( function, "ERROR expected on|off" );
+            return ERROR;
+          }
+        }
+      }
+      else
+      // --------------------------------
+      // camera getrecent
+      //
       if ( tokens[1]=="getrecent" ) {
-        error = this->camera.andor.get_recent();
+        error = this->camera.andor.get_recent(3000);
         error |= this->collect_header_info();                          // collect header information
         error |= this->camera.write_frame( "",
                                            this->imagename,
@@ -3315,41 +3477,86 @@ namespace Acam {
         this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
       }
       else
+      // --------------------------------
+      // camera mode
+      //
+      if ( tokens[1] == "mode" ) {
+        if ( tokens.size() < 3 ) {
+          logwrite( function, "ERROR camera mode expected argument" );
+          retstring="invalid_argument";
+          return ERROR;
+        }
+        else
+        if ( tokens[2] == "?" ) {
+          retstring = ACAMD_TEST;
+          retstring.append( " camera mode single | cont\n" );
+          retstring.append( "  Sets Andor acquisition mode to single scan\n" );
+          retstring.append( "  or continuous (run till abort).\n" );
+          error=HELP;
+        }
+        else
+        if ( tokens[2] == "single" ) {
+          error |= this->camera.andor.set_image( 1, 1, 1, this->camera.andor.camera_info.axes[0], 1, this->camera.andor.camera_info.axes[1] );
+          error |= this->camera.andor.set_read_mode( 4 );                  // image mode
+          error |= this->camera.andor.set_acquisition_mode( 1 );           // single scan
+          error |= this->camera.andor.set_shutter( std::string("auto") );  // shutter auto open,close each exposure
+        }
+        else
+        if ( tokens[2] == "cont" ) {
+          error |= this->camera.andor.set_image( 1, 1, 1, this->camera.andor.camera_info.axes[0], 1, this->camera.andor.camera_info.axes[1] );
+          error |= this->camera.andor.set_read_mode( 4 );                  // image mode
+          error |= this->camera.andor.set_acquisition_mode( 5 );           // run till abort
+          error |= this->camera.andor.sdk._SetFrameTransferMode( 1 );      // enable Frame Transfer mode
+          error |= this->camera.andor.sdk._SetKineticCycleTime( 0 );
+          error |= this->camera.andor.set_shutter( std::string("open") );  // shutter always open
+        }
+      }
+      else
+      // --------------------------------
+      // camera start
+      //
       if ( tokens[1]=="start" ) {
         error = this->camera.andor.start_acquisition();
       }
       else
+      // --------------------------------
+      // camera status
+      //
       if ( tokens[1]=="status" ) {
         error = this->camera.andor.get_status();
       }
-    }
-    else
-    // --------------------------------
-    // mode
-    //
-    if ( testname == "mode" ) {
-      if ( tokens.size() < 2 ) {
-        logwrite( function, "ERROR expected argument" );
-        retstring="invalid_argument";
+      else
+      // --------------------------------
+      // camera shutter
+      //
+      if ( tokens[1]=="shutter" ) {
+        if ( tokens.size() > 2 ) {
+          if ( tokens[2]=="open" || tokens[2]=="close" || tokens[2]=="auto" ) {
+            error = this->camera.andor.set_shutter(tokens[2]);
+          }
+          else {
+            logwrite( function, "ERROR expected open|close|auto" );
+            return ERROR;
+          }
+        }
+        else {
+          logwrite( function, "ERROR expected open|close|auto" );
+          return ERROR;
+        }
+      }
+      else
+      // --------------------------------
+      // camera shuttertimes
+      //
+      if ( tokens[1]=="shuttertimes" ) {
+        int opening, closing;
+        error = this->camera.andor.sdk._GetShutterMinTimes( opening, closing );
+        message.str(""); message << opening << " " << closing << " msec";
+        retstring=message.str();
+      }
+      else {
+        logwrite( function, "ERROR invalid test camera argument" );
         return ERROR;
-      }
-      else
-      if ( tokens[1] == "?" ) {
-        retstring = ACAMD_TEST;
-        retstring.append( " mode auto | cont\n" );
-        retstring.append( "  Sets Andor acquisition mode\n" );
-        error=HELP;
-      }
-      else
-      if ( tokens[1] == "single" ) {
-        error  = this->camera.andor.set_acquisition_mode( 1 );       // single scan
-        error |= this->camera.andor.shutter( std::string("auto") );  // shutter auto open,close with each exposure
-      }
-      else
-      if ( tokens[1] == "cont" ) {
-        error  = this->camera.andor.set_acquisition_mode( 5 );       // run till abort
-        error |= this->camera.andor.sdk._SetKineticCycleTime( 0 );
-        error |= this->camera.andor.shutter( std::string("open") );  // shutter always open
       }
     }
     else
@@ -3367,39 +3574,30 @@ namespace Acam {
     }
     else
     // --------------------------------
-    // adchans
+    // database
     //
-    if ( testname == "adchans" ) {
+    if ( testname == "database" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = ACAMD_TEST;
-        retstring.append( " adchans\n" );
-        retstring.append( "  Calls Andor SDK wrapper to return the number of AD converter channels\n" );
-        retstring.append( "   available.\n" );
+        retstring.append( " database\n" );
+        retstring.append( "  Test save some stuff to the telemetry database.\n" );
         error=HELP;
       }
       else {
-        int chans;
-        error = this->camera.andor.sdk._GetNumberADChannels( chans );
-        retstring = std::to_string(chans);
+        try {
+          this->database.add_telem_entry( "datetime",   get_datetime() );
+          this->database.add_telem_entry( "result",   "result" );
+          this->database.add_telem_entry( "obs_id",   123 );
+          this->database.add_telem_entry( "airmass",   1.23 );
+          this->database.add_telem_entry( "acquired",   true );
+          this->database.write();
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR adding keys to database: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
       }
-    }
-    else
-    // --------------------------------
-    // emgainrange
-    //
-    if ( testname == "emgainrange" ) {
-      int low, high;
-      error = this->camera.andor.get_emgain_range( low, high );
-      retstring = std::to_string(low) + " " + std::to_string(high);
-    }
-    else
-    // --------------------------------
-    // getemgain
-    //
-    if ( testname == "getemgain" ) {
-      int gain;
-      error = this->camera.andor.get_emgain( gain );
-      retstring = std::to_string( gain );
     }
     else
     // --------------------------------
@@ -3448,6 +3646,13 @@ namespace Acam {
     }
     else
     // --------------------------------
+    // shouldframegrab
+    //
+    if ( testname == "shouldframegrab" ) {
+      retstring = ( this->should_framegrab_run.load() ? "yes" : "no" );
+    }
+    else
+    // --------------------------------
     // sleep
     //
     if ( testname == "sleep" ) {
@@ -3467,6 +3672,83 @@ namespace Acam {
 
   }
   /***** Acam::Interface::test ************************************************/
+
+
+  /***** Acam::Interface::exptime *********************************************/
+  /**
+   * @brief      set/get exposure time
+   * @param[in]  args
+   * @param[out] retstring
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::exptime( const std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::exptime";
+    std::stringstream message;
+    long error=NO_ERROR;
+
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_EXPTIME;
+      retstring.append( " [ <exptime> ]\n" );
+      retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
+      retstring.append( "  If <exptime> is provided then the camera exposure time is changed,\n" );
+      retstring.append( "  else the current exposure time is returned.\n" );
+      return HELP;
+    }
+
+    // No arg just return the exposure time stored in the Andor Information class
+    // without reading from the Andor
+    //
+    if ( args.empty() ) {
+      retstring = std::to_string( this->camera.andor.camera_info.exptime );
+      return NO_ERROR;
+    }
+
+    // make sure the input value is reasonable
+    //
+    float fval=NAN;
+    try {
+      fval = std::stof( args );
+      if ( std::isnan(fval) || fval < 0 ) {
+        logwrite( function, "ERROR invalid exposure time" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing exptime value " << args << ": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    // I have a potentially valid float value now
+
+    // If framegrab is running then stop it. This won't return until framegrabbing
+    // has stopped (or timeout).
+    //
+    bool was_framegrab_running = this->is_framegrab_running.load();
+    if ( was_framegrab_running ) {
+      std::string dontcare;
+      error = this->framegrab( "stop", dontcare );
+    }
+
+    // setting the exposure time will stop any acquisition
+    //
+    this->camera.set_exptime( fval );
+
+    // If framegrab was previously running then restart it
+    //
+    if ( was_framegrab_running ) {
+      std::string dontcare;
+      error = this->framegrab( "start", dontcare );
+    }
+
+    retstring = std::to_string(fval);
+    message.str(""); message << fval << " sec";
+    logwrite( function, message.str() );
+
+    return error;
+  }
+  /***** Acam::Interface::exptime *********************************************/
 
 
   /***** Acam::Interface::image_quality ***************************************/
@@ -3653,8 +3935,8 @@ namespace Acam {
     // Check every time for the TCS because we don't ever want to save
     // an image with ambiguous keywords.
     //
-    if ( _tcs && this->tcsd.client.is_open() ) {
-      this->tcsd.get_name( tcsname );
+    if ( _tcs && this->tcsd.client.poll_open() ) {
+      this->tcsd.poll_name( tcsname );
     }
     else {
       tcsname = "offline";
@@ -3667,10 +3949,10 @@ namespace Acam {
 
     // Get the current pointing from the TCS
     //
-    if ( _tcs ) this->tcsd.get_cass( angle_scope );
-    if ( _tcs ) this->tcsd.get_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
+    if ( _tcs ) this->tcsd.poll_cass( angle_scope );
+    if ( _tcs ) this->tcsd.poll_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
 
-    if ( _tcs ) this->target.save_casangle( angle_scope );     // store in the Target class, required for acquisition
+    if ( _tcs ) this->target.save_casangle( angle_scope );      // store in the Target class, required for acquisition
 
     // Compute FP offsets from TCS coordinates (SCOPE) to ACAM coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
@@ -3748,6 +4030,8 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "PC1_2",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_2",     (        cos( angle_acam * PI / 180. ) ), "" );
+
+    this->camera.fitsinfo.fitskeys.addkey( "FILTER", this->motion.get_current_filter_name(), "filter name" );
 
     return NO_ERROR;
   }

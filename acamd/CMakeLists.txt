@@ -29,6 +29,14 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 include_directories( ${PROJECT_BASE_DIR}/tcsd )
 include_directories( ${PYTHON_DEV} )
 
+# -- MySQL database ------------------------------------------------------------
+#
+set ( MYSQL_DIR "/usr/local/mysql/connector" )
+find_path( MYSQL_API "mysqlx/xdevapi.h" PATHS ${MYSQL_DIR}/include )
+set( MYSQL_INCLUDES "${MYSQL_API}" )
+find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64 )
+include_directories( ${MYSQL_INCLUDES} )
+
 set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
 add_library( andorsim STATIC
         ${EMULATOR_DIR}/andorsim.cpp
@@ -44,6 +52,7 @@ add_executable(acamd
         ${ACAMD_DIR}/acam_fits.cpp
         ${ACAMD_DIR}/motion_interface.cpp 
         ${PYTHON_DEV}
+        ${MYSQL_INCLUDES}
         )
 
 target_link_libraries(acamd
@@ -56,10 +65,12 @@ target_link_libraries(acamd
         logentry
         utilities
         skyinfo
+        database
         ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}
         ${CMAKE_THREAD_LIBS_INIT}
+        ${MYSQL_LIB}
         )
 
 target_compile_options(acamd PRIVATE -g -Wall -O1 -Wno-variadic-macros -ggdb)

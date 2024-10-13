@@ -543,6 +543,41 @@ std::mutex generate_tmpfile_mtx;
   /***** get_clock_time *******************************************************/
 
 
+  /***** get_time_as_double ***************************************************/
+  /**
+   * @brief  return current UTC as a double
+   */
+  double get_time_as_double() {  /// return current UTC as a double
+    struct timespec timenow;
+    clock_gettime( CLOCK_REALTIME, &timenow );
+    return timenow.tv_sec + timenow.tv_nsec/1e9;
+  }
+  /***** get_time_as_double ***************************************************/
+
+
+  /***** datetime_from_double *************************************************/
+  /**
+   * @brief  get a datetime string "YYYY-MM-DD HH:MM:SS.sss" from a double
+   * @param[in]  time  time represented as seconds since Unix epoch
+   * @return     "YYYY-MM-DD HH:MM:SS.sss"
+   *
+   */
+  std::string datetime_from_double( double &time ) {
+    std::time_t time_since_epoch = static_cast<std::time_t>(time);
+    double fractional_seconds = time - time_since_epoch;
+
+    // convert to tm structure
+    //
+    std::tm* ts = std::gmtime( &time_since_epoch );
+    std::ostringstream timestr;
+    timestr << std::put_time( ts, "%Y-%m-%d %H:%M:%S" );
+    timestr << "." << std::setfill('0') << std::setprecision(3) << std::setw(3)
+            << static_cast<int>(fractional_seconds * 1e9);
+    return timestr.str();
+  }
+  /***** datetime_from_double *************************************************/
+
+
   /***** timeout **************************************************************/
   /**
    * @brief      sleeps integral number of minutes or seconds

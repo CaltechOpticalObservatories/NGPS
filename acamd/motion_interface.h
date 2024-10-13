@@ -45,9 +45,13 @@ namespace Acam {
     private:
       size_t numdev;                                                 ///< size of motors map (number of motor controllers)
       bool class_initialized;
+      std::string current_filter_name;                               ///< current filter name, updated whenever set or read
 
     public:
-      MotionInterface() : numdev(-1), motorinterface( ACAM_MOVE_TIMEOUT, ACAM_HOME_TIMEOUT, ACAM_POSNAME_TOLERANCE ) { }
+      MotionInterface() : numdev(-1), 
+                          class_initialized(false),
+                          current_filter_name("unknown"),
+                          motorinterface( ACAM_MOVE_TIMEOUT, ACAM_HOME_TIMEOUT, ACAM_POSNAME_TOLERANCE ) { }
 
       // map of all motor controllers
       //
@@ -62,6 +66,8 @@ namespace Acam {
       std::mutex wait_mtx;                                           ///< mutex object for waiting for threads
       std::condition_variable cv;                                    ///< condition variable for waiting for threads
 
+      inline std::string get_current_filter_name() { return this->current_filter_name; }
+
       long initialize_class();
       long open();                                                   ///< opens the PI socket connection
       long close();                                                  ///< closes the PI socket connection
@@ -74,8 +80,8 @@ namespace Acam {
       long send_command( const std::string &name, std::string cmd, std::string &retstring );  ///< writes command?, reads reply
       long motion( std::string args, std::string &retstring );       ///< basic motion test commands
       long filter( std::string args, std::string &retstring );       ///< set or get the filter
-      long current_filter( std::string &currname );                 ///< get current filter posname
-      long current_filter( std::string &currname, int &currid, float &currpos );  ///< get current filter posname
+      long get_current_filter( std::string &currname );              ///< get current filter posname
+      long get_current_filter( std::string &currname, int &currid, float &currpos );  ///< get current filter posname,id,pos
       long cover( std::string posname, std::string &retstring );  ///< set or get the dust cover
 
   };

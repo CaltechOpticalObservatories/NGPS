@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef DATABASE_H
-#define DATABASE_H
+#pragma once
 
 #include <mysqlx/xdevapi.h>
 #include <vector>
@@ -54,7 +53,15 @@ namespace Database {
 
       void _create_connection();
 
+      // These map stores in memory the record to be written to
+      // the database. The data is essentially a variant type so
+      // it can hold values of any type, indexed by column name.
+      //
+      std::map<std::string, mysqlx::Value> _data;
+
     public:
+      Database() : _dbconfigured(false), _dbconnected(false), _sessionopen(false),
+                   _session(nullptr), _table(nullptr), _schema(nullptr) { }
       Database( std::vector<std::string> info );
       Database( std::string host,
                 int         port,
@@ -69,12 +76,37 @@ namespace Database {
       inline bool dbconnected()  { return _dbconnected; }
       inline bool sessionopen()  { return _sessionopen; }
 
+      void initialize_class( std::vector<std::string> info );
       void close();
 
-      void write( std::map<std::string, std::string> data );
+      /***** Database::Database::add_telem_entry ******************************/
+      /**
+       * @brief      adds a key,value pair to the Database class
+       * @details    This adds a row into memory that will make up the complete
+       *             record to be written. The private _data map contains data
+       *             as mysqlx::Value indexed by name. msqlx::Value is essentially
+       *             a variant so it can hold a mix of any different type.
+       * @param[in]  key    name for the database column, or field
+       * @param[in]  value  value of entry can be any type
+       */
+      template <typename T>
+      void add_telem_entry( const std::string &key, T value ) {
+        _data[key] = value;
+      }
+      /***** Database::Database::add_telem_entry ******************************/
 
+      void write( std::map<std::string, mysqlx::Value> data );  ///< write passed map
+      void write();                                             ///< write class map
+
+      /**
+       * @brief      writes an STL map of any single type rather than mysqlx::Value
+       * @param[in]  data  map of data of any single type, indexed by field name
+       */
+      template <typename T>
+      void write( std::map<std::string, T> data ) {
+        this->write(data);
+      }
   };
   /***** Database::Database ***************************************************/
 
 }
-#endif

@@ -19,6 +19,21 @@ namespace Andor {
   std::vector<float> sim_vsspeeds = { 0.6, 1.13, 2.2, 4.33 };
 
 
+  /***** Andor::Emulator::_GetCapabilities ************************************/
+  /**
+   * @brief      wrapper for GetCapabilities.
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_GetCapabilities( AndorCapabilities* caps ) {
+    std::string function = "Andor::Emulator::_GetCapabilities";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_GetCapabilities ************************************/
+
+
   /***** Andor::Emulator::_GetAcquiredData16 **********************************/
   /**
    * @brief      
@@ -27,7 +42,7 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Emulator::_GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) {
+  long Emulator::_GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) {
     std::string function = "Andor::Emulator::_GetAcquiredData16";
     std::stringstream message;
 
@@ -44,7 +59,7 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Emulator::_GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) {
+  long Emulator::_GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) {
     std::string function = "Andor::Emulator::_GetMostRecentImage16";
     std::stringstream message;
 
@@ -62,7 +77,7 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Emulator::_GetAvailableCameras( int &number ) {
+  long Emulator::_GetAvailableCameras( at_32 &number ) {
     std::string function = "Andor::Emulator::_GetAvailableCameras";
     std::stringstream message;
 
@@ -87,7 +102,7 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Emulator::_GetCameraHandle( int index, int* handle ) {
+  long Emulator::_GetCameraHandle( int index, at_32 &handle ) {
     std::string function = "Andor::Emulator::_GetCameraHandle";
     std::stringstream message;
 
@@ -450,6 +465,22 @@ namespace Andor {
   /***** Andor::Emulator::_SetOutputAmplifier *********************************/
 
 
+  /***** Andor::Emulator::_SetFrameTransferMode *******************************/
+  /**
+   * @brief      wrapper for Andor Sim SetFrameTransferMode
+   * @param[in]  mode  1=on 0=off
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long Emulator::_SetFrameTransferMode( int mode ) {
+    std::string function = "Andor::Emulator::_SetFrameTransferMode";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetFrameTransferMode *******************************/
+
+
   /***** Andor::Emulator::_GetTemperature *************************************/
   /**
    * @brief      wrapper for Andor Sim GetTemperature
@@ -618,7 +649,7 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Emulator::_SetCurrentCamera( int handle ) {
+  long Emulator::_SetCurrentCamera( at_32 handle ) {
     std::string function = "Andor::Emulator::_SetCurrentCamera";
     std::stringstream message;
 
@@ -668,6 +699,72 @@ namespace Andor {
     return NO_ERROR;
   }
   /***** Andor::Emulator::_SetKineticCycleTime ********************************/
+
+
+  /***** Andor::Emulator::_SetNumberAccumulations *****************************/
+  /**
+   * @brief      wrapper for Andor Sim SetNumberAccumulations
+   * @param[in]  number
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_SetNumberAccumulations( int number ) {
+    std::string function = "Andor::Emulator::_SetNumberAccumulations";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetNumberAccumulations *****************************/
+
+
+  /***** Andor::Emulator::_SetAccumulationCycleTime ***************************/
+  /**
+   * @brief      wrapper for Andor Sim SetAccumulationCycleTime
+   * @param[in]  time
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_SetAccumulationCycleTime( float time ) {
+    std::string function = "Andor::Emulator::_SetAccumulationCycleTime";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetAccumulationCycleTime ***************************/
+
+
+  /***** Andor::Emulator::_SetNumberKinetics **********************************/
+  /**
+   * @brief      wrapper for Andor Sim SetNumberKinetics
+   * @param[in]  number
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_SetNumberKinetics( int number ) {
+    std::string function = "Andor::Emulator::_SetNumberKinetics";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetNumberKinetics **********************************/
+
+
+  /***** Andor::Emulator::__GetAcquisitionTimings *****************************/
+  /**
+   * @brief      wrapper for Andor Sim GetAcquisitionTimings
+   * @param[out] exp  valid exposure time in seconds
+   * @param[out] acc  valid accumulate cycle time in seconds
+   * @param[out] kin  valid kinetic cycle time in seconds
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_GetAcquisitionTimings( float &exp, float &acc, float &kin ) {
+    std::string function = "Andor::Emulator::_GetAcquisitionTimings";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_GetAcquisitionTimings ******************************/
 
 
   /***** Andor::Emulator::_SetImageFlip ***************************************/
@@ -756,6 +853,23 @@ namespace Andor {
   /***** Andor::Emulator::_SetReadMode ****************************************/
 
 
+  /***** Andor::Emulator::_GetShutterMinTimes *********************************/
+  /**
+   * @brief      wrapper for Andor Sim GetShutterMinTimes
+   * @param[out] minclosing
+   * @param[out] minopening
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_GetShutterMinTimes( int &minclosing, int &minopening ) {
+    std::string function = "Andor::Emulator::__GetShutterMinTimes";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_GetShutterMinTimes *********************************/
+
+
   /***** Andor::Emulator::_SetShutter *****************************************/
   /**
    * @brief      wrapper for Andor Sim SetShutter
@@ -790,7 +904,7 @@ namespace Andor {
 
     return NO_ERROR;
   }
-  /***** Andor::Emulator::_StartAcquisition ***********************************/
+  /***** Andor::Emulator::_AbortAcquisition ***********************************/
 
 
   /***** Andor::Emulator::_StartAcquisition ***********************************/
@@ -808,6 +922,40 @@ namespace Andor {
     return NO_ERROR;
   }
   /***** Andor::Emulator::_StartAcquisition ***********************************/
+
+
+  /***** Andor::Emulator::_WaitForAcquisition *********************************/
+  /**
+   * @brief      wrapper for Andor Sim WaitForAcquisition
+   * @details    starts the acquisition
+   * @details    this simply checks return value
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_WaitForAcquisition() {
+    std::string function = "Andor::Emulator::_WaitForAcquisition";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_WaitForAcquisition *********************************/
+
+
+  /***** Andor::Emulator::_WaitForAcquisitionByHandleTimeOut ******************/
+  /**
+   * @brief      wrapper for Andor Sim WaitForAcquisitionByHandleTimeOut
+   * @details    starts the acquisition
+   * @details    this simply checks return value
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) {
+    std::string function = "Andor::Emulator::_WaitForAcquisitionByHandleTimeOut";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_WaitForAcquisitionByHandleTimeOut ******************/
 
 
   /***** Andor::SkySim::initialize_python *************************************/

@@ -44,6 +44,7 @@ namespace TCS {
     jmessage["DOMEAZ"]   = this->tcs_info.domeazimuth;
     jmessage["DOMESTAT"] = this->tcs_info.domeshutters;
     jmessage["FOCUS"]    = this->tcs_info.focus;
+    jmessage["AIRMASS"]  = this->tcs_info.airmass;
 
     retstring = jmessage.dump();  // serialize the json message into retstring
 
@@ -382,8 +383,12 @@ namespace TCS {
       return HELP;
     }
 
+    bool silent = false;                 // logging enabled by default
+
+    if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
+
     for ( const auto &[key,val] : this->tcsmap ) {
-      if ( val.isconnected() ) {
+      if ( val.isconnected() && !silent ) {
         message.str(""); message << "connection open to " << val.name() << " on "
                                  << val.host() << ":" << val.port();
         logwrite( function, message.str() );
@@ -425,6 +430,10 @@ namespace TCS {
       return HELP;
     }
 
+    bool silent = false;                 // logging enabled by default
+
+    if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
+
     // Send the WEATHER command to the TCS. This returns a string of key=val pairs
     // with each pair separated by a newline character. The first two pairs are 
     // RA and DEC, which is all that is needed here.
@@ -461,7 +470,7 @@ namespace TCS {
     }
     }
 
-    logwrite( function, message.str() );
+    if ( !silent ) logwrite( function, message.str() );
 
     retstring = message.str();
 
@@ -496,6 +505,10 @@ namespace TCS {
       retstring.append( "  Return the current RA DEC as hh:mm:ss.ss dd:mm:ss.ss\n" );
       return HELP;
     }
+
+    bool silent = false;                 // logging enabled by default
+
+    if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
 
     // Send the REQPOS command to the TCS. This returns a string that looks like:
     //
@@ -554,7 +567,7 @@ namespace TCS {
       error = ERROR;
     }
 
-    if ( !retstring.empty() ) logwrite( function, retstring );
+    if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
     asyncmsg << "TCSD:coords:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );
@@ -588,6 +601,10 @@ namespace TCS {
       retstring.append( "  Return the current cass ring angle\n" );
       return HELP;
     }
+
+    bool silent = false;                 // logging enabled by default
+
+    if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
 
     // Send the REQSTAT command to the TCS. This returns a string that looks like:
     //
@@ -638,20 +655,16 @@ namespace TCS {
         reply << std::fixed << std::setprecision(2) << angle;
       }
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "EXCEPTION: out of range parsing Cass ring angle from TCS reply string \"" << cassline << "\"";
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "EXCEPTION converting Cass ring angle from \"" << cassline << "\" to double";
+    catch( const std::out_of_range &e ) {
+      message.str(""); message << "ERROR parsing Cass ring angle from TCS reply string \"" << cassline
+                               << "\": " << e.what();
       logwrite( function, message.str() );
       error = ERROR;
     }
 
     retstring = reply.str();
 
-    if ( !retstring.empty() ) logwrite( function, retstring );
+    if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
     asyncmsg << "TCSD:cassangle:" << ( !retstring.empty() ? retstring : "ERROR" );
     this->async.enqueue( asyncmsg.str() );

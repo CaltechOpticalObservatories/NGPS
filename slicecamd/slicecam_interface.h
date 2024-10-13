@@ -85,8 +85,8 @@ namespace Slicecam {
       long imrot( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
       int gain();
-      long exptime( std::string exptime_in, std::string &retstring );
-      double exptime();
+      long set_exptime( float &val );
+      long set_exptime( float &&val );
       long speed( std::string args, std::string &retstring );
       long temperature( std::string args, std::string &retstring );
 
@@ -325,6 +325,7 @@ namespace Slicecam {
       long gui_settings_control();          /// get gui settings and push to Guider GUI display
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long test( std::string args, std::string &retstring );
+      long exptime( std::string exptime_in, std::string &retstring );
 
       long get_acam_guide_state( bool &is_guiding );
 

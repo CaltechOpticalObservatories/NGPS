@@ -199,14 +199,25 @@
    * @return     ERROR | NO_ERROR
    *
    */
+  long TcsDaemonClient::poll_name( std::string &name ) {
+    return get_name( name, true );
+  }
   long TcsDaemonClient::get_name( std::string &name ) {
+    return get_name( name, false );
+  }
+  long TcsDaemonClient::get_name( std::string &name, bool poll ) {
     std::string function = "TcsDaemonClient::get_name";
     std::stringstream message;
+
+    // Prepending "poll" onto the command will prevent the server from logging the command
+    //
+    std::stringstream tcscmd;
+    tcscmd << ( poll ? "poll " : "" ) << TCSD_GET_NAME;  // optional "poll" prevents excessive logging by tcsd
 
     // Ask for the name of the TCS.
     // Response is expected to be "<name> DONE"
     //
-    if ( this->client.send( TCSD_GET_NAME, name ) != NO_ERROR ) {
+    if ( this->client.send( tcscmd.str(), name ) != NO_ERROR ) {
       logwrite( function, "ERROR reading TCS name" );
       name="error";
       return ERROR;
@@ -244,12 +255,25 @@
    * @return     ERROR or NO_ERROR
    *
    */
+  long TcsDaemonClient::poll_cass( double &cass ) {
+    return this->get_cass( cass, true );
+  }
   long TcsDaemonClient::get_cass( double &cass ) {
+    return this->get_cass( cass, false );
+  }
+  long TcsDaemonClient::get_cass( double &cass, bool poll ) {
     std::string function = "TcsDaemonClient::get_cass";
     std::stringstream message;
     std::string tcsreply;
+    std::stringstream tcscmd;
 
-    if ( this->client.send( TCSD_GET_CASS, tcsreply ) != NO_ERROR ) {
+    // Prepending "poll" onto the command will prevent the server from logging the command
+    //
+    tcscmd << ( poll ? "poll " : "" ) << TCSD_GET_CASS;  // optional "poll" prevents excessive logging by tcsd
+
+    // Send the command to tcsd to read the focus into tcsreply
+    //
+    if ( this->client.send( tcscmd.str(), tcsreply ) != NO_ERROR ) {
       logwrite( function, "ERROR reading TCS cass angle" );
       cass = NAN;
       return ERROR;
@@ -270,19 +294,16 @@
     try {                                              // extract ra dec from coordstring
       cass = std::stod( tokens.at(0) );
     }
-    catch( std::out_of_range &e ) {
-      message << "ERROR out of range parsing tcsreply \"" << tcsreply << "\": " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-    catch( std::invalid_argument &e ) {
-      message << "ERROR invalid argument parsing tcsreply \"" << tcsreply << "\": " << e.what();
+    catch( const std::out_of_range &e ) {
+      message << "ERROR parsing tcsreply \"" << tcsreply << "\": " << e.what();
       logwrite( function, message.str() );
       return ERROR;
     }
 
-    message.str(""); message << "currrent cass ring angle = " << cass;
-    logwrite( function, message.str() );
+    if ( !poll ) {
+      message.str(""); message << "currrent cass ring angle = " << cass;
+      logwrite( function, message.str() );
+    }
 
     return NO_ERROR;
   }
@@ -704,6 +725,9 @@
    * @return     ERROR or NO_ERROR
    *
    */
+  long TcsDaemonClient::poll_coords( double &ra_h, double &dec_d ) {
+    return this->get_coords_type( "poll "+TCSD_GET_COORDS, ra_h, dec_d );
+  }
   long TcsDaemonClient::get_coords( double &ra_h, double &dec_d ) {
     return this->get_coords_type( TCSD_GET_COORDS, ra_h, dec_d );
   }
@@ -750,12 +774,12 @@
 
     Tokenize( coordstring, tokens, " " );                       // comes back as space-delimited string "hh:mm:ss.ss dd:mm:ss.ss"
     try {                                                       // extract ra dec from coordstring
-      if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
+      if ( cmd.find( TCSD_GET_COORDS ) != std::string::npos ) {
         ra_h  = this->radec_to_decimal( tokens.at(0) );  // RA decimal hours
         dec_d = this->radec_to_decimal( tokens.at(1) );  // DEC decimal degrees
       }
       else
-      if ( cmd.compare( TCSD_WEATHER_COORDS ) == 0 ) {
+      if ( cmd.find( TCSD_WEATHER_COORDS ) != std::string::npos ) {
         ra_h  = std::stod( tokens.at(0) );                      // RA decimal hours
         dec_d = std::stod( tokens.at(1) );                      // DEC decimal degrees
       }

@@ -527,7 +527,7 @@ logwrite( "Acam::MotionInterface::home", name_in );
 
       // Where are we now?
       //
-      error = this->current_filter( currname, currid, currpos );
+      error = this->get_current_filter( currname, currid, currpos );
 
       // Where do we want to go?
       //
@@ -587,20 +587,18 @@ logwrite( "Acam::MotionInterface::home", name_in );
 
     // Whether or not a filter was supplied, read the current position now.
     //
-//  int addr = _motormap[ filter ].addr;
-//  float pos;
-//  error = this->pi.get_pos( addr, axis, pos );
+    error = this->get_current_filter( retstring );
 
-logwrite( function, "[DEBUG] query current filter" );
-    error = this->current_filter( retstring );
-message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( function, message.str() );
+    // save the name to the class
+    //
+    this->current_filter_name = retstring;
 
     return( error );
   }
   /***** Acam::MotionInterface::filter ****************************************/
 
 
-  /***** Acam::MotionInterface::current_filter ********************************/
+  /***** Acam::MotionInterface::get_current_filter ****************************/
   /**
    * @brief      get the current filter position name
    * @param[out] currname  return string contains the current position name
@@ -609,19 +607,19 @@ message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( 
    * This function is overloaded
    *
    */
-  long MotionInterface::current_filter( std::string &currname ) {
+  long MotionInterface::get_current_filter( std::string &currname ) {
     std::string function = "Acam::MotionInterface::currernt_filter";
     int currid;
     float currpos;
-    long error = this->current_filter( currname, currid, currpos );
+    long error = this->get_current_filter( currname, currid, currpos );
     return( error );
   }
-  /***** Acam::MotionInterface::current_filter ********************************/
+  /***** Acam::MotionInterface::get_current_filter ****************************/
 
 
-  /***** Acam::MotionInterface::current_filter ********************************/
+  /***** Acam::MotionInterface::get_current_filter ****************************/
   /**
-   * @brief      get the current filter position name
+   * @brief      get the current filter position name by reading the controller
    * @param[out] currname  contains the current position name
    * @param[out] currid    contains the current position id
    * @param[out] currpos   contains the current position position
@@ -630,7 +628,7 @@ message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( 
    * This function is overloaded
    *
    */
-  long MotionInterface::current_filter( std::string &currname, int &currid, float &currpos ) {
+  long MotionInterface::get_current_filter( std::string &currname, int &currid, float &currpos ) {
     std::string function = "Acam::MotionInterface::currernt_filter";
     std::string filter = "filter";
     std::stringstream message;
@@ -641,7 +639,7 @@ message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( 
     //
     std::string posstring;
     int axis=1;
-    auto addr=this->motorinterface.get_motormap()[currname].addr;
+    auto addr=this->motorinterface.get_motormap()[filter].addr;
     currpos=NAN;
     std::string posname;
 
@@ -649,13 +647,21 @@ message.str(""); message << "[DEBUG] current_filter = " << retstring; logwrite( 
 
     // form the return value
     //
-    message.str(""); message << currname << " " << std::fixed << std::setprecision(3) << currpos;
+    message.str(""); message << posname << " " << std::fixed << std::setprecision(3) << currpos;
     if ( ! posname.empty() ) { message << " (" << posname << ")"; }
     logwrite( function, message.str() );
 
+    // save the filter name to the class
+    //
+    this->current_filter_name = posname;
+
+    // return the posname as the currname
+    //
+    currname = posname;
+
     return( error );
   }
-  /***** Acam::MotionInterface::current_filter ********************************/
+  /***** Acam::MotionInterface::get_current_filter ****************************/
 
 
   /***** Acam::MotionInterface::cover *****************************************/

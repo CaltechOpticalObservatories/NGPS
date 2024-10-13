@@ -285,7 +285,7 @@ namespace Acam {
     std::string db_schema;
     std::string db_table;
 
-    this->db_info.clear();
+    this->interface.db_info.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -347,7 +347,7 @@ namespace Acam {
 
     } // end loop through the entries in the configuration file
 
-    this->db_info = { db_host, db_port, db_user, db_pass, db_schema, db_table };
+    this->interface.db_info = { db_host, db_port, db_user, db_pass, db_schema, db_table };
 
     message.str("");
     if (applied!=6) {
@@ -709,13 +709,13 @@ namespace Acam {
       }
       else
       if ( cmd == ACAMD_EXPTIME ) {
-                      ret  = this->interface.camera.exptime( args, retstring );  // set exptime
-                             this->interface.guider_settings_control();          // update Guider GUI display igores ret
+                      ret  = this->interface.exptime( args, retstring );         // set exptime
+          if (ret==NO_ERROR) this->interface.guider_settings_control();          // update Guider GUI display igores ret
       }
       else
       if ( cmd == ACAMD_GAIN ) {
                       ret  = this->interface.camera.gain( args, retstring );     // set gain
-                             this->interface.guider_settings_control();          // update Guider GUI display igores ret
+          if (ret==NO_ERROR) this->interface.guider_settings_control();          // update Guider GUI display igores ret
       }
       else
       if ( cmd == ACAMD_GUIDESET ) {
@@ -816,6 +816,7 @@ namespace Acam {
       //
       if ( cmd == ACAMD_FILTER ) {
                       ret = this->interface.motion.filter( args, retstring );
+         if (ret==NO_ERROR) this->interface.guider_settings_control();          // update Guider GUI display igores ret
       }
       else
 

@@ -23,6 +23,7 @@
 #include "tcsd_commands.h"
 #include "tcsd_client.h"
 #include "skyinfo.h"
+#include "database.h"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
@@ -105,9 +106,10 @@ namespace Acam {
       long imflip( std::string args, std::string &retstring );
       long imrot( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
+      long gain( int value );
       int gain();
-      long exptime( std::string exptime_in, std::string &retstring );
-      double exptime();
+      long set_exptime( float &fval );
+      long set_exptime( float &&fval );
       long speed( std::string args, std::string &retstring );
       long temperature( std::string args, std::string &retstring );
   };
@@ -147,6 +149,12 @@ namespace Acam {
       PyObject* pAstrometryModule;                       /// astrometry
       PyObject* pQualityModule;                          /// image quality
 
+      inline double get_seeing()         { return this->seeing; }
+      inline double get_seeing_zenith()  { return this->seeing_zenith; }
+      inline double get_extinction()     { return this->extinction; }
+      inline double get_background()     { return this->background_med; }
+      inline double get_background_std() { return this->background_std; }
+
       inline void get_solution( std::string &_result, double &_ra, double &_dec, double &_angle ) {
         _result = this->result;
         _ra     = this->ra;
@@ -170,20 +178,6 @@ namespace Acam {
   /***** Acam::Astrometry *****************************************************/
 
 
-  /***** Acam::Telemetry ******************************************************/
-  /**
-   * @class  Telemetry
-   * @brief  interface class for acam
-   *
-   * This class defines the interface for the acam system and
-   * contains the functions used to communicate with it.
-   *
-   */
-  class Telemetry {
-  };
-  /***** Acam::Telemetry ******************************************************/
-
-
   /***** Acam::GuideManager ***************************************************/
   /**
    * @class  GuideManager
@@ -203,7 +197,7 @@ namespace Acam {
 
       // These are the GUIDER GUI settings
       //
-      double exptime;
+      float exptime;
       int gain;
       std::string filter;  // Python needs an arg so filter can't be empty-initialize in constructor
       std::atomic<double> focus;
@@ -475,7 +469,7 @@ namespace Acam {
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
 
-      GuideManager guide_manager;
+      std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
       Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
                     tcs_online(false),
@@ -492,11 +486,13 @@ namespace Acam {
       inline void set_imagename( std::string name_in ) { this->imagename = name_in; return; }
       inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
 
+      GuideManager guide_manager;
+
+      Database::Database database;
+
       Acam::FitsInfo fitsinfo;
 
       Target target;                           /// for target acquisition
-
-//    Telemetry telemetry;                     /// for collecting and writing telemetry data files
 
       Common::Queue async;                     /// asynchronous message queue
 
@@ -532,6 +528,7 @@ namespace Acam {
       long put_on_slit( const std::string args, std::string &retstring );
       long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
+      long exptime( const std::string args, std::string &retstring );
 
       long collect_header_info();
 
