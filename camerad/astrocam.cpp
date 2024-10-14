@@ -3887,6 +3887,22 @@ logwrite(function, message.str());
 
         this->controller[dev].info.systemkeys.primary().addkey( "BINSPEC", this->camera_info.binning[_COL_], "binning in spectral direction" ); // TODO
         this->controller[dev].info.systemkeys.primary().addkey( "BINSPAT", this->camera_info.binning[_ROW_], "binning in spatial direction" );  // TODO
+
+        // Add ___SEC keywords
+        //
+        std::stringstream sec;
+
+        sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] << ":" << this->controller[dev].info.region_of_interest[1]
+                         << "," << this->controller[dev].info.region_of_interest[2] << ":" << this->controller[dev].info.region_of_interest[3] << "]";
+        this->controller[dev].info.systemkeys.extension().addkey( "CCDSEC", sec.str(), "physical format of CCD" );
+
+        sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] + skipcols << ":" << cols
+                         << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows << "]";
+        this->controller[dev].info.systemkeys.extension().addkey( "DATASEC", sec.str(), "section containing the CCD data" );
+
+        sec.str(""); sec << '[' << cols << ":" << cols+oscols
+                         << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows+osrows << "]";
+        this->controller[dev].info.systemkeys.extension().addkey( "BIASSEC", sec.str(), "overscan section" );
       }
       else {
         message.str(""); message << "saved but not sent to controller because chan " << this->controller[dev].channel << " is not connected";
