@@ -1114,9 +1114,6 @@ namespace Andor {
 
     PyGILState_Release( gstate );                    // Release the GIL
 
-    message.str(""); message << "headerfile: " << headerfile << " outputfile: " << outputfile;
-    logwrite( function, message.str() );
-
     return error;
   }
   /***** Andor::SkySim::generate_image ****************************************/
