@@ -597,7 +597,10 @@ namespace Thermal {
           timeout( 0, "sec" );
         }
 
-        database.close();  // Database is destructed when it leaves scope but this is tidy.
+        // Database is destructed when it leaves scope but this is tidy.
+        // close can throw an exception
+        //
+        database.close();
         logwrite( function, "telemetry database closed" );
       }
       catch ( const mysqlx::Error &err ) {

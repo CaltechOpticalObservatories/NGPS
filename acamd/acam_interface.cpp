@@ -820,7 +820,6 @@ namespace Acam {
       if (error==NO_ERROR) error = fits_file.copy_header_from( source_file );
     }
     else {
-      logwrite(function,"[DEBUG] create header");
       if (error==NO_ERROR) error = fits_file.create_header();  // create basic header
     }
 
@@ -1856,8 +1855,14 @@ namespace Acam {
       error |= this->camera.close();
 
       // close the database connection
+      // this may throw an exception
       //
-      this->database.close();
+      try { this->database.close(); }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR " << e.what();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
     }
 
     return error;

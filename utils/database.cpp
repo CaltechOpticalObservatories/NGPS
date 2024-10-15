@@ -158,7 +158,7 @@ namespace Database {
     catch ( const mysqlx::Error &err ) {
       message.str(""); message << "ERROR from mySQL: " << err;
       logwrite( function, message.str() );
-      throw mysqlx::Error( err );
+      throw std::runtime_error("closing database: " + std::string(err.what()));
     }
 
     return;

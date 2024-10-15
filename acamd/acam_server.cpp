@@ -611,7 +611,12 @@ namespace Acam {
       }
       else
       if ( cmd == ACAMD_TCSISCONNECTED ) {
+                      std::string tcsname;
                       ret = this->interface.tcsd.client.is_connected(retstring);
+                      if ( retstring=="true" ) {
+                        this->interface.tcsd.poll_name(tcsname);
+                        retstring.append(" "); retstring.append(tcsname);
+                      }
       }
       else
       if ( cmd == ACAMD_TCSGET ) {
