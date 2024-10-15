@@ -1,0 +1,281 @@
+#!/usr/bin/bash
+#
+# @file     camstep
+# @brief    script for taking Andor images while stepping focus or cass
+#
+# This script will change the telescope focus or cass angle and record
+# one or more images from the acam and/or slicecam at each postion.
+#
+
+acampath="/data/acam/"$(date -u +%Y%m%d)
+if [ ! -d $acampath ]; then $(mkdir $acampath); fi
+slicecampath="/data/slicecam/"$(date -u +%Y%m%d)
+if [ ! -d $slicecampath ]; then $(mkdir $slicecampath); fi
+
+# @fn     usage
+# @brief  display usage
+#
+function usage {
+        echo "usage:"
+        echo "  camstep focus|cass slicecam|acam|both <name> <num> <start> <stop> <step> [nexp]"
+        echo "  "
+        echo "  Steps through focus or cass angle which acquiring acam and/or slicecam"
+        echo "  images at each step."
+        echo "  "
+        echo "  First arg selects what to step, focus or cassangle, then"
+        echo "  second arg selects which camera to grab frames, slicecam, acam, or both."
+        echo "  "
+        echo "     <imname>  base image name"
+        echo "     <imnum>   starting image number"
+        echo "     <start>   starting focus position"
+        echo "     <stop>    ending focus position"
+        echo "     <step>    focus step size"
+        echo "     [<nexp>]  is an optional number of exposures at each step"
+        echo "  "
+        echo "  Start/stop can be in any order, i.e. it can step up or down."
+        echo "  Sign of the step is not needed, it's inferred."
+        echo "  Integral number of steps need not fit in range of start/stop."
+        echo "  "
+        echo "  All images saved in /data/acam/YYYYMMDD and /data/slicecam/YYYYMMDD"
+        echo "  A logfile is written to /data/logs/____out-YYYY-MM-DDTHHMM.txt"
+        echo "  where ____ is either focus or cass, e.g. focusout-2025-01-01T0800.txt"
+        echo "  "
+        echo "  All daemons (acamd, slicecamd, tcsd) must already be running and"
+        echo "  open, configured with exposure time, etc."
+        echo "  "
+}
+
+# @fn     sendto
+# @brief  send command to a daemon
+# @param  $1  name of daemon
+# @param  $2  command
+# @param  $3  arg
+# @param  $n  arg
+#
+function sendto {
+        daemon=$1
+        shift 1
+        command=""
+        output=""
+        while [ $# -gt 0 ]
+        do
+                command="$command $1"
+                shift 1
+        done
+        output=$($daemon $command)
+        echo $output
+        if echo $output | grep ERROR; then
+                echo "stopping due to an error"
+                exit
+        fi
+}
+
+# check number of arguments
+#
+if [ $# -lt 7 ]; then
+  echo 1>&2 "not enough arguments"
+  usage
+  exit 2
+elif [ $# -gt 8 ]; then
+  echo 1>&2 "too many arguments"
+  usage
+  exit 2
+fi
+
+# assign positional arguments
+#
+axis=$1
+cam=$2
+imname="$3"
+imnum="$4"
+axis_start=$5
+axis_stop=$6
+axis_step=$7
+
+# check axis argument
+#
+if [ "$axis" == "focus" ]; then
+    axisname="focus"
+    set_axis="setfocus"
+    get_axis="getfocus"
+    axistolerance=0.0001
+elif [ "$axis" == "cass" ]; then
+    axisname="cass angle"
+    set_axis="ringgo"
+    get_axis="getcass"
+    axistolerance=0.02
+else
+    echo "unrecognized \""$axis"\". expected focus|cass"
+    exit
+fi
+
+# create an array of cameras and later will loop through this array
+# to select slicecam, acam, or both
+#
+if [ $cam == "slicecam" ]; then
+    whichcam=("scam")
+    imagepath=($slicecampath)
+elif [ $cam == "acam" ]; then
+    whichcam=("acam")
+    imagepath=($acampath)
+elif [ $cam == "both" ]; then
+    whichcam=("acam" "scam")
+    imagepath=($acampath $slicecampath)
+else
+    echo "unrecognized camera \""$cam"\". expected slicecam|acam|both"
+    exit
+fi
+
+datetime=$(date +"%Y-%m-%dT%H%M")
+axisout="/data/logs/"$axis"out-"$datetime".txt"
+
+# optional 7th arg. If not included then nexp=1
+#
+if [ -z "$7" ]; then nexp=1; else nexp=$7; fi
+
+echo "nexp="$nexp
+
+# check that args needing numbers are numbers
+#
+re='^[+-]?[0-9]+([.][0-9]+)?$'
+if ! [[ $imnum =~ $re ]]       ; then echo "image num \""$imnum"\" is not a number"; exit; fi
+if ! [[ $axis_start =~ $re ]] ; then echo $axisname" start \""$axis_start"\" is not a number"; exit; fi
+if ! [[ $axis_stop =~ $re ]]  ; then echo $axisname" stop \""$axis_stop"\" is not a number"  ; exit; fi
+if ! [[ $axis_step =~ $re ]]  ; then echo $axisname" step \""$axis_step"\" is not a number"  ; exit; fi
+
+# which direction are we going, up or down?
+#
+if [ 1 -eq "$(echo "$axis_start > $axis_stop" | bc -l )" ]; then
+    down=true
+    if [ 1 -eq "$(echo "$axis_step > 0" | bc -l )" ]; then
+        axis_step=$(echo "-1 * $axis_step" | bc -l )
+    fi
+elif [ 1 -eq "$(echo "$axis_start < $axis_stop" | bc -l )" ]; then
+    up=true
+else
+    echo "ERROR! check start and stop (maybe the same?)"
+    exit
+fi
+
+if [ ! -d $imagepath ] ; then mkdir $imagepath; fi
+
+# After sending a framegrab command, wait a bit to make sure it's done.
+# Get exposure time(s) from camera(s), add to that 0.5 sec, and
+# multiply by 1.5 -- that's how long to wait.
+#
+sleeptime=()
+for i in "${!whichcam[@]}"
+do
+    echo "setting up "${whichcam[$i]}
+    output=$(sendto ${whichcam[$i]} exptime)
+    exptime=$(echo "$output" | awk '{print $1}')
+    doutput=$(echo "($exptime + 0.5) * 1.5" | bc)
+    sleeptime+=("$doutput")
+
+    # This is also a good time to stop continuous frame grabbing,
+    # which needs to be stopped so that the script can control
+    # the framegrabbing.
+    #
+    output=$(sendto ${whichcam[$i]} framegrab stop)
+done
+
+# go to the starting position
+#
+echo "moving to "$axisname" start "$axis_start
+output=$(sendto tcs $set_axis $axis_start)
+axis_goal=$axis_start
+
+echo "$axis, file" >> $axisout
+
+# loop forever until stop is reached
+#
+while : ; do
+
+    # wait until we get there
+    #
+    axisreply=$(sendto tcs $get_axis)
+    axisnow=$(echo $axisreply| cut -d' ' -f 1)
+
+    # add 360 to negative cass angle
+    #
+    if [ "$axis" == "cass" ] && [ 1 -eq "$(echo "$axisnow < 0" | bc -l)" ]; then axisnow=$(echo "$axisnow + 360" | bc -l); fi
+
+    axisdiff=$(echo "$axisnow - $axis_goal" | bc -l )
+    axisdiff=${axisdiff#-}
+    while [ 1 -eq "$(echo "$axisdiff > $axistolerance" | bc -l )" ]
+    do
+        echo "current "$axisname"="$axisnow" ... waiting for "$axis_goal
+        axisreply=$(sendto tcs $get_axis)
+        axisnow=$(echo $axisreply| cut -d' ' -f 1)
+
+        # add 360 to negative cass angle
+        if [ "$axis" == "cass" ] && [ 1 -eq "$(echo "$axisnow < 0" | bc -l)" ]; then axisnow=$(echo "$axisnow + 360" | bc -l); fi
+
+        axisdiff=$(echo "$axisnow - $axis_goal" | bc -l )
+        axisdiff=${axisdiff#-}
+
+        sleep 1
+    done
+
+    echo "current "$axisname"="$axisnow
+
+    sleep 2  # settling
+
+    # take "nexp" exposures at this axis position
+    #
+    exposure=1
+    while : ; do
+        echo "exposing "$exposure"/"$nexp
+        for i in "${!whichcam[@]}"
+        do
+            # the command to acquire and save a single frame is framegrabe saveone <filename>
+            # assemble the filename and send the command
+            #
+            filename=${imagepath[$i]}"/"$imname"_"$((imnum))"_"$exposure".fits"
+            output=$(sendto ${whichcam[$i]} framegrab saveone $filename)
+
+            # wait for completion
+            #
+            sleep "${sleeptime[$i]}"
+        done
+        echo $axisnow", "$filename >> $axisout
+        # increment the exposure counter at this axis position
+        #
+        exposure=$((exposure+1))
+        [[ $exposure > $nexp ]] && break
+    done
+
+    # increment the axis position counter
+    #
+    imnum=$((imnum+1))
+
+    # set new axis goal
+    # axis_step is signed appropriately so always use addition here
+    #
+    axis_goal=$(echo "$axis_goal + $axis_step" | bc -l )
+
+    # break while loop when goal reached
+    #
+    if [ "$up" == true ]; then
+        if [ 1 -eq "$(echo "$axis_goal > $axis_stop" | bc -l )" ]; then break; fi
+    fi
+
+    if [ "$down" == true ]; then
+        if [ 1 -eq "$(echo "$axis_goal < $axis_stop" | bc -l )" ]; then break; fi
+    fi
+
+    # if we didn't break then go to the next position and keep looping
+    #
+    echo "moving to next "$axisname" position "$axis_goal" ..."
+    output=$(sendto tcs $set_axis $axis_goal)
+
+done
+
+# restore framegrabbing
+#
+for i in "${!whichcam[@]}"
+do
+    output=$(sendto ${whichcam[$i]} framegrab start)
+done
+
+echo "done!"
