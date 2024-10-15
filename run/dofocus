@@ -8,7 +8,9 @@
 #
 
 acampath="/data/acam/"$(date -u +%Y%m%d)
+if [ ! -d $acampath ]; then $(mkdir $acampath); fi
 slicecampath="/data/slicecam/"$(date -u +%Y%m%d)
+if [ ! -d $slicecampath ]; then $(mkdir $slicecampath); fi
 
 # @fn     usage
 # @brief  display usage
@@ -145,6 +147,10 @@ do
     exptime=$(echo "$output" | awk '{print $1}')
     doutput=$(echo "($exptime + 0.5) * 1.5" | bc)
     sleeptime+=("$doutput")
+
+    # this is also a good time to stop the continuous frame grabbing
+    #
+    output=$(sendto ${whichcam[$i]} framegrab stop)
 done
 
 # go to the starting focus position
@@ -224,6 +230,13 @@ while : ; do
     echo "moving to next focus position "$focus_goal" ..."
     output=$(sendto tcs setfocus $focus_goal)
 
+done
+
+# restore framegrabbing
+#
+for i in "${!whichcam[@]}"
+do
+    output=$(sendto ${whichcam[$i]} framegrab start)
 done
 
 echo "done!"
