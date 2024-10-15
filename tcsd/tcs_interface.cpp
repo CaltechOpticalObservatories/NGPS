@@ -388,10 +388,12 @@ namespace TCS {
     if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
 
     for ( const auto &[key,val] : this->tcsmap ) {
-      if ( val.isconnected() && !silent ) {
-        message.str(""); message << "connection open to " << val.name() << " on "
-                                 << val.host() << ":" << val.port();
-        logwrite( function, message.str() );
+      if ( val.isconnected() ) {
+        if ( !silent ) {
+          message.str(""); message << "connection open to " << val.name() << " on "
+                                   << val.host() << ":" << val.port();
+          logwrite( function, message.str() );
+        }
         retstring = val.name();  // Found the connected TCS
         break;                   // so get out now!
       }
@@ -1277,7 +1279,7 @@ namespace TCS {
       retstring = TCSD_COORDS;
       retstring.append( " <ra> <dec> <equinox> <ramotion> <decmotion> [<motionflag>] [ \"<targetname>\" ]\n" );
       retstring.append( "  Supply a position to the TCS.\n" );
-      retstring.append( "  <ra> and <dec> are in decimal degrees\n" );
+      retstring.append( "  <ra> in decimal hours, <dec> in decimal degrees\n" );
       retstring.append( "  <equinox> = 0 indicates apparent equinox\n" );
       retstring.append( "  Optional <motionflag> defines the meaning of <ramotion> and <decmotion> as\n" );
       retstring.append( "  0 (or absent): proper motion in units of RA 0.0001 sec/yr, DEC 0.001 arcsec/yr\n" );
