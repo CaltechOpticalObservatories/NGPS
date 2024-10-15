@@ -6,40 +6,35 @@
 # This script will change the telescope focus and record one or more images
 # from the acam at each focus postion.
 #
-# usage: dofocus <name> <num> <start> <stop> <step> [nexp]
-#
-# where <name>   is the image basename
-#       <num>    is a number appended to the basename
-#       <cam>    is which camera slitcam|acam
-#       <start>  is the starting focus position
-#       <stop>   is the ending focus position
-#       <step>   is the step between focus positions
-#       [nexp]   is an optional number of exposures at each focus position
-#
-# start/stop can be in any order (i.e. it can step up or down)
-# sign of step is not required
-# integral number of steps need not fit in range of start/stop
-#
-# Output fill be written to file $imagepath/$focusout
-# which are specified below.
-#
-# You must have already started the ngps-acam GUI, initialized the camera
-# and clicked "GO" so that it starts acquiring images.
-# You must have initialzed the tcsdaemon.
-#
 
 acampath="/data/acam/"$(date -u +%Y%m%d)
-slitcampath="/data/slitcam/"$(date -u +%Y%m%d)
-
-SLITCAM=6666
-ACAM=31000
+slicecampath="/data/slicecam/"$(date -u +%Y%m%d)
 
 # @fn     usage
 # @brief  display usage
 #
 function usage {
         echo "usage:"
-        echo "  dofocus <name> <num> slitcam|acam <start> <stop> <step> [nexp]"
+        echo "  dofocus slicecam|acam|both <name> <num> <start> <stop> <step> [nexp]"
+        echo "  "
+        echo "  selects which camera to grab frames, slicecam, acam, or both"
+        echo "  where <imname> base image name"
+        echo "        <imnum>  starting image number"
+        echo "        <start>  starting focus position"
+        echo "        <stop>   ending focus position"
+        echo "        <step>   focus step size"
+        echo "        [<nexp>] is an optional number of exposures at each step"
+        echo "  "
+        echo "  Start/stop can be in any order, i.e. it can step up or down."
+        echo "  Sign of the step is not needed, it's inferred."
+        echo "  Integral number of steps need not fit in range of start/stop."
+        echo "  "
+        echo "  All images saved in /data/acam/YYYYMMDD and /data/slicecam/YYYYMMDD"
+        echo "  Logfile written to /data/logs/focusout-YYYY-MM-DDTHHMM.txt"
+        echo "  "
+        echo "  All daemons (acamd, slicecamd, tcsd) must already be running and"
+        echo "  open, configured with exposure time, etc."
+        echo "  "
 }
 
 # @fn     sendto
@@ -81,25 +76,32 @@ fi
 
 # assign positional arguments
 #
-imname=$1
-imnum=$2
-cam=$3
+cam=$1
+imname="$2"
+imnum="$3"
 focus_start=$4
 focus_stop=$5
 focus_step=$6
 
-if [ $cam == "slitcam" ]; then
-    whichcam=$SLITCAM
-    imagepath=$slitcampath
+# create an array of cameras and later will loop through this array
+# to select slicecam, acam, or both
+#
+if [ $cam == "slicecam" ]; then
+    whichcam=("scam")
+    imagepath=($slicecampath)
 elif [ $cam == "acam" ]; then
-    whichcam=$ACAM
-    imagepath=$acampath
+    whichcam=("acam")
+    imagepath=($acampath)
+elif [ $cam == "both" ]; then
+    whichcam=("acam" "scam")
+    imagepath=($acampath $slicecampath)
 else
-    echo "unrecognized camera \""$cam"\". expected slitcam|acam"
+    echo "unrecognized camera \""$cam"\". expected slicecam|acam|both"
     exit
 fi
 
-focusout=$imagepath/focusout.txt
+datetime=$(date +"%Y-%m-%dT%H%M")
+focusout="/data/logs/focusout-"$datetime".txt"
 
 # optional 7th arg. If not included then nexp=1
 #
@@ -131,18 +133,24 @@ fi
 
 if [ ! -d $imagepath ] ; then mkdir $imagepath; fi
 
-# send some prep commands to the camera
+# After sending a framegrab command, wait a bit to make sure it's done.
+# Get exposure time(s) from camera(s), add to that 0.5 sec, and
+# multiply by 1.5 -- that's how long to wait.
 #
-echo "setting up camera ..."
-output=$(sock $whichcam PATH $imagepath)
-output=$(sock $whichcam IMAGENAME $imname)
-output=$(sock $whichcam IMAGENUMBER $imnum)
-output=$(sock $whichcam FITSKEY PIXSCALE 6.5)
+sleeptime=()
+for i in "${!whichcam[@]}"
+do
+    echo "setting up "${whichcam[$i]}
+    output=$(sendto ${whichcam[$i]} exptime)
+    exptime=$(echo "$output" | awk '{print $1}')
+    doutput=$(echo "($exptime + 0.5) * 1.5" | bc)
+    sleeptime+=("$doutput")
+done
 
 # go to the starting focus position
 #
 echo "moving to focus start "$focus_start
-output=$(sendto tcs focusgo $focus_start)
+output=$(sendto tcs setfocus $focus_start)
 focus_goal=$focus_start
 
 echo "focus, file" >> $focusout
@@ -168,18 +176,33 @@ while : ; do
 
     sleep 2  # settling
 
-    output=$(sock $whichcam FITSKEY OPTICAL $focusnow)
-
     # take "nexp" exposures at this focus
     #
     exposure=1
     while : ; do
         echo "exposing "$exposure"/"$nexp
-        output=$(sock $whichcam EXPOSE)
-        echo $focusnow", "$output >> $focusout
+        for i in "${!whichcam[@]}"
+        do
+            # the command to acquire and save a single frame is framegrabe saveone <filename>
+            # assemble the filename and send the command
+            #
+            filename=${imagepath[$i]}"/"$imname"_"$((imnum))"_"$exposure".fits"
+            output=$(sendto ${whichcam[$i]} framegrab saveone $filename)
+
+            # wait for completion
+            #
+            sleep "${sleeptime[$i]}"
+        done
+        echo $focusnow", "$filename >> $focusout
+        # increment the exposure counter at this focus position
+        #
         exposure=$((exposure+1))
         [[ $exposure > $nexp ]] && break
     done
+
+    # increment the focus position counter
+    #
+    imnum=$((imnum+1))
 
     # set new focus goal
     # focus_step is signed appropriately so always use addition here
@@ -199,7 +222,7 @@ while : ; do
     # if we didn't break then go to the next position and keep looping
     #
     echo "moving to next focus position "$focus_goal" ..."
-    output=$(sendto tcs focusgo $focus_goal)
+    output=$(sendto tcs setfocus $focus_goal)
 
 done
 
