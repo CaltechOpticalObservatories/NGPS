@@ -42,7 +42,7 @@ namespace Andor {
       PyObject* pSkySimModule;
 
       long generate_image( const std::string_view &headerfile, const std::string_view &outputfile,
-                           const double exptime, const bool ismex, const int simsize );
+                           const float exptime, const bool ismex, const int simsize );
 
       inline bool is_initialized() { return this->python_initialized; }
   };

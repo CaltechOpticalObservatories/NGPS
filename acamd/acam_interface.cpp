@@ -807,7 +807,7 @@ namespace Acam {
       return ERROR;
     }
 
-    fitsinfo.fits_name = "/tmp/acam.fits";
+    fitsinfo.fits_name = outfile;
     fitsinfo.datatype = USHORT_IMG;
     fitsinfo.section_size = andor.camera_info.axes[0] * andor.camera_info.axes[1];
 
@@ -816,9 +816,11 @@ namespace Acam {
     error = fits_file.open_file();        // open the fits file for writing
 
     if ( !source_file.empty() ) {
+      message.str(""); message << "[DEBUG] copy header from " << source_file; logwrite(function,message.str());
       if (error==NO_ERROR) error = fits_file.copy_header_from( source_file );
     }
     else {
+      logwrite(function,"[DEBUG] create header");
       if (error==NO_ERROR) error = fits_file.create_header();  // create basic header
     }
 
@@ -2046,10 +2048,15 @@ namespace Acam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = ACAMD_FRAMEGRAB;
-      retstring.append( " [ start | stop | one [ <filename> ] | status ]\n" );
+      retstring.append( " [ start | stop | one [ <filename> ] | saveone <filename> | status ]\n" );
       retstring.append( "   Start/Stop continuous frame grabbing or grab one single ACAM image.\n" );
+      retstring.append( "   \n" );
       retstring.append( "   If an optional <filename> is supplied then that file will be used\n" );
       retstring.append( "   as a source for header information for the frame.\n" );
+      retstring.append( "   \n" );
+      retstring.append( "   A <filename> provided with the saveone argument will save the framegrab\n" );
+      retstring.append( "   to that filename.\n" );
+      retstring.append( "   \n" );
       retstring.append( "   No argument or \"status\" returns true|false to indicate running state.\n" );
       return HELP;
     }
@@ -2073,6 +2080,16 @@ namespace Acam {
       retstring="invalid_argument";
       return ERROR;
     }
+
+    // For "saveone" a provided filename is used for saving the frame,
+    // otherwise the default name is used. When no imagename is provided,
+    // set_imagename() will restore the default image name.
+    //
+    if ( whattodo == "saveone" ) {
+      this->set_imagename(sourcefile);  // use sourcefile to set the output image name
+      sourcefile.clear();               // then clear sourcefile because it's not meant as a WCS source
+    }
+    else this->set_imagename("");
 
     // Unless requresting a stop, if the TCS is not already open then
     // initialize the connection // TODO
@@ -2116,12 +2133,12 @@ namespace Acam {
    * @param[in]  iface       reference to Acam::Interface object
    *
    */
-  void Interface::dothread_framegrab( Acam::Interface &iface, const std::string whattodo, const std::string sourcefile ) {
+  void Interface::dothread_framegrab( Acam::Interface &iface, const std::string whattodo, std::string sourcefile ) {
     std::string function = "Acam::Interface::dothread_framegrab";
     std::stringstream message;
     long error = NO_ERROR;
 
-    if ( whattodo == "one" ) {
+    if ( whattodo == "one" || whattodo == "saveone" ) {
       // Clear should_framegrab_run which means the framegrab loop should not run.
       // If it's already running then return, the existing framegrab loop will
       // stop. If it's not already running then drop through, and a single
@@ -3718,6 +3735,8 @@ namespace Acam {
     catch( const std::exception &e ) {
       message.str(""); message << "ERROR parsing exptime value " << args << ": " << e.what();
       logwrite( function, message.str() );
+      message.str(""); message << "exception_"<< e.what();
+      retstring=message.str();
       return ERROR;
     }
     // I have a potentially valid float value now
@@ -3990,7 +4009,7 @@ namespace Acam {
 
     this->camera.fitsinfo.fitskeys.addkey( "EXPSTART", this->camera.andor.camera_info.timestring, "exposure start time" );
     this->camera.fitsinfo.fitskeys.addkey( "MJD0",     this->camera.andor.camera_info.mjd0, "exposure start time (modified Julian Date)" );
-    this->camera.fitsinfo.fitskeys.addkey( "EXPTIME",  this->camera.andor.camera_info.exposure_time, "exposure time (sec)" );
+    this->camera.fitsinfo.fitskeys.addkey( "EXPTIME",  this->camera.andor.camera_info.exptime, "exposure time (sec)" );
     this->camera.fitsinfo.fitskeys.addkey( "SERNO",    this->camera.andor.camera_info.serial_number, "camera serial number" );
     this->camera.fitsinfo.fitskeys.addkey( "ACQMODE",  this->camera.andor.camera_info.acqmodestr, "acquisition mode" );
     this->camera.fitsinfo.fitskeys.addkey( "READMODE", this->camera.andor.camera_info.readmodestr, "read mode" );

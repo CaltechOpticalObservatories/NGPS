@@ -1630,7 +1630,7 @@ namespace Slicecam {
         //
         double exptime=0;
         if ( !this->camera.andor.empty() ) {
-          exptime = this->camera.andor.begin()->second->camera_info.exposure_time;
+          exptime = this->camera.andor.begin()->second->camera_info.exptime;
         }
         if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
 
@@ -2506,7 +2506,7 @@ namespace Slicecam {
 
     slicecam->fitskeys.addkey( "EXPSTART", slicecam->camera_info.timestring, "exposure start time" );
     slicecam->fitskeys.addkey( "MJD0",     slicecam->camera_info.mjd0, "exposure start time (modified Julian Date)" );
-    slicecam->fitskeys.addkey( "EXPTIME",  slicecam->camera_info.exposure_time, "exposure time (sec)" );
+    slicecam->fitskeys.addkey( "EXPTIME",  slicecam->camera_info.exptime, "exposure time (sec)" );
     slicecam->fitskeys.addkey( "SERNO",    slicecam->camera_info.serial_number, "camera serial number" );
     slicecam->fitskeys.addkey( "NAME",     cam, "camera name" );
     slicecam->fitskeys.addkey( "READMODE", slicecam->camera_info.readmodestr, "read mode" );

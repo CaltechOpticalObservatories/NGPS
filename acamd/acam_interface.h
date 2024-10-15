@@ -41,6 +41,8 @@
  */
 namespace Acam {
 
+  constexpr std::string_view DEFAULT_IMAGENAME = "/tmp/acam.fits";
+
   constexpr const char* PYTHON_PATH = "/home/developer/dhale/sandbox/NGPS/Python:/home/developer/dhale/sandbox/NGPS/Python/acam_skyinfo";
   constexpr const char* PYTHON_ASTROMETRY_MODULE = "astrometry";
   constexpr const char* PYTHON_ASTROMETRY_FUNCTION = "astrometry_cwrap";
@@ -483,7 +485,7 @@ namespace Acam {
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
-      inline void set_imagename( std::string name_in ) { this->imagename = name_in; return; }
+      inline void set_imagename( std::string name_in ) { this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : name_in ); return; }
       inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
 
       GuideManager guide_manager;
@@ -537,7 +539,7 @@ namespace Acam {
       long configure_interface( Config &config );
 
       static void dothread_fpoffset( Acam::Interface &iface );
-      static void dothread_framegrab( Acam::Interface &iface, const std::string whattodo, const std::string sourcefile );
+      static void dothread_framegrab( Acam::Interface &iface, const std::string whattodo, std::string sourcefile );
       static void dothread_set_filter( Acam::Interface &iface, std::string filter_req );
       static void dothread_set_focus( Acam::Interface &iface, double focus_req );
       static void dothread_monitor_focus( Acam::Interface &iface );

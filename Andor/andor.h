@@ -83,7 +83,6 @@ namespace Andor {
       unsigned long npix;
       unsigned long section_size;
       double pixel_scale;                          ///< pixel scale
-      double exposure_time;                        ///< exposure time in seconds
       std::string fits_name;
       std::string sdk_version;                     ///< SDK version
       std::string driver_version;                  ///< device driver version
@@ -98,7 +97,7 @@ namespace Andor {
                       gain(-1), emgain(-1), emgain_low(-1), emgain_high(-1),
                       hflip(0), vflip(0),
                       rows(0), cols(0), axes{0,0}, datatype(-1), npix(0), section_size(0),
-                      pixel_scale(0), exposure_time(0),
+                      pixel_scale(0),
                       mjd0(0) { }
 
   };
@@ -201,7 +200,7 @@ namespace Andor {
       virtual long _Initialize( ) = 0;
       virtual long _SetAcquisitionMode( int mode ) = 0;
       virtual long _SetCurrentCamera( at_32 handle ) = 0;
-      virtual long _SetExposureTime( double exptime ) = 0;
+      virtual long _SetExposureTime( float exptime ) = 0;
       virtual long _SetKineticCycleTime( float time ) = 0;
       virtual long _SetNumberAccumulations( int number ) = 0;
       virtual long _SetAccumulationCycleTime( float time ) = 0;
@@ -261,7 +260,7 @@ namespace Andor {
       long _Initialize( ) override;
       long _SetAcquisitionMode( int mode ) override;
       long _SetCurrentCamera( at_32 handle ) override;
-      long _SetExposureTime( double exptime ) override;
+      long _SetExposureTime( float exptime ) override;
       long _SetKineticCycleTime( float time ) override;
       long _SetNumberAccumulations( int number ) override;
       long _SetAccumulationCycleTime( float time ) override;
@@ -291,14 +290,15 @@ namespace Andor {
   class Emulator : public AndorBase {
     private:
       bool is_initialized;
-      double exptime;
+      float exptime;
+      int temperature;
       int serial_number;
 
     public:
-      Emulator() : is_initialized(false), exptime(0), serial_number( -1 ) { }
-      Emulator( int sn ) : is_initialized(false), exptime(0), serial_number( sn ) { }
+      Emulator() : is_initialized(false), exptime(0), temperature(20), serial_number( -1 ) { }
+      Emulator( int sn ) : is_initialized(false), exptime(0), temperature(20), serial_number( sn ) { }
 
-      inline double get_exptime() { return this->exptime; }
+      inline float get_exptime() { return this->exptime; }
 
       long _GetCapabilities( AndorCapabilities* caps ) override;
       long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
@@ -331,7 +331,7 @@ namespace Andor {
       long _Initialize( ) override;
       long _SetAcquisitionMode( int mode ) override;
       long _SetCurrentCamera( at_32 handle ) override;
-      long _SetExposureTime( double exptime ) override;
+      long _SetExposureTime( float exptime ) override;
       long _SetKineticCycleTime( float time ) override;
       long _SetNumberAccumulations( int number ) override;
       long _SetAccumulationCycleTime( float time ) override;

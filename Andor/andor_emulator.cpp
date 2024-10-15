@@ -29,6 +29,9 @@ namespace Andor {
     std::string function = "Andor::Emulator::_GetCapabilities";
     std::stringstream message;
 
+    // set AC_ACQMODE_FRAMETRANSFER bit
+    caps->ulFTReadModes = AC_ACQMODE_FRAMETRANSFER;
+
     return NO_ERROR;
   }
   /***** Andor::Emulator::_GetCapabilities ************************************/
@@ -493,7 +496,7 @@ namespace Andor {
     std::string function = "Andor::Emulator::_GetTemperature";
     std::stringstream message;
 
-    temp   = -120;
+    temp   = this->temperature;
     status = "STABILIZED";
 
     return NO_ERROR;
@@ -568,6 +571,8 @@ namespace Andor {
     std::string function = "Andor::Emulator::_SetTemperature";
     std::stringstream message;
 
+    this->temperature = temp;
+
     return NO_ERROR;
   }
   /***** Andor::Emulator::_SetTemperature *************************************/
@@ -629,11 +634,6 @@ namespace Andor {
     std::string function = "Andor::Emulator::_SetAcquisitionMode";
     std::stringstream message;
 
-    if ( mode != 1 ) {
-      logwrite( function, "ERROR only mode 1 is supported" );
-      return ERROR;
-    }
-
     return NO_ERROR;
   }
   /***** Andor::Emulator::_SetAcquisitionMode *********************************/
@@ -668,7 +668,7 @@ namespace Andor {
    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
    *
    */
-  long Emulator::_SetExposureTime( double exptime_in ) {
+  long Emulator::_SetExposureTime( float exptime_in ) {
     std::string function = "Andor::Emulator::_SetExposureTime";
     std::stringstream message;
 
@@ -761,6 +761,10 @@ namespace Andor {
   long Emulator::_GetAcquisitionTimings( float &exp, float &acc, float &kin ) {
     std::string function = "Andor::Emulator::_GetAcquisitionTimings";
     std::stringstream message;
+
+    exp = this->exptime;
+    acc = 1.1*exp;
+    kin = 1.1*acc;
 
     return NO_ERROR;
   }
@@ -1019,7 +1023,7 @@ namespace Andor {
    */
   long SkySim::generate_image( const std::string_view &headerfile,
                                const std::string_view &outputfile,
-                               const double exptime,
+                               const float exptime,
                                const bool ismex,
                                const int simsize ) {
     std::string function = "Andor::SkySim::generate_image";

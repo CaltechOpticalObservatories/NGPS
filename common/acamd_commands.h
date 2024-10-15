@@ -66,7 +66,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_TCSISCONNECTED+" [ ? ]",
                                                 ACAMD_TCSISOPEN+" [ ? ]",
                                                 "  CAMERA COMMANDS:",
-                                                ACAMD_FRAMEGRAB+" [ ? | start | stop | one [ <filename> ] | status ]",
+                                                ACAMD_FRAMEGRAB+" [ ? | start | stop | one [ <filename> ] | saveone <filename> | status ]",
                                                 ACAMD_FRAMEGRABFIX+" [ ? ]",
                                                 ACAMD_BIN+" [ ? | <hbin> <vbin> ]",
                                                 ACAMD_EMULATOR+" [ ? | true | false ]",
