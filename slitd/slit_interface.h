@@ -43,16 +43,12 @@ namespace Slit {
    */
   class Interface {
     private:
-      bool class_initialized;
       size_t numdev;
       float maxwidth;
       float minwidth;
-    public:
-      size_t con_A;
-      size_t con_B;
 
-      Interface();
-      ~Interface();
+    public:
+      Interface() : numdev(-1), maxwidth(0), minwidth(0) { };
 
       Common::Queue async;
 

@@ -23,7 +23,7 @@ const std::vector<std::string> SLITD_SYNTAX = {
                                                  SLITD_HOME+" [ ? ]",
                                                  SLITD_ISHOME+" [ ? ]",
                                                  SLITD_ISOPEN+" [ ? ]",
-                                                 SLITD_NATIVE+" ? | <name> <cmd>",
+                                                 SLITD_NATIVE+" ? | <name> <cmd> [ <axis> <arg> ]",
                                                  SLITD_OPEN+" [ ? ]",
                                                  SLITD_SET+" ? | <width> [ <offset> ]"
                                                };

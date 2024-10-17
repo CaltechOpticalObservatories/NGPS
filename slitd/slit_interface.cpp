@@ -12,29 +12,6 @@
 
 namespace Slit {
 
-  /***** Slit::Interface::Interface *******************************************/
-  /**
-   * @brief      class constructor
-   *
-   */
-  Interface::Interface() {
-    this->con_A=-1;
-    this->con_B=-1;
-    this->numdev=-1;
-  }
-  /***** Slit::Interface::Interface *******************************************/
-
-
-  /***** Slit::Interface::~Interface ******************************************/
-  /**
-   * @brief      class deconstructor
-   *
-   */
-  Interface::~Interface() {
-  }
-  /***** Slit::Interface::~Interface ******************************************/
-
-
   /***** Slit::Interface::initialize_class ************************************/
   /**
    * @brief      initializes the class from configure_slitd()
@@ -350,16 +327,10 @@ namespace Slit {
           return( ERROR );
       }
     }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "unable to convert offset from args " << args << " : " << e.what();
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing args " << args << " : " << e.what();
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
-    }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "one or more values out of range " << args << " : " << e.what();
-      logwrite( function, message.str() );
-      retstring="out_of_range";
       return( ERROR );
     }
 
@@ -411,7 +382,7 @@ namespace Slit {
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " width=" << setwidth
-                             << " offset=" << setoffset << " con_A=" << this->con_A << " con_B=" << this->con_B;
+                             << " offset=" << setoffset;
     logwrite( function, message.str() );
 #endif
 
@@ -485,8 +456,7 @@ namespace Slit {
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " numdev=" << this->numdev
-                             << " width=" << width << " offset=" << offs
-                             << " con_A=" << this->con_A << " con_B=" << this->con_B;
+                             << " width=" << width << " offset=" << offs;
     logwrite( function, message.str() );
 #endif
 
@@ -533,7 +503,7 @@ namespace Slit {
   /***** Slit::Interface::send_command ****************************************/
   /**
    * @brief      writes the raw command as received to the master controller
-   * @param[in]  args       contains <name> <cmd>
+   * @param[in]  args       contains <name> <cmd> [ <axis> <arg> ]
    * @param[out] retstring  reference to contain any return string
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -543,17 +513,21 @@ namespace Slit {
    */
   long Interface::send_command( std::string args, std::string &retstring ) {
     std::string function = "Slit::Interface::send_command";
+    std::stringstream message;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
     // Help
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLITD_NATIVE;
-      retstring.append( " <name> <cmd>\n" );
+      retstring.append( " <name> <cmd> [ <axis> <arg> ] \n" );
       retstring.append( "  sends <cmd> directly to the controller named <name>,\n" );
       retstring.append( "  where <name> is in { " );
-      auto _motormap = this->motorinterface.get_motormap();
       for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
       retstring.append( "}\n" );
-      retstring.append( "  No checks are made as to the validity of the command string.\n" );
+      retstring.append( "  No checks are made as to the validity of the command string. Note that\n" );
+      retstring.append( "  some commands require specifying the axisid and may have additional args.\n" );
       retstring.append( "  If <cmd> does not contain a \"?\" then there is no return string.\n" );
       return HELP;
     }
@@ -561,21 +535,49 @@ namespace Slit {
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
+    // expecting minimally <name> <cmd> tokens
+    //
     if ( tokens.size() < 2 ) {
       logwrite( function, "ERROR expected at least two args: <name> <cmd>" );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
-    std::string name = tokens[0];
-    std::string cmd  = tokens[1];
+    // don't need try/catch because already verified there are two elements
+    //
+    std::string name   = tokens[0];
 
-    if ( cmd.find( "?" ) != std::string::npos ) {
-      return( this->motorinterface.send_command( name, cmd, retstring ) );
+    // The command may contain multiple string-separated tokens so
+    // remove the name, tokens[0] from the args and send the rest as
+    // the command.
+    //
+    auto nameloc = args.find(name);
+    std::string cmd_in = args.substr(nameloc+1);
+
+    // find name in the motormap
+    //
+    if ( _motormap.find(name) == _motormap.end() ) {
+      message.str(""); message << "ERROR \"" << name << "\" not found in motormap";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // once the name is verified, get the addr because it needs to be
+    // sent with the <cmd>
+    //
+    auto addr = _motormap[name].addr;
+
+    std::stringstream cmd;
+    if ( addr > 0 ) cmd << addr << " ";
+    cmd << cmd_in;
+
+    if ( cmd.str().find( "?" ) != std::string::npos ) {
+      return( this->motorinterface.send_command( name, cmd.str(), retstring ) );
     }
     else {
-      return( this->motorinterface.send_command( name, cmd ) );
+      return( this->motorinterface.send_command( name, cmd.str() ) );
     }
   }
   /***** Slit::Interface::send_command ****************************************/
+
 }

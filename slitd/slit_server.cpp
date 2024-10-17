@@ -217,12 +217,7 @@ namespace Slit {
    */
   void Server::block_main( Slit::Server &slit, Network::TcpSocket sock ) {
     while(1) {
-std::stringstream message;
-message.str(""); message << "block on Accept port " << sock.getport() << " fd " << sock.getfd();
-logwrite( "Server::block_main", message.str() );
       sock.Accept();
-message.str(""); message << "Accepted port " << sock.getport() << " fd " << sock.getfd();
-logwrite( "Server::block_main", message.str() );
       slit.doit(sock);              // call function to do the work
       sock.Close();
     }
@@ -250,14 +245,10 @@ logwrite( "Server::block_main", message.str() );
    */
   void Server::thread_main( Slit::Server &slit, Network::TcpSocket sock ) {
     while (1) {
-std::stringstream message;
-message.str(""); message << "lock_guard port " << sock.getport() << " fd " << sock.getfd();
-logwrite( "Server::thread_main", message.str() );
-      slit.conn_mutex.lock();
+      {
+      std::lock_guard<std::mutex> lock( slit.conn_mutex );
       sock.Accept();
-      slit.conn_mutex.unlock();
-message.str(""); message << "Accepted port " << sock.getport() << " fd " << sock.getfd();
-logwrite( "Server::thread_main", message.str() );
+      }
       slit.doit(sock);           // call function to do the work
       sock.Close();
     }
@@ -338,7 +329,6 @@ logwrite( "Server::thread_main", message.str() );
 
     while (connection_open) {
 
-message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwrite( function, message.str() );
       // Wait (poll) connected socket for incoming data...
       //
       int pollret;
@@ -537,7 +527,6 @@ message.str(""); message << "[TEST] polltimeout = " << sock.polltimeout(); logwr
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     return;
   }
   /***** Server::doit *********************************************************/
