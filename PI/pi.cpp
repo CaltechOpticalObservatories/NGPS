@@ -431,7 +431,7 @@ namespace Physik_Instrumente {
       auto axis = axisnums[n];
       auto position = positions[n];
 
-      // Spawn a thread to performm the home move.
+      // Spawn a thread to performm the move.
       // If there is more than one then they can be done in parallel.
       //
       std::thread( _dothread_moveto, std::ref( *this ), name, addr, axis, position ).detach();
@@ -573,10 +573,12 @@ namespace Physik_Instrumente {
       return ERROR;
     }
 
-    // send the move_abs command and wait for move
+    // send the move_abs command
     //
     long error = this->_move_abs( motorname, addr, axisnum, position );
 
+    // and wait for the move if successful
+    //
     if ( error==NO_ERROR ) error = this->_move_axis_wait( motorname, addr, axisnum );
 
     return error;
@@ -655,8 +657,8 @@ namespace Physik_Instrumente {
   template <typename ControllerType>
   void Interface<ControllerType>::_dothread_moveto( Interface<ControllerType> &iface,
                                                    const std::string name,
-                                                   const int axis,
                                                    const int addr,
+                                                   const int axis,
                                                    const float pos ) {
     std::string function = "Focus::Interface::_dothread_moveto";
     std::stringstream message;
@@ -879,23 +881,24 @@ namespace Physik_Instrumente {
       error |= iface._home_axis_wait( name, addr, axis );  // this can time out
     }
 
-    iface.thread_error.fetch_or( error );        // preserve any error returned
-
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
-
-    message.str(""); message << "completed home " << name << ( error!=NO_ERROR ? " with error" : "" );
-    logwrite( function, message.str() );
-
     // If successful, apply the zeropos if necessary
     //
     auto zeropos = iface.motormap[name].axes[axis].zeropos;
     if ( error==NO_ERROR && zeropos != 0 ) {
       logwrite( function, "applying zeropos offset" );
       error = iface._move_abs( name, addr, axis, zeropos );                 // move to zeropos position
-      std::stringstream cmd;
-      cmd << addr << " DFH " << axis;
-      if ( error==NO_ERROR ) error = iface.send_command( name, cmd.str() );  // define this as the home position
+//    std::stringstream cmd;
+//    cmd << addr << " DFH " << axis;
+//    if ( error==NO_ERROR ) error = iface.send_command( name, cmd.str() );  // define this as the home position
+      error |= iface._move_axis_wait( name, addr, axis );   // this can time out
     }
+
+    iface.thread_error.fetch_or( error );        // preserve any error returned
+
+    --iface.motors_running;                      // atomically decrement the number of motors waiting
+
+    message.str(""); message << "completed home " << name << ( error!=NO_ERROR ? " with error" : "" );
+    logwrite( function, message.str() );
 
     return;
   }
@@ -1004,6 +1007,11 @@ namespace Physik_Instrumente {
 
     bool is_home=false;
 
+    #ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
+    logwrite( function, message.str() );
+    #endif
+
     do {
       bool state;
       this->is_home( name, addr, axis, state );
@@ -1012,10 +1020,6 @@ namespace Physik_Instrumente {
 
       if ( is_home ) break;
       else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       }
 
@@ -1586,7 +1590,6 @@ namespace Physik_Instrumente {
       reply.erase(std::remove(reply.begin(), reply.end(), '\r' ), reply.end());
       reply.erase(std::remove(reply.begin(), reply.end(), '\n' ), reply.end());
       break;
-
     }
 
     retstring = reply;
@@ -1607,8 +1610,8 @@ namespace Physik_Instrumente {
    * a reply is read back; this function parses that reply.
    *
    * The reply from the controller is of the form:
-   * 0 1 A=R
-   * where A is the axis number and R is the response.
+   * 0 a A=R
+   * where a is the addr, A is the axis number and R is the response.
    *
    */
   template <typename ControllerType>

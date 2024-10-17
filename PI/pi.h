@@ -436,8 +436,8 @@ namespace Physik_Instrumente {
       //
       static void _dothread_moveto( Interface<ControllerType> &iface,
                                                    const std::string name,
-                                                   const int axis,
                                                    const int addr,
+                                                   const int axis,
                                                    const float pos );
       long _move_axis_wait( const std::string &name, int addr, int axis );
       long _move_abs( const std::string &name, int addr, float pos );                          ///< send move command in absolute coordinates
