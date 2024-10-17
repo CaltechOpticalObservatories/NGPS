@@ -141,14 +141,6 @@ namespace Power {
       error = ERROR;
     }
 
-#ifdef LOGLEVEL_DEBUG
-    for ( auto npsinfo_it = this->nps_info.begin(); npsinfo_it != this->nps_info.end(); ++npsinfo_it ) {
-      message.str(""); message << "[DEBUG] initialized NPS unit " << npsinfo_it->first << " with " << npsinfo_it->second.maxplugs
-                               << " outlets @ " << npsinfo_it->second.host << ":" << npsinfo_it->second.port;
-      logwrite( function, message.str() );
-    }
-#endif
-
     return( error );
   }
   /**************** Power::Interface::initialize_class ************************/
@@ -156,9 +148,7 @@ namespace Power {
 
   /**************** Power::Interface::open ************************************/
   /**
-   * @fn         open
    * @brief      open the NPS socket connection
-   * @param[in]  none
    * @return     ERROR or NO_ERROR
    *
    * This function will attempt to open sockets to the NPS unit(s). If
@@ -172,9 +162,11 @@ namespace Power {
     std::stringstream message;
     long error = NO_ERROR;   // this can only be set to error, never cleared in this function
 
+    this->missing.clear();
+
     // Iterate over all NPS units
     //
-    for ( auto iter = this->npsmap.begin(); iter != this->npsmap.end(); ) {
+    for ( auto iter = this->npsmap.begin(); iter != this->npsmap.end(); ++iter ) {
 
       // First make sure that the class object was initialized properly
       // (pretty much has to be)
@@ -202,18 +194,14 @@ namespace Power {
         //
         if ( this->missing.empty() ) this->missing.append( "missing:" );  // first time through
         this->missing.append( " " ); this->missing.append( iter->second.interface.get_name() );
-
-        iter = this->npsmap.erase( iter );  // erasing will return an iterator to the next element
-        continue;
       }
       else {
         message.str(""); message << "opened connection to " << iter->second.interface.get_name();
         logwrite( function, message.str() );
-        ++iter;                             // open successful so increment the iterator
       }
     }
 
-    return( error );
+    return error;
   }
   /**************** Power::Interface::open ************************************/
 
@@ -348,18 +336,23 @@ namespace Power {
       return HELP;
     }
 
-    if ( ! this->isopen() ) {
-      logwrite( function, "ERROR:connection not open" );
-      return ERROR;
-    }
-
     message << "u p s   plugname\n";
 
     try {
       for ( auto nps : this->npsmap ) {                     // loop through all units in the map
         int unit = nps.first;                               // get the nps unit number from the map
         int maxplugs = nps_info.at(unit).maxplugs;          // max number of plugs on this unit
-        nps.second.get_all( maxplugs, retstring );          // get plug status for all plugs in this unit
+
+        // get_all() is a member function of the WTI::NPS class
+        // which reads all plugs (on a given unit) and is called
+        // only if this nps is connected. If not connected (or
+        // get_all returns error) then this will set the status
+        // string to "err".
+        //
+        long err=ERROR;
+        if ( nps.second.isconnected() ) {
+          err=nps.second.get_all( maxplugs, retstring ); // get plug status for all plugs in this unit
+        }
 
         std::vector<std::string> tokens;                    // retstring will be CSV format
         Tokenize( retstring, tokens, "," );                 // so tokenize on comma to get each value
@@ -367,7 +360,9 @@ namespace Power {
         for ( int tok=0,plug=1; tok<tokens.size(); tok++,plug++ ) {
           plugid.str(""); plugid << unit << " " << plug;
           int status = std::stoi( tokens.at(tok) );
-          message << plugid.str() << " " << ( status==1 ? "\e[1mon\e[0m " : "off" ) 
+          std::string status_string;
+          if (err==ERROR) status_string="err"; else status_string=( status==1 ? "\e[1mon\e[0m " : "off" );
+          message << plugid.str() << " " << status_string
                                   << " " << this->plugname[ plugid.str() ] << "\n";
           this->telemetry_map[this->plugname[plugid.str()]] = status;
         }

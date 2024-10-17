@@ -10,47 +10,6 @@
 
 namespace WTI {
 
-  /***** WTI::Interface::Interface ********************************************/
-  /**
-   * @brief      default Interface class constructor
-   *
-   */
-  Interface::Interface( ) {
-    this->name = "";
-    this->port = -1;
-    this->host = "";
-    this->initialized = false;
-  }
-  /***** WTI::Interface::Interface ********************************************/
-
-
-  /***** WTI::Interface::Interface ********************************************/
-  /**
-   * @brief      Interface class constructor
-   * @param[in]  name  name of the device for info purposes only
-   * @param[in]  host  hostname of the device
-   * @param[in]  port  port number of the device
-   *
-   */
-  Interface::Interface( std::string name, std::string host, int port ) {
-    this->name = name;
-    this->port = port;
-    this->host = host;
-    this->initialized = true;
-  }
-  /***** WTI::Interface::Interface ********************************************/
-
-
-  /***** WTI::Interface::~Interface *******************************************/
-  /**
-   * @brief      Interface class deconstructor
-   *
-   */
-  Interface::~Interface() {
-  };
-  /***** WTI::Interface::~Interface *******************************************/
-
-
   /***** WTI::Interface::open *************************************************/
   /**
    * @brief      open a connection to the WTI hardware
@@ -137,8 +96,6 @@ namespace WTI {
    *
    */
   long Interface::send_command( std::string cmd ) {
-    std::string function = "WTI::Interface::send_command";
-    std::stringstream message;
     std::string retstring;
     return do_send_command( cmd, retstring );
   }
@@ -199,17 +156,12 @@ namespace WTI {
     long error=NO_ERROR;
     long retval=0;
 
-#ifdef LOGLEVEL_DEBUG
-    message << "[DEBUG] to " << this->name << " on socket " << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
-    logwrite( function, message.str() );
-#endif
-
     // send the command
     //
     cmd.append( "\r" );                            // add the CR character
     int written = this->sock.Write( cmd );         // write the command
     if ( written <= 0 ) {                          // return error if error writing to socket
-      message.str(""); message << "ERROR sending " << cmd << " to " << this->name;
+      message.str(""); message << "ERROR sending " << strip_newline(cmd) << " to " << this->name;
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -246,11 +198,11 @@ namespace WTI {
       }
       else {
 #ifdef LOGLEVEL_DEBUG
-        std::string debug_reply = retstring;
-        debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
-        debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
-        message.str(""); message << "[DEBUG] " << this->name << " reply: " << debug_reply;
-        logwrite( function, message.str() );
+//      std::string debug_reply = retstring;
+//      debug_reply= std::regex_replace( debug_reply, std::regex("\\r"), "\\r" );
+//      debug_reply= std::regex_replace( debug_reply, std::regex("\\n"), "\\n" );
+//      message.str(""); message << "[DEBUG] " << this->name << " reply: " << debug_reply;
+//      logwrite( function, message.str() );
 #endif
         break;
       }
@@ -259,26 +211,6 @@ namespace WTI {
     return( error );
   }
   /***** WTI::Interface::do_send_command **************************************/
-
-
-  /***** WTI::NPS::NPS ********************************************************/
-  /**
-   * @brief      default NPS class constructor
-   *
-   */
-  NPS::NPS() {
-  }
-  /***** WTI::NPS::NPS ********************************************************/
-
-
-  /***** WTI::NPS::~NPS *******************************************************/
-  /**
-   * @brief      default NPS class de-constructor
-   *
-   */
-  NPS::~NPS() {
-  }
-  /***** WTI::NPS::~NPS *******************************************************/
 
 
   /***** WTI::NPS::set_switch *************************************************/
@@ -308,11 +240,6 @@ namespace WTI {
                break;
     }
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] sending " << cmdstr.str() << " to " << this->interface.get_name();
-    logwrite( function, message.str() );
-#endif
-
     error = this->interface.send_command( cmdstr.str() );
 
     return( error );
@@ -329,26 +256,9 @@ namespace WTI {
    *
    */
   long NPS::get_switch( int plugnum, std::string &state ) {
-    std::string function = "WTI::NPS::get_switch";
-    std::stringstream message;
     std::stringstream cmdstr;
-    long error = NO_ERROR;
-
     cmdstr << "/S " << plugnum;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] sending " << cmdstr.str() << " to " << this->interface.get_name();
-    logwrite( function, message.str() );
-#endif
-
-    error = this->interface.send_command( cmdstr.str(), state );
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] received " << state;
-    logwrite( function, message.str() );
-#endif
-
-    return( error );
+    return this->interface.send_command( cmdstr.str(), state );
   }
   /***** WTI::NPS::get_switch *************************************************/
 
@@ -363,26 +273,9 @@ namespace WTI {
    *
    */
   long NPS::get_all( int maxplugs, std::string &state ) {
-    std::string function = "WTI::NPS::get_all";
-    std::stringstream message;
     std::stringstream cmdstr;
-    long error = NO_ERROR;
-
     cmdstr << "/S 1:" << maxplugs;
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] sending " << cmdstr.str() << " to " << this->interface.get_name();
-    logwrite( function, message.str() );
-#endif
-
-    error = this->interface.send_command( cmdstr.str(), state );
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] received " << state;
-    logwrite( function, message.str() );
-#endif
-
-    return( error );
+    return this->interface.send_command( cmdstr.str(), state );
   }
   /***** WTI::NPS::get_all ****************************************************/
 

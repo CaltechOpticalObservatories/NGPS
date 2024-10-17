@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef WTI_H
-#define WTI_H
+#pragma once
 
 #include "common.h"
 #include "network.h"
@@ -53,9 +52,10 @@ namespace WTI {
       long send_command( std::string cmd, std::string &reply );
       long do_send_command( std::string cmd, std::string &retstring );
 
-      Interface( std::string name, std::string host, int port );
-      Interface();
-      ~Interface();
+      Interface( std::string name, std::string host, int port )
+        : name(name), host(host), port(port), initialized(true) { };
+
+      Interface() : port(-1), initialized(false) { };
 
       Network::TcpSocket sock;    ///< provides the network communication
 
@@ -75,8 +75,6 @@ namespace WTI {
   class NPS {
     private:
     public:
-      NPS();
-      ~NPS();
 
       Interface interface;        ///< interface object provides the socket layer for communication
 
@@ -89,4 +87,3 @@ namespace WTI {
 
 }
 /***** WTI ********************************************************************/
-#endif

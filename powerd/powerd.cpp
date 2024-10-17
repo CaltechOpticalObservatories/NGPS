@@ -541,7 +541,7 @@ void doit(Network::TcpSocket sock) {
                     if ( args=="?" || args=="help" ) {
                       retstring=POWERD_TELEMREQUEST+"\n";
                       retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                      retstring.append( "  information, terminated with EOF\\n.\n" );
+                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                       ret=HELP;
                     }
                     else {
