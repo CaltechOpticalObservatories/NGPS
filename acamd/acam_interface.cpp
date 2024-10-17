@@ -100,7 +100,7 @@ namespace Acam {
     error |= this->andor.set_frame_transfer( "off" );  // disable Frame Transfer mode
     error |= this->andor.set_kinetic_cycle_time( 0 );
     error |= this->andor.set_shutter( "open" );        // shutter always open
-    error |= this->set_exptime(0.00001);               // small but non-zero exptime
+    error |= this->set_exptime(1);
 
     logwrite( function, (error==NO_ERROR ? "camera open" : "ERROR opening camera") );
 
@@ -1319,6 +1319,40 @@ namespace Acam {
     return;
   }
   /***** Acam::Astrometry::pyobj_from_string **********************************/
+
+
+  /***** Acam::Interface::make_telemetry_message ******************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket so that
+   *             outside clients can ask for my telemetry.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"] = "acaminfo";
+
+    // don't put data in the message if there's no camera connection
+    //
+    if ( this->isopen("camera") ) {
+      int ccdtemp=99;
+      this->camera.andor.get_temperature( ccdtemp );
+      jmessage["TANDOR_ACAM"] = ccdtemp;
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Acam::Interface::make_telemetry_message ******************************/
 
 
   /***** Acam::Interface::initialize_python_objects ***************************/

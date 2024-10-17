@@ -510,6 +510,7 @@ namespace Acam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
+      void make_telemetry_message( std::string &retstring );
       long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
