@@ -45,6 +45,8 @@
  */
 namespace Slicecam {
 
+  constexpr std::string_view DEFAULT_IMAGENAME = "/tmp/slicecam.fits";
+
   constexpr double PI = 3.14159265358979323846;
 
   class Interface;  // forward declaration
@@ -83,10 +85,14 @@ namespace Slicecam {
       long start_acquisition();
       long imflip( std::string args, std::string &retstring );
       long imrot( std::string args, std::string &retstring );
-      long gain( std::string args, std::string &retstring );
-      int gain();
+      long set_gain( int &gain );
+      long set_gain( std::string which, int &gain );
+      long set_gain( int &&gain );
+      long set_gain( std::string which, int &&gain );
       long set_exptime( float &val );
+      long set_exptime( std::string which, float &val );
       long set_exptime( float &&val );
+      long set_exptime( std::string which, float &&val );
       long speed( std::string args, std::string &retstring );
       long temperature( std::string args, std::string &retstring );
 
@@ -294,7 +300,7 @@ namespace Slicecam {
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
-      inline void set_imagename( std::string name_in ) { this->imagename = name_in; return; }
+      inline void set_imagename( std::string name_in ) { this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : name_in ); return; }
       inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
 
       Slicecam::FitsInfo fitsinfo;
@@ -311,6 +317,7 @@ namespace Slicecam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
+      void make_telemetry_message( std::string &retstring );
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
       long isopen( std::string which, bool &state, std::string &help );     /// wrapper for slicecams
@@ -326,6 +333,7 @@ namespace Slicecam {
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long test( std::string args, std::string &retstring );
       long exptime( std::string exptime_in, std::string &retstring );
+      long gain( std::string args, std::string &retstring );
 
       long get_acam_guide_state( bool &is_guiding );
 
@@ -337,6 +345,8 @@ namespace Slicecam {
 
       static void dothread_fpoffset( Slicecam::Interface &iface );
       void dothread_framegrab( const std::string whattodo, const std::string sourcefile );
+      long start_acquisition_threaded();
+      long get_recent_threaded(int timeoutms);
       long acquire_one_threaded();
       long collect_header_info_threaded();
   };

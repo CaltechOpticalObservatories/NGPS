@@ -511,7 +511,7 @@ namespace Slicecam {
       }
       else
       if ( cmd == SLICECAMD_GAIN ) {
-                      ret  = this->interface.camera.gain( args, retstring );     // set gain
+                      ret  = this->interface.gain( args, retstring );            // set gain
           if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
       }
       else
@@ -570,6 +570,22 @@ namespace Slicecam {
       }
       else
 
+      // send telemetry as json message
+      //
+      if ( cmd == SLICECAMD_TELEMREQUEST ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=SLICECAMD_TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        this->interface.make_telemetry_message( retstring );
+                        ret = JSON;
+                      }
+      }
+      else
+
       // test commands
       //
       if ( cmd == SLICECAMD_TEST ) {
@@ -591,14 +607,19 @@ namespace Slicecam {
       //
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+        if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
+        if ( ret == JSON ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
+          logwrite( function, message.str() );
+        }
+        else
         if ( ! retstring.empty() && ret != HELP ) {
+          retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
         }
 
-        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

@@ -90,7 +90,7 @@ namespace Andor {
       double mjd0;
 
       Information() : serial_number(-1), acqmode(-1), acqmodestr("UNDEFINED"), readmode(-1), adchan(0), adchans(-1),
-                      setpoint(20), ccdtemp(-1), temp_min(20), temp_max(20), amptype(-1),
+                      setpoint(20), ccdtemp(99), temp_min(20), temp_max(20), amptype(-1),
                       exptime(-1), acctime(-1), kintime(-1),
                       hspeed(-1), vspeed(-1), hbin(1), vbin(1),
                       hstart(1), vstart(1), hend(1), vend(1),

@@ -124,36 +124,41 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // no args is open both cameras in map
+    long ret;
+    // Loop through all defined Andors
     //
-    if ( which.empty() ) {
-      long ret;
-      for ( const auto &pair : this->andor ) {
-        if ( !pair.second->is_open() ) {
-          if ( ( ret=pair.second->open( args )) != NO_ERROR ) {
-            message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
-                                     << " S/N " << pair.second->camera_info.serial_number;
-            logwrite( function, message.str() );
-            error = ret;  // preserve the error state for the return value but try all
-          }
+    for ( const auto &pair : this->andor ) {
+      // If a "which" was specified AND it's not this one, then skip it
+      //
+      if ( !which.empty() && pair.first != which ) continue;
+
+      // otherwise, open this camera if not already open
+      //
+      if ( !pair.second->is_open() ) {
+        if ( ( ret=pair.second->open( args )) != NO_ERROR ) {
+          message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
+                                   << " S/N " << pair.second->camera_info.serial_number;
+          logwrite( function, message.str() );
+          error = ret;  // preserve the error state for the return value but try all
+          continue;
         }
       }
-    }
-    else {
-      // make sure requested camera is in the map
+
+      // Now set up for continuous readout
       //
-      auto it = this->andor.find( which );
-      if ( it == this->andor.end() ) {
-        message.str(""); message << "ERROR Andor camera name \"" << which << "\" not found";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      // then open only that camera
-      //
-      if ( !this->andor[which]->is_open() ) error = this->andor[which]->open( args );
+      error |= this->set_gain(pair.first, 2);
+      error |= pair.second->set_vsspeed( 4.33 );          // vertical shift speed
+      error |= pair.second->set_hsspeed( 30.0 );          // horizontal shift speed
+      error |= pair.second->set_read_mode( 4 );           // image mode
+      error |= pair.second->set_acquisition_mode( 5 );    // run till abort
+      error |= pair.second->set_frame_transfer( "off" );  // disable Frame Transfer mode
+      error |= pair.second->set_kinetic_cycle_time( 0 );
+      error |= pair.second->set_shutter( "open" );        // shutter always open
+      error |= this->set_exptime(pair.first, 1 );
+
       if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR opening slicecam " << this->andor[which]->camera_info.camera_name
-                                 << " S/N " << this->andor[which]->camera_info.serial_number;
+        message.str(""); message << "ERROR configuring slicecam " << pair.second->camera_info.camera_name
+                                 << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
       }
     }
@@ -573,10 +578,18 @@ namespace Slicecam {
    *
    */
   long Camera::set_exptime( float &fval ) {
+    return set_exptime("", fval);
+  }
+  /***** Slicecam::Camera::set_exptime ****************************************/
+  long Camera::set_exptime( std::string which, float &fval ) {
 
     long error = NO_ERROR;
 
     for ( const auto &pair : this->andor ) {
+      // If a "which" was specified AND it's not this one, then skip it
+      //
+      if ( !which.empty() && pair.first != which ) continue;
+
       // Ensure aquisition has stopped
       //
       error |= pair.second->abort_acquisition();
@@ -599,13 +612,16 @@ namespace Slicecam {
    * @return     ERROR | NO_ERROR
    */
   long Camera::set_exptime( float &&fval ) {
+    return set_exptime("", fval);
+  }
+  long Camera::set_exptime( std::string which, float &&fval ) {
     float retval=fval;
-    return set_exptime(retval);
+    return set_exptime(which, retval);
   }
   /***** Slicecam::Camera::set_exptime ****************************************/
 
 
-  /***** Slicecam::Camera::gain ***********************************************/
+  /***** Slicecam::Camera::set_gain *******************************************/
   /**
    * @brief      set or get the CCD gain
    * @details    The output amplifier is automatically set based on gain.
@@ -616,114 +632,51 @@ namespace Slicecam {
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Camera::gain( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Camera::gain";
+  long Camera::set_gain( int &gain ) {
+    return set_gain("", gain);
+  }
+  long Camera::set_gain( std::string which, int &gain ) {
+    std::string function = "Slicecam::Camera::set_gain";
     std::stringstream message;
     long error = NO_ERROR;
-    int gain = -999;
 
-    // Help
+    // get gain range
     //
-    if ( args == "?" || args == "help" ) {
-      retstring = SLICECAMD_GAIN;
-      retstring.append( " [ <gain> ]\n" );
-      retstring.append( "   Set or get CCD Gain.\n" );
-      if ( !this->andor.empty() ) {
-        if ( this->andor.begin()->second->is_open() ) {
-          int low, high;
-          this->andor.begin()->second->get_emgain_range( low, high );
-          retstring.append( "   Select <gain> = 1 for conventional or in range { " );
-          retstring.append( std::to_string( low ) );
-          retstring.append( " " );
-          retstring.append( std::to_string( high ) );
-          retstring.append( " } for EMCCD.\n" );
-        }
-        else {
-          retstring.append( "   Open connection to camera to see gain range.\n" );
-        }
-      }
-      retstring.append( "   If <gain> is omitted then the current gain is returned.\n" );
-      retstring.append( "   Output amplifier is automatically selected as conventional for unity gain,\n" );
-      retstring.append( "   or EM for non-unity gain.\n" );
-      return HELP;
-    }
+    int low=999, high=-1;
+    error = this->andor.begin()->second->get_emgain_range( low, high );
 
-    // If the STL map of Andors is empty then something went wrong
-    // with the configuration.
-    //
-    if ( this->andor.empty() ) {
-      logwrite( function, "ERROR no cameras defined" );
-      retstring="bad_config";
-      return ERROR;
-    }
-
-    // all configured Andors must have been initialized
+    // Loop through all defined Andors
     //
     for ( const auto &pair : this->andor ) {
+      // If a "which" was specified AND it's not this one, then skip it
+      //
+      if ( !which.empty() && pair.first != which ) continue;
+
+      // camera must be open
+      //
       if ( ! pair.second->is_open() ) {
         message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
                                  << " S/N " << pair.second->camera_info.serial_number;
         logwrite( function, message.str() );
         error=ERROR;
-      }
-    }
-    if ( error==ERROR ) return ERROR;
-
-    // Parse args if present
-    //
-    if ( !args.empty() ) {
-
-      std::vector<std::string> tokens;
-      Tokenize( args, tokens, " " );
-
-      // There can be only one arg (the requested EM gain)
-      //
-      if ( tokens.size() != 1 ) {
-        logwrite( function, "ERROR too many arguments" );
-        retstring="invalid_argument";
-        return ERROR;
+        continue;
       }
 
-      // Parse the gain from the token
-      //
-      try {
-        gain = std::stoi( tokens.at(0) );
-      }
-      catch ( const std::exception &e ) {
-        message.str(""); message << "ERROR setting gain: " << e.what();
-        error = ERROR;
-      }
-
-      if (error==ERROR) logwrite( function, message.str() );
-
-      int low, high;
-      this->andor.begin()->second->get_emgain_range( low, high );
-
-      // set gain and output amplifier as necessary
-      //
-      message.str("");
-      if ( error==NO_ERROR && gain < 1 ) {
-        message << "ERROR: gain " << gain << " outside range { 1, " << low << ":" << high << " }";
-        error = ERROR;
-      }
-      else
       if ( error==NO_ERROR && gain == 1 ) {
-        error = this->andor.begin()->second->set_output_amplifier( Andor::AMPTYPE_CONV );
+        error = pair.second->set_output_amplifier( Andor::AMPTYPE_CONV );
         if (error==NO_ERROR) {
           for ( const auto &pair : this->andor ) {
-            pair.second->camera_info.gain = gain;
+            pair.second->camera_info.gain = 1;
           }
         }
         else { message << "ERROR gain not set"; }
       }
       else
       if ( error==NO_ERROR && gain >= low && gain <= high ) {
-        for ( const auto &pair : this->andor ) {
-          error |= pair.second->set_output_amplifier( Andor::AMPTYPE_EMCCD );
-          if (error==NO_ERROR) pair.second->set_emgain( gain );
-          if (error==NO_ERROR) pair.second->camera_info.gain = gain;
-          else { message << "ERROR gain not set"; }
-        }
+        error |= pair.second->set_output_amplifier( Andor::AMPTYPE_EMCCD );
+        if (error==NO_ERROR) pair.second->set_emgain( gain );
+        if (error==NO_ERROR) pair.second->camera_info.gain = gain;
+        else { message << "ERROR gain not set"; }
       }
       else
       if ( error==NO_ERROR ) {
@@ -732,42 +685,22 @@ namespace Slicecam {
         error = ERROR;
       }
       if ( !message.str().empty() ) logwrite( function, message.str() );
+
     }
 
-    // Regardless of setting the gain, always return it.
+    // Regardless of setting the gain, always return what's in the camera
     //
-    if ( this->andor.begin()->second->camera_info.gain < 1 ) {
-      retstring = "ERR";
-    }
-    else {
-      retstring = std::to_string( this->andor.begin()->second->camera_info.gain );
-    }
-
-    logwrite( function, retstring );
+    gain = this->andor.begin()->second->camera_info.gain;
 
     return error;
   }
-  /***** Slicecam::Camera::gain ***********************************************/
-
-
-  /***** Slicecam::Camera::gain ***********************************************/
-  /**
-   * @brief      wrapper to get exposure time as a double
-   * @return     double exposure time
-   *
-   */
-  int Camera::gain() {
-    std::string function = "Slicecam::Camera::gain";
-    std::string svalue;
-    int ivalue=0;
-    this->gain( "", svalue );
-    try {
-      ivalue=std::stoi( svalue );
-    }
-    catch( const std::exception &e ) { logwrite( "Slicecam::Camera::gain", "ERROR "+std::string(e.what()) ); }
-    return ivalue;
+  long Camera::set_gain( int &&gain ) {
+    return set_gain("", gain);
   }
-  /***** Slicecam::Camera::gain ***********************************************/
+  long Camera::set_gain( std::string which, int &&gain ) {
+    return set_gain(which, gain);
+  }
+  /***** Slicecam::Camera::set_gain *******************************************/
 
 
   /***** Slicecam::Camera::speed **********************************************/
@@ -1017,7 +950,7 @@ namespace Slicecam {
       }
     }
 
-    fitsinfo.fits_name = "/tmp/slicecam.fits";
+    fitsinfo.fits_name = outfile;
     fitsinfo.datatype = USHORT_IMG;
 
     fits_file.copy_info( fitsinfo );      // copy from fitsinfo to the fits_file class
@@ -1066,6 +999,47 @@ namespace Slicecam {
     return error;
   }
   /***** Slicecam::Camera::write_frame ****************************************/
+
+
+  /***** Slicecam::Interface::make_telemetry_message **************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket so that
+   *             outside clients can ask for my telemetry.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"] = "slicecaminfo";
+
+    // loop through all cameras, getting their temperature (if open)
+    // and adding to the jmessage. default non-reading is 9999.
+    //
+    for ( const auto &pair : this->camera.andor ) {
+      std::string which = pair.second->camera_info.camera_name;
+      // only add to the message if the camera is open
+      //
+      if ( this->isopen(which) ) {
+        int ccdtemp = 99;
+        pair.second->get_temperature( ccdtemp );
+        std::string key="TANDOR_SCAM_"+which;
+        jmessage[key] = ccdtemp;
+      }
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Slicecam::Interface::make_telemetry_message **************************/
 
 
   /***** Slicecam::Interface::configure_interface *****************************/
@@ -1513,10 +1487,12 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_FRAMEGRAB;
-      retstring.append( " [ start | stop | one [ <filename> ] | status ]\n" );
+      retstring.append( " [ start | stop | one [ <filename> ] | saveone <filename> | status ]\n" );
       retstring.append( "   Start/Stop continuous frame grabbing or grab one single ACAM image.\n" );
       retstring.append( "   If an optional <filename> is supplied then that file will be used\n" );
       retstring.append( "   as a source for header information for the frame.\n" );
+      retstring.append( "   A <filename> provided with the saveone argument will save the framegrab\n" );
+      retstring.append( "   to that filename.\n" );
       retstring.append( "   No argument or \"status\" returns true|false to indicate running state.\n" );
       return HELP;
     }
@@ -1536,10 +1512,20 @@ namespace Slicecam {
     if ( tokens.size() > 0 ) whattodo   = tokens[0];
     if ( tokens.size() > 1 ) sourcefile = tokens[1];
     if ( tokens.size() > 2 ) {
-      logwrite( function, "ERROR too many arguments. expected \"one [ <sourcefile> ] | start | stop | status\"" );
+      logwrite( function, "ERROR too many arguments" );
       retstring="invalid_argument";
       return ERROR;
     }
+
+    // For "saveone" a provided filename is used for saving the frame,
+    // otherwise the default name is used. When no imagename is provided,
+    // set_imagename() will restore the default image name.
+    //
+    if ( whattodo == "saveone" ) {
+      this->set_imagename(sourcefile);  // use sourcefile to set the output image name
+      sourcefile.clear();               // then clear sourcefile because it's not meant as a WCS source
+    }
+    else this->set_imagename("");
 
     // Unless requresting a stop, if the TCS is not already open then
     // initialize the connection // TODO
@@ -1554,6 +1540,24 @@ namespace Slicecam {
     // or not, based on whattodo
     //
     std::thread( &Slicecam::Interface::dothread_framegrab, this, whattodo, sourcefile ).detach();
+
+    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes.
+    // Always wait a minimum of 1 second in case exptime is 0.
+    //
+    if ( whattodo == "stop" ) {
+      auto start = std::chrono::steady_clock::now();
+      bool timedout=false;
+      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*this->camera.andor.begin()->second->camera_info.exptime), 2.0 ) );
+      while ( this->is_framegrab_running.load() ) {
+        auto now = std::chrono::steady_clock::now();
+        if ( now - start > timeout_time ) {
+          timedout=true;
+          break;
+        }
+        std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+      }
+      if ( timedout ) logwrite( function, "ERROR timeout waiting for framegrab to stop" );
+    }
 
     return NO_ERROR;
   }
@@ -1576,7 +1580,7 @@ namespace Slicecam {
     std::stringstream message;
     long error = NO_ERROR;
 
-    if ( whattodo == "one" ) {
+    if ( whattodo == "one" || whattodo == "saveone" ) {
       // Clear should_framegrab_run which means the framegrab loop should not run.
       // If it's already running then return, the existing framegrab loop will
       // stop. If it's not already running then drop through, and a single
@@ -1623,6 +1627,7 @@ namespace Slicecam {
     std::unique_lock<std::mutex> lock( this->framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
       BoolState loop_running( this->is_framegrab_running );    // sets state true here, clears when it goes out of scope
+      if (error==NO_ERROR) error = this->start_acquisition_threaded();
       do {
         std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
@@ -1634,7 +1639,7 @@ namespace Slicecam {
         }
         if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
 
-        if (error==NO_ERROR) error = this->acquire_one_threaded();          // grab frame from both cameras
+        if (error==NO_ERROR) error = this->get_recent_threaded(3000);       // grab frame from both cameras
         if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
         if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
         if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
@@ -1662,6 +1667,94 @@ namespace Slicecam {
     return;
   }
   /***** Slicecam::Interface::dothread_framegrab ******************************/
+
+
+  /***** Slicecam::Interface::start_acquisition_threaded **********************/
+  /**
+   * @brief      calls start_acquisition for each andor map element
+   * @details    Loops through the andor STL map and spawns a thread for each
+   *             call, then waits for all threads to complete.
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::start_acquisition_threaded() {
+
+    // create a container to hold the threads
+    //
+    std::vector<std::thread> threads;
+
+    // Loop through all elements in the andor map and create an start_acquisition thread for each.
+    // The first arg specifies the member function pointer for start_acquisition, and
+    // the second arg is the instance on which start_acquisition should be called.
+    //
+    for ( const auto &pair : this->camera.andor ) {
+      threads.emplace_back( &Andor::Interface::start_acquisition, pair.second );
+    }
+
+    // Wait for all threads to complete by joining them to this main thread,
+    // not to each other.
+    //
+    for ( auto &thread : threads ) {
+      if ( thread.joinable() ) {
+        thread.join();
+      }
+    }
+
+    // Loop again to see if any acquie_one threads had an error. This doesn't
+    // need threads because it's only checking a state, so it's fast.
+    //
+    long error = NO_ERROR;
+    for ( const auto &pair : this->camera.andor ) {
+      error |= pair.second->read_error();
+    }
+
+    return error;
+  }
+  /***** Slicecam::Interface::start_acquisition_threaded **********************/
+
+
+  /***** Slicecam::Interface::get_recent_threaded *****************************/
+  /**
+   * @brief      calls get_recent for each andor map element
+   * @details    Loops through the andor STL map and spawns a thread for each
+   *             call, then waits for all threads to complete.
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::get_recent_threaded(int timeoutms) {
+
+    // create a container to hold the threads
+    //
+    std::vector<std::thread> threads;
+
+    // Loop through all elements in the andor map and create an get_recent thread for each.
+    // The first arg specifies the member function pointer for get_recent, and
+    // the second arg is the instance on which get_recent should be called.
+    //
+    for ( const auto &pair : this->camera.andor ) {
+      threads.emplace_back( &Andor::Interface::get_recent, pair.second, timeoutms );
+    }
+
+    // Wait for all threads to complete by joining them to this main thread,
+    // not to each other.
+    //
+    for ( auto &thread : threads ) {
+      if ( thread.joinable() ) {
+        thread.join();
+      }
+    }
+
+    // Loop again to see if any acquie_one threads had an error. This doesn't
+    // need threads because it's only checking a state, so it's fast.
+    //
+    long error = NO_ERROR;
+    for ( const auto &pair : this->camera.andor ) {
+      error |= pair.second->read_error();
+    }
+
+    return error;
+  }
+  /***** Slicecam::Interface::get_recent_threaded *****************************/
 
 
   /***** Slicecam::Interface::acquire_one_threaded ****************************/
@@ -1808,11 +1901,12 @@ namespace Slicecam {
       try {
         std::string reply;
         float fval = std::stof( tokens.at(0) );
+        int ival = std::stoi( tokens.at(1) );
 
         for ( const auto &pair : this->camera.andor ) {
           error |= pair.second->set_exptime( fval );
         }
-        error |= camera.gain( tokens[1], reply );
+        error |= camera.set_gain( ival );
         set=true;
       }
       catch( const std::exception &e ) {
@@ -2401,30 +2495,17 @@ namespace Slicecam {
     bool was_framegrab_running = this->is_framegrab_running.load();
     if ( was_framegrab_running ) {
       std::string dontcare;
+logwrite(function,"[DEBUG] stopping framegrab");
       error = this->framegrab( "stop", dontcare );
     }
 
-    // Set the exposure time now for each camera in separate threads.
-    // Use std::async to run the function asynchronously.
-    //
-    std::vector<std::future<long>> futures;
-
-    for ( const auto &pair : this->camera.andor ) {
-      futures.push_back( std::async( std::launch::async, [pair, &fval, &retstring]() {
-        return pair.second->set_exptime( fval );
-      } ) );
-    }
-
-    // Wait for all futures to complete
-    //
-    for ( auto &future : futures ) {
-      error |= future.get(); // This will block until the thread finishes
-    }
+    this->camera.set_exptime( fval );
 
     // If framegrab was previously running then restart it
     //
     if ( was_framegrab_running ) {
       std::string dontcare;
+logwrite(function,"[DEBUG] starting framegrab");
       error = this->framegrab( "start", dontcare );
     }
 
@@ -2435,6 +2516,70 @@ namespace Slicecam {
     return error;
   }
   /***** Slicecam::Interface::exptime *****************************************/
+
+
+  /***** Slicecam::Interface::gain ********************************************/
+  /**
+   * @brief      set or get the CCD gain
+   * @details    The output amplifier is automatically set based on gain.
+   *             If gain=1 then set to conventional amp and if gain > 1
+   *             then set the EMCCD gain register.
+   * @param[in]  args       optionally contains new gain
+   * @param[out] retstring  return string contains temp, setpoint, and status
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::gain( std::string args, std::string &retstring ) {
+    std::string function = "Slicecam::Interface::gain";
+    std::stringstream message;
+    long error = NO_ERROR;
+    int gain = -999;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_GAIN;
+      retstring.append( " [ <gain> ]\n" );
+      retstring.append( "   Set or get CCD Gain.\n" );
+      if ( !this->camera.andor.empty() ) {
+        if ( this->camera.andor.begin()->second->is_open() ) {
+          int low, high;
+          this->camera.andor.begin()->second->get_emgain_range( low, high );
+          retstring.append( "   Select <gain> = 1 for conventional or in range { " );
+          retstring.append( std::to_string( low ) );
+          retstring.append( " " );
+          retstring.append( std::to_string( high ) );
+          retstring.append( " } for EMCCD.\n" );
+        }
+        else {
+          retstring.append( "   Open connection to camera to see gain range.\n" );
+        }
+      }
+      retstring.append( "   If <gain> is omitted then the current gain is returned.\n" );
+      retstring.append( "   Output amplifier is automatically selected as conventional for unity gain,\n" );
+      retstring.append( "   or EM for non-unity gain.\n" );
+      return HELP;
+    }
+
+    // If the STL map of Andors is empty then something went wrong
+    // with the configuration.
+    //
+    if ( this->camera.andor.empty() ) {
+      logwrite( function, "ERROR no cameras defined" );
+      retstring="bad_config";
+      return ERROR;
+    }
+
+    error = this->camera.set_gain( gain );
+
+    retstring = std::to_string( gain );
+
+    message.str(""); message << ( error==ERROR ? "ERROR " : "" ) << retstring;
+    logwrite( function, message.str() );
+
+    return error;
+  }
+  /***** Slicecam::Interface::gain ********************************************/
 
 
   /***** Slicecam::Interface::collect_header_info *****************************/
@@ -2470,12 +2615,14 @@ namespace Slicecam {
     }
 
     double angle_scope=NAN, ra_scope=NAN, dec_scope=NAN,
-           angle_slit=NAN,  ra_slit=NAN,  dec_slit=NAN;
+           angle_slit=NAN,  ra_slit=NAN,  dec_slit=NAN,
+           focus=NAN;
 
     // Get the current pointing from the TCS
     //
     if ( _tcs ) this->tcsd.poll_cass( angle_scope );
     if ( _tcs ) this->tcsd.poll_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
+    if ( _tcs ) this->tcsd.poll_focus( focus );
 
     // Compute FP offsets from TCS coordinates (SCOPE) to SLIT coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
@@ -2503,6 +2650,7 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "CREATOR",  "slicecamd", "file creator" );
     slicecam->fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     slicecam->fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
+    slicecam->fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
 
     slicecam->fitskeys.addkey( "EXPSTART", slicecam->camera_info.timestring, "exposure start time" );
     slicecam->fitskeys.addkey( "MJD0",     slicecam->camera_info.mjd0, "exposure start time (modified Julian Date)" );
