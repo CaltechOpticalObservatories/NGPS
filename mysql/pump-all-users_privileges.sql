@@ -1,5 +1,5 @@
 -- Dump created by MySQL pump utility, version: 8.0.26, Linux (x86_64)
--- Dump start time: Wed Sep  4 14:16:33 2024
+-- Dump start time: Sat Oct 19 13:39:41 2024
 -- Server version: 8.0.26
 
 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
@@ -20,6 +20,7 @@ GRANT SELECT ON `telemetry`.* TO `grafana`@`localhost`;
 DROP USER 'gui'@'localhost';
 CREATE USER 'gui'@'localhost' IDENTIFIED WITH 'mysql_native_password' AS '*2A7D1FF7A33551D8652FB6AA05238DD9B1E40A79' REQUIRE NONE PASSWORD EXPIRE DEFAULT ACCOUNT UNLOCK PASSWORD HISTORY DEFAULT PASSWORD REUSE INTERVAL DEFAULT PASSWORD REQUIRE CURRENT DEFAULT;
 GRANT USAGE ON *.* TO `gui`@`localhost`;
+GRANT SELECT ON `ngps`.`completed_obs` TO `gui`@`localhost`;
 GRANT SELECT ON `ngps`.`completed_observations` TO `gui`@`localhost`;
 GRANT ALL PRIVILEGES ON `ngps`.`owner` TO `gui`@`localhost`;
 GRANT ALL PRIVILEGES ON `ngps`.`target_sets` TO `gui`@`localhost`;
@@ -64,4 +65,4 @@ SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
 SET SQL_MODE=@OLD_SQL_MODE;
--- Dump end time: Wed Sep  4 14:16:33 2024
+-- Dump end time: Sat Oct 19 13:39:41 2024

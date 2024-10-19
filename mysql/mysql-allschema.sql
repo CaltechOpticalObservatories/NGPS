@@ -775,7 +775,7 @@ CREATE TABLE `completed_obs` (
   `OTMFLAG` varchar(20) DEFAULT NULL COMMENT 'OTM flag codes at time of exposure',
   PRIMARY KEY (`LOG_ID`,`NAME`),
   UNIQUE KEY `LOG_ID_UNIQUE` (`LOG_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=87 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=93 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -811,7 +811,7 @@ CREATE TABLE `target_sets` (
   `LAST_UPDATE_TIMESTAMP` timestamp(1) NULL DEFAULT NULL,
   PRIMARY KEY (`SET_ID`),
   UNIQUE KEY `set_id_UNIQUE` (`SET_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=134 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=220 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -822,6 +822,69 @@ DROP TABLE IF EXISTS `targets`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `targets` (
+  `OBSERVATION_ID` int NOT NULL AUTO_INCREMENT,
+  `SET_ID` int NOT NULL,
+  `STATE` varchar(36) DEFAULT NULL,
+  `OBS_ORDER` int NOT NULL,
+  `TARGET_NUMBER` int NOT NULL,
+  `SEQUENCE_NUMBER` int NOT NULL,
+  `NAME` varchar(128) NOT NULL,
+  `RA` varchar(32) DEFAULT NULL,
+  `DECL` varchar(32) DEFAULT NULL,
+  `OFFSET_RA` double DEFAULT NULL,
+  `OFFSET_DEC` double DEFAULT NULL,
+  `EXPTIME` varchar(32) NOT NULL,
+  `SLITWIDTH` varchar(32) NOT NULL,
+  `SLITOFFSET` double DEFAULT NULL,
+  `OBSMODE` varchar(32) DEFAULT NULL,
+  `BINSPECT` int DEFAULT NULL,
+  `BINSPAT` int DEFAULT NULL,
+  `SLITANGLE` varchar(32) DEFAULT NULL,
+  `AIRMASS_MAX` varchar(32) DEFAULT NULL,
+  `WRANGE_LOW` float DEFAULT NULL,
+  `WRANGE_HIGH` float DEFAULT NULL,
+  `CHANNEL` varchar(16) DEFAULT NULL,
+  `MAGNITUDE` double DEFAULT NULL,
+  `MAGSYSTEM` varchar(16) DEFAULT NULL,
+  `MAGFILTER` varchar(16) DEFAULT NULL,
+  `SRCMODEL` varchar(128) DEFAULT NULL,
+  `OTMexpt` double DEFAULT NULL,
+  `OTMslitwidth` double NOT NULL,
+  `OTMcass` double DEFAULT NULL,
+  `OTMairmass_start` double DEFAULT NULL,
+  `OTMairmass_end` double DEFAULT NULL,
+  `OTMsky` double DEFAULT NULL,
+  `OTMdead` double DEFAULT NULL,
+  `OTMslewgo` timestamp(1) NULL DEFAULT NULL,
+  `OTMexp_start` timestamp(1) NULL DEFAULT NULL,
+  `OTMexp_end` timestamp(1) NULL DEFAULT NULL,
+  `OTMpa` double DEFAULT NULL,
+  `OTMwait` double DEFAULT NULL,
+  `OTMflag` varchar(32) DEFAULT NULL,
+  `OTMlast` varchar(32) DEFAULT NULL,
+  `OTMslew` double DEFAULT NULL,
+  `OTMmoon` varchar(32) DEFAULT NULL,
+  `OTMSNR` varchar(32) DEFAULT NULL,
+  `OTMres` double DEFAULT NULL,
+  `OTMseeing` double DEFAULT NULL,
+  `OTMslitangle` double DEFAULT NULL,
+  `NOTE` varchar(128) DEFAULT NULL,
+  `COMMENT` varchar(1024) DEFAULT NULL,
+  `OWNER` varchar(64) DEFAULT NULL,
+  `NOTBEFORE` timestamp NULL DEFAULT NULL,
+  `POINTMODE` varchar(45) DEFAULT NULL,
+  PRIMARY KEY (`OBSERVATION_ID`,`OTMslitwidth`)
+) ENGINE=InnoDB AUTO_INCREMENT=4431 DEFAULT CHARSET=utf8mb3;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `targets_dev2`
+--
+
+DROP TABLE IF EXISTS `targets_dev2`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `targets_dev2` (
   `OBSERVATION_ID` int NOT NULL AUTO_INCREMENT,
   `SET_ID` int NOT NULL,
   `STATE` varchar(36) DEFAULT NULL,
@@ -874,69 +937,7 @@ CREATE TABLE `targets` (
   `NOTBEFORE` timestamp NULL DEFAULT NULL,
   `POINTMODE` varchar(45) DEFAULT NULL,
   PRIMARY KEY (`OBSERVATION_ID`,`OTMslitwidth`)
-) ENGINE=InnoDB AUTO_INCREMENT=2616 DEFAULT CHARSET=utf8mb3;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `targets_dev`
---
-
-DROP TABLE IF EXISTS `targets_dev`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `targets_dev` (
-  `OBSERVATION_ID` int NOT NULL DEFAULT '0',
-  `SET_ID` int NOT NULL,
-  `STATE` varchar(36) CHARACTER SET utf8 DEFAULT NULL,
-  `OBS_ORDER` int NOT NULL,
-  `TARGET_NUMBER` int NOT NULL,
-  `SEQUENCE_NUMBER` int NOT NULL,
-  `NAME` varchar(128) CHARACTER SET utf8 NOT NULL,
-  `RA` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `DECL` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `OFFSET_RA` double DEFAULT NULL,
-  `OFFSET_DEC` double DEFAULT NULL,
-  `EXPTIME` varchar(32) CHARACTER SET utf8 NOT NULL,
-  `SLITWIDTH` varchar(32) CHARACTER SET utf8 NOT NULL,
-  `SLITOFFSET` double DEFAULT NULL,
-  `OBSMODE` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `BINSPECT` int DEFAULT NULL,
-  `BINSPAT` int DEFAULT NULL,
-  `SLITANGLE` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `AIRMASS_MAX` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `WRANGE_LOW` int DEFAULT NULL,
-  `WRANGE_HIGH` int DEFAULT NULL,
-  `CHANNEL` varchar(16) CHARACTER SET utf8 DEFAULT NULL,
-  `MAGNITUDE` double DEFAULT NULL,
-  `MAGSYSTEM` varchar(16) CHARACTER SET utf8 DEFAULT NULL,
-  `MAGFILTER` varchar(16) CHARACTER SET utf8 DEFAULT NULL,
-  `SRCMODEL` varchar(128) CHARACTER SET utf8 DEFAULT NULL,
-  `OTMexpt` double DEFAULT NULL,
-  `OTMslitwidth` double NOT NULL,
-  `OTMcass` double DEFAULT NULL,
-  `OTMairmass_start` double DEFAULT NULL,
-  `OTMairmass_end` double DEFAULT NULL,
-  `OTMsky` double DEFAULT NULL,
-  `OTMdead` double DEFAULT NULL,
-  `OTMslewgo` timestamp(1) NULL DEFAULT NULL,
-  `OTMexp_start` timestamp(1) NULL DEFAULT NULL,
-  `OTMexp_end` timestamp(1) NULL DEFAULT NULL,
-  `OTMpa` double DEFAULT NULL,
-  `OTMwait` double DEFAULT NULL,
-  `OTMflag` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `OTMlast` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `OTMslew` double DEFAULT NULL,
-  `OTMmoon` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `OTMSNR` varchar(32) CHARACTER SET utf8 DEFAULT NULL,
-  `OTMres` double DEFAULT NULL,
-  `OTMseeing` double DEFAULT NULL,
-  `OTMslitangle` double DEFAULT NULL,
-  `NOTE` varchar(128) CHARACTER SET utf8 DEFAULT NULL,
-  `COMMENT` varchar(1024) CHARACTER SET utf8 DEFAULT NULL,
-  `OWNER` varchar(64) CHARACTER SET utf8 DEFAULT NULL,
-  `NOTBEFORE` timestamp NULL DEFAULT NULL,
-  `POINTMODE` varchar(45) CHARACTER SET utf8 DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2724 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -955,32 +956,36 @@ DROP TABLE IF EXISTS `acamd`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `acamd` (
-  `datetime` varchar(23) NOT NULL,
-  PRIMARY KEY (`datetime`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `detector_temps`
---
-
-DROP TABLE IF EXISTS `detector_temps`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `detector_temps` (
-  `datetime` varchar(17) NOT NULL,
-  `AU_CCD` decimal(6,3) NOT NULL,
-  `BU_dewar` decimal(6,3) NOT NULL,
-  `CR_CCD` decimal(8,3) NOT NULL,
-  `DR_dewar` decimal(7,3) NOT NULL,
-  `1U_heat` decimal(6,3) NOT NULL,
-  `2R_heat` decimal(7,3) NOT NULL,
-  `AG_CCD` decimal(6,3) NOT NULL,
-  `BG_dewar` decimal(6,3) NOT NULL,
-  `CI_CCD` decimal(8,3) NOT NULL,
-  `DI_dewar` decimal(6,3) NOT NULL,
-  `1G_heat` decimal(6,3) NOT NULL,
-  `2I_heat` decimal(6,3) NOT NULL,
+  `datetime` datetime(3) NOT NULL COMMENT 'YYYY-MM-DD hh:mm:ss.sss',
+  `name` varchar(128) DEFAULT NULL COMMENT 'Target name',
+  `obs_id` int DEFAULT NULL COMMENT 'observation ID',
+  `RA` varchar(32) DEFAULT NULL COMMENT 'Target RA (hh:mm:ss.s)',
+  `DECL` varchar(32) DEFAULT NULL COMMENT 'Target DEC (dd:mm:ss.s)',
+  `RAtel` varchar(32) DEFAULT NULL COMMENT 'TCS RA (hh:mm:ss.s)',
+  `DECLtel` varchar(32) DEFAULT NULL COMMENT 'TCS DEC (dd:mm:ss.s)',
+  `airmass` float DEFAULT NULL COMMENT 'TCS airmass',
+  `az` float DEFAULT NULL COMMENT 'TCS azimuth',
+  `casangle` float DEFAULT NULL COMMENT 'TCS Cassegrain ring angle',
+  `filter` varchar(16) DEFAULT NULL COMMENT 'Filter selection on ACAM',
+  `pointmode` varchar(8) DEFAULT NULL COMMENT 'Pointing target at slit or ACAM',
+  `focus` float DEFAULT NULL COMMENT 'TCS focus position',
+  `RAoffset` float DEFAULT NULL COMMENT 'PT input (arcsec)',
+  `DECLoffset` float DEFAULT NULL COMMENT 'PT input (arcsec)',
+  `acquired` tinyint DEFAULT NULL COMMENT 'TRUE means ACAM is in guiding mode after acquiring target',
+  `flags` varchar(32) DEFAULT NULL,
+  `RAsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM center (deg)',
+  `DECsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM center (deg)',
+  `ANGsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM position angle (deg)',
+  `rms_arcsec` float DEFAULT NULL COMMENT 'RMS residuals of solver WCS fit (arcsec)',
+  `result` varchar(8) DEFAULT NULL COMMENT 'Result of astrometry solver (GOOD, NOISY, etc.)',
+  `matches` int DEFAULT NULL COMMENT 'Number of matches sources from solver',
+  `seeing` float DEFAULT NULL COMMENT 'median seeing in ACAM field (arcsec)',
+  `seeing_zen` float DEFAULT NULL COMMENT 'seeing extrapolated to zenith (arcsec)',
+  `seeing_std` float DEFAULT NULL COMMENT 'STDDEV seeing in ACAM field (arcsec)',
+  `background` float DEFAULT NULL COMMENT 'median background in ACAM field (mag/argsec^2)',
+  `background_std` float DEFAULT NULL COMMENT 'STDDEV background in ACAM field (mag/argsec^2)',
+  `extinction` float DEFAULT NULL COMMENT 'median extinction in ACAM field (mag/argsec^2)',
+  `extinction_std` float DEFAULT NULL COMMENT 'STDDEV extinction in ACAM field (mag/argsec^2)',
   PRIMARY KEY (`datetime`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1077,6 +1082,57 @@ DROP TABLE IF EXISTS `thermald`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `thermald` (
   `datetime` datetime(3) NOT NULL,
+  `TCCD_U` float DEFAULT NULL COMMENT 'CCD temperature (K)',
+  `TCCD_G` float DEFAULT NULL COMMENT 'CCD temperature (K)',
+  `TCCD_R` float DEFAULT NULL COMMENT 'CCD temperature (K)',
+  `TCCD_I` float DEFAULT NULL COMMENT 'CCD temperature (K)',
+  `Tdewar_U` float DEFAULT NULL COMMENT 'dewar temperature (K)',
+  `Tdewar_G` float DEFAULT NULL COMMENT 'dewar temperature (K)',
+  `Tdewar_R` float DEFAULT NULL COMMENT 'dewar temperature (K)',
+  `Tdewar_I` float DEFAULT NULL COMMENT 'dewar temperature (K)',
+  `heat_U` float DEFAULT NULL COMMENT 'CCD heater power (%)',
+  `heat_G` float DEFAULT NULL COMMENT 'CCD heater power (%)',
+  `heat_R` float DEFAULT NULL COMMENT 'CCD heater power (%)',
+  `heat_I` float DEFAULT NULL COMMENT 'CCD heater power (%)',
+  `TCOLL_U` float DEFAULT NULL COMMENT 'collimator temp (C)',
+  `TCOLL_G` float DEFAULT NULL COMMENT 'collimator temp (C)',
+  `TCOLL_R` float DEFAULT NULL COMMENT 'collimator temp (C)',
+  `TCOLL_I` float DEFAULT NULL COMMENT 'collimator temp (C)',
+  `TFOCUS_U` float DEFAULT NULL COMMENT 'focus stage air temp (C)',
+  `TFOCUS_G` float DEFAULT NULL COMMENT 'focus stage air temp (C)',
+  `TFOCUS_R` float DEFAULT NULL COMMENT 'focus stage air temp (C)',
+  `TFOCUS_I` float DEFAULT NULL COMMENT 'focus stage air temp (C)',
+  `TRACKSURF` float DEFAULT NULL COMMENT 'rack surface temp (C)',
+  `TRACK_1` float DEFAULT NULL COMMENT 'rack temp 1 (C)',
+  `TRACK_2` float DEFAULT NULL COMMENT 'rack temp 2 (C)',
+  `TRACK_3` float DEFAULT NULL COMMENT 'rack temp 3 (C)',
+  `TFLEXCON_IG` float DEFAULT NULL COMMENT 'Flexure TTP controller rack temp (C)',
+  `TFLEXCON_UR` float DEFAULT NULL COMMENT 'Flexure TTP controller rack temp (C)',
+  `TRHRACK_1` float DEFAULT NULL COMMENT 'rack temp from humidity sensor 1 (C)',
+  `TRHRACK_2` float DEFAULT NULL COMMENT 'rack temp from humidity sensor 2 (C)',
+  `RHRACK_1` float DEFAULT NULL COMMENT 'rack relative humidity 1 (%)',
+  `RHRACK_2` float DEFAULT NULL COMMENT 'rack relative humidity 2 (%)',
+  `RHETA_B` float DEFAULT NULL COMMENT 'Etalon blue relative humidity (%)',
+  `RHETA_R` float DEFAULT NULL COMMENT 'Etalon red relative humidity (%)',
+  `TETA_B` float DEFAULT NULL COMMENT 'Etalon temp blue (C)',
+  `TETA_R` float DEFAULT NULL COMMENT 'Etalon temp red (C)',
+  `TACAM` float DEFAULT NULL COMMENT 'ACAM structure internal temp (C)',
+  `TANDOR_ACAM` float DEFAULT NULL COMMENT 'Andor temp; ACAM (C)',
+  `TANDOR_SCAM_L` float DEFAULT NULL COMMENT 'Andor temp; slicer cam L (C)',
+  `TANDOR_SCAM_R` float DEFAULT NULL COMMENT 'Andor temp; slicer cam R (C)',
+  PRIMARY KEY (`datetime`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `thermald_old`
+--
+
+DROP TABLE IF EXISTS `thermald_old`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `thermald_old` (
+  `datetime` datetime(3) NOT NULL,
   `TCCD_U` decimal(8,3) DEFAULT NULL COMMENT 'CCD temperature (K)',
   `TCCD_G` decimal(8,3) DEFAULT NULL COMMENT 'CCD temperature (K)',
   `TCCD_R` decimal(8,3) DEFAULT NULL COMMENT 'CCD temperature (K)',
@@ -1103,4 +1159,4 @@ CREATE TABLE `thermald` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-09-04 14:16:33
+-- Dump completed on 2024-10-19 13:39:58
