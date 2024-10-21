@@ -48,13 +48,15 @@ namespace Slit {
       float minwidth;
 
     public:
-      Interface() : numdev(-1), maxwidth(0), minwidth(0) { };
+      Interface() : numdev(-1), maxwidth(0), minwidth(0), arcsec_per_mm(NAN) { };
 
       Common::Queue async;
 
       // PI Interface class for Servo type
       //
       Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
+
+      double arcsec_per_mm;
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
@@ -66,6 +68,8 @@ namespace Slit {
       long set( Slit::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
       long get( std::string args, std::string &retstring );                         ///< get the current width and offset
       long get( std::string &retstring );                                           ///< get the current width and offset
+      long read_positions( float &width, float &offset, float &posa, float &posb );
+      long read_positions( float &width, float &offset );
 
       static void dothread_move_abs( Slit::Interface &iface, int addr, float pos ); ///< threaded move_abs function
 
@@ -73,6 +77,7 @@ namespace Slit {
       long move_rel( std::string args );         ///< send move-relative command to specified controllers
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( std::string args, std::string &retstring );      ///< writes the raw command as received to the master controller
+      void make_telemetry_message( std::string &retstring );
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 

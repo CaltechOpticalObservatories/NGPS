@@ -431,28 +431,13 @@ namespace Slit {
     if ( args == "?" || args == "help" ) {
       retstring = SLITD_GET;
       retstring.append( " \n" );
-      retstring.append( "  returns the current slit width and offset\n" );
+      retstring.append( "  returns the current slit width and offset in arcseconds\n" );
       return HELP;
     }
 
-    // check here to guard against divide-by-zero
+    // this call reads the controller and returns the numeric values
     //
-    if ( this->numdev == 0 ) {
-      logwrite( function, "ERROR no motor controllers defined!" );
-      retstring="invalid_configuration";
-      return( ERROR );
-    }
-
-    // get the position for each address in controller_info
-    //
-    int axis=1;
-    this->motorinterface.get_pos( "A", axis, pos_A );
-    this->motorinterface.get_pos( "B", axis, pos_B );
-
-    // calculate width and offset
-    //
-    width = pos_A + pos_B;
-    offs = ( pos_B - pos_A ) / this->numdev;
+    error = this->read_positions( width, offs, pos_A, pos_B );
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " numdev=" << this->numdev
@@ -471,10 +456,61 @@ namespace Slit {
 
     return( error );
   }
+  /***** Slit::Interface::get *************************************************/
   long Interface::get( std::string &retstring ) {
     return this->get( "", retstring );
   }
   /***** Slit::Interface::get *************************************************/
+
+
+  /***** Slit::Interface::read_positions **************************************/
+  /**
+   * @brief      read the actuator positions
+   * @param[out] width   calculated slit width in arcsec
+   * @param[out] offset  calculated slit offset in arcsec
+   * @param[out] posa    actuator A position in mm
+   * @param[out] posb    actuator B position in mm
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::read_positions( float &width, float &offset, float &posa, float &posb ) {
+
+    long error = NO_ERROR;
+
+    // check here to guard against divide-by-zero
+    //
+    if ( this->numdev == 0 ) {
+      logwrite( "Slit::Interface::read_positions", "ERROR no motor controllers defined!" );
+      return ERROR;
+    }
+
+    // get the position for each address in controller_info
+    //
+    int axis=1;
+    error |= this->motorinterface.get_pos( "A", axis, posa );
+    error |= this->motorinterface.get_pos( "B", axis, posb );
+
+    // calculate width and offset, converting to arcseconds
+    //
+    width = ( posa + posb ) * this->arcsec_per_mm;
+    offset  = ( ( posb - posa ) / this->numdev ) * this->arcsec_per_mm;
+
+    return error;
+  }
+  /***** Slit::Interface::read_positions **************************************/
+  /**
+   * @brief      read the actuator positions
+   * @details    This overloads read_positions to return only width and offset.
+   * @param[out] width   calculated slit width in arcsec
+   * @param[out] width   calculated slit width in arcsec
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::read_positions( float &width, float &offset ) {
+    float posa=NAN, posb=NAN;
+    return read_positions( width, offset, posa, posb );
+  }
+  /***** Slit::Interface::read_positions **************************************/
 
 
   /***** Slit::Interface::stop ************************************************/
@@ -579,5 +615,47 @@ namespace Slit {
     }
   }
   /***** Slit::Interface::send_command ****************************************/
+
+
+  /***** Slit::Interface::make_telemetry_message ******************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for my telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    const std::string function="Slit::Interface::make_telemetry_message";
+
+    // assemble my telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"]="slitinfo";
+
+    // There needs to be at least one device defined
+    //
+    if ( this->numdev > 0 ) {
+      // get the position for each address in controller_info
+      //
+      float width=NAN, offs=NAN, pos_A=NAN, pos_B=NAN;
+      this->read_positions( width, offs, pos_A, pos_B );
+
+      // fill the jmessage with the positions just retrieved
+      //
+      if ( !std::isnan(width) ) jmessage["SLITW"] = width;
+      if ( !std::isnan(offs) )  jmessage["SLITO"] = offs;
+      if ( !std::isnan(pos_A) ) jmessage["SLITPOSA"] = pos_A;
+      if ( !std::isnan(pos_B) ) jmessage["SLITPOSB"] = pos_B;
+    }
+
+    retstring = jmessage.dump();  // serialize the json message into retstring
+
+    retstring.append(JEOF);       // append the JSON message terminator
+
+    return;
+  }
+  /***** Slit::Interface::make_telemetry_message ******************************/
 
 }

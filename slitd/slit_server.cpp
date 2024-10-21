@@ -159,6 +159,23 @@ namespace Slit {
         }
       }
 
+      // ARCSEC_PER_MM: conversion of actuator units to arcseconds
+      //
+      if ( config.param[entry] == "ARCSEC_PER_MM" ) {
+        try {
+          this->interface.arcsec_per_mm = std::stod( config.arg[entry] );
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing ARCSEC_PER_MM " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          error=ERROR;
+          break;
+        }
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -496,6 +513,22 @@ namespace Slit {
       if ( cmd == SLITD_NATIVE ) {
                       ret = this->interface.send_command( args, retstring );
       }
+      else
+
+      // send telemetry on request
+      //
+      if ( cmd == TELEMREQUEST ) {
+                    if ( args=="?" || args=="help" ) {
+                      retstring=TELEMREQUEST+"\n";
+                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                      ret=HELP;
+                    }
+                    else {
+                      this->interface.make_telemetry_message( retstring );
+                      ret = JSON;
+                    }
+      }
 
       // unknown commands generate an error
       //
@@ -512,14 +545,19 @@ namespace Slit {
       //
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+        if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
+        if ( ret == JSON ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
+          logwrite( function, message.str() );
+        }
+        else
         if ( ! retstring.empty() && ret != HELP ) {
+          retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
         }
 
-        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
