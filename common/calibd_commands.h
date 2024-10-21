@@ -18,7 +18,6 @@ const std::string CALIBD_LAMPMOD = "lampmod";///< lamp modulator control
 const std::string CALIBD_NATIVE = "native";  ///< send native commands to PI controller
 const std::string CALIBD_OPEN = "open";      ///< open connection to calib
 const std::string CALIBD_SET = "set";        ///< set state of both actuators
-const std::string CALIBD_TELEMREQUEST = "telem";  ///< request telemetry info
 
 const std::vector<std::string> CALIBD_SYNTAX = {
                                                  CALIBD_CLOSE,
@@ -34,5 +33,5 @@ const std::vector<std::string> CALIBD_SYNTAX = {
                                                  "  LAMP MODULATOR CONTROL",
                                                  CALIBD_LAMPMOD+" ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]",
                                                  "  OTHER",
-                                                 CALIBD_TELEMREQUEST+" [ ? ]"
+                                                 TELEMREQUEST+" [ ? ]"
                                                };

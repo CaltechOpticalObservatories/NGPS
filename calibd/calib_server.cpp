@@ -555,11 +555,11 @@ namespace Calib {
 
       // telemetry request
       //
-      if ( cmd == CALIBD_TELEMREQUEST ) {
+      if ( cmd == TELEMREQUEST ) {
                       if ( args=="?" || args=="help" ) {
-                        retstring=CALIBD_TELEMREQUEST+"\n";
+                        retstring=TELEMREQUEST+"\n";
                         retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with EOF\\n.\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                         ret=HELP;
                       }
                       else {
@@ -603,7 +603,6 @@ namespace Calib {
                                            // Keep blocking connection open for interactive session.
     }
 
-    sock.Close();
     if ( ret == EXIT ) raise( SIGUSR1 );
     return;
   }

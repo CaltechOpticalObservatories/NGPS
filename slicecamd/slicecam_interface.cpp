@@ -1029,7 +1029,7 @@ namespace Slicecam {
         int ccdtemp = 99;
         pair.second->get_temperature( ccdtemp );
         std::string key="TANDOR_SCAM_"+which;
-        jmessage[key] = ccdtemp;
+        jmessage[key] = static_cast<float>(ccdtemp);  // the database wants floats
       }
     }
 

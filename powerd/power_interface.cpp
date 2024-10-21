@@ -614,9 +614,11 @@ namespace Power {
   /***** Power::Interface::make_telemetry_message *****************************/
   /**
    * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
+   * @details    This creates a JSON message for my telemetry info, then serializes
    *             it into a std::string ready to be sent over a socket.
    * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   * powerd telemetry is reported as true|false if the plug is on
    *
    */
   void Interface::make_telemetry_message( std::string &retstring ) {
@@ -632,10 +634,11 @@ namespace Power {
     //
     this->status("", retstring);
 
-    // fill the jmessage with the key/val pairs just retrieved
+    // fill the jmessage with boolean values for the key/val pairs just retrieved
+    // to represent the powered state of the plug ("on" is true)
     //
     for ( const auto &[key,val] : this->telemetry_map ) {
-      jmessage[key]=val;
+      jmessage[key]=(val==1?true:false);
     }
 
     retstring = jmessage.dump();  // serialize the json message into retstring

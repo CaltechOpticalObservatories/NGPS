@@ -478,11 +478,11 @@ namespace Flexure {
 
       // send telemetry upon request
       //
-      if ( cmd == FLEXURED_TELEMREQUEST ) {
+      if ( cmd == TELEMREQUEST ) {
                       if ( args=="?" || args=="help" ) {
-                        retstring=FLEXURED_TELEMREQUEST+"\n";
+                        retstring=TELEMREQUEST+"\n";
                         retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with EOF\\n.\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                         ret=HELP;
                       }
                       else {

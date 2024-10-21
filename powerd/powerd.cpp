@@ -537,9 +537,9 @@ void doit(Network::TcpSocket sock) {
 
     // send telemetry upon request
     //
-    if ( cmd == POWERD_TELEMREQUEST ) {
+    if ( cmd == TELEMREQUEST ) {
                     if ( args=="?" || args=="help" ) {
-                      retstring=POWERD_TELEMREQUEST+"\n";
+                      retstring=TELEMREQUEST+"\n";
                       retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
                       retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                       ret=HELP;
