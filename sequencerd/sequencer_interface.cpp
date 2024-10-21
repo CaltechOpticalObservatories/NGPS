@@ -54,11 +54,11 @@ namespace Sequencer {
     this->name.clear();
     this->ra_hms.clear();
     this->dec_dms.clear();
-    this->slitangle=-1;
-    this->casangle=-1;
+    this->slitangle=NAN;
+    this->casangle=NAN;
     this->pointmode.clear();
-    this->slitwidth=-1;
-    this->slitoffset=-1;
+    this->slitwidth=NAN;
+    this->slitoffset=NAN;
     this->exptime=-1;
     this->targetnum=-1;
     this->sequencenum=-1;

@@ -1571,6 +1571,22 @@ namespace Sequencer {
                       if ( ret != NO_ERROR ) logwrite(function, "ERROR: unable to load config file");
                       else ret = seq.configure_sequencer();
       }
+      else
+
+      // send telemetry upon request
+      //
+      if ( cmd == TELEMREQUEST ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        seq.sequence.make_telemetry_message( retstring );
+                        ret = JSON;
+                      }
+      }
 
       // Unknown commands generate an error
       //
@@ -1588,20 +1604,26 @@ namespace Sequencer {
       }
 
       if (ret != NOTHING) {
+        if ( ! retstring.empty() ) retstring.append(" ");
+
         // If the retstring doesn't already have a DONE or ERROR in it,
         // then append that to the retstring.
         //
-        if ( ret != HELP &&
+        if ( ret != HELP && ret != JSON &&
              ( retstring.find( "DONE" )  == std::string::npos ) &&
              ( retstring.find( "ERROR" ) == std::string::npos ) ) {
           retstring.append( ret == 0 ? "DONE" : "ERROR" );
 
+          if ( ret == JSON ) {
+            message.str(""); message << "command (" << seq.cmd_num << ") reply with JSON message";
+            logwrite( function, message.str() );
+          }
+          else
           if ( ret != HELP && buf.find("help")==std::string::npos && buf.find("?")==std::string::npos ) {
+            retstring.append( "\n" );
             message.str(""); message << "command (" << seq.cmd_num << ") reply: " << retstring;
             logwrite( function, message.str() );
           }
-
-          retstring.append( "\n" );
         }
         else retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;

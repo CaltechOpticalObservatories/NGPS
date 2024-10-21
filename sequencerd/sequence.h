@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cmath>
 #include <mysqlx/xdevapi.h>
+#include <json.hpp>
 
 #include "sequencer_interface.h"  // this defines the classes used to interface with various subsystems
 
@@ -291,6 +292,8 @@ const int foo=2;
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
       long tcs_init( const std::string which, std::string &retstring );
+
+      void make_telemetry_message( std::string &retstring );
 
       // These are various jobs that are done in their own threads
       //

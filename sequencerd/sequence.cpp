@@ -1035,7 +1035,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to acam hardware.
+    // Turn on power to acam hardware and wait for it to start before proceeding
     //
     for ( const auto &plug : seq.power_switch[POWER_ACAM].plugname ) {
       std::stringstream cmd;
@@ -1043,6 +1043,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       error |= seq.powerd.send( cmd.str(), reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR turning on power to acam hardware" );
     }
+    std::this_thread::sleep_for( std::chrono::seconds(7) );  // ACAM needs some time to power-on
 
     // if not connected to the acam daemon then connect
     //
@@ -3454,6 +3455,42 @@ logwrite( function, message.str() );
     }
   }
   /***** Sequencer::Sequence::tcs_init ****************************************/
+
+
+  /***** Sequencer::Sequence::make_telemetry_message **************************/
+  /**
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for my telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Sequence::make_telemetry_message( std::string &retstring ) {
+    // assemble the telemetry I want to report into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"] = "targetinfo";
+
+    // Store unconfigured values as NAN.
+    // NAN values are not logged to the database.
+    //
+    jmessage["OBSID"] = this->target.obsid < 0 ? NAN : this->target.obsid;            //  OBSERVATION_ID
+    jmessage["TARGET"] = this->target.name;                                           //  NAME
+    jmessage["SLITA"] = this->target.slitangle;                                       // *OTMslitangle
+    jmessage["BINSPECT"] = this->target.binspect < 1 ? NAN : this->target.slitwidth;  // *BINSPECT
+    jmessage["BINSPAT"] = this->target.binspat < 1 ? NAN : this->target.slitwidth;    // *BINSPAT
+    jmessage["POINTMODE"] = this->target.pointmode;                                   // *POINTMODE
+    jmessage["RA"] = this->target.ra_hms;                                             // *RA
+    jmessage["DEC"] = this->target.dec_dms;                                           // *DECL
+
+    retstring = jmessage.dump();  // serialize the json message into a string
+
+    retstring.append(JEOF);       // append JSON message terminator
+
+    return;
+  }
+  /***** Sequencer::Sequence::make_telemetry_message **************************/
 
 
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
