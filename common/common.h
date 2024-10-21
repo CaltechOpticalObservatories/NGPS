@@ -27,7 +27,13 @@ const long TIMEOUT = 3;
 const long HELP = 4;
 const long JSON = 5;
 const long EXIT = 999;
-const std::string JEOF = "EOF\n";  ///< used to terminate JSON messages
+
+const std::string JEOF = "EOF\n";              ///< used to terminate JSON messages
+const std::string TELEMREQUEST = "sendtelem";  ///< common daemon command used to request telemetry
+
+constexpr bool EXT = true;   ///< constant for use_extension arg of Common::Header::add_key()
+constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Header::add_key()
+
 
 /***** Common *****************************************************************/
 /**

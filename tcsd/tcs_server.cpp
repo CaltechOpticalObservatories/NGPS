@@ -670,11 +670,11 @@ namespace TCS {
       }
       else
 
-      if ( caseCompareString( cmd, TCSD_TELEMREQUEST ) ) {
+      if ( caseCompareString( cmd, TELEMREQUEST ) ) {
                       if ( args=="?" || args=="help" ) {
-                        retstring=TCSD_TELEMREQUEST+"\n";
+                        retstring=TELEMREQUEST+"\n";
                         retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with EOF\\n.\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                         ret=HELP;
                       }
                       else {

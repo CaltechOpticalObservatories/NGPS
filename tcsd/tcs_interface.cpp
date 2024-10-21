@@ -37,13 +37,13 @@ namespace TCS {
     jmessage["HA"]       = this->tcs_info.ha;
     jmessage["RAOFFS"]   = this->tcs_info.offsetra;
     jmessage["DECOFFS"]  = this->tcs_info.offsetdec;
-    jmessage["TELRA"]    = this->tcs_info.ra_hms;
-    jmessage["TELDEC"]   = this->tcs_info.dec_dms;
+    jmessage["TELRA"]    = this->tcs_info.ra_hms;       // string "hh:mm:ss.s"
+    jmessage["TELDEC"]   = this->tcs_info.dec_dms;      // string "dd:mm:ss.s"
     jmessage["AZIMUTH"]  = this->tcs_info.azimuth;
     jmessage["ZENANGLE"] = this->tcs_info.zenithangle;
     jmessage["DOMEAZ"]   = this->tcs_info.domeazimuth;
-    jmessage["DOMESTAT"] = this->tcs_info.domeshutters;
-    jmessage["FOCUS"]    = this->tcs_info.focus;
+    jmessage["DOMESHUT"] = this->tcs_info.domeshutters==1?"open":"closed";
+    jmessage["TELFOCUS"] = this->tcs_info.focus;
     jmessage["AIRMASS"]  = this->tcs_info.airmass;
 
     retstring = jmessage.dump();  // serialize the json message into retstring
@@ -1695,12 +1695,12 @@ namespace TCS {
     // to the end of the string.
     //
     try {
-      pos = tokens.at(0).find("=");  this->ra_h_dec     = std::stod(tokens.at(0).substr(pos+1));
-      pos = tokens.at(1).find("=");  this->dec_d_dec    = std::stod(tokens.at(1).substr(pos+1));
-      pos = tokens.at(6).find("=");  this->azimuth      = std::stod(tokens.at(6).substr(pos+1));
-      pos = tokens.at(7).find("=");  this->zenithangle  = std::stod(tokens.at(7).substr(pos+1));
-      pos = tokens.at(9).find("=");  this->domeazimuth  = std::stod(tokens.at(9).substr(pos+1));
-      pos = tokens.at(10).find("="); this->domeshutters = std::stoi(tokens.at(10).substr(pos+1));
+      pos = tokens.at(0).find("="); this->ra_h_dec     = std::stod(tokens.at(0).substr(pos+1));
+      pos = tokens.at(1).find("="); this->dec_d_dec    = std::stod(tokens.at(1).substr(pos+1));
+      pos = tokens.at(5).find("="); this->azimuth      = std::stod(tokens.at(5).substr(pos+1));
+      pos = tokens.at(6).find("="); this->zenithangle  = std::stod(tokens.at(6).substr(pos+1));
+      pos = tokens.at(8).find("="); this->domeazimuth  = std::stod(tokens.at(8).substr(pos+1));
+      pos = tokens.at(9).find("="); this->domeshutters = std::stoi(tokens.at(9).substr(pos+1));
     }
     catch ( const std::exception &e ) {
       message << "ERROR parsing input: " << e.what();
