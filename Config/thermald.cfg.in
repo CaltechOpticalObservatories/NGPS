@@ -70,30 +70,43 @@ LKS_CHAN="2 H2 HEAT_I"
 CAMP_UNIT="/dev/cr1000"                      # Campbell CR1000X
 
 # Each Campbell channel is set as follows:
-# CAMP_CHAN="CHAN# NAME CALTYPE CAL_COEF..."
-# Set NAME = "undef" if channel is not to be recorded.
+# CAMP_CHAN="<NUM> <NAME>"
+# where <NUM> is the order the data appears in the CSV stream,
+# and   <NAME> corresponds with the database field name.
 #
-CAMP_CHAN="1  TRACK_SURF TEMP LIN 0.0 1.0"
-CAMP_CHAN="2  TRACK_1 TEMP LIN 0.0 1.0"
-CAMP_CHAN="3  TRACK_2 TEMP LIN 0.0 1.0"
-CAMP_CHAN="4  TRACK_3 TEMP LIN 0.0 1.0"
-CAMP_CHAN="5  TCOLL_U TEMP LIN 0.0 1.0"
+# Set <NAME> = "undef" if channel is not to be recorded.
+#
+CAMP_CHAN="1  TRACKSURF"
+CAMP_CHAN="2  TRACK_1"
+CAMP_CHAN="3  TRACK_2"
+CAMP_CHAN="4  TRACK_3"
+CAMP_CHAN="5  TCOLL_U"
 CAMP_CHAN="6  TCOLL_G"
 CAMP_CHAN="7  TCOLL_R"
-CAMP_CHAN="8  RHRACL_1"
-CAMP_CHAN="9  RHRACL_2"
-CAMP_CHAN="10 ETA_RH1"
-CAMP_CHAN="11 ETA_RH2"
-CAMP_CHAN="12 TCOLL_I"
-CAMP_CHAN="13 FOCTEMPU"
-CAMP_CHAN="14 FOCTEMPG"
-CAMP_CHAN="15 FOCTEMPR"
-CAMP_CHAN="16 FOCTEMPI"
-CAMP_CHAN="17 undef"
-CAMP_CHAN="18 undef"
-CAMP_CHAN="19 undef"
-CAMP_CHAN="20 undef"
-CAMP_CHAN="21 undef"
-CAMP_CHAN="22 undef"
-CAMP_CHAN="23 undef"
+CAMP_CHAN="8  TRHRACK_1"
+CAMP_CHAN="9  RHRACK_1"
+CAMP_CHAN="10 TRHRACK_2"
+CAMP_CHAN="11 RHRACK_2"
+CAMP_CHAN="12 TETA_B"
+CAMP_CHAN="13 RHETA_B"
+CAMP_CHAN="14 TETA_R"
+CAMP_CHAN="15 RHETA_R"
+CAMP_CHAN="16 TCOLL_I"
+CAMP_CHAN="17 TFOCUS_U"
+CAMP_CHAN="18 TFOCUS_G"
+CAMP_CHAN="19 TFOCUS_R"
+CAMP_CHAN="20 TFOCUS_I"
+CAMP_CHAN="21 TFLEXCON_IG"
+CAMP_CHAN="22 TFLEXCON_UR"
+CAMP_CHAN="23 TACAM"
+
+# -----------------------------------------------------------------------------
+# TELEM_PROVIDER=( <name> <port> )
+#
+# This is a list of telemetry providers where <name> is the daemon name,
+# and <port> is the port on which to send the telemetry request.
+# Provide one per line.
+#
+TELEM_PROVIDER=(acamd     @ACAMD_NB_PORT@)
+TELEM_PROVIDER=(slicecamd @SLICECAMD_NB_PORT@)
 

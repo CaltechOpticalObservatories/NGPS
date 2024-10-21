@@ -108,6 +108,31 @@ namespace Thermal {
         applied++;
       }
 
+      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
+      //
+      if ( config.param[entry] == "TELEM_PROVIDER" ) {
+        std::vector<std::string> tokens;
+        Tokenize( config.arg[entry], tokens, " " );
+        try {
+          if ( tokens.size() == 2 ) {
+            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
+          }
+          else {
+            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( "THERMALD", function, message.str() );
+        applied++;
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -583,22 +608,31 @@ namespace Thermal {
         // the database, and block until it has been restarted.
         //
         while ( server.telem_sleeptimer.running() ) {
-          server.interface.lakeshore_readall();
-//        server.interface.campbell.read_data();  TODO DISABLED UNTIL I GET THE COLUMN NAMES
+          // Gather the data, each source stores in its own map
+          //
+          server.interface.get_external_telemetry();  // collect telemetry from other daemons
+          server.interface.lakeshore_readall();       // read all Lakeshores
+          server.interface.campbell.read_data();      // read Campbell CR1000
 
+          // erase the telemdata map,
+          // timestamp it now, then merge each source into that
+          //
           server.interface.telemdata.clear();
           server.interface.telemdata["datetime"] = get_datetime();
+          server.interface.telemdata.merge( server.interface.externaldata );
           server.interface.telemdata.merge( server.interface.campbell.datamap );
           server.interface.telemdata.merge( server.interface.lakeshoredata );
 
+          // write the telemdata map to the database
+          //
           database.write( server.interface.telemdata );
 
           server.telem_sleeptimer.sleepFor( std::chrono::seconds( duration ) );
           timeout( 0, "sec" );
         }
 
-        // Database is destructed when it leaves scope but this is tidy.
-        // close can throw an exception
+        // Database is destructed when it leaves scope, and the destructor
+        // will close it, but this is tidy. close can throw an exception.
         //
         database.close();
         logwrite( function, "telemetry database closed" );
@@ -1005,6 +1039,26 @@ namespace Thermal {
       if ( cmd.compare( THERMALD_TELEMETRY ) == 0 ) {
                       ret = this->telemetry( args, retstring );
       }
+      else
+      if ( cmd == THERMALD_SHOWTELEM ) {
+                      ret = this->interface.show_telemdata( args, retstring );
+      }
+      else
+
+      // send telemetry upon request
+      //
+      if ( cmd == TELEMREQUEST ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        this->interface.make_telemetry_message( retstring );
+                        ret = JSON;
+                      }
+      }
 
       // unknown commands generate an error
       //
@@ -1021,14 +1075,19 @@ namespace Thermal {
       //
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret != HELP ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
+        if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
+        if ( ret == JSON ) {
+          message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
+          logwrite( function, message.str() );
+        }
+        else
         if ( ! retstring.empty() && ret != HELP ) {
+          retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
         }
 
-        retstring.append( "\n" );
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

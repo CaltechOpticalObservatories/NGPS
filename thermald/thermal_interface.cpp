@@ -12,24 +12,192 @@
 
 namespace Thermal {
 
-  /***** Thermal::Interface::Interface ****************************************/
+  /***** Thermal::Interface::make_telemetry_message ***************************/
   /**
-   * @brief      class constructor
+   * @brief      assembles a telemetry message
+   * @details    This creates a JSON message for telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket so that
+   *             outside clients can ask for my telemetry.
+   * @param[out] retstring  string containing the serialization of the JSON message
    *
    */
-  Interface::Interface() {
+  void Interface::make_telemetry_message( std::string &retstring ) {
+
+    // read the data only if the maps are empty
+    //
+    if ( this->lakeshoredata.empty() )    this->lakeshore_readall();
+    if ( this->campbell.datamap.empty() ) this->campbell.read_data();
+
+    // assemble the telemetry into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"] = "thermalinfo";
+
+    // Loop through the two datamaps, campbell.datamap and lakeshoredata
+    //
+    try {
+
+      // Make a copy of telemdata which contains all the latest readings
+      //
+      auto showdata = this->telemdata;
+
+      // If that is empty, or the arg is "force" then read all sensors now
+      //
+      if ( showdata.empty() ) {
+        this->get_external_telemetry();
+        this->lakeshore_readall();
+        this->campbell.read_data();
+        showdata.merge( this->externaldata );
+        showdata.merge( this->campbell.datamap );
+        showdata.merge( this->lakeshoredata );
+      }
+
+      // Now loop through that map and if the value is a float then
+      // add it to the jmessage (this blocks NANs).
+      //
+      for ( const auto &[key,val] : showdata ) {
+        if ( val.getType() == mysqlx::Value::FLOAT ) {
+          jmessage[key] = val.get<float>();
+        }
+      }
+
+      retstring = jmessage.dump();  // serialize the json message into retstring
+
+      retstring.append(JEOF);       // append the JSON message terminator
+    }
+    catch( const std::exception &e ) {
+      logwrite( "Thermal::Interface::make_telemetry_message",
+                "ERROR assembling telemetry message: "+std::string(e.what()) );
+    }
+
+    return;
   }
-  /***** Thermal::Interface::Interface ****************************************/
+  /***** Thermal::Interface::make_telemetry_message ***************************/
 
 
-  /***** Thermal::Interface::~Interface ***************************************/
+  /***** Thermal::Interface::get_external_telemetry ***************************/
   /**
-   * @brief      class deconstructor
+   * @brief      collect telemetry from another daemon
+   * @details    This is used for any telemetry that I need to collect from
+   *             another daemon. Send the command "sendtelem" to the daemon, which
+   *             will respond with a JSON message. The daemon(s) to contact
+   *             are configured with the TELEM_PROVIDER key in the config file.
    *
    */
-  Interface::~Interface() {
+  void Interface::get_external_telemetry() {
+
+    // protects externaldata from simultaneous access
+    //
+    std::lock_guard<std::mutex> lock( this->externaldata_mtx );
+
+    // clear the external telemetry map
+    // any external telemetry collected here gets put into this
+    // map by handle_json_message()
+    //
+    this->externaldata.clear();
+
+    // Instantiate a client to communicate with each daemon,
+    // constructed with no name, newline termination on command writes,
+    // and JEOF termination on reply reads.
+    //
+    Common::DaemonClient jclient("", "\n", JEOF );
+
+    // Loop through each configured telemetry provider, which is a map of
+    // ports indexed by daemon name, both of which are used to update
+    // the jclient object.
+    //
+    // Send the command "sendtelem" to each daemon and read back the reply into
+    // retstring, which will be the serialized JSON telemetry message.
+    //
+    // handle_json_message() will parse the reply and set the FITS header
+    // keys in the telemkeys database.
+    //
+    std::string retstring;
+    for ( const auto &[name, port] : this->telemetry_providers ) {
+      jclient.set_name(name);
+      jclient.set_port(port);
+      jclient.connect();
+      jclient.command("sendtelem", retstring);
+      jclient.disconnect();
+      handle_json_message(retstring);
+    }
+
+    return;
   }
-  /***** Thermal::Interface::~Interface ***************************************/
+  /***** Thermal::Interface::get_external_telemetry ***************************/
+
+
+  /***** Thermal::Interface::handle_json_message ******************************/
+  /**
+   * @brief      parses incoming telemetry messages
+   * @details    The Interface::get_external_telemetry() will receive telemetry
+   *             from another daemon in a JSON message. Pass that message
+   *             to this function to parse it. The process_key<T>() function
+   *             verifies the key before storing it in the externaldata map.
+   * @param[in]  message_in  incoming JSON message
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::handle_json_message( std::string message_in ) {
+    const std::string function="Thermal::Interface::handle_json_message";
+    std::stringstream message;
+
+    try {
+      nlohmann::json jmessage = nlohmann::json::parse( message_in );
+      std::string messagetype;
+
+      // jmessage must not contain key "error" and must contain key "messagetype"
+      //
+      if ( !jmessage.contains("error") ) {
+        if ( jmessage.contains("messagetype") ) {
+          messagetype = jmessage["messagetype"];
+        }
+        else {
+          logwrite( function, "ERROR received JSON message with no messagetype" );
+          return ERROR;
+        }
+      }
+      else {
+        logwrite( function, "ERROR in JSON message" );
+        return ERROR;
+      }
+
+      // no errors, so disseminate the message contents based on the message type
+      //
+      if ( messagetype == "acaminfo" ) {
+        this->process_key<float>( jmessage, "TANDOR_ACAM" );
+      }
+      else
+      if ( messagetype == "slicecaminfo" ) {
+        this->process_key<float>( jmessage, "TANDOR_SCAM_L" );
+        this->process_key<float>( jmessage, "TANDOR_SCAM_R" );
+      }
+      else
+      if ( messagetype == "test" ) {
+        message.str(""); message << "received JSON test message: \"" << jmessage["test"].get<std::string>() << "\"";
+        logwrite( function, message.str() );
+      }
+      else {
+        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const nlohmann::json::parse_error &e ) {
+      message.str(""); message << "ERROR json exception parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Thermal::Interface::handle_json_message ******************************/
 
 
   /***** Thermal::Interface::open_campbell ***********************************/
@@ -231,7 +399,7 @@ namespace Thermal {
     // "?" or no arg displays usage and possible inputs, then return
     //
     if ( args=="?" || args.empty() ) {
-      retstream << THERMALD_GET << " <label> | <unit> <chan> | camp\n"  // usage
+      retstream << THERMALD_GET << " <label> | <unit> <chan> | camp [ force ]\n"  // usage
                 << "  Returns all Cambpell CR1000 readings if arg is \"camp\" or\n"
                 << "  returns temperature of channel specified by <label> or <unit> <chan> using...\n";
 
@@ -252,13 +420,30 @@ namespace Thermal {
         }
       }
       retstream << "\n";
+      retstream << "\n";
+      retstream << "  Adding the \"force\" argument to camp will force it to read all data,\n"
+                << "  including outliers which are normally discarded.\n";
       retstring = retstream.str();
       return( NO_ERROR );
     }
 
-    if ( args == "camp" ) {
-      this->campbell.read_data();
-      return NO_ERROR;
+    if ( args.find("camp") != std::string::npos ) {
+      // Read the Campbell data.
+      // If "force" is present then outliers are shown in the logfile
+      // but still not written to the database.
+      //
+      bool show_outliers = (args.find("force") != std::string::npos);
+      this->campbell.read_data( show_outliers );
+
+      // Loop through the resultant map of data read from the Campbell
+      // and put it in the return string
+      //
+      retstring.clear();
+      for ( const auto &[key,val] : this->campbell.datamap ) {
+        message.str(""); message << key << "=" << val << "\n";
+        retstring.append( message.str() );
+      }
+      return HELP;
     }
 
     int unit;
@@ -277,6 +462,70 @@ namespace Thermal {
     return( error );
   }
   /***** Thermal::Interface::get **********************************************/
+
+
+  /***** Thermal::Interface::show_telemdata ***********************************/
+  /**
+   * @brief      returns all collected telemetry data
+   * @param[in]  args       optional help or "force" to read now
+   * @param[out] retstring  string containing data
+   * @return     HELP
+   *
+   */
+  long Interface::show_telemdata( std::string args, std::string &retstring ) {
+    std::string function = "Thermal::Interface::show_telemdata";
+    std::stringstream message;
+    retstring.clear();
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = THERMALD_SHOWTELEM;
+      retstring.append( " [ force ]\n" );
+      retstring.append( "   Show most recently collected thermal telemetry data.\n" );
+      retstring.append( "   Use argument \"force\" to force a read now of all sensors.\n" );
+      return HELP;
+    }
+
+    // Make a copy of telemdata which contains all the latest readings
+    //
+    auto showdata = this->telemdata;
+
+    // If that is empty, or the arg is "force" then read all sensors now
+    //
+    if ( args=="force" || showdata.empty() ) {
+      this->get_external_telemetry();
+      this->lakeshore_readall();
+      this->campbell.read_data();
+      showdata.merge( this->externaldata );
+      showdata.merge( this->campbell.datamap );
+      showdata.merge( this->lakeshoredata );
+    }
+
+    // Add the timestamp (either now or what is in the telemdata map)
+    //
+    message.str(""); message << "data collected ";
+    if ( showdata.find("datetime") != showdata.end() ) {
+      message << showdata["datetime"] << "\n";
+    }
+    else {
+      message << get_datetime() << "\n";
+    }
+    retstring.append( message.str() );
+
+    // Add each key=value pair to the return string
+    //
+    for ( const auto &[key,value] : showdata ) {
+      if ( key=="datetime" ) continue;  // already displayed this
+      message.str(""); message << key << " = " << value << "\n";
+      retstring.append( message.str() );
+    }
+
+    // return "HELP" for quiet logging
+    //
+    return HELP;
+  }
+  /***** Thermal::Interface::show_telemdata ***********************************/
 
 
   /***** Thermal::Interface::setpoint *****************************************/
@@ -442,6 +691,10 @@ namespace Thermal {
     std::stringstream cmd;
     std::string reply;
     long error = NO_ERROR;
+
+    // protects lakeshoredata from simultaneous access
+    //
+    std::lock_guard<std::mutex> lock( this->lakeshoredata_mtx );
 
     this->lakeshoredata.clear();
 
@@ -659,7 +912,7 @@ namespace Thermal {
 
 
   /***** Thermal::Campbell::open_device ***************************************/
-  /*
+  /**
    * @brief      open and initialize the serial port for the CR1000
    * @details    The Campbell CR1000 is connected to a USB port using a
    *             USB-RS232 serial converter. This requires a proper udev rule
@@ -746,7 +999,7 @@ namespace Thermal {
 
 
   /***** Thermal::Campbell::close_device **************************************/
-  /*
+  /**
    * @brief      close serial port for the CR1000
    * @return     NO_ERROR
    *
@@ -762,17 +1015,28 @@ namespace Thermal {
 
 
   /***** Thermal::Campbell::read_data *****************************************/
-  /*
+  /**
    * @brief      read data from CR1000
    * @details    The Campbell CR1000 is programmed to transmit all values in a
    *             CSV string terminated by newline on reception of any character.
    *             This sends a character to the serial port and reads back the
    *             response into map indexed by name. The names come from the
    *             configuration file.
+   *             Outlier values are discarded.
    * @return     ERROR or NO_ERROR
    *
    */
-  long Campbell::read_data()  {
+  long Campbell::read_data() {
+    return read_data(false);
+  }
+  /***** Thermal::Campbell::read_data *****************************************/
+  /**
+   * @brief      read data from CR1000
+   * @details    This overloaded version accepts an argument to log outliers
+   * @param[in]  showoutliers  when true, discarded outliers are logged
+   *
+   */
+  long Campbell::read_data( bool show_outliers ) {
     std::string function = "Thermal::Campbell::read_data";
     std::stringstream message;
 
@@ -837,6 +1101,10 @@ namespace Thermal {
     //
     std::string tok;
     try {
+      // protects datamap
+      //
+      std::lock_guard<std::mutex> lock( this->datamap_mtx );
+
       this->datamap.clear();  // erase the map
 
       // Loop through tokens, which is a vector of sensor readings in order
@@ -848,8 +1116,20 @@ namespace Thermal {
         int chan = static_cast<int>(i+1);            // sensor_names indexed by int channel
         std::string key = this->sensor_names[chan];  // map key is sensor name
         if ( key == "undef" ) continue;              // don't save the reading if label is "undef"
-        double      val = std::stod(tok);            // map value is sensor reading
-        this->datamap[key] = val;                    // save this reading to the map
+        float val = std::stof(tok);                  // map value is sensor reading
+
+        // Apply some crude QC checks to eliminate bad or missing sensors.
+        // These outliers are never recorded to the database but if
+        // show_outliers is true then they are logged, to enable some access to them.
+        //
+        if ( val < -500 || val > 500 ) {
+          if ( show_outliers ) {
+            message.str(""); message << "outlier not recorded: " << key << " = " << val;
+            logwrite( function, message.str() );
+          }
+          continue;                                  // don't add crazy outliers to the map
+        }
+        this->datamap[key]=static_cast<float>(val);  // otherwise save this reading to the map
       }
     }
     catch( const std::exception &e ) {
