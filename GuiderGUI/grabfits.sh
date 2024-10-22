@@ -3,6 +3,7 @@
 # Save FITS file and push to another DS9 window
 
 camera=$1  # guider or slicev
+saveopt=$2 # push display or save only
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/gui.config $camera
@@ -12,6 +13,13 @@ fname=${grabdir}/${id}_`date +"%Y%m%d-%H%M%S"`.fits
 DEFzoom=.5
 
 xpaset -p $id save mosaicimage $fname  # save the FITS file
+echo $fname
+
+# Quit after saving if --no-display
+if [[ "$saveopt" == "--no-display" ]]; then
+  exit 0
+fi
+
 
 process_running=`ps aux | grep ds9 | grep " $newID "`  # should be empty string if no matches
 
