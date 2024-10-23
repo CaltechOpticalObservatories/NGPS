@@ -13,6 +13,7 @@ const std::string THERMALD_ECHO     = "echo";      ///<
 const std::string THERMALD_EXIT     = "exit";      ///< 
 const std::string THERMALD_GET      = "get";       ///< 
 const std::string THERMALD_NATIVE   = "native";    ///< 
+const std::string THERMALD_PRINTLABELS = "printlabels";    ///< 
 const std::string THERMALD_RECONNECT = "reconnect";   ///< 
 const std::string THERMALD_SETPOINT = "setpoint";  ///< 
 const std::string THERMALD_SHOWTELEM = "show";  ///< 
@@ -22,6 +23,7 @@ const std::vector<std::string> THERMALD_SYNTAX = {
                                                  THERMALD_EXIT,
                                                  THERMALD_GET+" [ ? | <label> | <unt> <chan> ] | camp [force]",
                                                  THERMALD_NATIVE+" [ ? | <unit> <cmd> [<args>] ]",
+                                                 THERMALD_PRINTLABELS+" [?]",
                                                  THERMALD_RECONNECT+" [ ? ]",
                                                  TELEMREQUEST+" [?]",
                                                  THERMALD_SETPOINT+" [ ? | <unit> <output> [ <temp> ] ]",

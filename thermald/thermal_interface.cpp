@@ -379,7 +379,7 @@ namespace Thermal {
    * @brief      read the specified channel from the specified LKS unit
    * @param[in]  args       see details below
    * @param[out] retstring  string containing requested value, or help
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * @details    usage:  <label> | <unit> <chan>
    *
@@ -424,7 +424,7 @@ namespace Thermal {
       retstream << "  Adding the \"force\" argument to camp will force it to read all data,\n"
                 << "  including outliers which are normally discarded.\n";
       retstring = retstream.str();
-      return( NO_ERROR );
+      return HELP;
     }
 
     if ( args.find("camp") != std::string::npos ) {
@@ -533,7 +533,7 @@ namespace Thermal {
    * @brief      set or get setpoint for specified output channel
    * @param[in]  args       see details below
    * @param[out] retstring  string containing requested value, or help
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * @details    usage:  <unit> <output> [ <temp> ]
    *
@@ -561,7 +561,7 @@ namespace Thermal {
       retstream << "\n";
       retstream << "  If <temp> is omitted then read and return the current setpoint.\n";
       retstring = retstream.str();
-      return( NO_ERROR );
+      return HELP;
     }
 
     int unit, output;
@@ -621,7 +621,7 @@ namespace Thermal {
    * @details    only query-based commands will generate a return string
    * @param[in]  cmd        should contain <unit> followed by Lakeshore-native command and args
    * @param[out] retstring  reference to string to contain any reply
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | HELP
    *
    * Other than parsing the <unit> number out of the cmd input string, this
    * function does no parsing and passes the arg string directly to the Lakeshore
@@ -657,22 +657,34 @@ namespace Thermal {
       retstream << THERMALD_NATIVE;
       retstream << " <unit> <cmd> [ <args> ]\n";
       retstream << "  Sends <cmd> and optional <args> to Lakeshore designated by <unit>\n";
-      retstream << "  where <unit>: ";
+      retstream << "  where <unit> = ";
       for ( const auto &lks_it : this->lakeshore ) {   // loop through all lakeshores
         retstream << lks_it.first;
-        retstream << " (" << lks_it.second.lks->get_name() << ")\n";
-        retstream << "                ";
+        retstream << " (for " << lks_it.second.lks->get_name() << ")\n";
+        retstream << "                 ";
       }
       retstream << "\n";
       retstream << "  No parsing is done except to extract the <unit>. The string following <unit>\n";
       retstream << "  is sent directly to the designated Lakeshore\n";
       retstring = retstream.str();
-      return( NO_ERROR );
+      return HELP;
     }
 
     // send the command
     //
-    if ( error==NO_ERROR ) error = this->lakeshore[unit].lks->send_command( cmd, retstring );
+    if ( error==NO_ERROR ) {
+      // If there is a question mark "?" in the command then send the command
+      // and get the reply back into retstring.
+      //
+      if ( cmd.find("?") != std::string::npos ) {
+        error = this->lakeshore[unit].lks->send_command( cmd, retstring );
+      }
+      else {
+        // Otherwise send the command without waiting for a reply
+        //
+        error = this->lakeshore[unit].lks->send_command( cmd );
+      }
+    }
 
     return error;
   }
@@ -754,6 +766,45 @@ namespace Thermal {
     return( error );
   }
   /***** Thermal::Interface::lakeshore_readall ********************************/
+
+
+  /***** Thermal::Interface::print_labels *************************************/
+  /**
+   * @brief      returns the channel labels
+   *
+   */
+  long Interface::print_labels( std::string args, std::string &retstring ) {
+    if ( args == "?" || args == "help" ) {
+      retstring = THERMALD_PRINTLABELS;
+      retstring.append( "\n" );
+      retstring.append( "   Prints the labels for the Lakeshore channels\n" );
+      return HELP;
+    }
+
+    std::stringstream retstream;
+
+    for ( const auto &lakeshore_it : this->lakeshore ) {          // loop through all lakeshores
+      retstream << "\n";
+      retstream << "    unit: ";
+      retstream << lakeshore_it.first << " (" << lakeshore_it.second.lks->get_name() << ")\n";  // unit and name
+      retstream << "   chans: ";
+
+      for ( const auto &temp : lakeshore_it.second.temp_info ) {  // loop through all tempchans for this lakeshore
+        retstream << temp.first << " ";                           // temp chan
+      }
+      retstream << "\n";
+      retstream << "  labels: ";
+
+      for ( const auto &temp : lakeshore_it.second.temp_info ) {  // loop through all tempchans for this lakeshore
+        retstream << temp.second << " ";                          // temp label
+      }
+    }
+    retstream << "\n";
+    retstring=retstream.str();
+
+    return HELP;
+  }
+  /***** Thermal::Interface::print_labels *************************************/
 
 
   /***** Thermal::Lakeshore::read_temp ****************************************/

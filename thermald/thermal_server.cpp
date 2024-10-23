@@ -999,6 +999,13 @@ namespace Thermal {
       }
       else
 
+      // print lakeshore labels
+      //
+      if ( cmd.compare( THERMALD_PRINTLABELS ) == 0 ) {
+                      ret = this->interface.print_labels( args, retstring );
+      }
+      else
+
       // NATIVE
       //
       if ( cmd.compare( THERMALD_NATIVE ) == 0 ) {

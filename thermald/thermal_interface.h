@@ -198,6 +198,7 @@ namespace Thermal {
       long parse_unit_chan( std::string args, int &unit, std::string &chan );
       long lakeshore_readall( );  ///< read all Lakeshores into memory
       long get( std::string args, std::string &retstring );       ///< read specified channel from specified LKS unit
+      long print_labels( std::string args, std::string &retstring );     ///< print lakeshore channel labels
       long show_telemdata( std::string args, std::string &retstring );
       long native( std::string cmd, std::string &retstring );     ///< send Lakeshore-native command to specified unit
       long setpoint( std::string args, std::string &retstring );  ///< set or get setpoint for specified output
