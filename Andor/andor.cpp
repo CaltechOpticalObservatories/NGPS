@@ -1646,7 +1646,12 @@ namespace Andor {
     //
     if ( error==NO_ERROR &&
          temp >= this->camera_info.temp_min &&
-         temp <= -20 ) { if ( andor ) andor->_CoolerOFF(); }
+         temp <= -20 ) {
+      if ( andor ) {
+        andor->_SetTemperature( 20 );
+        andor->_CoolerOFF();
+      }
+    }
 
     // Wait for temperature to rise above -20
     //
