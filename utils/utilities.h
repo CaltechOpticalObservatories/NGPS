@@ -33,6 +33,8 @@
 #include <limits>
 #include <ctime>
 #include "time.h"
+#include <map>
+#include <json.hpp>
 
 #define TO_DEGREES ( 360. / 24. )
 #define TO_HOURS   ( 24. / 360. )
@@ -433,4 +435,3 @@ class PreciseTimer {
     void stop() { cancelled=true; }
 };
 /***** PreciseTimer ***********************************************************/
-

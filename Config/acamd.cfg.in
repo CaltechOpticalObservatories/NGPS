@@ -148,3 +148,13 @@ ACQUIRE_TCS_MAX_OFFSET=30     # the maximum allowable offset sent to the TCS, in
 #
 SKYSIM_IMAGE_SIZE=1024
 
+# -----------------------------------------------------------------------------
+# TELEM_PROVIDER=( <name> <port> )
+#
+# This is a list of telemetry providers where <name> is the daemon name,
+# and <port> is the port on which to send the telemetry request.
+# Provide one per line.
+#
+TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
+TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
+

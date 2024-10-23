@@ -59,6 +59,8 @@ namespace Database {
       //
       std::map<std::string, mysqlx::Value> _data;
 
+      std::mutex _data_mtx;       ///< protecs _data map access
+
     public:
       Database() : _dbconfigured(false), _dbconnected(false), _sessionopen(false),
                    _session(nullptr), _table(nullptr), _schema(nullptr) { }
@@ -79,7 +81,7 @@ namespace Database {
       void initialize_class( std::vector<std::string> info );
       void close();
 
-      /***** Database::Database::add_telem_entry ******************************/
+      /***** Database::Database::add_key_val **********************************/
       /**
        * @brief      adds a key,value pair to the Database class
        * @details    This adds a row into memory that will make up the complete
@@ -90,10 +92,44 @@ namespace Database {
        * @param[in]  value  value of entry can be any type
        */
       template <typename T>
-      void add_telem_entry( const std::string &key, T value ) {
+      void add_key_val( const std::string &key, T value ) {
+        std::lock_guard<std::mutex> lock(_data_mtx);
         _data[key] = value;
       }
-      /***** Database::Database::add_telem_entry ******************************/
+      /***** Database::Database::add_key_val **********************************/
+
+      /***** Database::Database::add_from_json ********************************/
+      /**
+       * @brief      verifies key in json message and adds key/val to Database::_data
+       * @details    Accepts a json message and key, verifies the key is in the message
+       *             and the value is not null, and if that passes then use the
+       *             add_key_val() function to add the associated value to the
+       *             Database class internal _data map.
+       * @param[in]  jmessage  json message
+       * @param[in]  jkey      key to extract value from json message
+       * @param[in]  optional  optional database key, defaults to json key
+       */
+      template <typename T>
+      void add_from_json( const nlohmann::json &jmessage, const std::string &jkey, const std::string &optional="" ) {
+        // The dbkey used to write to the database is the same as the jkey, unless
+        // otherwise specified.
+        //
+        const std::string &dbkey = ( optional.empty() ? jkey : optional );
+
+        // index jmessage with jkey
+        if ( jmessage.contains(jkey) ) {
+          if ( !jmessage[jkey].is_null() ) {
+            try {
+              // index database with dbkey
+              this->add_key_val( dbkey, jmessage[jkey].get<T>() );
+            }
+            catch ( const nlohmann::json::type_error &e ) {
+              logwrite( "Database::Database::add_from_json", "ERROR key \""+jkey+"\" not expected type: "+e.what() );
+            }
+          }
+        }
+      }
+      /***** Database::Database::add_from_json ********************************/
 
       void write( std::map<std::string, mysqlx::Value> data );  ///< write passed map
       void write();                                             ///< write class map

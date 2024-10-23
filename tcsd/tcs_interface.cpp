@@ -33,13 +33,13 @@ namespace TCS {
     nlohmann::json jmessage;
     jmessage["messagetype"] = "tcsinfo";
 
-    jmessage["CASANGLE"] = this->tcs_info.cassangle;
-    jmessage["HA"]       = this->tcs_info.ha;
-    jmessage["RAOFFS"]   = this->tcs_info.offsetra;
-    jmessage["DECOFFS"]  = this->tcs_info.offsetdec;
+    jmessage["CASANGLE"] = this->tcs_info.cassangle;    // double
+    jmessage["HA"]       = this->tcs_info.ha;           // string
+    jmessage["RAOFFSET"]   = this->tcs_info.offsetra;   // double
+    jmessage["DECLOFFSET"]  = this->tcs_info.offsetdec; // double
     jmessage["TELRA"]    = this->tcs_info.ra_hms;       // string "hh:mm:ss.s"
     jmessage["TELDEC"]   = this->tcs_info.dec_dms;      // string "dd:mm:ss.s"
-    jmessage["AZIMUTH"]  = this->tcs_info.azimuth;
+    jmessage["AZ"]       = this->tcs_info.azimuth;
     jmessage["ZENANGLE"] = this->tcs_info.zenithangle;
     jmessage["DOMEAZ"]   = this->tcs_info.domeazimuth;
     jmessage["DOMESHUT"] = this->tcs_info.domeshutters==1?"open":"closed";

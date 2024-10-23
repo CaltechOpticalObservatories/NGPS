@@ -133,12 +133,18 @@ namespace Acam {
     private:
       char* restorePythonPath;
       std::string result;
-      double ra, dec, pa;
-      double seeing, seeing_zenith, extinction, background_med, background_std;
+      double ra, dec, pa, rmsarcsec;
+      long matches;
+      double seeing, seeing_std, seeing_zen, extinction, extinction_std, background, background_std;
       bool python_initialized;
 
     public:
-      Astrometry() : python_initialized(false), isacquire(true), pAstrometryModule(nullptr), pQualityModule(nullptr) { }
+      Astrometry()
+        : ra(NAN), dec(NAN), pa(NAN), rmsarcsec(NAN),
+          matches(-1), seeing(NAN), seeing_std(NAN), seeing_zen(NAN),
+          extinction(NAN), extinction_std(NAN),
+          background(NAN), background_std(NAN),
+          python_initialized(false), isacquire(true), pAstrometryModule(nullptr), pQualityModule(nullptr) { }
 
       long initialize_python();                          /// initializes the Python module
 
@@ -151,17 +157,22 @@ namespace Acam {
       PyObject* pAstrometryModule;                       /// astrometry
       PyObject* pQualityModule;                          /// image quality
 
-      inline double get_seeing()         { return this->seeing; }
-      inline double get_seeing_zenith()  { return this->seeing_zenith; }
-      inline double get_extinction()     { return this->extinction; }
-      inline double get_background()     { return this->background_med; }
-      inline double get_background_std() { return this->background_std; }
+      inline double get_seeing()         const { return this->seeing; }
+      inline double get_seeing_std()     const { return this->seeing_std; }
+      inline double get_seeing_zen()     const { return this->seeing_zen; }
+      inline double get_extinction()     const { return this->extinction; }
+      inline double get_extinction_std() const { return this->extinction_std; }
+      inline double get_background()     const { return this->background; }
+      inline double get_background_std() const { return this->background_std; }
 
-      inline void get_solution( std::string &_result, double &_ra, double &_dec, double &_angle ) {
-        _result = this->result;
-        _ra     = this->ra;
-        _dec    = this->dec;
-        _angle  = this->pa;
+      inline void get_solution( std::string &_result, double &_ra, double &_dec, double &_angle,
+                                long &_matches, double &_rmsarcsec ) const {
+        _result    = this->result;
+        _ra        = this->ra;
+        _dec       = this->dec;
+        _angle     = this->pa;
+        _matches   = this->matches;
+        _rmsarcsec = this->rmsarcsec;
       }
 
       inline std::string get_result() {
@@ -473,6 +484,10 @@ namespace Acam {
 
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
+      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
+
+      nlohmann::json tcs_jmessage;             ///< JSON message containing TCS telemetry
+
       Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
                     tcs_online(false),
                     motion_port(-1),
@@ -511,6 +526,8 @@ namespace Acam {
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
       void make_telemetry_message( std::string &retstring );
+      void get_external_telemetry();
+      long handle_json_message( std::string message_in );
       long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components

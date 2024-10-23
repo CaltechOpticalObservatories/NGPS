@@ -38,7 +38,6 @@ const std::string ACAMD_OFFSETGOAL = "offsetgoal";  ///< add dRA,dDEC offset to 
 const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_PUTONSLIT= "putonslit"; ///< put target on slit
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
-const std::string ACAMD_TELEMREQUEST= "sendtelem"; ///< send my telemetry as JSON message
 const std::string ACAMD_SHUTDOWN = "shutdown";  ///< shutdown threads and close connections
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver
 const std::string ACAMD_TCSGET = "tcsget";      ///< 
@@ -88,7 +87,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_OFFSETCAL+" [ ? ]",
                                                 ACAMD_OFFSETGOAL+" [ ? | <dRA> <dDEC> ]",
                                                 ACAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> ]",
-                                                ACAMD_TELEMREQUEST+" [ ? ]",
+                                                TELEMREQUEST+" [ ? ]",
                                                 ACAMD_SHUTDOWN+" [ ? ]",
                                                 ACAMD_TEST+" ? | <testname> ..."
                                               };

@@ -1014,11 +1014,13 @@ namespace Acam {
     // If there is any error then report it and do not proceed
     //
     if ( ! errstr.empty() ) {
-      this->seeing            = -1;
-      this->seeing_zenith     = -1;
-      this->extinction        = -1;
-      this->background_med    = -1;
-      this->background_std    = -1;
+      this->seeing            = NAN;
+      this->seeing_std        = NAN;
+      this->seeing_zen        = NAN;
+      this->extinction        = NAN;
+      this->extinction_std    = NAN;
+      this->background        = NAN;
+      this->background_std    = NAN;
       message.str(""); message << "ERROR from Python image_quality: " << errstr;
       logwrite( function, message.str() );
       Py_DECREF( pReturn );
@@ -1030,27 +1032,33 @@ namespace Acam {
     // (GetItemString returns a borrowed reference, no need to DECREF)
     //
     PyObject *_seeing         = PyDict_GetItemString( pReturn, "seeing" );
-    PyObject *_seeing_zenith  = PyDict_GetItemString( pReturn, "seeing_zenith" );
+    PyObject *_seeing_std     = PyDict_GetItemString( pReturn, "seeing_std" );
+    PyObject *_seeing_zen     = PyDict_GetItemString( pReturn, "seeing_zen" );
     PyObject *_extinction     = PyDict_GetItemString( pReturn, "extinction" );
-    PyObject *_background_med = PyDict_GetItemString( pReturn, "background_med" );
+    PyObject *_extinction_std = PyDict_GetItemString( pReturn, "extinction_std" );
+    PyObject *_background     = PyDict_GetItemString( pReturn, "background" );
     PyObject *_background_std = PyDict_GetItemString( pReturn, "background_std" );
 
     // Store them in the class
     //
     this->seeing              = PyFloat_AsDouble( _seeing );
-    this->seeing_zenith       = PyFloat_AsDouble( _seeing_zenith );
+    this->seeing_std          = PyFloat_AsDouble( _seeing_std);
+    this->seeing_zen          = PyFloat_AsDouble( _seeing_zen );
     this->extinction          = PyFloat_AsDouble( _extinction );
-    this->background_med      = PyFloat_AsDouble( _background_med );
+    this->extinction_std      = PyFloat_AsDouble( _extinction_std );
+    this->background          = PyFloat_AsDouble( _background );
     this->background_std      = PyFloat_AsDouble( _background_std );
 
     Py_DECREF( pReturn );
     PyGILState_Release( gstate );                    // release the GIL before returning
 
     message.str("");
-    message << "seeing=" << this->seeing
-            << " seeing_zenith=" << this->seeing_zenith
+    message << " seeing=" << this->seeing
+            << " seeing_std=" << this->seeing_std
+            << " seeing_zen=" << this->seeing_zen
             << " extinction=" << this->extinction
-            << " background_med=" << this->background_med
+            << " extinction_std=" << this->extinction_std
+            << " background=" << this->background
             << " background_std=" << this->background_std;
     logwrite( function, message.str() );
 
@@ -1220,6 +1228,8 @@ namespace Acam {
     PyObject* ra_       = PyDict_GetItemString( pReturn, "solveRA" );
     PyObject* dec_      = PyDict_GetItemString( pReturn, "solveDEC" );
     PyObject* pa_       = PyDict_GetItemString( pReturn, "solveANG" );
+    PyObject* matches_  = PyDict_GetItemString( pReturn, "matches" );
+    PyObject* rmsarcsec_= PyDict_GetItemString( pReturn, "rms_arcsec" );
 
     // store them in the class
     //
@@ -1229,14 +1239,18 @@ namespace Acam {
     this->ra  = PyFloat_Check( ra_ )  ? PyFloat_AsDouble( ra_ )  : NAN;
     this->dec = PyFloat_Check( dec_ ) ? PyFloat_AsDouble( dec_ ) : NAN;
     this->pa  = PyFloat_Check( pa_ )  ? PyFloat_AsDouble( pa_ )  : NAN;
+    this->matches   = PyLong_Check( matches_ )  ? PyLong_AsLong( matches_ )  : -1L;
+    this->rmsarcsec = PyFloat_Check( rmsarcsec_ )  ? PyFloat_AsDouble( rmsarcsec_ )  : NAN;
 
     PyGILState_Release( gstate );                    // release the GIL before returning
 
     message.str(""); message << "result=" << this->result
+                             << " NMATCH="<< this->matches
                              << std::fixed << std::setprecision(6)
                              << " RA="    << this->ra
                              << " DEC="   << this->dec
                              << " PA="    << this->pa
+                             << " RMS="   << this->rmsarcsec
                              << " solve time=" << t1-t0 << " sec";
     logwrite( function, message.str() );
 
@@ -1324,7 +1338,7 @@ namespace Acam {
   /***** Acam::Interface::make_telemetry_message ******************************/
   /**
    * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
+   * @details    This creates a JSON message for my telemetry info, then serializes
    *             it into a std::string ready to be sent over a socket so that
    *             outside clients can ask for my telemetry.
    * @param[out] retstring  string containing the serialization of the JSON message
@@ -1343,7 +1357,7 @@ namespace Acam {
     if ( this->isopen("camera") ) {
       int ccdtemp=99;
       this->camera.andor.get_temperature( ccdtemp );
-      jmessage["TANDOR_ACAM"] = ccdtemp;
+      jmessage["TANDOR_ACAM"] = static_cast<float>(ccdtemp);  // the database wants floats
     }
 
     retstring = jmessage.dump();  // serialize the json message into retstring
@@ -1353,6 +1367,123 @@ namespace Acam {
     return;
   }
   /***** Acam::Interface::make_telemetry_message ******************************/
+
+
+  /***** Acam::Interface::get_external_telemetry ******************************/
+  /**
+   * @brief      collect telemetry from another daemon
+   * @details    This is used for any telemetry that I need to collect from
+   *             another daemon. Send the command "sendtelem" to the daemon, which
+   *             will respond with a JSON message. The daemon(s) to contact
+   *             are configured with the TELEM_PROVIDER key in the config file.
+   *
+   */
+  void Interface::get_external_telemetry() {
+
+    // Instantiate a client to communicate with each daemon,
+    // constructed with no name, newline termination on command writes,
+    // and JEOF termination on reply reads.
+    //
+    Common::DaemonClient jclient("", "\n", JEOF );
+
+    // Loop through each configured telemetry provider, which is a map of
+    // ports indexed by daemon name, both of which are used to update
+    // the jclient object.
+    //
+    // Send the command "sendtelem" to each daemon and read back the reply into
+    // retstring, which will be the serialized JSON telemetry message.
+    //
+    // handle_json_message() will parse the reply and set the FITS header
+    // keys in the telemkeys database.
+    //
+    std::string retstring;
+    for ( const auto &[name, port] : this->telemetry_providers ) {
+      jclient.set_name(name);
+      jclient.set_port(port);
+      jclient.connect();
+      jclient.command("sendtelem", retstring);
+      jclient.disconnect();
+      handle_json_message(retstring);
+    }
+    return;
+  }
+  /***** Acam::Interface::get_external_telemetry ******************************/
+
+
+  /***** Acam::Interface::handle_json_message *********************************/
+  /**
+   * @brief      parses incoming telemetry messages
+   * @details    Requesting telemetry from another daemon returns a serialized
+   *             JSON message which needs to be passed in here to parse it.
+   * @param[in]  message_in  incoming serialized JSON message (as a string)
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::handle_json_message( std::string message_in ) {
+    const std::string function="Acam::Interface::handle_json_message";
+    std::stringstream message;
+
+    try {
+      nlohmann::json jmessage = nlohmann::json::parse( message_in );
+      std::string messagetype;
+
+      // jmessage must not contain key "error" and must contain key "messagetype"
+      //
+      if ( !jmessage.contains("error") ) {
+        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
+          messagetype = jmessage["messagetype"];
+        }
+        else {
+          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
+          return ERROR;
+        }
+      }
+      else {
+        logwrite( function, "ERROR in JSON message" );
+        return ERROR;
+      }
+
+      // no errors, so disseminate the message contents based on the message type
+      //
+      if ( messagetype == "tcsinfo" ) {
+        this->database.add_from_json<double>( jmessage, "CASANGLE" );
+        this->database.add_from_json<std::string>( jmessage, "TELRA", "RAtel" );
+        this->database.add_from_json<std::string>( jmessage, "TELDEC", "DECLtel" );
+        this->database.add_from_json<double>( jmessage, "AZ" );
+        this->database.add_from_json<double>( jmessage, "TELFOCUS", "focus" );
+        this->database.add_from_json<double>( jmessage, "AIRMASS" );
+      }
+      else
+      if ( messagetype == "targetinfo" ) {
+        this->database.add_from_json<int>( jmessage, "OBS_ID" );
+        this->database.add_from_json<std::string>( jmessage, "NAME" );
+        this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
+        this->database.add_from_json<std::string>( jmessage, "RA" );
+        this->database.add_from_json<std::string>( jmessage, "DECL" );
+      }
+      else
+      if ( messagetype == "test" ) {
+      }
+      else {
+        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const nlohmann::json::parse_error &e ) {
+      message.str(""); message << "ERROR json exception parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::handle_json_message *********************************/
 
 
   /***** Acam::Interface::initialize_python_objects ***************************/
@@ -1715,7 +1846,13 @@ namespace Acam {
     // Open motion
     //
     if ( component == "all" || component == "motion" ) {
+      // open motion
       error |= this->motion.open();
+      // are actuators homed?
+      std::string homestr;
+      error |= this->motion.is_home("", homestr);
+      // home them if needed
+      if ( homestr == "false" ) error |= this->motion.home("", homestr);
     }
 
     // Open camera
@@ -2748,7 +2885,8 @@ namespace Acam {
       // Optional solver args can be included here, which currently only come from the test commands.
       //
       bool match_found = false;                    // was a match found?
-      double acam_ra=0, acam_dec=0, acam_angle=0;  // calculations from acam solver
+      long matches=-1;
+      double acam_ra=NAN, acam_dec=NAN, acam_angle=NAN, rmsarcsec=NAN;  // calculations from acam solver
       std::string result;                          // acam solver result
 
       std::string last_imagename = iface->get_imagename();
@@ -2759,7 +2897,7 @@ namespace Acam {
 
       // this gets the solution from the solver
       //
-      iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
+      iface->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle, matches, rmsarcsec );
 
       if ( result=="GOOD" || result=="NOISY" ) {   // treat GOOD and NOISY the same for now
         match_found = true;
@@ -2778,10 +2916,12 @@ namespace Acam {
       // any type of value (string, int, float, bool, etc.).
       // This does not write them to the actual database yet.
       //
-      iface->database.add_telem_entry( "result",   result );
-      iface->database.add_telem_entry( "RAsolve",  acam_ra );
-      iface->database.add_telem_entry( "DECsolve", acam_dec );
-      iface->database.add_telem_entry( "ANGsolve", acam_angle );
+      iface->database.add_key_val( "result",   result );
+      iface->database.add_key_val( "RAsolve",  acam_ra );
+      iface->database.add_key_val( "DECsolve", acam_dec );
+      iface->database.add_key_val( "ANGsolve", acam_angle );
+      iface->database.add_key_val( "matches", matches );
+      iface->database.add_key_val( "rms_arcsec", rmsarcsec );
 
       // If no match found and exceeded number of attempts then give up and get out.
       // This counts as an attempt so attempts is incremented.
@@ -2824,8 +2964,8 @@ namespace Acam {
       // Add properly-typed telemetry keys/value pairs to a database map object.
       // This does not write them to the actual database yet.
       //
-      iface->database.add_telem_entry( "RAoffset",   ra_off );
-      iface->database.add_telem_entry( "DECLoffset", dec_off );
+      iface->database.add_key_val( "RAoffset",   ra_off );
+      iface->database.add_key_val( "DECLoffset", dec_off );
 
       this->offset_cal_offset += offset;
 
@@ -2896,9 +3036,13 @@ namespace Acam {
       // to call this a success, so any failure here resets the counter.
       //
       if ( offset < this->offset_threshold ) {
-        this->nacquired++;
-        message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
-        logwrite( function, message.str() );
+        // but only in ACQUIRE mode, otherwise this could increment forever in GUIDE mode
+        if ( this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+          this->nacquired++;
+          message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
+          logwrite( function, message.str() );
+        }
+        else if ( this->acquire_mode == Acam::TARGET_GUIDE ) this->nacquired=this->min_repeat;
       }
       else {
         nacquired=0;     // if an acquire is not below threshold then reset the counter
@@ -2923,6 +3067,13 @@ namespace Acam {
       this->is_acquired.store( true, std::memory_order_seq_cst );                   // Target Acquired!
       this->acquire_mode = Acam::TARGET_NOP;
     }
+    else
+    // In guide mode, just silently keep the is_acquired flag set
+    //
+    if ( this->acquire_mode == Acam::TARGET_GUIDE &&
+         this->nacquired == this->min_repeat ) {
+      this->is_acquired.store( true, std::memory_order_seq_cst );
+    }
 
     // Leaving this function with an error means target acquisition has failed
     //
@@ -2935,21 +3086,28 @@ namespace Acam {
     // any type of value (string, int, float, bool, etc.).
     // This does not write them to the actual database yet.
     //
-    iface->database.add_telem_entry( "acquired",       this->is_acquired.load() );
-    iface->database.add_telem_entry( "pointmode",      this->get_pointmode() );
-    iface->database.add_telem_entry( "seeing",         iface->astrometry.get_seeing() );
-    iface->database.add_telem_entry( "seeing_zen",     iface->astrometry.get_seeing_zenith() );
-    iface->database.add_telem_entry( "extinction",     iface->astrometry.get_extinction() );
-    iface->database.add_telem_entry( "background",     iface->astrometry.get_background() );
-    iface->database.add_telem_entry( "background_std", iface->astrometry.get_background_std() );
-    iface->database.add_telem_entry( "filter",         iface->motion.get_current_filter_name() );
+    iface->database.add_key_val( "acquired",       this->is_acquired.load() );
+    iface->database.add_key_val( "seeing",         iface->astrometry.get_seeing() );
+    iface->database.add_key_val( "seeing_std",     iface->astrometry.get_seeing_std() );
+    iface->database.add_key_val( "seeing_zen",     iface->astrometry.get_seeing_zen() );
+    iface->database.add_key_val( "extinction",     iface->astrometry.get_extinction() );
+    iface->database.add_key_val( "extinction_std", iface->astrometry.get_extinction_std() );
+    iface->database.add_key_val( "background",     iface->astrometry.get_background() );
+    iface->database.add_key_val( "background_std", iface->astrometry.get_background_std() );
+    iface->database.add_key_val( "filter",         iface->motion.get_current_filter_name() );
 
-    iface->database.add_telem_entry( "datetime",       get_datetime() );
+    iface->database.add_key_val( "datetime",       get_datetime() );
 
     // This will write the collected telemetry key/value pairs to the database,
     // then will clear the map object once they are written.
     //
-    iface->database.write();
+    try {
+      iface->database.write();
+    }
+    catch ( ... ) {
+      logwrite( function, "ERROR writing to database" );
+      error=ERROR;
+    }
 
     return error;
   }
@@ -3641,11 +3799,11 @@ namespace Acam {
       }
       else {
         try {
-          this->database.add_telem_entry( "datetime",   get_datetime() );
-          this->database.add_telem_entry( "result",   "result" );
-          this->database.add_telem_entry( "obs_id",   123 );
-          this->database.add_telem_entry( "airmass",   1.23 );
-          this->database.add_telem_entry( "acquired",   true );
+          this->database.add_key_val( "datetime",   get_datetime() );
+          this->database.add_key_val( "result",   "result" );
+          this->database.add_key_val( "obs_id",   123 );
+          this->database.add_key_val( "airmass",   1.23 );
+          this->database.add_key_val( "acquired",   true );
           this->database.write();
         }
         catch ( const std::exception &e ) {
@@ -4002,6 +4160,10 @@ namespace Acam {
       _tcs = this->tcs_online.load();
     }
 
+    // request external telemetry
+    //
+    this->get_external_telemetry();
+
     double angle_scope=NAN, ra_scope=NAN, dec_scope=NAN,
            angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;
 
@@ -4071,7 +4233,7 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
     this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
     this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  angle_scope, "Cassegrain ring angle" );
-    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",   1, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",   NAN, "" );
     this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
@@ -4089,7 +4251,11 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_2",     (        cos( angle_acam * PI / 180. ) ), "" );
 
-    this->camera.fitsinfo.fitskeys.addkey( "FILTER", this->motion.get_current_filter_name(), "filter name" );
+    std::string retstring;
+    this->motion.filter("", retstring);
+    this->camera.fitsinfo.fitskeys.addkey( "FILTER", retstring, "ACAM filter name" );
+    this->motion.cover("", retstring);
+    this->camera.fitsinfo.fitskeys.addkey( "COVER", retstring, "ACAM cover position" );
 
     return NO_ERROR;
   }
@@ -4291,7 +4457,8 @@ namespace Acam {
     // then translate into ACAM coordinates.
     //
     double scope_angle=NAN, scope_ra=NAN, scope_dec=NAN,
-           acam_angle=NAN,  acam_ra=NAN,  acam_dec=NAN;
+           acam_angle=NAN,  acam_ra=NAN,  acam_dec=NAN, rmsarcsec=NAN;
+    long matches=-1L;
     long error=NO_ERROR;
 
     // Get the current pointing from the TCS
@@ -4344,7 +4511,7 @@ namespace Acam {
 
     std::string result;
 
-    if (error==NO_ERROR) this->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle );
+    if (error==NO_ERROR) this->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle, matches, rmsarcsec );
 
     if (error==NO_ERROR) {
       retstring = "ACAM CALIBRATION RESULT\n";

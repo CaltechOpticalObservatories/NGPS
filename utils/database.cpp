@@ -231,12 +231,12 @@ namespace Database {
     catch ( const mysqlx::Error &err ) {
       message.str(""); message << "ERROR from mySQL: " << err.what();
       logwrite( function, message.str() );
-      throw mysqlx::Error( err );
+      throw;
     }
     catch ( const std::exception &err ) {
       message.str(""); message << "ERROR: " << err.what();
       logwrite( function, message.str() );
-      throw std::exception( err );
+      throw;
     }
     catch ( ... ) {
       logwrite( function, "ERROR unknown exception" );
@@ -257,6 +257,7 @@ namespace Database {
    *
    */
   void Database::write() {
+    std::lock_guard<std::mutex> lock(_data_mtx);
     this->write( this->_data );  // Write the record stored in the class,
     this->_data.clear();         // then erase it.
   }
