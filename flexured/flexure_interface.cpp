@@ -302,6 +302,38 @@ namespace Flexure {
   /***** Flexure::Interface::get **********************************************/
 
 
+  /***** Flexure::Interface::compensate ***************************************/
+  /**
+   * @brief      performs the flexure compensation
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::compensate( std::string args, std::string &retstring ) {
+    const std::string function="Flexure::Interface::compensate";
+    std::stringstream message;
+
+    if ( args == "?" || args == "help" ) {
+      retstring = FLEXURED_COMPENSATE;
+      retstring.append( " [ dryrun ]\n" );
+      retstring.append( "   Performs the flexure compensation. If the optional dryrun argument\n" );
+      retstring.append( "   is supplied then perform the calcuations and show the actions that\n" );
+      retstring.append( "   would be taken without actually moving anything.\n" );
+      return HELP;
+    }
+
+    // get the needed telemetry (telescope position and temperatures)
+    //
+    this->get_external_telemetry();
+
+    // perform the calculations
+    //
+    retstring="not_yet_implemented";
+
+    return ERROR;
+  }
+  /***** Flexure::Interface::compensate ***************************************/
+
+
   /***** Flexure::Interface::stop *********************************************/
   /**
    * @brief      send the stop-all-motion command to all controllers
@@ -411,6 +443,110 @@ namespace Flexure {
     return;
   }
   /***** Flexure::Interface::make_telemetry_message ***************************/
+
+
+  /***** Flexure::Interface::get_external_telemetry ***************************/
+  /**
+   * @brief      collect telemetry from another daemon
+   * @details    This is used for any telemetry that I need to collect from
+   *             another daemon. Send the command "sendtelem" to the daemon, which
+   *             will respond with a JSON message. The daemon(s) to contact
+   *             are configured with the TELEM_PROVIDER key in the config file.
+   *
+   */
+  void Interface::get_external_telemetry() {
+
+    // Loop through each configured telemetry provider. This requests
+    // their telemetry which is returned as a serialized json string
+    // held in retstring.
+    //
+    // handle_json_message() will parse the serialized json string.
+    //
+    std::string retstring;
+    for ( const auto &provider : this->telemetry_providers ) {
+      Common::collect_telemetry( provider, retstring );
+      handle_json_message(retstring);
+    }
+    return;
+  }
+  /***** Flexure::Interface::get_external_telemetry ***************************/
+
+
+  /***** Flexure::Interface::handle_json_message ******************************/
+  /**
+   * @brief      parses incoming telemetry messages
+   * @details    Requesting telemetry from another daemon returns a serialized
+   *             JSON message which needs to be passed in here to parse it.
+   * @param[in]  message_in  incoming serialized JSON message (as a string)
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::handle_json_message( std::string message_in ) {
+    const std::string function="Flexure::Interface::handle_json_message";
+    std::stringstream message;
+
+    try {
+      nlohmann::json jmessage = nlohmann::json::parse( message_in );
+      std::string messagetype;
+
+      // jmessage must not contain key "error" and must contain key "messagetype"
+      //
+      if ( !jmessage.contains("error") ) {
+        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
+          messagetype = jmessage["messagetype"];
+        }
+        else {
+          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
+          return ERROR;
+        }
+      }
+      else {
+        logwrite( function, "ERROR in JSON message" );
+        return ERROR;
+      }
+
+      // no errors, so disseminate the message contents based on the message type
+      //
+      if ( messagetype == "thermalinfo" ) {
+        double TCOLL_I=NAN, TCOLL_R=NAN, TCOLL_G=NAN, TCOLL_U=NAN;
+        Common::extract_telemetry_value( message_in, "TCOLL_I", TCOLL_I );
+        Common::extract_telemetry_value( message_in, "TCOLL_R", TCOLL_R );
+        Common::extract_telemetry_value( message_in, "TCOLL_G", TCOLL_G );
+        Common::extract_telemetry_value( message_in, "TCOLL_U", TCOLL_U );
+        message.str(""); message << "TCOLL_I=" << TCOLL_I << " TCOLL_R=" << TCOLL_R << " TCOLL_G=" << TCOLL_G << " TCOLL_U=" << TCOLL_U;
+        logwrite( function, message.str() );
+      }
+      else
+      if ( messagetype == "tcsinfo" ) {
+        double casangle=NAN, alt=NAN;
+        Common::extract_telemetry_value( message_in, "CASANGLE", casangle );
+        Common::extract_telemetry_value( message_in, "ALT", alt );
+        message.str(""); message << "casangle=" << casangle << " alt=" << alt;
+        logwrite( function, message.str() );
+      }
+      else
+      if ( messagetype == "test" ) {
+      }
+      else {
+        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const nlohmann::json::parse_error &e ) {
+      message.str(""); message << "ERROR json exception parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Flexure::Interface::handle_json_message ******************************/
 
 
   /***** Flexure::Interface::test *********************************************/

@@ -48,6 +48,8 @@ namespace Flexure {
 
       Interface() : numdev(-1), motorinterface( FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE ) {}
 
+      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
+
       Common::Queue async;
 
       // PI Interface class for the Piezo type
@@ -61,11 +63,14 @@ namespace Flexure {
 
       long set( std::string args, std::string &retstring ); ///< set the slit width and offset
       long get( std::string args, std::string &retstring ); ///< get the current width and offset
+      long compensate( std::string args, std::string &retstring );  ///< perform flexure compensation
 
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
       long send_command( const std::string &name, std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
       void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message
+      void get_external_telemetry();                          ///< collect telemetry from other daemon(s)
+      long handle_json_message( std::string message_in );     ///< parses incoming telemetry messages
       long test( std::string args, std::string &retstring );                 ///< test routines
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller

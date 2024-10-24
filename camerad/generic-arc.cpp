@@ -10,11 +10,36 @@
 namespace AstroCam {
 
   /***** AstroCam::Interface::handle_json_message *****************************/
+  /**
+   * @brief      parses incoming telemetry messages
+   * @param[in]  message_in  serialized JSON message string
+   * @return     ERROR | NO_ERROR
+   *
+   */
   long Interface::handle_json_message( std::string message_in ) {
     const std::string function="AstroCam::Interface::handle_json_message";
     std::stringstream message;
     std::string messagetype;
     long error;
+
+    struct PrimaryInfo {
+      std::string jkey;
+      std::string comment;
+    };
+
+    struct ExtensionInfo {
+      std::string chan;
+      std::string jkey;
+      std::string keyword;
+      std::string comment;
+    };
+
+    auto &telemkeys = this->camera_info.telemkeys;
+
+    // selects whether to write to extension or primary
+    //
+    bool ext = true;
+    bool pri = !ext;
 
     size_t eof_pos = message_in.find(JEOF);
     if ( eof_pos != std::string::npos ) message_in.erase(eof_pos);
@@ -43,97 +68,179 @@ namespace AstroCam {
       //
       if ( error != NO_ERROR ) return error;
 
+      // telemetry from calibd goes in the primary header
+      //
       if ( messagetype == "calibinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPTHAR", "is ThAr lamp on" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPFEAR", "is FeAr lamp on" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPXE", "is Xe lamp on" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPINCA", "is Incandescent lamp on" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "MODFEAR", "FeAr lamp modulator pow dut per" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "MODTHAR", "ThAr lamp modulator pow dut per" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "MODBLCON", "Blue continuum modulator pow dut per" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "MODBLBYP", "Blue bypass modulator pow dut per" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "MODRDCON", "Red continuum modulator pow dut per" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "MODRDBYP", "Red bypass modulator pow dut per" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CALCOVER", "calib cover state" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CALDOOR", "calib door state" );
+        const PrimaryInfo keyarray[] = {
+          {"MODFEAR", "FeAr lamp modulator pow dut per"},
+          {"MODTHAR", "ThAr lamp modulator pow dut per"},
+          {"MODBLCON", "Blue continuum modulator pow dut per"},
+          {"MODBLBYP", "Blue bypass modulator pow dut per"},
+          {"MODRDCON", "Red continuum modulator pow dut per"},
+          {"MODRDBYP", "Red bypass modulator pow dut per"},
+          {"CALCOVER", "calib cover state"},
+          {"CALDOOR", "calib door state"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+        }
         #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] received calibinfo" );
         #endif
       }
       else
+
+      // telemetry from flexured goes in the extension header corresponding to the channel
+      //
       if ( messagetype == "flexureinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPE_I", "I flexure spectral axis 2 (X) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPA_I", "I flexure spatial axis 3 (Y) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXPIS_I", "I flexure piston axis 1 (Z) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPE_R", "R flexure spectral axis 2 (X) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPA_R", "R flexure spatial axis 3 (Y) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXPIS_R", "R flexure piston axis 1 (Z) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPE_G", "G flexure spectral axis 2 (X) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPA_G", "G flexure spatial axis 3 (Y) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXPIS_G", "G flexure piston axis 1 (Z) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPE_U", "U flexure spectral axis 2 (X) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXSPA_U", "U flexure spatial axis 3 (Y) in um" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FLXPIS_U", "U flexure piston axis 1 (Z) in um" );
+        const ExtensionInfo keyarray[] = {
+          {"I", "FLXSPE_I", "FLXSPE", "I flexure spectral axis 2 (X) in um"},
+          {"I", "FLXSPA_I", "FLXSPA", "I flexure spatial axis 3 (Y) in um"},
+          {"I", "FLXPIS_I", "FLXPIS", "I flexure piston axis 1 (Z) in um"},
+          {"R", "FLXSPE_R", "FLXSPE", "R flexure spectral axis 2 (X) in um"},
+          {"R", "FLXSPA_R", "FLXSPA", "R flexure spatial axis 3 (Y) in um"},
+          {"R", "FLXPIS_R", "FLXPIS", "R flexure piston axis 1 (Z) in um"},
+          {"G", "FLXSPE_G", "FLXSPE", "G flexure spectral axis 2 (X) in um"},
+          {"G", "FLXSPA_G", "FLXSPA", "G flexure spatial axis 3 (Y) in um"},
+          {"G", "FLXPIS_G", "FLXPIS", "G flexure piston axis 1 (Z) in um"},
+          {"U", "FLXSPE_U", "FLXSPE", "U flexure spectral axis 2 (X) in um"},
+          {"U", "FLXSPA_U", "FLXSPA", "U flexure spatial axis 3 (Y) in um"},
+          {"U", "FLXPIS_U", "FLXPIS", "U flexure piston axis 1 (Z) in um"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);
+        }
         #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] received flexureinfo" );
         #endif
       }
       else
+
+      // telemetry from focusd goes in the extension header corresponding to the channel
+      //
       if ( messagetype == "focusinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FOCUSI", "science camera I focus position in mm" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FOCUSR", "science camera R focus position in mm" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FOCUSG", "science camera G focus position in mm" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FOCUSU", "science camera U focus position in mm" );
+        const ExtensionInfo keyarray[] = {
+          {"I", "FOCUSI", "FOCUS", "science camera I focus position in mm" },
+          {"R", "FOCUSR", "FOCUS", "science camera R focus position in mm" },
+          {"G", "FOCUSG", "FOCUS", "science camera G focus position in mm" },
+          {"U", "FOCUSU", "FOCUS", "science camera U focus position in mm" }
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);
+        }
         #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] received focusinfo" );
         #endif
       }
       else
+
+      // telemetry from powerd goes in the primary header
+      //
       if ( messagetype == "powerinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPTHAR", "ThAr lamp 1=on 0=off" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPFEAR", "FeAr lamp 1=on 0=off" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPBLUC", "Blue Xe continuum lamp 1=on 0=off" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "LAMPREDC", "Red continuum lamp 1=on 0=off" );
+        const PrimaryInfo keyarray[] = {
+          {"LAMPTHAR", "is ThAr lamp on"},
+          {"LAMPFEAR", "is FeAr lamp on"},
+          {"LAMPBLUC", "is blue Xe continuum lamp on"},
+          {"LAMPREDC", "is red continuum lamp on"},
+          {"LAMPXE", "is Xe lamp on"},
+          {"LAMPINCA", "is Incandescent lamp on"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+        }
         #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] received powerinfo" );
         #endif
       }
       else
-      if ( messagetype == "targetinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "BINSPECT", "binning in spectral direction" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "BINSPAT", "binning in spatial direction" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "SLITW", "slit width in mm" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "RA", "requested Right Ascension in J2000" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "DEC", "requested Declination in J2000" );
+
+      // telemetry from calibd goes in the primary header
+      //
+      if ( messagetype == "slitinfo" ) {
+        const PrimaryInfo keyarray[] = {
+          {"SLITW", "slit width in arcsec"},
+          {"SLITO", "slit offset in arcsec"},
+          {"SLITPOSA", "slit actuator A position in mm"},
+          {"SLITPOSA", "slit actuator A position in mm"},
+          {"SLITPOSB", "slit actuator B position in mm"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+        }
+        #ifdef LOGLEVEL_DEBUG
+        logwrite( function, "[DEBUG] received slitinfo" );
+        #endif
       }
       else
+
+      // targetinfo telemetry comes from sequencerd and goes in the primary header
+      //
+      if ( messagetype == "targetinfo" ) {
+        const PrimaryInfo keyarray[] = {
+          {"OBS_ID", "Observation ID"},
+          {"NAME", "target name"},
+          {"BINSPECT", "binning in spectral direction"},
+          {"BINSPAT", "binning in spatial direction"},
+          {"SLITA", "slit angle in deg"},
+          {"POINTMDE", "pointing mode"},
+          {"RA", "requested Right Ascension in J2000"},
+          {"DECL", "requested Declination in J2000"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+        }
+        #ifdef LOGLEVEL_DEBUG
+        logwrite( function, "[DEBUG] received targetinfo" );
+        #endif
+      }
+      else
+
+      // telemetry from tcsd goes into primary header
+      // AIRMASS is intentionally left out since it is handled differently
+      //
       if ( messagetype == "tcsinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CASANGLE", "TCS reported Cassegrain angle in deg" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "HA", "hour angle" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "RAOFFS", "offset Right Ascension" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "DECOFFS", "offset Declination" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "TELRA", "TCS reported Right Ascension" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "TELDEC", "TCS reported Declination" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "AZIMUTH", "TCS reported azimuth" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "ZENANGLE", "TCS reported Zenith angle" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "DOMEAZ", "TCS reported dome azimuth" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "DOMESTAT", "Dome shutters 1=open 0=closed" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "FOCUS", "TCS reported focus position in mm" );
+        const PrimaryInfo keyarray[] = {
+          {"CASANGLE", "TCS reported Cassegrain angle in deg"},
+          {"HA", "hour angle"},
+          {"RAOFFSET", "offset Right Ascension"},
+          {"DECLOFFSET", "offset Declination"},
+          {"TELRA", "TCS reported Right Ascension"},
+          {"TELDEC", "TCS reported Declination"},
+          {"AZ", "TCS reported azimuth"},
+          {"ZENANGLE", "TCS reported Zenith angle"},
+          {"DOMEAZ", "TCS reported dome azimuth"},
+          {"DOMESHUT", "dome shutters"},
+          {"TELFOCUS", "TCS reported telescope focus position in mm"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+        }
         #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] received tcsinfo" );
         #endif
       }
       else
+
+      // telemetry from thermald
+      //
       if ( messagetype == "thermalinfo" ) {
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CCDTEMPR", "R CCD temperature in Kelvin" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CCDTEMPI", "I CCD temperature in Kelvin" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CCDTEMPU", "U CCD temperature in Kelvin" );
-        this->camera_info.telemkeys.add_json_key( &Common::Header::primary, jmessage, "CCDTEMPG", "G CCD temperature in Kelvin" );
+        const ExtensionInfo keyarray[] = {
+          {"I", "TCCD_I", "CCDTEMP", "I CCD temperature in Kelvin"},
+          {"R", "TCCD_R", "CCDTEMP", "R CCD temperature in Kelvin"},
+          {"G", "TCCD_G", "CCDTEMP", "G CCD temperature in Kelvin"},
+          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin"}
+        };
+        for ( const auto &keyinfo : keyarray ) {
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);
+        }
         #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] received thermalinfo" );
         #endif
       }
       else
+
+      // test message
+      //
       if ( messagetype == "test" ) {
         message.str(""); message << "received JSON test message: \"" << jmessage["test"].get<std::string>() << "\"";
         logwrite( function, message.str() );
@@ -307,7 +414,7 @@ namespace AstroCam {
   /***** AstroCam::Interface::readout ***************8*************************/
   /**
    * @brief      wrapper for do_readout
-   * @details    initiate an exposure
+   * @details    set or get type of readout
    * @return     ERROR or NO_ERROR
    *
    */

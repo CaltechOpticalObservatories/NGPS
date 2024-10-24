@@ -564,6 +564,16 @@ void doit(Network::TcpSocket &sock) {
                       ret = server.camera_info.telemkeys.primary().listkeys();
                       message.str(""); message << "camera_info extension telemkeys:"; logwrite( function, message.str() );
                       ret = server.camera_info.telemkeys.extension().listkeys();
+
+                      for ( auto &[chan, keydb] : server.camera_info.systemkeys.elmomap() ) {
+                        message.str(""); message << "camera_info elmo extension systemkeys chan " << chan; logwrite( function, message.str() );
+                        keydb.listkeys();
+                      }
+
+                      for ( auto &[chan, keydb] : server.camera_info.telemkeys.elmomap() ) {
+                        message.str(""); message << "camera_info elmo extension telemkeys chan " << chan; logwrite( function, message.str() );
+                        keydb.listkeys();
+                      }
                     }
                     else {
                       ret = server.camera_info.userkeys.primary().addkey(args);

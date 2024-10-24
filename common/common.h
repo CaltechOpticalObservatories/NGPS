@@ -34,7 +34,6 @@ const std::string TELEMREQUEST = "sendtelem";  ///< common daemon command used t
 constexpr bool EXT = true;   ///< constant for use_extension arg of Common::Header::add_key()
 constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Header::add_key()
 
-
 /***** Common *****************************************************************/
 /**
  * @namespace Common
@@ -43,6 +42,106 @@ constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Head
  */
 namespace Common {
 
+  void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
+
+  /***** Common::extract_telemetry_value **************************************/
+  /**
+   * @brief      extract a correctly typed value from a JSON message using a specific key
+   * @param[in]  jstring  serialized JSON message string
+   * @param[in]  jkey     key to look for in JSON string
+   * @param[out] value    reference of type T to value to return
+   *
+   */
+  using json = nlohmann::json;
+  template <typename T>
+  void extract_telemetry_value( const std::string &jstring, const std::string &jkey, T &value ) {
+    const std::string function="Common::extract_telemetry_value";
+    std::stringstream message;
+
+    // extract the correct typed value for the requested key from the provided
+    // serialized json string
+    //
+    try {
+      // get a JSON message object from the serialized string
+      //
+      json jmessage = json::parse( jstring );
+
+      // extract the value from the JSON message using jkey as the key
+      //
+      auto jvalue = jmessage.at( jkey );
+
+      if ( jvalue == nullptr ) return;
+
+      // Using the type of the supplied value reference T, try to extract
+      // the corresponding type of data from the json key and assign it to
+      // the provided value.
+      //
+      if constexpr ( std::is_same<T, bool>::value ) {
+        if ( jvalue.type() == json::value_t::boolean ) {
+          value = jvalue.template get<bool>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, uint16_t>::value || std::is_same<T, uint32_t>::value || std::is_same<T, uint64_t>::value) {
+        if ( jvalue.type() == json::value_t::number_unsigned ) {
+          value = jvalue.template get<T>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, int16_t>::value || std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value ) {
+        if ( jvalue.type() == json::value_t::number_unsigned ) {
+          value = jvalue.template get<T>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, float>::value || std::is_same<T, double>::value ) {
+        if ( jvalue.type() == json::value_t::number_float ) {
+          value = jvalue.template get<T>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, std::string>::value ) {
+        if ( jvalue.type() == json::value_t::string ) {
+          value = jvalue.template get<std::string>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, std::vector<uint8_t>>::value ) {
+        if ( jvalue.type() == json::value_t::binary ) {
+          value = jvalue.template get<std::vector<uint8_t>>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, std::vector<json>>::value ) {
+        if ( jvalue.type() == json::value_t::array ) {
+          value = jvalue.template get<std::vector<json>>();
+        }
+      }
+      else
+      if constexpr ( std::is_same<T, json>::value ) {
+        if ( jvalue.type() == json::value_t::object ) {
+          value = jvalue.template get<json>();
+        }
+      }
+      else {
+        message << "ERROR unknown type for key " << jkey;
+        logwrite( function, message.str() );
+        return;
+      }
+    }
+    catch( const json::exception &e ) {
+      message << "ERROR JSON exception parsing value for key " << jkey << ": " << e.what();
+      logwrite( function, message.str() );
+    }
+    catch( const std::exception &e ) {
+      message << "ERROR exception parsing value for key " << jkey << ": " << e.what();
+      logwrite( function, message.str() );
+    }
+    return;
+  }
+  /***** Common::extract_telemetry_value **************************************/
+
+
   /**************** Common::FitsKeys ******************************************/
   /*
    * @class  FitsKeys
@@ -50,10 +149,55 @@ namespace Common {
    *
    */
   class FitsKeys {
-    private:
     public:
-      FitsKeys() {}
-      ~FitsKeys() {}
+      /**
+       * @brief   structure of FITS keyword internal database
+       */
+      typedef struct {
+        std::string keyword;
+        std::string keytype;
+        std::string keyvalue;
+        std::string keycomment;
+      } struct_key_t;
+
+      /**
+       * @brief   STL map for the actual keyword database
+       */
+      typedef std::map<std::string, struct_key_t> fits_key_t;
+
+      fits_key_t keydb;                                      ///< keyword database
+
+      /**
+       * @brief  default constructor
+       */
+      FitsKeys() { }
+
+      /**
+       * @brief  copy constructor, copies the keydb map
+       */
+      FitsKeys( const FitsKeys &other ) : keydb(other.keydb) { }
+
+      /**
+       * @brief  assignment operator, assigns the keydb map
+       */
+      FitsKeys &operator=(const FitsKeys &other) {
+        if ( this != &other ) keydb = other.keydb;  ///< assign the map if not myself
+        return *this;
+      }
+
+      /**
+       * @brief  merges another fits_key_t database (keydb) with this one
+       */
+      void merge( const fits_key_t &source ) {
+        for ( const auto &pair : source ) {
+          this->keydb.insert(pair);
+        }
+      }
+
+      /**
+       * @brief  erases this fits_key_t database (keydb)
+       */
+      inline void erase_db() { this->keydb.clear(); return; }
 
       std::string get_keytype(std::string keyvalue);         ///< return type of keyword based on value
       long listkeys();                                       ///< list FITS keys in the internal database
@@ -152,32 +296,6 @@ namespace Common {
       }
       /***** Common::FitsKeys::addkey *****************************************/
 
-      /**
-       * @typedef user_key_t
-       * @brief   structure of FITS keyword internal database
-       */
-      typedef struct {
-        std::string keyword;
-        std::string keytype;
-        std::string keyvalue;
-        std::string keycomment;
-      } user_key_t;
-
-      /**
-       * @typedef fits_key_t
-       * @brief   STL map for the actual keyword database
-       */
-      typedef std::map<std::string, user_key_t> fits_key_t;
-
-      fits_key_t keydb;                                      ///< keyword database
-
-      inline void erase_db() { this->keydb.clear(); return; }
-
-void merge( Common::FitsKeys from ) {
-  this->keydb.insert( from.keydb.begin(), from.keydb.end() );
-  return;
-}
-
       // Find all entries in the keyword database which start with the search_for string,
       // return a vector of iterators.
       //
@@ -224,7 +342,8 @@ void merge( Common::FitsKeys from ) {
   /*
    * @class   Header
    * @brief   encapsulates FitsKeys classes to hold primary & extension databases
-   * @details contains template functions to add key,value,comment passed by
+   * @details The Common::Header class contains two Common::FitsKeys objects
+   *          contains template functions to add key,value,comment passed by
    *          reference or from a JSON message
    *
    */
@@ -233,10 +352,86 @@ void merge( Common::FitsKeys from ) {
     private:
       FitsKeys _primary;
       FitsKeys _extension;
+      std::map<std::string, FitsKeys> _elmo;
 
     public:
-      FitsKeys &primary()   { return _primary;   }
-      FitsKeys &extension() { return _extension; }
+      Header() = default;
+
+      /**
+       * @brief  copy constructor
+       */
+      Header(const Header &other)
+        : _primary(other._primary),
+          _extension(other._extension),
+          _elmo(other._elmo) { }
+
+      /**
+       * @brief  assignment operator
+       */
+      Header &operator=(const Header &other) {
+        if (this != &other) {
+          _primary = other._primary;
+          _extension = other._extension;
+          _elmo = other._elmo;
+        }
+        return *this;
+      }
+
+      /**
+       * getter functions return references to the private FitsKeys
+       * data objects
+       */
+      FitsKeys &primary()   { return _primary;   }  ///< return a reference to _primary object
+      FitsKeys &extension() { return _extension; }  ///< return a reference to _extension object
+
+      std::map<std::string, FitsKeys> &elmomap()   { return _elmo;      }
+
+      void erase_extensions() { for ( auto &chan : _elmo ) chan.second.erase_db(); }
+
+      FitsKeys &elmo(const std::string &chan) {
+        try { return _elmo.at(chan); }
+        catch ( const std::exception &e ) {
+          logwrite("Common::Header::elmo", "ERROR "+chan+" not in elmo");
+          static FitsKeys error;
+          return error;
+        }
+      }
+      const FitsKeys &elmo(const std::string &chan) const {
+        try { return _elmo.at(chan); }
+        catch ( const std::exception &e ) {
+          logwrite("Common::Header::elmo", "ERROR "+chan+" not in elmo");
+          static FitsKeys error;
+          return error;
+        }
+      }
+
+      void copy_extensionmap( const Header &source ) { this->_elmo = source._elmo; }
+
+      void copy_extension( const std::string &chan, const Header &src ) {
+        if ( src.has_chan(chan) ) this->_elmo[chan] = src.elmo(chan);
+      }
+
+      void merge_extension( const std::string &chan, const Header &src ) {
+        // the source must have the requested channel
+        //
+        if ( src.has_chan(chan) ) {
+          // if the destination has the same channel then use FitsKeys::merge
+          // to merge the keydbs
+          //
+          if ( this->has_chan(chan) ) {
+            this->_elmo[chan].merge( src.elmo(chan).keydb );
+          }
+          else {
+            // otherwise copy the extension if it doesn't exist in the destination
+            //
+            this->_elmo[chan] = src.elmo(chan);
+          }
+        }
+      }
+
+      void add_extension(const std::string chan, const FitsKeys &keydb) { _elmo[chan] = keydb; }
+
+      bool has_chan(const std::string chan) const { return _elmo.find(chan) != _elmo.end(); }
 
       /**
        * @brief      template class adds key,value,comment to indicated keydb
@@ -252,6 +447,34 @@ void merge( Common::FitsKeys from ) {
         keydb.addkey( keyword, value, comment );
       }
 
+      template <typename T>
+      void add_key( const std::string &keyword,
+                    const T &value,
+                    const std::string &comment,
+                    bool use_extension,
+                    const std::string &chan="") {
+        const std::string function="Common::Header::add_key";
+        std::stringstream message;
+
+        if ( use_extension && !has_chan(chan) ) {
+          FitsKeys newdb;
+          add_extension(chan, newdb);
+          message.str(""); message << "added extension chan " << chan << " to keydb for " << keyword << "=" << value << " / " << comment;
+          logwrite( function, message.str() );
+        }
+
+        // Select the correct FitsKeys database. The default is primary()
+        // but if chan is passed then use the appropriate FitsKey
+        // object from the map.
+        //
+        FitsKeys &keydb = ( use_extension ? elmo(chan) : primary() );
+
+        message.str(""); message << "[DEBUG] will try to add " << keyword << "=" << value << " / " << comment
+                                 << " to " << ( use_extension ? chan : "primary" );
+        logwrite(function,message.str());
+        this->add_key( keydb, keyword, value, comment );
+      }
+
       /**
        * @brief      template class adds key,value,comment to indicated keydb from json message
        * @details    This extracts the value from a JSON message and uses add_key to add the
@@ -261,19 +484,113 @@ void merge( Common::FitsKeys from ) {
        * @param[in]  comment   comment string for header keyword
        *
        */
+      void add_json_key( const json &jmessage,
+                         const std::string &jkey,
+                         const std::string &keyword,
+                         const std::string &comment,
+                         bool use_extension,
+                         const std::string &chan="") {
+        const std::string function="Common::Header::add_json_key";
+        std::stringstream message;
+
+        message.str(""); message << "[DEBUG] jkey=" << jkey << " keyword=" << keyword << " chan=" << chan;
+        logwrite(function,message.str());
+
+        if ( use_extension && !has_chan(chan) ) {
+          FitsKeys newdb;
+          add_extension(chan, newdb);
+          message.str(""); message << "added extension chan " << chan << " to keydb";
+          logwrite( function, message.str() );
+        }
+
+        try {
+          // extract the value from the JSON message using jkey as the key
+          //
+          auto jvalue = jmessage.at( jkey );
+
+          // don't add null values
+          //
+          if ( jvalue == nullptr ) return;
+
+          // Select the correct FitsKeys database. The default is primary()
+          // but if chan is passed then use the appropriate FitsKey
+          // object from the map.
+          //
+          FitsKeys &keydb = ( use_extension ? elmo(chan) : primary() );
+
+          // type check each value to call add_key with the correct type
+          //
+          if ( jvalue.type() == json::value_t::boolean ) {
+            this->add_key( keydb, keyword, jvalue.template get<bool>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::number_integer ) {
+            this->add_key( keydb, keyword, jvalue.template get<int>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::number_unsigned ) {
+            this->add_key( keydb, keyword, jvalue.template get<uint16_t>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::number_float ) {
+            this->add_key( keydb, keyword, jvalue.template get<double>(), comment );
+          }
+          else
+          if ( jvalue.type() == json::value_t::string ) {
+            this->add_key( keydb, keyword, jvalue.template get<std::string>(), comment );
+          }
+          else {
+            message << "ERROR unknown type for keyword " << keyword << "=" << jvalue;
+            logwrite( function, message.str() );
+          }
+        }
+        catch( const json::exception &e ) {
+          message.str(""); message << "JSON exception adding keyword " << keyword << ": " << e.what();
+          logwrite( function, message.str() );
+        }
+        catch( const std::exception &e ) {
+          message.str(""); message << "ERROR exception adding keyword " << keyword << ": " << e.what();
+          logwrite( function, message.str() );
+        }
+      }
+
+      void add_elmo_key( FitsKeys &keydb,
+                         const json &jmessage,
+                         const std::string &jkey,
+                         const std::string &keyword,
+                         const std::string &comment ) {
+        logwrite("add_elmo_key","ERROR why are you calling me?");
+      }
+
       template <typename HeaderType, typename T=nlohmann::json>
       void add_json_key( HeaderType type,
                          const T &jmessage,
                          const std::string &keyword, const std::string &comment ) {
+        add_json_key( type, jmessage, keyword, keyword, comment );
+        logwrite("add_json_key","ERROR why are you calling me?");
+      }
+      template <typename HeaderType>
+      void add_json_key( HeaderType type,
+                         const nlohmann::json &jmessage,
+                         const std::string &jkey,
+                         const std::string &keyword,
+                         const std::string &comment ) {
+        logwrite("add_json_key","ERROR why are you calling me?");
+      }
+      /***
         const std::string function="Common::Header::add_json_key";
         std::stringstream message;
 
-        try {
-          // extract the value from the JSON message using keyword as the key
-          //
-          auto jvalue = jmessage.at( keyword );
+        message.str(""); message << "[DEBUG] jkey=" << jkey << " keyword=" << keyword;
+        logwrite(function,message.str());
 
-          // use this object's db type
+        try {
+          // extract the value from the JSON message using jkey as the key
+          //
+          auto jvalue = jmessage.at( jkey );
+
+          // select the correct FitsKeys database from the Common::Header object,
+          // primary or extension
           //
           FitsKeys &keydb = (this->*type)();
 
@@ -312,6 +629,7 @@ void merge( Common::FitsKeys from ) {
           logwrite( function, message.str() );
         }
       }
+      ***/
   };
   /**************** Common::Header ********************************************/
 
@@ -400,7 +718,11 @@ void merge( Common::FitsKeys from ) {
       static void dothread_command( Common::DaemonClient &daemon, std::string args );
       long command( std::string args );                            ///< commands to daemon
       long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
-      long send( std::string command, std::string &reply );        ///< for internal use only
+      long send( std::string command,
+                 std::string &reply,
+                 const std::string &term_str_write_override="",
+                 const std::string &term_str_read_override="",
+                 bool term_with_string_override=false );
       long connect();                                              ///< initialize socket connection to daemon
       void disconnect();                                           ///< close socket connection to daemon
       inline void set_name( const std::string &name_in ) { this->name=name_in; } ///< name this daemon

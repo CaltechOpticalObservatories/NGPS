@@ -9,6 +9,7 @@
 #pragma once
 
 const std::string FLEXURED_CLOSE = "close";    const int FLEXURED_CLOSE_TIMEOUT = 3000;
+const std::string FLEXURED_COMPENSATE = "comp";    const int FLEXURED_COMPENSATE_TIMEOUT = 3000;
 const std::string FLEXURED_GET = "get";        const int FLEXURED_GET_TIMEOUT = 3000;
 const std::string FLEXURED_ISOPEN = "isopen";  const int FLEXURED_ISOPEN_TIMEOUT = 3000;
 const std::string FLEXURED_NATIVE = "native";  const int FLEXURED_NATIVE_TIMEOUT = 3000;
@@ -18,6 +19,7 @@ const std::string FLEXURED_TEST  = "test";     const int FLEXURED_TEST_TIMEOUT =
 
 const std::vector<std::string> FLEXURED_SYNTAX = {
                                                  FLEXURED_CLOSE,
+                                                 FLEXURED_COMPENSATE+" [ ? | dryrun ]",
                                                  FLEXURED_GET+" ? | <chan> <axis>",
                                                  FLEXURED_ISOPEN,
                                                  FLEXURED_NATIVE+" ? | <chan> <cmd>",

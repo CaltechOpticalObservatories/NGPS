@@ -870,8 +870,12 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           //
           int detcols;                     //!< number of detector columns (unchanged by binning)
           int detrows;                     //!< number of detector rows (unchanged by binning)
-          int oscols;                      //!< number of overscan rows
-          int osrows;                      //!< number of overscan columns
+          int oscols0;                     //!< requested number of overscan rows
+          int osrows0;                     //!< requested number of overscan columns
+          int oscols;                      //!< realized number of overscan rows (can be modified by binning)
+          int osrows;                      //!< realized number of overscan columns (can be modified by binning)
+          int skiprows;
+          int skipcols;
 
           arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
@@ -943,8 +947,11 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       // Functions
       //
+      void make_image_keywords( int dev );
       long handle_json_message( std::string message_in );
+      long parse_spect_config( std::string args );
       long parse_controller_config( std::string args );
+      int  devnum_from_chan( const std::string &chan );
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
       long test(std::string args, std::string &retstring);                 ///< test routines
       void dothread_test_shutter_timer(long ms);
@@ -989,6 +996,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long expose(std::string nseq_in);
       long do_expose(std::string nseq_in);
       void collect_telemetry();
+      void collect_telemetry(std::string name, std::string &retstring);
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);
       long do_native(std::string cmdstr);
@@ -996,7 +1004,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long do_native(std::vector<uint32_t> selectdev, std::string cmdstr);
       long do_native( int dev, std::string cmdstr, std::string &retstring );
       long do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring );
-      long write_frame( int expbuf, int devnum, int fpbcount );
+      long write_frame( int expbuf, int devnum, const std::string chan, int fpbcount );
+
       static void dothread_load( Controller &con, std::string timlodfile );
       static void dothread_shutter( int expbuf, Interface &interface );
       static void dothread_read( Camera::Camera &cam, Controller &con, int expbuf );
@@ -1021,6 +1030,77 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 //    int get_image_rows() { return this->rows; };  // REMOVE
 //    int get_image_cols() { return this->cols; }; // REMOVE
 
+      using json = nlohmann::json;
+      template <typename T>
+      void collect_telemetry_key( const std::string &name, const std::string &key, T &value ) {
+        const std::string function="AstroCam::Interface::collect_telemetry_key";
+        std::stringstream message;
+
+        std::string retstring;
+
+        // collect the telemetry from this one named provider
+        //
+        collect_telemetry(name, retstring);
+
+        // extract the correct typed value for the requested key from that
+        // telemetry message
+        //
+        try {
+          // get a JSON message from the serialized return string
+          //
+          nlohmann::json jmessage = nlohmann::json::parse( retstring );
+
+          // extract the value from the JSON message using jkey as the key
+          //
+          auto jvalue = jmessage.at( key );
+
+          if ( jvalue == nullptr ) return;
+
+          if constexpr ( std::is_same<T, bool>::value ) {
+            if ( jvalue.type() == json::value_t::boolean ) {
+              value = jvalue.template get<bool>();
+            }
+          }
+          else
+          if constexpr ( std::is_same<T, int>::value ) {
+            if ( jvalue.type() == json::value_t::number_integer ) {
+              value = jvalue.template get<int>();
+            }
+          }
+          else
+          if constexpr ( std::is_same<T, uint16_t>::value ) {
+            if ( jvalue.type() == json::value_t::number_unsigned ) {
+              value = jvalue.template get<uint16_t>();
+            }
+          }
+          else
+          if constexpr ( std::is_same<T, float>::value || std::is_same<T, double>::value ) {
+            if ( jvalue.type() == json::value_t::number_float ) {
+              value = jvalue.template get<double>();
+            }
+          }
+          else
+          if constexpr ( std::is_same<T, std::string>::value ) {
+            if ( jvalue.type() == json::value_t::string ) {
+              value = jvalue.template get<std::string>();
+            }
+          }
+          else {
+            message << "ERROR unknown type for key " << key << " from provider " << name;
+            logwrite( function, message.str() );
+            return;
+          }
+        }
+        catch( const json::exception &e ) {
+          message << "JSON exception parsing value for key " << key << " from provider " << name << ": " << e.what();
+          logwrite( function, message.str() );
+        }
+        catch( const std::exception &e ) {
+          message << "ERROR exception parsing value for key " << key << " from provider " << name << ": " << e.what();
+          logwrite( function, message.str() );
+        }
+        return;
+      }
   };
   /***** AstroCam::Interface **************************************************/
 

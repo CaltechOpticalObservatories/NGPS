@@ -41,6 +41,7 @@ class FITS_file {
     std::atomic<int> threadcount;                   ///< keep track of number of write_image_thread threads
     std::atomic<int> framen;                        ///< internal frame counter for multi-extensions
     CCfits::ExtHDU* imageExt;                       ///< image extension header unit
+    std::vector<CCfits::ExtHDU*> pExtension;        ///< image extension header unit
     std::string fits_name;
     enum class HDUTYPE { Primary, Extension };
 
@@ -160,6 +161,10 @@ this->foo(HDUTYPE::Primary);
           }
         }
 ***/
+
+        // create empty extensions
+        //
+//      pExtension[i] = this->pFits->addImage(extname[i], info.datatype, axes);
       }
       catch (CCfits::FITS::CantCreate){
         message.str(""); message << "ERROR: unable to open FITS file \"" << info.fits_name << "\"";
@@ -295,7 +300,7 @@ this->foo(HDUTYPE::Primary);
      *
      */
     template <class T>
-    long write_image(T* data, Camera::Information& info) {
+    long write_image(T* data, Camera::Information& info, const std::string extname="" ) {
       std::string function = "FITS::write_image";
       std::stringstream message;
 
@@ -337,7 +342,7 @@ this->foo(HDUTYPE::Primary);
 #endif
       std::thread([&]() {                                    // create the detached thread here
         if (info.ismex) {
-          this->write_mex_thread(array, info, this);
+          this->write_mex_thread(array, info, this, extname);
         }
         else {
           this->write_image_thread(array, info, this);
@@ -487,7 +492,7 @@ this->foo(HDUTYPE::Primary);
      *
      */
     template <class T>
-    void write_mex_thread(std::valarray<T> &data, Camera::Information &info, FITS_file *self) {
+    void write_mex_thread(std::valarray<T> &data, Camera::Information &info, FITS_file *self, const std::string extname) {
       std::string function = "FITS_file::write_mex_thread";
       std::stringstream message;
 
@@ -548,10 +553,7 @@ this->foo(HDUTYPE::Primary);
         // create the extension name
         // This shows up as keyword EXTNAME and in DS9's "display header"
         //
-//      std::string extname = std::to_string( info.extension+1 );
-//      std::string extname = std::to_string( this->extension+1 );
-
-        std::string extname = info.systemkeys.extension().keydb["SPEC_ID"].keyvalue;
+//      std::string extname = info.systemkeys.extension().keydb["SPEC_ID"].keyvalue;
 
         message.str(""); message << "adding " << axes[0] << " x " << axes[1] 
                                  << " frame to extension " << this->extension+1 << " (" << extname << ") in file " << self->fits_name;
@@ -568,21 +570,68 @@ this->foo(HDUTYPE::Primary);
           this->imageExt->addKey("BSCALE", 1, "scaling factor");
         }
 
-        logwrite( function, "writing info.userkeys.extension");
-        for ( auto const &keydb : info.userkeys.extension().keydb ) {
-          this->add_key( HDUTYPE::Extension, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        // convenient local variable for all elmokeys
+        //
+        auto elmokeys = info.systemkeys.elmomap();
+
+        // If this extension name is in the elmokeys map, then add them to this extension
+        //
+        logwrite( function, "this is where I would write system elmo keys for specific channels" );
+        if ( elmokeys.find(extname) != elmokeys.end() ) {
+          // loop through keydb for the extension keys for this channel
+          for ( const auto &_db : elmokeys.at(extname).keydb ) {
+            this->add_key( HDUTYPE::Extension, _db.second.keyword, _db.second.keytype, _db.second.keyvalue, _db.second.keycomment );
+          }
         }
 
-        logwrite( function, "writing info.telemkeys.extension");
-        for ( auto const &keydb : info.telemkeys.extension().keydb ) {
-//        message.str(""); message << "[DEBUG]: adding info.telemkeys \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
-          this->add_key( HDUTYPE::Extension, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        // Add any keys designated for "all" extensions
+        //
+        logwrite( function, "this is where I would write system elmo keys for ALL channels" );
+        if ( elmokeys.find("all") != elmokeys.end() ) {
+          // loop through keydb for the extension keys for this channel
+          for ( const auto &_db : elmokeys.at("all").keydb ) {
+            this->add_key( HDUTYPE::Extension, _db.second.keyword, _db.second.keytype, _db.second.keyvalue, _db.second.keycomment );
+          }
         }
 
-        logwrite( function, "writing systemkeys.extension() keys" );
-        for ( auto const &keydb : info.systemkeys.extension().keydb ) {
-//        message.str(""); message << "[DEBUG]: adding info.systemkeys.extension \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
-          this->add_key( HDUTYPE::Extension, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        // If this extension name is in the elmokeys map, then add them to this extension
+        //
+        logwrite( function, "this is where I would write user elmo keys for specific channels" );
+        if ( info.userkeys.elmomap().find(extname) != info.userkeys.elmomap().end() ) {
+          // loop through keydb for the extension keys for this channel
+          for ( const auto &_db : info.userkeys.elmomap().at(extname).keydb ) {
+            this->add_key( HDUTYPE::Extension, _db.second.keyword, _db.second.keytype, _db.second.keyvalue, _db.second.keycomment );
+          }
+        }
+
+        // Add any keys designated for "all" extensions
+        //
+        logwrite( function, "this is where I would write user elmo keys for ALL channels" );
+        if ( info.userkeys.elmomap().find("all") != info.userkeys.elmomap().end() ) {
+          // loop through keydb for the extension keys for this channel
+          for ( const auto &_db : info.userkeys.elmomap().at("all").keydb ) {
+            this->add_key( HDUTYPE::Extension, _db.second.keyword, _db.second.keytype, _db.second.keyvalue, _db.second.keycomment );
+          }
+        }
+
+        // If this extension name is in the elmokeys map, then add them to this extension
+        //
+        logwrite( function, "this is where I would write telem elmo keys for specific channels" );
+        if ( info.telemkeys.elmomap().find(extname) != info.telemkeys.elmomap().end() ) {
+          // loop through keydb for the extension keys for this channel
+          for ( const auto &_db : info.telemkeys.elmomap().at(extname).keydb ) {
+            this->add_key( HDUTYPE::Extension, _db.second.keyword, _db.second.keytype, _db.second.keyvalue, _db.second.keycomment );
+          }
+        }
+
+        // Add any keys designated for "all" extensions
+        //
+        logwrite( function, "this is where I would write telem elmo keys for ALL channels" );
+        if ( info.telemkeys.elmomap().find("all") != info.telemkeys.elmomap().end() ) {
+          // loop through keydb for the extension keys for this channel
+          for ( const auto &_db : info.telemkeys.elmomap().at("all").keydb ) {
+            this->add_key( HDUTYPE::Extension, _db.second.keyword, _db.second.keytype, _db.second.keyvalue, _db.second.keycomment );
+          }
         }
 
         // Add AMPSEC keys

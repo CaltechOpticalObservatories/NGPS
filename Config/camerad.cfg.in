@@ -31,8 +31,14 @@ ARCSIM_NUMDEV=0
 ### I CHANNEL LODFILE HAS BEEN CHANGED FOR DEBUGGING  --CHAZ
 #CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
 #CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
+
+## note 10/16/24, these are what Matt has been using:
+#CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
+#CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
+
+## note 10/16/24, these are the latest firmware files:
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_20240315.lod U2)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_20240315.lod U1)
 
 # -----------------------------------------------------------------------------
 # This defines the default image size and binning for each controller.
@@ -61,6 +67,18 @@ DET_ORIENTATION=(I COL ROW)
 DET_ORIENTATION=(R COL ROW)
 DET_ORIENTATION=(G COL ROW)
 DET_ORIENTATION=(U ROW COL)
+
+# -----------------------------------------------------------------------------
+# Spectral Information configuration
+# These configuration keys must follow CONTROLLER which must have an
+# associated CHAN.
+#
+# SPECT_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
+#
+SPECT_INFO=(I 0.69 7560)
+SPECT_INFO=(R 0.57 5610)
+SPECT_INFO=(G 0.42 4170)
+SPECT_INFO=(U 0.31 3200)
 
 # -----------------------------------------------------------------------------
 # Optional axis labels. If not specified then the x-axis is named "X"
@@ -108,16 +126,19 @@ CONSTKEY_PRI=(INSTRUME NGPS "name of instrument")
 CONSTKEY_PRI=(TELESCOP P200 "name of telescope")
 CONSTKEY_PRI=(OBSLON -116.8583299 "Observatory longitude")
 CONSTKEY_PRI=(OBSLAT 33.353498586 "Observatory latitude")
+CONSTKEY_PRI=(RADESYSA ICRS)
 
 # Secondary Extensions
 # CONSTKEY_EXT=( <keyword> <value> [ <comment> ] )
 #
+CONSTKEY_EXT=(WCSAXES 2)
 CONSTKEY_EXT=(CUNIT1A Angstrom)
 CONSTKEY_EXT=(CUNIT2A arcsec)
 CONSTKEY_EXT=(WCSNAMEA SPECTRUM)
 CONSTKEY_EXT=(WCSNAME DISPLAY)
 CONSTKEY_EXT=(PCOUNT 0)
 CONSTKEY_EXT=(GCOUNT 1)
+CONSTKEY_EXT=(SPECTPART WHOLE)  # fixed only because we're writing single-channel extensions
 
 # Should user-supplied keywords persist, or be cleared
 # after each exposure?
@@ -132,8 +153,11 @@ USERKEYS_PERSIST=no
 # and <port> is the port on which to send the telemetry request. These are the
 # sources for telemetry information for FITS headers. Provide one per line.
 #
-TELEM_PROVIDER=(calibd   @CALIBD_NB_PORT@)
-TELEM_PROVIDER=(flexured @FLEXURED_NB_PORT@)
-TELEM_PROVIDER=(focusd   @FOCUSD_NB_PORT@)
-TELEM_PROVIDER=(tcsd     @TCSD_NB_PORT@)
-TELEM_PROVIDER=(powerd   @POWERD_NB_PORT@)
+TELEM_PROVIDER=(calibd     @CALIBD_NB_PORT@)
+TELEM_PROVIDER=(flexured   @FLEXURED_NB_PORT@)
+TELEM_PROVIDER=(focusd     @FOCUSD_NB_PORT@)
+TELEM_PROVIDER=(powerd     @POWERD_NB_PORT@)
+TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
+TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
+TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
+TELEM_PROVIDER=(thermald   @THERMALD_NB_PORT@)

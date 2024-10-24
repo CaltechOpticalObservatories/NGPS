@@ -468,49 +468,153 @@ namespace Camera {
 
       std::vector< std::vector<long> > amp_section;
 
-//    Common::FitsKeys userkeys;     ///< create a FitsKeys object for FITS keys specified by the user
-//    Common::FitsKeys prikeys;      ///< create a FitsKeys object for FITS keys imposed by the software
-//    Common::FitsKeys extkeys;      ///< create a FitsKeys object for extension-only FITS keys imposed by the software
+      double dispersion;
+      double minwavel;
 
       Common::Header systemkeys;     ///< Header class object holds pri/ext FitsKeys for system use
       Common::Header telemkeys;      ///< Header class object holds pri/ext FitsKeys for telemetry use
       Common::Header userkeys;       ///< Header class object holds pri/ext FitsKeys for command line use
 
+      std::map<std::string,Common::Header> devkeys;
+
       /***** Camera::Information:Information **********************************/
       /**
        * @brief   Information class constructor
-       *
        */
-      Information() {
-        this->axes[0] = 1;
-        this->axes[1] = 1;
-        this->axes[2] = 1;
-        this->cubedepth = 1;
-        this->fitscubed = 1;
-        this->binning[0] = 1;
-        this->binning[1] = 1;
-        this->region_of_interest[0] = 1;
-        this->region_of_interest[1] = 1;
-        this->region_of_interest[2] = 1;
-        this->region_of_interest[3] = 1;
-        this->image_center[0] = 1;
-        this->image_center[1] = 1;
-        this->abortexposure = false;
-        this->ismex = true;                  ///< fixed for NGPS
-        this->datatype = USHORT_IMG;         ///< fixed for NGPS
-        this->type_set = true;               ///< fixed for NGPS
-        this->arcsim = false;                // the ARC device is not simulated
-        this->sim_et = 0;
-        this->sim_modet = -1;
-        this->exposure_time = -1;            // default is exposure time undefined
-        this->exposure_unit = "";            // default is exposure unit undefined
-        this->exposure_factor = -1;          // default is factor undefined
-        this->shutteractivate = "";
-        this->num_pre_exposures = 0;         // default is no pre-exposures
-        this->shutterenable = true;          // default is enabled shutter
-      }
+      Information()
+        : datatype(USHORT_IMG),              ///< fixed for NGPS
+          type_set(true),                    ///< fixed for NGPS
+          axes{1,1,1},
+          cubedepth(1),
+          fitscubed(1),
+          binning{1,1},
+          region_of_interest{1,1,1,1},
+          image_center{1,1},
+          abortexposure(false),
+          ismex(true),                       ///< fixed for NGPS
+          shutterenable(true),               // default enabled shutter
+          shutteractivate(""),
+          arcsim(false),                     // the ARC device is not simulated
+          sim_et(0),
+          sim_modet(-1),
+          exposure_time(-1),                 // default is exposure time undefined
+          exposure_unit(""),                 // default is exposure unit undefined
+          exposure_factor(-1),               // default undefined
+          num_pre_exposures(0),              // default no pre-exposures
+          dispersion(0),
+          minwavel(0)
+          { }
       /***** Camera::Information:Information **********************************/
 
+
+      /**
+       * @brief   Information copy constructor
+       */
+      Information( const Information &other )
+        : hostname(other.hostname),
+          port(other.port),
+          activebufs(other.activebufs),
+          bitpix(other.bitpix),
+          datatype(other.datatype),
+          type_set(other.type_set),
+          frame_type(other.frame_type),
+          detector_pixels{other.detector_pixels[0], other.detector_pixels[1]},
+          section_size(other.section_size),
+          image_memory(other.image_memory),
+          current_observing_mode(other.current_observing_mode),
+          readout_name(other.readout_name),
+          readout_type(other.readout_type),
+          axes{other.axes[0], other.axes[1], other.axes[2]},
+          cubedepth(other.cubedepth),
+          fitscubed(other.fitscubed),
+          binning{other.binning[0], other.binning[1]},
+          axis_pixels{other.axis_pixels[0], other.axis_pixels[1]},
+          region_of_interest{other.region_of_interest[0], other.region_of_interest[1],
+                             other.region_of_interest[2], other.region_of_interest[3]},
+          image_center{other.image_center[0], other.image_center[1]},
+          abortexposure(other.abortexposure),
+          ismex(other.ismex),
+          extension(other.extension),
+          shutterenable(other.shutterenable),
+          shutteractivate(other.shutteractivate),
+          arcsim(other.arcsim),
+          sim_et(other.sim_et),
+          sim_modet(other.sim_modet),
+          exposure_time(other.exposure_time),
+          exposure_unit(other.exposure_unit),
+          exposure_factor(other.exposure_factor),
+          exposure_progress(other.exposure_progress),
+          num_pre_exposures(other.num_pre_exposures),
+          fits_name(other.fits_name),
+          start_time(other.start_time),
+          amp_section(other.amp_section),
+          dispersion(other.dispersion),
+          minwavel(other.minwavel),
+          systemkeys(other.systemkeys),  // this will call the Common::Header copy constructor
+          telemkeys(other.telemkeys),    // this will call the Common::Header copy constructor
+          userkeys(other.userkeys),      // this will call the Common::Header copy constructor
+          devkeys(other.devkeys)
+          { }
+
+      /**
+       * @brief   Information assignment operator
+       */
+      Information &operator=(const Information &other) {
+        if ( this != &other ) {
+          hostname = other.hostname;
+          port = other.port;
+          activebufs = other.activebufs;
+          bitpix = other.bitpix;
+          datatype = other.datatype;
+          type_set = other.type_set;
+          frame_type = other.frame_type;
+          detector_pixels[0] = other.detector_pixels[0];
+          detector_pixels[1] = other.detector_pixels[1];
+          section_size = other.section_size;
+          image_memory = other.image_memory;
+          current_observing_mode = other.current_observing_mode;
+          readout_name = other.readout_name;
+          readout_type = other.readout_type;
+          axes[0] = other.axes[0];
+          axes[1] = other.axes[1];
+          axes[2] = other.axes[2];
+          cubedepth = other.cubedepth;
+          fitscubed = other.fitscubed;
+          binning[0] = other.binning[0];
+          binning[1] = other.binning[1];
+          axis_pixels[0] = other.axis_pixels[0];
+          axis_pixels[1] = other.axis_pixels[1];
+          region_of_interest[0] = other.region_of_interest[0];
+          region_of_interest[1] = other.region_of_interest[1];
+          region_of_interest[2] = other.region_of_interest[2];
+          region_of_interest[3] = other.region_of_interest[3];
+          image_center[0] = other.image_center[0];
+          image_center[1] = other.image_center[1];
+          abortexposure = other.abortexposure;
+          ismex = other.ismex;
+          extension = other.extension;
+          shutterenable = other.shutterenable;
+          shutteractivate = other.shutteractivate;
+          arcsim = other.arcsim;
+          sim_et = other.sim_et;
+          sim_modet = other.sim_modet;
+          exposure_time = other.exposure_time;
+          exposure_unit = other.exposure_unit;
+          exposure_factor = other.exposure_factor;
+          exposure_progress = other.exposure_progress;
+          num_pre_exposures = other.num_pre_exposures;
+          fits_name = other.fits_name;
+          start_time = other.start_time;
+          amp_section = other.amp_section;
+          dispersion = other.dispersion;
+          minwavel = other.minwavel;
+          systemkeys = other.systemkeys;
+          telemkeys = other.telemkeys;
+          userkeys = other.userkeys;
+          devkeys = other.devkeys;
+        }
+        return *this;
+      }
 
       long pre_exposures( std::string num_in, std::string &num_out );
 

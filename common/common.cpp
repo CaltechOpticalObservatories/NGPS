@@ -9,6 +9,34 @@
 
 namespace Common {
 
+  /***** Common::collect_telemetry ********************************************/
+  /**
+   * @brief      send the TELEMREQUEST command to daemon to get telemetry
+   * @param[in]  provider   pair contains <"provider", port>
+   * @param[out] retstring  serialized string of json telemetry message
+   *
+   */
+  void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring) {
+    // Instantiate a client to communicate with each daemon,
+    // constructed with no name, newline termination on command writes,
+    // and JEOF termination on reply reads.
+    //
+    Common::DaemonClient jclient("", "\n", JEOF );
+
+    // Send the command TELEMREQUEST to each daemon and read back the reply into
+    // retstring, which will be the serialized JSON telemetry message.
+    //
+    jclient.set_name(provider.first);
+    jclient.set_port(provider.second);
+    jclient.connect();
+    jclient.command(TELEMREQUEST, retstring);
+    jclient.disconnect();
+
+    return;
+  }
+  /***** Common::collect_telemetry ********************************************/
+
+
   /***** Common::Queue::enqueue ***********************************************/
   /**
    * @brief      puts a message into the queue
@@ -168,7 +196,21 @@ namespace Common {
    *
    */
   long FitsKeys::delkey( const std::string &key ) {
-    return this->addkey( std::vector<std::string> { key, ".", "" } );
+    const std::string function="Common::FitsKeys::delkey";
+    std::stringstream message;
+
+    fits_key_t::iterator it = this->keydb.find(key);
+
+    if (it==this->keydb.end()) {
+      message.str(""); message << "keyword " << key << " not found";
+      logwrite(function, message.str());
+    }
+    else {
+      this->keydb.erase(it);
+      message.str(""); message << "keyword " << key << " erased";
+      logwrite(function, message.str());
+    }
+    return NO_ERROR;
   }
   /***** Common::FitsKeys::delkey *********************************************/
 
@@ -502,9 +544,12 @@ namespace Common {
   /***** Common::DaemonClient::send ***************************************************/
   /**
    * @brief      send a command, read the reply
-   * @param[in]  command  string command
-   * @param[out] reply    reference to string to contain reply
-   * @return     ERROR or NO_ERROR
+   * @param[in]  command                    string command
+   * @param[out] reply                      reference to string to contain reply
+   * @param[in]  term_str_write_override    optional allows overriding class value
+   * @param[in]  term_str_read_override     optional allows overriding class value
+   * @param[in]  term_with_string_override  optional allows overriding class value
+   * @return     ERROR | NO_ERROR
    *
    * this->term_write is automatically appended to the end of the command
    *
@@ -512,8 +557,15 @@ namespace Common {
    * is stale. If that happens, re-open the socket and try send()ing again. Limit the
    * number of retries which is set when the socket is initially opened.
    *
+   * term_str_write and _read are set in the class ahead of time, but you can
+   * override them for this call only by passing in different (optional) values.
+   *
    */
-  long Common::DaemonClient::send( std::string command, std::string &reply ) {
+  long Common::DaemonClient::send( std::string command,
+                                   std::string &reply,
+                                   const std::string &term_str_write_override,
+                                   const std::string &term_str_read_override,
+                                   bool term_with_string_override ) {
     std::string function = "Common::DaemonClient::send";
     std::stringstream message;
     long ret;
@@ -534,10 +586,21 @@ namespace Common {
       return ERROR;
     }
 
+    // Determine whether to use the override values or not
+    // for this call only.
+    //
+    bool term_with_string_actual = term_with_string_override || this->term_with_string;
+
+    const std::string &term_str_write_actual = term_str_write_override.empty() ? this->term_str_write
+                                                                               : term_str_write_override;
+
+    const std::string &term_str_read_actual = term_str_read_override.empty() ? this->term_str_read
+                                                                             : term_str_read_override;
+
     // send the command
     //
-    if ( this->term_with_string ) {
-      command += this->term_str_write;
+    if ( term_with_string_actual ) {
+      command += term_str_write_actual;
     }
     else {
       command += this->term_write;
@@ -585,7 +648,7 @@ namespace Common {
 
     // read the response, using either term_read or term_str_read as the terminator
     //
-    ret = ( term_with_string ? socket.Read( reply, term_str_read ) : socket.Read( reply, term_read ) );
+    ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
 
     if ( ret <= 0 ) {
       if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
@@ -612,7 +675,7 @@ namespace Common {
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
         message.str(""); message << "[TEST] I read this: " << reply << " but I'm going to read again!";
         logwrite( function, message.str() );
-        ret = ( term_with_string ? socket.Read( reply, term_str_read ) : socket.Read( reply, term_read ) );
+        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
         reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
         message.str(""); message << "[TEST] and the 2nd read was this: " << reply;
@@ -623,8 +686,8 @@ namespace Common {
 
     // remove the read terminator
     //
-    if ( term_with_string ) {
-      size_t termpos = reply.find(term_str_read);
+    if ( term_with_string_actual ) {
+      size_t termpos = reply.find(term_str_read_actual);
       if ( termpos != std::string::npos ) reply.erase(termpos);
     }
     else {

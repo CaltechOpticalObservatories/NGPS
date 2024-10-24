@@ -161,6 +161,31 @@ namespace Flexure {
         }
       }
 
+      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
+      //
+      if ( config.param[entry] == "TELEM_PROVIDER" ) {
+        std::vector<std::string> tokens;
+        Tokenize( config.arg[entry], tokens, " " );
+        try {
+          if ( tokens.size() == 2 ) {
+            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
+          }
+          else {
+            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
+        applied++;
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -414,7 +439,9 @@ namespace Flexure {
       ret = NOTHING;
       std::string retstring;
 
-      if ( cmd == "help" || cmd == "?" ) {
+      if ( cmd == "-h" || cmd == "--help" || cmd == "help" || cmd == "?" ) {
+                      retstring="flexure { <CMD> } [<ARG>...]\n";
+                      retstring.append( "  where <CMD> is one of:\n" );
                       for ( const auto &s : FLEXURED_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
                       ret = HELP;
       }
@@ -462,10 +489,17 @@ namespace Flexure {
       }
       else
 
-      // get width and offset
+      // get
       //
       if ( cmd == FLEXURED_GET ) {
                       ret = this->interface.get( args, retstring );
+      }
+      else
+
+      // compensate
+      //
+      if ( cmd == FLEXURED_COMPENSATE ) {
+                      ret = this->interface.compensate( args, retstring );
       }
       else
 

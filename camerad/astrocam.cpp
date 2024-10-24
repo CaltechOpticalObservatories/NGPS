@@ -270,6 +270,154 @@ namespace AstroCam {
   /***** AstroCam::Interface::state_monitor_thread ****************************/
 
 
+  /***** AstroCam::Interface::make_image_keywords *****************************/
+  void Interface::make_image_keywords( int dev ) {
+    std::string function = "AstroCam::Interface::make_image_keywords";
+    std::stringstream message;
+
+    auto chan = this->controller[dev].channel;
+
+    auto rows = this->controller[dev].info.axes[_ROW_];
+    auto cols = this->controller[dev].info.axes[_COL_];
+    auto osrows = this->controller[dev].osrows;
+    auto oscols = this->controller[dev].oscols;
+    auto skiprows = this->controller[dev].skiprows;
+    auto skipcols = this->controller[dev].skipcols;
+    auto binspec = this->camera_info.binning[_COL_];
+    auto binspat = this->camera_info.binning[_ROW_];
+
+    this->controller[dev].info.systemkeys.add_key( "AMP_ID", this->controller[dev].info.readout_name, "readout amplifier", EXT, chan  );
+    this->controller[dev].info.systemkeys.add_key( "FT", this->controller[dev].have_ft, "frame transfer used", EXT, chan );
+
+    this->controller[dev].info.systemkeys.add_key( "IMG_ROWS", this->controller[dev].info.axes[_ROW_], "image rows", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "IMG_COLS", this->controller[dev].info.axes[_COL_], "image cols", EXT, chan );
+
+    this->controller[dev].info.systemkeys.add_key( "OS_ROWS", osrows, "overscan rows", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "OS_COLS", oscols, "overscan cols", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "SKIPROWS", skiprows, "skipped rows", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "SKIPCOLS", skipcols, "skipped cols", EXT, chan );
+
+    int L=0, B=0;
+    switch ( this->controller[ dev ].info.readout_type ) {
+      case L1:     B=1; break;
+      case U1:     L=1; B=1; break;
+      case U2:     L=1; break;
+      case SPLIT1: B=1; break;
+      case FT1:    B=1; break;
+      default:     L=0; B=0;
+    }
+
+    int ltv2 = B * osrows / binspat;
+    int ltv1 = L * oscols / binspec;
+
+message.str(""); message << "[DEBUG] B=" << B << " L=" << L << " osrows=" << osrows << " oscols=" << oscols
+                         << " binning_row=" << binspat << " binning_col=" << binspec
+                         << " ltv2=" << ltv2 << " ltv1=" << ltv1;
+logwrite(function,message.str() );
+
+    this->controller[dev].info.systemkeys.add_key( "LTV2", ltv2, "", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "LTV1", ltv1, "", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "CRPIX1A", ltv1+1, "", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "CRPIX2A", ltv2+1, "", EXT, chan );
+
+    this->controller[dev].info.systemkeys.add_key( "BINSPEC", binspec, "binning in spectral direction", EXT, chan );  // TODO
+    this->controller[dev].info.systemkeys.add_key( "BINSPAT", binspat, "binning in spatial direction", EXT, chan );  // TODO
+
+    this->controller[dev].info.systemkeys.add_key( "CDELT1A",
+                                                   this->controller[dev].info.dispersion*binspat,
+                                                   "Dispersion in Angstrom/pixel", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "CRVAL1A",
+                                                   this->controller[dev].info.minwavel,
+                                                   "Reference value in Angstrom", EXT, chan );
+
+    // These keys are for proper mosaic display.
+    // Adjust GAPY to taste.
+    //
+    int GAPY=20;
+    int crval2 = ( this->controller[dev].info.axes[_ROW_] / binspat + GAPY ) * dev;
+
+    this->controller[dev].info.systemkeys.add_key( "CRPIX1", 0, "", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "CRPIX2", 0, "", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "CRVAL1", 0, "", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "CRVAL2", crval2, "", EXT, chan );
+
+    // Add ___SEC keywords to the extension header for this channel
+    //
+    std::stringstream sec;
+
+    sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] << ":" << this->controller[dev].info.region_of_interest[1]
+                     << "," << this->controller[dev].info.region_of_interest[2] << ":" << this->controller[dev].info.region_of_interest[3] << "]";
+    this->controller[dev].info.systemkeys.add_key( "CCDSEC", sec.str(), "physical format of CCD", EXT, chan );
+
+    sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] + skipcols << ":" << cols
+                     << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows << "]";
+    this->controller[dev].info.systemkeys.add_key( "DATASEC", sec.str(), "section containing the CCD data", EXT, chan );
+
+    sec.str(""); sec << '[' << cols << ":" << cols+oscols
+                     << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows+osrows << "]";
+    this->controller[dev].info.systemkeys.add_key( "BIASSEC", sec.str(), "overscan section", EXT, chan );
+
+    return;
+  }
+  /***** AstroCam::Interface::make_image_keywords *****************************/
+
+
+  /***** AstroCam::Interface::parse_spect_config ******************************/
+  long Interface::parse_spect_config( std::string args ) {
+    std::string function = "AstroCam::Interface::parse_spect_config";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 3 ) {
+      message.str(""); message << "ERROR: bad value \"" << args << "\". expected { CHAN DISPERSION MINWAVELENGTH }";
+      logwrite( function, message.str() );
+      return( ERROR );
+    }
+
+    std::string chan;
+    double disp=NAN;
+    double wavel=NAN;
+
+    // Parse the three values from the args string
+    //
+    try {
+      chan  = tokens.at(0);
+      disp  = std::stod(tokens.at(1));
+      wavel = std::stod(tokens.at(2));
+    }
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR: parsing \"" << args << "\": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // There must have been a device configured for this channel.
+    // Not an error if there's not, but can't continue.
+    //
+    int dev = devnum_from_chan(chan);
+
+    if ( dev < 0 ) {
+      message.str(""); message << "NOTICE: no devnum configured for channel \"" << chan << "\"";
+      logwrite( function, message.str() );
+      return NO_ERROR;
+    }
+
+    if ( this->controller.find(dev) == this->controller.end() ) {
+      message.str(""); message << "ERROR dev " << dev << " not found in controller configuration";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    this->controller[dev].info.dispersion = disp;
+    this->controller[dev].info.minwavel = wavel;
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::parse_spect_config ******************************/
+
+
   /***** AstroCam::Interface::parse_controller_config *************************/
   /**
    * @brief      parses the CONTROLLER keyword from config file
@@ -400,11 +548,11 @@ namespace AstroCam {
 
     // Header keys specific to this controller are stored in the controller's extension
     //
-    this->controller[dev].info.systemkeys.extension().addkey( "CCD_ID", id, "CCD identifier parse" );
-    this->controller[dev].info.systemkeys.extension().addkey( "FT", ft, "frame transfer used" );
-    this->controller[dev].info.systemkeys.extension().addkey( "AMP_ID", amp, "CCD readout amplifier ID" );
-    this->controller[dev].info.systemkeys.extension().addkey( "SPEC_ID", chan, "spectrograph channel" );
-    this->controller[dev].info.systemkeys.extension().addkey( "DEV_ID", dev, "detector controller PCI device ID" );
+    this->controller[dev].info.systemkeys.add_key( "CCD_ID", id, "CCD identifier parse", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "FT", ft, "frame transfer used", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "AMP_ID", amp, "CCD readout amplifier ID", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "SPEC_ID", chan, "spectrograph channel", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "DEV_ID", dev, "detector controller PCI device ID", EXT, chan );
 
 //  FITS_file* pFits = new FITS_file();             // create a pointer to a FITS_file class object
 //  this->controller[dev].pFits = pFits;            // set the pointer to this object in the public vector
@@ -419,6 +567,27 @@ namespace AstroCam {
     return( NO_ERROR );
   }
   /***** AstroCam::Interface::parse_controller_config *************************/
+
+
+  /***** AstroCam::Interface::devnum_from_chan ********************************/
+  /**
+   * @brief      return the devnum associated with a channel name
+   * @param[out] chan       reference to channel name
+   * @return     devnum or -1 if not found
+   *
+   */
+  int Interface::devnum_from_chan( const std::string &chan ) {
+    int devnum=-1;
+    for ( const auto &con : this->controller ) {
+      if ( con.second.inactive ) continue; // skip controllers flagged as inactive
+      if ( con.second.channel == chan ) {  // check to see if it matches a configured channel.
+        devnum = con.second.devnum;
+        break;
+      }
+    }
+    return devnum;
+  }
+  /***** AstroCam::Interface::devnum_from_chan ********************************/
 
 
   /***** AstroCam::Interface::extract_dev_chan ********************************/
@@ -635,14 +804,15 @@ namespace AstroCam {
         // Now, since binning applies equally to all devices and the image
         // must be resized for binning, set the image size for each device.
         // This uses the existing image size parameters and the new binning.
+        // The requested overscans are sent here, which can be modified by binning.
         //
         for ( const auto &dev : this->devnums ) {
           message.str("");
           message << dev << " "
                   << this->controller[dev].detrows << " "
                   << this->controller[dev].detcols << " "
-                  << this->controller[dev].osrows  << " "
-                  << this->controller[dev].oscols  << " "
+                  << this->controller[dev].osrows0 << " "
+                  << this->controller[dev].oscols0 << " "
                   << binning[_ROW_] << " "
                   << binning[_COL_];
           error = this->image_size( message.str(), retstring );  // this retstring only used on error
@@ -1215,6 +1385,14 @@ namespace AstroCam {
         applied++;
       }
 
+      if ( this->config.param[entry] == "SPECT_INFO" ) {
+        if ( this->parse_spect_config( this->config.arg[entry] ) != ERROR ) {
+          message.str(""); message << "CAMERAD:config:" << this->config.param[entry] << "=" << this->config.arg[entry];
+          this->camera.async.enqueue_and_log( function, message.str() );
+          applied++;
+        }
+      }
+
     }
 
     message.str("");
@@ -1551,11 +1729,16 @@ namespace AstroCam {
     std::string timestring;
     timespec timenow;
     double mjd0, mjd1, mjd;
+    double airmass0, airmass1, airmass;
 
     if ( !interface.in_readout() ) {
       logwrite( function, "NOTICE: sending command to stop clocks!" );
       interface.do_native( "SPC" );
     }
+
+    // get the airmass now
+    //
+    interface.collect_telemetry_key( "tcsd", "AIRMASS", airmass0 );
 
     // If configured, send a command to the ARC controller to open
     // the shutter. This is not connected to the shutter but can be
@@ -1602,9 +1785,19 @@ namespace AstroCam {
     //
     if ( interface.camera.ext_shutter ) interface.do_native( "CSH" );
 
+    // get the airmass again
+    //
+    interface.collect_telemetry_key( "tcsd", "AIRMASS", airmass1 );
+
+    // average airmass
+    //
+    airmass = ( airmass1 + airmass0 ) / 2.0;
+
     interface.camera.shutter.condition.notify_all();  // notify waiting threads that the shutter has closed
 
-    // Add keywords to primary keyword database for this expbuf
+    // Add keywords to primary keyword database for this expbuf.
+    // These have to be added to fitsinfo[expbuf] because the exposure has already started,
+    // and camera_info keys have already been locked-in to fitsinfo[].
     //
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
@@ -1612,6 +1805,9 @@ namespace AstroCam {
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "SHUTTIME", interface.camera.shutter.duration(), 
                                                                          "actual shutter open time in msec", 3 );
+    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS0", airmass0, "airmass at start of exposure" );
+    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS1", airmass1, "airmass at end of exposure" );
+    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS", airmass, "average of AIRMASS0 and AIRMASS1" );
     return;
   }
   /***** AstroCam::Interface::dothread_shutter ********************************/
@@ -2348,11 +2544,16 @@ this->camera_info.userkeys.primary().listkeys();
       timespec timenow       = Time::getTimeNow();         // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
       double mjd             = mjd_from( timenow );        // modified Julian date of start
+      double airmass=NAN;
+      this->collect_telemetry_key( "tcsd", "AIRMASS", airmass );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD0", mjd, "exposure start time (modified Julian Date)" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD1", mjd, "exposure stop time (modified Julian Date)" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "SHUTTIME", 0.0, "actual shutter open time in msec", 3 );
+      this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "AIRMASS0", airmass, "airmass at start of exposure" );
+      this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "AIRMASS1", airmass, "airmass at end of exposure" );
+      this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "AIRMASS", airmass, "average of AIRMASS0 and AIRMASS1" );
     }
 
     // Shutter or not, an exposure is now pending, so set the exposure_pending flag
@@ -2426,52 +2627,89 @@ this->camera_info.userkeys.primary().listkeys();
     // These threads may block (if needed) until the shutter has closed, but
     // it's OK if the shutter thread is so quick that it ends first.
     //
-    // This is where camera_info keywords are "locked-in", when they are copied to
-    // to the expinfo object. After copying camera_info, erase the telemkeys and
-    // conditionally erase the userkeys from it.
+    // This is where camera_info keywords are "locked-in", when they are copied
+    // to the expinfo object. The FITS writer is going to get
+    // this->controller[devnum].expinfo[expbuf] so that's where all the header
+    // keys need to be.
     //
-
-    this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "WCSNAME", "DISPLAY", "" );
-    this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "WCSNAMEA", "SPECTRUM", "" );
-    this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "CUNIT1A", "Angstrom", "" );
-    this->fitsinfo[this_expbuf]->systemkeys.extension().addkey( "CUNIT2A", "arcsec", "" );
+    // After copying camera_info, erase the telemkeys and conditionally erase
+    // the userkeys from it.
+    //
+    this->camera_info.systemkeys.add_key("WCSNAME",  "DISPLAY",  "", EXT, "all");
+    this->camera_info.systemkeys.add_key("WCSNAMEA", "SPECTRUM", "", EXT, "all");
+    this->camera_info.systemkeys.add_key("CUNIT1A",  "Angstrom", "", EXT, "all");
+    this->camera_info.systemkeys.add_key("CUNIT2A",  "arcsec",   "", EXT, "all");
+    this->camera_info.systemkeys.add_key("CDELT2A",  0.25*this->camera_info.binning[_ROW_], "Spatial scale in arcsec/pixel", EXT, "all");
+    this->camera_info.systemkeys.add_key("CRVAL2A",  0.0, "Reference value in arcsec", EXT, "all");
 
     for (const auto &dev : this->devnums) {        // spawn a thread for each device in devnums
+
+      this->make_image_keywords(dev);
+
       try {
-        // copy the info class from controller[dev] to controller[dev].expinfo[expbuf]  -- kludge for now
+
+        // copy the info class from controller[dev] to controller[dev].expinfo[expbuf]
         //
         this->controller[dev].expinfo[this_expbuf] = this->controller[dev].info;
 
-        // copy the systemkeys databases from fitsinfo to expinfo
+        // copy the info class from controller[dev] to controller[dev].expinfo[expbuf]
+        // create handy references to the Common::Header objects for expinfo
         //
-        this->controller[dev].expinfo[this_expbuf].systemkeys.primary().keydb   = this->fitsinfo[this_expbuf]->systemkeys.primary().keydb;
-        this->controller[dev].expinfo[this_expbuf].systemkeys.extension().keydb = this->fitsinfo[this_expbuf]->systemkeys.extension().keydb;
+        auto &_systemkeys = this->controller[dev].expinfo[this_expbuf].systemkeys;
+        auto &_telemkeys  = this->controller[dev].expinfo[this_expbuf].telemkeys;
+        auto &_userkeys   = this->controller[dev].expinfo[this_expbuf].userkeys;
 
-        this->controller[dev].expinfo[this_expbuf].systemkeys.extension().merge( this->controller[dev].info.systemkeys.extension() );
+        // merge the primary keyword databases from fitsinfo into expinfo
+        //
+        _systemkeys.primary().merge( this->fitsinfo[this_expbuf]->systemkeys.primary().keydb );
+        _telemkeys.primary().merge( this->fitsinfo[this_expbuf]->telemkeys.primary().keydb );
+        _userkeys.primary().merge( this->fitsinfo[this_expbuf]->userkeys.primary().keydb );
 
-        this->controller[dev].expinfo[this_expbuf].telemkeys.primary().keydb    = this->fitsinfo[this_expbuf]->telemkeys.primary().keydb;
-        this->controller[dev].expinfo[this_expbuf].telemkeys.extension().keydb  = this->fitsinfo[this_expbuf]->telemkeys.extension().keydb;
+        // merge in the primary from camera_info
+        //
+        _systemkeys.primary().merge( this->camera_info.systemkeys.primary().keydb );
+        _telemkeys.primary().merge( this->camera_info.telemkeys.primary().keydb );
+        _userkeys.primary().merge( this->camera_info.userkeys.primary().keydb );
 
-        this->controller[dev].expinfo[this_expbuf].userkeys.primary().keydb     = this->fitsinfo[this_expbuf]->userkeys.primary().keydb;
-        this->controller[dev].expinfo[this_expbuf].userkeys.extension().keydb   = this->fitsinfo[this_expbuf]->userkeys.extension().keydb;
+        // merge in the primary from camera_info
+        // handy vector of "all" and the channel for this devnum which is used
+        // to reference keywords to be written to all extensions and only the
+        // extension for this channel
+        //
+        auto channel = this->controller[dev].channel;
+        std::vector<std::string> channels = { "all", channel };
+
+        // Loop through both "channels" and merge the Header objects from camera_info
+        // into expinfo.
+        //
+        for ( const auto &chan : channels ) {
+          if ( this->camera_info.systemkeys.has_chan(chan) ) _systemkeys.merge_extension(chan, this->camera_info.systemkeys );
+          if ( this->camera_info.telemkeys.has_chan(chan) )  _telemkeys.merge_extension(chan, this->camera_info.telemkeys );
+          if ( this->camera_info.userkeys.has_chan(chan) )   _userkeys.merge_extension(chan, this->camera_info.userkeys );
+        }
+
+        // All changes to the primary extension have to be reflected in the fitsinfo object
+        // because this is what the fitswriter has.
+        //
+        this->fitsinfo[this_expbuf]->systemkeys.primary() = _systemkeys.primary();
+        this->fitsinfo[this_expbuf]->telemkeys.primary() = _telemkeys.primary();
+        this->fitsinfo[this_expbuf]->userkeys.primary() = _userkeys.primary();
 
         this->controller[dev].expinfo[this_expbuf].fits_name="not_needed";
 
         std::string hash;
         md5_file( this->controller[dev].firmware, hash );                 // compute the md5 hash
 
-        // Copy camera_info then erase the per-exposure keyword databases.
+        // erase the per-exposure keyword databases.
         //
-        this->controller[dev].expinfo[this_expbuf].systemkeys.primary().keydb   = this->camera_info.systemkeys.primary().keydb;
-
         // telemkeys are refreshed for each exposure
         this->camera_info.telemkeys.primary().erase_db();
-        this->camera_info.telemkeys.extension().erase_db();
+        this->camera_info.telemkeys.erase_extensions();
 
-        // userkeys are confitionally persistent
+        // userkeys are conditionally persistent
         if ( !this->camera.is_userkeys_persist ) {
           this->camera_info.userkeys.primary().erase_db();
-          this->camera_info.userkeys.extension().erase_db();
+          this->camera_info.userkeys.erase_extensions();
         }
 
         // ... then spawn a thread to trigger the appropriate readout waveforms in the ARC controller
@@ -2544,7 +2782,28 @@ this->camera_info.userkeys.primary().listkeys();
 
   /***** AstroCam::Interface::collect_telemetry *******************************/
   /**
-   * @brief      send the "telem" command to each configured daemon to get telemetry
+   * @brief      send the TELEMREQUEST command to each configured daemon to get telemetry
+   * @details    This overloaded version accepts a name, for the case where
+   *             telemetry is needed from one provider only (e.g. TCS)
+   * @param[in]  name       name of provider from TELEM_PROVIDER config key
+   * @param[out] retstring  serialized string of json telemetry message
+   *
+   */
+  void Interface::collect_telemetry(const std::string name, std::string &retstring) {
+    Common::DaemonClient jclient("", "\n", JEOF );
+    auto it = this->telemetry_providers.find(name);
+    if ( it != this->telemetry_providers.end() ) {
+      jclient.set_name(it->first);
+      jclient.set_port(it->second);
+      jclient.connect();
+      jclient.command(TELEMREQUEST, retstring);
+      jclient.disconnect();
+    }
+    return;
+  }
+  /***** AstroCam::Interface::collect_telemetry *******************************/
+  /**
+   * @brief      send the TELEMREQUEST command to each configured daemon to get telemetry
    *
    */
   void Interface::collect_telemetry() {
@@ -2560,7 +2819,7 @@ this->camera_info.userkeys.primary().listkeys();
     // ports indexed by daemon name, both of which are used to update
     // the jclient object.
     //
-    // Send the command "telem" to each daemon and read back the reply into
+    // Send the command TELEMREQUEST to each daemon and read back the reply into
     // retstring, which will be the serialized JSON telemetry message.
     //
     // handle_json_message() will parse the reply and set the FITS header
@@ -2570,7 +2829,7 @@ this->camera_info.userkeys.primary().listkeys();
       jclient.set_name(name);
       jclient.set_port(port);
       jclient.connect();
-      jclient.command("telem", retstring);
+      jclient.command(TELEMREQUEST, retstring);
       jclient.disconnect();
       handle_json_message(retstring);
     }
@@ -2844,8 +3103,10 @@ for ( const auto &dev : selectdev ) {
       std::string hash;
       md5_file( timlodfile, hash );                         // compute the md5 hash
 
-      con.info.systemkeys.extension().addkey( "FIRMWARE", timlodfile, "" );     // no room for a comment
-      con.info.systemkeys.extension().addkey( "FIRM_MD5", hash, "MD5 checksum of firmware" );
+      // add keys to the extension for this channel
+      //
+      con.info.systemkeys.add_key( "FIRMWARE", timlodfile, "", EXT, con.channel );  // no room for a comment
+      con.info.systemkeys.add_key( "FIRM_MD5", hash, "MD5 checksum of firmware", EXT, con.channel );
     }
     catch(const std::exception &e) {
       message.str(""); message << "ERROR: " << con.devname << ": " << e.what();
@@ -3111,7 +3372,8 @@ for ( const auto &dev : selectdev ) {
         this->controller[ dev ].info.readout_name = readout_name;
         this->controller[ dev ].info.readout_type = readout_type;
         this->controller[ dev ].readout_arg = readout_arg;
-        this->controller[ dev ].info.systemkeys.extension().addkey( "AMP_ID", readout_name, "readout amplifier" );
+        // add keyword to the extension for this channel
+//TCB   this->controller[ dev ].info.systemkeys.add_key( "AMP_ID", readout_name, "readout amplifier", EXT, chan  );
       }
     }
 
@@ -3155,7 +3417,7 @@ for ( const auto &dev : selectdev ) {
    * incoming frame from ARC -> frameCallback() -> handle_frame() -> write_frame()
    *
    */
-  long Interface::write_frame( int expbuf, int devnum, int fpbcount ) {
+  long Interface::write_frame( int expbuf, int devnum, const std::string chan, int fpbcount ) {
     std::string function = "AstroCam::Interface::write_frame";
     std::stringstream message;
     long error=NO_ERROR;
@@ -3192,7 +3454,7 @@ logwrite(function, message.str());
           // passing a pointer to the workbuf for this controller (which has the deinterlaced image), and
           // a pointer for the info class for this exposure buf on this controller.
           //
-          error = this->pFits[ expbuf ]->write_image( (uint16_t *)this->controller[ devnum ].workbuf, this->controller[ devnum ].expinfo[expbuf] );
+          error = this->pFits[ expbuf ]->write_image( (uint16_t *)this->controller[ devnum ].workbuf, this->controller[ devnum ].expinfo[expbuf], chan );
 
           this->pFits[ expbuf ]->extension++;
 
@@ -3651,7 +3913,8 @@ logwrite(function, message.str());
     //
     if ( ! retstring.empty() ) {
       this->controller[dev].have_ft = ( retstring == "yes" ? true : false );
-      this->controller[dev].info.systemkeys.extension().addkey( "FT", this->controller[dev].have_ft, "frame transfer used" );
+      // add keyword to the extension for this channel
+//TCB this->controller[dev].info.systemkeys.add_key( "FT", this->controller[dev].have_ft, "frame transfer used", EXT, chan );
     }
 
     // In any case, return the current state
@@ -3777,8 +4040,8 @@ logwrite(function, message.str());
       //
       this->controller[dev].detrows = rows;
       this->controller[dev].detcols = cols;
-      this->controller[dev].osrows  = osrows;
-      this->controller[dev].oscols  = oscols;
+      this->controller[dev].osrows0 = osrows;
+      this->controller[dev].oscols0 = oscols;
 
       // Binning is the same for all devices so it's stored in the camera info class.
       //
@@ -3793,11 +4056,11 @@ logwrite(function, message.str());
       // If binned by a non-evenly-divisible factor then skip that
       // many at the start. These will be removed from the image.
       //
-      int skipcols = cols % bincols;
-      int skiprows = rows % binrows;
+      this->controller[dev].skipcols = cols % bincols;
+      this->controller[dev].skiprows = rows % binrows;
 
-      cols -= skipcols;
-      rows -= skiprows;
+      cols -= this->controller[dev].skipcols;
+      rows -= this->controller[dev].skiprows;
 
       // Adjust the number of overscans to make them evenly divisible
       // by the binning factor.
@@ -3843,6 +4106,11 @@ logwrite(function, message.str());
         oscols /= bincols;
         osrows /= binrows;
 
+        // save the binning-adjusted overscans to the class
+        //
+        this->controller[dev].osrows = osrows;
+        this->controller[dev].oscols = oscols;
+
         // allocate PCI buffer and set geometry now
         //
         std::stringstream geostring;
@@ -3870,39 +4138,83 @@ logwrite(function, message.str());
         std::stringstream cmd;
         cmd << "SBP "
             << this->camera_info.binning[_ROW_] << " "
-            << skiprows << " "
+            << this->controller[dev].skiprows << " "
             << this->camera_info.binning[_COL_] << " "
-            << skipcols;
+            << this->controller[dev].skipcols;
         if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
+/**********
         // Add image size related keys specific to this controller in the controller's extension
         //
-        this->controller[dev].info.systemkeys.extension().addkey( "IMG_ROWS", this->controller[dev].info.axes[_ROW_], "image rows" );
-        this->controller[dev].info.systemkeys.extension().addkey( "IMG_COLS", this->controller[dev].info.axes[_COL_], "image cols" );
+        this->controller[dev].info.systemkeys.add_key( "IMG_ROWS", this->controller[dev].info.axes[_ROW_], "image rows", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "IMG_COLS", this->controller[dev].info.axes[_COL_], "image cols", EXT, chan );
 
-        this->controller[dev].info.systemkeys.extension().addkey( "OS_ROWS", osrows, "overscan rows" );
-        this->controller[dev].info.systemkeys.extension().addkey( "OS_COLS", oscols, "overscan cols" );
-        this->controller[dev].info.systemkeys.extension().addkey( "SKIPROWS", skiprows, "skipped rows" );
-        this->controller[dev].info.systemkeys.extension().addkey( "SKIPCOLS", skipcols, "skipped cols" );
+        this->controller[dev].info.systemkeys.add_key( "OS_ROWS", osrows, "overscan rows", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "OS_COLS", oscols, "overscan cols", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "SKIPROWS", skiprows, "skipped rows", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "SKIPCOLS", skipcols, "skipped cols", EXT, chan );
 
-        this->controller[dev].info.systemkeys.primary().addkey( "BINSPEC", this->camera_info.binning[_COL_], "binning in spectral direction" ); // TODO
-        this->controller[dev].info.systemkeys.primary().addkey( "BINSPAT", this->camera_info.binning[_ROW_], "binning in spatial direction" );  // TODO
+        int L=0, B=0;
+        switch ( this->controller[ dev ].info.readout_type ) {
+          case L1:     B=1; break;
+          case U1:     L=1; B=1; break;
+          case U2:     L=1; break;
+          case SPLIT1: B=1; break;
+          case FT1:    B=1; break;
+          default:     L=0; B=0;
+        }
 
-        // Add ___SEC keywords
+        int ltv2 = B * osrows / this->camera_info.binning[_ROW_];
+        int ltv1 = L * oscols / this->camera_info.binning[_COL_];
+
+message.str(""); message << "[DEBUG] B=" << B << " L=" << L << " osrows=" << osrows << " oscols=" << oscols
+                         << " binning_row=" << this->camera_info.binning[_ROW_] << " binning_col=" << this->camera_info.binning[_COL_]
+                         << " ltv2=" << ltv2 << " ltv1=" << ltv1;
+logwrite(function,message.str() );
+
+        this->controller[dev].info.systemkeys.add_key( "LTV2", ltv2, "", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "LTV1", ltv1, "", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "CRPIX1A", ltv1+1, "", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "CRPIX2A", ltv2+1, "", EXT, chan );
+
+        this->controller[dev].info.systemkeys.add_key( "BINSPEC", this->camera_info.binning[_COL_], "binning in spectral direction", EXT, chan );  // TODO
+        this->controller[dev].info.systemkeys.add_key( "BINSPAT", this->camera_info.binning[_ROW_], "binning in spatial direction", EXT, chan );  // TODO
+
+        this->controller[dev].info.systemkeys.add_key( "CDELT1A", 
+                                                       this->controller[dev].info.dispersion*this->camera_info.binning[_ROW_],
+                                                       "Dispersion in Angstrom/pixel", EXT, this->controller[dev].channel );
+        this->controller[dev].info.systemkeys.add_key( "CRVAL1A", 
+                                                       this->controller[dev].info.minwavel,
+                                                       "Reference value in Angstrom", EXT, this->controller[dev].channel );
+
+        // These keys are for proper mosaic display.
+        // Adjust GAPY to taste.
+        //
+        int GAPY=20;
+        int channeldevnum = this->controller[dev].devnum;
+        int crval2 = ( this->controller[dev].info.axes[_ROW_] / this->camera_info.binning[_ROW_] + GAPY ) * channeldevnum;
+
+        this->controller[dev].info.systemkeys.add_key( "CRPIX1", 0, "", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "CRPIX2", 0, "", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "CRVAL1", 0, "", EXT, chan );
+        this->controller[dev].info.systemkeys.add_key( "CRVAL2", crval2, "", EXT, chan );
+
+        // Add ___SEC keywords to the extension header for this channel
         //
         std::stringstream sec;
 
         sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] << ":" << this->controller[dev].info.region_of_interest[1]
                          << "," << this->controller[dev].info.region_of_interest[2] << ":" << this->controller[dev].info.region_of_interest[3] << "]";
-        this->controller[dev].info.systemkeys.extension().addkey( "CCDSEC", sec.str(), "physical format of CCD" );
+        this->controller[dev].info.systemkeys.add_key( "CCDSEC", sec.str(), "physical format of CCD", EXT, chan );
 
         sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] + skipcols << ":" << cols
                          << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows << "]";
-        this->controller[dev].info.systemkeys.extension().addkey( "DATASEC", sec.str(), "section containing the CCD data" );
+        this->controller[dev].info.systemkeys.add_key( "DATASEC", sec.str(), "section containing the CCD data", EXT, chan );
 
         sec.str(""); sec << '[' << cols << ":" << cols+oscols
                          << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows+osrows << "]";
-        this->controller[dev].info.systemkeys.extension().addkey( "BIASSEC", sec.str(), "overscan section" );
+        this->controller[dev].info.systemkeys.add_key( "BIASSEC", sec.str(), "overscan section", EXT, chan );
+**********/
       }
       else {
         message.str(""); message << "saved but not sent to controller because chan " << this->controller[dev].channel << " is not connected";
@@ -4204,7 +4516,7 @@ logwrite(function, message.str());
     message.str(""); message << "[DEBUG] calling server.write_frame for devnum=" << devnum << " fpbcount=" << fpbcount;
     logwrite(function, message.str());
 #endif
-      error = server.write_frame( expbuf, devnum, fpbcount );
+      error = server.write_frame( expbuf, devnum, server.controller[devnum].channel, fpbcount );
     }
     else {
       logwrite(function, "aborted!");
@@ -5149,7 +5461,7 @@ logwrite(function, message.str());
         jclient.set_name("calibd");
         jclient.set_port(9101);
         jclient.connect();
-        jclient.command("telem", retstring);
+        jclient.command(TELEMREQUEST, retstring);
         jclient.disconnect();
       }
       else
@@ -5157,7 +5469,7 @@ logwrite(function, message.str());
         jclient.set_name("flexured");
         jclient.set_port(9103);
         jclient.connect();
-        jclient.command("telem", retstring);
+        jclient.command(TELEMREQUEST, retstring);
         jclient.disconnect();
       }
       else
@@ -5165,7 +5477,7 @@ logwrite(function, message.str());
         jclient.set_name("focusd");
         jclient.set_port(9104);
         jclient.connect();
-        jclient.command("telem", retstring);
+        jclient.command(TELEMREQUEST, retstring);
         jclient.disconnect();
       }
       else
@@ -5173,7 +5485,7 @@ logwrite(function, message.str());
         jclient.set_name("tcsd");
         jclient.set_port(9107);
         jclient.connect();
-        jclient.command("telem", retstring);
+        jclient.command(TELEMREQUEST, retstring);
         jclient.disconnect();
       }
       else

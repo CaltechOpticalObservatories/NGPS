@@ -308,7 +308,8 @@ namespace Camera {
 
             if ( config.param[entry].compare( 9, 3, "PRI" )==0 ) error = this->camera_info.systemkeys.primary().addkey( tokens );
             else
-            if ( config.param[entry].compare( 9, 3, "EXT" )==0 ) error = this->camera_info.systemkeys.extension().addkey( tokens );
+            if ( config.param[entry].compare( 9, 3, "EXT" )==0 ) this->camera_info.systemkeys.add_key(tokens[0],tokens[1],"",true,"all");
+//          if ( config.param[entry].compare( 9, 3, "EXT" )==0 ) error = this->camera_info.systemkeys.extension().addkey( tokens );
             else
             continue;
 
