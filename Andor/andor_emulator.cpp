@@ -84,7 +84,7 @@ namespace Andor {
     std::string function = "Andor::Emulator::_GetAvailableCameras";
     std::stringstream message;
 
-    number = 1;
+    number = 8;
 
     logwrite( function, std::to_string( number ) );
 
@@ -109,6 +109,10 @@ namespace Andor {
     std::string function = "Andor::Emulator::_GetCameraHandle";
     std::stringstream message;
 
+    if ( index < 0 || index > 7 ) return ERROR;
+
+    handle = this->_handles[index];
+
     return NO_ERROR;
   }
   /***** Andor::Emulator::_GetCameraHandle ************************************/
@@ -126,7 +130,7 @@ namespace Andor {
     std::string function = "Andor::Emulator::_GetCameraSerialNumber";
     std::stringstream message;
 
-    number = this->serial_number;
+    number = this->_serial;
 
     return NO_ERROR;
   }
@@ -652,6 +656,15 @@ namespace Andor {
   long Emulator::_SetCurrentCamera( at_32 handle ) {
     std::string function = "Andor::Emulator::_SetCurrentCamera";
     std::stringstream message;
+
+    if ( handle < 1 || handle > 8 ) {
+      message << "ERROR handle " << handle << " outside range { 1 : 8 }";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    this->_handle = handle;
+    this->_serial = 1000+handle;
 
     return NO_ERROR;
   }

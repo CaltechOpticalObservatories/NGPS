@@ -1588,10 +1588,15 @@ namespace Acam {
 
       if ( starts_with( config.param[entry], "ANDOR_SN" ) ) {
 
+        std::vector<std::string> tokens;
+        Tokenize( config.arg[entry], tokens, " " );
+
         // When the SN is set to "emulate" (case-insensitive) then this enables the Andor emulator
+        // and the next token is the emulated serial number.
         //
-        if ( caseCompareString( config.arg[entry], "emulate" ) ) {
+        if ( tokens.size() > 1 && tokens[0] == "emulate" ) {
           this->camera.andor.andor_emulator( true );
+          this->camera.andor.camera_info.serial_number=std::stoi(tokens[1]);
           applied++;
         }
         else {

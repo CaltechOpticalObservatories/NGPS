@@ -25,12 +25,11 @@ ACAMD_PORT=@ACAMD_BLK_PORT@
 # designates left and right, respectively, the perspective
 # as shown in the GUI.
 #
-# NOTE: Set <sn> to "emulate" to emulate that camera.
-#       If emulated, the serial number will be internally
-#       generated as 1001 for L and 1002 for R.
+# set "ANDOR_SN=(emulate <sn>)" to emulate the Andor where <sn> is
+# an emulated serial nunmber of {1001,1002,...,1008}.
 #
-#ANDOR=(L emulate 0.06)
-#ANDOR=(R emulate 0.06)
+#ANDOR=(L emulate 1002 0.06)
+#ANDOR=(R emulate 1003 0.06)
 ANDOR=(L 14223 0.06)
 #ANDOR=(R 13452 0.06) # s/n for ACAM
 

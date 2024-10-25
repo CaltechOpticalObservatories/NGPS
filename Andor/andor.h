@@ -295,11 +295,24 @@ namespace Andor {
       bool is_initialized;
       float exptime;
       int temperature;
-      int serial_number;
+      int _serial;
+      at_32 _handle;
+      std::vector<at_32> _handles;
+      std::map<at_32, at_32> _handlemap;
 
     public:
-      Emulator() : is_initialized(false), exptime(0), temperature(20), serial_number( -1 ) { }
-      Emulator( int sn ) : is_initialized(false), exptime(0), temperature(20), serial_number( sn ) { }
+      Emulator()
+        : is_initialized(false), exptime(0), temperature(20), _serial( -1 ),
+          _handle(-1), _handles{1,2,3,4,5,6,7,8},
+          _handlemap{{1,1001}, {2,1002}, {3,1003}, {4,1004}, {5,1005}, {6,1006}, {7,1007}, {8,1008}}
+      { }
+      Emulator( int sn )
+        : is_initialized(false), exptime(0), temperature(20), _serial( sn ),
+          _handle(-1), _handles{1,2,3,4,5,6,7,8},
+          _handlemap{{1001,1}, {1002,2}, {1003,3}, {1004,4}, {1005,5}, {1006,6}, {1007,7}, {1008,8}}
+      { auto it = _handlemap.find(_serial);
+        if ( it != _handlemap.end() ) _handle = it->second;
+      }
 
       inline float get_exptime() { return this->exptime; }
 

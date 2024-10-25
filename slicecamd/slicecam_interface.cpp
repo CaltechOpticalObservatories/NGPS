@@ -1094,8 +1094,8 @@ namespace Slicecam {
       if ( config.param[entry] == "ANDOR" ) {
         std::vector<std::string> tokens;
         Tokenize( config.arg[entry], tokens, " " );
-        if ( tokens.size() != 3 ) {
-          message.str(""); message << "ERROR invalid args ANDOR=\"" << config.arg[entry] << "\" : expected <NAME> <SN> <SCALE>";
+        if ( tokens.size() < 3 ) {
+          message.str(""); message << "ERROR invalid args ANDOR=\"" << config.arg[entry] << "\" : expected <NAME> [emulate] <SN> <SCALE>";
           logwrite( function, message.str() );
           error |= ERROR;
           continue;
@@ -1109,16 +1109,16 @@ namespace Slicecam {
         try {
           const std::string idx   = tokens.at(0);                          // name of this camera is map index
 
-          if ( tokens.at(1) == "emulate" ) {
-            this->camera.andor[idx] = std::make_shared<Andor::Interface>(  tokens.at(0)=="L" ? 1001 : 1002  );  // create an Andor::Interface pointer in the map
+          if ( tokens.size() > 2 && tokens.at(1) == "emulate" ) {
+            this->camera.andor[idx] = std::make_shared<Andor::Interface>( std::stoi(tokens.at(2) ) );  // create an Andor::Interface pointer in the map
           }
           else {
             this->camera.andor[idx] = std::make_shared<Andor::Interface>();  // create an Andor::Interface pointer in the map
           }
 
           int sn;
-          if ( tokens.at(1) == "emulate" ) {
-            sn=( tokens.at(0)=="L" ? 1 : 2 );
+          if ( tokens.size() > 2 && tokens.at(1) == "emulate" ) {
+            sn=std::stoi(tokens.at(2));
             this->camera.andor[idx]->andor_emulator( true );
           }
           else {
@@ -1127,7 +1127,7 @@ namespace Slicecam {
           }
           this->camera.andor[idx]->camera_info.camera_name   = idx;
           this->camera.andor[idx]->camera_info.serial_number = sn;
-          this->camera.andor[idx]->camera_info.pixel_scale   = std::stod( tokens.at(2) );
+          if ( tokens.size() > 3 ) this->camera.andor[idx]->camera_info.pixel_scale   = std::stod( tokens.at(3) );
         }
         catch( const std::exception &e ) {
           message.str(""); message << "ERROR parsing \"" << config.arg[entry] << "\": " << e.what();
