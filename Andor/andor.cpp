@@ -295,6 +295,7 @@ namespace Andor {
       case DRV_IDLE:                 status_msg = "IDLE";                                       break;
       case DRV_TEMPCYCLE:            status_msg = "executing temperature cycle";                break;
       case DRV_ACQUIRING:            status_msg = "acquisition in progress";                    break;
+      case DRV_NOT_INITIALIZED:      status_msg = "ERROR not initialized";                      break;
       case DRV_ACCUM_TIME_NOT_MET:   status_msg = "ERROR unable to meet accumulate cycle time"; break;
       case DRV_KINETIC_TIME_NOT_MET: status_msg = "ERROR unable to meet kinetic cycle time";    break;
       case DRV_ERROR_ACK:            status_msg = "ERROR unable to communicate with card";      break;
@@ -951,7 +952,7 @@ namespace Andor {
       default:            message << "ERROR: unknown error " << ret;                 break;
     }
 
-    logwrite( function, message.str() );
+    if ( !message.str().empty() ) logwrite( function, message.str() );
 
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
@@ -1451,6 +1452,34 @@ namespace Andor {
   /***** Andor::SDK::_WaitForAcquisition **************************************/
 
 
+  /***** Andor::SDK::_WaitForAcquisitionTimeOut *******************************/
+  /**
+   * @brief      wrapper for Andor SDK WaitForAcquisitionTimeOut
+   * @details    WaitForAcquisitionTimeOut can be called after an acquisition
+   *             is started using StartAcquisition to put the calling thread
+   *             to sleep until an Acquisition Event occurs.
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long SDK::_WaitForAcquisitionTimeOut( int timeout ) {
+    std::string function = "Andor::SDK::_WaitForAcquisitionTimeOut";
+    std::stringstream message;
+
+    unsigned int ret = WaitForAcquisitionTimeOut(timeout);
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         /* silent on success */                 break;
+      case DRV_NO_NEW_DATA:     /* silent on cancel  */                 break;
+      default:                  message << "ERROR unrecognized return code " << ret;
+    }
+
+    if ( !message.str().empty() ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_WaitForAcquisitionTimeOut *******************************/
+
+
   /***** Andor::SDK::_WaitForAcquisitionByHandleTimeOut ***********************/
   /**
    * @brief      wrapper for Andor SDK WaitForAcquisitionByHandleTimeOut
@@ -1482,63 +1511,34 @@ namespace Andor {
   /***** Andor::SDK::_WaitForAcquisitionByHandleTimeOut ***********************/
 
 
-  /***** Andor::Interface::open ***********************************************/
+  /***** Andor::Interface::get_handlemap **************************************/
   /**
-   * @brief      open a connection to the Andor
-   * @param[in]  args  Optional arg is the camera serial number to open. If not
-   *                   specified then open the first device found.
-   * @return     ERROR or NO_ERROR
+   * @brief      returns a map of camera handles indexed by serial number
+   * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::open( std::string args ) {
-    std::string function = "Andor::Interface::open";
+  long Interface::get_handlemap( std::map<at_32, at_32> &handlemap ) {
+    std::string function = "Andor::Interface::get_handlemap";
     std::stringstream message;
-    long error=NO_ERROR;
-    at_32 ncameras=0;          // number of cameras
-    int index=-1;              // camera index number {0,1,2,...}
-    int serial=-1;             // camera serial number
 
-    // If there was an argument then get the camera index from it
-    //
-    if ( !args.empty() ) {
-      try { serial = std::stoi( args ); }
-      catch ( const std::exception &e ) {
-        message.str(""); message << "ERROR parsing serial number " << args << ": " << e.what();
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
-    else index=0;    // no serial number opens the first (only?) device
-
+    at_32 ncameras=0;          // number of installed cameras
     char info[128];
+    long error;
+
+    // just FYI, really
+    //
     error = ( andor ? andor->_GetVersionInfo( AT_SDKVersion, info, 128 ) : ERROR );
     if ( error == NO_ERROR ) {
       this->camera_info.sdk_version = std::string(info);
       message.str(""); message << "SDK version " << this->camera_info.sdk_version;
       logwrite( function, message.str() );
     }
-
-    // Initialize the Andor SDK
-    //
-    logwrite( function, "initializing Andor SDK" );
-    error = ( andor ? andor->_Initialize() : ERROR );
-
-    if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR initializing Andor SDK" );
-      return error;
-    }
-
     error = ( andor ? andor->_GetVersionInfo( AT_DeviceDriverVersion, info, 128 ) : ERROR );
     if ( error == NO_ERROR ) {
       this->camera_info.driver_version = std::string(info);
       message.str(""); message << "Device Driver version " << this->camera_info.driver_version;
       logwrite( function, message.str() );
     }
-
-    // The Andor SDK takes several seconds to initialize but returns
-    // immediately, so one has to actually wait some period of time.
-    //
-    std::this_thread::sleep_for( std::chrono::seconds(3) );
 
     // Get the number of installed cameras
     //
@@ -1549,48 +1549,83 @@ namespace Andor {
     }
     else logwrite( function, "ERROR reading number of cameras" );
 
-    // Get the serial numbers of all installed cameras
+    // Get the serial numbers of all installed cameras. To do that you must
+    // set the handle and Initialize it; after the s/n has been read it
+    // can be closed.
     //
-    for ( int idx=0; idx < ncameras; idx++ ) {
+    for ( at_32 index=0; index < ncameras; index++ ) {
       int sn;
-      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( idx, this->handle ) : ERROR );
-      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( sn ) : ERROR );
+      at_32 handle;
+      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( index, handle ) : ERROR );
+      if (error==NO_ERROR) error = ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );
       if (error==NO_ERROR) {
-        this->device_map[sn] = idx;
-        message.str(""); message << "found s/n " << sn << " index " << idx;
+        long init = ( andor ? andor->_Initialize() : ERROR );
+        // If this handle cannot be initialized then someone else is already using it
+        // and it's not an option for me -- move on.
+        //
+        if (init==ERROR) {
+          logwrite( function, "handle "+std::to_string(handle)+" busy, trying next handle");
+          continue;
+        }
+      }
+      // otherwise the handle has been Initialized so read the s/n
+      //
+      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( sn ) : ERROR );
+
+      // save this handle to a map indexed by serial number
+      //
+      if (error==NO_ERROR) {
+        handlemap[sn] = handle;
+        message.str(""); message << "found s/n " << sn << " with handle " << handle;
         logwrite( function, message.str() );
       }
+
+      // close this camera handle
+      //
+      ShutDown();
     }
 
-    // Get the index for the requested serial number, if requested.
-    //
-    if ( serial != -1 ) {
-      if ( this->device_map.find( serial ) != this->device_map.end() ) {
-        index = this->device_map[serial];
-      }
-      else {
-        message.str(""); message << "ERROR requested serial number " << serial << " not found";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
+    message.str(""); message << ( error ? "ERROR" : "successfully" )
+                             << " mapped " << handlemap.size() << " camera handle(s)";
+    logwrite( function, message.str() );
 
-    // Set the current camera handle
+    return error;
+  }
+  /***** Andor::Interface::initialize_handles *********************************/
+
+
+  /***** Andor::Interface::open ***********************************************/
+  /**
+   * @brief      open a connection to the Andor
+   * @details    This opens a camera by handle so in order to know that, you need
+   *             to have called Interface::initialize_handles() first.
+   * @param[in]  handle_in  the camera handle to open
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::open( int handle_in ) {
+    std::string function = "Andor::Interface::open";
+    std::stringstream message;
+    long error=NO_ERROR;
+
+    this->_handle = handle_in;
+
+    // Set the handle and initialize the SDK for this camera
     //
-    if (error==NO_ERROR) {logwrite(function,"GetCameraHandle");error = ( andor ? andor->_GetCameraHandle( index, this->handle ) : ERROR );}
-    if (error==NO_ERROR) {logwrite(function,"SetCurrentCamera");error = ( andor ? andor->_SetCurrentCamera( this->handle ) : ERROR );}
+    if (error==NO_ERROR) error = ( andor ? andor->_SetCurrentCamera( this->_handle ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_Initialize() : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( this->camera_info.serial_number ) : ERROR );
+
     if (error!=NO_ERROR) {
-      message.str(""); message << "ERROR setting camera handle for camera " << index;
+      message.str(""); message << "ERROR initializing camera s/n " << serial << " handle " << this->_handle;
       logwrite( function, message.str() );
       return error;
     }
 
-    error = ( andor ? andor->_GetCameraSerialNumber( this->camera_info.serial_number ) : ERROR );
-
-    message.str(""); message << "opened s/n " << this->camera_info.serial_number << " index " << index;
-    logwrite( function, message.str() );
-
     this->is_andor_open = true;
+
+    message.str(""); message << "opened s/n " << this->camera_info.serial_number << " handle " << this->_handle;
+    logwrite( function, message.str() );
 
     // collect camera information, set unity gain, close shutter
     //
@@ -1669,6 +1704,8 @@ namespace Andor {
     this->is_andor_open=false;
     ShutDown();
 
+    std::lock_guard<std::mutex> lock(image_data_mutex);
+
     if ( this->image_data != nullptr ) {
       delete[] this->image_data;
       this->image_data = nullptr;
@@ -1677,6 +1714,22 @@ namespace Andor {
     return NO_ERROR;
   }
   /***** Andor::Interface::close **********************************************/
+
+
+  /***** Andor::Interface::select_camera **************************************/
+  /**
+   * @brief      select camera by setting the camera handle
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::select_camera( at_32 handle ) {
+    if ( ! this->is_andor_open ) {
+      logwrite( "Andor::Interface::selct_camera", "ERROR camera handle "+std::to_string(handle)+" not open" );
+      return ERROR;
+    }
+    return ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );
+  }
+  /***** Andor::Interface::select_camera **************************************/
 
 
   /***** Andor::Interface::start_acquisition **********************************/
@@ -1693,6 +1746,10 @@ namespace Andor {
       logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     long error = ( andor ? andor->_StartAcquisition() : ERROR );
 
@@ -1765,6 +1822,10 @@ namespace Andor {
       logwrite( function, "ERROR expected { auto open close }" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     // stop acquiring
     //
@@ -2823,7 +2884,7 @@ namespace Andor {
       return ERROR;
     }
 
-    long error = ( andor ? andor->_WaitForAcquisitionByHandleTimeOut( this->handle, timeout ) : ERROR );
+    long error = ( andor ? andor->_WaitForAcquisitionByHandleTimeOut( this->_handle, timeout ) : ERROR );
 
     return error;
   }
@@ -2881,6 +2942,57 @@ namespace Andor {
   /***** Andor::Interface::get_recent *****************************************/
 
 
+  /***** Andor::Interface::get_single *****************************************/
+  /**
+   * @brief      get a single frame
+   * @param[in]  timeout  timeout in msec
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_single( int timeout ) {
+    std::string function = "Andor::Interface::get_single";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
+      return ERROR;
+    }
+
+    // Make sure the camera is in single scan mode
+    //
+    if ( this->camera_info.acqmode != 1 ) {
+      logwrite( function, "ERROR not in single scan mode" );
+      return ERROR;
+    }
+
+    // Wait for acquisition, this camera, with timeout
+    //
+    error = this->wait_for_acquisition(timeout);
+
+    // Get the acquired image
+    //
+    std::lock_guard<std::mutex> lock( image_data_mutex );
+    if ( this->image_data == nullptr ) {
+      logwrite( function, "ERROR image_data buffer not initialized: no image saved" );
+      return ERROR;
+    }
+
+    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
+
+    // Store the exposure start time
+    //
+    timespec timenow             = Time::getTimeNow();         // get the time NOW
+    this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+    this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
+
+//  if (error==NO_ERROR) error = sdk._GetTemperature();
+
+    return error;
+  }
+  /***** Andor::Interface::get_single *****************************************/
+
+
   /***** Andor::Interface::acquire_one ****************************************/
   /**
    * @brief      acquire a single scan single frame
@@ -2892,6 +3004,10 @@ namespace Andor {
     std::string function = "Andor::Interface::acquire_one";
     std::stringstream message;
     long error = NO_ERROR;
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     if ( ! this->is_andor_open ) {
       logwrite( function, "ERROR camera not open" );

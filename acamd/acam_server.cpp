@@ -608,8 +608,12 @@ namespace Acam {
       ret = NOTHING;
       std::string retstring;
 
-      if ( cmd == "help" || cmd == "?" ) {
-                      for ( const auto &s : ACAMD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+      if ( cmd == "-h" || cmd == "--help" || cmd == "help" || cmd == "?" ) {
+                      retstring="acam { <CMD> } [<ARG>...]\n";
+                      retstring.append( "  where <CMD> is one of:\n" );
+                      for ( const auto &s : ACAMD_SYNTAX ) {
+                        retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
+                      }
                       ret = HELP;
       }
       else

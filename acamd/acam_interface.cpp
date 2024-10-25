@@ -76,7 +76,7 @@ namespace Acam {
    * @return     ERROR or NO_ERROR
    * 
    */
-  long Camera::open( std::string args ) {
+  long Camera::open( int sn ) {
     std::string function = "Acam::Camera::open";
     std::stringstream message;
     long error=NO_ERROR;
@@ -87,7 +87,17 @@ namespace Acam {
       logwrite( function, "already initialized" );
     }
     else {
-      error = this->andor.open( args );
+      if ( this->handlemap.size() == 0 ) {
+        error = this->andor.get_handlemap( this->handlemap );
+      }
+      if ( this->handlemap.find(sn) == this->handlemap.end() ) {
+        message.str(""); message << "ERROR no camera handle found for requested s/n " << sn;
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+      at_32 handle = this->handlemap[sn];
+
+      error = this->andor.open( handle );
     }
 
     // Setup camera for continuous readout
@@ -102,7 +112,8 @@ namespace Acam {
     error |= this->andor.set_shutter( "open" );        // shutter always open
     error |= this->set_exptime(1);
 
-    logwrite( function, (error==NO_ERROR ? "camera open" : "ERROR opening camera") );
+    message.str(""); message << ( error==ERROR ? "ERROR opening" : "opened" ) << " camera s/n " << sn;
+    logwrite( function, message.str() );
 
     return error;
   }
@@ -1379,30 +1390,15 @@ namespace Acam {
    *
    */
   void Interface::get_external_telemetry() {
-
-    // Instantiate a client to communicate with each daemon,
-    // constructed with no name, newline termination on command writes,
-    // and JEOF termination on reply reads.
+    // Loop through each configured telemetry provider. This requests
+    // their telemetry which is returned as a serialized json string
+    // held in retstring.
     //
-    Common::DaemonClient jclient("", "\n", JEOF );
-
-    // Loop through each configured telemetry provider, which is a map of
-    // ports indexed by daemon name, both of which are used to update
-    // the jclient object.
-    //
-    // Send the command "sendtelem" to each daemon and read back the reply into
-    // retstring, which will be the serialized JSON telemetry message.
-    //
-    // handle_json_message() will parse the reply and set the FITS header
-    // keys in the telemkeys database.
+    // handle_json_message() will parse the serialized json string.
     //
     std::string retstring;
-    for ( const auto &[name, port] : this->telemetry_providers ) {
-      jclient.set_name(name);
-      jclient.set_port(port);
-      jclient.connect();
-      jclient.command("sendtelem", retstring);
-      jclient.disconnect();
+    for ( const auto &provider : this->telemetry_providers ) {
+      Common::collect_telemetry( provider, retstring );
       handle_json_message(retstring);
     }
     return;
@@ -1814,7 +1810,7 @@ namespace Acam {
             return ERROR;
           }
         }
-        // If one arg is camera then the following args are passed to the camera
+        // If one arg is camera then the following arg is the serial number
         //
         if ( arglist[i] == "camera" ) {
           component = arglist[i]; ccount++;
@@ -1861,9 +1857,20 @@ namespace Acam {
       // If serial number not specified as an arg then open the s/n specified
       // in the config file.
       //
-      if ( camarg.empty() ) camarg = std::to_string( this->camera.andor.camera_info.serial_number );
+      int sn;
+      if ( camarg.empty() ) sn = this->camera.andor.camera_info.serial_number;
+      else {
+        try {
+          sn = std::stoi( camarg );
+        }
+        catch( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing serial number from \"" << camarg << "\": " << e.what();
+          logwrite( function, message.str() );
+          error = ERROR;
+        }
+      }
 
-      if ( this->camera.open( camarg ) == NO_ERROR ) {
+      if ( error==NO_ERROR && this->camera.open( sn ) == NO_ERROR ) {
         error |= this->framegrab( "start", retstring );   // start frame grabbing if open succeeds
       }
       else error=ERROR;
@@ -4225,7 +4232,8 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "AMPTYPE",  this->camera.andor.camera_info.amptypestr, "CCD amplifier type" );
     this->camera.fitsinfo.fitskeys.addkey( "CCDGAIN",  this->camera.andor.camera_info.gain, "CCD amplifier gain" );
 
-    this->camera.fitsinfo.fitskeys.addkey( "GAIN",     1, "e-/ADU" );
+    this->camera.fitsinfo.fitskeys.addkey( "GAIN",     1, "e-/ADU fixed" );
+    this->camera.fitsinfo.fitskeys.addkey( "SATURATE", 65535, "saturation level fixed by 16 bit readout" );
 
     this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE",  this->camera.andor.camera_info.pixel_scale, "arcsec per pixel" );
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
@@ -4233,7 +4241,6 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
     this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
     this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  angle_scope, "Cassegrain ring angle" );
-    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",   NAN, "" );
     this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );

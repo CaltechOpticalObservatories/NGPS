@@ -124,6 +124,25 @@ namespace Slicecam {
       return ERROR;
     }
 
+    // Get a map of camera handles, indexed by serial number.
+    // This must be called before open because open uses handles.
+    //
+    if ( this->handlemap.size() == 0 ) {
+      error = this->andor.begin()->second->get_handlemap( this->handlemap );
+    }
+
+    // make sure each configured Andor has an associated handle for his s/n
+    //
+    for ( const auto &pair : this->andor ) {
+      auto it = this->handlemap.find(pair.second->camera_info.serial_number);
+      if ( it == this->handlemap.end() ) {
+        message.str(""); message << "ERROR no camera handle found for s/n " << pair.second->camera_info.serial_number;
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+      pair.second->camera_info.handle = this->handlemap[pair.second->camera_info.serial_number];
+    }
+
     long ret;
     // Loop through all defined Andors
     //
@@ -135,7 +154,7 @@ namespace Slicecam {
       // otherwise, open this camera if not already open
       //
       if ( !pair.second->is_open() ) {
-        if ( ( ret=pair.second->open( args )) != NO_ERROR ) {
+        if ( ( ret=pair.second->open( pair.second->camera_info.handle )) != NO_ERROR ) {
           message.str(""); message << "ERROR opening slicecam " << pair.second->camera_info.camera_name
                                    << " S/N " << pair.second->camera_info.serial_number;
           logwrite( function, message.str() );
@@ -150,7 +169,7 @@ namespace Slicecam {
       error |= pair.second->set_vsspeed( 4.33 );          // vertical shift speed
       error |= pair.second->set_hsspeed( 30.0 );          // horizontal shift speed
       error |= pair.second->set_read_mode( 4 );           // image mode
-      error |= pair.second->set_acquisition_mode( 5 );    // run till abort
+      error |= pair.second->set_acquisition_mode( 1 );    // single scan
       error |= pair.second->set_frame_transfer( "off" );  // disable Frame Transfer mode
       error |= pair.second->set_kinetic_cycle_time( 0 );
       error |= pair.second->set_shutter( "open" );        // shutter always open
@@ -211,6 +230,11 @@ namespace Slicecam {
    * 
    */
   long Camera::start_acquisition() {
+    long error=NO_ERROR;
+    for ( const auto &pair : this->andor ) {
+      error |= pair.second->start_acquisition();
+      std::this_thread::sleep_for( std::chrono::milliseconds(1000) );
+    }
     return ERROR;
   }
   /***** Slicecam::Camera::start_acquisition **********************************/
@@ -1627,10 +1651,8 @@ namespace Slicecam {
     std::unique_lock<std::mutex> lock( this->framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
       BoolState loop_running( this->is_framegrab_running );    // sets state true here, clears when it goes out of scope
-      if (error==NO_ERROR) error = this->start_acquisition_threaded();
-      do {
-        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
 
+      do {
         // they will both have the same exptime so just get the first one
         //
         double exptime=0;
@@ -1639,7 +1661,13 @@ namespace Slicecam {
         }
         if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
 
-        if (error==NO_ERROR) error = this->get_recent_threaded(3000);       // grab frame from both cameras
+        // Trigger and wait for acquisition on both cameras.
+        // Unfortunately the SDK can only do this one at a time within the same process.
+        //
+        for ( const auto &pair : this->camera.andor ) {
+          pair.second->acquire_one();
+        }
+
         if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
         if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
         if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
@@ -1667,138 +1695,6 @@ namespace Slicecam {
     return;
   }
   /***** Slicecam::Interface::dothread_framegrab ******************************/
-
-
-  /***** Slicecam::Interface::start_acquisition_threaded **********************/
-  /**
-   * @brief      calls start_acquisition for each andor map element
-   * @details    Loops through the andor STL map and spawns a thread for each
-   *             call, then waits for all threads to complete.
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::start_acquisition_threaded() {
-
-    // create a container to hold the threads
-    //
-    std::vector<std::thread> threads;
-
-    // Loop through all elements in the andor map and create an start_acquisition thread for each.
-    // The first arg specifies the member function pointer for start_acquisition, and
-    // the second arg is the instance on which start_acquisition should be called.
-    //
-    for ( const auto &pair : this->camera.andor ) {
-      threads.emplace_back( &Andor::Interface::start_acquisition, pair.second );
-    }
-
-    // Wait for all threads to complete by joining them to this main thread,
-    // not to each other.
-    //
-    for ( auto &thread : threads ) {
-      if ( thread.joinable() ) {
-        thread.join();
-      }
-    }
-
-    // Loop again to see if any acquie_one threads had an error. This doesn't
-    // need threads because it's only checking a state, so it's fast.
-    //
-    long error = NO_ERROR;
-    for ( const auto &pair : this->camera.andor ) {
-      error |= pair.second->read_error();
-    }
-
-    return error;
-  }
-  /***** Slicecam::Interface::start_acquisition_threaded **********************/
-
-
-  /***** Slicecam::Interface::get_recent_threaded *****************************/
-  /**
-   * @brief      calls get_recent for each andor map element
-   * @details    Loops through the andor STL map and spawns a thread for each
-   *             call, then waits for all threads to complete.
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::get_recent_threaded(int timeoutms) {
-
-    // create a container to hold the threads
-    //
-    std::vector<std::thread> threads;
-
-    // Loop through all elements in the andor map and create an get_recent thread for each.
-    // The first arg specifies the member function pointer for get_recent, and
-    // the second arg is the instance on which get_recent should be called.
-    //
-    for ( const auto &pair : this->camera.andor ) {
-      threads.emplace_back( &Andor::Interface::get_recent, pair.second, timeoutms );
-    }
-
-    // Wait for all threads to complete by joining them to this main thread,
-    // not to each other.
-    //
-    for ( auto &thread : threads ) {
-      if ( thread.joinable() ) {
-        thread.join();
-      }
-    }
-
-    // Loop again to see if any acquie_one threads had an error. This doesn't
-    // need threads because it's only checking a state, so it's fast.
-    //
-    long error = NO_ERROR;
-    for ( const auto &pair : this->camera.andor ) {
-      error |= pair.second->read_error();
-    }
-
-    return error;
-  }
-  /***** Slicecam::Interface::get_recent_threaded *****************************/
-
-
-  /***** Slicecam::Interface::acquire_one_threaded ****************************/
-  /**
-   * @brief      calls acquire_one for each andor map element
-   * @details    Loops through the andor STL map and spawns a thread for each
-   *             call, then waits for all threads to complete.
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::acquire_one_threaded() {
-
-    // create a container to hold the threads
-    //
-    std::vector<std::thread> threads;
-
-    // Loop through all elements in the andor map and create an acquire_one thread for each.
-    // The first arg specifies the member function pointer for acquire_one, and
-    // the second arg is the instance on which acquire_one should be called.
-    //
-    for ( const auto &pair : this->camera.andor ) {
-      threads.emplace_back( &Andor::Interface::acquire_one, pair.second );
-    }
-
-    // Wait for all threads to complete by joining them to this main thread,
-    // not to each other.
-    //
-    for ( auto &thread : threads ) {
-      if ( thread.joinable() ) {
-        thread.join();
-      }
-    }
-
-    // Loop again to see if any acquie_one threads had an error. This doesn't
-    // need threads because it's only checking a state, so it's fast.
-    //
-    long error = NO_ERROR;
-    for ( const auto &pair : this->camera.andor ) {
-      error |= pair.second->read_error();
-    }
-
-    return error;
-  }
-  /***** Slicecam::Interface::acquire_one_threaded ****************************/
 
 
   /***** Slicecam::Interface::collect_header_info_threaded ********************/
@@ -2195,6 +2091,7 @@ namespace Slicecam {
       retstring.append( "   emgainrange\n" );
       retstring.append( "   fpoffsets ? | <from> <to> <ra> <dec> <angle> (see help for units)\n" );
       retstring.append( "   getemgain\n" );
+      retstring.append( "   handlemap [?]\n" );
       retstring.append( "   isguiding [ ? ]\n" );
       retstring.append( "   offsetgoal ? | <dRA> <dDEC>\n" );
       retstring.append( "   sleep\n" );
@@ -2343,6 +2240,29 @@ namespace Slicecam {
       retstring = std::to_string( gain );
     }
     else
+    if ( testname == "handlemap" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = SLICECAMD_TEST;
+        retstring.append( " handlemap\n" );
+        retstring.append( "  Refreshes the camera handle map. Use with caution.\n" );
+        retstring.append( "  Cameras must be closed first.\n" );
+        return HELP;
+      }
+      // make sure no cameras are open
+      //
+      for ( const auto &pair : this->camera.andor ) {
+        if ( pair.second->is_open() ) {
+          message.str(""); message << "ERROR slicecam " << pair.second->camera_info.camera_name << " is open";
+          logwrite( function, message.str() );
+          retstring="not_while_camera_open";
+          return ERROR;
+        }
+      }
+      // if I'm here then all closed. erase the map and get a new one
+      //
+      error = this->camera.init_handlemap();
+    }
+    else
     if ( testname == "isguiding" ) {
       if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = SLICECAMD_TEST;
@@ -2398,7 +2318,7 @@ namespace Slicecam {
     }
     else
     if ( testname == "sliceparams" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+      if ( tokens.size() > 1 && tokens[2] == "?" ) {
         retstring = SLICECAMD_TEST;
         retstring.append( " sliceparams\n" );
         retstring.append( "  Show the slicecam params calculated by Python getSlicevParams function.\n" );

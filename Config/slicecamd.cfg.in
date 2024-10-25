@@ -29,10 +29,10 @@ ACAMD_PORT=@ACAMD_BLK_PORT@
 #       If emulated, the serial number will be internally
 #       generated as 1001 for L and 1002 for R.
 #
-ANDOR=(L emulate 0.06)
-ANDOR=(R emulate 0.06)
-#ANDOR=(L 13452 0.06)
-#ANDOR=(R 13453 0.06)
+#ANDOR=(L emulate 0.06)
+#ANDOR=(R emulate 0.06)
+ANDOR=(L 14223 0.06)
+#ANDOR=(R 13452 0.06) # s/n for ACAM
 
 # PUSH_GUI_SETTINGS=<file>
 # This defines the shell script which pushes settings to the

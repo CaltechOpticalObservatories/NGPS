@@ -85,6 +85,7 @@ namespace Acam {
     private:
       uint16_t* image_data;
       int simsize;      /// for the sky simulator
+      std::map<at_32, at_32> handlemap;
 
     public:
       Camera() : image_data( nullptr ), simsize(1024) { };
@@ -98,7 +99,7 @@ namespace Acam {
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
 
       long emulator( std::string args, std::string &retstring );
-      long open( std::string args );
+      long open( int sn );
       long close();
       long start_acquisition();
       long get_frame();

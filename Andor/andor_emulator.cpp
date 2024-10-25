@@ -945,6 +945,21 @@ namespace Andor {
   /***** Andor::Emulator::_WaitForAcquisition *********************************/
 
 
+  /***** Andor::Emulator::_WaitForAcquisitionTimeOut **************************/
+  /**
+   * @brief      wrapper for Andor Sim WaitForAcquisitionTimeOut
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_WaitForAcquisitionTimeOut( int timeout ) {
+    std::string function = "Andor::Emulator::_WaitForAcquisitionTimeOut";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_WaitForAcquisitionTimeOut **************************/
+
+
   /***** Andor::Emulator::_WaitForAcquisitionByHandleTimeOut ******************/
   /**
    * @brief      wrapper for Andor Sim WaitForAcquisitionByHandleTimeOut

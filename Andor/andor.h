@@ -41,6 +41,7 @@ namespace Andor {
     private:
     public:
       int serial_number;
+      at_32 handle;                                ///< this camera handle
       std::string camera_name;                     ///< a friendly camera name for humans
       int acqmode;                                 ///< acquisition mode
       std::string acqmodestr;
@@ -173,7 +174,7 @@ namespace Andor {
       virtual long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) = 0;
       virtual long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) = 0;
       virtual long _GetAvailableCameras( at_32 &number ) = 0;
-      virtual long _GetCameraHandle( int index, at_32 &handle ) = 0;
+      virtual long _GetCameraHandle( at_32 index, at_32 &handle ) = 0;
       virtual long _GetCameraSerialNumber( int &number ) = 0;
       virtual long _GetDetector( int &xpix, int &ypix ) = 0;
       virtual long _GetStatus( std::string &status ) = 0;
@@ -214,6 +215,7 @@ namespace Andor {
       virtual long _SetShutter( int type, int mode, int closetime, int opentime ) = 0;
       virtual long _AbortAcquisition( ) = 0;
       virtual long _StartAcquisition( ) = 0;
+      virtual long _WaitForAcquisitionTimeOut( int timeout ) = 0;
       virtual long _WaitForAcquisition( ) = 0;
       virtual long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) = 0;
   };
@@ -233,7 +235,7 @@ namespace Andor {
       long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
       long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) override;
       long _GetAvailableCameras( at_32 &number ) override;
-      long _GetCameraHandle( int index, at_32 &handle ) override;
+      long _GetCameraHandle( at_32 index, at_32 &handle ) override;
       long _GetCameraSerialNumber( int &number ) override;
       long _GetDetector( int &xpix, int &ypix ) override;
       long _GetStatus( std::string &status ) override;
@@ -274,6 +276,7 @@ namespace Andor {
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
       long _AbortAcquisition( ) override;
       long _StartAcquisition( ) override;
+      long _WaitForAcquisitionTimeOut( int timeout ) override;
       long _WaitForAcquisition( ) override;
       long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) override;
   };
@@ -304,7 +307,7 @@ namespace Andor {
       long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
       long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) override;
       long _GetAvailableCameras( at_32 &number ) override;
-      long _GetCameraHandle( int index, at_32 &handle ) override;
+      long _GetCameraHandle( at_32 index, at_32 &handle ) override;
       long _GetCameraSerialNumber( int &number ) override;
       long _GetDetector( int &xpix, int &ypix ) override;
       long _GetStatus( std::string &status ) override;
@@ -345,6 +348,7 @@ namespace Andor {
       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
       long _AbortAcquisition( ) override;
       long _StartAcquisition( ) override;
+      long _WaitForAcquisitionTimeOut( int timeout ) override;
       long _WaitForAcquisition( ) override;
       long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) override;
 
@@ -375,8 +379,7 @@ namespace Andor {
       std::mutex image_data_mutex;
       unsigned short* image_data;
       std::atomic<bool> err;
-      std::map<int,int> device_map;  ///< map of device numbers indexed by serial number
-      at_32 handle;  ///< handle of the camera
+      at_32 _handle;  ///< handle of the camera
 
     public:
       Andor::SDK sdk;             ///< object for the real Andor SDK
@@ -389,7 +392,7 @@ namespace Andor {
        *
        */
       Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( false ),
-                    andor( &sdk ), image_data( nullptr ), err( false ), handle(-1), emulator( -1 ) { }
+                    andor( &sdk ), image_data( nullptr ), err( false ), _handle(-1), emulator( -1 ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /***** Andor::Interface::Interface **************************************/
@@ -398,7 +401,7 @@ namespace Andor {
        *
        */
       Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
-                            andor( &sdk ), image_data( nullptr ), err( false ), handle(-1), emulator( sn ) { }
+                            andor( &sdk ), image_data( nullptr ), err( false ), _handle(-1), emulator( sn ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /**
@@ -469,12 +472,16 @@ namespace Andor {
 
       inline bool is_open() { return this->is_andor_open; }
 
+      inline at_32 handle() { return this->_handle; }
+
       long simulate_frame( std::string name_in );
       long simulate_frame( std::string name_in, const bool ismex, const int simsize );
 
       long simandor( std::string args, std::string &retstring );
-      long open( std::string args );
+      long get_handlemap( std::map<at_32, at_32> &handlemap );
+      long open( at_32 handle_in );
       long close();
+      long select_camera( at_32 handle );
       long test();
       long set_shutter( const std::string &state );
       long set_shutter( const int type, const int mode, const int closingtime, const int openingtime );
@@ -485,6 +492,7 @@ namespace Andor {
       long read_exptime( float &exptime, float &acctime, float &kintime );
       long wait_for_acquisition( int timeout );
       long get_recent(int timeout);
+      long get_single(int timeout);
       long acquire_one();
       long save_acquired( std::string wcs_in, std::string &imgname );
       long save_acquired( std::string wcs_in, std::string &imgname, const int simsize );

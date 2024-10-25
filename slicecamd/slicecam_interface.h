@@ -63,6 +63,7 @@ namespace Slicecam {
     private:
       uint16_t* image_data;
       int simsize;      /// for the sky simulator
+      std::map<at_32, at_32> handlemap;
 
     public:
       Camera() : image_data( nullptr ), simsize(1024) { };
@@ -70,10 +71,17 @@ namespace Slicecam {
       FITS_file fits_file;        /// instantiate a FITS container object
       FitsInfo  fitsinfo;
 
+      std::mutex framegrab_mutex;
+
       std::map<std::string, std::shared_ptr<Andor::Interface>> andor;     ///< create a container for Andor::Interface objects
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
+
+      inline long init_handlemap() {
+        this->handlemap.clear();
+        return this->andor.begin()->second->get_handlemap( this->handlemap );
+      }
 
       long emulator( std::string args, std::string &retstring );
       long open( std::string which, std::string args );
@@ -95,82 +103,8 @@ namespace Slicecam {
       long set_exptime( std::string which, float &&val );
       long speed( std::string args, std::string &retstring );
       long temperature( std::string args, std::string &retstring );
-
-      /**
-       * This template function declares a function "execute_in_threads" which
-       * accepts a function name of type Func and a variable argument list args.
-       * This uses a trailing return type " -> " to set the return type of
-       * execute_in_threads based on the return type of invoking func with the
-       * provided arg list.
-       *
-       */
-/****
-      template <typename Func, typename... Args>
-      auto execute_andor_thread( Func func, Args&&... args ) -> decltype( ( std::declval<Andor::Interface>().*func )( std::forward<Args>(args)... ) ) {
-
-        // Determine the return type of func
-        //
-        using ReturnType = decltype( ( std::declval<Andor::Interface>().*func )( std::forward<Args>(args)... ) );
-    
-        // Vector to hold futures
-        //
-        std::vector<std::future<ReturnType>> futures;
-
-        // Launch async tasks
-        //
-        for ( const auto &pair : this->andor ) {
-          futures.push_back( std::async( std::launch::async, [pair, func, &args...]() -> ReturnType {
-            return( pair.second.get()->*func )( std::forward<Args>(args)... );
-          } ) );
-        }
-
-        // Aggregate results -- assumes the result can be OR'd
-        //
-        ReturnType result{};
-        for ( auto &future : futures ) {
-          result |= future.get();
-        }
-
-        return result;
-      }
-
-      void execute_in_threads( long (Interface::*func)(std::shared_ptr<Andor::Interface>)) {
-
-        // Vector to store threads
-        //
-        std::vector<std::thread> threads;
-
-        // Loop through the map and spawn a thread for each element
-        //
-        for ( const auto &pair : this->andor ) {
-          threads.emplace_back( [this, func, param=pair.second]() { (this->*func)(param); } );
-        }
-
-        // Join all threads to wait for their completion
-        //
-        for ( auto &th : threads ) {
-          if ( th.joinable() ) {
-            th.join();
-          }
-        }
-      }
-****/
   };
   /***** Slicecam::Camera *****************************************************/
-
-
-  /***** Slicecam::Telemetry **************************************************/
-  /**
-   * @class  Telemetry
-   * @brief  interface class for slicecam
-   *
-   * This class defines the interface for the slicecam system and
-   * contains the functions used to communicate with it.
-   *
-   */
-  class Telemetry {
-  };
-  /***** Slicecam::Telemetry **************************************************/
 
 
   /***** Slicecam::GUIManager *************************************************/
@@ -345,9 +279,6 @@ namespace Slicecam {
 
       static void dothread_fpoffset( Slicecam::Interface &iface );
       void dothread_framegrab( const std::string whattodo, const std::string sourcefile );
-      long start_acquisition_threaded();
-      long get_recent_threaded(int timeoutms);
-      long acquire_one_threaded();
       long collect_header_info_threaded();
   };
   /***** Slicecam::Interface **************************************************/
