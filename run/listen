@@ -7,4 +7,4 @@
 source /home/developer/Software/run/ngps-config
 source $SEQUENCERD_CONFIG
 
-listener $MESSAGEGROUP $MESSAGEPORT $1
+listener "$MESSAGEGROUP" "$MESSAGEPORT" "$@"

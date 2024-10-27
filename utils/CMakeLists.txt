@@ -48,5 +48,6 @@ add_executable(socksend
         )
 
 add_executable(listener
-        ${PROJECT_UTILS_DIR}/listener.c
+        ${PROJECT_UTILS_DIR}/listener.cpp
         )
+target_link_libraries( listener PRIVATE utilities )
