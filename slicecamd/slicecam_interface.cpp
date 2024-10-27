@@ -163,7 +163,8 @@ namespace Slicecam {
         }
       }
 
-      // Now set up for continuous readout
+      // Now set up for single scan readout -- cannot software-trigger acquisition to
+      // support continuous readout for multiple cameras in the same process.
       //
       error |= this->set_gain(pair.first, 2);
       error |= pair.second->set_vsspeed( 4.33 );          // vertical shift speed
@@ -221,59 +222,6 @@ namespace Slicecam {
     return error;
   }
   /***** Slicecam::Camera::close **********************************************/
-
-
-  /***** Slicecam::Camera::start_acquisition **********************************/
-  /**
-   * @brief      
-   * @return     ERROR or NO_ERROR
-   * 
-   */
-  long Camera::start_acquisition() {
-    long error=NO_ERROR;
-    for ( const auto &pair : this->andor ) {
-      error |= pair.second->start_acquisition();
-      std::this_thread::sleep_for( std::chrono::milliseconds(1000) );
-    }
-    return ERROR;
-  }
-  /***** Slicecam::Camera::start_acquisition **********************************/
-
-
-  /***** Slicecam::Camera::get_status *****************************************/
-  /**
-   * @brief      
-   * @return     ERROR or NO_ERROR
-   * 
-   */
-  long Camera::get_status() {
-    std::string function = "Slicecam::Camera::get_status";
-    std::stringstream message;
-    long error=NO_ERROR;
-
-    // If the STL map of Andors is empty then something went wrong
-    // with the configuration.
-    //
-    if ( this->andor.empty() ) {
-      logwrite( function, "ERROR no cameras defined" );
-      return ERROR;
-    }
-
-    // loop through all Andors, opening if not already open
-    //
-    for ( const auto &pair : this->andor ) {
-      long ret = pair.second->get_status();
-      if ( ret != NO_ERROR ) {
-        message.str(""); message << "ERROR getting status from slicecam " << pair.second->camera_info.camera_name
-                                 << " S/N " << pair.second->camera_info.serial_number;
-        logwrite( function, message.str() );
-        error = ret;  // preserve the error state for the return value
-      }
-    }
-
-    return error;
-  }
-  /***** Slicecam::Camera::get_status *****************************************/
 
 
   /***** Slicecam::Camera::bin ************************************************/
@@ -1521,6 +1469,9 @@ namespace Slicecam {
       return HELP;
     }
 
+    // No argument, or "status" will return the framegrab running state
+    // then return, no action.
+    //
     if ( args.empty() || args == "status" ) {
       retstring = ( this->is_framegrab_running.load() ? "true" : "false" );
       return NO_ERROR;
@@ -1533,6 +1484,9 @@ namespace Slicecam {
 
     std::string whattodo, sourcefile;
 
+    // First token is what to do (start, stop, one, saveone)
+    // and second token, if present, is an optional filename
+    //
     if ( tokens.size() > 0 ) whattodo   = tokens[0];
     if ( tokens.size() > 1 ) sourcefile = tokens[1];
     if ( tokens.size() > 2 ) {
@@ -1603,6 +1557,16 @@ namespace Slicecam {
     std::string function = "Slicecam::Interface::dothread_framegrab";
     std::stringstream message;
     long error = NO_ERROR;
+
+    // For any whattodo that will take an image, when running the Andor emulator,
+    // there must be a TCS (real or emulated) because TCS info is required for
+    // the Andor emulator to work.
+    //
+    if ( (whattodo=="start" || whattodo=="one" || whattodo=="saveone") &&
+         (this->camera.andor.begin()->second->is_emulated() && !this->tcs_online.load()) ) {
+      logwrite( function, "ERROR Andor emulator requires a TCS connection" );
+      return;
+    }
 
     if ( whattodo == "one" || whattodo == "saveone" ) {
       // Clear should_framegrab_run which means the framegrab loop should not run.
@@ -2190,7 +2154,7 @@ namespace Slicecam {
         retstring = SLICECAMD_TEST;
         retstring.append( " threadoffset\n" );
         retstring.append( "  Spawns a thread which calls a Python function.\n" );
-        error=HELP;
+        return HELP;
       }
       else {
         message.str(""); message << "spawning dothread_fpoffset: PyGILState=" << PyGILState_Check();
@@ -2207,7 +2171,7 @@ namespace Slicecam {
         retstring.append( " adchans\n" );
         retstring.append( "  Calls Andor SDK wrapper to return the number of AD converter channels\n" );
         retstring.append( "   available.\n" );
-        error=HELP;
+        return HELP;
       }
       else {
         int chans;
@@ -2268,7 +2232,7 @@ namespace Slicecam {
         retstring = SLICECAMD_TEST;
         retstring.append( " isguiding\n" );
         retstring.append( "  Return the acam guiding state\n" );
-        error=HELP;
+        return HELP;
       }
       bool is_guiding;
       error = this->get_acam_guide_state( is_guiding );
@@ -2281,7 +2245,7 @@ namespace Slicecam {
         retstring = SLICECAMD_TEST;
         retstring.append( " offsetgoal <dRA> <dDEC>\n" );
         retstring.append( "  \n" );
-        error=HELP;
+        return HELP;
       }
       if ( tokens.size() != 3 ) {
         logwrite( function, "ERROR expected <dRA> <dDEC>" );
@@ -2322,7 +2286,7 @@ namespace Slicecam {
         retstring = SLICECAMD_TEST;
         retstring.append( " sliceparams\n" );
         retstring.append( "  Show the slicecam params calculated by Python getSlicevParams function.\n" );
-        error=HELP;
+        return HELP;
       }
       // reads slicecam params into fpoffsets class
       this->fpoffsets.get_slicecam_params();
@@ -2415,7 +2379,6 @@ namespace Slicecam {
     bool was_framegrab_running = this->is_framegrab_running.load();
     if ( was_framegrab_running ) {
       std::string dontcare;
-logwrite(function,"[DEBUG] stopping framegrab");
       error = this->framegrab( "stop", dontcare );
     }
 
@@ -2425,7 +2388,6 @@ logwrite(function,"[DEBUG] stopping framegrab");
     //
     if ( was_framegrab_running ) {
       std::string dontcare;
-logwrite(function,"[DEBUG] starting framegrab");
       error = this->framegrab( "start", dontcare );
     }
 

@@ -808,7 +808,6 @@ namespace Acam {
   long Camera::write_frame( std::string source_file, std::string &outfile, const bool _tcs_online ) {
     std::string function = "Acam::Camera::write_frame";
     std::stringstream message;
-
     long error = NO_ERROR;
 
     // Nothing to do if not Andor image data
@@ -2249,6 +2248,9 @@ namespace Acam {
       return HELP;
     }
 
+    // No argument, or "status" will return the framegrab running state
+    // then return, no action.
+    //
     if ( args.empty() || args == "status" ) {
       retstring = ( this->is_framegrab_running.load() ? "true" : "false" );
       return NO_ERROR;
@@ -2261,6 +2263,9 @@ namespace Acam {
 
     std::string whattodo, sourcefile;
 
+    // First token is what to do (start, stop, one, saveone)
+    // and second token, if present, is an optional filename
+    //
     if ( tokens.size() > 0 ) whattodo   = tokens[0];
     if ( tokens.size() > 1 ) sourcefile = tokens[1];
     if ( tokens.size() > 2 ) {
@@ -2280,7 +2285,7 @@ namespace Acam {
     else this->set_imagename("");
 
     // Unless requresting a stop, if the TCS is not already open then
-    // initialize the connection // TODO
+    // initialize the connection. This includes start, one, saveone
     //
     if ( whattodo != "stop" && ! this->tcsd.client.is_open() ) {
       this->async.enqueue_and_log( function, "NOTICE: not connected to TCS" );
@@ -2288,6 +2293,8 @@ namespace Acam {
 //    this->tcs_online.store( true ); // TODO
     }
 
+    // Spawn a dothread_framegrab thread
+    //
     std::thread( dothread_framegrab, std::ref(*this), whattodo, sourcefile ).detach();
 
     // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes.
@@ -2325,6 +2332,16 @@ namespace Acam {
     std::string function = "Acam::Interface::dothread_framegrab";
     std::stringstream message;
     long error = NO_ERROR;
+
+    // For any whattodo that will take an image, when running the Andor emulator,
+    // there must be a TCS (real or emulated) because TCS info is required for
+    // the Andor emulator to work.
+    //
+    if ( (whattodo=="start" || whattodo=="one" || whattodo=="saveone") &&
+         (iface.camera.andor.is_emulated() && !iface.tcs_online.load()) ) {
+      logwrite( function, "ERROR Andor emulator requires a TCS connection" );
+      return;
+    }
 
     if ( whattodo == "one" || whattodo == "saveone" ) {
       // Clear should_framegrab_run which means the framegrab loop should not run.
@@ -3562,7 +3579,7 @@ namespace Acam {
         retstring = ACAMD_TEST;
         retstring.append( " threadoffset\n" );
         retstring.append( "  Spawns a thread which calls a Python function.\n" );
-        error=HELP;
+        return HELP;
       }
       else {
         message.str(""); message << "spawning dothread_fpoffset: PyGILState=" << PyGILState_Check();
@@ -3589,15 +3606,16 @@ namespace Acam {
         retstring.append( "  acquire         starts acquisition, and gets the acquired image\n" );
         retstring.append( "  adchans         return number of AD converter channels\n" );
         retstring.append( "  abort           aborts acquisition\n" );
-        retstring.append( "  acont [ n ]     switch to mode cont and acquire n continuous frame(s)\n" );
+        retstring.append( "  acont [<n>]     switch to mode cont and acquire n continuous frame(s)\n" );
         retstring.append( "  ft on|off       gets the most recent image\n" );
         retstring.append( "  getrecent       get recent image from camera\n" );
         retstring.append( "  mode ? | <m>    <m>=single | cont\n" );
+        retstring.append( "  open [?|<sn>]   open camera only, optional serial number <sn>\n" );
         retstring.append( "  shutter <s>     where <s> = open|close|auto\n" );
         retstring.append( "  shuttertimes    gets the shutter minimum opening closing times in ms\n" );
         retstring.append( "  start           starts acquisition\n" );
         retstring.append( "  status          Andor status\n" );
-        error=HELP;
+        return HELP;
       }
       else
       // --------------------------------
@@ -3635,7 +3653,7 @@ namespace Acam {
           retstring.append( " camera adchans\n" );
           retstring.append( "  Calls Andor SDK wrapper to return the number of AD converter channels\n" );
           retstring.append( "   available.\n" );
-          error=HELP;
+          return HELP;
         }
         else {
           int chans;
@@ -3718,7 +3736,7 @@ namespace Acam {
           retstring.append( " camera mode single | cont\n" );
           retstring.append( "  Sets Andor acquisition mode to single scan\n" );
           retstring.append( "  or continuous (run till abort).\n" );
-          error=HELP;
+          return HELP;
         }
         else
         if ( tokens[2] == "single" ) {
@@ -3736,6 +3754,35 @@ namespace Acam {
           error |= this->camera.andor.sdk._SetKineticCycleTime( 0 );
           error |= this->camera.andor.set_shutter( std::string("open") );  // shutter always open
         }
+      }
+      else
+      // --------------------------------
+      // camera open [ <sn> ]
+      //
+      if ( tokens[1] == "open" ) {
+        // help
+        if ( tokens.size() > 2 && tokens[2] == "?" ) {
+          retstring = ACAMD_TEST;
+          retstring.append( " camera open [ <sn> ]\n" );
+          retstring.append( "   Open camera only, optionally specify serial number <sn>.\n" );
+          retstring.append( "   Framegrabbng is not started.\n" );
+          return HELP;
+        }
+        // get the serial number, either from next token or from the class
+        int sn=-1;
+        if ( tokens.size() > 2 ) {
+          try { sn = std::stoi( tokens.at(2) ); }
+          catch( const std::exception &e ) {
+            message.str(""); message << "ERROR parsing requested serial number: " << e.what();
+            logwrite( function, message.str() );
+            retstring="invalid_argument";
+            return ERROR;
+          }
+        }
+        else sn = this->camera.andor.camera_info.serial_number;
+        message.str(""); message << "opening camera serial number " << sn;
+        logwrite( function, message.str() );
+        error = this->camera.open( sn );
       }
       else
       // --------------------------------
@@ -3794,7 +3841,7 @@ namespace Acam {
         retstring = ACAMD_TEST;
         retstring.append( " collect\n" );
         retstring.append( "  Gather information and add it to the internal keyword database.\n" );
-        error=HELP;
+        return HELP;
       }
       else error = this->collect_header_info();             // collect header information
     }
@@ -3807,7 +3854,7 @@ namespace Acam {
         retstring = ACAMD_TEST;
         retstring.append( " database\n" );
         retstring.append( "  Test save some stuff to the telemetry database.\n" );
-        error=HELP;
+        return HELP;
       }
       else {
         try {
@@ -3836,7 +3883,7 @@ namespace Acam {
         retstring.append( "  Stop or start a thread which monitors the telescope focus and\n" );
         retstring.append( "  updates GUIDER GUI when it changes. Anything else returns the\n" );
         retstring.append( "  running state of that thread.\n" );
-        error=HELP;
+        return HELP;
       }
       else
       if ( tokens.size() > 1 && tokens[1] == "start" ) {
@@ -4263,11 +4310,16 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_2",     (        cos( angle_acam * PI / 180. ) ), "" );
 
-    std::string retstring;
-    this->motion.filter("", retstring);
-    this->camera.fitsinfo.fitskeys.addkey( "FILTER", retstring, "ACAM filter name" );
-    this->motion.cover("", retstring);
-    this->camera.fitsinfo.fitskeys.addkey( "COVER", retstring, "ACAM cover position" );
+    // filter and cover keywords, always present,
+    // but not collected if the motion component isn't open
+    //
+    std::string filtername="unknown", coverpos="unknown";
+    if ( this->motion.is_open() ) {
+      this->motion.filter("", filtername);
+      this->motion.cover("", coverpos);
+    }
+    this->camera.fitsinfo.fitskeys.addkey( "FILTER", filtername, "ACAM filter name" );
+    this->camera.fitsinfo.fitskeys.addkey( "COVER", coverpos, "ACAM cover position" );
 
     return NO_ERROR;
   }

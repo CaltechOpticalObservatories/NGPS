@@ -88,9 +88,7 @@ namespace Slicecam {
       long close();
       long get_frame();
       long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
-      long get_status();
       long bin( std::string args, std::string &retstring );
-      long start_acquisition();
       long imflip( std::string args, std::string &retstring );
       long imrot( std::string args, std::string &retstring );
       long set_gain( int &gain );
