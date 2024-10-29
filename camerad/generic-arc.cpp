@@ -228,7 +228,16 @@ namespace AstroCam {
           {"I", "TCCD_I", "CCDTEMP", "I CCD temperature in Kelvin"},
           {"R", "TCCD_R", "CCDTEMP", "R CCD temperature in Kelvin"},
           {"G", "TCCD_G", "CCDTEMP", "G CCD temperature in Kelvin"},
-          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin"}
+          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin"},
+
+          {"I", "TCOLL_I", "COLTEMP", "I collimator temp in deg C"},
+          {"R", "TCOLL_R", "COLTEMP", "R collimator temp in deg C"},
+          {"G", "TCOLL_G", "COLTEMP", "G collimator temp in deg C"},
+
+          {"I", "TFOCUS_I", "FOCTEMP", "I focus temp in deg C"},
+          {"R", "TFOCUS_R", "FOCTEMP", "R focus temp in deg C"},
+          {"G", "TFOCUS_G", "FOCTEMP", "G focus temp in deg C"},
+          {"U", "TFOCUS_U", "FOCTEMP", "U focus temp in deg C"}
         };
         for ( const auto &keyinfo : keyarray ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);

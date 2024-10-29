@@ -1803,8 +1803,8 @@ logwrite(function,message.str() );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
-    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "SHUTTIME", interface.camera.shutter.duration(), 
-                                                                         "actual shutter open time in msec", 3 );
+    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "SHUTTIME", interface.camera.shutter.get_duration(),
+                                                                         "actual shutter open time in sec", 3 );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS0", airmass0, "airmass at start of exposure" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS1", airmass1, "airmass at end of exposure" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS", airmass, "average of AIRMASS0 and AIRMASS1" );
@@ -2535,6 +2535,8 @@ this->camera_info.userkeys.primary().listkeys();
       std::thread( std::ref(AstroCam::Interface::dothread_shutter), this_expbuf, std::ref(*this) ).detach();
     }
     else {
+      this->camera.shutter.zero_exposure();  // sets shutter duration to 0
+
       logwrite( function, "shutter not opened" );
       message.str(""); message << "NOTICE: incremented exposure buffer to " << server.get_expbuf();
       logwrite( function, message.str() );
@@ -2545,12 +2547,16 @@ this->camera_info.userkeys.primary().listkeys();
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
       double mjd             = mjd_from( timenow );        // modified Julian date of start
       double airmass=NAN;
+
+      // get the airmass from tcsd telemetry now
+      //
       this->collect_telemetry_key( "tcsd", "AIRMASS", airmass );
+
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD0", mjd, "exposure start time (modified Julian Date)" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD1", mjd, "exposure stop time (modified Julian Date)" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
-      this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "SHUTTIME", 0.0, "actual shutter open time in msec", 3 );
+      this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "SHUTTIME", this->camera.shutter.get_duration(), "actual shutter open time in sec", 3 );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "AIRMASS0", airmass, "airmass at start of exposure" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "AIRMASS1", airmass, "airmass at end of exposure" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "AIRMASS", airmass, "average of AIRMASS0 and AIRMASS1" );
@@ -2778,6 +2784,32 @@ this->camera_info.userkeys.primary().listkeys();
     return error;
   }
   /***** AstroCam::Interface::do_expose ***************************************/
+
+
+  /***** AstroCam::Interface::make_telemetry_message **************************/
+  /**
+   * @brief      assembles my telemetry message
+   * @details    This creates a JSON message for my telemetry info, then serializes
+   *             it into a std::string ready to be sent over a socket.
+   * @param[out] retstring  string containing the serialization of the JSON message
+   *
+   */
+  void Interface::make_telemetry_message( std::string &retstring ) {
+    // assemble the telemetry I want to report into a json message
+    // Set a messagetype keyword to indicate what kind of message this is.
+    //
+    nlohmann::json jmessage;
+    jmessage["messagetype"] = "camerainfo";
+
+    jmessage["SHUTTIME_SEC"] = this->camera.shutter.get_duration();  // shutter open time in sec
+
+    retstring = jmessage.dump();  // serialize the json message into a string
+
+    retstring.append(JEOF);       // append JSON message terminator
+
+    return;
+  }
+  /***** AstroCam::Interface::make_telemetry_message **************************/
 
 
   /***** AstroCam::Interface::collect_telemetry *******************************/
@@ -5199,7 +5231,7 @@ logwrite(function,message.str() );
         }
         else
         if ( tokens[1] == "time" ) {     // report the last recorded exposure duration
-          double el = this->camera.shutter.duration();
+          double el = this->camera.shutter.get_duration();
           retstring = std::to_string( el );
         }
         else
@@ -5228,7 +5260,7 @@ logwrite(function,message.str() );
           error  = this->camera.shutter.set_open();
           if ( error==NO_ERROR ) std::this_thread::sleep_for(std::chrono::milliseconds(sl));
           error |= this->camera.shutter.set_close();
-          double el = this->camera.shutter.duration();
+          double el = this->camera.shutter.get_duration();
           retstring = ( error==NO_ERROR ? std::to_string( el ) : "NaN" );
         }
       }

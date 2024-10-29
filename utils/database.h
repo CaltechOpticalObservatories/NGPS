@@ -21,6 +21,8 @@
  */
 namespace Database {
 
+  void get_mysql_type( mysqlx::Value value, std::string &type );
+
   /***** Database::Database ***************************************************/
   /**
    * @class  Database

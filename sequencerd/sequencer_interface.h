@@ -15,10 +15,12 @@
 #include "network.h"
 #include "logentry.h"
 #include "common.h"
+#include "database.h"
 #include <sys/stat.h>
 
 #include <vector>
 #include <mysqlx/xdevapi.h>
+#include <mysqlx/devapi/collection_crud.h>
 
 #include "acam_interface_shared.h"
 
@@ -125,6 +127,10 @@ namespace Sequencer {
 
     public:
       TargetInfo() : db_port(-1), db_configured(false),
+                     /**
+                      * @var targetlist_cols fields used for accessing the target table,
+                      *                      these define what you get with get_next()
+                      */
                      targetlist_cols { "OWNER",
                                        "OBSERVATION_ID",
                                        "OBS_ORDER",
@@ -141,12 +147,83 @@ namespace Sequencer {
                                        "BINSPECT",
                                        "BINSPAT",
                                        "OTMcass",
-                                       "POINTMODE" },
+                                       "POINTMODE",
+                                       "NOTE",
+                                       "OTMFLAG",
+                                       "NOTBEFORE",
+                                       "AIRMASS_MAX" },
                      targetset_cols  { "SET_ID",
                                        "SET_NAME" },
                      offset_threshold(0), max_tcs_offset(0) { init_record(); }
 
       SkyInfo::FPOffsets fpoffsets;       ///< for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
+
+      /***** Sequencer::TargetInfo::extract_column_from_row *******************/
+      /**
+       * @brief      gets named column value of the correct type from a mysqlx Row
+       * @param[in]  field         database column name
+       * @param[in]  row           mysqlx Row read from database
+       * @param[in]  defaultvalue  optional arg to set value in case it's null
+       *
+       */
+      template <typename T>
+      T extract_column_from_row( const std::string &field, mysqlx::Row row, T defaultvalue=T{} ) {
+        std::stringstream message;
+        mysqlx::col_count_t col = std::numeric_limits<mysqlx::col_count_t>::max();
+        std::string type;
+        try {
+          // find the column number for this field in the targetlist_cols vector
+          //
+          col = colnum( field, this->targetlist_cols );
+
+          if ( col == std::numeric_limits<mysqlx::col_count_t>::max() ) throw std::runtime_error("field not found");
+
+          // field is not empty
+          //
+          if ( !row[col].isNull() ) {
+            return row.get(col).get<T>();
+          }
+
+          // If the field is empty and a default value was specified,
+          // then return that default value.
+          //
+          if ( row[col].isNull() ) {
+            if ( defaultvalue != T{} ) return defaultvalue;
+            else return T{};
+          }
+          else
+          if constexpr ( std::is_same<T, std::string>::value ) {
+            if ( !defaultvalue.empty() ) return defaultvalue;
+          }
+          else
+          if constexpr ( std::is_arithmetic<T>::value ) {
+            if ( defaultvalue != T{} ) return defaultvalue;
+          }
+          else
+          if constexpr ( std::is_default_constructible<T>::value ) {
+            if ( defaultvalue != T{} ) return defaultvalue;
+            else return T{};
+          }
+          message.str("");
+          message << "field \"" << field << "\" empty and no default value specified";
+          throw std::runtime_error(message.str());
+        }
+        catch( const mysqlx::Error &e ) {
+          Database::get_mysql_type( row.get(col), type );
+          message.str(""); message << "ERROR MySQL extracting \"" << field << "\"<" << type << "> col " << col;
+          logwrite( "Sequencer::TargetInfo::extract_column_from_row", message.str() );
+          message.str(""); message << "MySQL extracting \"" << field << "\"<" << type << ">: " << e.what();
+          throw std::runtime_error(message.str());
+        }
+        catch( const std::runtime_error &e ) {
+          Database::get_mysql_type( row.get(col), type );
+          message.str(""); message << "ERROR MySQL extracting \"" << field << "\"<" << type << "> col " << col;
+          logwrite( "Sequencer::TargetInfo::extract_column_from_row", message.str() );
+          message.str(""); message << "extracting \"" << field << "\"<" << type << ">: " << e.what();
+          throw std::runtime_error(message.str());
+        }
+      }
+      /***** Sequencer::TargetInfo::extract_column_from_row *******************/
 
       /**
        * TargetState enums are the possible return values from the TargetInfo::TargetState get_next() function
@@ -156,6 +233,74 @@ namespace Sequencer {
         TARGET_NOT_FOUND,                 ///< no active targets found with requested state
         TARGET_FOUND                      ///< target found
       };
+
+      /**
+       * @var  structure for external_telemetry map
+       */
+      struct ColumnData {
+        bool valid;           // set when value is valid
+        mysqlx::Value value;  // value
+      };
+
+      std::map<std::string, ColumnData> external_telemetry;
+
+
+      /***** Sequencer::TargetInfo::column_from_json **************************/
+      /**
+       * @brief      assigns value from json telemetry message to a database column
+       * @details    This will extract the value for the named jkey from the JSON
+       *             message and assign it to external_telemetry map using colname
+       *             as the map key, where colname is expected to be a database
+       *             column name. When a non-null value is successfully found then
+       *             set the .valid flag true, which will enable writing the value to
+       *             the database. When valid is false then the column will not be
+       *             written to the database, which is the sign of a bad value.
+       * @param[in]  colname   database field name to assign value
+       * @param[in]  jkey      key to find value from jmessage
+       * @param[in]  jmessage  json message from telemetry provider
+       *
+       */
+      template <typename T>
+      void column_from_json( const std::string &colname,
+                             const std::string &jkey,
+                             const nlohmann::json &jmessage ) {
+        const std::string function="Sequencer::TargetInfo::column_from_json";
+        std::stringstream message;
+
+        try {
+          // If jkey is in jmessage and the value isn't null then
+          // put that value in the external_telemetry map and set the
+          // valid flag true,
+          //
+          if ( jmessage.contains(jkey) && !jmessage[jkey].is_null() ) {
+            this->external_telemetry[colname].valid = true;
+            this->external_telemetry[colname].value = jmessage[jkey].get<T>();
+          }
+          else {
+            // otherwise clear the valid flag, which will prevent this column
+            // from being added to the database.
+            //
+            this->external_telemetry[colname].valid = false; 
+          }
+        }
+        catch( const nlohmann::json::type_error &e ) {
+          message << "ERROR cannot associate value with key \"" << jkey << "\"";
+          logwrite( function, message.str() );
+          throw;
+        }
+        catch( const nlohmann::json::out_of_range &e ) {
+          message << "ERROR key \"" << jkey << "\" not a valid index";
+          logwrite( function, message.str() );
+          throw;
+        }
+        catch( const std::exception &e ) {
+          message << "ERROR getting jkey \"" << jkey << "\" for column " << colname;
+          logwrite( function, message.str() );
+          throw;
+        }
+        return;
+      }
+      /***** Sequencer::TargetInfo::column_from_json **************************/
 
       bool is_db_configured() { return this->db_configured; };   ///< get the private db_configured state
 
@@ -193,18 +338,20 @@ namespace Sequencer {
       mysqlx::string notbefore;           ///< earliest date/time to start exposure
       mysqlx::string slewstart;           ///< slew start date/time
       mysqlx::string slewend;             ///< slew end date/time
-      double         exptime;             ///< exposure time in seconds for this target
-      mysqlx::string exptime_req;         ///< exposure time request
+      double         exptime_act;         ///< exposure time in seconds for this target comes from camerad telemetry
+      double         exptime_req;         ///< exposure time request
       mysqlx::string expstart;            ///< exposure start date/time
       mysqlx::string expend;              ///< exposure end date/time
       double         slitwidth;           ///< slit width for this target
-      mysqlx::string slitwidth_req;       ///< slit width request
+      double         slitwidth_req;       ///< slit width request
       double         slitoffset;          ///< slit offset for this target
+      double         slitoffset_req;      ///< slit offset for this target
       int            binspect;            ///< binning in spectral direction for this target
       int            binspat;             ///< binning in spatial direction for this target
+      double         airmasslimit;        ///< individual target airmass limit, above which we don't observe
       mysqlx::string obsmode;             ///< observation mode contains CCD settings TBD
-      mysqlx::string note;                ///< observer notes
-      mysqlx::string otmflag;             ///< OTM codes
+      mysqlx::string note;                ///< observer notes, read just so that it can be written back to the DB completed table (!)
+      mysqlx::string otmflag;             ///< OTM flag, read just so that it can be written back to the DB completed table (!)
 
       mysqlx::string state;               ///< current target state
       double         slitangle;           ///< current slit angle
@@ -215,7 +362,7 @@ namespace Sequencer {
       int            min_repeat;          ///< minimum number of sequentiall successful acquires
       std::atomic<bool> acquired;         ///< true on successful acquisition and while guiding
 
-      int  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
+      mysqlx::col_count_t  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
       TargetInfo::TargetState get_next( );                     ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in

@@ -59,13 +59,13 @@ CAMERA_PREAMBLE=(native EPG 500)
 # The names used here must have a matching NPS_PLUG name defined in power.cfg
 #
 POWER_SLIT=SLIT
-POWER_CAMERA=(LEACH_U LEACH_G LEACH_R LEACH_I)
-POWER_CALIB=(CAL_MOTION LAMP_MODULATOR LAMP_INCANDESCENT)
-POWER_FLEXURE=(FLEXURE_I FLEXURE_R)
-POWER_FILTER=ACAM_MOTION
-POWER_FOCUS=(FOCUS_RG FOCUS_I)
+POWER_CAMERA=(LEACH_R LEACH_I)
+POWER_CALIB=(CAL_MOT LAMP_MOD)
+POWER_FLEXURE=(FLEX_I FLEX_R)
+POWER_FILTER=ACAM_MOT
+POWER_FOCUS=(FOCUS_IR)
 POWER_TELEM=CR1000
-POWER_THERMAL=(LAKESHORE_IR LAKESHORE_UG)
+POWER_THERMAL=(LKS_IG LKS_UR)
 POWER_ACAM=ACAM
 
 # database configuration
@@ -99,3 +99,14 @@ ACQUIRE_TCS_MAX_OFFSET=30            # the maximum allowable offset sent to the 
 # miscellaneous
 #
 UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
+
+# -----------------------------------------------------------------------------
+# TELEM_PROVIDER=( <name> <port> )
+#
+# This is a list of telemetry providers where <name> is the daemon name,
+# and <port> is the port on which to send the telemetry request.
+# Provide one per line.
+#
+TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
+TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
+TELEM_PROVIDER=(camerad    @CAMERAD_NB_PORT@)

@@ -404,7 +404,7 @@ namespace Sequencer {
         if ( seq.notify_tcs_next_target && statstr.compare( 0, 11, "ELAPSEDTIME" ) == 0 ) {     // async message tag ELAPSEDTIME
           std::string::size_type pos = statstr.find( ":" );
           std::string elapsedstr = statstr.substr( pos + 1 );
-          double remaining = (double)( seq.target.exptime - stol( elapsedstr )/1000. );
+          double remaining = (double)( seq.target.exptime_req - stol( elapsedstr )/1000. );
 
           if ( remaining <= seq.tcs_preauth_time ) {
             std::thread( dothread_notify_tcs, std::ref(seq) ).detach();
@@ -632,6 +632,20 @@ namespace Sequencer {
         break;
       }
 
+/* deferred
+      // Wait for target airmass to be below target airmass limit,
+      // or an abort.
+      //
+      if (
+      seq.async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
+
+      while ( !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_ontarget.load()==false ) {
+        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+      }
+
+      seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
+*/
+
       if ( seq.target.pointmode == Acam::POINTMODE_ACAM ) {
         logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
@@ -693,6 +707,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
         message.str(""); message << "exposure complete for target " << seq.target.name
                                  << " id " << seq.target.obsid << " order " << seq.target.obsorder;
         logwrite( function, message.str() );
+
+        // before writing to the completed database table, get current
+        // telemetry from other daemons.
+        //
+        seq.get_external_telemetry();
 
         // Update this target's state in the database
         //
@@ -769,8 +788,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
     // Everywhere is maintained that exptime is specified in sec except
     // the camera takes msec, so convert just before sending the command.
     //
-    long exptime = (long)( seq.target.exptime * 1000 );
-    camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime;
+    long exptime_msec = (long)( seq.target.exptime_req * 1000 );
+    camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime_msec;
 
     error = seq.camerad.send( camcmd.str(), reply );
 
@@ -1066,7 +1085,10 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       std::stringstream cmd;
       cmd << ACAMD_TCSINIT << " " << seq.tcs_name;
       error  = seq.acamd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR initializing acamd <-> tcsd" );
+      if ( error != NO_ERROR ) {
+        message.str(""); message << "ERROR initializing acamd <--> tcsd \"" << seq.tcs_name << "\"";
+        seq.async.enqueue_and_log( function, message.str() );
+      }
     }
 
     // Ask acamd if hardware connections are open,
@@ -2376,14 +2398,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     else error = ERROR;
 
     if ( error==NO_ERROR ) {
-      seq.target.exptime = updated_exptime;
+      seq.target.exptime_req = updated_exptime;
       message.str(""); message << "successfully updated exptime to " << updated_exptime << " sec";
       logwrite( function, message.str() );
     }
 
     // announce the success or failure in an asynchronous broadcast message
     //
-    message.str(""); message << "MODIFY_EXPTIME: " << seq.target.exptime << ( error==NO_ERROR ? " DONE" : " ERROR" );
+    message.str(""); message << "MODIFY_EXPTIME: " << seq.target.exptime_req << ( error==NO_ERROR ? " DONE" : " ERROR" );
     seq.async.enqueue( message.str() );
 
     seq.clr_thrstate_bit( THR_MODIFY_EXPTIME );
@@ -3475,14 +3497,14 @@ logwrite( function, message.str() );
     // Store unconfigured values as NAN.
     // NAN values are not logged to the database.
     //
-    jmessage["OBSID"] = this->target.obsid < 0 ? NAN : this->target.obsid;            //  OBSERVATION_ID
-    jmessage["TARGET"] = this->target.name;                                           //  NAME
+    jmessage["OBS_ID"] = this->target.obsid < 0 ? NAN : this->target.obsid;           //  OBSERVATION_ID
+    jmessage["NAME"] = this->target.name;                                             //  NAME
     jmessage["SLITA"] = this->target.slitangle;                                       // *OTMslitangle
-    jmessage["BINSPECT"] = this->target.binspect < 1 ? NAN : this->target.slitwidth;  // *BINSPECT
-    jmessage["BINSPAT"] = this->target.binspat < 1 ? NAN : this->target.slitwidth;    // *BINSPAT
+    jmessage["BINSPECT"] = this->target.binspect < 1 ? NAN : this->target.binspect;   // *BINSPECT
+    jmessage["BINSPAT"] = this->target.binspat < 1 ? NAN : this->target.binspat;      // *BINSPAT
     jmessage["POINTMODE"] = this->target.pointmode;                                   // *POINTMODE
     jmessage["RA"] = this->target.ra_hms;                                             // *RA
-    jmessage["DEC"] = this->target.dec_dms;                                           // *DECL
+    jmessage["DECL"] = this->target.dec_dms;                                          // *DECL
 
     retstring = jmessage.dump();  // serialize the json message into a string
 
@@ -3491,6 +3513,120 @@ logwrite( function, message.str() );
     return;
   }
   /***** Sequencer::Sequence::make_telemetry_message **************************/
+
+
+  /***** Sequencer::Sequence::get_external_telemetry **************************/
+  /**
+   * @brief      collect telemetry from other daemon(s)
+   * @details    This is used for any telemetry that I need to collect from
+   *             another daemon. Common::collect_telemetry() sends a command
+   *             to the daemon, which will respond with a JSON message. The
+   *             daemon(s) to contact are configured with the TELEM_PROVIDER
+   *             key in the config file.
+   *
+   */
+  void Sequence::get_external_telemetry() {
+    // Loop through each configured telemetry provider. This requests
+    // their telemetry which is returned as a serialized json string
+    // held in retstring.
+    //
+    // handle_json_message() will parse the serialized json string.
+    //
+    std::string retstring;
+    for ( const auto &provider : this->telemetry_providers ) {
+      Common::collect_telemetry( provider, retstring );
+      handle_json_message(retstring);
+    }
+    return;
+  }
+  /***** Sequencer::Sequence::get_external_telemetry **************************/
+
+
+  /***** Sequencer::Sequence::handle_json_message *****************************/
+  /**
+   * @brief      parses incoming telemetry messages
+   * @details    Requesting telemetry from another daemon returns a serialized
+   *             JSON message which needs to be passed in here to parse it.
+   * @param[in]  message_in  incoming serialized JSON message (as a string)
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Sequence::handle_json_message( const std::string message_in ) {
+    const std::string function="Sequencer::Sequence::handle_json_message";
+    std::stringstream message;
+
+    if ( message_in.empty() ) {
+      logwrite( function, "ERROR empty JSON message" );
+      return ERROR;
+    }
+
+    try {
+      nlohmann::json jmessage = nlohmann::json::parse( message_in );
+      std::string messagetype;
+
+      // jmessage must not contain key "error" and must contain key "messagetype"
+      //
+      if ( !jmessage.contains("error") ) {
+        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
+          messagetype = jmessage["messagetype"];
+        }
+        else {
+          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
+          return ERROR;
+        }
+      }
+      else {
+        logwrite( function, "ERROR in JSON message" );
+        return ERROR;
+      }
+
+      // No errors, so disseminate the message contents based on the message type.
+      //
+      // column_from_json<T>( colname, jkey, jmessage ) will extract the value of
+      // expected type <T> with key jkey from json string jmessage, and assign it
+      // to this->target.external_telemetry[colname] map. It is expected that
+      // "colname" is the column name in the database.
+      //
+      if ( messagetype == "camerainfo" ) {
+        this->target.column_from_json<double>( "EXPTIME", "SHUTTIME_SEC", jmessage );
+      }
+      else
+      if ( messagetype == "slitinfo" ) {
+        this->target.column_from_json<double>( "SLITWIDTH", "SLITW", jmessage );
+        this->target.column_from_json<double>( "SLITOFFSET", "SLITO", jmessage );
+      }
+      else
+      if ( messagetype == "tcsinfo" ) {
+        this->target.column_from_json<std::string>( "TELRA", "TELRA", jmessage );
+        this->target.column_from_json<std::string>( "TELDECL", "TELDEC", jmessage );
+        this->target.column_from_json<double>( "ALT", "ALT", jmessage );
+        this->target.column_from_json<double>( "AZ", "AZ", jmessage );
+        this->target.column_from_json<double>( "AIRMASS", "AIRMASS", jmessage );
+        this->target.column_from_json<double>( "CASANGLE", "CASANGLE", jmessage );
+      }
+      else
+      if ( messagetype == "test" ) {
+      }
+      else {
+        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const nlohmann::json::parse_error &e ) {
+      message.str(""); message << "ERROR json exception parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::handle_json_message *****************************/
 
 
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
@@ -3564,6 +3700,7 @@ logwrite( function, message.str() );
       retstring.append( "   expose [ ? ]\n" );
       retstring.append( "   fpoffset ? | <from> <to>\n" );
       retstring.append( "   getnext [ ? ]\n" );
+      retstring.append( "   gettelem [ ? ]\n" );
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
       retstring.append( "   notify [ ? ]\n" );
@@ -3774,7 +3911,7 @@ logwrite( function, message.str() );
         this->target.slitangle   = std::stod( tokens.at(2) );  // *OTMslitangle
         this->target.slitwidth   = std::stod( tokens.at(3) );  // *OTMslit
         this->target.slitoffset  = 0.;                         //  SLITOFFSET
-        this->target.exptime     = std::stod( tokens.at(4) );  // *OTMexpt
+        this->target.exptime_req = std::stod( tokens.at(4) );  // *OTMexpt
         this->target.targetnum   = 0;                          //  TARGET_NUMBER
         this->target.sequencenum = 0;                          //  SEQUENCE_NUMBER
         this->target.binspect    = std::stoi( tokens.at(5) );  // *BINSPECT
@@ -3822,19 +3959,42 @@ logwrite( function, message.str() );
       message.str(""); message << "NOTICE: " << targetstatus;
       this->async.enqueue( message.str() );                      // broadcast target status
 
-      if ( ret == TargetInfo::TargetState::TARGET_FOUND )     { rts << this->target.name  << " " 
-                                                                    << this->target.obsid << " " 
-                                                                    << this->target.obsorder << " "
-                                                                    << this->target.ra_hms << " "
-                                                                    << this->target.dec_dms << " "
-                                                                    << this->target.casangle << " "
-                                                                    << this->target.slitangle; }
+      if ( ret == TargetInfo::TargetState::TARGET_FOUND ) {
+        rts << "name      obsid  order  ra  dec  casangle  slitangle  airmasslim\n";
+        rts << this->target.name  << " "
+            << this->target.obsid << "   "
+            << this->target.obsorder << "   "
+            << this->target.ra_hms << "  "
+            << this->target.dec_dms << "  "
+            << this->target.casangle << "  "
+            << this->target.slitangle << "  "
+            << this->target.airmasslimit << "\n";
+      }
       else
       if ( ret == TargetInfo::TargetState::TARGET_NOT_FOUND ) { rts << "(none)"; }
       else
       if ( ret == TargetInfo::TargetState::TARGET_ERROR )     { error = ERROR; }
 
       retstring = rts.str();
+    }
+    else
+
+    // ----------------------------------------------------
+    // gettelem -- get external telemetry
+    // ----------------------------------------------------
+    //
+    if ( testname == "gettelem" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test gettelem\n";
+        retstring.append( "  Get external telemetry from other daemons.\n" );
+        return HELP;
+      }
+      this->get_external_telemetry();
+      message.str("");
+      for ( const auto &[name,data] : this->target.external_telemetry ) {
+        message << "name=" << name << " valid=" << (data.valid?"T":"F") << " value=" << data.value << "\n";
+      }
+      retstring = message.str();
     }
     else
 

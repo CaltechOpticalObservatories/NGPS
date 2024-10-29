@@ -97,30 +97,16 @@ namespace Thermal {
     //
     this->externaldata.clear();
 
-    // Instantiate a client to communicate with each daemon,
-    // constructed with no name, newline termination on command writes,
-    // and JEOF termination on reply reads.
+    // Loop through each configured telemetry provider. This requests
+    // their telemetry which is returned as a serialized json string
+    // held in retstring.
     //
-    Common::DaemonClient jclient("", "\n", JEOF );
-
-    // Loop through each configured telemetry provider, which is a map of
-    // ports indexed by daemon name, both of which are used to update
-    // the jclient object.
-    //
-    // Send the command "sendtelem" to each daemon and read back the reply into
-    // retstring, which will be the serialized JSON telemetry message.
-    //
-    // handle_json_message() will parse the reply and set the FITS header
-    // keys in the telemkeys database.
+    // handle_json_message() will parse the serialized json string.
     //
     std::string retstring;
-    for ( const auto &[name, port] : this->telemetry_providers ) {
-      jclient.set_name(name);
-      jclient.set_port(port);
-      jclient.connect();
-      jclient.command("sendtelem", retstring);
-      jclient.disconnect();
-      handle_json_message(retstring);
+    for ( const auto &provider : this->telemetry_providers ) {
+      Common::collect_telemetry( provider, retstring );
+      if ( !retstring.empty() ) handle_json_message(retstring);
     }
 
     return;

@@ -171,8 +171,8 @@ this->foo(HDUTYPE::Primary);
         logwrite(function, message.str());
         return(ERROR);
       }
-      catch (...) {
-        message.str(""); message << "unknown error opening FITS file \"" << info.fits_name << "\"";
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR opening FITS file \"" << info.fits_name << "\": " << e.what();
         logwrite(function, message.str());
         return(ERROR);
       }
@@ -218,6 +218,16 @@ this->foo(HDUTYPE::Primary);
         return;
       }
 
+      // try to get the mutex
+      //
+      std::unique_lock<std::mutex> lock( this->fits_mutex, std::defer_lock );
+
+      if ( !lock.try_lock() ) {
+        message.str(""); message << "another thread is already closing " << info.fits_name;
+        logwrite( function, message.str() );
+        return;
+      }
+
       // If aborted then close and remove the file
       //
       if ( info.abortexposure ) {
@@ -235,30 +245,30 @@ this->foo(HDUTYPE::Primary);
         return;
       }
 
-      // Iterate through the system-defined FITS keyword databases and add them to the primary header.
-      //
-      logwrite( function, "writing systemkeys.primary() keys after exposure" );
-      for ( auto const &keydb : info.systemkeys.primary().keydb ) {
-//      message.str(""); message << "[DEBUG]: adding info.systemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
-        this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
-      }
-      logwrite( function, "writing telemkeys.primary() keys after exposure" );
-      for ( auto const &keydb : info.telemkeys.primary().keydb ) {
-//      message.str(""); message << "[DEBUG]: adding info.telemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
-        this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
-      }
+      try {
+        // Iterate through the system-defined FITS keyword databases and add them to the primary header.
+        //
+        logwrite( function, "writing systemkeys.primary() keys after exposure" );
+        for ( auto const &keydb : info.systemkeys.primary().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.systemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
+        logwrite( function, "writing telemkeys.primary() keys after exposure" );
+        for ( auto const &keydb : info.telemkeys.primary().keydb ) {
+//        message.str(""); message << "[DEBUG]: adding info.telemkeys.primary \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( HDUTYPE::Primary, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
 
 /****
-      // Write the user keys on close, if specified
-      //
-      logwrite( function, "writing user-defined keys after exposure" );
-      for ( auto const &keydb : info.userkeys.keydb ) {
-        message.str(""); message << "[DEBUG]: adding info.userkeys \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
-        this->add_key( true, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
-      }
+        // Write the user keys on close, if specified
+        //
+        logwrite( function, "writing user-defined keys after exposure" );
+        for ( auto const &keydb : info.userkeys.keydb ) {
+          message.str(""); message << "[DEBUG]: adding info.userkeys \"" << keydb.second.keyword << "\""; logwrite(function, message.str());
+          this->add_key( true, keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
+        }
 ****/
 
-      try {
         // Add a header keyword for the time the file was written (right now!)
         //
         this->pFits->pHDU().addKey("DATE", get_timestamp(), "FITS file write time");
@@ -273,6 +283,11 @@ this->foo(HDUTYPE::Primary);
       }
       catch (CCfits::FitsError& error){
         message.str(""); message << "ERROR writing checksum and closing file: " << error.message();
+        logwrite(function, message.str());
+        this->file_open = false;   // must set this false on exception
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR closing file: " << e.what();
         logwrite(function, message.str());
         this->file_open = false;   // must set this false on exception
       }
@@ -507,7 +522,6 @@ this->foo(HDUTYPE::Primary);
       //
       int last_threadcount = this->threadcount;
       int wait = FITS_WRITE_WAIT;
-//    while (info.extension != this->framen) {
       while (this->extension != this->framen) {
         usleep(1000);
         if (this->threadcount >= last_threadcount) {  // threads are not completing
@@ -540,20 +554,16 @@ this->foo(HDUTYPE::Primary);
       self->writing_file = true;
 
       // write the primary image into the FITS file
+      // An exception here is fatal, get out.
       //
+      long fpixel(1);                // start with the first pixel always
       try {
-        long fpixel(1);              // start with the first pixel always
 
         long num_axis = ( info.fitscubed > 1 ? 3 : 2 );
 
         std::vector<long> axes(2);   // addImage() wants a vector, which has the size of the number of axes
 
         for ( int i=0; i < num_axis; i++ ) axes[i]=info.axes[i];
-
-        // create the extension name
-        // This shows up as keyword EXTNAME and in DS9's "display header"
-        //
-//      std::string extname = info.systemkeys.extension().keydb["SPEC_ID"].keyvalue;
 
         message.str(""); message << "adding " << axes[0] << " x " << axes[1] 
                                  << " frame to extension " << this->extension+1 << " (" << extname << ") in file " << self->fits_name;
@@ -569,7 +579,20 @@ this->foo(HDUTYPE::Primary);
           this->imageExt->addKey("BZERO", 32768, "offset for signed short int");
           this->imageExt->addKey("BSCALE", 1, "scaling factor");
         }
+      }
+      catch ( const CCfits::FitsError& error ) {
+        message.str(""); message << "ERROR adding extension " << extname << " to " << self->fits_name << ": " << error.message();
+        logwrite(function, message.str());
+        self->writing_file = false;
+        self->error = true;    // tells the calling function that I had an error
+        return;
+      }
 
+      // Write header keywords.
+      // An exception here is not good, but isn't necessarily fatal
+      // and doesn't cause an immediate return;
+      //
+      try {
         // convenient local variable for all elmokeys
         //
         auto elmokeys = info.systemkeys.elmomap();
@@ -636,35 +659,42 @@ this->foo(HDUTYPE::Primary);
 
         // Add AMPSEC keys
         //
-        if ( info.amp_section.size() > 0 ) {
-          try {
-            int x1 = info.amp_section.at( info.extension ).at( 0 );
-            int x2 = info.amp_section.at( info.extension ).at( 1 );
-            int y1 = info.amp_section.at( info.extension ).at( 2 );
-            int y2 = info.amp_section.at( info.extension ).at( 3 );
+        if ( info.amp_section.size() == 4 ) {
+          int x1 = info.amp_section.at( info.extension ).at( 0 );
+          int x2 = info.amp_section.at( info.extension ).at( 1 );
+          int y1 = info.amp_section.at( info.extension ).at( 2 );
+          int y2 = info.amp_section.at( info.extension ).at( 3 );
 
-            message.str(""); message << "[" << x1 << ":" << x2 << "," << y1 << ":" << y2 << "]";
-            this->imageExt->addKey( "AMPSEC", message.str(), "amplifier section" );
-          }
-          catch ( std::out_of_range & ) {
-            logwrite( function, "ERROR: no amplifier section referenced for this extension" );
-          }
+          message.str(""); message << "[" << x1 << ":" << x2 << "," << y1 << ":" << y2 << "]";
+          this->imageExt->addKey( "AMPSEC", message.str(), "amplifier section" );
         }
-        else {
-          logwrite( function, "no AMPSEC key: missing amplifier section information" );
-        }
+      }
+      catch ( const CCfits::FitsError &error ) {
+        message.str(""); message << "ERROR from CCfits writing keys: " << error.message();
+        logwrite(function, message.str());
+        self->error = true;    // tells the calling function that I had an error
+      }
+      catch( const std::exception &e ) {
+        message.str(""); message << "ERROR exception writing keys: " << e.what();
+        logwrite( function, message.str() );
+        self->error = true;    // tells the calling function that I had an error
+      }
 
+      try {
         // Write and flush to make sure image is written to disk
         //
         this->imageExt->write( fpixel, info.section_size, data );
         self->pFits->flush();
       }
-      catch (CCfits::FitsError& error){
-        message.str(""); message << "ERROR: " << error.message();
+      catch ( const CCfits::FitsError &error ) {
+        message.str(""); message << "ERROR CCfits exception finalizing " << info.fits_name << ": " << error.message();
         logwrite(function, message.str());
-        self->writing_file = false;
         self->error = true;    // tells the calling function that I had an error
-        return;
+      }
+      catch(...) {
+        message.str(""); message << "ERROR unknown exception finalizing " << info.fits_name;
+        logwrite( function, message.str() );
+        self->error = true;    // tells the calling function that I had an error
       }
 
       // increment number of frames written
@@ -707,6 +737,7 @@ this->foo(HDUTYPE::Primary);
     /***** FITS_file::add_key *************************************************/
     /**
      * @brief      wrapper to write keywords to the FITS file header
+     * @details    This can throw an exception so it should be caught.
      * @param[in]  hdu      HDUTYPE enum specified Primary or Extension
      * @param[in]  keyword
      * @param[in]  type
@@ -735,7 +766,8 @@ this->foo(HDUTYPE::Primary);
       if ( !this->file_open ) {
         message.str(""); message << "ERROR: adding key " << keyword << "=" << value << ": no FITS file open";
         logwrite( function, message.str() );
-        return;
+        message.str(""); message << function << ": adding key " << keyword << "=" << value << ": no FITS file open";
+        throw std::runtime_error( message.str() );
       }
 
       try {
@@ -770,30 +802,22 @@ this->foo(HDUTYPE::Primary);
           logwrite(function, message.str());
         }
       }
-      // There could be an error converting a value to INT or DOUBLE with stoi or stof,
-      // in which case save the keyword as a STRING.
+      // There could be an error converting a value to INT or DOUBLE with stoi or stof
       //
-      catch ( std::invalid_argument & ) { 
-        message.str(""); message << "ERROR: unable to convert value " << value;
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing value " << value << " for keyword " << keyword << ": " << e.what();
         logwrite( function, message.str() );
-        if (type.compare("STRING") != 0) {
-          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, value, comment)
-                    : this->imageExt->addKey( keyword, value, comment ) );
-        }
-      }
-      catch ( std::out_of_range & ) {
-        message.str(""); message << "ERROR: value " << value << " out of range";
-        logwrite( function, message.str() );
-        if (type.compare("STRING") != 0) {
-          ( hdu == HDUTYPE::Primary ? this->pFits->pHDU().addKey(keyword, value, comment)
-                    : this->imageExt->addKey( keyword, value, comment ) );
-        }
+        message.str(""); message << function << ": parsing value " << value << " for keyword " << keyword << ": " << e.what();
+        throw std::runtime_error( message.str() );
       }
       catch (CCfits::FitsError & err) {
         message.str(""); message << "ERROR adding key " << keyword << "=" << value << " / " << comment << " (" << type << ")"
                                  << " to " << ( hdu == HDUTYPE::Primary ? "primary" : "extension" ) << " :"
                                  << err.message();
         logwrite(function, message.str());
+        message.str(""); message << function << ": adding " << keyword << "=" << value << " to "
+                                 << ( hdu == HDUTYPE::Primary ? "primary" : "extension" ) << " :" << err.message();
+        throw std::runtime_error( message.str() );
       }
       return;
     }

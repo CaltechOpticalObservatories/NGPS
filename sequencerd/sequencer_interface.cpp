@@ -9,30 +9,30 @@
 
 namespace Sequencer {
 
+
   /***** Sequencer::TargetInfo::colnum ****************************************/
   /**
    * @brief      get column number of requested field from this->targetlist_cols
+   * @details    This can throw a std::runtime_error exception
    * @param[in]  field  string to search for
-   * @return     integer, -1 on error
+   * @return     col_count_t index
    *
    * This function is used to return the location of the field name in the targetlist_cols
    * vector. This is needed because the mysqlx Connector/C++ X DEV API does not have
-   * its own capability for this. If the field is not found then return -1. This should
-   * cause a std::exception row column to be thrown if you try to access a row[ -1 ].
+   * its own capability for this. If the field is not found then throw an exception.
    *
    */
-  int TargetInfo::colnum( std::string field, std::vector<std::string> vec ) {
-    std::string function = "Sequencer::TargetInfo::colnum";
-    std::stringstream message;
-    std::vector<std::string>::iterator it;
-    it = std::find( vec.begin(), vec.end(), field );
+  mysqlx::col_count_t TargetInfo::colnum( std::string field, std::vector<std::string> vec ) {
+    auto it = std::find( vec.begin(), vec.end(), field );
     if ( it != vec.end() ) {
       return ( it - vec.begin() );
     }
     else {
+      std::string function = "Sequencer::TargetInfo::colnum";
+      std::stringstream message;
       message.str(""); message << "ERROR: requested field " << field << " not found";
       logwrite( function, message.str() );
-      return -1;
+      throw std::runtime_error(message.str());
     }
   }
   /***** Sequencer::TargetInfo::colnum ****************************************/
@@ -58,13 +58,17 @@ namespace Sequencer {
     this->casangle=NAN;
     this->pointmode.clear();
     this->slitwidth=NAN;
+    this->slitwidth_req=NAN;
     this->slitoffset=NAN;
-    this->exptime=-1;
+    this->slitoffset_req=NAN;
+    this->exptime_act=-1;
+    this->exptime_req=-1;
     this->targetnum=-1;
     this->sequencenum=-1;
     this->obsmode.clear();
     this->binspect=-1;
     this->binspat=-1;
+    this->airmasslimit=99.;
     this->acquired=false;
     this->notbefore="1901-01-01 00:00:00.000";
     this->slewstart="1901-01-01 00:00:00.000";
@@ -561,51 +565,62 @@ namespace Sequencer {
       logwrite( function, message.str() );
 #endif
 
-      // fetch the current row
+      // Fetch the current row,
       //
       mysqlx::Row row = result.fetchOne();
 
-      // all of the columns are needed, none can be null
+      // which should not be empty.
       //
-      for ( mysqlx::col_count_t cc = 0; cc < colcount; cc++ ) {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] " << cc << ": " << this->targetlist_cols.at(cc) << " = " << row[cc];
-        logwrite( function, message.str() );
-#endif
-        if ( row[cc].isNull() ) {
-          message.str(""); message << "ERROR " << this->targetlist_cols.at(cc) << " cannot be empty!";
-          status = message.str();
-          logwrite( function, message.str() );
-          error = ERROR;
-        }
+      if ( ! row ) {
+        logwrite( function, "ERROR no row read from database" );
+        return TARGET_ERROR;
       }
-      if ( error == ERROR ) { return TARGET_ERROR; }
 
-      // Connector/C++ does not support referring to row columns by their name yet (!)
-      // so you have to get them by the order requested. The colnum() function returns
-      // the correct column number.
+      // To get the value of a field, call extract_column_from_row<T>( FIELD, row, [default] )
+      // Call it with the explicit template instantiation type <T> to match the data type of
+      // the value, pass it the name of the field and the mysqlx::Row.
       //
-      col = this->colnum( "STATE", this->targetlist_cols );           this->state       = row.get( col );
-      col = this->colnum( "OWNER", this->targetlist_cols );           this->owner       = row.get( col );
-      col = this->colnum( "OBSERVATION_ID", this->targetlist_cols );  this->obsid       = row.get( col );
-      col = this->colnum( "OBS_ORDER", this->targetlist_cols );       this->obsorder    = row.get( col );
-      col = this->colnum( "TARGET_NUMBER", this->targetlist_cols );   this->targetnum   = row.get( col );
-      col = this->colnum( "SEQUENCE_NUMBER", this->targetlist_cols ); this->sequencenum = row.get( col );
-      col = this->colnum( "NAME", this->targetlist_cols );            this->name        = row.get( col );
-      col = this->colnum( "RA", this->targetlist_cols );              this->ra_hms      = row.get( col );
-      col = this->colnum( "DECL", this->targetlist_cols );            this->dec_dms     = row.get( col );
+      // The fields here must be defined in the TargetInfo::targetlist_cols vector.
+      //
+      // If a third (optional) argument is specified then that value will be used if the
+      // field is empty, otherwise the field is required and will throw an exception if
+      // empty.
+      //
+      this->state          = extract_column_from_row<mysqlx::string>( "STATE", row );
+      this->owner          = extract_column_from_row<mysqlx::string>( "OWNER", row );
+      this->obsid          = extract_column_from_row<int>( "OBSERVATION_ID", row );
+      this->obsorder       = extract_column_from_row<int>( "OBS_ORDER", row );
+      this->targetnum      = extract_column_from_row<long>( "TARGET_NUMBER", row );
+      this->sequencenum    = extract_column_from_row<long>( "SEQUENCE_NUMBER", row );
+      this->name           = extract_column_from_row<mysqlx::string>( "NAME", row );
+      this->ra_hms         = extract_column_from_row<mysqlx::string>( "RA", row );
+      this->dec_dms        = extract_column_from_row<mysqlx::string>( "DECL", row );
 
-      col = this->colnum( "OTMcass", this->targetlist_cols );         this->casangle    = row.get( col );
-      col = this->colnum( "OTMslitangle", this->targetlist_cols );    this->slitangle   = row.get( col );
-      col = this->colnum( "OTMslitwidth", this->targetlist_cols );    this->slitwidth   = row.get( col );
-      col = this->colnum( "SLITOFFSET", this->targetlist_cols );      this->slitoffset  = row.get( col );
-      col = this->colnum( "OTMexpt", this->targetlist_cols );         this->exptime     = row.get( col );
-      col = this->colnum( "BINSPECT", this->targetlist_cols );        this->binspect    = row.get( col );
-      col = this->colnum( "BINSPAT", this->targetlist_cols );         this->binspat     = row.get( col );
-      col = this->colnum( "POINTMODE", this->targetlist_cols );       this->pointmode   = row.get( col );
+      this->casangle       = extract_column_from_row<double>( "OTMcass", row );
+      this->slitangle      = extract_column_from_row<double>( "OTMslitangle", row );
+      this->slitwidth_req  = extract_column_from_row<double>( "OTMslitwidth", row );
+      this->slitoffset_req = extract_column_from_row<double>( "SLITOFFSET", row );
+
+      // The database stores a field "EXPTIME_REQ" which contains the command to the OTM,
+      // then the field "OTMexpt" is the calculated exposure time from the OTM, which I
+      // define here as my exptime_req because that is the exposure time the sequencer is
+      // going to request of the cameras. After the exposure the sequencer will ask the
+      // camera for the actual exposure time, which I call exptime_act.
+      //
+      this->exptime_req    = extract_column_from_row<double>( "OTMexpt", row );
+
+      this->binspect       = extract_column_from_row<int>( "BINSPECT", row );
+      this->binspat        = extract_column_from_row<int>( "BINSPAT", row );
+
+      this->pointmode      = extract_column_from_row<mysqlx::string>( "POINTMODE", row );
+      this->note           = extract_column_from_row<mysqlx::string>( "NOTE", row );
+      this->otmflag        = extract_column_from_row<mysqlx::string>( "OTMFLAG", row );
+      this->notbefore      = extract_column_from_row<mysqlx::string>( "NOTBEFORE", row, "1901-01-01 00:00:00.000" );
+
+//    this->airmasslimit = extract_column_from_row<double>( "AIRMASS_MAX", row, 99.0 );
     }
     catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "EXCEPTION from mySQL ";
+      message.str(""); message << "ERROR mySQL exception ";
       if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
       else { message << "( col = " << col << " )"; }
       message << ": " << err;
@@ -615,7 +630,7 @@ namespace Sequencer {
       return( TARGET_ERROR );
     }
     catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "EXCEPTION ";
+      message.str(""); message << "ERROR exception ";
       if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
       else { message << "( col = " << col << " )"; }
       message << ": " << ex.what();
@@ -625,7 +640,7 @@ namespace Sequencer {
       return( TARGET_ERROR );
     }
     catch ( const char *ex ) {            /// catch everything else
-      message.str(""); message << "EXCEPTION ";
+      message.str(""); message << "ERROR exception ";
       if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
       else { message << "( col = " << col << " )"; }
       message << ": " << ex;
@@ -756,7 +771,9 @@ namespace Sequencer {
       mysqlx::Table targettable = db.getTable( this->db_active );
 
       // Find the row in the SQL active observations table
-      // which matches the current observation ID.
+      // which matches the current observation ID. The targetlist_cols
+      // vector identifies the fields to retrieve and is initialized
+      // by the TargetInfo() class initializer list.
       //
       mysqlx::RowResult result = targettable.select( this->targetlist_cols )
                                            .where( "OBSERVATION_ID like :obsid" )
@@ -843,77 +860,76 @@ namespace Sequencer {
       //
       mysqlx::Table targettable = db.getTable( this->db_completed );
 
-      // add the row --
-      // All of these are read directly from the target table from
-      // the column of the same name, unless otherwise noted.
+      // create a vector of column names
       //
-      targettable.insert( "OWNER",
-                          "OBSERVATION_ID",
-                          "SET_ID",
-                          "TARGET_NUMBER",
-                          "SEQUENCE_NUMBER",
-                          "NAME",
-                          "FITSFILE",         // internal from ___
-                          "RA",
-                          "DECL",
-                          "TELRA",            // read from tcsd
-                          "TELDECL",          // read from tcsd
-                          "ALT",              // read from tcsd
-                          "AZ",               // read from tcsd
-                          "AIRMASS",          // read from tcsd
-                          "CASANGLE",         // read from tcsd
-                          "SLITANGLE_REQ",
-                          "POINTMODE",
-                          "NOTBEFORE",
-                          "SLEW_START",       // from Sequence::dothread_move_to_target()
-                          "SLEW_END",         // from Sequence::dothread_move_to_target()
-                          "EXPTIME",          // target table col = OTMexpt
-                          "EXPTIME_REQ",
-                          "EXP_START",        // from Sequence::dothread_trigger_exposure()
-                          "EXP_END",          // from Sequence::dothread_sequencer_async_listener() ?
-                          "SLITWIDTH",
-                          "SLITWIDTH_REQ",
-                          "SLITOFFSET",
-                          "BINSPECT",
-                          "BINSPAT",
-                          "OBSMODE",
-                          "NOTE",
-                          "OTMFLAG"
-                        )
-                .values( this->owner,
-                         this->obsid,
-                         this->setid,
-                         this->targetnum,
-                         this->sequencenum,
-                         this->name,
-                         this->fitsfile,
-                         this->ra_hms,
-                         this->dec_dms,
-                         this->tel_ra,
-                         this->tel_dec,
-                         this->tel_alt,
-                         this->tel_az,
-                         this->airmass,
-                         this->casangle,
-                         this->slitangle_req,
-                         this->pointmode,
-                         this->notbefore,
-                         this->slewstart,
-                         this->slewend,
-                         this->exptime,
-                         this->exptime_req,
-                         this->expstart,
-                         this->expend,
-                         this->slitwidth,
-                         this->slitwidth_req,
-                         this->slitoffset,
-                         this->binspect,
-                         this->binspat,
-                         this->obsmode,
-                         this->note,
-                         this->otmflag
-                        )
-                .execute();
+      std::vector<std::string> columns;
+      columns = { "OWNER",            // target table
+                  "OBSERVATION_ID",   // target table
+                  "SET_ID",           // target table
+                  "TARGET_NUMBER",    // target table
+                  "SEQUENCE_NUMBER",  // target table
+                  "NAME",             // target table
+                  "FITSFILE",         // internal from ___
+                  "RA",               // target table
+                  "DECL",             // target table
+                  "SLITANGLE_REQ",    // target table col = SLITANGLE
+                  "POINTMODE",        // target table
+                  "NOTBEFORE",        // target table
+                  "SLEW_START",       // from Sequence::dothread_move_to_target()
+                  "SLEW_END",         // from Sequence::dothread_move_to_target()
+                  "EXPTIME_REQ",      // target table col = OTMexpt
+                  "EXP_START",        // from Sequence::dothread_trigger_exposure()
+                  "EXP_END",          // from Sequence::dothread_sequencer_async_listener() ?
+                  "SLITWIDTH_REQ",    // target table col = SLITWIDTH
+                  "BINSPECT",         // target table
+                  "BINSPAT",          // target table
+                  "OBSMODE",          // target table
+                  "NOTE",             // target table
+                  "OTMFLAG"           // target table
+                };
+
+      // and a vector of corresponding values for those columns
+      //
+      std::vector<mysqlx::Value> values;
+      values = { this->owner,         // OWNER
+                 this->obsid,         // OBSERVATION_ID
+                 this->setid,         // SET_ID
+                 this->targetnum,     // TARGET_NUMBER
+                 this->sequencenum,   // SEQUENCER_NUMBER
+                 this->name,          // NAME
+                 this->fitsfile,      // FITSFILE
+                 this->ra_hms,        // RA
+                 this->dec_dms,       // DECL
+                 this->slitangle_req, // SLITANGLE_REQ
+                 this->pointmode,     // POINTMODE
+                 this->notbefore,     // NOTBEFORE
+                 this->slewstart,     // SLEW_START
+                 this->slewend,       // SLEW_END
+                 this->exptime_req,   // EXPTIME_REQ <-- came in as OTMexpt
+                 this->expstart,      // EXP_START
+                 this->expend,        // EXP_END
+                 this->slitwidth_req, // SLITWIDTH_REQ
+                 this->binspect,      // BINSPECT
+                 this->binspat,       // BINSPAT
+                 this->obsmode,       // OBSMODE
+                 this->note,          // NOTE
+                 this->otmflag        // OTMFLAG
+               };
+
+      // The entries in the above "columns" and "values" vectors are fixed.
+      // Now add additional columns/values to each which come from external
+      // telemetry sources, but only add them if they have a valid value.
+      //
+      for ( const auto &[name, data] : this->external_telemetry ) {
+        if ( data.valid ) {
+          columns.push_back( name );
+          values.push_back( data.value );
+        }
+      }
+
+      // add the row --
+      //
+      targettable.insert( columns).values( values ).execute();
     }
     catch ( const mysqlx::Error &err ) {
       message.str(""); message << "ERROR mySQL exception: " << err;

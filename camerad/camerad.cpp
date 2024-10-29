@@ -446,8 +446,12 @@ void doit(Network::TcpSocket &sock) {
     ret = NOTHING;
     std::string retstring="";                               // string for return the value (where needed)
 
-    if ( cmd == "help" || cmd == "?" ) {
-                    for ( const auto &s : CAMERAD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+    if ( cmd == "-h" || cmd == "--help" || cmd == "help" || cmd == "?" ) {
+                    retstring="camera { <CMD> } [<ARG>...]\n";
+                    retstring.append( "  where <CMD> is one of:\n" );
+                    for ( const auto &s : CAMERAD_SYNTAX ) {
+                      retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
+                    }
                     ret = HELP;
     }
     else
@@ -464,6 +468,20 @@ void doit(Network::TcpSocket &sock) {
                     sock.Write( " " );
                     ret = NO_ERROR;
                     }
+    // send telemetry as json message
+    //
+    if ( cmd == TELEMREQUEST ) {
+                    if ( args=="?" || args=="help" ) {
+                      retstring=TELEMREQUEST+"\n";
+                      retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
+                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                      ret=HELP;
+                    }
+                    else {
+                      server.make_telemetry_message( retstring );
+                      ret = JSON;
+                    }
+    }
     else
     if ( cmd == CAMERAD_OPEN ) {
                     ret = server.connect_controller(args, retstring);
@@ -781,27 +799,28 @@ void doit(Network::TcpSocket &sock) {
       ret = ERROR;
     }
 
-      // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
-      // and log the reply along with the command number. Write the reply back to the socket.
-      //
-      // Don't append anything nor log the reply if the command was just requesting help.
-      //
-      if (ret != NOTHING) {
-        if ( ! retstring.empty() ) retstring.append( " " );
-        if ( ret == NO_ERROR ) retstring.append( "DONE" );
-        if ( ret != HELP && ret != NO_ERROR ) {
-          retstring.append( "ERROR" );
-          retstring.append( server.camera.get_longerror() );
-        }
+    // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
+    // and log the reply along with the command number. Write the reply back to the socket.
+    //
+    // Don't append anything nor log the reply if the command was just requesting help.
+    //
+    if (ret != NOTHING) {
+      if ( ! retstring.empty() ) retstring.append( " " );
+      if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
-        if ( ! retstring.empty() && ret != HELP ) {
-          message.str(""); message << "command (" << server.cmd_num << ") reply: " << retstring;
-          logwrite( function, message.str() );
-        }
-
-        retstring.append( "\n" );
-        if ( sock.Write( retstring ) < 0 ) connection_open=false;
+      if ( ret == JSON ) {
+        message.str(""); message << "command (" << server.cmd_num << ") reply with JSON message";
+        logwrite( function, message.str() );
       }
+      else
+      if ( ! retstring.empty() && ret != HELP ) {
+        retstring.append( "\n" );
+        message.str(""); message << "command (" << server.cmd_num << ") reply: " << retstring;
+        logwrite( function, message.str() );
+      }
+
+      if ( sock.Write( retstring ) < 0 ) connection_open=false;
+    }
 
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                          // Keep blocking connection open for interactive session.

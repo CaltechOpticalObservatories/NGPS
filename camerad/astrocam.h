@@ -995,6 +995,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       long expose(std::string nseq_in);
       long do_expose(std::string nseq_in);
+      void make_telemetry_message( std::string &retstring );
       void collect_telemetry();
       void collect_telemetry(std::string name, std::string &retstring);
       long native(std::string cmdstr);

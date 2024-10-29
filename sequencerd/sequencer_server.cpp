@@ -796,6 +796,31 @@ namespace Sequencer {
         }
       }
 
+      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
+      //
+      if ( config.param[entry] == "TELEM_PROVIDER" ) {
+        std::vector<std::string> tokens;
+        Tokenize( config.arg[entry], tokens, " " );
+        try {
+          if ( tokens.size() == 2 ) {
+            this->sequence.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
+          }
+          else {
+            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
+            logwrite( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( "SEQUENCERD", function, message.str() );
+        applied++;
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -1075,8 +1100,12 @@ namespace Sequencer {
       ret = NOTHING;
       std::string retstring;
 
-      if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
-                      for ( const auto &s : SEQUENCERD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
+      if ( cmd == "-h" || cmd == "--help" || cmd == "help" || cmd == "?" ) {
+                      retstring="seq { <CMD> } [<ARG>...]\n";
+                      retstring.append( "  where <CMD> is one of:\n" );
+                      for ( const auto &s : SEQUENCERD_SYNTAX ) {
+                        retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
+                      }
                       ret = HELP;
       }
       else
@@ -1573,12 +1602,12 @@ namespace Sequencer {
       }
       else
 
-      // send telemetry upon request
+      // send my telemetry upon request
       //
       if ( cmd == TELEMREQUEST ) {
                       if ( args=="?" || args=="help" ) {
                         retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
                         retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                         ret=HELP;
                       }

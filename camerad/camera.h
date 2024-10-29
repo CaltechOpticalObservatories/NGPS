@@ -74,6 +74,7 @@ namespace Camera {
       int RTS_bit;  //!< bitmask representing RTS line
       int fd;
       std::chrono::time_point<std::chrono::high_resolution_clock> open_time, close_time;
+      double duration_sec;
     public:
       std::condition_variable condition;
       std::mutex lock;
@@ -142,6 +143,12 @@ namespace Camera {
       /***** Camera::Shutter:shutdown *****************************************/
 
 
+      /**
+       * @brief      properly sets duration_sec when taking a 0s exposure
+       */
+      inline void zero_exposure() { this->duration_sec = 0.0; }
+
+
       /***** Camera::Shutter:set_open *****************************************/
       /*
        * @brief      opens the shutter
@@ -154,6 +161,7 @@ namespace Camera {
        */
       inline long set_open() {
         this->state=1;
+        this->duration_sec=NAN;  // reset duration, set on shutter close
         this->open_time = std::chrono::high_resolution_clock::now();
         return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
       }
@@ -162,7 +170,7 @@ namespace Camera {
 
       /***** Camera::Shutter:set_close ****************************************/
       /*
-       * @brief      closes the shutter
+       * @brief      closes the shutter and calculates shutter open time in sec
        * @details    Uses iotcl( TIOCMBIC ) to clear modem control register RTS bit.
        *             Sets the class variable close_time to record the time it closed.
        * @return     ERROR or NO_ERROR
@@ -173,38 +181,27 @@ namespace Camera {
       inline long set_close() {
         this->state=0;
         this->close_time = std::chrono::high_resolution_clock::now();
-        return( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+        // close shutter here
+        long ret = ( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+        // set shutter duration now
+        this->duration_sec = std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
+                                                                                - this->open_time).count() / 1000000000.;
+        return ret;
       }
       /***** Camera::Shutter:set_close ****************************************/
 
 
-      /***** Camera::Shutter:duration *****************************************/
+      /***** Camera::Shutter:get_duration *************************************/
       /*
-       * @brief      returns the shutter open/close time duration in milliseconds
-       * @return     double precision duration in msec
+       * @brief      returns the shutter open/close time duration in seconds
+       * @details    This was calculated by Shutter::set_close()
+       * @return     double precision duration in sec
        *
        */
-      inline double duration() const {
-        return( std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
-                                                                   - this->open_time).count() / 1000000. );
+      inline double get_duration() const {
+        return this->duration_sec;
       }
-      /***** Camera::Shutter:duration *****************************************/
-
-
-      /***** Camera::Shutter:duration *****************************************/
-      /*
-       * @brief      returns the shutter open/close time duration in milliseconds
-       * @param[out] retstring  reference to string to return duration as string
-       * @return     double precision duration in msec
-       *
-       */
-      double duration( std::string &retstring ) {
-        double dur = this->duration();
-        try { retstring = std::to_string( dur ); }
-        catch ( std::bad_alloc &e ) { retstring="error"; return NAN; }
-        return dur;
-      }
-      /***** Camera::Shutter:duration *****************************************/
+      /***** Camera::Shutter:get_duration *************************************/
 
 
       /***** Camera::Shutter:get_state ****************************************/
@@ -297,7 +294,7 @@ namespace Camera {
       /***** Camera::Shutter:get_state ****************************************/
 
 
-      Shutter() : state(-1), RTS_bit(TIOCM_RTS), fd(-1) {
+      Shutter() : state(-1), RTS_bit(TIOCM_RTS), fd(-1), duration_sec(NAN) {
         this->open_time = this->close_time = std::chrono::high_resolution_clock::now();
       }
 
@@ -618,6 +615,7 @@ namespace Camera {
 
       long pre_exposures( std::string num_in, std::string &num_out );
 
+      long manage_userkeys( std::string args, std::string &retstring );
 
       /***** Camera::Information:set_axes *************************************/
       /**

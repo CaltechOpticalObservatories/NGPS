@@ -180,6 +180,8 @@ const int foo=2;
       Sequence();
       ~Sequence() { };
 
+      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
+
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
@@ -291,9 +293,11 @@ const int foo=2;
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
-      long tcs_init( const std::string which, std::string &retstring );
+      long tcs_init( const std::string which, std::string &retstring );  ///< initialize the specified tcs device
 
-      void make_telemetry_message( std::string &retstring );
+      void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
+      void get_external_telemetry();                                ///< collect telemetry from another daemon
+      long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
       // These are various jobs that are done in their own threads
       //

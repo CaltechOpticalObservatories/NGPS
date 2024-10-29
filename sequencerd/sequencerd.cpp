@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
   int thrid=1;
   for (thrid=1; thrid<Sequencer::N_THREADS-1; thrid++) {        // create N_THREADS-1 non-blocking socket objects
     if (thrid==1) {                                  // first one only
-      Network::TcpSocket s(sequencerd.nbport, false, 0, thrid); // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
+      Network::TcpSocket s(sequencerd.nbport, false, 10, thrid); // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
       if ( s.Listen() < 0 ) {                        // create a listening socket
         logwrite( function, "ERROR could not create listening socket" );
         sequencerd.exit_cleanly();

@@ -40,6 +40,7 @@ namespace TCS {
     jmessage["TELRA"]    = this->tcs_info.ra_hms;       // string "hh:mm:ss.s"
     jmessage["TELDEC"]   = this->tcs_info.dec_dms;      // string "dd:mm:ss.s"
     jmessage["AZ"]       = this->tcs_info.azimuth;
+    jmessage["ALT"]      = 90. - this->tcs_info.zenithangle;
     jmessage["ZENANGLE"] = this->tcs_info.zenithangle;
     jmessage["DOMEAZ"]   = this->tcs_info.domeazimuth;
     jmessage["DOMESHUT"] = this->tcs_info.domeshutters==1?"open":"closed";

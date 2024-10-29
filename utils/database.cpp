@@ -10,6 +10,63 @@
 
 namespace Database {
 
+  /***** Database::get_mysql_type *********************************************/
+  /**
+   * @brief      gets a string representation of the type of mysqlx value
+   * @param[in]  value  mysqlx::Value
+   * @param[out] type   return string representing type of value
+   *
+   */
+  void get_mysql_type( mysqlx::Value value, std::string &type ) {
+
+    if ( value.isNull() ) {
+      type="NULL";
+      return;
+    }
+
+    if ( value.getType() == mysqlx::Value::VNULL ) {
+      type="NULL";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::UINT64 ) {
+      type="uint64_t";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::INT64 ) {
+      type="int64_t";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::FLOAT ) {
+      type="float";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::DOUBLE ) {
+      type="double";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::BOOL ) {
+      type="bool";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::STRING ) {
+      type="string";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::RAW ) {
+      type="raw";
+    }
+    else
+    if ( value.getType() == mysqlx::Value::ARRAY ) {
+      type="array";
+    }
+    else
+      type="unknown";
+
+    return;
+  }
+  /***** Database::get_mysql_type *********************************************/
+
+
   /***** Database::Database ***************************************************/
   /**
    * @brief      Database class constructor

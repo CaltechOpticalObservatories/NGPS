@@ -49,6 +49,14 @@ namespace Camera {
   }
 
 
+  /***** Camera::Camera::manage_userkeys **************************************/
+  /**
+   * @brief      pause the current operation (exposure, readout, etc.)
+   *
+   */
+//long manage_userkeys
+
+
   /***** Camera::Camera::pause ************************************************/
   /**
    * @brief      pause the current operation (exposure, readout, etc.)
