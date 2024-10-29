@@ -1243,14 +1243,21 @@ namespace Acam {
 
     // store them in the class
     //
-    const char* cresult = PyUnicode_AsUTF8( result_ );
-    this->result.assign( cresult );
+    if ( result_ ) {
+      const char* cresult = PyUnicode_AsUTF8( result_ );
+      this->result.assign( cresult );
+    }
+    else {
+      logwrite( function, "ERROR missing result from solver" );
+      PyGILState_Release( gstate );                  // release the GIL before returning
+      return ERROR;
+    }
 
-    this->ra  = PyFloat_Check( ra_ )  ? PyFloat_AsDouble( ra_ )  : NAN;
-    this->dec = PyFloat_Check( dec_ ) ? PyFloat_AsDouble( dec_ ) : NAN;
-    this->pa  = PyFloat_Check( pa_ )  ? PyFloat_AsDouble( pa_ )  : NAN;
-    this->matches   = PyLong_Check( matches_ )  ? PyLong_AsLong( matches_ )  : -1L;
-    this->rmsarcsec = PyFloat_Check( rmsarcsec_ )  ? PyFloat_AsDouble( rmsarcsec_ )  : NAN;
+    this->ra = ra_ && PyFloat_Check( ra_ ) ? PyFloat_AsDouble( ra_ )  : NAN;
+    this->dec = dec_ && PyFloat_Check( dec_ ) ? PyFloat_AsDouble( dec_ ) : NAN;
+    this->pa = pa_ && PyFloat_Check( pa_ ) ? PyFloat_AsDouble( pa_ )  : NAN;
+    this->matches = matches_ && PyLong_Check( matches_ ) ? PyLong_AsLong( matches_ )  : -1L;
+    this->rmsarcsec = rmsarcsec_ && PyFloat_Check( rmsarcsec_ ) ? PyFloat_AsDouble( rmsarcsec_ )  : NAN;
 
     PyGILState_Release( gstate );                    // release the GIL before returning
 
