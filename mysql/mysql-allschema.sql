@@ -775,7 +775,7 @@ CREATE TABLE `completed_obs` (
   `OTMFLAG` varchar(20) DEFAULT NULL COMMENT 'OTM flag codes at time of exposure',
   PRIMARY KEY (`LOG_ID`,`NAME`),
   UNIQUE KEY `LOG_ID_UNIQUE` (`LOG_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=93 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -811,7 +811,7 @@ CREATE TABLE `target_sets` (
   `LAST_UPDATE_TIMESTAMP` timestamp(1) NULL DEFAULT NULL,
   PRIMARY KEY (`SET_ID`),
   UNIQUE KEY `set_id_UNIQUE` (`SET_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=220 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=224 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -874,7 +874,7 @@ CREATE TABLE `targets` (
   `NOTBEFORE` timestamp NULL DEFAULT NULL,
   `POINTMODE` varchar(45) DEFAULT NULL,
   PRIMARY KEY (`OBSERVATION_ID`,`OTMslitwidth`)
-) ENGINE=InnoDB AUTO_INCREMENT=4431 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=4448 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1159,4 +1159,4 @@ CREATE TABLE `thermald_old` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-10-19 13:39:58
+-- Dump completed on 2024-10-30  9:37:59
