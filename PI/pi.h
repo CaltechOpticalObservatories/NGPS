@@ -482,7 +482,7 @@ namespace Physik_Instrumente {
       long get_pos( const std::string &name, int axisnum, int addr, float &position, std::string &posname, float tol_in );  ///< outside callable version
       long stop_motion( const std::string &name, int addr );                                  ///< stop all movement on all axes
       long send_command( const std::string &motorname, std::string cmd );  ///< send a command string to the controller
-      long send_command( const std::string &motorname, std::string cmd, std::string &retstring );  ///< send a command string to the controller
+      long send_command( const std::string &motorname, std::string cmd, std::string &retstring, const bool quiet=false );  ///< send a command string to the controller
 
       template <typename ReplyType> long parse_reply( int axis, std::string &reply, ReplyType &retval );
 

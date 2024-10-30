@@ -1007,10 +1007,8 @@ namespace Physik_Instrumente {
 
     bool is_home=false;
 
-    #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] waiting for homing " << name << " addr " << addr << " ..." ;
+    message.str(""); message << "homing " << name << " will time-out in " << this->home_timeout/1000. << " sec";
     logwrite( function, message.str() );
-    #endif
 
     do {
       bool state;
@@ -1030,12 +1028,12 @@ namespace Physik_Instrumente {
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
       if ( elapsed > this->home_timeout ) {
-        message.str(""); message << "TIMEOUT waiting for homing " << name << " addr " << addr;
+        message.str(""); message << "ERROR home timeout waiting for " << name << " addr " << addr;
         logwrite( function, message.str() );
         error = TIMEOUT;
         break;
       }
-    } while ( 1 );
+    } while ( true );
 
     return error;
   }
@@ -1061,6 +1059,9 @@ namespace Physik_Instrumente {
     //
     std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
 
+    message.str(""); message << "moving " << name << " will time-out in " << this->move_timeout/1000. << " sec";
+    logwrite( function, message.str() );
+
     do {
       bool state;
       this->on_target( name, addr, axis, state );
@@ -1068,10 +1069,6 @@ namespace Physik_Instrumente {
 
       if ( this->motormap[name].axes[axis].ontarget ) break;
       else {
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] waiting for " << name << " addr " << addr << " ..." ;
-        logwrite( function, message.str() );
-#endif
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
       }
 
@@ -1082,12 +1079,12 @@ namespace Physik_Instrumente {
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tnow - tstart).count();
 
       if ( elapsed > this->move_timeout ) {
-        message.str(""); message << "TIMEOUT waiting for " << name << " addr " << addr;
+        message.str(""); message << "ERROR move timeout waiting for " << name << " addr " << addr;
         logwrite( function, message.str() );
         error = TIMEOUT;
         break;
       }
-    } while ( 1 );
+    } while ( true );
 
     return error;
   }
@@ -1197,7 +1194,9 @@ namespace Physik_Instrumente {
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "FRF? " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    bool quiet=true;  // keeps send_command quiet
+
+    long error = this->send_command( name, cmd.str(), reply, quiet );          // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1224,11 +1223,12 @@ namespace Physik_Instrumente {
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
+    bool quiet = true;  // keeps send_command quiet
 
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "FRF? " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command( name, cmd.str(), reply, quiet );          // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1274,12 +1274,13 @@ namespace Physik_Instrumente {
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
+    bool quiet = true;  // keeps send_command quiet
 
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "ONT?";
     if ( axis > 0 ) cmd << " " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command( name, cmd.str(), reply, quiet );          // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1529,7 +1530,7 @@ namespace Physik_Instrumente {
    *
    */
   template <typename ControllerType>
-  long Interface<ControllerType>::send_command( const std::string &motorname, std::string cmd, std::string &retstring ) {
+  long Interface<ControllerType>::send_command( const std::string &motorname, std::string cmd, std::string &retstring, const bool quiet ) {
     std::string function = "Physik_Instrumente::Interface::send_command";
     std::stringstream message;
     std::string reply;
@@ -1557,8 +1558,10 @@ namespace Physik_Instrumente {
       return ERROR;
     }
 
-    message.str(""); message << "sending \"" << cmd << "\" to motor " << motorname;
-    logwrite( function, message.str() );
+    if ( !quiet ) {
+      message.str(""); message << "sending \"" << cmd << "\" to motor " << motorname;
+      logwrite( function, message.str() );
+    }
 
     cmd.append( "\n" );                   // add the newline character
 
@@ -1580,7 +1583,7 @@ namespace Physik_Instrumente {
       }
 
       if ( ( retval = socket.Read( reply, '\n' ) ) < 0 ) {
-        message.str(""); message << "error reading from motor controller: " << strerror( errno );
+        message.str(""); message << "ERROR reading from motor controller: " << strerror( errno );
         logwrite( function, message.str() );
         break;
       }
@@ -1593,6 +1596,11 @@ namespace Physik_Instrumente {
     }
 
     retstring = reply;
+
+    if ( !quiet && !reply.empty() ) {
+      message.str(""); message << "motor " << motorname << " replied \"" << reply << "\"";
+      logwrite( function, message.str() );
+    }
 
     return error;
   }
@@ -1626,10 +1634,6 @@ namespace Physik_Instrumente {
       logwrite( function, "ERROR: empty message" );
       return ERROR;
     }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] reply was \"" << reply << "\""; logwrite( function, message.str() );
-#endif
 
     Tokenize( reply, tokens, "=" );
 
