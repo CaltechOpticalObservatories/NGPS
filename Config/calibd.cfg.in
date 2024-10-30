@@ -27,10 +27,10 @@ EMULATOR=@CALIBD_EMULATOR@
 #
 # For calibd, one controller must be named "cover" and the other must be "door"
 #
-#MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
-#MOTOR_CONTROLLER="door  @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
-MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
-MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
+MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
+MOTOR_CONTROLLER="door  @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
+#MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
+#MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"
@@ -41,7 +41,7 @@ MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
 #  <zero>  value to add to home position (max will be reduced by this amount)
 #  <ref>   reference type {neg|pos|ref}
 #
-MOTOR_AXIS="cover 1 0 32 0 neg"
+MOTOR_AXIS="cover 1 0 39 0 neg"
 MOTOR_AXIS="door  1 0 30 0 neg"
 
 # Specify named positions for each actuator
@@ -53,7 +53,7 @@ MOTOR_AXIS="door  1 0 30 0 neg"
 #   <posname>  name of that position, what the user will use
 #
 MOTOR_POS="cover 1 0  0.0 open"
-MOTOR_POS="cover 1 1 32.0 close"
+MOTOR_POS="cover 1 1 38.5 close"
 MOTOR_POS="door  1 0 30.0 open"
 MOTOR_POS="door  1 1  0.0 close"
 

@@ -5,8 +5,8 @@
 # @details These will be used by CMake to create the individual .cfg files
 # ----------------------------------------------------------------------------
 
-set( ETS8P_1             3001 )
-set( ETS8P_CALIB         3002 )
+set( ETS8P_CALIB         3001 )
+set( ETS8P_dead          3002 )
 set( ETS8P_SLIT          3003 )
 set( ETS8P_FOCUS         3004 )
 set( ETS8P_ACAM_MOTION   3005 )

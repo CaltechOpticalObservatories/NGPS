@@ -11,7 +11,7 @@ EMULATOR_PORT=@SLITD_PI_PORT@     # emulator listens on this port
 
 # Scale factor at slit, ARCSEC_PER_MM
 #
-ARCSEC_PER_MM=12.73
+ARCSEC_PER_MM=2.45
 
 # For each actuator's controller specify:
 # MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
