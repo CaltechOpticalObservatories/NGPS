@@ -371,7 +371,7 @@ logwrite( "Acam::MotionInterface::home", name_in );
     // specified by <name>, e.g. 
     //    motion filter native FRF?
     // or 
-    //    motion dustcover native MOV 1 0
+    //    motion cover native MOV 1 0
     //
     // Only commands with a "?" will provide a reply in retstring.
     //
@@ -382,17 +382,18 @@ logwrite( "Acam::MotionInterface::home", name_in );
         return( ERROR );
       }
       else {
-
-        int addr = _motormap[ name ].addr;  // Get the address from the class,
-        std::stringstream cmdstream;        // then build the command from the arglist.
-        cmdstream << addr;
+        // build the command from the arglist after name
+        //
+        std::stringstream cmdstream;
         for ( int i=2; i<(int)arglist.size(); i++ ) cmdstream << " " << arglist[i];
-        error = this->send_command( cmdstream.str(), retstring );
+
+        // then send the command
+        error = this->send_command( name, cmdstream.str(), retstring );
         logwrite( function, retstring );
       }
     }
 
-    return( error );
+    return error;
   }
   /***** Acam::MotionInterface::motion ****************************************/
 
@@ -535,11 +536,6 @@ logwrite( "Acam::MotionInterface::home", name_in );
       float destpos = _motormap[ filter ].posmap[ destname ].position;
       int newid = mod( ( destid + ( 2 - currid ) ) , 6 );
 
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] currid=" << currid << " destid=" << destid << " newid=" << newid;
-      logwrite( function, message.str() );
-#endif
-
       // Find the position for id=2 so that we can temporarily remap
       // current position as position #2, the "midpoint" of the wheel.
       // This allows for the shortest movement since we can move in
@@ -552,9 +548,9 @@ logwrite( "Acam::MotionInterface::home", name_in );
                  fit != _motormap[filter].posmap.end(); ++fit) {
         if ( fit->second.posid == 2 ) remap = fit->second.position;       // remap = (position for posid=2)
       }
-      cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( filter, cmd.str() );
-      cmd.str(""); cmd << "POS " << axis << " " << remap;  this->send_command( filter, cmd.str() );
-      cmd.str(""); cmd << "RON " << axis << " 1";          this->send_command( filter, cmd.str() );
+      cmd.str(""); cmd << "RON " << axis << " 0";         this->send_command( filter, cmd.str() );  // reference mode on
+      cmd.str(""); cmd << "POS " << axis << " " << remap; this->send_command( filter, cmd.str() );  // set position of axis
+      cmd.str(""); cmd << "RON " << axis << " 1";         this->send_command( filter, cmd.str() );  // reference mode off
 
       // Now move to the position with the calculated "newid"
       //
@@ -567,33 +563,35 @@ logwrite( "Acam::MotionInterface::home", name_in );
       else {
         message.str(""); message << "ERROR: no position found for filter ID " << newid;
         logwrite( function, message.str() );
+        error=ERROR;
       }
 
-      // Then map back to the correct order for the destination filter,
-      // or to the current position if no position was found for newid,
-      // which means we never moved.
-      //
-      remap = ( !std::isnan(newpos) ? destpos : currpos );
+      if ( error != NO_ERROR ) {
+        message.str(""); message << "ERROR moving to ID=" << newid << " pos=" << newpos;
+        logwrite( function, message.str() );
+      }
+      else {
+        // Then map back to the correct order for the destination filter,
+        // or to the current position if no position was found for newid,
+        // which means we never moved.
+        //
+        remap = ( !std::isnan(newpos) ? destpos : currpos );
 
-      cmd.str(""); cmd << "RON " << axis << " 0";          this->send_command( filter, cmd.str() );
-      cmd.str(""); cmd << "POS " << axis << " " << remap;  this->send_command( filter, cmd.str() );
-      cmd.str(""); cmd << "RON " << axis << " 1";          this->send_command( filter, cmd.str() );
+        cmd.str(""); cmd << "RON " << axis << " 0";         this->send_command( filter, cmd.str() );  // reference mode on
+        cmd.str(""); cmd << "POS " << axis << " " << remap; this->send_command( filter, cmd.str() );  // set position of axis
+        cmd.str(""); cmd << "RON " << axis << " 1";         this->send_command( filter, cmd.str() );  // reference mode off
+      }
     }
-#ifdef LOGLEVEL_DEBUG
-    else {
-      logwrite( function, "[DEBUG] destname empty, query-only" );
-    }
-#endif
 
     // Whether or not a filter was supplied, read the current position now.
     //
-    error = this->get_current_filter( retstring );
+    error |= this->get_current_filter( retstring );
 
     // save the name to the class
     //
     this->current_filter_name = retstring;
 
-    return( error );
+    return error;
   }
   /***** Acam::MotionInterface::filter ****************************************/
 
@@ -639,17 +637,11 @@ logwrite( "Acam::MotionInterface::home", name_in );
     //
     std::string posstring;
     int axis=1;
-    auto addr=this->motorinterface.get_motormap()[filter].addr;
+    auto filter_motor = this->motorinterface.get_motormap()[filter];
     currpos=NAN;
     std::string posname;
 
-    error = this->motorinterface.get_pos( filter, axis, addr, currpos, posname, tolerance );
-
-    // form the return value
-    //
-    message.str(""); message << posname << " " << std::fixed << std::setprecision(3) << currpos;
-    if ( ! posname.empty() ) { message << " (" << posname << ")"; }
-    logwrite( function, message.str() );
+    error = this->motorinterface.get_pos( filter, axis, filter_motor.addr, currpos, posname, tolerance );
 
     // save the filter name to the class
     //
@@ -658,6 +650,16 @@ logwrite( "Acam::MotionInterface::home", name_in );
     // return the posname as the currname
     //
     currname = posname;
+
+    // return the id of this position
+    //
+    currid = filter_motor.posmap[posname].posid;
+
+    // log the position and name
+    //
+    message.str(""); message << std::fixed << std::setprecision(3) << currpos;
+    if ( ! posname.empty() ) { message << " (" << posname << ")"; }
+    logwrite( function, message.str() );
 
     return( error );
   }

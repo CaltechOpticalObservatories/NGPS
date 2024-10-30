@@ -2403,7 +2403,10 @@ namespace Acam {
 
         if ( iface.camera.andor.camera_info.exptime == 0 ) continue;            // wait for non-zero exposure time
 
-        if (error==NO_ERROR) error = iface.camera.andor.get_recent(3000);       // get latest frame from camera into memory
+        // timeout to get frame in msec is exposure time + 3s
+        int to = static_cast<int>(std::round(iface.camera.andor.camera_info.exptime+3.)*1000.);
+
+        if (error==NO_ERROR) error = iface.camera.andor.get_recent(to);         // get latest frame from camera into memory
         if (error==NO_ERROR) error = iface.collect_header_info();                            // collect header information
         if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
                                                                iface.imagename,

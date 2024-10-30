@@ -20,8 +20,8 @@
 #include <atomic>
 #include <cmath>  // for NAN
 
-#define ACAM_MOVE_TIMEOUT      20000     ///< timeout in sec before a move fails
-#define ACAM_HOME_TIMEOUT      45000     ///< timeout in sec before a home fails
+#define ACAM_MOVE_TIMEOUT      40000     ///< timeout in sec before a move fails
+#define ACAM_HOME_TIMEOUT     180000     ///< timeout in sec before a home fails
 #define ACAM_POSNAME_TOLERANCE     0.01  ///< tolerance to determine posname from position
 
 /***** Acam *******************************************************************/
