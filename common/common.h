@@ -518,38 +518,39 @@ namespace Common {
           //
           FitsKeys &keydb = ( use_extension ? elmo(chan) : primary() );
 
-          // type check each value to call add_key with the correct type
+          // type-check each value to call add_key with the correct type
+          // keyword is the header keyword if not empty, otherwise use jkey
           //
           if ( jvalue.type() == json::value_t::boolean ) {
-            this->add_key( keydb, keyword, jvalue.template get<bool>(), comment );
+            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<bool>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_integer ) {
-            this->add_key( keydb, keyword, jvalue.template get<int>(), comment );
+            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<int>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_unsigned ) {
-            this->add_key( keydb, keyword, jvalue.template get<uint16_t>(), comment );
+            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<uint16_t>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_float ) {
-            this->add_key( keydb, keyword, jvalue.template get<double>(), comment );
+            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<double>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::string ) {
-            this->add_key( keydb, keyword, jvalue.template get<std::string>(), comment );
+            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<std::string>(), comment );
           }
           else {
-            message << "ERROR unknown type for keyword " << keyword << "=" << jvalue;
+            message << "ERROR unknown type for keyword " << (!keyword.empty()?keyword:jkey) << "=" << jvalue;
             logwrite( function, message.str() );
           }
         }
         catch( const json::exception &e ) {
-          message.str(""); message << "JSON exception adding keyword " << keyword << ": " << e.what();
+          message.str(""); message << "JSON exception adding keyword " << (!keyword.empty()?keyword:jkey) << ": " << e.what();
           logwrite( function, message.str() );
         }
         catch( const std::exception &e ) {
-          message.str(""); message << "ERROR exception adding keyword " << keyword << ": " << e.what();
+          message.str(""); message << "ERROR exception adding keyword " << (!keyword.empty()?keyword:jkey) << ": " << e.what();
           logwrite( function, message.str() );
         }
       }
@@ -704,6 +705,8 @@ namespace Common {
           timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< construct with terminating strings
+
+      ~DaemonClient() { this->disconnect(); }
 
       std::string name;             ///< name of the daemon
       std::string host;             ///< host where the daemon is running
