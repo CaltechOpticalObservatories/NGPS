@@ -1281,7 +1281,7 @@ namespace Sequencer {
       // This is needed before any sequences can be run.
       //
       if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
-                      seq.sequence.tcs_ontarget.store( false );
+                      seq.sequence.is_tcs_ontarget.store( false );
                       seq.sequence.tcs_nowait.store( false );
                       seq.sequence.dome_nowait.store( true );
                       if ( sock.isasync() ) {
@@ -1309,7 +1309,7 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
-                      seq.sequence.tcs_ontarget.store( false );
+                      seq.sequence.is_tcs_ontarget.store( false );
                       seq.sequence.tcs_nowait.store( false );
                       seq.sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
@@ -1413,6 +1413,9 @@ namespace Sequencer {
                           seq.sequence.clr_seqstate_bit( Sequencer::SEQ_WAIT_EXPOSE );       // clear the EXPOSE bit
                         }
 
+//                      {
+//                        I was here
+//                      std::lock_guard<std::mutex> lock(seq.tcs_ontarget_mtx); // Lock the mutex
                         seq.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTREQ );
                         seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
                         seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_ABORTREQ,                                // set ABORTREQ
@@ -1439,6 +1442,14 @@ namespace Sequencer {
 #endif
                           std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
                         }
+
+//                      {
+//                      std::lock_guard<std::mutex> lock(seq.tcs_ontarget_mtx); // Lock the mutex
+//                      seq.set_seqstate(Sequencer::SEQ_ABORTREQ); // Update the state
+//                      }
+//                      seq.tcs_ontarget_cv.notify_all(); // Notify waiting threads
+
+                        seq.sequence.tcs_ontarget_cv.notify_all();
                         ret |= NO_ERROR;
                       }
                       else {
@@ -1452,7 +1463,7 @@ namespace Sequencer {
       // because there is currently no remote command that provides this information.
       //
       if ( cmd.compare( SEQUENCERD_ONTARGET ) == 0) {
-                      seq.sequence.tcs_ontarget.store( true );
+                      seq.sequence.is_tcs_ontarget.store( true );
                       ret = NO_ERROR;
       }
       else
@@ -1486,8 +1497,8 @@ namespace Sequencer {
       // which will be returned, logged, and written to the async message port.
       //
       if ( cmd.compare( SEQUENCERD_STATE ) == 0) {
-                      retstring = seq.sequence.report_seqstate();
-                      retstring.append( " " );
+                      seq.sequence.broadcast_seqstate();
+                      retstring = seq.sequence.seqstate_string( seq.sequence.seqstate.load() );
                       ret = NO_ERROR;
       }
       else

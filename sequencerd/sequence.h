@@ -192,6 +192,10 @@ const int foo=2;
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
       std::mutex start_mtx;       ///< mutex to protect the start sequence from multiple instances
 
+      std::mutex              tcs_ontarget_mtx;
+      std::condition_variable tcs_ontarget_cv;
+      std::atomic<bool>       is_tcs_ontarget;             ///< remotely set by the TCS operator to indicate that the target is ready
+
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex monitor_mtx;
@@ -202,19 +206,21 @@ const int foo=2;
       std::map<int, std::string> thread_states;
       std::vector<int> thread_state_bits;
 
-      volatile std::atomic<bool>          waiting_for_state;  ///< set if dothread_wait_for_state is running
-      volatile std::atomic<bool>          do_once;            ///< set if "do one" selected, clear if "do all" selected
-      volatile std::atomic<bool>          tcs_ontarget;       ///< remotely set by the TCS operator to indicate that the target is ready
-      volatile std::atomic<bool>          tcs_nowait;         ///< set to skip waiting for TCS
-      volatile std::atomic<bool>          dome_nowait;        ///< set to skip waiting for dome
+      std::atomic<bool> waiting_for_state;  ///< set if dothread_wait_for_state is running
+      std::atomic<bool> do_once;            ///< set if "do one" selected, clear if "do all" selected
+      std::atomic<bool> tcs_nowait;         ///< set to skip waiting for TCS
+      std::atomic<bool> dome_nowait;        ///< set to skip waiting for dome
 
-      volatile std::atomic<std::uint32_t> thrstate;           ///< word to indicate which threads are running
-      volatile std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
-      volatile std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
-      volatile std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
+      std::mutex seqstate_mtx;
+      std::condition_variable seqstate_cv;
 
-      volatile std::atomic<std::uint32_t> thr_error;          ///< error state of threads
-      volatile std::atomic<std::uint32_t> thr_which_err;      ///< word to define which thread caused an error
+      std::atomic<std::uint32_t> thrstate;           ///< word to indicate which threads are running
+      std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
+      std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
+      std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
+
+      std::atomic<std::uint32_t> thr_error;          ///< error state of threads
+      std::atomic<std::uint32_t> thr_which_err;      ///< word to define which thread caused an error
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
@@ -249,8 +255,8 @@ const int foo=2;
       void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
       void clr_seqstate_bit( uint32_t mb );     ///< clear the specified masked bit in the seqstate word
       void set_clr_seqstate_bit( uint32_t sb, uint32_t cb );     ///< set and clear the specified masked bit(s) in the seqstate word
-      std::string report_seqstate();            ///< writes the seqstate string to the async port
-      uint32_t get_seqstate();                  ///< get the seqstate word
+      void broadcast_seqstate();                ///< writes the seqstate string to the async port
+      uint32_t get_seqstate() const;            ///< get the seqstate word
 
       void set_reqstate_bit( uint32_t mb );     ///< set the specified masked bit in the reqstate word
       void clr_reqstate_bit( uint32_t mb );     ///< clear the specified masked bit in the reqstate word

@@ -204,9 +204,9 @@ int main(int argc, char **argv) {
 
   sequencerd.sequence.async.enqueue( "SEQUENCERD:started" );  // broadcast that I have started
 
-  sequencerd.sequence.report_seqstate();                      // broadcast the seqstate
+  sequencerd.sequence.broadcast_seqstate();                   // broadcast the seqstate
 
-  for (;;) pause();                                  // main thread suspends
+  for (;;) pause();                                           // main thread suspends
 
   return 0;
 }

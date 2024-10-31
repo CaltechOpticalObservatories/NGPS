@@ -25,7 +25,7 @@ namespace Sequencer {
     this->seqstate.store( Sequencer::SEQ_OFFLINE );  /// offline
     this->reqstate.store( Sequencer::SEQ_OFFLINE );  /// offline
     this->do_once.store( false );                    /// default to "do all"
-    this->tcs_ontarget.store( false );               /// default TCS target not ready to observe
+    this->is_tcs_ontarget.store( false );            /// default TCS target not ready to observe
     this->tcs_nowait.store( false );                 /// default to wait
     this->dome_nowait.store( false );                /// default to wait
     this->waiting_for_state.store( false );          /// not currently waiting for a state
@@ -124,7 +124,8 @@ namespace Sequencer {
    * @brief      ensures that seqstate is changed (READY/OFFLINE) based on system_not_ready word
    * @details    spawned at startup by main() in sequencerd.cpp
    * @param[in]  seq  reference to Sequencer::Sequence object
-   * @todo       this was an experiment and is not currently in use
+   *
+   * @todo       !! this was an experiment and is not currently in use !!
    *
    */
   void Sequence::dothread_monitor_ready_state( Sequencer::Sequence &seq ) {
@@ -157,7 +158,7 @@ namespace Sequencer {
           seq.reqstate.fetch_and( ~Sequencer::SEQ_OFFLINE );    // clear OFFLINE.
         }
       }
-      seq.report_seqstate();                                    // report current state
+      seq.broadcast_seqstate();                                 // broadcast current state
     }
     seq.clr_thrstate_bit( THR_MONITOR_READY_STATE );
     return;
@@ -170,21 +171,13 @@ namespace Sequencer {
    * @brief      atomically sets the requested bit in the seqstate word
    * @param[in]  mb  masked bit is uint32 word containing the bit to set
    *
-   * The new state will be written to the async message port
+   * The new state will be broadcast
    *
    */
-  void Sequence::set_seqstate_bit( uint32_t mb ) {
-#ifdef LOGLEVEL_DEBUG
-    std::string function = "Sequencer::Sequence::set_seqstate_bit";
-    std::stringstream debugmessage;
-    std::uint32_t oldstate = this->seqstate.load();
-    std::uint32_t newstate =  oldstate | mb;
-    debugmessage << "[DEBUG] state changed from " << oldstate << " to " << newstate
-                 << ": " << this->seqstate_string( newstate );
-    logwrite( function, debugmessage.str() );
-#endif
-    this->seqstate.fetch_or( mb );    // clear
-    this->report_seqstate();          // report current state
+  void Sequence::set_seqstate_bit( const uint32_t mb ) {
+    this->seqstate.fetch_or( mb );    // set
+    this->seqstate_cv.notify_all();   // notify waiting threads of the change
+    this->broadcast_seqstate();       // broadcast current state
   }
   /***** Sequencer::Sequence::set_seqstate_bit ********************************/
 
@@ -194,21 +187,13 @@ namespace Sequencer {
    * @brief      atomically clears the requested bit in the seqstate word
    * @param[in]  mb  masked bit is uint32 word containing the bit to clear
    *
-   * The new state will be written to the async message port
+   * The new state will be broadcast
    *
    */
-  void Sequence::clr_seqstate_bit( uint32_t mb ) {
-#ifdef LOGLEVEL_DEBUG
-    std::string function = "Sequencer::Sequence::clr_seqstate_bit";
-    std::stringstream debugmessage;
-    std::uint32_t oldstate = this->seqstate.load();
-    std::uint32_t newstate = oldstate & ~mb;
-    debugmessage << "[DEBUG] state changed from " << oldstate << " to " << newstate
-                 << ": " << this->seqstate_string( newstate );
-    logwrite( function, debugmessage.str() );
-#endif
+  void Sequence::clr_seqstate_bit( const uint32_t mb ) {
     this->seqstate.fetch_and( ~mb );  // clear
-    this->report_seqstate();          // report current state
+    this->seqstate_cv.notify_all();   // notify waiting threads of the change
+    this->broadcast_seqstate();       // broadcast current state
   }
   /***** Sequencer::Sequence::clr_seqstate_bit ********************************/
 
@@ -219,48 +204,32 @@ namespace Sequencer {
    * @param[in]  sb  masked bit is uint32 word containing the bit(s) to set
    * @param[in]  mb  masked bit is uint32 word containing the bit(s) to clear
    *
-   * The new state will be written to the async message port
+   * The new state will be broadcast
    *
    */
-  void Sequence::set_clr_seqstate_bit( uint32_t sb, uint32_t cb ) {
-#ifdef LOGLEVEL_DEBUG
-    std::string function = "Sequencer::Sequence::set_clr_seqstate_bit";
-    std::stringstream debugmessage;
-    std::uint32_t oldstate = this->seqstate.load();
-    std::uint32_t newstate = oldstate | sb;  // set sb
-    newstate &= ~cb;                         // clear cb
-    debugmessage << "[DEBUG] state changed from " << oldstate << " to " << newstate
-                 << ": " << this->seqstate_string( newstate );
-    logwrite( function, debugmessage.str() );
-#endif
+  void Sequence::set_clr_seqstate_bit( const uint32_t sb, const uint32_t cb ) {
     this->seqstate.fetch_or( sb );    // set
     this->seqstate.fetch_and( ~cb );  // clear
-    this->report_seqstate();          // report current state
+    this->seqstate_cv.notify_all();   // notify waiting threads of the change
+    this->broadcast_seqstate();       // broadcast current state
   }
   /***** Sequencer::Sequence::set_clr_seqstate_bits ***************************/
 
 
-  /***** Sequencer::Sequence::report_seqstate *********************************/
+  /***** Sequencer::Sequence::broadcast_seqstate ******************************/
   /**
    * @brief      writes the seqstate string to the async port
    * @details    This broadcasts the seqstate as a string with the "RUNSTATE:"
-   *             message tag, but returns only the seqstate string.
-   * @return     seqstate string
+   *             message tag.
    *
    */
-  std::string Sequence::report_seqstate() {
+  void Sequence::broadcast_seqstate() {
     std::string async_message = "RUNSTATE: ";
-
-    uint32_t ss = this->seqstate.load();                             // get the seqstate
-
-    std::string retstring = this->seqstate_string( ss );             // convert it to a string
-
-    async_message.append( retstring );
-    this->async.enqueue( async_message );                            // broadcast it with tag
-
-    return( retstring );                                             // return it
+    async_message.append( seqstate_string( seqstate.load() ) );  // seqstate converted to string
+    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate", async_message );
+    return;
   }
-  /***** Sequencer::Sequence::report_seqstate *********************************/
+  /***** Sequencer::Sequence::broadcast_seqstate ******************************/
 
 
   /***** Sequencer::Sequence::get_seqstate ************************************/
@@ -269,14 +238,7 @@ namespace Sequencer {
    * @return     seqstate
    *
    */
-  uint32_t Sequence::get_seqstate( ) {
-#ifdef LOGLEVEL_DEBUG
-    std::string function = "Sequencer::Sequence::get_seqstate";
-    std::stringstream message;
-    message.str(""); message << "[DEBUG] seqstate is " << this->seqstate.load()
-                             << ": " << this->seqstate_string( this->seqstate.load() );
-    logwrite( function, message.str() );
-#endif
+  uint32_t Sequence::get_seqstate() const {
     return( this->seqstate.load() );
   }
   /***** Sequencer::Sequence::get_seqstate ************************************/
@@ -594,14 +556,17 @@ namespace Sequencer {
 
       logwrite( function, "[DEBUG] (1) waiting on notification" );
 
-      std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );  // create a mutex object for waiting
-
-      while ( seq.seqstate.load() != seq.reqstate.load() ) {
-        message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-        logwrite( function, message.str() );
-        seq.cv.wait( wait_lock );
+      message.str(""); message << "current state: " << seq.seqstate_string(seq.seqstate.load())
+                               << " waiting for: " << seq.seqstate_string(seq.reqstate.load());
+      logwrite( function, message.str() );
+      {
+      std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
+      if ( seq.seqstate.load() != seq.reqstate.load() ) {
+        seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
       }
-      logwrite( function, "[DEBUG] (1) DONE waiting on notification" );
+      }
+      logwrite(function, "[DEBUG] DONE waiting on notification");
+
 /*
       long error;
       while ( seq.cv.wait_for( wait_lock, std::chrono::seconds(1))==std::cv_status::timeout ) {
@@ -656,17 +621,20 @@ namespace Sequencer {
         std::thread( dothread_trigger_exposure, std::ref(seq) ).detach();  // trigger exposure in a thread
 
         seq.set_reqstate_bit( Sequencer::SEQ_RUNNING );                    // set the requested state
-        std::thread( dothread_wait_for_state, std::ref(seq) ).detach();    // wait for requested state
 
         // ...then wait for it to complete
         //
         logwrite( function, "[DEBUG] (2) waiting on notification" );
-        while ( seq.seqstate.load() != seq.reqstate.load() ) {
-          message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-          logwrite( function, message.str() );
-          seq.cv.wait( wait_lock );
+        message.str(""); message << "current state: " << seq.seqstate_string(seq.seqstate.load())
+                                 << " waiting for: " << seq.seqstate_string(seq.reqstate.load());
+        logwrite( function, message.str() );
+        {
+        std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
+        if ( seq.seqstate.load() != seq.reqstate.load() ) {
+          seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
         }
-        logwrite( function, "[DEBUG] (2) DONE waiting on notification" );
+        }
+        logwrite(function, "[DEBUG] (2) DONE waiting on notification");
 
         // Now that we're done waiting, check for errors or abort
         //
@@ -1788,14 +1756,18 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
         seq.clr_reqstate_bit( Sequencer::SEQ_GUIDE );
 
-        std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );                       // create a mutex object for waiting
-        while ( seq.seqstate.load() != seq.reqstate.load() ) {
-          message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-          logwrite( function, message.str() );
-          seq.cv.wait( wait_lock );
+        message.str(""); message << "current state: " << seq.seqstate_string(seq.seqstate.load())
+                                 << " waiting for: " << seq.seqstate_string(seq.reqstate.load());
+        logwrite( function, message.str() );
+        {
+        std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
+        if ( seq.seqstate.load() != seq.reqstate.load() ) {
+          seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
+        }
         }
         logwrite( function, "DONE WAITING" );
       }
+      else logwrite( function, "NOTICE: not guiding" );
 
       // clear target acquired flag
       //
@@ -1898,11 +1870,32 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       //
       seq.async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
-      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.tcs_ontarget.load()==false ) {
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+      {
+      std::unique_lock<std::mutex> lock( seq.tcs_ontarget_mtx );
+      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.is_tcs_ontarget.load()==false ) {
+        seq.tcs_ontarget_cv.wait(lock);
+      }
       }
 
-      seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
+      if ( seq.is_seqstate_set(Sequencer::SEQ_ABORTREQ) ) {
+        seq.async.enqueue_and_log( function, "NOTICE: received abort signal!" );
+
+        // clear all TCS wait bits
+        //
+        seq.clr_seqstate_bit( Sequencer::SEQ_WAIT_TCS    |
+                              Sequencer::SEQ_WAIT_TCSOP  |
+                              Sequencer::SEQ_WAIT_SLEW   |
+                              Sequencer::SEQ_WAIT_SETTLE );
+
+        seq.clr_thrstate_bit( THR_MOVE_TO_TARGET );
+        seq.dome_nowait.store( false );
+        seq.tcs_nowait.store( false );
+        seq.is_tcs_ontarget.store( false );
+        return;
+      }
+      else {
+        seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
+      }
 
 /***
       // Target coords have been sent to the TCS but they don't actually go to the TCS,
@@ -2124,7 +2117,7 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     seq.clr_thrstate_bit( THR_MOVE_TO_TARGET );
     seq.dome_nowait.store( false );
     seq.tcs_nowait.store( false );
-    seq.tcs_ontarget.store( false );
+    seq.is_tcs_ontarget.store( false );
     return;
   }
   /***** Sequencer::Sequence::dothread_move_to_target *************************/
@@ -2559,7 +2552,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
 
     // done waiting so send notification
     //
-    std::unique_lock<std::mutex> lck(seq.wait_mtx);
     message.str(""); message << "requested state " << seq.seqstate_string( seq.seqstate.load() )
                              << " reached: notifying threads";
     logwrite( function, message.str() );
@@ -2630,8 +2622,6 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
       }
     }
 
-    std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );                       // create a mutex object for waiting
-
     // clear the thread error state
     //
     seq.thr_error.store( THR_NONE );
@@ -2649,11 +2639,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     std::thread( dothread_wait_for_state, std::ref(seq) ).detach();               // wait for requested state
 
     logwrite( function, "[DEBUG] (3) waiting for power control to initialize" );
-
-    while ( seq.seqstate.load() != seq.reqstate.load() ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-      logwrite( function, message.str() );
-      seq.cv.wait( wait_lock );
+    message.str(""); message << "current state: " << seq.seqstate_string(seq.seqstate.load())
+                             << " waiting for: " << seq.seqstate_string(seq.reqstate.load());
+    logwrite( function, message.str() );
+    {
+    std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
+    if ( seq.seqstate.load() != seq.reqstate.load() ) {
+      seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
+    }
     }
     logwrite( function, "[DEBUG] (3) DONE waiting for power control to initialize" );
 
@@ -2689,11 +2682,14 @@ message.str(""); message << "[DEBUG] *after* thr_error=" << seq.thr_error.load()
     std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
 
     logwrite( function, "[DEBUG] (4) waiting for init threads to complete" );
-
-    while ( seq.seqstate.load() != seq.reqstate.load() ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-      logwrite( function, message.str() );
-      seq.cv.wait( wait_lock );
+    message.str(""); message << "current state: " << seq.seqstate_string(seq.seqstate.load())
+                             << " waiting for: " << seq.seqstate_string(seq.reqstate.load());
+    logwrite( function, message.str() );
+    {
+    std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
+    if ( seq.seqstate.load() != seq.reqstate.load() ) {
+      seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
+    }
     }
     logwrite( function, "[DEBUG] (4) DONE waiting for init threads to complete" );
 
@@ -2798,10 +2794,14 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     logwrite( function, "[DEBUG] waiting for power control to initialize" );
 
-    while ( seq.seqstate.load() != seq.reqstate.load() ) {
-      message.str(""); message << "wait for state " << seq.seqstate_string( seq.reqstate.load() );
-      logwrite( function, message.str() );
-      seq.cv.wait( wait_lock );
+    message.str(""); message << "current state: " << seq.seqstate_string(seq.seqstate.load())
+                             << " waiting for: " << seq.seqstate_string(seq.reqstate.load());
+    logwrite( function, message.str() );
+    {
+    std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
+    if ( seq.seqstate.load() != seq.reqstate.load() ) {
+      seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
+    }
     }
     logwrite( function, "[DEBUG] DONE waiting for power control to initialize" );
 
@@ -4197,7 +4197,7 @@ logwrite( function, message.str() );
       }
       this->async.enqueue_and_log( function, message.str() );
 
-      this->tcs_ontarget.store( false );
+      this->is_tcs_ontarget.store( false );
       this->tcs_nowait.store( false );
       logwrite( function, "spawning dothread_move_to_target..." );
       std::thread( dothread_move_to_target, std::ref(*this) ).detach();
