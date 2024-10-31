@@ -414,8 +414,8 @@ namespace Acam {
   /***** block_main ***********************************************************/
   /**
    * @brief      main function for blocking connection thread
-   * @param[in]  acam  reference to Acam::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to Acam::Server object
+   * @param[in]  sock    pointer to Network::TcpSocket socket object
    *
    * accepts a socket connection and processes the request by
    * calling function doit()
@@ -423,12 +423,12 @@ namespace Acam {
    * This thread never terminates.
    *
    */
-  void Server::block_main( Acam::Server &acam, Network::TcpSocket sock ) {
-    while(1) {
-      sock.Accept();
-      acam.doit(sock);              // call function to do the work
-      sock.Close();
-    }
+  void Server::block_main( Acam::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
+    server.threads_active.fetch_add(1);  // atomically increment threads_busy counter
+    server.doit(*sock);
+    sock->Close();
+    server.threads_active.fetch_sub(1);  // atomically increment threads_busy counter
+    server.id_pool.release_number( sock->id );
     return;
   }
   /***** block_main ***********************************************************/
@@ -437,8 +437,8 @@ namespace Acam {
   /***** thread_main **********************************************************/
   /**
    * @brief      main function for all non-blocked threads
-   * @param[in]  acam  reference to Acam::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to Acam::Server object
+   * @param[in]  sock    pointer to Network::TcpSocket socket object
    *
    * accepts a socket connection and processes the request by
    * calling function doit()
@@ -450,14 +450,14 @@ namespace Acam {
    * is mutex-protected.
    *
    */
-  void Server::thread_main( Acam::Server &acam, Network::TcpSocket sock ) {
-    while (1) {
+  void Server::thread_main( Acam::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
+    while (true) {
       {
-      std::lock_guard<std::mutex> lock ( acam.conn_mutex );
-      sock.Accept();
+      std::lock_guard<std::mutex> lock(server.conn_mutex);
+      sock->Accept();
       }
-      acam.doit(sock);           // call function to do the work
-      sock.Close();
+      server.doit(*sock);                // call function to do the work
+      sock->Close();
     }
     return;
   }

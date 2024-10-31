@@ -66,7 +66,7 @@ namespace Acam {
   };
 
   const std::string TargetAcquisitionModeString[] = {
-    "stopped",
+    "standby",
     "acquiring",
     "guiding"
   };
@@ -215,6 +215,7 @@ namespace Acam {
       int gain;
       std::string filter;  // Python needs an arg so filter can't be empty-initialize in constructor
       std::atomic<double> focus;
+      std::string status;
 
       // sets the private variable push_settings, call on config
       inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
@@ -250,6 +251,7 @@ namespace Acam {
         message << ( this->filter.empty() ? "undef" : this->filter );  // Python will need an arg so filter can't be empty
         message << " ";
         if ( std::isnan( this->focus ) ) message << "ERR"; else { message << std::fixed << std::setprecision(2) << this->focus; };
+        message << " " << status;
         return message.str();
       }
 
@@ -399,7 +401,7 @@ namespace Acam {
 
       /* @brief  return a human-friendly string of the target mode
        */
-      inline std::string acquire_mode_string() {
+      inline std::string acquire_mode_string() const {
         if ( acquire_mode >= 0 && acquire_mode < Acam::TARGET_MODE_COUNT ) {
           return TargetAcquisitionModeString[ acquire_mode ];
         }
