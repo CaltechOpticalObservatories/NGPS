@@ -13,6 +13,7 @@ const std::string CAMERAD_AUTODIR = "autodir";
 const std::string CAMERAD_BASENAME = "basename";
 const std::string CAMERAD_BIAS = "bias";
 const std::string CAMERAD_BIN = "bin";
+const std::string CAMERAD_BOI = "boi";
 const std::string CAMERAD_BUFFER = "buffer";
 const std::string CAMERAD_CLOSE = "close";
 const std::string CAMERAD_CONFIG = "config";
@@ -50,6 +51,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_BASENAME,
                                                   CAMERAD_BIAS,
                                                   CAMERAD_BIN+" ? | <axis> [ <binfactor> ]",
+                                                  CAMERAD_BOI+" ?|<chan>|<dev#> [full|<nskip1> <nread1> [<nskip2> <nread2> [...]]]]",
                                                   CAMERAD_BUFFER+" ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]",
                                                   CAMERAD_CLOSE,
                                                   CAMERAD_CONFIG,

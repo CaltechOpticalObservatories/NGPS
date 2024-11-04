@@ -545,17 +545,14 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_FITSNAMING ) {
                     ret = server.camera.fitsnaming(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_SHUTTER ) {
                     ret = server.shutter(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_WRITEKEYS ) {
                     ret = server.camera.writekeys(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_KEY ) {
@@ -633,17 +630,14 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_USEFRAMES ) {
                     ret = server.access_useframes(args);
-                    if (!args.empty()) { sock.Write(args); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_FRAMETRANSFER ) {
                     ret = server.frame_transfer_mode(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_GEOMETRY ) {
                     ret = server.geometry(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_BUFFER ) {
@@ -656,7 +650,10 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_READOUT ) {
                     ret = server.readout(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
+                    }
+    else
+    if ( cmd == CAMERAD_BOI ) {
+                    ret = server.band_of_interest(args, retstring);
                     }
 #endif
 #ifdef STA_ARCHON

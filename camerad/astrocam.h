@@ -877,6 +877,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           int skiprows;
           int skipcols;
 
+          std::string imsize_args;         ///< IMAGE_SIZE arguments read from config file, used to restore default
+
           arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
           bool connected;                  //!< true if controller connected (requires successful TDL command)
@@ -975,6 +977,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long do_load_firmware(std::string timlodfile, std::string &retstring);
       long load_firmware(std::string &retstring);                          ///< wrapper for load_firmware
       long load_firmware(std::string timlodfile, std::string &retstring);  ///< wrapper for load_firmware
+      long band_of_interest( std::string args, std::string &retstring );   ///< set/get interest bands
       long set_camera_mode(std::string mode);
       long exptime(std::string exptime_in, std::string &retstring);
       long do_exptime(std::string exptime_in, std::string &retstring);
@@ -983,7 +986,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long shutter(std::string shutter_in, std::string& shutter_out);
       long frame_transfer_mode( std::string args );
       long frame_transfer_mode( std::string args, std::string &retstring );
-      long image_size( std::string args, std::string &retstring );
+      long image_size( std::string args, std::string &retstring, const bool save_as_default=false );
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);

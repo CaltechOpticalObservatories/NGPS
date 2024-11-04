@@ -1278,9 +1278,10 @@ logwrite(function,message.str() );
         }
       }
 
-      if ( this->config.param[entry].find( "IMAGE_SIZE" ) == 0 ) {
+      if ( this->config.param[entry] == "IMAGE_SIZE" ) {
         std::string retstring;
-        if ( this->image_size( this->config.arg[entry], retstring ) != ERROR ) {
+        bool save_as_default = true;
+        if ( this->image_size( this->config.arg[entry], retstring, save_as_default ) != ERROR ) {
           message.str(""); message << "CAMERAD:config:" << this->config.param[entry] << "=" << this->config.arg[entry];
           this->camera.async.enqueue_and_log( function, message.str() );
           applied++;
@@ -3418,6 +3419,215 @@ for ( const auto &dev : selectdev ) {
   /***** AstroCam::Interface::do_readout **************************************/
 
 
+  /***** AstroCam::Interface::band_of_interest ********************************/
+  /**
+   * @brief      set or get band of interest
+   * @details    Up to 10 BOIs can be defined using up to 10 pairs of nskip and
+   *             nread values, which define the number of rows to skip and the
+   *             number of rows to read. Each successive skip picks up where the
+   *             last read left off. This makes use of firmware from NGPS / SWIFT
+   *             commit 8080c66aeeae5aafccfd861771e5143ec114e81a
+   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1>]
+   * @param[out] retstring  reference to a string for return values
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::band_of_interest( std::string args, std::string &retstring ) {
+    const std::string function = "AstroCam::Interface::band_of_interest";
+    std::stringstream message;
+    std::stringstream cmd;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = CAMERAD_BOI;
+      retstring.append( "  <chan>|<dev#> [full|<nskip1> <nread1> [<nskip2> <nread2> [...]]]]\n" );
+      retstring.append( "  Set or get band(s) of interest parameters.\n" );
+      retstring.append( "  If no args are supplied then the BOI table for dev|chan is returned.\n" );
+      retstring.append( "  Argument \"full\" returns to the full imsize defined in the config file.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  Specify <chan> from { " );
+      message.str("");
+      for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
+        message << con.second.channel << " ";
+      }
+      message << "}\n";
+      retstring.append( message.str() );
+      retstring.append( "       or <dev#> from { " );
+      message.str("");
+      for ( const auto &con : this->controller ) {
+        if ( con.second.inactive ) continue;  // skip controllers flagged as inactive
+        message << con.second.devnum << " ";
+      }
+      message << "}\n";
+      retstring.append( message.str() );
+      retstring.append( "\n" );
+      retstring.append( "  One or more bands of interest are specified by supplying a pair of\n" );
+      retstring.append( "  values, <nskip> <nread> which specifies the number of rows to skip,\n" );
+      retstring.append( "  then read. Successive pairs will resume skipping from the previous\n" );
+      retstring.append( "  row that was read. Up to 10 such pairs may be specified.\n" );
+      retstring.append( "  The resultant image size will be the sum of all <nreads> in rows.\n" );
+      retstring.append( "\n" );
+      retstring.append( "  Camera controller connection must first be open.\n" );
+      return HELP;
+    }
+
+    if ( args.empty() ) {
+      logwrite( function, "ERROR missing <chan> or <dev>" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // Don't allow any changes while any exposure activity is running.
+    //
+    if ( !this->is_camera_idle() ) {
+      logwrite( function, "ERROR: all exposure activity must be stopped before changing image parameters" );
+      retstring="camera_busy";
+      return( ERROR );
+    }
+
+    // Get the requested dev# and channel from supplied args.
+    // After calling extract_dev_chan(), dev can be trusted as
+    // a valid index without needing a try/catch.
+    //
+    int dev=-1;
+    std::string chan;
+    if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
+
+    // don't continue if that controller is not connected now
+    //
+    if ( !this->controller[dev].connected ) {
+      message.str(""); message << "ERROR controller channel " << chan << " not connected";
+      logwrite( function, message.str() );
+      retstring="not_connected";
+      return ERROR;
+    }
+
+    // "full" will erase the interest band table and restore the IMAGE_SIZE that
+    // was specified in the config file
+    //
+    if ( args.find("full") != std::string::npos ) {
+      this->controller[dev].info.interest_bands.clear();
+      // This native 3-letter command with three zeros "SIB 0 0 0" will initialize
+      // the Y:NBOXES address which disables band-of-interest skips/reads in the firmware.
+      // It's the 3rd zero that triggers the initialization.
+      //
+      if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
+
+      // restore the image size from the config file, which was stored in the class
+      // when the config file was read
+      //
+      cmd.str(""); cmd << chan << " " << this->controller[dev].imsize_args;
+      if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+    }
+    else {
+
+      // Any args(s) other than "full" are parsed here.
+      // I'm expecting pairs of <nskip> <nread> ...
+      //
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // args must come in pairs so check for an even number of tokens
+      // after removing one token for the dev argument
+      //
+      if ( (tokens.size()-1) % 2 != 0 ) {
+        logwrite( function, "ERROR expected pairs of values <nskip> <nread>" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      // the total number rows for imsize will be the sum
+      // of all the nreads
+      //
+      int total_rows = 0;
+
+      try {
+        // loop through the tokens (which have already been checked to be in pairs)
+        // and place each pair into the vector of interest_bands
+        //
+        for ( size_t i=1; i<tokens.size(); i+=2 ) {
+          int nskip = std::stoi( tokens.at(i) );
+          int nread = std::stoi( tokens.at(i+1) );
+
+          // must read at least 1 row
+          //
+          if ( nread<=0 ) {
+            logwrite( function, "ERROR nread must be greater than 0" );
+            retstring="invalid_argument";
+            return ERROR;
+          }
+
+          // don't have to skip but it can't be negative
+          //
+          if ( nskip<0 ) {
+            logwrite( function, "ERROR nskip cannot be negative" );
+            retstring="invalid_argument";
+            return ERROR;
+          }
+
+          this->camera_info.interest_bands.emplace_back( nskip, nread );
+
+          // total number of rows in image size
+          //
+          total_rows += nread;
+        }
+
+        // disable binning
+        //
+        if ( this->do_bin("row 1", retstring) != NO_ERROR ) return ERROR;
+        if ( this->do_bin("col 1", retstring) != NO_ERROR ) return ERROR;
+
+        // Load the interest bands into a table on the controller.
+        // Supply a non-zero 3rd value because the 3rd value = 0 is used
+        // to initialize the number of rows in the firmware.
+        //
+        for ( const auto &[nskip,nread] : this->camera_info.interest_bands ) {
+          cmd.str(""); cmd << "BOI " << nskip << " " << nread << 0xFFFF;
+          if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+          logwrite( function, cmd.str() );
+        }
+
+        // Now update the image size
+        //
+        cmd.str("");
+        cmd << chan                             << " "  // this channel
+            << total_rows                       << " "  // rows calculated from sum of nreads
+            << this->controller[dev].detcols    << " "  // don't change original columns
+            << 0                                << " "  // force no parallel overscans
+            << this->controller[dev].oscols     << " "  // don't change original serial overscans
+            << this->camera_info.binning[_ROW_] << " "  // class binning should be 1
+            << this->camera_info.binning[_COL_];        // class binning should be 1
+        if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+      }
+      catch( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing skip/read pairs: " << e.what();
+        logwrite( function, message.str() );
+        retstring="parsing_exception";
+        return ERROR;
+      }
+    } // end if args != full
+
+    // Whether setting boi or not, the retstring contains the current image size
+    // and the list of interest bands. Here's the current image size,
+    //
+    retstring.clear();
+    this->image_size("", retstring);
+
+    // and here append the list of interest bands.
+    //
+    int boinum=1;
+    for ( const auto &[nskip,nread] : this->camera_info.interest_bands ) {
+      message.str(""); message << boinum++ << ": " << nskip << " " << nread << "\n";
+      retstring.append( message.str() );
+    }
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::band_of_interest ********************************/
+
+
   /***** AstroCam::Interface::set_camera_mode *********************************/
   /**
    * @brief      not yet implemented
@@ -3969,7 +4179,7 @@ logwrite(function, message.str());
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::image_size( std::string args, std::string &retstring ) {
+  long Interface::image_size( std::string args, std::string &retstring, const bool save_as_default ) {
     std::string function = "AstroCam::Interface::image_size";
     std::stringstream message;
 
@@ -4125,6 +4335,13 @@ logwrite(function, message.str());
         message.str(""); message << "ERROR setting axes for device " << dev;
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return( ERROR );
+      }
+
+      // if requested, store the imsize values as a string in the class for default recovery
+      //
+      if ( save_as_default ) {
+        message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
+        this->controller[dev].imsize_args = message.str();
       }
 
       // This is as far as we can get without a connected controller.

@@ -446,6 +446,7 @@ namespace Camera {
       int           binning[2];
       long          axis_pixels[2];
       long          region_of_interest[4];
+      std::vector<std::pair<int,int>> interest_bands;  ///< multiple BOIs specified by <nskip>,<nread> pair
       long          image_center[2];
       bool          abortexposure;
       bool          ismex;                   //!< the info object given to the FITS writer will need to know multi-extension status
