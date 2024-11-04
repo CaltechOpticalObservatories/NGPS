@@ -912,18 +912,12 @@ namespace Common {
 
     const std::lock_guard<std::mutex> lock( this->client_access );
 
-    // If connected then close the connection
+    // close the connection
     //
-    if ( this->socket.isconnected() ) {
-      message.str(""); message << "closing connection to " << this->name << " socket " << this->socket.gethost()
-                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
-      logwrite( function, message.str() );
-      this->socket.Close();
-    }
-    else {
-      message.str(""); message << "socket to " << this->name << " is not connected";
-      logwrite( function, message.str() );
-    }
+    message.str(""); message << "closing connection to " << this->name << " socket " << this->socket.gethost()
+                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+    logwrite( function, message.str() );
+    this->socket.Close();
 
     return;
   }

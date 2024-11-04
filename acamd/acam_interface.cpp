@@ -1425,6 +1425,13 @@ namespace Acam {
     const std::string function="Acam::Interface::handle_json_message";
     std::stringstream message;
 
+    // nothing to do if the message is empty
+    //
+    if ( message_in.empty() ) {
+      logwrite( function, "ERROR empty JSON message" );
+      return ERROR;
+    }
+
     try {
       nlohmann::json jmessage = nlohmann::json::parse( message_in );
       std::string messagetype;
@@ -2419,6 +2426,9 @@ namespace Acam {
         // acquire target if needed
         //
         if (error==NO_ERROR) {
+          // get currently displayed guide status
+          std::string status_og = iface.guide_manager.status;
+
           // do_acquire() is called with each frame grab and will return NO_ERROR
           // each time, unless it reaches the max number of retries or otherwise
           // fails.
@@ -2426,6 +2436,13 @@ namespace Acam {
           long did_acquire = iface.target.do_acquire();                                      // acquire target here (if needed)
           if ( did_acquire != NO_ERROR ) {
             iface.target.acquire( Acam::TARGET_NOP );                                        // disable acquire on failure
+          }
+          // set guide status
+          iface.guide_manager.status = iface.target.acquire_mode_string();
+          // update display if status changed
+          if ( iface.guide_manager.status != status_og ) {
+            iface.guide_manager.set_update();
+            std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
           }
         }
 
@@ -3452,6 +3469,7 @@ namespace Acam {
       retstring.append( "   mode ? | cont | single \n" );
       retstring.append( "   monitorfocus [ ? | stop | start ]\n" );
       retstring.append( "   pointmode\n" );
+      retstring.append( "   pushguider\n" );
       retstring.append( "   shouldframegrab [ ? | yes | no ]\n" );
       retstring.append( "   sleep\n" );
       retstring.append( "   solverargs [ ? | <key=val> [...<keyn=valn>] ]\n" );
@@ -3613,6 +3631,7 @@ namespace Acam {
       if ( tokens[1] == "?" ) {
         retstring = ACAMD_TEST;
         retstring.append( " camera ...\n" );
+        retstring.append( "  acqonly         starts acquisition only\n" );
         retstring.append( "  acquire         starts acquisition, and gets the acquired image\n" );
         retstring.append( "  adchans         return number of AD converter channels\n" );
         retstring.append( "  abort           aborts acquisition\n" );
@@ -3631,6 +3650,10 @@ namespace Acam {
       // --------------------------------
       // camera acquire
       //
+      if ( tokens[1]=="acqonly" ) {
+        return this->camera.andor.acquire_one();                     // acquire a single image
+      }
+      else
       if ( tokens[1]=="acquire" ) {
         int nacquires=1;
         if ( tokens.size() > 2 ) {
@@ -3926,6 +3949,14 @@ namespace Acam {
     //
     if ( testname == "pointmode" ) {
       retstring = "pointmode " + this->target.get_pointmode() + " selected";
+    }
+    else
+    // --------------------------------
+    // pushguider
+    //
+    if ( testname == "pushguider" ) {
+      this->guide_manager.push_guider_image( this->imagename );      // send frame to Guider GUI
+      retstring = "pushed "+this->imagename;
     }
     else
     // --------------------------------
