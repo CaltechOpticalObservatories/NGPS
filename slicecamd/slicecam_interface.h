@@ -254,7 +254,7 @@ namespace Slicecam {
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
       long isopen( std::string which, bool &state, std::string &help );     /// wrapper for slicecams
       bool isopen( std::string which );     /// wrapper for slicecams
-      long close( std::string which, std::string &help );      /// wrapper to open all slicecams
+      long close( std::string args, std::string &retstring );      /// wrapper to open all slicecams
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing

@@ -207,7 +207,7 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // loop through all Andors, opening if not already open
+    // loop through and close all (configured) Andors
     //
     for ( const auto &pair : this->andor ) {
       long ret = pair.second->close();
@@ -1267,46 +1267,28 @@ namespace Slicecam {
 
   /***** Slicecam::Interface::close *******************************************/
   /**
-   * @brief      wrapper for all slicecam hardware components
-   * @param[in]  component  optionally provide the component name to close { camera | motion }
-   * @param[out] help       contains return string for help
+   * @brief      closes slicecams
+   * @param[in]  args       optionally request help
+   * @param[out] retstring  contains return string for help
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::close( std::string component, std::string &help ) {
+  long Interface::close( std::string args, std::string &retstring ) {
     std::string function = "Slicecam::Interface::close";
     std::stringstream message;
     long error = NO_ERROR;
 
     // Help
     //
-    if ( component == "?" ) {
-      help = SLICECAMD_CLOSE;
-      help.append( " [ camera | motion ]\n" );
-      help.append( "  optionally supply the component name to close only that component\n" );
-      help.append( "  closes all components if no arg supplied\n" );
+    if ( args == "?" ) {
+      retstring = SLICECAMD_CLOSE;
+      retstring.append( " \n" );
+      retstring.append( "  Closes all configured slicecams.\n" );
       return HELP;
     }
 
-    if ( component.empty() ) {  // No component closes everything (motion and camera)...
-      component = "all";
-    }
-    else {
-      std::transform( component.begin(), component.end(), component.begin(), ::tolower );
-    }
-
-    if ( component != "all" && component != "motion" && component != "camera" ) {
-      message.str(""); message << "ERROR: unrecognized component \"" << component << "\". "
-                               << "Expected { motion | camera }";
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    if ( component == "all" || component == "camera" ) {
-      std::string dontcare;
-      error |= this->framegrab( "stop", dontcare );
-      error |= this->camera.close();
-    }
+    error |= this->framegrab( "stop", retstring );
+    error |= this->camera.close();
 
     return error;
   }
@@ -1519,13 +1501,13 @@ namespace Slicecam {
     //
     std::thread( &Slicecam::Interface::dothread_framegrab, this, whattodo, sourcefile ).detach();
 
-    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes.
-    // Always wait a minimum of 1 second in case exptime is 0.
+    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes
+    // or 5s, whichever is greater.
     //
     if ( whattodo == "stop" ) {
       auto start = std::chrono::steady_clock::now();
       bool timedout=false;
-      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*this->camera.andor.begin()->second->camera_info.exptime), 2.0 ) );
+      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*this->camera.andor.begin()->second->camera_info.exptime), 5.0 ) );
       while ( this->is_framegrab_running.load() ) {
         auto now = std::chrono::steady_clock::now();
         if ( now - start > timeout_time ) {
@@ -2058,6 +2040,7 @@ namespace Slicecam {
       retstring.append( "   handlemap [?]\n" );
       retstring.append( "   isguiding [ ? ]\n" );
       retstring.append( "   offsetgoal ? | <dRA> <dDEC>\n" );
+      retstring.append( "   shouldframegrab [?]\n" );
       retstring.append( "   sleep\n" );
       retstring.append( "   sliceparams [ ? ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
@@ -2274,6 +2257,19 @@ namespace Slicecam {
       }
     }
     else
+    // --------------------------------
+    // shouldframegrab
+    //
+    if ( testname == "shouldframegrab" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = SLICECAMD_TEST;
+        retstring.append( " shouldframegrab\n" );
+        retstring.append( "  Returns state of should_framegrab_run\n" );
+        return HELP;
+      }
+      retstring = ( this->should_framegrab_run.load() ? "yes" : "no" );
+    }
+    else
     if ( testname == "sleep" ) {
       for ( int i=0; i<10; i++ ) {
         logwrite( function, "sleeping . . ." );
@@ -2282,7 +2278,7 @@ namespace Slicecam {
     }
     else
     if ( testname == "sliceparams" ) {
-      if ( tokens.size() > 1 && tokens[2] == "?" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
         retstring = SLICECAMD_TEST;
         retstring.append( " sliceparams\n" );
         retstring.append( "  Show the slicecam params calculated by Python getSlicevParams function.\n" );
@@ -2407,7 +2403,7 @@ namespace Slicecam {
    *             If gain=1 then set to conventional amp and if gain > 1
    *             then set the EMCCD gain register.
    * @param[in]  args       optionally contains new gain
-   * @param[out] retstring  return string contains temp, setpoint, and status
+   * @param[out] retstring  return string contains gain
    * @return     ERROR | NO_ERROR | HELP
    *
    */
@@ -2452,8 +2448,41 @@ namespace Slicecam {
       return ERROR;
     }
 
-    error = this->camera.set_gain( gain );
+    // No args, just read gain
+    //
+    if ( args.empty() ) {
+      gain = this->camera.andor.begin()->second->camera_info.gain;
+    }
+    else {
+      // otherwise parse args
+      //
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
 
+      // There must be only one arg (the requested EM gain)
+      //
+      if ( tokens.size() != 1 ) {
+        logwrite( function, "ERROR too many arguments" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      // Parse the gain from the token
+      //
+      try {
+        gain  = std::stoi( tokens.at(0) );
+        error = this->camera.set_gain( gain );  // this returns the set gain as confirmation
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing gain: " << e.what();
+        logwrite( function, message.str() );
+        retstring="parsing_exception";
+        return ERROR;
+      }
+    }
+
+    // return string is the current gain
+    //
     retstring = std::to_string( gain );
 
     message.str(""); message << ( error==ERROR ? "ERROR " : "" ) << retstring;
