@@ -35,6 +35,9 @@
 #include "time.h"
 #include <map>
 #include <json.hpp>
+#include <condition_variable>
+#include <initializer_list>
+#include <bitset>
 
 #define TO_DEGREES ( 360. / 24. )
 #define TO_HOURS   ( 24. / 360. )
@@ -435,3 +438,228 @@ class PreciseTimer {
     void stop() { cancelled=true; }
 };
 /***** PreciseTimer ***********************************************************/
+
+
+/***** StateManager ***********************************************************/
+/**
+ * @class   StateManager
+ * @brief   Creates a state manager using a thread safe bitset object
+ * @details std::bitset does not provide atomic operations. This class achieves
+ *          atomicity by protecting a bitset object with a mutex. Set, clear,
+ *          and is_set functions are also provided.
+ *
+ *          The size N of the bitset object should be known at compile time.
+ *
+ *          All get and set and clear operations are done in a thread-safe
+ *          manner using a mutex to protect operations.
+ *          All set and clear operations notify any waiting threads.
+ *
+ */
+template <size_t N>
+class StateManager {
+  private:
+    std::bitset<N> state_bits;
+    std::map<size_t, std::string> state_names;
+    mutable std::mutex mtx;
+    std::condition_variable cv;
+
+  public:
+    StateManager( const std::map<size_t, std::string> &names_in )
+      : state_names(names_in) { initialize(); }
+
+    StateManager() { initialize(); }
+
+    void initialize( bool set_all=false ) {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits = set_all ? std::bitset<N>().set() : std::bitset<N>();
+    }
+
+    std::bitset<N> get() const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return state_bits;
+    }
+
+    /**
+     * @brief      set multiple state bits in variadic list
+     * @param[in]  states  variadic list of state bits to set
+     */
+    template <typename... StateBits>
+    void set( StateBits... states ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      ( state_bits.set( states ), ... );
+      }
+      cv.notify_all();
+    }
+
+    /**
+     * @brief      clear multiple state bits in variadic list
+     * @param[in]  states  variadic list of state bits to clear
+     */
+    template <typename... StateBits>
+    void clear( StateBits... states ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      ( state_bits.reset( states ), ... );
+      }
+      cv.notify_all();
+    }
+
+    /**
+     * @brief      atomically set and clear the specified state bits
+     * @param[in]  setstate  state bit to set
+     * @param[in]  clrstate  state bit to clear
+     */
+    void set_and_clear( size_t setstate, size_t clrstate ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits.set( setstate );
+      state_bits.reset( clrstate );
+      }
+      cv.notify_all();
+    }
+
+    /**
+     * @brief      atomically set and clear the specified state bits
+     * @param[in]  setstates  list of state bits to set
+     * @param[in]  clrstates  list of state bits to clear
+     */
+    void set_and_clear( std::initializer_list<size_t> setstates, std::initializer_list<size_t> clrstates ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      for ( auto set : setstates ) state_bits.set(set);
+      for ( auto clr : clrstates ) state_bits.reset(clr);
+      }
+      cv.notify_all();
+    }
+
+    /**
+     * @brief      clear all state bits
+     */
+    void clear_all() {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits.reset();
+      }
+      cv.notify_all();
+    }
+
+    /**
+     * @brief      is the specified state bit clear?
+     * @param[in]  state  state bit to check
+     * @return     true|false
+     */
+    bool is_clear( size_t state ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return !state_bits.test( state );
+    }
+
+    /**
+     * @brief      are all of the specified state bits clear?
+     * @param[in]  states  variadic list of state bits to check
+     * @return     true|false
+     */
+    template <typename... StateBits>
+    bool are_all_clear( StateBits... states ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return ( (!state_bits.test(states)) && ... );
+    }
+
+    /**
+     * @brief      is the specified state bit set?
+     * @param[in]  state  state bit to check
+     * @return     true|false
+     */
+    bool is_set( size_t state ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return state_bits.test( state );
+    }
+
+    /**
+     * @brief      are all of the specified state bits set?
+     * @param[in]  states  variadic list of state bits to check
+     * @return     true|false
+     */
+    template <typename... StateBits>
+    bool are_all_set( StateBits... states ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return ( state_bits.test(states) && ... );
+    }
+
+    /**
+     * @brief      is any one of the specified state bits set?
+     * @param[in]  states  variadic list of state bits to check
+     * @return     true|false
+     */
+    template <typename... StateBits>
+    bool is_any_set( StateBits... states ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return ( state_bits.test(states) || ... );
+    }
+
+    /**
+     * @brief      is any state bit in the bitset set?
+     * @return     true|false
+     */
+    bool is_any_set() const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return state_bits.any();
+    }
+
+    /**
+     * @brief      wait for specified state to be set
+     * @param[in]  state  state bit to wait for
+     */
+    void wait_for_state( size_t state ) const {
+      std::unique_lock<std::mutex> lock(mtx);
+      if ( state_bits.test( state ) ) return;
+      cv.wait( lock, [this,state]() { return state_bits.is_set( state ); } );
+    }
+
+    /**
+     * @brief      wait for specified state to be clear
+     * @param[in]  state  state bit to wait for
+     */
+    void wait_for_state_clear( size_t state ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      if ( !state_bits.test( state ) ) return;
+      cv.wait( lock, [this,state]() { return !state_bits.is_set( state ); } );
+    }
+
+    /**
+     * @brief      wait for all state bits to match those of another StateManager object
+     * @param[in]  obj  reference to another StateManager object for comparison
+     */
+    void wait_for_match( const StateManager &obj ) {
+      std::unique_lock<std::mutex> lock(mtx);
+      if ( state_bits == obj.get() ) return;
+      cv.wait( lock, [this,&obj] { return state_bits == obj.get(); } );
+    }
+
+    /**
+     * @brief      returns the name of a single state bit
+     * @param[in]  state  state bit enum in a std::bitset
+     * @return     string
+     */
+    std::string get_state_name( size_t state ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      auto it = state_names.find( state );
+      return it != state_names.end() ? it->second : "unknown";
+    }
+
+    /**
+     * @brief      returns a space-delimited string of names of all set states
+     * @return     space-delimited string
+     */
+    std::string get_set_names() {
+      std::stringstream names;
+      for ( const auto &[state,name] : state_names ) {
+        if ( state_bits.test(state) ) {
+          if ( !names.str().empty() ) names << " ";
+          names << name;
+        }
+      }
+      return names.str();
+    }
+};
+/***** StateManager ***********************************************************/
