@@ -10,6 +10,7 @@
 #pragma once
 
 #include <atomic>
+#include <map>
 #include <cmath>
 #include <mysqlx/xdevapi.h>
 #include <json.hpp>
@@ -37,134 +38,137 @@
  */
 namespace Sequencer {
 
-const int foo=2;
   /**
    * @enum  SequenceStateBits
-   * @brief assigns each subsystem a bit in the seqstate word
+   * @brief assigns each subsystem a bit to indicate its state
    */
   enum SequenceStateBits : int {
-    OFFLINE_BIT=0,
-    ABORTREQ_BIT,
-    STOPREQ_BIT,
-    READY_BIT,
-    RUNNING_BIT,
-    SHUTTING_BIT,
-    PAUSE_BIT,
-    STARTING_BIT,
-    ACAM_BIT,
-    ACQUIRE_BIT,
-    CALIB_BIT,
-    CAMERA_BIT,
-    EXPOSE_BIT,
-    GUIDE_BIT,
-    READOUT_BIT,
-    FILTER_BIT,
-    FLEXURE_BIT,
-    FOCUS_BIT,
-    POWER_BIT,
-    SLIT_BIT,
-    TCS_BIT,
-    TCSOP_BIT,
-    SETTLE_BIT,
-    SLEW_BIT,
-    NUM_STATE_BITS          /// NUM_STATE_BITS used for internal error checking
+    SEQ_OFFLINE=0,           ///< set when when offline
+    SEQ_ABORTREQ,            ///< set when an abort is requested
+    SEQ_STOPREQ,             ///< set when a stop is requested
+    SEQ_READY,               ///< set when sequencer is ready to be started
+    SEQ_RUNNING,             ///< set when sequencer is running
+    SEQ_SHUTTING,            ///< set when sequencer is shutting down
+    SEQ_PAUSE,               ///< set when sequencer is paused
+    SEQ_STARTING,            ///< set when sequencer is starting up
+    SEQ_WAIT_ACAM,           ///< set when waiting for acam
+    SEQ_WAIT_SLICECAM,       ///< set when waiting for slicecam
+    SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
+    SEQ_WAIT_CALIB,          ///< set when waiting for calib
+    SEQ_WAIT_CAMERA,         ///< set when waiting for camera
+    SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
+    SEQ_GUIDE,               ///< set/clear to enable/disable guide thread
+    SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
+    SEQ_WAIT_FILTER,         ///< set when waiting for filter
+    SEQ_WAIT_FLEXURE,        ///< set when waiting for flexure
+    SEQ_WAIT_FOCUS,          ///< set when waiting for focus
+    SEQ_WAIT_POWER,          ///< set when waiting for power
+    SEQ_WAIT_SLIT,           ///< set when waiting for slit
+    SEQ_WAIT_TCS,            ///< set when waiting for tcs
+    SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
+    SEQ_WAIT_SETTLE,         ///< set when waiting specifically for tcs settle
+    SEQ_WAIT_SLEW,           ///< set when waiting specifically for tcs slew
+    NUM_SEQ_STATES
   };
 
-  const std::uint32_t SEQ_OFFLINE      = 1 << OFFLINE_BIT;   ///< set when when offline
-  const std::uint32_t SEQ_ABORTREQ     = 1 << ABORTREQ_BIT;  ///< set when an abort is requested
-  const std::uint32_t SEQ_STOPREQ      = 1 << STOPREQ_BIT;   ///< set when a stop is requested
-  const std::uint32_t SEQ_READY        = 1 << READY_BIT;     ///< set when sequencer is ready to be started
-  const std::uint32_t SEQ_RUNNING      = 1 << RUNNING_BIT;   ///< set when sequencer is running
-  const std::uint32_t SEQ_SHUTTING     = 1 << SHUTTING_BIT;  ///< set when sequencer is shutting down
-  const std::uint32_t SEQ_PAUSE        = 1 << PAUSE_BIT;     ///< set when sequencer is paused
-  const std::uint32_t SEQ_STARTING     = 1 << STARTING_BIT;  ///< set when sequencer is starting up
-  const std::uint32_t SEQ_WAIT_ACAM    = 1 << ACAM_BIT;      ///< set when waiting for acam
-  const std::uint32_t SEQ_WAIT_ACQUIRE = 1 << ACQUIRE_BIT;   ///< set when waiting for acquire
-  const std::uint32_t SEQ_WAIT_CALIB   = 1 << CALIB_BIT;     ///< set when waiting for calib
-  const std::uint32_t SEQ_WAIT_CAMERA  = 1 << CAMERA_BIT;    ///< set when waiting for camera
-  const std::uint32_t SEQ_WAIT_EXPOSE  = 1 << EXPOSE_BIT;    ///< set when waiting for camera exposure
-  const std::uint32_t SEQ_GUIDE        = 1 << GUIDE_BIT;     ///< set/clear to enable/disable guide thread
-  const std::uint32_t SEQ_WAIT_READOUT = 1 << READOUT_BIT;   ///< set when waiting for camera readout
-  const std::uint32_t SEQ_WAIT_FILTER  = 1 << FILTER_BIT;    ///< set when waiting for filter
-  const std::uint32_t SEQ_WAIT_FLEXURE = 1 << FLEXURE_BIT;   ///< set when waiting for flexure
-  const std::uint32_t SEQ_WAIT_FOCUS   = 1 << FOCUS_BIT;     ///< set when waiting for focus
-  const std::uint32_t SEQ_WAIT_POWER   = 1 << POWER_BIT;     ///< set when waiting for power
-  const std::uint32_t SEQ_WAIT_SLIT    = 1 << SLIT_BIT;      ///< set when waiting for slit
-  const std::uint32_t SEQ_WAIT_TCS     = 1 << TCS_BIT;       ///< set when waiting for tcs
-  const std::uint32_t SEQ_WAIT_TCSOP   = 1 << TCSOP_BIT;     ///< set when waiting specifically for tcs operator
-  const std::uint32_t SEQ_WAIT_SETTLE  = 1 << SETTLE_BIT;    ///< set when waiting specifically for tcs settle
-  const std::uint32_t SEQ_WAIT_SLEW    = 1 << SLEW_BIT;      ///< set when waiting specifically for tcs slew
+  const std::map<size_t, std::string> seq_state_names = {
+    {SEQ_OFFLINE,       "OFFLINE"},
+    {SEQ_ABORTREQ,      "ABORTREQ"},
+    {SEQ_STOPREQ,       "STOPREQ"},
+    {SEQ_READY,         "READY"},
+    {SEQ_RUNNING,       "RUNNING"},
+    {SEQ_SHUTTING,      "SHUTTING"},
+    {SEQ_PAUSE,         "PAUSE"},
+    {SEQ_STARTING,      "STARTING"},
+    {SEQ_WAIT_ACAM,     "ACAM"},
+    {SEQ_WAIT_SLICECAM, "SLICECAM"},
+    {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
+    {SEQ_WAIT_CALIB,    "CALIB"},
+    {SEQ_WAIT_CAMERA,   "CAMERA"},
+    {SEQ_WAIT_EXPOSE,   "EXPOSE"},
+    {SEQ_GUIDE,         "GUIDE"},
+    {SEQ_WAIT_READOUT,  "READOUT"},
+    {SEQ_WAIT_FILTER,   "FILTER"},
+    {SEQ_WAIT_FLEXURE,  "FLEXURE"},
+    {SEQ_WAIT_FOCUS,    "FOCUS"},
+    {SEQ_WAIT_POWER,    "POWER"},
+    {SEQ_WAIT_SLIT,     "SLIT"},
+    {SEQ_WAIT_TCS,      "TCS"},
+    {SEQ_WAIT_TCSOP,    "TCSOP"},
+    {SEQ_WAIT_SETTLE,   "SETTLE"},
+    {SEQ_WAIT_SLEW,     "SLEW"}
+  };
 
   /**
    * @enum  ThreadStatusBits
    * @brief assigns each thread a bit in a threadstate word
    */
   enum ThreadStatusBits : int {
-    ASYNCLISTENER_BIT=0,
-    TRIGEXPO_BIT,
-    WAITFORSTATE_BIT,
-    SEQSTART_BIT,
-    MONITORREADY_BIT,
-    CALIBSET_BIT,
-    CAMERASET_BIT,
-    SLITSET_BIT,
-    MOVETOTARGET_BIT,
-    NOTIFYTCS_BIT,
-    FOCUSSET_BIT,
-    FLEXURESET_BIT,
-    CALIBRATORSET_BIT,
-    ACAMINIT_BIT,
-    CALIBINIT_BIT,
-    TCSINIT_BIT,
-    SLITINIT_BIT,
-    CAMERAINIT_BIT,
-    FLEXUREINIT_BIT,
-    FOCUSINIT_BIT,
-    POWERINIT_BIT,
-    ACAMSTOP_BIT,
-    CALIBSTOP_BIT,
-    TCSSTOP_BIT,
-    POWERSTOP_BIT,
-    MODEXPTIME_BIT,
-    ACQUISITION_BIT,
-    GUIDING_BIT,
-    STARTUP_BIT,
-    SHUTDOWN_BIT,
-    NUM_THREAD_STATE_BITS
+    THR_SEQUENCER_ASYNC_LISTENER=0,    ///< set when dothread_sequencer_async_listener running
+    THR_TRIGGER_EXPOSURE,              ///< set when dothread_trigger_exposure running
+    THR_WAIT_FOR_STATE,                ///< set when dothread_wait_for_state running
+    THR_SEQUENCE_START,                ///< set when dothread_sequencer_start running
+    THR_MONITOR_READY_STATE,
+    THR_CALIB_SET,
+    THR_CAMERA_SET,
+    THR_SLIT_SET,
+    THR_MOVE_TO_TARGET,
+    THR_NOTIFY_TCS,
+    THR_FOCUS_SET,
+    THR_FLEXURE_SET,
+    THR_CALIBRATOR_SET,
+    THR_ACAM_INIT,
+    THR_CALIB_INIT,
+    THR_TCS_INIT,
+    THR_SLIT_INIT,
+    THR_CAMERA_INIT,
+    THR_FLEXURE_INIT,
+    THR_FOCUS_INIT,
+    THR_POWER_INIT,
+    THR_ACAM_SHUTDOWN,
+    THR_CALIB_SHUTDOWN,
+    THR_TCS_SHUTDOWN,
+    THR_POWER_SHUTDOWN,
+    THR_MODIFY_EXPTIME,
+    THR_ACQUISITION,
+    THR_GUIDING,
+    THR_STARTUP,
+    THR_SHUTDOWN,
+    NUM_THREAD_STATES
   };
 
-  const std::uint32_t THR_NONE                     = 0;                       ///< used to clear anything thread related
-  const std::uint32_t THR_SEQUENCER_ASYNC_LISTENER = 1 << ASYNCLISTENER_BIT;  ///< set when dothread_sequencer_async_listener running
-  const std::uint32_t THR_TRIGGER_EXPOSURE         = 1 << TRIGEXPO_BIT;       ///< set when dothread_trigger_exposure running
-  const std::uint32_t THR_WAIT_FOR_STATE           = 1 << WAITFORSTATE_BIT;   ///< set when dothread_wait_for_state running
-  const std::uint32_t THR_SEQUENCE_START           = 1 << SEQSTART_BIT;       ///< set when dothread_sequencer_start running
-  const std::uint32_t THR_MONITOR_READY_STATE      = 1 << MONITORREADY_BIT;
-  const std::uint32_t THR_CALIB_SET                = 1 << CALIBSET_BIT;
-  const std::uint32_t THR_CAMERA_SET               = 1 << CAMERASET_BIT;
-  const std::uint32_t THR_SLIT_SET                 = 1 << SLITSET_BIT;
-  const std::uint32_t THR_MOVE_TO_TARGET           = 1 << MOVETOTARGET_BIT;
-  const std::uint32_t THR_NOTIFY_TCS               = 1 << NOTIFYTCS_BIT;
-  const std::uint32_t THR_FOCUS_SET                = 1 << FOCUSSET_BIT;
-  const std::uint32_t THR_FLEXURE_SET              = 1 << FLEXURESET_BIT;
-  const std::uint32_t THR_CALIBRATOR_SET           = 1 << CALIBRATORSET_BIT;
-  const std::uint32_t THR_ACAM_INIT                = 1 << ACAMINIT_BIT;
-  const std::uint32_t THR_CALIB_INIT               = 1 << CALIBINIT_BIT;
-  const std::uint32_t THR_TCS_INIT                 = 1 << TCSINIT_BIT;
-  const std::uint32_t THR_SLIT_INIT                = 1 << SLITINIT_BIT;
-  const std::uint32_t THR_CAMERA_INIT              = 1 << CAMERAINIT_BIT;
-  const std::uint32_t THR_FLEXURE_INIT             = 1 << FLEXUREINIT_BIT;
-  const std::uint32_t THR_FOCUS_INIT               = 1 << FOCUSINIT_BIT;
-  const std::uint32_t THR_POWER_INIT               = 1 << POWERINIT_BIT;
-  const std::uint32_t THR_ACAM_SHUTDOWN            = 1 << ACAMSTOP_BIT;
-  const std::uint32_t THR_CALIB_SHUTDOWN           = 1 << CALIBSTOP_BIT;
-  const std::uint32_t THR_TCS_SHUTDOWN             = 1 << TCSSTOP_BIT;
-  const std::uint32_t THR_POWER_SHUTDOWN           = 1 << POWERSTOP_BIT;
-  const std::uint32_t THR_MODIFY_EXPTIME           = 1 << MODEXPTIME_BIT;
-  const std::uint32_t THR_ACQUISITION              = 1 << ACQUISITION_BIT;
-  const std::uint32_t THR_GUIDING                  = 1 << GUIDING_BIT;
-  const std::uint32_t THR_STARTUP                  = 1 << STARTUP_BIT;
-  const std::uint32_t THR_SHUTDOWN                 = 1 << SHUTDOWN_BIT;
-
+  const std::map<size_t, std::string> thread_names = {
+    {THR_SEQUENCER_ASYNC_LISTENER, "async_listener"},
+    {THR_TRIGGER_EXPOSURE,         "trigger_exposure"},
+    {THR_WAIT_FOR_STATE,           "wait_for_state"},
+    {THR_SEQUENCE_START,           "sequence_start"},
+    {THR_MONITOR_READY_STATE,      "monitor_ready_state"},
+    {THR_CALIB_SET,                "calib_set"},
+    {THR_CAMERA_SET,               "camera_set"},
+    {THR_SLIT_SET,                 "slit_set"},
+    {THR_MOVE_TO_TARGET,           "move_to_target"},
+    {THR_NOTIFY_TCS,               "notify_tcs"},
+    {THR_FOCUS_SET,                "focus_set"},
+    {THR_FLEXURE_SET,              "flexure_set"},
+    {THR_CALIBRATOR_SET,           "calibrator_set"},
+    {THR_ACAM_INIT,                "acam_init"},
+    {THR_CALIB_INIT,               "calib_init"},
+    {THR_TCS_INIT,                 "tcs_init"},
+    {THR_SLIT_INIT,                "slit_init"},
+    {THR_CAMERA_INIT,              "camera_init"},
+    {THR_FLEXURE_INIT,             "flexure_init"},
+    {THR_FOCUS_INIT,               "focus_init"},
+    {THR_POWER_INIT,               "power_init"},
+    {THR_ACAM_SHUTDOWN,            "acam_shutdown"},
+    {THR_CALIB_SHUTDOWN,           "calib_shutdown"},
+    {THR_TCS_SHUTDOWN,             "tcs_shutdown"},
+    {THR_POWER_SHUTDOWN,           "power_shutdown"},
+    {THR_MODIFY_EXPTIME,           "modify_exptime"},
+    {THR_ACQUISITION,              "acquisition"},
+    {THR_GUIDING,                  "guiding"},
+    {THR_STARTUP,                  "startup"},
+    {THR_SHUTDOWN,                 "shutdown"}
+  };
 
   /***** Sequencer::Sequence **************************************************/
   /**
@@ -214,13 +218,14 @@ const int foo=2;
       std::mutex seqstate_mtx;
       std::condition_variable seqstate_cv;
 
-      std::atomic<std::uint32_t> thrstate;           ///< word to indicate which threads are running
+      StateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state{ Sequencer::seq_state_names };
+      StateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    req_state{ Sequencer::seq_state_names };
+      StateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state{ Sequencer::thread_names };
+      StateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error{ Sequencer::thread_names };
+
       std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
       std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
       std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
-
-      std::atomic<std::uint32_t> thr_error;          ///< error state of threads
-      std::atomic<std::uint32_t> thr_which_err;      ///< word to define which thread caused an error
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
@@ -253,17 +258,9 @@ const int foo=2;
       inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
 
       void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
-      void clr_seqstate_bit( uint32_t mb );     ///< clear the specified masked bit in the seqstate word
-      void set_clr_seqstate_bit( uint32_t sb, uint32_t cb );     ///< set and clear the specified masked bit(s) in the seqstate word
       void broadcast_seqstate();                ///< writes the seqstate string to the async port
-      uint32_t get_seqstate() const;            ///< get the seqstate word
 
-      void set_reqstate_bit( uint32_t mb );     ///< set the specified masked bit in the reqstate word
-      void clr_reqstate_bit( uint32_t mb );     ///< clear the specified masked bit in the reqstate word
       uint32_t get_reqstate();                  ///< get the reqstate word
-
-      inline void set_thrstate_bit( uint32_t mb ) { this->thrstate.fetch_or( mb ); }
-      inline void clr_thrstate_bit( uint32_t mb ) { this->thrstate.fetch_and( ~mb ); }
 
       static void dothread_monitor_ready_state( Sequencer::Sequence &seq );
 
@@ -284,7 +281,6 @@ const int foo=2;
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply
       std::string seqstate_string( uint32_t state );                           ///< returns string form of states set in state word
-      std::string thrstate_string( uint32_t state );                           ///< returns string form of thread states
       long dotype( std::string args );                                         ///< set do type (one/all)
       long dotype( std::string args, std::string &retstring );                 ///< set or get do type (one/all)
       long poll_dome_position( double &domeazi, double &telazi );

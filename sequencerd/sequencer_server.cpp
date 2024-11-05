@@ -1339,9 +1339,9 @@ namespace Sequencer {
                       // then spawn a thread to start
                       //
                       else {
-                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
-                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_RUNNING );
-                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_READY );
+                        seq.sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
+                        seq.sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
+                        seq.sequence.broadcast_seqstate();
 
                         std::thread( std::ref( Sequencer::Sequence::dothread_sequence_start ),
                                      std::ref( seq.sequence) ).detach();
@@ -1366,9 +1366,9 @@ namespace Sequencer {
                       else {
                         logwrite( function, "stop requested" );
 
-                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_STOPREQ );
-                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
-                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_STOPREQ, (Sequencer::SEQ_RUNNING|Sequencer::SEQ_WAIT_EXPOSE) );  // set STOPREQ, clear RUNNING|EXPOSE
+                        seq.sequence.req_state.set_and_clear( Sequencer::SEQ_STOPREQ, Sequencer::SEQ_RUNNING );
+                        seq.sequence.seq_state.set_and_clear( {Sequencer::SEQ_STOPREQ}, {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // set STOPREQ, clear RUNNING|EXPOSE
+                        seq.sequence.broadcast_seqstate();
 
                         // If exposing then modify the exposure time to end immediately (-1)
                         //
@@ -1380,7 +1380,8 @@ namespace Sequencer {
                         //
                         if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
                           seq.sequence.camerad.async( CAMERAD_RESUME );                // tell the camera to resume exposure
-                          seq.sequence.clr_seqstate_bit( Sequencer::SEQ_PAUSE );       // clear the PAUSE bit
+                          seq.sequence.seq_state.clear( Sequencer::SEQ_PAUSE );        // clear the PAUSE bit
+                          seq.sequence.broadcast_seqstate();
                         }
 
                         // If not already running then spawn a thread to wait for this state,
@@ -1410,16 +1411,17 @@ namespace Sequencer {
                         //
                         if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
                           seq.sequence.camerad.async( CAMERAD_ABORT );                       // tell camera to abort exposure
-                          seq.sequence.clr_seqstate_bit( Sequencer::SEQ_WAIT_EXPOSE );       // clear the EXPOSE bit
+                          seq.sequence.seq_state.clear( Sequencer::SEQ_WAIT_EXPOSE );        // clear the EXPOSE bit
+                          seq.sequence.broadcast_seqstate();
                         }
 
 //                      {
 //                        I was here
 //                      std::lock_guard<std::mutex> lock(seq.tcs_ontarget_mtx); // Lock the mutex
-                        seq.sequence.set_reqstate_bit( Sequencer::SEQ_ABORTREQ );
-                        seq.sequence.clr_reqstate_bit( Sequencer::SEQ_RUNNING );
-                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_ABORTREQ,                                // set ABORTREQ
-                                                           (Sequencer::SEQ_RUNNING|Sequencer::SEQ_WAIT_EXPOSE) );  // clear RUNNING|EXPOSE
+                        seq.sequence.req_state.set_and_clear( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_RUNNING );
+                        seq.sequence.seq_state.set_and_clear( {Sequencer::SEQ_ABORTREQ},
+                                                              {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // clear RUNNING|EXPOSE
+                        seq.sequence.broadcast_seqstate();
 
                         // Set the do-type to single-step
                         //
@@ -1531,7 +1533,8 @@ namespace Sequencer {
                       }
                       else {
                         seq.sequence.camerad.async( CAMERAD_PAUSE );
-                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+                        seq.sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+                        seq.sequence.broadcast_seqstate();
                         ret = NO_ERROR;
                       }
       }
@@ -1548,7 +1551,8 @@ namespace Sequencer {
                       }
                       else {
                         seq.sequence.camerad.async( CAMERAD_RESUME );
-                        seq.sequence.set_clr_seqstate_bit( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
+                        seq.sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
+                        seq.sequence.broadcast_seqstate();
                         ret = NO_ERROR;
                       }
       }
