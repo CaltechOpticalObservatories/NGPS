@@ -599,14 +599,13 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if ( cmd == CAMERAD_NATIVE ) {
+      logwrite(function, " CALLING NATIVE");
                     ret = server.native(args, retstring);  // @todo make this work with Archon
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
 #ifdef ASTROCAM
     else
     if ( cmd == CAMERAD_MODEXPTIME ) {
                     ret = server.modify_exptime(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_PAUSE ) {
@@ -645,7 +644,7 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if ( cmd == CAMERAD_IMSIZE ) {
-                    ret = server.image_size(args, retstring);
+                    ret = server._image_size(args, retstring);
                     }
     else
     if ( cmd == CAMERAD_READOUT ) {

@@ -987,6 +987,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long frame_transfer_mode( std::string args );
       long frame_transfer_mode( std::string args, std::string &retstring );
       long image_size( std::string args, std::string &retstring, const bool save_as_default=false );
+      long _image_size( std::string args, std::string &retstring, const bool save_as_default=false );
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);

@@ -34,7 +34,7 @@ namespace AstroCam {
 
     // Log PCI devices configured
     //
-    if ( this->configdev.empty() ) {
+    if ( this->configured_devnums.empty() ) {
       logwrite( function, "ERROR: no devices configured. Need CONTROLLER keyword in config file." );
       retstring="not_configured";
       return ERROR;
@@ -43,18 +43,18 @@ namespace AstroCam {
     // If no string is given then use vector of configured devices
     //
     if ( devices_in.empty() ) {
-      this->devlist = this->configdev;
+      this->devnums = this->configured_devnums;
     }
     else {
-      // Otherwise, tokenize the device list string and build devlist from the tokens
+      // Otherwise, tokenize the device list string and build devnums from the tokens
       //
       std::vector<std::string> tokens;
       Tokenize(devices_in, tokens, " ");
       for ( const auto &n : tokens ) {                // For each token in the devices_in string,
         try {
           int dev = std::stoi( n );                   // convert to int
-          if ( std::find( this->devlist.begin(), this->devlist.end(), dev ) == this->devlist.end() ) { // If it's not already in the vector,
-            this->devlist.push_back( dev );                                                            // then push into devlist vector.
+          if ( std::find( this->devnums.begin(), this->devnums.end(), dev ) == this->devnums.end() ) { // If it's not already in the vector,
+            this->devnums.push_back( dev );                                                            // then push into devnums vector.
           }
         }
         catch (std::invalid_argument &) {
@@ -73,10 +73,10 @@ namespace AstroCam {
       }
     }
 
-    // For each requested dev in devlist, if there is a matching controller in the config file,
+    // For each requested dev in devnums, if there is a matching controller in the config file,
     // then get the devname and store it in the controller map.
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       if ( this->controller.find( dev ) != this->controller.end() ) {
         this->controller[ dev ].devname = "sim"+std::to_string(dev);
       }
@@ -84,7 +84,7 @@ namespace AstroCam {
 
     // set the controller connected state true
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       this->controller[dev].connected = true;
     }
 
@@ -110,7 +110,7 @@ namespace AstroCam {
 
     // clear the controller connected state
     //
-    for ( const auto &dev : this->devlist ) {
+    for ( const auto &dev : this->devnums ) {
       this->controller[dev].connected = false;
     }
 
@@ -150,7 +150,7 @@ namespace AstroCam {
       std::stringstream lodfilestream;
       // But only use it if the device is open
       //
-      if ( std::find( this->devlist.begin(), this->devlist.end(), fw->first ) != this->devlist.end() ) {
+      if ( std::find( this->devnums.begin(), this->devnums.end(), fw->first ) != this->devnums.end() ) {
         lodfilestream << fw->first << " " << fw->second;
 
         // Call do_load_firmware with the built up string.
@@ -451,6 +451,14 @@ namespace AstroCam {
     return( NO_ERROR );
   }
   /***** AstroCam::Interface::native ******************************************/
+
+
+  long Interface::_image_size( std::string args, std::string &retstring, const bool save_as_default ) {
+    std::string function = "AstroCam::Interface::_image_size";
+    std::stringstream message;
+    logwrite( function, "NOP" );
+    return( NO_ERROR );
+  }
 
 
   /***** AstroCam::Simulator::dothread_expose *********************************/
