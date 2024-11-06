@@ -454,14 +454,20 @@ class PreciseTimer {
  *          manner using a mutex to protect operations.
  *          All set and clear operations notify any waiting threads.
  *
+ *          The wait functions set a bitset indicating which bits are being
+ *          waited on, and can be cancelled. When cancelled an exception
+ *          is thrown.
+ *
  */
 template <size_t N>
 class StateManager {
   private:
     std::bitset<N> state_bits;
+    std::bitset<N> pending_bits;  // contains the bits being waited on
     std::map<size_t, std::string> state_names;
     mutable std::mutex mtx;
     std::condition_variable cv;
+    std::atomic<bool> should_cancel{false};
 
   public:
     StateManager( const std::map<size_t, std::string> &names_in )
@@ -477,6 +483,23 @@ class StateManager {
     std::bitset<N> get() const {
       std::lock_guard<std::mutex> lock(mtx);
       return state_bits;
+    }
+
+    std::bitset<N> get_pending() const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return pending_bits;
+    }
+
+    /**
+     * @brief      cancels all waiting threads and resets all pending bits
+     */
+    void cancel_wait() {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      should_cancel=true;
+      pending_bits.reset();
+      }
+      cv.notify_all();
     }
 
     /**
@@ -608,32 +631,65 @@ class StateManager {
 
     /**
      * @brief      wait for specified state to be set
+     * @details    this can throw an exception
      * @param[in]  state  state bit to wait for
      */
-    void wait_for_state( size_t state ) const {
+    void wait_for_state_set( size_t state ) {
       std::unique_lock<std::mutex> lock(mtx);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_state_set cancelled by external signal");
+      }
       if ( state_bits.test( state ) ) return;
-      cv.wait( lock, [this,state]() { return state_bits.is_set( state ); } );
+      pending_bits.set(state);
+      cv.wait( lock, [this,state]() { return should_cancel.load() || state_bits.test( state ); } );
+      pending_bits.reset(state);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_state_set cancelled by external signal");
+      }
     }
 
     /**
      * @brief      wait for specified state to be clear
+     * @details    this can throw an exception
      * @param[in]  state  state bit to wait for
      */
-    void wait_for_state_clear( size_t state ) const {
-      std::lock_guard<std::mutex> lock(mtx);
+    void wait_for_state_clear( size_t state ) {
+      std::unique_lock<std::mutex> lock(mtx);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_state_clear cancelled by external signal");
+      }
       if ( !state_bits.test( state ) ) return;
-      cv.wait( lock, [this,state]() { return !state_bits.is_set( state ); } );
+      pending_bits.set(state);
+      cv.wait( lock, [this,state]() { return ( should_cancel.load() || !state_bits.test( state ) ); } );
+      pending_bits.reset(state);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_state_clear cancelled by external signal");
+      }
     }
 
     /**
      * @brief      wait for all state bits to match those of another StateManager object
+     * @details    this can throw an exception
      * @param[in]  obj  reference to another StateManager object for comparison
      */
     void wait_for_match( const StateManager &obj ) {
       std::unique_lock<std::mutex> lock(mtx);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_match cancelled by external signal");
+      }
       if ( state_bits == obj.get() ) return;
-      cv.wait( lock, [this,&obj] { return state_bits == obj.get(); } );
+      pending_bits = obj.get();    // these are the bits being waited for
+      cv.wait( lock, [this,&obj] { return ( should_cancel.load() || state_bits == obj.get() ); } );
+      pending_bits &= ~obj.get();  // remove them from pending
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_match cancelled by external signal");
+      }
     }
 
     /**
@@ -657,6 +713,39 @@ class StateManager {
         if ( state_bits.test(state) ) {
           if ( !names.str().empty() ) names << " ";
           names << name;
+        }
+      }
+      return names.str();
+    }
+
+    /**
+     * @brief      returns a space-delimited string of names of all clear states
+     * @return     space-delimited string
+     */
+    std::string get_clear_names() {
+      std::stringstream names;
+      for ( const auto &[state,name] : state_names ) {
+        if ( !state_bits.test(state) ) {
+          if ( !names.str().empty() ) names << " ";
+          names << name;
+        }
+      }
+      return names.str();
+    }
+
+    /**
+     * @brief      returns a space-delimited string of names of all pending states
+     * @return     space-delimited string
+     */
+    std::string get_pending_names() {
+      std::stringstream names;
+      // loop through all bits
+      for ( size_t bit=0; bit<N; ++bit ) {
+        // if pending_bits has this bit set
+        // then find the corresponding name from state_names
+        if ( pending_bits.test(bit) ) {
+          auto it = state_names.find(bit);
+          if ( it != state_names.end() ) names << it->second;
         }
       }
       return names.str();
