@@ -2528,7 +2528,7 @@ namespace Acam {
     if ( tokens.size() == 4 ) {
       try {
         std::string reply;
-        exptime = std::stof( tokens.at(1) );
+        exptime = std::stof( tokens.at(0) );
 
         // set the exposure time here
         error |= camera.set_exptime( exptime );
