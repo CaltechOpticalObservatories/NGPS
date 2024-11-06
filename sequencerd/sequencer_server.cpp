@@ -87,11 +87,11 @@ namespace Sequencer {
         configkey = config.param.at(entry);
         configval = config.arg.at(entry);
       }
-      catch (std::out_of_range &) {   // should be impossible
-        message.str(""); message << "ERROR: entry " << entry
-                                 << " out of range in config parameters (" << this->config.n_entries << ")";
+      catch (const std::exception &e) {   // should be impossible
+        message.str(""); message << "ERROR parsing entry " << entry << " of " << this->config.n_entries
+                                 << ": " << e.what();
         this->sequence.async.enqueue_and_log( function, message.str() );
-        return(ERROR);
+        return ERROR;
       }
 
 #ifdef LOGLEVEL_DEBUG
@@ -100,88 +100,67 @@ namespace Sequencer {
 #endif
 
       // NBPORT
-      if ( configkey.compare(0, 6, "NBPORT")==0 ) {
-        int port;
+      if ( configkey == "NBPORT" ) {
         try {
-          port = std::stoi( configval );
+          this->nbport = std::stoi( configval );
         }
-        catch (std::invalid_argument &) {
-          message.str(""); message << "ERROR: bad NBPORT: unable to convert " << configval << " to integer";
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing NBPORT: " << e.what();
           this->sequence.async.enqueue_and_log( function, message.str() );
-          return(ERROR);
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: NBPORT number out of integer range" );
-          return(ERROR);
-        }
-        this->nbport = port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // BLKPORT
-      if (config.param[entry].compare(0, 7, "BLKPORT")==0) {
-        int port;
+      if (config.param[entry] == "BLKPORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->blkport = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad BLKPORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing BLKPORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: BLKPORT number out of integer range" );
-          return(ERROR);
-        }
-        this->blkport = port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // ASYNCPORT
-      if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
-        int port;
+      if (config.param[entry] == "ASYNCPORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->asyncport = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ASYNCPORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ASYNCPORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ASYNCPORT number out of integer range" );
-          return(ERROR);
-        }
-        this->asyncport = port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // MESSAGEPORT
-      if (config.param[entry].compare(0, 11, "MESSAGEPORT")==0) {
-        int port;
+      if (config.param[entry] == "MESSAGEPORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->messageport = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad MESSAGEPORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing MESSAGEPORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: MESSAGEPORT number out of integer range" );
-          return(ERROR);
-        }
-        this->messageport = port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // MESSAGEGROUP
-      if (config.param[entry].compare(0, 12, "MESSAGEGROUP")==0) {
+      if (config.param[entry] == "MESSAGEGROUP") {
         this->messagegroup = config.arg[entry];
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
@@ -189,221 +168,180 @@ namespace Sequencer {
       }
 
       // ACAMD_PORT
-      if (config.param[entry].compare(0, 10, "ACAMD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "ACAMD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.acamd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACAMD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ACAMD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACAMD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.acamd.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // CAMERAD_PORT
-      if (config.param[entry].compare(0, 12, "CAMERAD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "CAMERAD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.camerad.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad CAMERAD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::invalid_argument &e) {
+          message.str(""); message << "ERROR parsing CAMERAD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: CAMERAD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.camerad.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // CAMERAD_NBPORT
-      if (config.param[entry].compare(0, 14, "CAMERAD_NBPORT")==0) {
-        int port;
+      if (config.param[entry] == "CAMERAD_NBPORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.camerad.nbport = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad CAMERAD_NBPORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing CAMERAD_NBPORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: CAMERAD_NBPORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.camerad.nbport =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // FLEXURED_PORT
-      if (config.param[entry].compare(0, 13, "FLEXURED_PORT")==0) {
-        int port;
+      if (config.param[entry] == "FLEXURED_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.flexured.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad FLEXURED_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing FLEXURED_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: FLEXURED_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.flexured.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // POWERD_PORT
-      if (config.param[entry].compare(0, 11, "POWERD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "POWERD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.powerd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad POWERD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing POWERD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: POWERD_PORT number out of integer range" );
-          return(ERROR);
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // SLICECAMD_PORT
+      if (config.param[entry] == "SLICECAMD_PORT") {
+        try {
+          this->sequence.slicecamd.port = std::stoi( config.arg[entry] );
         }
-        this->sequence.powerd.port =  port;
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SLICECAMD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // SLITD_PORT
-      if (config.param[entry].compare(0, 10, "SLITD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "SLITD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.slitd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad SLITD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SLITD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: SLITD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.slitd.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // TCSD_PORT
-      if (config.param[entry].compare(0, 9, "TCSD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "TCSD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.tcsd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad TCSD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing TCSD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCSD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.tcsd.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // CALIBD_PORT
-      if (config.param[entry].compare(0, 11, "CALIBD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "CALIBD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.calibd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad CALIBD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing CALIBD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: CALIBD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.calibd.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // FILTERD_PORT
-      if (config.param[entry].compare(0, 12, "FILTERD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "FILTERD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.filterd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad FILTERD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing FILTERD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: FILTERD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.filterd.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // FOCUSD_PORT
-      if (config.param[entry].compare(0, 11, "FOCUSD_PORT")==0) {
-        int port;
+      if (config.param[entry] == "FOCUSD_PORT") {
         try {
-          port = std::stoi( config.arg[entry] );
+          this->sequence.focusd.port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad FOCUSD_PORT: unable to convert to integer" );
-          return(ERROR);
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing FOCUSD_PORT: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: FOCUSD_PORT number out of integer range" );
-          return(ERROR);
-        }
-        this->sequence.focusd.port =  port;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
       // ACQUIRE_TIMEOUT
-      if (config.param[entry].compare(0, 15, "ACQUIRE_TIMEOUT")==0) {
-        double to=0;
+      if (config.param[entry] == "ACQUIRE_TIMEOUT") {
         try {
-          to = std::stod( config.arg[entry] );
+          this->sequence.acquisition_timeout = std::stod( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          message.str(""); message << "ERROR: bad ACQUIRE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ACQUIRE_TIMEOUT: " << e.what();
           this->sequence.async.enqueue_and_log( function, message.str() );
-          return(ERROR);
+          return ERROR;
         }
-        catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_TIMEOUT number out of double range" );
-          return(ERROR);
-        }
-        this->sequence.acquisition_timeout = to;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
         applied++;
