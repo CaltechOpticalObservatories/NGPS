@@ -711,6 +711,14 @@ namespace Sequencer {
         this->sequence.async.enqueue_and_log( function, message.str() );
       }
 
+      // CAMERA_EPILOGUE
+      if (config.param[entry].compare( 0, CAMERA_EPILOGUE.length(), CAMERA_EPILOGUE )==0) {
+        this->sequence.camera_epilogue.push_back( this->config.arg[entry] );
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
       //
       // configure the power switch parameters
       //
@@ -790,6 +798,15 @@ namespace Sequencer {
       // POWER_ACAM
       if (config.param[entry].compare( 0, POWER_ACAM.length(), POWER_ACAM )==0) {
         if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
+      }
+
+      // POWER_SLICECAM
+      if (config.param[entry].compare( 0, POWER_SLICECAM.length(), POWER_SLICECAM )==0) {
+        if ( this->sequence.power_switch[POWER_SLICECAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );

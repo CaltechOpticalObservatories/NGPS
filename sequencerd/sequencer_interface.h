@@ -48,6 +48,7 @@ namespace Sequencer {
   const std::string DB_SETS="DB_SETS";            ///< name of the completed target sets table configuration parameter
 
   const std::string CAMERA_PREAMBLE="CAMERA_PREAMBLE";  ///< parameter name which defines CAMERA_PREAMBLE commands
+  const std::string CAMERA_EPILOGUE="CAMERA_EPILOGUE";  ///< parameter name which defines CAMERA_EPILOGUE commands
 
   const std::string POWER_SLIT="POWER_SLIT";         ///< parameter name which defines NPS_PLUG names required for slit hardware
   const std::string POWER_CAMERA="POWER_CAMERA";     ///< parameter name which defines NPS_PLUG names required for camera hardware
@@ -58,6 +59,7 @@ namespace Sequencer {
   const std::string POWER_TELEM="POWER_TELEM";       ///< parameter name which defines NPS_PLUG names required for telem hardware
   const std::string POWER_THERMAL="POWER_THERMAL";   ///< parameter name which defines NPS_PLUG names required for thermal hardware
   const std::string POWER_ACAM="POWER_ACAM";         ///< parameter name which defines NPS_PLUG names required for ACAM (A&G) hardware
+  const std::string POWER_SLICECAM="POWER_SLICECAM"; ///< parameter name which defines NPS_PLUG names required for SLICECAM hardware
 
   const std::string ACQUIRE_OFFSET_THRESHOLD="ACQUIRE_OFFSET_THRESHOLD";    ///< below this in arcsec defines successful acquisition
   const std::string ACQUIRE_MIN_REPEAT="ACQUIRE_MIN_REPEAT";    ///< minimum number of successful sequential acquires

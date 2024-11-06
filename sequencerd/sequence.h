@@ -18,6 +18,7 @@
 #include "sequencer_interface.h"  // this defines the classes used to interface with various subsystems
 
 #include "acamd_commands.h"
+#include "slicecamd_commands.h"
 #include "calibd_commands.h"
 #include "camerad_commands.h"
 #include "flexured_commands.h"
@@ -39,10 +40,39 @@
 namespace Sequencer {
 
   /**
+   * @enum  DaemonBits
+   * @brief assigns each subsystem a bit to indicate its state
+   */
+  enum DaemonBits : size_t {
+    DAEMON_ACAM=0,
+    DAEMON_CALIB,
+    DAEMON_CAMERA,
+    DAEMON_FLEXURE,
+    DAEMON_FOCUS,
+    DAEMON_POWER,
+    DAEMON_SLICECAM,
+    DAEMON_SLIT,
+    DAEMON_TCS,
+    NUM_DAEMONS
+  };
+
+  const std::map<size_t, std::string> daemon_names = {
+    {DAEMON_ACAM,      "acam"},
+    {DAEMON_CALIB,     "calib"},
+    {DAEMON_CAMERA,    "camera"},
+    {DAEMON_FLEXURE,   "flexure"},
+    {DAEMON_FOCUS,     "focus"},
+    {DAEMON_POWER,     "power"},
+    {DAEMON_SLICECAM,  "slicecam"},
+    {DAEMON_SLIT,      "slit"},
+    {DAEMON_TCS,       "tcs"}
+  };
+
+  /**
    * @enum  SequenceStateBits
    * @brief assigns each subsystem a bit to indicate its state
    */
-  enum SequenceStateBits : int {
+  enum SequenceStateBits : size_t {
     SEQ_OFFLINE=0,           ///< set when when offline
     SEQ_ABORTREQ,            ///< set when an abort is requested
     SEQ_STOPREQ,             ///< set when a stop is requested
@@ -103,7 +133,7 @@ namespace Sequencer {
    * @enum  ThreadStatusBits
    * @brief assigns each thread a bit in a threadstate word
    */
-  enum ThreadStatusBits : int {
+  enum ThreadStatusBits : size_t {
     THR_SEQUENCER_ASYNC_LISTENER=0,    ///< set when dothread_sequencer_async_listener running
     THR_TRIGGER_EXPOSURE,              ///< set when dothread_trigger_exposure running
     THR_WAIT_FOR_STATE,                ///< set when dothread_wait_for_state running
@@ -118,6 +148,7 @@ namespace Sequencer {
     THR_FLEXURE_SET,
     THR_CALIBRATOR_SET,
     THR_ACAM_INIT,
+    THR_SLICECAM_INIT,
     THR_CALIB_INIT,
     THR_TCS_INIT,
     THR_SLIT_INIT,
@@ -126,7 +157,11 @@ namespace Sequencer {
     THR_FOCUS_INIT,
     THR_POWER_INIT,
     THR_ACAM_SHUTDOWN,
+    THR_SLICECAM_SHUTDOWN,
     THR_CALIB_SHUTDOWN,
+    THR_CAMERA_SHUTDOWN,
+    THR_FOCUS_SHUTDOWN,
+    THR_SLIT_SHUTDOWN,
     THR_TCS_SHUTDOWN,
     THR_POWER_SHUTDOWN,
     THR_MODIFY_EXPTIME,
@@ -152,6 +187,7 @@ namespace Sequencer {
     {THR_FLEXURE_SET,              "flexure_set"},
     {THR_CALIBRATOR_SET,           "calibrator_set"},
     {THR_ACAM_INIT,                "acam_init"},
+    {THR_SLICECAM_INIT,            "slicecam_init"},
     {THR_CALIB_INIT,               "calib_init"},
     {THR_TCS_INIT,                 "tcs_init"},
     {THR_SLIT_INIT,                "slit_init"},
@@ -160,7 +196,11 @@ namespace Sequencer {
     {THR_FOCUS_INIT,               "focus_init"},
     {THR_POWER_INIT,               "power_init"},
     {THR_ACAM_SHUTDOWN,            "acam_shutdown"},
+    {THR_SLICECAM_SHUTDOWN,        "slicecam_shutdown"},
     {THR_CALIB_SHUTDOWN,           "calib_shutdown"},
+    {THR_CAMERA_SHUTDOWN,          "camera_shutdown"},
+    {THR_FOCUS_SHUTDOWN,           "focus_shutdown"},
+    {THR_SLIT_SHUTDOWN,            "slit_shutdown"},
     {THR_TCS_SHUTDOWN,             "tcs_shutdown"},
     {THR_POWER_SHUTDOWN,           "power_shutdown"},
     {THR_MODIFY_EXPTIME,           "modify_exptime"},
@@ -222,10 +262,11 @@ namespace Sequencer {
       StateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    req_state{ Sequencer::seq_state_names };
       StateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state{ Sequencer::thread_names };
       StateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error{ Sequencer::thread_names };
+      StateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_ready{ Sequencer::daemon_names };
 
       std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
       std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
-      std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
+//    std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
@@ -247,12 +288,14 @@ namespace Sequencer {
       Common::DaemonClient flexured { "flexured" };
       Common::DaemonClient focusd { "focusd" };
       Common::DaemonClient powerd { "powerd" };
+      Common::DaemonClient slicecamd { "slicecamd" };
       Common::DaemonClient slitd { "slitd" };
       Common::DaemonClient tcsd { "tcsd" };
 
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
       std::vector<std::string> camera_preamble;  ///< commands to send to camera on initialization, read from cfg file
+      std::vector<std::string> camera_epilogue;  ///< commands to send to camera on shutdown, read from cfg file
 
       inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
       inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
@@ -318,6 +361,7 @@ namespace Sequencer {
       static void dothread_flexure_set( Sequencer::Sequence &seq );
 
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
+      static void dothread_slicecam_init( Sequencer::Sequence &seq );          ///< initializes connection to slicecamd
       static void dothread_calib_init( Sequencer::Sequence &seq );             ///< initializes connection to calibd
       static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
       static void dothread_slit_init( Sequencer::Sequence &seq );              ///< initializes connection to slitd
@@ -326,10 +370,14 @@ namespace Sequencer {
       static void dothread_focus_init( Sequencer::Sequence &seq );             ///< initializes connection to focusd
       static void dothread_power_init( Sequencer::Sequence &seq );             ///< initializes connection to powerd
 
-      static void dothread_tcs_shutdown( Sequencer::Sequence &seq );           ///< shutdown the TCS
-      static void dothread_calib_shutdown( Sequencer::Sequence &seq );         ///< shutdown the calibrator
       static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam
+      static void dothread_calib_shutdown( Sequencer::Sequence &seq );         ///< shutdown the calibrator
+      static void dothread_camera_shutdown( Sequencer::Sequence &seq );        ///< shutdown the camera
+      static void dothread_focus_shutdown( Sequencer::Sequence &seq );         ///< shutdown focusd
       static void dothread_power_shutdown( Sequencer::Sequence &seq );         ///< shutdown the power system
+      static void dothread_slicecam_shutdown( Sequencer::Sequence &seq );      ///< shutdown the slicecam
+      static void dothread_slit_shutdown( Sequencer::Sequence &seq );          ///< shutdown slitd
+      static void dothread_tcs_shutdown( Sequencer::Sequence &seq );           ///< shutdown the TCS
   };
   /***** Sequencer::Sequence **************************************************/
 

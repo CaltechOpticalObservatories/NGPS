@@ -50,6 +50,13 @@ CAMERA_PREAMBLE=(mex true)
 CAMERA_PREAMBLE=(shutter enable)
 CAMERA_PREAMBLE=(native EPG 500)
 
+# Camera epilogue
+#
+# Analogous to preamble, these commands are sent to the camera daemon on shutdown.
+#
+CAMERA_EPILOGUE=(native POF)
+CAMERA_EPILOGUE=(close)
+
 # NPS power switches
 #
 # These are the names of NPS switches used by the Sequencer.
@@ -59,14 +66,15 @@ CAMERA_PREAMBLE=(native EPG 500)
 # The names used here must have a matching NPS_PLUG name defined in power.cfg
 #
 POWER_SLIT=SLIT
-POWER_CAMERA=(LEACH_R LEACH_I)
+POWER_CAMERA=(SHUTTER LEACH_R LEACH_I)
 POWER_CALIB=(CAL_MOT LAMP_MOD)
 POWER_FLEXURE=(FLEX_I FLEX_R)
 POWER_FILTER=ACAM_MOT
 POWER_FOCUS=(FOCUS_IR)
 POWER_TELEM=CR1000
-POWER_THERMAL=(LKS_IG LKS_UR)
-POWER_ACAM=ACAM
+POWER_THERMAL=(LKS_IG LKS_UR CR1000)
+POWER_ACAM=(ACAM ACAM_MOT)
+POWER_SLICECAM=(SLICCAM1 SLICCAM2)
 
 # database configuration
 #
