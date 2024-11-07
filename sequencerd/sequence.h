@@ -236,9 +236,9 @@ namespace Sequencer {
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
       std::mutex start_mtx;       ///< mutex to protect the start sequence from multiple instances
 
-      std::mutex              tcs_ontarget_mtx;
-      std::condition_variable tcs_ontarget_cv;
-      std::atomic<bool>       is_tcs_ontarget;             ///< remotely set by the TCS operator to indicate that the target is ready
+///   std::mutex              tcs_ontarget_mtx;
+///   std::condition_variable tcs_ontarget_cv;
+///   std::atomic<bool>       is_tcs_ontarget;             ///< remotely set by the TCS operator to indicate that the target is ready
 
       std::mutex wait_mtx;
       std::condition_variable cv;
@@ -266,7 +266,6 @@ namespace Sequencer {
 
       std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
       std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
-//    std::atomic<std::uint32_t> system_not_ready;   ///< set bits indicate which subsystem is not ready
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h

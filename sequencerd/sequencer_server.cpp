@@ -1236,7 +1236,7 @@ namespace Sequencer {
       // This is needed before any sequences can be run.
       //
       if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
-                      seq.sequence.is_tcs_ontarget.store( false );
+///                   seq.sequence.is_tcs_ontarget.store( false );
                       seq.sequence.tcs_nowait.store( false );
                       seq.sequence.dome_nowait.store( true );
                       if ( sock.isasync() ) {
@@ -1264,7 +1264,7 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
-                      seq.sequence.is_tcs_ontarget.store( false );
+///                   seq.sequence.is_tcs_ontarget.store( false );
                       seq.sequence.tcs_nowait.store( false );
                       seq.sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
@@ -1406,7 +1406,7 @@ namespace Sequencer {
 //                      }
 //                      seq.tcs_ontarget_cv.notify_all(); // Notify waiting threads
 
-                        seq.sequence.tcs_ontarget_cv.notify_all();
+///                     seq.sequence.tcs_ontarget_cv.notify_all();
                         ret |= NO_ERROR;
                       }
                       else {
@@ -1418,9 +1418,12 @@ namespace Sequencer {
 
       // The TCS operator tells the Sequencer when the target is ready to observe
       // because there is currently no remote command that provides this information.
+      // Clearing the SEQ_WAIT_TCSOP state means no longer waiting for the TCS operator.
+      // This will notify the waiting thread which will proceed with the observation.
       //
-      if ( cmd.compare( SEQUENCERD_ONTARGET ) == 0) {
-                      seq.sequence.is_tcs_ontarget.store( true );
+      if ( cmd == SEQUENCERD_ONTARGET ) {
+                      seq.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
+///                   seq.sequence.is_tcs_ontarget.store( true );
                       ret = NO_ERROR;
       }
       else

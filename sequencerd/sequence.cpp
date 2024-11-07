@@ -25,7 +25,7 @@ namespace Sequencer {
     this->req_state.set( Sequencer::SEQ_OFFLINE );   /// offline
     this->broadcast_seqstate();
     this->do_once.store( false );                    /// default to "do all"
-    this->is_tcs_ontarget.store( false );            /// default TCS target not ready to observe
+/// this->is_tcs_ontarget.store( false );            /// default TCS target not ready to observe
     this->tcs_nowait.store( false );                 /// default to wait
     this->dome_nowait.store( false );                /// default to wait
     this->waiting_for_state.store( false );          /// not currently waiting for a state
@@ -43,16 +43,6 @@ namespace Sequencer {
     this->last_target="";
     this->test_solver_args="";
     this->tcs_name="offline";
-
-//  this->system_not_ready.store( 0 );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_ACAM );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_CALIB );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_CAMERA );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_FLEXURE );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_FOCUS );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_POWER );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_SLIT );
-//  this->system_not_ready.fetch_or( Sequencer::SEQ_WAIT_TCS );
   }
   /***** Sequencer::Sequence **************************************************/
 
@@ -64,6 +54,8 @@ namespace Sequencer {
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    * @todo       !! this was an experiment and is not currently in use !!
+   *             system_not_ready has been replaced with daemon_ready so consider
+   *             that if this function gets revived.
    *
    */
   void Sequence::dothread_monitor_ready_state( Sequencer::Sequence &seq ) {
@@ -1851,7 +1843,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
       // disable guiding (if running)
       //
-      if ( seq.is_seqstate_set( Sequencer::SEQ_GUIDE ) ) {
+      if ( seq.seq_state.is_set( Sequencer::SEQ_GUIDE ) {
 
 ///     if ( ! seq.waiting_for_state.load() ) {
 ///       std::thread( seq.dothread_wait_for_state, std::ref(seq) ).detach();
@@ -1986,37 +1978,51 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
         return;
       }
 
-      // Wait for on-target signal
+      // Wait for on-target signal (or abort)
       //
       seq.async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
-      {
-      std::unique_lock<std::mutex> lock( seq.tcs_ontarget_mtx );
-      while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.is_tcs_ontarget.load()==false ) {
-        seq.tcs_ontarget_cv.wait(lock);
+      try {
+        seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_TCSOP );
       }
-      }
-
-      if ( seq.is_seqstate_set(Sequencer::SEQ_ABORTREQ) ) {
-        seq.async.enqueue_and_log( function, "NOTICE: received abort signal!" );
-
-        // clear all TCS wait bits
-        //
-        seq.seq_state.clear( Sequencer::SEQ_WAIT_TCS,
-                             Sequencer::SEQ_WAIT_TCSOP,
-                             Sequencer::SEQ_WAIT_SLEW,
-                             Sequencer::SEQ_WAIT_SETTLE );
+      catch ( const std::exception &e ) {
+        message.str(""); message << "NOTICE: move to target aborted: " << e.what();
+        seq.async.enqueue_and_log( function, message.str() );
+        seq.seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
         seq.broadcast_seqstate();
-
         seq.thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-        seq.dome_nowait.store( false );
-        seq.tcs_nowait.store( false );
-        seq.is_tcs_ontarget.store( false );
-        return;
+        return NO_ERROR;
       }
-      else {
-        seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
-      }
+
+      seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
+
+///   {
+///   std::unique_lock<std::mutex> lock( seq.tcs_ontarget_mtx );
+///   while ( error==NO_ERROR && !seq.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && seq.is_tcs_ontarget.load()==false ) {
+///     seq.tcs_ontarget_cv.wait(lock);
+///   }
+///   }
+
+///   if ( seq.is_seqstate_set(Sequencer::SEQ_ABORTREQ) ) {
+///     seq.async.enqueue_and_log( function, "NOTICE: received abort signal!" );
+///
+///     // clear all TCS wait bits
+///     //
+///     seq.seq_state.clear( Sequencer::SEQ_WAIT_TCS,
+///                          Sequencer::SEQ_WAIT_TCSOP,
+///                          Sequencer::SEQ_WAIT_SLEW,
+///                          Sequencer::SEQ_WAIT_SETTLE );
+///     seq.broadcast_seqstate();
+///
+///     seq.thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
+///     seq.dome_nowait.store( false );
+///     seq.tcs_nowait.store( false );
+///     seq.is_tcs_ontarget.store( false );
+///     return;
+///   }
+///   else {
+///     seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
+///   }
 
 /***
       // Target coords have been sent to the TCS but they don't actually go to the TCS,
@@ -2249,7 +2255,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     seq.thread_state.clear( THR_MOVE_TO_TARGET );              // thread terminated
     seq.dome_nowait.store( false );
     seq.tcs_nowait.store( false );
-    seq.is_tcs_ontarget.store( false );
+/// seq.is_tcs_ontarget.store( false );
     return;
   }
   /***** Sequencer::Sequence::dothread_move_to_target *************************/
@@ -4455,7 +4461,7 @@ logwrite( function, message.str() );
       }
       this->async.enqueue_and_log( function, message.str() );
 
-      this->is_tcs_ontarget.store( false );
+///   this->is_tcs_ontarget.store( false );
       this->tcs_nowait.store( false );
       logwrite( function, "spawning dothread_move_to_target..." );
       std::thread( dothread_move_to_target, std::ref(*this) ).detach();
