@@ -1843,7 +1843,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
       // disable guiding (if running)
       //
-      if ( seq.seq_state.is_set( Sequencer::SEQ_GUIDE ) {
+      if ( seq.seq_state.is_set( Sequencer::SEQ_GUIDE ) ) {
 
 ///     if ( ! seq.waiting_for_state.load() ) {
 ///       std::thread( seq.dothread_wait_for_state, std::ref(seq) ).detach();
@@ -1991,7 +1991,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
         seq.seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
         seq.broadcast_seqstate();
         seq.thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-        return NO_ERROR;
+        return;
       }
 
       seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );

@@ -1422,7 +1422,7 @@ namespace Sequencer {
       // This will notify the waiting thread which will proceed with the observation.
       //
       if ( cmd == SEQUENCERD_ONTARGET ) {
-                      seq.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
+                      seq.sequence.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
 ///                   seq.sequence.is_tcs_ontarget.store( true );
                       ret = NO_ERROR;
       }
