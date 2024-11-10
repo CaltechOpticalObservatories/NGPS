@@ -22,7 +22,7 @@ EMULATOR_PORT=@FOCUSD_EMULATOR@
 #
 MOTOR_CONTROLLER="I @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
 MOTOR_CONTROLLER="R @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
-MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
+#MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
 #MOTOR_CONTROLLER="I localhost @FOCUSD_EMULATOR@ 1 1"  # emulator
 #MOTOR_CONTROLLER="R localhost @FOCUSD_EMULATOR@ 2 1"  # emulator
 #MOTOR_CONTROLLER="G localhost @FOCUSD_EMULATOR@ 3 1"  # emulator
@@ -34,7 +34,7 @@ MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
 #
 MOTOR_AXIS="I 1 0 7.6 0 ref"
 MOTOR_AXIS="R 1 0 6.7 0 ref"
-MOTOR_AXIS="G 1 0 7.8 0 ref"
+#MOTOR_AXIS="G 1 0 7.8 0 ref"
 
 # Specify nominal focus positions for each actuator
 # MOTOR_POS="<name> <ID> <pos> <posname>"
@@ -46,4 +46,4 @@ MOTOR_AXIS="G 1 0 7.8 0 ref"
 #
 MOTOR_POS="I 1 0 5.887 nominal"
 MOTOR_POS="R 1 0 3.947 nominal"
-MOTOR_POS="G 1 0 4.610 nominal"
+#MOTOR_POS="G 1 0 4.610 nominal"

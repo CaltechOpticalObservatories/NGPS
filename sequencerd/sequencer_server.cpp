@@ -1387,15 +1387,15 @@ namespace Sequencer {
                                                  << " as " << Sequencer::TARGET_UNASSIGNED;
                         logwrite( function, message.str() );
 
-                        // If this thread is not already running then spawn a thread to wait for this state,
-                        // which will send out any needed notifications.
-                        //
-                        if ( ! seq.sequence.waiting_for_state.load() ) {
+///                     // If this thread is not already running then spawn a thread to wait for this state,
+///                     // which will send out any needed notifications.
+///                     //
+///                     if ( ! seq.sequence.waiting_for_state.load() ) {
 #ifdef LOGLEVEL_DEBUG
-                          logwrite( function, "[DEBUG] spawning waiting_for_state thread" );
+///                       logwrite( function, "[DEBUG] spawning waiting_for_state thread" );
 #endif
-                          std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
-                        }
+///                       std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
+///                     }
 
 //                      {
 //                      std::lock_guard<std::mutex> lock(seq.tcs_ontarget_mtx); // Lock the mutex

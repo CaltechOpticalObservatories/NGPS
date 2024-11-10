@@ -1130,10 +1130,10 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     for ( const auto &plug : seq.power_switch[POWER_ACAM].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
-      error |= seq.powerd.send( cmd.str(), reply );
+      error |= seq.powerd.command( cmd.str() );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR turning on power to acam hardware" );
     }
-    std::this_thread::sleep_for( std::chrono::seconds(7) );  // ACAM needs some time to power-on
+    std::this_thread::sleep_for( std::chrono::seconds(10) );  // ACAM needs some time to power-on
 
     // if not connected to the acam daemon then connect
     //
@@ -1155,7 +1155,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error == NO_ERROR ) {
       std::stringstream cmd;
       cmd << ACAMD_TCSINIT << " " << seq.tcs_name;
-      error  = seq.acamd.send( cmd.str(), reply );
+      error  = seq.acamd.command( cmd.str(), reply );
       if ( error != NO_ERROR ) {
         message.str(""); message << "ERROR initializing acamd <--> tcsd \"" << seq.tcs_name << "\"";
         seq.async.enqueue_and_log( function, message.str() );
@@ -1165,16 +1165,17 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     // Ask acamd if hardware connections are open,
     //
     if ( error == NO_ERROR ) {
-      error  = seq.acamd.send( ACAMD_ISOPEN, reply );
+      error  = seq.acamd.command( ACAMD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with acam hardware" );
     }
 
-    // and open it if necessary.
+    // and open it if necessary, overriding the timeout because this can
+    // take a long time if the filter wheel needs to be homed.
     //
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to acam hardware" );
-      error = seq.acamd.send( ACAMD_OPEN, reply );
+      error = seq.acamd.command_timeout( ACAMD_OPEN, 180000 );  // TODO get this from motion_interface.h, don't hard-code here!
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to acam hardware" );
     }
 
@@ -1182,7 +1183,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "turning on acam cooling" );
-      error = seq.acamd.send( ACAMD_TEMP+" -100", reply );
+      error = seq.acamd.command( ACAMD_TEMP+" -100", reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR requesting acam preamble" );
     }
 
@@ -1311,7 +1312,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     // Ask calibd if hardware connection is open,
     //
     if ( error == NO_ERROR ) {
-      error  = seq.calibd.send( CALIBD_ISOPEN, reply );
+      error  = seq.calibd.command( CALIBD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
     }
@@ -1320,7 +1321,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to calib hardware" );
-      error = seq.calibd.send( CALIBD_OPEN, reply );
+      error = seq.calibd.command( CALIBD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to calib hardware" );
     }
 
@@ -1336,7 +1337,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !ishomed ) {
       logwrite( function, "sending home command" );
-      error = seq.calibd.command( CALIBD_HOME, reply );
+      error = seq.calibd.command_timeout( CALIBD_HOME, 60000 );  // TODO get timeout from calib_interface instead of hard-code
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
     }
 
@@ -1345,7 +1346,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error==NO_ERROR ) {
       logwrite( function, "closing calib door and cover" );
       message.str(""); message << CALIBD_SET << " cover=close door=close";
-      error = seq.calibd.command( message.str(), reply );
+      error = seq.calibd.command_timeout( message.str(), 25000 );  // TODO get timeout from calib_interface
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
     }
 
@@ -1396,7 +1397,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error==NO_ERROR ) {
       logwrite( function, "closing calib door and cover" );
       message.str(""); message << CALIBD_SET << " cover=close door=close";
-      error = seq.calibd.command( message.str(), reply );
+      error = seq.calibd.command_timeout( message.str(), 25000 );  // TODO get timeout from calib_interface
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
     }
 
@@ -1643,6 +1644,12 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to flexure hardware" );
     }
 
+    // It takes 20 seconds after power-on before the flexure controllers
+    // are ready to accept a connection.
+    //
+    logwrite( function, "waiting 21 s for flexure controller to boot" );
+    std::this_thread::sleep_for( std::chrono::seconds( 21 ) );
+
     // if not connected to the flexure daemon then connect
     //
     if ( !seq.flexured.socket.isconnected() ) {
@@ -1667,9 +1674,12 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to flexure hardware" );
     }
 
-    // atomically set thread_error so the main thread knows we had an error
+    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
     //
-    if ( error != NO_ERROR ) {
+    if ( error == NO_ERROR ) {
+      seq.daemon_ready.set( Sequencer::DAEMON_FLEXURE );
+    }
+    else {
       seq.async.enqueue_and_log( function, "ERROR: unable to initialize flexure control" );
       seq.thread_error.set( THR_FLEXURE_INIT );
     }
@@ -1799,9 +1809,12 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to focus hardware" );
     }
 
-    // atomically set thread_error so the main thread knows we had an error
+    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
     //
-    if ( error != NO_ERROR ) {
+    if ( error == NO_ERROR ) {
+      seq.daemon_ready.set( Sequencer::DAEMON_FOCUS );
+    }
+    else {
       seq.async.enqueue_and_log( function, "ERROR: unable to initialize focus control" );
       seq.thread_error.set( THR_FOCUS_SET );
     }
@@ -3154,8 +3167,9 @@ logwrite( function, "[DEBUG] setting READY bit" );
     //
     seq.thread_error.clear_all();
 
-    // Everything (except TCS) needs the power control to be running
-    // so make sure that power control is running and initialize it if not.
+    // Everything (except TCS) needs the power control to be running.
+    // It should already be running but just make sure that power control
+    // is running and initialize it if not.
     // For this, set SHUTTING and WAIT_POWER bits, and clear READY bit.
     //
     seq.seq_state.set_and_clear( {Sequencer::SEQ_SHUTTING, Sequencer::SEQ_WAIT_POWER}, {Sequencer::SEQ_READY, Sequencer::SEQ_OFFLINE} );
@@ -3164,7 +3178,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     std::thread( dothread_power_init, std::ref(seq) ).detach();                   // start power initialization thread
 
-    std::thread( dothread_wait_for_state, std::ref(seq) ).detach();               // wait for requested state
+/// std::thread( dothread_wait_for_state, std::ref(seq) ).detach();               // wait for requested state
 
     logwrite( function, "[DEBUG] waiting for power control to initialize" );
 
@@ -3241,7 +3255,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
                            Sequencer::SEQ_WAIT_ACAM,
                            Sequencer::SEQ_WAIT_CALIB,
                            Sequencer::SEQ_WAIT_CAMERA,
-//                         Sequencer::SEQ_WAIT_FLEXURE,
+                           Sequencer::SEQ_WAIT_FLEXURE,
                            Sequencer::SEQ_WAIT_FOCUS,
                            Sequencer::SEQ_WAIT_SLICECAM,
                            Sequencer::SEQ_WAIT_SLIT );
@@ -3255,6 +3269,11 @@ logwrite( function, "[DEBUG] setting READY bit" );
 ///   logwrite( function, message.str() );
 ///   seq.cv.wait( wait_lock );
 /// }
+
+
+/*****
+   why shut down powerd?
+
     logwrite( function, "[DEBUG] (5) DONE waiting for shutdown threads to complete" );
 
     // Everything has undergone their shutdown procedure so safe to shut down the power daemon now
@@ -3289,6 +3308,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
 ///   seq.cv.wait( wait_lock );
 /// }
     logwrite( function, "[DEBUG] (6) DONE waiting for power daemon to shut down" );
+
+*****/
 
     // Note the error(s) but shutdown will always close the daemon connections
     // so return success.
