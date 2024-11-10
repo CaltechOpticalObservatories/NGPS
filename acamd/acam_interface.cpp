@@ -3405,13 +3405,17 @@ namespace Acam {
     if ( args == "?" ) {
       retstring = ACAMD_SHUTDOWN;
       retstring.append( "\n" );
-      retstring.append( "  Shutdown all threads which communicate with the camera and TCS,\n" );
-      retstring.append( "  and close all connections. The daemon remains running.\n" );
+      retstring.append( "  Closes cover, shuts down all threads which communicate with the camera\n" );
+      retstring.append( "  and TCS, and close all connections. The daemon remains running.\n" );
       return HELP;
     }
 
     long error = NO_ERROR;
     std::string dontcare;
+
+    // close the cover (if motion is in use)
+    //
+    if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
 
     // stop the framegrab thread
     //
