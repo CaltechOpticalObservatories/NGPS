@@ -104,20 +104,20 @@ namespace Sequencer {
   /***** Sequencer::Sequence::dothread_monitor_ready_state ********************/
 
 
-  /***** Sequencer::Sequence::set_seqstate_bit ********************************/
-  /**
-   * @brief      atomically sets the requested bit in the seqstate word
-   * @param[in]  mb  masked bit is uint32 word containing the bit to set
-   *
-   * The new state will be broadcast
-   *
-   */
-  void Sequence::set_seqstate_bit( const uint32_t mb ) {
-    this->seqstate.fetch_or( mb );    // set
-    this->seqstate_cv.notify_all();   // notify waiting threads of the change
-    this->broadcast_seqstate();       // broadcast current state
-  }
-  /***** Sequencer::Sequence::set_seqstate_bit ********************************/
+///***** Sequencer::Sequence::set_seqstate_bit ********************************/
+///**
+///* @brief      atomically sets the requested bit in the seqstate word
+///* @param[in]  mb  masked bit is uint32 word containing the bit to set
+///*
+///* The new state will be broadcast
+///*
+///*/
+///oid Sequence::set_seqstate_bit( const uint32_t mb ) {
+/// this->seqstate.fetch_or( mb );    // set
+/// this->seqstate_cv.notify_all();   // notify waiting threads of the change
+/// this->broadcast_seqstate();       // broadcast current state
+///
+///***** Sequencer::Sequence::set_seqstate_bit ********************************/
 
 
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
@@ -811,14 +811,12 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
     // Turn on power to slit hardware.
     //
-/***** TEMPORARY
     for ( const auto &plug : seq.power_switch[POWER_SLIT].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error |= seq.powerd.send( cmd.str(), reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to slit hardware" );
     }
-*****/
 
     // if not connected to the slit daemon then connect
     //
@@ -890,19 +888,61 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   void Sequence::dothread_slit_shutdown( Sequencer::Sequence &seq ) {
     seq.thread_state.set( THR_SLIT_SHUTDOWN );                       // thread running
     const std::string function = "Sequencer::Sequence::dothread_slit_shutdown";
+    std::stringstream message;
+    std::string reply;
+    long error=NO_ERROR;
 
-    if ( seq.slitd.command( SLITD_CLOSE ) != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR shutting down slit daemon" );
-      seq.thread_error.set( THR_SLIT_SHUTDOWN );
+    // If not connected to the slit daemon then connect.
+    // Even though we are shutting down, it's worth connecting in order to be able to send
+    // the close command, to ensure that the hardware has been closed.
+    //
+    if ( !seq.slitd.socket.isconnected() ) {
+      logwrite( function, "connecting to slit daemon" );
+      error = seq.slitd.connect();                   // connect to the daemon
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting to slit daemon" );
     }
-    else {
-      seq.daemon_ready.clear( Sequencer::DAEMON_SLIT );
+
+    // send CLOSE command to slitd to close connections between slitd
+    // and the hardware with which it communicates
+    //
+    if ( error==NO_ERROR ) {
+      logwrite( function, "closing slit hardware" );
+      error = seq.slitd.command( SLITD_CLOSE, reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing down slit hardware connection" );
     }
+
+    // disconnect me from slitd, irrespective of any previous error
+    //
+    logwrite( function, "disconnecting from slitd" );
+    seq.slitd.disconnect();
+
+    // Turn off power to slit hardware.
+    // Any error here is added to thread_error.
+    //
+    for ( const auto &plug : seq.power_switch[POWER_SLIT].plugname ) {
+      long pwrerr=NO_ERROR;
+      std::stringstream cmd;
+      cmd << plug << " OFF";
+      pwrerr = seq.powerd.send( cmd.str(), reply );
+      if ( pwrerr != NO_ERROR ) {
+        message.str(""); message << "ERROR turning off plug " << plug;
+        seq.async.enqueue_and_log( function, message.str() );
+        seq.thread_error.set( THR_SLIT_SHUTDOWN );
+      }
+    }
+
+    // set this system as not ready
+    //
+    seq.daemon_ready.clear( Sequencer::DAEMON_SLIT );
+
+    // set this thread's error status
+    //
+    if (error!=NO_ERROR) seq.thread_error.set( THR_SLIT_SHUTDOWN );
 
     seq.seq_state.clear( Sequencer::SEQ_WAIT_SLIT );
     seq.broadcast_seqstate();
 
-    seq.thread_state.clear( THR_SLIT_SHUTDOWN );                     // thread running
+    seq.thread_state.clear( THR_SLIT_SHUTDOWN );                 // thread terminated
     return;
   }
   /***** Sequencer::Sequence::dothread_slit_shutdown **************************/
@@ -1011,19 +1051,61 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   void Sequence::dothread_slicecam_shutdown( Sequencer::Sequence &seq ) {
     seq.thread_state.set( THR_SLICECAM_SHUTDOWN );                   // thread running
     const std::string function = "Sequencer::Sequence::dothread_slicecam_shutdown";
+    std::stringstream message;
+    std::string reply;
+    long error=NO_ERROR;
 
-    if ( seq.slicecamd.command( SLICECAMD_CLOSE ) != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR shutting down slicecam daemon" );
-      seq.thread_error.set( THR_SLICECAM_SHUTDOWN );
+    // If not connected to the slicecam daemon then connect.
+    // Even though we are shutting down, it's worth connecting in order to be able to send
+    // the close command, to ensure that the hardware has been closed.
+    //
+    if ( !seq.slicecamd.socket.isconnected() ) {
+      logwrite( function, "connecting to slicecamd daemon" );
+      error = seq.slicecamd.connect();                   // connect to the daemon
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting to slicecamd daemon" );
     }
-    else {
-      seq.daemon_ready.clear( Sequencer::DAEMON_SLICECAM );
+
+    // send SLICECAMD_SHUTDOWN command to slicecamd -- this will cause it to nicely
+    // close connections between slicecamd and the hardware with which it communicates
+    //
+    if ( error==NO_ERROR ) {
+      logwrite( function, "closing slicecam hardware" );
+      error = seq.slicecamd.send( SLICECAMD_SHUTDOWN, reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR shutting down slicecamd" );
     }
+
+    // disconnect me from slicecamd, irrespective of any previous error
+    //
+    logwrite( function, "disconnecting from slicecamd" );
+    seq.slicecamd.disconnect();
+
+    // Turn off power to slicecam hardware.
+    // Any error here is added to thread_error.
+    //
+    for ( const auto &plug : seq.power_switch[POWER_SLICECAM].plugname ) {
+      long pwrerr=NO_ERROR;
+      std::stringstream cmd;
+      cmd << plug << " OFF";
+      pwrerr = seq.powerd.send( cmd.str(), reply );
+      if ( pwrerr != NO_ERROR ) {
+        message.str(""); message << "ERROR turning off plug " << plug;
+        seq.async.enqueue_and_log( function, message.str() );
+        seq.thread_error.set( THR_SLICECAM_SHUTDOWN );
+      }
+    }
+
+    // set this system as not ready
+    //
+    seq.daemon_ready.clear( Sequencer::DAEMON_SLICECAM );
+
+    // set this thread's error status
+    //
+    if (error!=NO_ERROR) seq.thread_error.set( THR_SLICECAM_SHUTDOWN );
 
     seq.seq_state.clear( Sequencer::SEQ_WAIT_SLICECAM );
     seq.broadcast_seqstate();
 
-    seq.thread_state.clear( THR_SLICECAM_SHUTDOWN );                 // thread running
+    seq.thread_state.clear( THR_SLICECAM_SHUTDOWN );                 // thread terminated
     return;
   }
   /***** Sequencer::Sequence::dothread_slicecam_shutdown **********************/
@@ -1169,7 +1251,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       cmd << plug << " OFF";
       pwrerr = seq.powerd.send( cmd.str(), reply );
       if ( pwrerr != NO_ERROR ) {
-        message.str(""); message << "ERROR: turning off plug " << plug;
+        message.str(""); message << "ERROR turning off plug " << plug;
         seq.async.enqueue_and_log( function, message.str() );
         seq.thread_error.set( THR_ACAM_SHUTDOWN );
       }
@@ -1204,28 +1286,26 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
-    bool isopen=false;
+    bool isopen=false, ishomed=false;
 
     // Turn on power to calib hardware.
     //
-/*****  TEMPORARY
     for ( const auto &plug : seq.power_switch[POWER_CALIB].plugname ) {
       std::stringstream cmd;
       cmd << plug << " ON";
       error = seq.powerd.send( cmd.str(), reply );
       if ( error != NO_ERROR ) {
-        seq.async.enqueue_and_log( function, "ERROR: turning on power to calib hardware" );
+        seq.async.enqueue_and_log( function, "ERROR turning on power to calib hardware" );
         break;
       }
     }
-*****/
 
     // if not connected to the calib daemon then connect
     //
     if ( error==NO_ERROR && !seq.calibd.socket.isconnected() ) {
       logwrite( function, "connecting to calib daemon" );
       error = seq.calibd.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to calib daemon" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting to calib daemon" );
     }
 
     // Ask calibd if hardware connection is open,
@@ -1233,7 +1313,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error == NO_ERROR ) {
       error  = seq.calibd.send( CALIBD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with calib hardware" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
     }
 
     // and open it if necessary.
@@ -1241,13 +1321,38 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to calib hardware" );
       error = seq.calibd.send( CALIBD_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to calib hardware" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to calib hardware" );
+    }
+
+    // Ask calibd if the motors are homed,
+    //
+    if ( error == NO_ERROR ) {
+      error  = seq.calibd.command( CALIBD_ISHOME, reply );
+      error |= seq.parse_state( function, reply, ishomed );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
+    }
+
+    // and send the HOME command to calib if needed.
+    //
+    if ( error==NO_ERROR && !ishomed ) {
+      logwrite( function, "sending home command" );
+      error = seq.calibd.command( CALIBD_HOME, reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
+    }
+
+    // ensure door and cover are closed
+    //
+    if ( error==NO_ERROR ) {
+      logwrite( function, "closing calib door and cover" );
+      message.str(""); message << CALIBD_SET << " cover=close door=close";
+      error = seq.calibd.command( message.str(), reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
     }
 
     // atomically set thread_error so the main thread knows we had an error
     //
     if ( error != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize calibrator" );
+      seq.async.enqueue_and_log( function, "ERROR unable to initialize calibrator" );
       seq.thread_error.set( THR_CALIB_INIT );
     }
     else {
@@ -1286,6 +1391,15 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to calib daemon" );
     }
 
+    // ensure door and cover are closed
+    //
+    if ( error==NO_ERROR ) {
+      logwrite( function, "closing calib door and cover" );
+      message.str(""); message << CALIBD_SET << " cover=close door=close";
+      error = seq.calibd.command( message.str(), reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
+    }
+
     // close connections between calibd and the hardware with which it communicates
     //
     if ( error==NO_ERROR ) {
@@ -1308,7 +1422,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       cmd << plug << " OFF";
       pwrerr = seq.powerd.send( cmd.str(), reply );
       if ( pwrerr != NO_ERROR ) {
-        message.str(""); message << "ERROR: turning off plug " << plug;
+        message.str(""); message << "ERROR turning off plug " << plug;
         seq.async.enqueue_and_log( function, message.str() );
         seq.thread_error.set( THR_CALIB_SHUTDOWN );
       }
@@ -1569,6 +1683,74 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_flexure_init ***************************/
 
 
+  /***** Sequencer::Sequence::dothread_flexure_shutdown ***********************/
+  /**
+   * @brief      shuts down the flexure system
+   * @param[in]  seq  reference to Sequencer::Sequence object
+   *
+   */
+  void Sequence::dothread_flexure_shutdown( Sequencer::Sequence &seq ) {
+    seq.thread_state.set( THR_FLEXURE_SHUTDOWN );              // thread running
+    std::string function = "Sequencer::Sequence::dothread_flexure_shutdown";
+    std::stringstream message;
+    std::string reply;
+    long error=NO_ERROR;
+
+    // If not connected to the flexure daemon then connect.
+    // Even though we are shutting down, it's worth connecting in order to be able to send
+    // the close command, to ensure that the hardware has been closed.
+    //
+    if ( !seq.flexured.socket.isconnected() ) {
+      logwrite( function, "connecting to flexure daemon" );
+      error = seq.flexured.connect();                  // connect to the daemon
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting to flexure daemon" );
+    }
+
+    // close connections between flexured and the hardware with which it communicates
+    //
+    if ( error==NO_ERROR ) {
+      logwrite( function, "closing flexure hardware" );
+      error = seq.flexured.command( FLEXURED_CLOSE, reply );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: closing connection to flexure hardware" );
+    }
+
+    // disconnect me from flexured, irrespective of any previous error
+    //
+    logwrite( function, "disconnecting from flexured" );
+    seq.flexured.disconnect();
+
+    // Turn off power to flexure hardware.
+    // Any error here is added to thread_error.
+    //
+    for ( const auto &plug : seq.power_switch[POWER_FLEXURE].plugname ) {
+      long pwrerr=NO_ERROR;
+      std::stringstream cmd;
+      cmd << plug << " OFF";
+      pwrerr = seq.powerd.send( cmd.str(), reply );
+      if ( pwrerr != NO_ERROR ) {
+        message.str(""); message << "ERROR turning off plug " << plug;
+        seq.async.enqueue_and_log( function, message.str() );
+        seq.thread_error.set( THR_FLEXURE_SHUTDOWN );
+      }
+    }
+
+    // set this system as not ready
+    //
+    seq.daemon_ready.clear( Sequencer::DAEMON_FLEXURE );
+
+    // set this thread's error status
+    //
+    if (error!=NO_ERROR) seq.thread_error.set( THR_FLEXURE_SHUTDOWN );
+
+    seq.seq_state.clear( Sequencer::SEQ_WAIT_FLEXURE );
+    seq.broadcast_seqstate();
+
+    seq.thread_state.clear( THR_FLEXURE_SHUTDOWN );            // thread terminated
+    return;
+  }
+  /***** Sequencer::Sequence::dothread_flexure_shutdown ***********************/
+
+
   /***** Sequencer::Sequence::dothread_focus_init *****************************/
   /**
    * @brief      initializes the focus system for control from the Sequencer
@@ -1643,13 +1825,20 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     seq.thread_state.set( THR_FOCUS_SHUTDOWN );                     // thread running
     const std::string function = "Sequencer::Sequence::dothread_focus_shutdown";
 
+    // close connections between focusd and the hardware with which it communicates
+    //
     if ( seq.focusd.command( FOCUSD_CLOSE ) != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR shutting down focus daemon" );
+      seq.async.enqueue_and_log( function, "ERROR closing focus hardware" );
       seq.thread_error.set( THR_FOCUS_SHUTDOWN );
     }
     else {
       seq.daemon_ready.clear( Sequencer::DAEMON_FOCUS );
     }
+
+    // disconnect me from focusd, irrespective of any previous error
+    //
+    logwrite( function, "disconnecting from focusd" );
+    seq.focusd.disconnect();
 
     seq.seq_state.clear( Sequencer::SEQ_WAIT_FOCUS );
     seq.broadcast_seqstate();
@@ -1765,30 +1954,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     return;
   }
   /***** Sequencer::Sequence::dothread_camera_shutdown ************************/
-
-
-  /***** Sequencer::Sequence::dothread_acam_shutdown **************************/
-  /**
-   * @brief      shutdown the acam by closing dust covers
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   * @todo       ACAM Shutdown not yet implemented!
-   *
-   */
-/***
-  void Sequence::dothread_acam_shutdown( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_ACAM_SHUTDOWN );                 // thread running
-    std::string function = "Sequencer::Sequence::dothread_acam_shutdown";
-    std::stringstream message;
-    std::string reply;
-    logwrite( function, "[TODO] acam shutdown not yet implemented. sleeping 5s" );
-    usleep( 5000000 );
-    seq.thread_state.clear( THR_ACAM_SHUTDOWN );               // thread terminated
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_ACAM );
-    seq.broadcast_seqstate();
-    return;
-  }
-***/
-  /***** Sequencer::Sequence::dothread_acam_shutdown **************************/
 
 
   /***** Sequencer::Sequence::dothread_move_to_target *************************/
@@ -2230,11 +2395,26 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
       logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_ACQUIRE ); std::thread( dothread_acquisition, std::ref(seq) ).detach();
+      seq.seq_state.set( Sequencer::SEQ_WAIT_ACQUIRE );
+      seq.broadcast_seqstate();
+      std::thread( dothread_acquisition, std::ref(seq) ).detach();
     }
     else
     if ( error==NO_ERROR && seq.target.acquired ) {
       logwrite( function, "target already acquired, nothing to do" );  ///< TODO @todo log to telemetry!
+    }
+
+    // Wait for the acquisition sequence
+    //
+    try {
+      seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_ACQUIRE );
+    }
+    catch ( std::exception & ) {
+      message.str(""); message << "NOTICE: acquisition aborted";
+      seq.async.enqueue_and_log( function, message.str() );
+      seq.seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );
+      seq.broadcast_seqstate();
+      error = ABORT;
     }
 
     // atomically set thread_error so the main thread knows we had an error
@@ -2471,7 +2651,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
     if ( error == NO_ERROR ) {
       error = seq.target.update_state( Sequencer::TARGET_EXPOSING );   // set EXPOSE state in database
-      seq.set_seqstate_bit( Sequencer::SEQ_WAIT_EXPOSE );              // set EXPOSE bit
+      seq.seq_state.set( Sequencer::SEQ_WAIT_EXPOSE );                 // set EXPOSE bit
     }
     else {
       seq.async.enqueue_and_log( function, "ERROR sending command: CAMERAD_EXPOSE" );
@@ -2516,8 +2696,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
     // This function is only used while exposing
     //
-    if ( not seq.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-      seq.async.enqueue_and_log( function, "ERROR: cannot update exposure time when not currently exposing" );
+    if ( ! seq.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+      seq.async.enqueue_and_log( function, "ERROR cannot update exposure time when not currently exposing" );
       error = ERROR;
     }
 
@@ -2841,7 +3021,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     seq.seq_state.set( Sequencer::SEQ_WAIT_ACAM,
                        Sequencer::SEQ_WAIT_CALIB,
                        Sequencer::SEQ_WAIT_CAMERA,
-//                     Sequencer::SEQ_WAIT_FLEXURE,
+                       Sequencer::SEQ_WAIT_FLEXURE,
                        Sequencer::SEQ_WAIT_FOCUS,
                        Sequencer::SEQ_WAIT_SLICECAM,
                        Sequencer::SEQ_WAIT_SLIT );
@@ -2849,7 +3029,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::thread( dothread_acam_init, std::ref(seq) ).detach();
     std::thread( dothread_calib_init, std::ref(seq) ).detach();
     std::thread( dothread_camera_init, std::ref(seq) ).detach();
-//  std::thread( dothread_flexure_init, std::ref(seq) ).detach();
+    std::thread( dothread_flexure_init, std::ref(seq) ).detach();
     std::thread( dothread_focus_init, std::ref(seq) ).detach();
     std::thread( dothread_slicecam_init, std::ref(seq) ).detach();
     std::thread( dothread_slit_init, std::ref(seq) ).detach();
@@ -3031,7 +3211,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     seq.seq_state.set( Sequencer::SEQ_WAIT_ACAM,
                        Sequencer::SEQ_WAIT_CALIB,
                        Sequencer::SEQ_WAIT_CAMERA,
-//                     Sequencer::SEQ_WAIT_FLEXURE,
+                       Sequencer::SEQ_WAIT_FLEXURE,
                        Sequencer::SEQ_WAIT_FOCUS,
                        Sequencer::SEQ_WAIT_SLICECAM,
                        Sequencer::SEQ_WAIT_SLIT );
@@ -3039,7 +3219,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     std::thread( dothread_acam_shutdown, std::ref(seq) ).detach();
     std::thread( dothread_calib_shutdown, std::ref(seq) ).detach();
     std::thread( dothread_camera_shutdown, std::ref(seq) ).detach();
-//  std::thread( dothread_flexure_shutdown, std::ref(seq) ).detach();
+    std::thread( dothread_flexure_shutdown, std::ref(seq) ).detach();
     std::thread( dothread_focus_shutdown, std::ref(seq) ).detach();
     std::thread( dothread_slicecam_shutdown, std::ref(seq) ).detach();
     std::thread( dothread_slit_shutdown, std::ref(seq) ).detach();
@@ -3079,7 +3259,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     // Everything has undergone their shutdown procedure so safe to shut down the power daemon now
     //
-    seq.set_seqstate_bit( Sequencer::SEQ_WAIT_POWER );
+    seq.seq_state.set( Sequencer::SEQ_WAIT_POWER );
     seq.broadcast_seqstate();
     std::thread( dothread_power_shutdown, std::ref(seq) ).detach();
 
@@ -3696,7 +3876,7 @@ logwrite( function, message.str() );
       }
       else {
         if ( !which.empty() ) {
-          this->set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );                    // only set the WAIT bit if a device was specified
+          this->seq_state.set( Sequencer::SEQ_WAIT_TCS );                       // only set the WAIT bit if a device was specified
           logwrite( function, "TCS initialization started" );
         }
         std::thread( dothread_tcs_init, std::ref(*this), which ).detach();      // spawn the tcs_init thread here
@@ -4069,7 +4249,7 @@ logwrite( function, message.str() );
         retstring.append( "  Set only the camera according to the parameters in the target row.\n" );
         return HELP;
       }
-      this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
+      this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );                   // set the current state
       std::thread( dothread_camera_set, std::ref(*this) ).detach();        // set camera in a thread
     }
     else
@@ -4084,7 +4264,7 @@ logwrite( function, message.str() );
         retstring.append( "  Trigger an exposure.\n" );
         return HELP;
       }
-      this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );                // set the current state
+      this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );                   // set the current state
       std::thread( dothread_trigger_exposure, std::ref(*this) ).detach();  // trigger exposure in a thread
     }
     else
@@ -4666,31 +4846,31 @@ logwrite( function, message.str() );
       }
       else
       if ( tokens[1] == "acam" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_ACAM );    std::thread( dothread_acam_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_ACAM );    std::thread( dothread_acam_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "calib" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_CALIB );   std::thread( dothread_calib_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "camera" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );  std::thread( dothread_camera_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "flexure" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_FLEXURE ); std::thread( dothread_flexure_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "focus" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_FOCUS );   std::thread( dothread_focus_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "slicecam" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_SLICECAM ); std::thread( dothread_slicecam_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_SLICECAM ); std::thread( dothread_slicecam_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "slit" ) {
-        this->set_seqstate_bit( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_init, std::ref(*this) ).detach();
+        this->seq_state.set( Sequencer::SEQ_WAIT_SLIT );    std::thread( dothread_slit_init, std::ref(*this) ).detach();
       }
       else
       if ( tokens[1] == "tcs" && tokens.size()==3 ) {

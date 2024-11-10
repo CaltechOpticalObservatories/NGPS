@@ -26,6 +26,7 @@ const long BUSY = 2;
 const long TIMEOUT = 3;
 const long HELP = 4;
 const long JSON = 5;
+const long ABORT = 6;
 const long EXIT = 999;
 
 const std::string JEOF = "EOF\n";              ///< used to terminate JSON messages

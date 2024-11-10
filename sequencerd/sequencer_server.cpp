@@ -1272,16 +1272,15 @@ namespace Sequencer {
                       if ( seq.sequence.seqstate.load() != Sequencer::SEQ_READY ) {
                         // log applicable causes
                         //
-                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) ) {
+                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_RUNNING ) ) {
                           seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer already running" );
                         }
                         else
-                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ||
-                             seq.sequence.is_seqstate_set( Sequencer::SEQ_STOPREQ  ) ) {
+                        if ( seq.sequence.seq_state.is_any_set( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_STOPREQ ) ) {
                           seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer waiting for stop" );
                         }
                         else
-                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_OFFLINE ) ) {
+                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_OFFLINE ) ) {
                           seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer is offline. run startup" );
                         }
                         else {
@@ -1310,8 +1309,7 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_STOP ) == 0 ) {
                       // Can only stop during an active or paused exposure
                       //
-                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) &&
-                           not seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                      if ( ! seq.sequence.seq_state.is_any_set( Sequencer::SEQ_PAUSE, Sequencer::SEQ_WAIT_EXPOSE ) ) {
                         seq.sequence.async.enqueue_and_log( function, "ERROR: can only stop during an active or paused exposure" );
                         ret = ERROR;
                       }
@@ -1327,24 +1325,24 @@ namespace Sequencer {
 
                         // If exposing then modify the exposure time to end immediately (-1)
                         //
-                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
                           seq.sequence.dothread_modify_exptime( std::ref( seq.sequence ), -1 );
                         }
 
                         // If paused then send the RESUME command to the camera daemon.
                         //
-                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
+                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
                           seq.sequence.camerad.async( CAMERAD_RESUME );                // tell the camera to resume exposure
                           seq.sequence.seq_state.clear( Sequencer::SEQ_PAUSE );        // clear the PAUSE bit
                           seq.sequence.broadcast_seqstate();
                         }
 
-                        // If not already running then spawn a thread to wait for this state,
-                        // which will send out any needed notifications.
-                        //
-                        if ( not seq.sequence.waiting_for_state.load() ) {
-                          std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
-                        }
+///                     // If not already running then spawn a thread to wait for this state,
+///                     // which will send out any needed notifications.
+///                     //
+///                     if ( not seq.sequence.waiting_for_state.load() ) {
+///                       std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
+///                     }
                         ret = NO_ERROR;
                       }
       }
@@ -1357,14 +1355,13 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
                       // don't allow an abort unless SEQ_RUNNING or SEQ_PAUSED bit is set
                       //
-                      if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_RUNNING ) || 
-                           seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
-
+                      if ( seq.sequence.seq_state.is_any_set( Sequencer::SEQ_RUNNING,
+                                                              Sequencer::SEQ_PAUSE ) ) {
                         logwrite( function, "abort requested" );
 
                         // If exposing then asynchronously send the ABORT command to the camera daemon
                         //
-                        if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
                           seq.sequence.camerad.async( CAMERAD_ABORT );                       // tell camera to abort exposure
                           seq.sequence.seq_state.clear( Sequencer::SEQ_WAIT_EXPOSE );        // clear the EXPOSE bit
                           seq.sequence.broadcast_seqstate();
@@ -1478,14 +1475,14 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_PAUSE ) == 0) {
                       // Can only pause during an exposure
                       //
-                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                      if ( seq.sequence.seq_state.is_clear( Sequencer::SEQ_WAIT_EXPOSE ) ) {
                         seq.sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
                         ret = ERROR;
                       }
                       else
                       // Can't already be paused
                       //
-                      if ( seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
+                      if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
                         seq.sequence.async.enqueue_and_log( function, "ERROR: already paused" );
                         ret = ERROR;
                       }
@@ -1503,7 +1500,7 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_RESUME ) == 0) {
                       // Can only resume when paused
                       //
-                      if ( not seq.sequence.is_seqstate_set( Sequencer::SEQ_PAUSE ) ) {
+                      if ( seq.sequence.seq_state.is_clear( Sequencer::SEQ_PAUSE ) ) {
                         seq.sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
                         ret = ERROR;
                       }

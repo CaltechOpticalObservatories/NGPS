@@ -160,6 +160,7 @@ namespace Sequencer {
     THR_SLICECAM_SHUTDOWN,
     THR_CALIB_SHUTDOWN,
     THR_CAMERA_SHUTDOWN,
+    THR_FLEXURE_SHUTDOWN,
     THR_FOCUS_SHUTDOWN,
     THR_SLIT_SHUTDOWN,
     THR_TCS_SHUTDOWN,
@@ -199,6 +200,7 @@ namespace Sequencer {
     {THR_SLICECAM_SHUTDOWN,        "slicecam_shutdown"},
     {THR_CALIB_SHUTDOWN,           "calib_shutdown"},
     {THR_CAMERA_SHUTDOWN,          "camera_shutdown"},
+    {THR_FLEXURE_SHUTDOWN,         "flexure_shutdown"},
     {THR_FOCUS_SHUTDOWN,           "focus_shutdown"},
     {THR_SLIT_SHUTDOWN,            "slit_shutdown"},
     {THR_TCS_SHUTDOWN,             "tcs_shutdown"},
@@ -296,10 +298,10 @@ namespace Sequencer {
       std::vector<std::string> camera_preamble;  ///< commands to send to camera on initialization, read from cfg file
       std::vector<std::string> camera_epilogue;  ///< commands to send to camera on shutdown, read from cfg file
 
-      inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
-      inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
+///   inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
+///   inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
 
-      void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
+///   void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
       void broadcast_seqstate();                ///< writes the seqstate string to the async port
 
       uint32_t get_reqstate();                  ///< get the reqstate word
@@ -360,18 +362,19 @@ namespace Sequencer {
       static void dothread_flexure_set( Sequencer::Sequence &seq );
 
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
-      static void dothread_slicecam_init( Sequencer::Sequence &seq );          ///< initializes connection to slicecamd
       static void dothread_calib_init( Sequencer::Sequence &seq );             ///< initializes connection to calibd
-      static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
-      static void dothread_slit_init( Sequencer::Sequence &seq );              ///< initializes connection to slitd
       static void dothread_camera_init( Sequencer::Sequence &seq );            ///< initializes connection to camerad
       static void dothread_flexure_init( Sequencer::Sequence &seq );           ///< initializes connection to flexured
       static void dothread_focus_init( Sequencer::Sequence &seq );             ///< initializes connection to focusd
       static void dothread_power_init( Sequencer::Sequence &seq );             ///< initializes connection to powerd
+      static void dothread_slicecam_init( Sequencer::Sequence &seq );          ///< initializes connection to slicecamd
+      static void dothread_slit_init( Sequencer::Sequence &seq );              ///< initializes connection to slitd
+      static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
 
       static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam
       static void dothread_calib_shutdown( Sequencer::Sequence &seq );         ///< shutdown the calibrator
       static void dothread_camera_shutdown( Sequencer::Sequence &seq );        ///< shutdown the camera
+      static void dothread_flexure_shutdown( Sequencer::Sequence &seq );       ///< shutdown flexure system
       static void dothread_focus_shutdown( Sequencer::Sequence &seq );         ///< shutdown focusd
       static void dothread_power_shutdown( Sequencer::Sequence &seq );         ///< shutdown the power system
       static void dothread_slicecam_shutdown( Sequencer::Sequence &seq );      ///< shutdown the slicecam
