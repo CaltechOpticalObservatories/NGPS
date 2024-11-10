@@ -610,7 +610,7 @@ namespace Common {
     // Wait (poll) connected socket for incoming data...
     //
     int pollret;
-    if ( ( pollret = this->socket.Poll() ) <= 0 ) {
+    if ( ( pollret = this->socket.Poll(this->timeout) ) <= 0 ) {
       long error = ERROR;
       if ( pollret == 0 ) {
         message.str(""); message << "TIMEOUT polling socket " << this->socket.gethost() << "/" << this->socket.getport()
@@ -727,6 +727,26 @@ namespace Common {
     return;
   }
   /***** Common::DaemonClient::dothread_command ***************************************/
+
+
+  /***** Common::DaemonClient::command_timeout ****************************************/
+  /**
+   * @brief      special daemon commands or send any command, no reply, timeout override
+   * @details    temporarily override the default Poll timeout with the to provided,
+   *             for this command only, then restores class timeout to default
+   * @param[in]  args  string to send
+   * @param[in]  to    timeout in ms
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Common::DaemonClient::command_timeout( std::string args, const long to ) {
+    long timeout_og = this->timeout;
+    this->timeout = to;
+    long error = this->command( args );
+    this->timeout = timeout_og;
+    return error;
+  }
+  /***** Common::DaemonClient::command_timeout ****************************************/
 
 
   /***** Common::DaemonClient::command ************************************************/

@@ -679,31 +679,32 @@ namespace Common {
       std::string term_str_write; ///< optional terminating string for writes
       std::string term_str_read;  ///< optional terminating string for reads
       bool term_with_string;      ///< set true if using termating string (else terminating char)
+      long timeout;               ///< Poll timeout in ms
       bool timedout;
       std::atomic<int> num_send;
 
     public:
       DaemonClient()
         : term_write('\n'), term_read('\n'), term_with_string(false),
-          timedout(false), num_send(2), name("unconfigured_daemon"), port(-1), nbport(-1) {
+          timeout(POLLTIMEOUT), timedout(false), num_send(2), name("unconfigured_daemon"), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };
 
       DaemonClient( std::string name_in )
         : term_write('\n'), term_read('\n'), term_with_string(false),
-          timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
+          timeout(POLLTIMEOUT), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< preferred constructor with name to identify daemon
 
       DaemonClient( std::string name_in, char write_in, char read_in )
         : term_write(write_in), term_read(read_in), term_with_string(false),
-          timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
+          timeout(POLLTIMEOUT), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< preferred constructor with name to identify daemon
 
       DaemonClient( std::string name_in, const std::string &write_in, const std::string &read_in )
         : term_str_write(write_in), term_str_read(read_in), term_with_string(true),
-          timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
+          timeout(POLLTIMEOUT), timedout(false), num_send(2), name(name_in), port(-1), nbport(-1) {
         this->socket.sethost( "localhost" );
       };   ///< construct with terminating strings
 
@@ -720,6 +721,7 @@ namespace Common {
       long async( std::string args, std::string &retstring );      ///< async (non-blocking) commands to daemon that need a reply
 
       static void dothread_command( Common::DaemonClient &daemon, std::string args );
+      long command_timeout( std::string args, const long to );     ///< commands to daemon with timeout override
       long command( std::string args );                            ///< commands to daemon
       long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
       long send( std::string command,
