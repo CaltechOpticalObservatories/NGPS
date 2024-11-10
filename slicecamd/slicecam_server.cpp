@@ -580,6 +580,13 @@ namespace Slicecam {
       }
       else
 
+      // shutdown
+      //
+      if ( cmd == SLICECAMD_SHUTDOWN ) {
+                      ret = this->interface.shutdown( args, retstring );
+      }
+      else
+
       // test commands
       //
       if ( cmd == SLICECAMD_TEST ) {

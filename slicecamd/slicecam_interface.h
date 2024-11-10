@@ -263,6 +263,7 @@ namespace Slicecam {
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long gui_settings_control();          /// get gui settings and push to Guider GUI display
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
+      long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
       long exptime( std::string exptime_in, std::string &retstring );
       long gain( std::string args, std::string &retstring );

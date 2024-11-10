@@ -1999,6 +1999,47 @@ namespace Slicecam {
   /***** Slicecam::Interface::put_on_slit *************************************/
 
 
+  /***** Slicecam::Interface::shutdown ****************************************/
+  /**
+   * @brief      shutdown all threads and connections
+   * @param[in]  args       only used for help
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::shutdown( std::string args, std::string &retstring ) {
+    std::string function = "Slicecam::Interface::shutdown";
+    std::stringstream message;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = SLICECAMD_SHUTDOWN;
+      retstring.append( "\n" );
+      retstring.append( "  Shuts down all threads which communicate with the cameras and\n" );
+      retstring.append( "  TCS, and close all connections. The daemon remains running.\n" );
+      return HELP;
+    }
+
+    long error = NO_ERROR;
+    std::string dontcare;
+
+    // this stops framegrabbing and closes socket connections to hardware
+    //
+    error |= this->close( "", dontcare );
+
+    // shutdown TCS connection
+    //
+    error |= this->tcs_init( "shutdown", dontcare );
+
+    if ( error == NO_ERROR ) logwrite( function, "slicecam interfaces shut down" );
+    else logwrite( function, "ERROR shutting down slicecam interfaces" );
+
+    return error;
+  }
+  /***** Slicecam::Interface::shutdown ****************************************/
+
+
   /***** Slicecam::Interface::test ********************************************/
   /**
    * @brief      test routines
