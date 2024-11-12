@@ -608,6 +608,11 @@ namespace Acam {
       ret = NOTHING;
       std::string retstring;
 
+      if ( this->interface.is_shutting_down ) {
+                      message.str(""); message << "BUSY: shutdown in progress. ignoring command: " << cmd;
+                      logwrite( function, message.str() );
+      }
+      else
       if ( cmd == "-h" || cmd == "--help" || cmd == "help" || cmd == "?" ) {
                       retstring="acam { <CMD> } [<ARG>...]\n";
                       retstring.append( "  where <CMD> is one of:\n" );

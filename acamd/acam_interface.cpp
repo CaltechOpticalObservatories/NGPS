@@ -3413,6 +3413,11 @@ namespace Acam {
     long error = NO_ERROR;
     std::string dontcare;
 
+    // sets is_shutting_down true here, clears when it goes out of scope
+    // This prevents other commands from coming in during the shutdown process.
+    //
+    BoolState shutting_down( this->is_shutting_down );
+
     // close the cover (if motion is in use)
     //
     if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );

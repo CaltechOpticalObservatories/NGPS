@@ -484,6 +484,7 @@ namespace Acam {
 
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
+      std::atomic<bool> is_shutting_down;      ///< set during shutdown
 
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
@@ -495,7 +496,8 @@ namespace Acam {
                     tcs_online(false),
                     motion_port(-1),
                     should_framegrab_run(false),
-                    is_framegrab_running(false) {
+                    is_framegrab_running(false),
+                    is_shutting_down(false) {
         target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
