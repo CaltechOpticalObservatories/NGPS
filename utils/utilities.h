@@ -672,6 +672,31 @@ class StateManager {
     }
 
     /**
+     * @brief      wait for specified states to be clear
+     * @details    this can throw an exception
+     * @param[in]  states  state bits to wait for
+     */
+    template <typename... StateBits>
+    void wait_for_states_clear(StateBits... states) {
+      std::unique_lock<std::mutex> lock(mtx);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_states_clear cancelled by external signal");
+      }
+      (pending_bits.set(states), ...);
+      if ( ( ... && !state_bits.test(states) ) ) {
+        (pending_bits.reset(states), ...);
+        return;
+      }
+      cv.wait(lock, [this, &states...]() { return should_cancel.load() || (... && !state_bits.test(states)); });
+      (pending_bits.reset(states), ...);
+      if ( should_cancel.load() ) {
+        should_cancel.store(false);
+        throw std::runtime_error("wait_for_states_clear cancelled by external signal");
+      }
+    }
+
+    /**
      * @brief      wait for all state bits to match those of another StateManager object
      * @details    this can throw an exception
      * @param[in]  obj  reference to another StateManager object for comparison
