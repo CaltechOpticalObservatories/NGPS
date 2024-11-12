@@ -148,6 +148,7 @@ namespace Sequencer {
     THR_FLEXURE_SET,
     THR_CALIBRATOR_SET,
     THR_ACAM_INIT,
+    THR_ANDOR_INIT,
     THR_SLICECAM_INIT,
     THR_CALIB_INIT,
     THR_TCS_INIT,
@@ -157,6 +158,7 @@ namespace Sequencer {
     THR_FOCUS_INIT,
     THR_POWER_INIT,
     THR_ACAM_SHUTDOWN,
+    THR_ANDOR_SHUTDOWN,
     THR_SLICECAM_SHUTDOWN,
     THR_CALIB_SHUTDOWN,
     THR_CAMERA_SHUTDOWN,
@@ -188,6 +190,7 @@ namespace Sequencer {
     {THR_FLEXURE_SET,              "flexure_set"},
     {THR_CALIBRATOR_SET,           "calibrator_set"},
     {THR_ACAM_INIT,                "acam_init"},
+    {THR_ANDOR_INIT,               "andor_init"},
     {THR_SLICECAM_INIT,            "slicecam_init"},
     {THR_CALIB_INIT,               "calib_init"},
     {THR_TCS_INIT,                 "tcs_init"},
@@ -197,6 +200,7 @@ namespace Sequencer {
     {THR_FOCUS_INIT,               "focus_init"},
     {THR_POWER_INIT,               "power_init"},
     {THR_ACAM_SHUTDOWN,            "acam_shutdown"},
+    {THR_ANDOR_SHUTDOWN,           "andor_shutdown"},
     {THR_SLICECAM_SHUTDOWN,        "slicecam_shutdown"},
     {THR_CALIB_SHUTDOWN,           "calib_shutdown"},
     {THR_CAMERA_SHUTDOWN,          "camera_shutdown"},
@@ -361,6 +365,7 @@ namespace Sequencer {
       static void dothread_focus_set( Sequencer::Sequence &seq );
       static void dothread_flexure_set( Sequencer::Sequence &seq );
 
+      static void dothread_andor_init( Sequencer::Sequence &seq );             ///< initializes connections to acamd and slicecamd
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
       static void dothread_calib_init( Sequencer::Sequence &seq );             ///< initializes connection to calibd
       static void dothread_camera_init( Sequencer::Sequence &seq );            ///< initializes connection to camerad
