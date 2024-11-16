@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef TCS_INTERFACE_H
-#define TCS_INTERFACE_H
+#pragma once
 
 #include "network.h"
 #include "logentry.h"
@@ -16,6 +15,8 @@
 #include "tcsd_commands.h"
 #include <sys/stat.h>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <math.h>
 
 /***** TCS ********************************************************************/
@@ -26,6 +27,7 @@
  */
 namespace TCS {
 
+  constexpr bool BLOCK=true;
 
   /***** TCS::TcsInfo *********************************************************/
   /**
@@ -107,13 +109,86 @@ namespace TCS {
    *
    */
   class TcsIO {
+    private:
+      const std::string name;   ///< name of this tcs
+      const std::string host;   ///< hostname for this tcs
+      int port;                 ///< port on hostname
+      char term_write;          ///< terminate commands sent with this character
+      char term_read;           ///< responses read are terminated with this character
+
+      // connection for slow-response commands
+      std::shared_ptr<Network::Interface> conn_slow;
+      std::mutex mtx_slow;
+
+      // pool for fast-response commands
+      std::vector<std::shared_ptr<Network::Interface>> pool;
+      std::mutex mtx_fast;
+      std::condition_variable cv;
+
     public:
+      TcsIO(const std::string &name, const std::string &host, int port, char term_write, char term_read)
+        : name(name),
+          host(host),
+          port(port),
+          term_write(term_write),
+          term_read(term_read),
+          conn_slow(std::make_shared<Network::Interface>(name, host, port, term_write, term_read))
+      {
+          for ( size_t i=0; i < poolsize; ++i ) {
+            pool.emplace_back(std::make_shared<Network::Interface>(name, host, port, term_write, term_read));
+          }
+      }
+
+      static const size_t poolsize = 3;
+
+      // get a connection for a command
+      //
+      std::shared_ptr<Network::Interface> get_connection( bool is_slow_command ) {
+        if ( is_slow_command ) {
+          // slow command, lock and return the slow command connection
+          std::lock_guard<std::mutex> lock( mtx_slow );
+          return conn_slow;
+        }
+        else {
+          // fast command, take a connection from the pool
+          std::unique_lock<std::mutex> lock(mtx_fast);
+          cv.wait( lock, [this]() { return !pool.empty(); } );
+          auto conn = std::move( pool.back() );
+          pool.pop_back();
+          return conn;
+        }
+      }
+
+      // return a fast-response connection to the pool
+      //
+      void return_connection( std::shared_ptr<Network::Interface> conn ) {
+        {
+        std::lock_guard<std::mutex> lock(mtx_fast);
+        pool.push_back( std::move(conn) );
+        }
+        cv.notify_one();
+      }
 
       /**
        * @var    tcs  pointer to Network::Interface
        * @brief  provides standard TCP/IP socket iterface
        */
       std::unique_ptr< Network::Interface > tcs;
+
+      long execute_command(const std::string& command, std::string& response, bool is_slow_command) {
+        auto conn = get_connection(is_slow_command);
+        if (!conn) {
+          logwrite("TCS::TcsIO::execute_command", "ERROR failed to acquire a connection");
+          return ERROR;
+        }
+
+        long error = conn->send_command(command, response);
+        if (!is_slow_command) {
+          return_connection(conn); // Return fast connections to the pool
+        }
+
+      return error;
+      }
 
       /**
        * convenience functions provide access to the Network::Interface functions
@@ -123,13 +198,54 @@ namespace TCS {
       inline long close() const { return tcs->close(); }
       inline bool isconnected() const { return tcs->sock.isconnected(); }
       inline int fd() const { return tcs->sock.getfd(); }
-      inline std::string host() const { return tcs->get_host(); }
-      inline std::string name() const { return tcs->get_name(); }
-      inline int port() const { return tcs->get_port(); }
+      inline std::string gethost() const { return tcs->get_host(); }
+      inline std::string getname() const { return tcs->get_name(); }
+      inline int getport() const { return tcs->get_port(); }
       inline long send( std::string cmd ) { return tcs->send_command( cmd ); }
       inline long send( std::string cmd, std::string &retstring ) { return tcs->send_command( cmd, retstring ); }
   };
   /***** TCS::TcsIO ***********************************************************/
+
+
+/****
+  class ConnectionPool {
+    public:
+      std::queue<std::shared_ptr<TcsIO>> slow_connections;
+      std::queue<std::shared_ptr<TcsIO>> fast_connections;
+
+      std::mutex pool_mutex;
+
+      ConnectionPool( size_t slow_count, size_t fast_count ) {
+        for ( size_t i=0; i<slow_count; ++i ) slow_connections.push( std::make_shared<TcsIO>(true) );
+        for ( size_t i=0; i<fast_count; ++i ) fast_connections.push( std::make_shared<TcsIO>(true) );
+      }
+
+      std::shared_ptr<TcsIO> get_connection( bool slow_command ) {
+        std::lock_guard<std::mutex> lock(pool_mutex);
+
+        auto &queue = slow_command ? slow_connections : fast_connections;
+
+        if ( ! queue.empty() ) {
+          auto conn = queue.front();
+          queue.pop();
+          return conn;
+        }
+        // return a new dynamic connection if pool is exhausted
+        //
+        return std::make_shared<TcsIO>();
+      }
+
+      void release_connection( bool slow_command, std::shared_ptr<TcsIO> conn ) {
+        if ( conn->is_persistent ) {
+          std::lock_guard<std::mutex> lock(pool_mutex);
+
+          auto &queue = slow_command ? slow_connections : fast_connections;
+          queue.push(conn);
+        }
+        // otherwise dynamic connections are destroyed when their shared ptr is released
+      }
+  };
+*****/
 
 
   /***** TCS::Interface *******************************************************/
@@ -150,10 +266,12 @@ namespace TCS {
 
       std::string name;                            ///< the name of the currently open tcs device
 
-      std::map< std::string, TCS::TcsIO > tcsmap;  ///< STL map of TcsIO objects indexed by name
+      std::map< std::string, std::shared_ptr<TCS::TcsIO> > tcsmap;  ///< STL map of TcsIO objects indexed by name
 
       std::mutex publish_mutex;
       std::mutex collect_mutex;
+
+      std::mutex query_mtx;
 
       std::condition_variable publish_condition;
       std::condition_variable collect_condition;
@@ -191,7 +309,7 @@ namespace TCS {
       long coords( std::string args, std::string &retstring );
       long pt_offset( std::string args, std::string &retstring );
       long ret_offsets( std::string args, std::string &retstring );
-      long send_command( std::string cmd, std::string &retstring );
+      long send_command( std::string cmd, std::string &retstring, bool block=false );
       long native( std::string args, std::string &retstring );
       long parse_reply_code( std::string codein, std::string &retstring );
       long parse_motion_code( std::string codein, std::string &retstring );
@@ -205,4 +323,3 @@ namespace TCS {
 
 }
 /***** TCS ********************************************************************/
-#endif
