@@ -31,7 +31,7 @@ else
   zenity --notification --text "$id GUI (ds9) is launching.  Please wait..."  # Pop-up on linux OS
 
   ds9 -png $startfile -title $id \
-    -zoom to fit -cmap $cmap -scale linear -scale mode zscale \
+    -zoom to fit -cmap $cmap -scale linear -scale mode zscale -scale datasec yes \
     -preserve pan yes -preserve regions yes \
     -view filename no -view object no -view colorbar no \
     -prefs theme awbreezedark -geometry $geometry  \
