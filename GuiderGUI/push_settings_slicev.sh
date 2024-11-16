@@ -30,7 +30,7 @@ fi
 
 # update headsup display
 width=`xpaget $id fits width`
-XCENTER=$width # don't divide by 2 since there are 2 frames $(($width/2))
+XCENTER=$(($width/2)) # don't divide by 2 since there are 2 frames $(($width/2))
 YCENTER=30
 
 xpaset -p $id region delete all
