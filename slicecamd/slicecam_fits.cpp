@@ -181,7 +181,7 @@ logwrite( function, file_in );
    * @brief      
    *
    */
-  long FITS_file::write_image( std::shared_ptr<Andor::Interface> slicecam ) {
+  long FITS_file::write_image( std::unique_ptr<Andor::Interface> &slicecam ) {
     std::string function = "Slicecam::FITS_file::write_image";
     std::stringstream message;
 
@@ -243,6 +243,8 @@ logwrite( function, file_in );
       // Write and flush to make sure imeage is written to disk
       //
       this->imageExt->write( fpixel, slicecam->camera_info.section_size, array );
+
+      slicecam->erase_data_buffer();
 
       this->pFits->flush();  // make sure the image is written to disk
     }

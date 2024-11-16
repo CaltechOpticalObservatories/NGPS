@@ -990,6 +990,21 @@ namespace Andor {
   /***** Andor::Emulator::_WaitForAcquisitionByHandleTimeOut ******************/
 
 
+  /***** Andor::Emulator::_SetFanMode *****************************************/
+  /**
+   * @brief      wrapper for Andor Sim SetFanMode
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long Emulator::_SetFanMode( int mode ) {
+    std::string function = "Andor::Emulator::_SetFanMode";
+    std::stringstream message;
+
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetFanMode *****************************************/
+
+
   /***** Andor::SkySim::initialize_python *************************************/
   /**
    * @brief      initializes the Python skysim module

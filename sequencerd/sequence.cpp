@@ -4893,11 +4893,11 @@ logwrite( function, message.str() );
     // startup -- startup a single specified module
     // ---------------------------------------------------------
     //
-    if ( testname == "startup" ) {
+    if ( testname == "startup" || testname == "shutdown" ) {
 
       if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" ) ) {
-        retstring = "test startup <module>\n";
-        retstring.append( "  Startup only a single specified module in a manner similar\n" );
+        retstring = "test startup | shutdown <module>\n";
+        retstring.append( "  Startup or shutdown only a single specified module in a manner similar\n" );
         retstring.append( "  to the startup command, but only the specified module.\n" );
         retstring.append( "  Valid modules are:\n" );
         retstring.append( "    power | acam | andor | calib | camera | flexure | focus |\n" );
@@ -4952,6 +4952,11 @@ logwrite( function, message.str() );
       bool wait=false;
       if ( tokens.size() == 3 && tokens[2]=="wait" ) wait=true;
 
+      // startup or shutdown?
+      //
+      bool isinit = true;
+      if ( testname == "startup" ) isinit=true; else if ( testname == "shutdown" ) isinit=false;
+
       if ( tokens[1] == "power" ) {
         if ( this->powerd.socket.isconnected() ) {
           std::string reply;
@@ -4976,18 +4981,22 @@ logwrite( function, message.str() );
       if ( tokens[1] == "acam" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_ACAM );
         this->broadcast_seqstate();
-        std::thread( dothread_acam_init, std::ref(*this) ).detach();
+        std::thread( (isinit ? dothread_acam_init : dothread_acam_shutdown), std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_ACAM );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: acam startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: acam aborted" );
           }
         }
       }
       else
       if ( tokens[1] == "andor" ) {
+        if ( !isinit ) {
+          logwrite( function, "ERROR there is no andor shutdown. use acam and slicecam" );
+          return ERROR;
+        }
         this->seq_state.set( Sequencer::SEQ_WAIT_ACAM, Sequencer::SEQ_WAIT_SLICECAM );
         this->broadcast_seqstate();
         std::thread( dothread_andor_init, std::ref(*this) ).detach();
@@ -4996,7 +5005,7 @@ logwrite( function, message.str() );
             this->seq_state.wait_for_states_clear( Sequencer::SEQ_WAIT_ACAM, Sequencer::SEQ_WAIT_SLICECAM );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: andor startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: andor aborted" );
           }
         }
       }
@@ -5004,13 +5013,13 @@ logwrite( function, message.str() );
       if ( tokens[1] == "calib" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_CALIB );
         this->broadcast_seqstate();
-        std::thread( dothread_calib_init, std::ref(*this) ).detach();
+        std::thread( isinit ? dothread_calib_init : dothread_calib_shutdown, std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_CALIB );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: calib startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: calib aborted" );
           }
         }
       }
@@ -5018,13 +5027,13 @@ logwrite( function, message.str() );
       if ( tokens[1] == "camera" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );
         this->broadcast_seqstate();
-        std::thread( dothread_camera_init, std::ref(*this) ).detach();
+        std::thread( isinit ? dothread_camera_init : dothread_camera_shutdown, std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_CAMERA );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: camera startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: camera aborted" );
           }
         }
       }
@@ -5032,13 +5041,13 @@ logwrite( function, message.str() );
       if ( tokens[1] == "flexure" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_FLEXURE );
         this->broadcast_seqstate();
-        std::thread( dothread_flexure_init, std::ref(*this) ).detach();
+        std::thread( isinit ? dothread_flexure_init : dothread_flexure_shutdown, std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_FLEXURE );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: flexure startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: flexure aborted" );
           }
         }
       }
@@ -5046,13 +5055,13 @@ logwrite( function, message.str() );
       if ( tokens[1] == "focus" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_FOCUS );
         this->broadcast_seqstate();
-        std::thread( dothread_focus_init, std::ref(*this) ).detach();
+        std::thread( isinit ? dothread_focus_init : dothread_focus_shutdown, std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_FOCUS );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: focus startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: focus aborted" );
           }
         }
       }
@@ -5060,13 +5069,13 @@ logwrite( function, message.str() );
       if ( tokens[1] == "slicecam" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_SLICECAM );
         this->broadcast_seqstate();
-        std::thread( dothread_slicecam_init, std::ref(*this) ).detach();
+        std::thread( isinit ? dothread_slicecam_init : dothread_slicecam_shutdown, std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_SLICECAM );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: slicecam startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: slicecam aborted" );
           }
         }
       }
@@ -5074,13 +5083,13 @@ logwrite( function, message.str() );
       if ( tokens[1] == "slit" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_SLIT );
         this->broadcast_seqstate();
-        std::thread( dothread_slit_init, std::ref(*this) ).detach();
+        std::thread( isinit ? dothread_slit_init : dothread_slit_shutdown, std::ref(*this) ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_SLIT );
           }
           catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: slit startup aborted" );
+            this->async.enqueue_and_log( function, "NOTICE: slit aborted" );
           }
         }
       }

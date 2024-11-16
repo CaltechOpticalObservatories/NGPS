@@ -67,7 +67,7 @@ namespace Slicecam {
       long copy_header( std::string wcs_in );
       long add_key( std::string keyword, std::string type, std::string value, std::string comment );
 
-      long write_image( std::shared_ptr<Andor::Interface> slicecam );
+      long write_image( std::unique_ptr<Andor::Interface> &slicecam );
 //    long write_image( uint16_t* data, Slicecam::FitsInfo &imageinfo );
 /*** 4/3/24
       template <typename T> long write_image( std::unique_ptr<T[]> &data ) {

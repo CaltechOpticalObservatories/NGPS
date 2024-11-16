@@ -51,7 +51,7 @@ namespace Slit {
       error = ERROR;
     }
 
-    this->minwidth=0;
+//  this->minwidth=0;
     this->maxwidth=0;
 
     // Loop through the expected motor names, and
@@ -64,8 +64,8 @@ namespace Slit {
 
       if ( loc != _motormap.end() ) {
         if ( _motormap[name].axes.find(1) != _motormap[name].axes.end() ) {
-          this->maxwidth += ( _motormap[name].axes[1].max - _motormap[name].axes[1].min );
-          this->minwidth +=   _motormap[name].axes[1].min ;
+          this->maxwidth += ( _motormap[name].axes[1].max /*- _motormap[name].axes[1].min*/ );
+//        this->minwidth +=   _motormap[name].axes[1].min ;
         }
         else {
           message.str(""); message << "ERROR motor " << name << " missing configuration for axis 1";
@@ -371,14 +371,39 @@ namespace Slit {
 
     float pos_A, pos_B;
 
-    if ( setoffset >= 0 ) {
-      pos_B = setoffset + setwidth/this->numdev;
-      pos_A = std::abs( setwidth - pos_B );
+    pos_A = 2.2 + setwidth/2 + setoffset;
+    pos_B = 2.2 + setwidth/2 - setoffset;
+
+    auto _motormap = this->motorinterface.get_motormap();
+
+    if ( pos_A < _motormap["A"].axes[1].min ||
+         pos_A > _motormap["A"].axes[1].max ) {
+      message.str(""); message << "ERROR actuator A " << pos_A << " outside range { "
+                               << _motormap["A"].axes[1].min << " : "
+                               << _motormap["A"].axes[1].max << " }";
+      logwrite( function, message.str() );
+      retstring="invalid_position";
+      return ERROR;
     }
-    else {
-      pos_A = setwidth/this->numdev - setoffset;
-      pos_B = std::abs( setwidth - pos_A );
+
+    if ( pos_B < _motormap["B"].axes[1].min ||
+         pos_B > _motormap["B"].axes[1].max ) {
+      message.str(""); message << "ERROR actuator B " << pos_B << " outside range { "
+                               << _motormap["B"].axes[1].min << " : "
+                               << _motormap["B"].axes[1].max << " }";
+      logwrite( function, message.str() );
+      retstring="invalid_position";
+      return ERROR;
     }
+
+//  if ( setoffset >= 0 ) {
+//    pos_B = setoffset + setwidth/this->numdev;
+//    pos_A = std::abs( setwidth - pos_B );
+//  }
+//  else {
+//    pos_A = setwidth/this->numdev - setoffset;
+//    pos_B = std::abs( setwidth - pos_A );
+//  }
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " width=" << setwidth

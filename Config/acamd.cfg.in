@@ -40,6 +40,21 @@ PIXSCALE=0.26
 ANDOR_SN=13452
 #ANDOR_SN=(emulate 1001)
 
+# ANDOR=( [emulate] <SN> <HFLIP> <VFLIP> <ROTDIR> )
+# Specify the Andor serial number, image flip and rotation.
+# The serial number identifies the correct camera to use, or
+# use SN="emulate <sn>" to emulate the Andor where <sn> is
+# an emulated serial nunmber of {1001,1002,...,1008}.
+#
+# Set <HFLIP> or <VFLIP> to 1 to enable flipping horizontally
+# or vertically. Set to 0 to disable flipping.
+#
+# Set <ROTDIR> to "cw"   to rotate 90 deg clockwise
+#                 "ccw"  to rotate 90 deg counter clockwise
+#                 "none" to set rotation to none
+#
+ANDOR=(13452 1 0 cw)
+
 # PUSH_GUIDER_SETTINGS
 # This defines the shell script which pushes guider settings to the
 # SAOimage GUIDER display.

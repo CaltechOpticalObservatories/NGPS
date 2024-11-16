@@ -45,10 +45,10 @@ namespace Slit {
     private:
       size_t numdev;
       float maxwidth;
-      float minwidth;
 
     public:
-      Interface() : numdev(-1), maxwidth(0), minwidth(0), arcsec_per_mm(NAN) { };
+      float minwidth;
+      Interface() : numdev(-1), maxwidth(NAN), minwidth(NAN), arcsec_per_mm(NAN) { };
 
       Common::Queue async;
 

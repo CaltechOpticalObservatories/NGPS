@@ -25,6 +25,7 @@ const std::string ACAMD_SPEED    = "speed";     ///< set/get CCD clocking speeds
 const std::string ACAMD_EMULATOR = "emulator";  ///< set/get Andor emulator state
 const std::string ACAMD_EXIT     = "exit";      ///< 
 const std::string ACAMD_EXPTIME  = "exptime";   ///< set/get camera exposure time
+const std::string ACAMD_FAN      = "fan";       ///< set Andor fan mode
 const std::string ACAMD_FILTER   = "filter";    ///< filter [ name ] to set or get the filter
 const std::string ACAMD_GUIDESET = "guideset";  ///< set params for guider display
 const std::string ACAMD_HOME     = "home";      ///< home all motors
@@ -71,6 +72,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_BIN+" [ ? | <hbin> <vbin> ]",
                                                 ACAMD_EMULATOR+" [ ? | true | false ]",
                                                 ACAMD_EXPTIME+" [ ? | <exptime> ]",
+                                                ACAMD_FAN+" [ ? | <mode> ]",
                                                 ACAMD_GAIN+" [ ? | <gain> ]",
                                                 ACAMD_GUIDESET+" [ ? | <exptime> <gain> <filter> <focus> ]",
                                                 ACAMD_IMFLIP+" [ ? | <hflip> <vflip> ]",

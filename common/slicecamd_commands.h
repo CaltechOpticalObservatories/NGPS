@@ -22,6 +22,7 @@ const std::string SLICECAMD_SPEED    = "speed";     ///< set/get CCD clocking sp
 const std::string SLICECAMD_EMULATOR = "emulator";  ///< set/get Andor emulator state
 const std::string SLICECAMD_EXIT     = "exit";      ///< 
 const std::string SLICECAMD_EXPTIME  = "exptime";   ///< set/get camera exposure time
+const std::string SLICECAMD_FAN      = "fan";       ///< set Andor fan mode
 const std::string SLICECAMD_GUISET   = "guiset";    ///< set params for gui display
 const std::string SLICECAMD_INIT     = "init";      ///< ***
 const std::string SLICECAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
@@ -51,13 +52,14 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 "  CAMERA COMMANDS:",
                                                 SLICECAMD_FRAMEGRAB+" [ ? | start | stop | one [ <filename> ] | status ]",
                                                 SLICECAMD_FRAMEGRABFIX+" [ ? ]",
-                                                SLICECAMD_BIN+" [ ? | <hbin> <vbin> ]",
+                                                SLICECAMD_BIN+" [ ? | <name> <hbin> <vbin> ]",
                                                 SLICECAMD_EMULATOR+" [ ? | true | false ]",
                                                 SLICECAMD_EXPTIME+" [ ? | <exptime> ]",
+                                                SLICECAMD_FAN+" [ ? | <name> <mode> ]",
                                                 SLICECAMD_GAIN+" [ ? | <gain> ]",
                                                 SLICECAMD_GUISET+" [ ? | <exptime> <gain> ]",
-                                                SLICECAMD_IMFLIP+" [ ? | <hflip> <vflip> ]",
-                                                SLICECAMD_IMROT+" [ ? | <rotdir> ]",
+                                                SLICECAMD_IMFLIP+" [ ? | <name> <hflip> <vflip> ]",
+                                                SLICECAMD_IMROT+" [ ? | <name> <rotdir> ]",
                                                 SLICECAMD_INIT,
                                                 SLICECAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 SLICECAMD_TEMP+" [ ? | <setpoint> ]",

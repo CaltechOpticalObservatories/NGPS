@@ -435,7 +435,7 @@ namespace AstroCam {
             this->none( row_start, row_stop, index );
             break;
           case U2:
-            this->flip_udlr( row_start, row_stop, index_ud );
+            this->flip_lr( row_start, row_stop, index );
             break;
           case L2:
             this->flip_ud( row_start, row_stop, index_ud );

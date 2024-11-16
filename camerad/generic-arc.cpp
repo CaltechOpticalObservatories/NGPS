@@ -190,7 +190,15 @@ namespace AstroCam {
    *
    */
   long Interface::native( std::string cmdstr, std::string &retstring ) {
-    return this->do_native( cmdstr, retstring );
+
+    // temporary kludge to allow sending native commands to each controller
+    // not safe so fix this later
+    //
+    size_t it = cmdstr.find(" ");
+    int dev = std::stoi(cmdstr.substr(0, it));
+    std::string cmd = cmdstr.substr(it+1);
+    return this->do_native( dev, cmd, retstring );
+//  return this->do_native( cmdstr, retstring );
   }
   /***** AstroCam::Interface::native ****************8*************************/
 

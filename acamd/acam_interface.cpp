@@ -102,9 +102,9 @@ namespace Acam {
 
     // Setup camera for continuous readout
     //
-    error |= this->gain(2);
+    error |= this->gain(1);
     error |= this->andor.set_vsspeed( 4.33 );          // vertical shift speed
-    error |= this->andor.set_hsspeed( 30.0 );          // horizontal shift speed
+    error |= this->andor.set_hsspeed( 1.0 );           // horizontal shift speed
     error |= this->andor.set_read_mode( 4 );           // image mode
     error |= this->andor.set_acquisition_mode( 5 );    // run till abort
     error |= this->andor.set_frame_transfer( "off" );  // disable Frame Transfer mode
@@ -136,82 +136,24 @@ namespace Acam {
 
   /***** Acam::Camera::bin ****************************************************/
   /**
-   * @brief      set or get camera binning
-   * @param[in]  args       optionally contains <hbin> <vbin>
-   * @param[out] retstring  return string contains <hbin> <vbin>
+   * @brief      set camera binning
+   * @param[in]  hbin  horizontal binning factor
+   * @param[in]  vbin  vertical binning factor
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Camera::bin( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::bin";
-    std::stringstream message;
-    long error = NO_ERROR;
-
-    // Help
-    //
-    if ( args == "?" || args == "help" ) {
-      retstring = ACAMD_BIN;
-      retstring.append( " [ <hbin> <vbin> ]\n" );
-      retstring.append( "   Set or get CCD binning.\n" );
-      retstring.append( "   <hbin> and <vbin> are the number of pixels to bin horizontally\n" );
-      retstring.append( "   and vertically, respectively. When setting either, both must\n" );
-      retstring.append( "   be supplied. If both omitted then the current binning is returned.\n" );
-      return HELP;
-    }
+  long Camera::bin( const int hbin, const int vbin ) {
 
     // Andor must be connected
     //
     if ( !this->andor.is_open() ) {
-      logwrite( function, "ERROR no connection to camera" );
+      logwrite( "Acam::Camera::bin", "ERROR no connection to camera" );
       return ERROR;
     }
 
-    // Parse args if present
+    // Set the binning parameters now
     //
-    if ( !args.empty() ) {
-
-      int hbin, vbin;
-
-      std::vector<std::string> tokens;
-      Tokenize( args, tokens, " " );
-
-      // There can be only one arg (the requested EM gain)
-      //
-      if ( tokens.size() != 2 ) {
-        logwrite( function, "ERROR expected <hbin> <vbin>" );
-        return ERROR;
-      }
-
-      // Parse the gain from the token
-      //
-      try {
-        hbin = std::stoi( tokens.at(0) );
-        vbin = std::stoi( tokens.at(1) );
-      }
-      catch ( std::out_of_range &e ) {
-        message.str(""); message << "ERROR reading arguments: " << e.what();
-        error = ERROR;
-      }
-      catch ( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR reading arguments: " << e.what();
-        error = ERROR;
-      }
-
-      if (error==ERROR) logwrite( function, message.str() );
-
-      // Set the binning parameters now
-      //
-      if (error!=ERROR ) error = this->andor.set_binning( hbin, vbin );
-    }
-
-    // return the current binning parameters
-    //
-    message.str(""); message << this->andor.camera_info.hbin << " " << this->andor.camera_info.vbin;
-    retstring = message.str();
-
-    logwrite( function, retstring );
-
-    return error;
+    return this->andor.set_binning( hbin, vbin );
   }
   /***** Acam::Camera::bin ****************************************************/
 
@@ -404,6 +346,27 @@ namespace Acam {
     return set_exptime(retval);
   }
   /***** Acam::Camera::set_exptime ********************************************/
+
+
+  /***** Acam::Camera::set_fan ************************************************/
+  /**
+   * @brief      set fan mode
+   * @param[in]  mode  {0 1 2}
+   * @return     ERROR | NO_ERROR
+   */
+  long Camera::set_fan( int mode ) {
+    const std::string function="Acam::Camera::set_fan";
+
+    // Andor must be connected
+    //
+    if ( !this->andor.is_open() ) {
+      logwrite( function, "ERROR no connection to camera" );
+      return ERROR;
+    }
+
+    return this->andor.set_fan( mode );
+  }
+  /***** Acam::Camera::set_fan ************************************************/
 
 
   /***** Acam::Camera::gain ***************************************************/
@@ -1352,6 +1315,97 @@ namespace Acam {
   /***** Acam::Astrometry::pyobj_from_string **********************************/
 
 
+  /***** Acam::Interface::bin *************************************************/
+  /**
+   * @brief      set or get camera binning
+   * @param[in]  args       optionally contains <hbin> <vbin>
+   * @param[out] retstring  return string contains <hbin> <vbin>
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::bin( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::bin";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_BIN;
+      retstring.append( " [ <hbin> <vbin> ]\n" );
+      retstring.append( "   Set or get CCD binning.\n" );
+      retstring.append( "   <hbin> and <vbin> are the number of pixels to bin horizontally\n" );
+      retstring.append( "   and vertically, respectively. When setting either, both must\n" );
+      retstring.append( "   be supplied. If both omitted then the current binning is returned.\n" );
+      return HELP;
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      int hbin=-1, vbin=-1;
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There can be only one arg (the requested EM gain)
+      //
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <hbin> <vbin>" );
+        return ERROR;
+      }
+
+      // Parse the binning arguments from the tokens
+      //
+      try {
+        hbin = std::stoi( tokens.at(0) );
+        vbin = std::stoi( tokens.at(1) );
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR reading arguments: " << e.what();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+
+      if ( hbin < 1 || vbin < 1 ) {
+        logwrite( function, "ERROR bin factors must be >= 1" );
+        return ERROR;
+      }
+
+      // If framegrab is running then stop it. This won't return until framegrabbing
+      // has stopped (or timeout).
+      //
+      bool was_framegrab_running = this->is_framegrab_running.load();
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error = this->framegrab( "stop", dontcare );
+      }
+
+      // Set the binning parameters now
+      //
+      if (error!=ERROR ) error = this->camera.bin( hbin, vbin );
+
+      // If framegrab was previously running then restart it
+      //
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error |= this->framegrab( "start", dontcare );
+      }
+    }
+
+    // return the current binning parameters
+    //
+    message.str(""); message << this->camera.andor.camera_info.hbin << " " << this->camera.andor.camera_info.vbin;
+    retstring = message.str();
+
+    logwrite( function, retstring );
+
+    return error;
+  }
+  /***** Acam::Interface::bin *************************************************/
+
+
   /***** Acam::Interface::make_telemetry_message ******************************/
   /**
    * @brief      assembles a telemetry message
@@ -1612,10 +1666,10 @@ namespace Acam {
           this->camera.andor.camera_info.serial_number=std::stoi(tokens[1]);
           applied++;
         }
-        else {
+        else if ( tokens.size() > 0 ) {
           this->camera.andor.andor_emulator( false );
           try {
-            this->camera.andor.camera_info.serial_number=std::stoi(config.arg[entry]);
+            this->camera.andor.camera_info.serial_number=std::stoi(tokens.at(0));
             applied++;
           }
           catch ( const std::exception &e ) {
@@ -2526,6 +2580,16 @@ namespace Acam {
     // If all args are supplied then set all parameters
     //
     if ( tokens.size() == 4 ) {
+
+      // If framegrab is running then stop it. This won't return until framegrabbing
+      // has stopped (or timeout).
+      //
+      bool was_framegrab_running = this->is_framegrab_running.load();
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error = this->framegrab( "stop", dontcare );
+      }
+
       try {
         std::string reply;
         exptime = std::stof( tokens.at(0) );
@@ -2556,6 +2620,13 @@ namespace Acam {
         logwrite( function, message.str() );
         retstring="invalid_argument";
         error = ERROR;
+      }
+
+      // If framegrab was previously running then restart it
+      //
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error = this->framegrab( "start", dontcare );
       }
     }
 
@@ -3230,7 +3301,6 @@ namespace Acam {
    *
    */
   void Interface::dothread_set_focus( Acam::Interface &iface, double focus_req ) {
-/*
     std::string function = "Acam::Interface::dothread_set_focus";
     std::stringstream message;
 
@@ -3239,9 +3309,9 @@ namespace Acam {
     double focus_og;
     long error = iface.tcsd.get_focus( focus_og );
 
-    double tolerance=0.01;
+    double tolerance=0.1;
     bool arrived = false;
-    int stalled = 0, stall_limit=240;
+    int stalled = 0, stall_limit=40;
 
     error |= iface.tcsd.set_focus( focus_req );
 
@@ -3250,15 +3320,21 @@ namespace Acam {
     //
     do {
       double last_focus = iface.guide_manager.focus;
+      double focus_now  = 999;
       arrived = ( std::abs( iface.guide_manager.focus - focus_req ) < tolerance ? true : false );
-      error |= iface.tcsd.get_focus( iface.guide_manager.focus );
+      error |= iface.tcsd.get_focus( focus_now );
+      iface.guide_manager.focus.store( focus_now, std::memory_order_seq_cst );
       iface.guide_manager.push_guider_settings();
       std::this_thread::sleep_for( std::chrono::milliseconds( 250 ) );
+      // If the focus reading didn't change since the last one, increment a counter
+      // and if that counter exceeds the stall_limit then assume the focus movement
+      // has stalled and get out. This should wait about 10 seconds.
+      //
       stalled = ( std::abs( iface.guide_manager.focus - last_focus ) < tolerance ? stalled+1 : 0 );
     } while ( error!=ERROR && !arrived && stalled < stall_limit );
 
     if ( stalled == stall_limit ) {
-      logwrite( function, "ERROR TCS focus position is not changing" );
+      logwrite( function, "TCS focus position is not changing" );
     }
 
     if ( iface.guide_manager.focus != focus_og ) {
@@ -3271,7 +3347,6 @@ namespace Acam {
       iface.guide_manager.focus=NAN;
     }
 
-*/
     return;
   }
   /***** Acam::Interface::dothread_set_focus **********************************/
@@ -4074,6 +4149,78 @@ namespace Acam {
     return error;
   }
   /***** Acam::Interface::exptime *********************************************/
+
+
+  /***** Acam::Interface::fan_mode ********************************************/
+  /**
+   * @brief      set camera fan mode
+   * @param[in]  args       {full low off}
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::fan_mode( std::string args, std::string &retstring ) {
+    std::string function = "Acam::Interface::fan_mode";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_FAN;
+      retstring.append( " <mode>\n" );
+      retstring.append( "   Set camera fan mode where <mode> is { full low off }.\n" );
+      retstring.append( "   The fan should only be turned off for short periods of time.\n" );
+      retstring.append( "   Fan state cannot be directly read. Reported state is only known\n" );
+      retstring.append( "   by remembering the last state set, so if not set manually then no state\n" );
+      retstring.append( "   can be reported.\n" );
+      return HELP;
+    }
+
+    // get the mode from args
+    //
+    if ( args.empty() ) {
+      logwrite( function, "ERROR expected { full low off }\n" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // assign the numeric mode value from the string argument
+    //
+    int mode;
+    try {
+      // convert to lowercase
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );
+      if ( args == "full" ) mode = 0;
+      else
+      if ( args == "low" )  mode = 1;
+      else
+      if ( args == "off" )  mode = 2;
+      else {
+        message.str(""); message << "ERROR bad arg " << args << ": expected { full low off }";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR processing args: " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    // set the mode
+    //
+    error = this->camera.set_fan( mode );
+
+    if ( error == NO_ERROR ) {
+      message.str(""); message << "set fan to " << args;
+      logwrite( function, message.str() );
+    }
+    else logwrite( function, "ERROR setting fan" );
+
+    return error;
+  }
+  /***** Acam::Interface::fan_mode ********************************************/
 
 
   /***** Acam::Interface::image_quality ***************************************/

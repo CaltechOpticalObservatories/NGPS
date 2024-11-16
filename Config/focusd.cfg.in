@@ -44,6 +44,6 @@ MOTOR_AXIS="R 1 0 6.7 0 ref"
 #   <pos>      real actuator position
 #   <posname>  name of that position, what the user will use
 #
-MOTOR_POS="I 1 0 5.887 nominal"
-MOTOR_POS="R 1 0 3.947 nominal"
+MOTOR_POS="I 1 0 4.75 nominal"
+MOTOR_POS="R 1 0 2.45 nominal"
 #MOTOR_POS="G 1 0 4.610 nominal"

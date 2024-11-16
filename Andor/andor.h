@@ -55,6 +55,7 @@ namespace Andor {
       int temp_max;                                ///< maximum allowed temperature
       int amptype;                                 ///< amp type 0=EM 1=conventional
       std::string amptypestr;                      ///< amp type string
+      std::string fan_mode;                        ///< fan mode string
       std::map<int, std::vector<float>> hsspeeds;  ///< vector of hori shift speeds for each amp type
       std::vector<float> vsspeeds;                 ///< vector of vert shift speeds
 
@@ -218,6 +219,7 @@ namespace Andor {
       virtual long _WaitForAcquisitionTimeOut( int timeout ) = 0;
       virtual long _WaitForAcquisition( ) = 0;
       virtual long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) = 0;
+      virtual long _SetFanMode( int mode ) = 0;
   };
   /***** Andor::AndorBase *****************************************************/
 
@@ -279,6 +281,7 @@ namespace Andor {
       long _WaitForAcquisitionTimeOut( int timeout ) override;
       long _WaitForAcquisition( ) override;
       long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) override;
+      long _SetFanMode( int mode ) override;
   };
   /***** Andor::SDK ***********************************************************/
 
@@ -364,6 +367,7 @@ namespace Andor {
       long _WaitForAcquisitionTimeOut( int timeout ) override;
       long _WaitForAcquisition( ) override;
       long _WaitForAcquisitionByHandleTimeOut( at_32 handle, int timeout ) override;
+      long _SetFanMode( int mode ) override;
 
       SkySim skysim;
   };
@@ -393,6 +397,7 @@ namespace Andor {
       unsigned short* image_data;
       std::atomic<bool> err;
       at_32 _handle;  ///< handle of the camera
+      size_t bufsz;
 
     public:
       Andor::SDK sdk;             ///< object for the real Andor SDK
@@ -479,7 +484,9 @@ namespace Andor {
 
 //    std::unique_ptr<uint16_t[]> get_image_data() { return std::move( this->image_data ); }
 //    std::unique_ptr<uint16_t[]>& get_image_data() { return this->image_data; }
-      inline uint16_t* get_image_data() { return this->image_data; }
+//    inline uint16_t* get_image_data() { return this->image_data; }
+      uint16_t* get_image_data();
+      inline void erase_data_buffer() { memset (this->image_data, 0, this->bufsz); }
 
       inline bool is_emulated() { return this->andor_emulated; }
 
@@ -532,6 +539,7 @@ namespace Andor {
       long set_hsspeed( float speed );
       long set_vsspeed( float speed );
       long set_image( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
+      long set_fan( int mode );
       long set_binning( int hbin, int vbin );
       long set_imflip( int hflip, int vflip );
       long set_imrot( int rotdir );

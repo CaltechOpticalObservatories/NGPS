@@ -159,6 +159,23 @@ namespace Slit {
         }
       }
 
+      // MIN_WIDTH: minimum slit width in physical units (mm)
+      //
+      if ( config.param[entry] == "MIN_WIDTH" ) {
+        try {
+          this->interface.minwidth = std::stod( config.arg[entry] );
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing MIN_WIDTH " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          error=ERROR;
+          break;
+        }
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
       // ARCSEC_PER_MM: conversion of actuator units to arcseconds
       //
       if ( config.param[entry] == "ARCSEC_PER_MM" ) {

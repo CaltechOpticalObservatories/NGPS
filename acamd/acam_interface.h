@@ -105,7 +105,7 @@ namespace Acam {
       long get_frame();
       long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
       long get_status();
-      long bin( std::string args, std::string &retstring );
+      long bin( const int hbin, const int vbin );
       long imflip( std::string args, std::string &retstring );
       long imrot( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
@@ -113,6 +113,7 @@ namespace Acam {
       int gain();
       long set_exptime( float &fval );
       long set_exptime( float &&fval );
+      long set_fan( int mode );
       long speed( std::string args, std::string &retstring );
       long temperature( std::string args, std::string &retstring );
   };
@@ -530,6 +531,7 @@ namespace Acam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
+      long bin( std::string args, std::string &retstring );
       void make_telemetry_message( std::string &retstring );
       void get_external_telemetry();
       long handle_json_message( std::string message_in );
@@ -554,6 +556,7 @@ namespace Acam {
       long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
       long exptime( const std::string args, std::string &retstring );
+      long fan_mode( std::string args, std::string &retstring );
 
       long collect_header_info();
 

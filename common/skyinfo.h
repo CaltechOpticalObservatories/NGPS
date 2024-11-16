@@ -50,6 +50,7 @@ namespace SkyInfo {
         long crpix1;
         long crpix2;
         long thetadeg;
+        std::string datasec;
       } sliceparam_t;
 
       // this map holds the output of get_slicecam_params()

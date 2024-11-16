@@ -131,6 +131,11 @@ namespace Slicecam {
       error = this->andor.begin()->second->get_handlemap( this->handlemap );
     }
 
+    if (error==ERROR) {
+      logwrite( function, "ERROR no camera handles found!" );
+      return ERROR;
+    }
+
     // make sure each configured Andor has an associated handle for his s/n
     //
     for ( const auto &pair : this->andor ) {
@@ -166,9 +171,9 @@ namespace Slicecam {
       // Now set up for single scan readout -- cannot software-trigger acquisition to
       // support continuous readout for multiple cameras in the same process.
       //
-      error |= this->set_gain(pair.first, 2);
+      error |= this->set_gain(pair.first, 1);
       error |= pair.second->set_vsspeed( 4.33 );          // vertical shift speed
-      error |= pair.second->set_hsspeed( 30.0 );          // horizontal shift speed
+      error |= pair.second->set_hsspeed( 1.0 );           // horizontal shift speed
       error |= pair.second->set_read_mode( 4 );           // image mode
       error |= pair.second->set_acquisition_mode( 1 );    // single scan
       error |= pair.second->set_frame_transfer( "off" );  // disable Frame Transfer mode
@@ -226,35 +231,22 @@ namespace Slicecam {
 
   /***** Slicecam::Camera::bin ************************************************/
   /**
-   * @brief      set or get camera binning
-   * @param[in]  args       optionally contains <hbin> <vbin>
-   * @param[out] retstring  return string contains <hbin> <vbin>
+   * @brief      set camera binning
+   * @param[in]  hbin  horizontal binning factor
+   * @param[in]  vbin  vertical binning factor
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Camera::bin( std::string args, std::string &retstring ) {
+  long Camera::bin( const int hbin, const int vbin ) {
     std::string function = "Slicecam::Camera::bin";
     std::stringstream message;
     long error = NO_ERROR;
-
-    // Help
-    //
-    if ( args == "?" || args == "help" ) {
-      retstring = SLICECAMD_BIN;
-      retstring.append( " [ <hbin> <vbin> ]\n" );
-      retstring.append( "   Set or get CCD binning.\n" );
-      retstring.append( "   <hbin> and <vbin> are the number of pixels to bin horizontally\n" );
-      retstring.append( "   and vertically, respectively. When setting either, both must\n" );
-      retstring.append( "   be supplied. If both omitted then the current binning is returned.\n" );
-      return HELP;
-    }
 
     // If the STL map of Andors is empty then something went wrong
     // with the configuration.
     //
     if ( this->andor.empty() ) {
       logwrite( function, "ERROR no cameras defined" );
-      retstring="bad_config";
       return ERROR;
     }
 
@@ -270,68 +262,52 @@ namespace Slicecam {
     }
     if ( error==ERROR ) return ERROR;
 
-    // Parse args if present
+    // Set the binning parameters now for each sequentially
     //
-    if ( !args.empty() ) {
-
-      int hbin, vbin;
-
-      std::vector<std::string> tokens;
-      Tokenize( args, tokens, " " );
-
-      // There must be two args <hbin> <vbin>
-      //
-      if ( tokens.size() != 2 ) {
-        logwrite( function, "ERROR expected <hbin> <vbin>" );
-        return ERROR;
-      }
-
-      // Parse the binning values from the tokens
-      //
-      try {
-        hbin = std::stoi( tokens.at(0) );
-        vbin = std::stoi( tokens.at(1) );
-
-        // Set the binning parameters now in separate threads.
-        // Use std::async to run the function asynchronously.
-        //
-        std::vector<std::future<long>> futures;
-
-        for ( const auto &pair : this->andor ) {
-          futures.push_back( std::async( std::launch::async, [pair, hbin, vbin]() {
-            return pair.second->set_binning( hbin, vbin );
-          } ) );
-        }
-
-        // Wait for all futures to complete
-        //
-        for ( auto &future : futures ) {
-          error |= future.get(); // This will block until the thread finishes
-        }
-      }
-      catch ( const std::exception &e ) {
-        message.str(""); message << "ERROR reading arguments: " << e.what();
-        error = ERROR;
-      }
-
-      if ( error==ERROR ) logwrite( function, message.str() );
+    for ( auto &[name, cam] : this->andor ) {
+      error |= cam->set_binning( hbin, vbin );
     }
-
-    // return the current binning parameters
-    //
-    int hbin=0, vbin=0;
-    for ( const auto &pair : this->andor ) {
-      hbin = pair.second->camera_info.hbin;
-      vbin = pair.second->camera_info.vbin;
-    }
-    message.str(""); message << hbin << " " << vbin;
-    retstring = message.str();
-
-    logwrite( function, retstring );
 
     return error;
   }
   /***** Slicecam::Camera::bin ************************************************/
+
+
+  /***** Slicecam::Camera::set_fan ********************************************/
+  /**
+   * @brief      set fan mode
+   * @param[in]  which  { L R }
+   * @param[in]  mode   { 0 1 2 }
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Camera::set_fan( std::string which, int mode ) {
+    std::string function = "Slicecam::Camera::set_fan";
+    std::stringstream message;
+
+    // make sure requested camera is in the map
+    //
+    auto it = this->andor.find( which );
+    if ( it == this->andor.end() ) {
+      message.str(""); message << "ERROR invalid camera name \"" << which << "\"";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // make sure requested camera is open
+    //
+    if ( ! this->andor[which]->is_open() ) {
+      message.str(""); message << "ERROR no connection to slicecam " << which
+                               << " S/N " << this->andor[which]->camera_info.serial_number;
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // set the mode
+    //
+    return this->andor[which]->set_fan( mode );
+  }
+  /***** Slicecam::Camera::set_fan ********************************************/
 
 
   /***** Slicecam::Camera::imflip *********************************************/
@@ -351,8 +327,8 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_IMFLIP;
-      retstring.append( " [ <hflip> <vflip> ]\n" );
-      retstring.append( "   Set or get CCD image flip.\n" );
+      retstring.append( " [ <name> <hflip> <vflip> ]\n" );
+      retstring.append( "   Set or get CCD image flip for camera <name> = L | R.\n" );
       retstring.append( "   <hflip> and <vflip> indicate to flip horizontally and\n" );
       retstring.append( "   vertically, respectively. Set these =1 to enable flipping,\n" );
       retstring.append( "   or =0 to disable flipping the indicated axis. When setting\n" );
@@ -370,72 +346,61 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // all configured Andors must have been initialized
+    // tokenize the args to get the camera name and the flip args
     //
-    for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_open() ) {
-        message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
-                                 << " S/N " << pair.second->camera_info.serial_number;
-        logwrite( function, message.str() );
-        error=ERROR;
-      }
-    }
-    if ( error==ERROR ) return ERROR;
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
 
-    // Parse args if present
-    //
-    if ( !args.empty() ) {
-
-      int hflip, vflip;
-
-      std::vector<std::string> tokens;
-      Tokenize( args, tokens, " " );
-
-      // There must be two args <hflip> <vflip>
-      //
-      if ( tokens.size() != 2 ) {
-        logwrite( function, "ERROR expected <hflip> <vflip>" );
-        return ERROR;
-      }
-
-      // Parse the args from the tokens
-      //
-      try {
-        hflip = std::stoi( tokens.at(0) );
-        vflip = std::stoi( tokens.at(1) );
-
-        // Set the flip parameters now in separate threads.
-        // Use std::async to run the function asynchronously.
-        //
-        std::vector<std::future<long>> futures;
-
-        for ( const auto &pair : this->andor ) {
-          futures.push_back( std::async( std::launch::async, [pair, hflip, vflip]() {
-            return pair.second->set_imflip( hflip, vflip );
-          } ) );
-        }
-
-        // Wait for all futures to complete
-        //
-        for ( auto &future : futures ) {
-          error |= future.get(); // This will block until the thread finishes
-        }
-      }
-      catch ( const std::exception &e ) {
-        message.str(""); message << "ERROR reading arguments: " << e.what();
-        error = ERROR;
-      }
-
-      if (error==ERROR) logwrite( function, message.str() );
+    if ( tokens.size() != 3 ) {
+      logwrite( function, "ERROR expected 3 args L|R <hflip> <vflip>" );
+      retstring="invalid_argument";
+      return ERROR;
     }
 
-    // return the current image flip states
-    //
-    int hflip=-1, vflip=-1;
-    for ( const auto &pair : this->andor ) {
-      hflip = pair.second->camera_info.hflip;
-      vflip = pair.second->camera_info.vflip;
+    std::string which;
+    int hflip, vflip;
+
+    try {
+      which = tokens.at(0);
+      hflip = std::stoi(tokens.at(1));
+      vflip = std::stoi(tokens.at(2));
     }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR processing args: " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    // make sure requested camera is in the map
+    //
+    auto it = this->andor.find( which );
+    if ( it == this->andor.end() ) {
+      message.str(""); message << "ERROR invalid camera name \"" << which << "\"";
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // make sure the requested camera is open
+    //
+    if ( ! this->andor[which]->is_open() ) {
+      message.str(""); message << "ERROR no connection to slicecam " << which
+                               << " S/N " << this->andor[which]->camera_info.serial_number;
+      logwrite( function, message.str() );
+      retstring="not_open";
+      return ERROR;
+    }
+
+    // perform the flip
+    //
+    error = this->andor[which]->set_imflip( hflip, vflip );
+
+    if ( error == NO_ERROR ) {
+      hflip = this->andor[which]->camera_info.hflip;
+      vflip = this->andor[which]->camera_info.vflip;
+    }
+
     message.str(""); message << hflip << " " << vflip;
     retstring = message.str();
     logwrite( function, retstring );
@@ -462,8 +427,9 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_IMROT;
-      retstring.append( " [ <rotdir> ]\n" );
-      retstring.append( "   Set CCD image rotation where <rotdir> is { none cw ccw }\n" );
+      retstring.append( " [ <name> <rotdir> ]\n" );
+      retstring.append( "   Set CCD image rotation for camera <name> where <rotdir> is { none cw ccw }\n" );
+      retstring.append( "   <name> is L | R\n" );
       retstring.append( "   and \"cw\"   will rotate 90 degrees clockwise,\n" );
       retstring.append( "       \"ccw\"  will rotate 90 degrees counter-clockwise,\n" );
       retstring.append( "       \"none\" will set the rotation to none.\n" );
@@ -483,54 +449,67 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // all configured Andors must have been initialized
+    // tokenize the args to get the camera name and the rot arg
     //
-    for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_open() ) {
-        message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
-                                 << " S/N " << pair.second->camera_info.serial_number;
-        logwrite( function, message.str() );
-        error=ERROR;
-      }
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 2 ) {
+      logwrite( function, "ERROR expected 2 args L|R <rotdir>" );
+      retstring="invalid_argument";
+      return ERROR;
     }
-    if ( error==ERROR ) return ERROR;
 
-    // Parse args if present
+    std::string which;
+    int rotdir;
+
+    // assign the numeric rotdir value from the string argument
     //
-    if ( !args.empty() ) {
-
-      int rotdir;
-
-      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
-
-      if ( args == "none" ) rotdir = 0;
+    try {
+      which = tokens.at(0);
+      // convert to lowercase
+      std::transform( tokens.at(1).begin(), tokens.at(1).end(), tokens.at(1).begin(), ::tolower );
+      if ( tokens.at(1) == "none" ) rotdir = 0;
       else
-      if ( args == "cw" )   rotdir = 1;
+      if ( tokens.at(1) == "cw" )   rotdir = 1;
       else
-      if ( args == "ccw" )  rotdir = 2;
+      if ( tokens.at(1) == "ccw" )  rotdir = 2;
       else {
-        message.str(""); message << "ERROR bad arg " << args << ": expected { none cw ccw }";
+        message.str(""); message << "ERROR bad arg " << tokens.at(1) << ": expected { none cw ccw }";
         logwrite( function, message.str() );
         return ERROR;
       }
-
-      // Set the rotation now in separate threads.
-      // Use std::async to run the function asynchronously.
-      //
-      std::vector<std::future<long>> futures;
-
-      for ( const auto &pair : this->andor ) {
-        futures.push_back( std::async( std::launch::async, [pair, rotdir]() {
-          return pair.second->set_imrot( rotdir );
-        } ) );
-      }
-
-      // Wait for all futures to complete
-      //
-      for ( auto &future : futures ) {
-        error |= future.get(); // This will block until the thread finishes
-      }
     }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR processing args: " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    // make sure requested camera is in the map
+    //
+    auto it = this->andor.find( which );
+    if ( it == this->andor.end() ) {
+      message.str(""); message << "ERROR invalid camera name \"" << which << "\"";
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // make sure requested camera is open
+    //
+    if ( ! this->andor[which]->is_open() ) {
+      message.str(""); message << "ERROR no connection to slicecam " << which
+                               << " S/N " << this->andor[which]->camera_info.serial_number;
+      logwrite( function, message.str() );
+      retstring="not_open";
+      return ERROR;
+    }
+
+    // perform the image rotation
+    //
+    error = this->andor[which]->set_imrot( rotdir );
 
     return error;
   }
@@ -570,6 +549,10 @@ namespace Slicecam {
       // This will modify val with actual exptime.
       //
       if (error==NO_ERROR) error |= pair.second->set_exptime( fval );
+      std::stringstream message;
+      message.str(""); message << "[DEBUG] set exptime to " << fval
+                               << " for camera " << pair.second->camera_info.camera_name;
+      logwrite( "Slicecam::Camera::set_exptime", message.str() );
     }
 
     return error;
@@ -634,6 +617,10 @@ namespace Slicecam {
         continue;
       }
 
+      message.str(""); message << "[DEBUG] set gain to " << gain
+                               << " for camera " << pair.second->camera_info.camera_name;
+      logwrite( function, message.str() );
+
       if ( error==NO_ERROR && gain == 1 ) {
         error = pair.second->set_output_amplifier( Andor::AMPTYPE_CONV );
         if (error==NO_ERROR) {
@@ -696,6 +683,7 @@ namespace Slicecam {
       retstring.append( " [ <hori> <vert> ]\n" );
       retstring.append( "   Set or get CCD clocking speeds for horizontal <hori> and vertical <vert>\n" );
       retstring.append( "   If speeds are omitted then the current speeds are returned.\n" );
+/***
       if ( !this->andor.empty() && this->andor.begin()->second->is_open() ) {
         auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
         retstring.append( "   Current amp type is " );
@@ -717,6 +705,7 @@ namespace Slicecam {
       else {
         retstring.append( "   Open connection to camera to see possible speeds.\n" );
       }
+***/
       return HELP;
     }
 
@@ -731,17 +720,17 @@ namespace Slicecam {
 
     // all configured Andors must have been initialized
     //
-    for ( const auto &pair : this->andor ) {
-      if ( ! pair.second->is_open() ) {
-        message.str(""); message << "ERROR no connection to slicecam " << pair.second->camera_info.camera_name
-                                 << " S/N " << pair.second->camera_info.serial_number;
+//  for ( const auto &pair : this->andor ) {
+//    if ( ! pair.second->is_open() ) {
+    for ( auto &[name, cam] : this->andor ) {
+      if ( ! cam->is_open() ) {
+        message.str(""); message << "ERROR no connection to slicecam " << cam->camera_info.camera_name
+                                 << " S/N " << cam->camera_info.serial_number;
         logwrite( function, message.str() );
         error=ERROR;
       }
     }
     if ( error==ERROR ) return ERROR;
-
-    auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
 
     // Parse args if present
     //
@@ -779,15 +768,21 @@ namespace Slicecam {
       }
     }
 
-    if ( ( cam->camera_info.hspeed < 0 ) ||
-         ( cam->camera_info.vspeed < 0 ) ) {
-      logwrite( function, "ERROR speeds not set" );
-      error = ERROR;
+    message.str("");
+
+    for ( auto &[name, cam] : this->andor ) {
+      if ( ( cam->camera_info.hspeed < 0 ) ||
+           ( cam->camera_info.vspeed < 0 ) ) {
+        message.str(""); message << "ERROR speeds not set for camera " << cam->camera_info.camera_name;
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+
+      message << cam->camera_info.camera_name << " "
+              << cam->camera_info.hspeed << " " << cam->camera_info.vspeed << " ";
     }
 
-    retstring = std::to_string( cam->camera_info.hspeed ) + " "
-              + std::to_string( cam->camera_info.vspeed );
-
+    retstring = message.str();
     logwrite( function, retstring );
 
     return error;
@@ -815,6 +810,7 @@ namespace Slicecam {
       retstring = SLICECAMD_TEMP;
       retstring.append( " [ <setpoint> ]\n" );
       retstring.append( "  Set or get camera temperature in integer degrees C,\n" );
+/***
       if ( !this->andor.empty() && this->andor.begin()->second->is_open() ) {
         auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
         retstring.append( "  where <setpoint> is in range { " );
@@ -826,6 +822,7 @@ namespace Slicecam {
       else {
         retstring.append( "  open connection to camera to see acceptable range.\n" );
       }
+***/
       retstring.append( "  If optional <setpoint> is provided then the camera setpoint is changed,\n" );
       retstring.append( "  else the current temperature, setpoint, and status are returned.\n" );
       retstring.append( "  Format of return value is <temp> <setpoint> <status>\n" );
@@ -874,6 +871,9 @@ namespace Slicecam {
       try {
         temp = static_cast<int>( std::round( std::stof( tokens.at(0) ) ) );
         for ( const auto &pair : this->andor ) {
+          message.str(""); message << "[DEBUG] set temp to " << temp
+                                   << " for camera " << pair.second->camera_info.camera_name;
+          logwrite( function, message.str() );
           error |= pair.second->set_temperature( temp );
         }
       }
@@ -886,10 +886,13 @@ namespace Slicecam {
 
     // Regardless of setting the temperature, always read it.
     //
-    auto cam = this->andor.begin()->second;  // make a smart pointer to the first andor in the map
-    error |= cam->get_temperature( temp );
-
-    message.str(""); message << temp << " " << cam->camera_info.setpoint << " " << cam->camera_info.temp_status;
+    message.str("");
+    for ( const auto &pair : this->andor ) {
+      error |= pair.second->get_temperature(temp);
+      message << pair.second->camera_info.camera_name << " " << temp << " "
+              << pair.second->camera_info.setpoint << " "
+              << pair.second->camera_info.temp_status << " ";
+    }
     logwrite( function, message.str() );
 
     retstring = message.str();
@@ -911,17 +914,6 @@ namespace Slicecam {
 
     long error = NO_ERROR;
 
-    // Nothing to do if no Andor image data
-    //
-    for ( const auto &pair : this->andor ) {
-      if ( pair.second->get_image_data() == nullptr ) {
-        message.str(""); message << "ERROR no image data available for slicecam "
-                                 << pair.second->camera_info.camera_name;
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
-
     fitsinfo.fits_name = outfile;
     fitsinfo.datatype = USHORT_IMG;
 
@@ -936,15 +928,17 @@ namespace Slicecam {
       if (error==NO_ERROR) error = fits_file.create_header();                  // create basic header
     }
 
-    for ( const auto &pair : this->andor ) {
-      pair.second->camera_info.section_size = pair.second->camera_info.axes[0] * pair.second->camera_info.axes[1];
-      if ( pair.second->camera_info.section_size == 0 ) {
-        message.str(""); message << "ERROR section size 0 for slicecam " << pair.second->camera_info.camera_name;
+    for ( auto &[name, cam] : this->andor ) {
+      cam->camera_info.section_size = cam->camera_info.axes[0] * cam->camera_info.axes[1];
+      if ( cam->camera_info.section_size == 0 ) {
+        message.str(""); message << "ERROR section size 0 for slicecam " << cam->camera_info.camera_name;
         logwrite( function, message.str() );
         error = ERROR;
         break;
       }
-      fits_file.write_image( pair.second );                    // write the image data
+      // cam is passed by reference
+      //
+      fits_file.write_image( cam );                            // write the image data
     }
 
     fits_file.close_file();               // close the file
@@ -971,6 +965,113 @@ namespace Slicecam {
     return error;
   }
   /***** Slicecam::Camera::write_frame ****************************************/
+
+
+  /***** Slicecam::Interface::bin *********************************************/
+  /**
+   * @brief      set or get camera binning
+   * @param[in]  args       optionally contains <hbin> <vbin>
+   * @param[out] retstring  return string contains <hbin> <vbin>
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::bin( std::string args, std::string &retstring ) {
+    std::string function = "Slicecam::Interface::bin";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_BIN;
+      retstring.append( " [ <hbin> <vbin> ]\n" );
+      retstring.append( "   Set or get CCD binning.\n" );
+      retstring.append( "   <hbin> and <vbin> are the number of pixels to bin horizontally\n" );
+      retstring.append( "   and vertically, respectively, and must be a power of 2. When\n" );
+      retstring.append( "   setting either, both must be supplied. If both omitted then the\n" );
+      retstring.append( "   current binning is returned.\n" );
+      retstring.append( "   Binning is applied equally to both cameras.\n" );
+      return HELP;
+    }
+
+    // Parse args if present
+    //
+    if ( !args.empty() ) {
+
+      int hbin=-1, vbin=-1;
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // There must be two args <hbin> <vbin>
+      //
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <hbin> <vbin>" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      // Parse the binning values from the tokens
+      //
+      try {
+        hbin = std::stoi( tokens.at(0) );
+        vbin = std::stoi( tokens.at(1) );
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR reading arguments: " << e.what();
+        logwrite( function, message.str() );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      if ( hbin < 1 || vbin < 1 || (hbin & (hbin-1)) || (vbin & (vbin-1)) ) {
+        logwrite( function, "ERROR bin factors must be a power of 2" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      // If framegrab is running then stop it. This won't return until framegrabbing
+      // has stopped (or timeout).
+      //
+      bool was_framegrab_running = this->is_framegrab_running.load();
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error = this->framegrab( "stop", dontcare );
+      }
+
+      // Set the binning parameters now
+      //
+      if (error!=ERROR ) error = this->camera.bin( hbin, vbin );
+
+      // If framegrab was previously running then restart it
+      //
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error |= this->framegrab( "start", dontcare );
+      }
+    }
+
+    // return the current binning parameters
+    //
+    int hbin=0, vbin=0;
+    for ( auto &[name, cam] : this->camera.andor ) {
+      hbin = cam->camera_info.hbin;
+      vbin = cam->camera_info.vbin;
+    }
+
+    // save to the Camera class
+    //
+    this->camera.hbin = hbin;
+    this->camera.vbin = vbin;
+
+    message.str(""); message << hbin << " " << vbin;
+    retstring = message.str();
+
+    logwrite( function, retstring );
+
+    return error;
+  }
+  /***** Slicecam::Interface::bin *********************************************/
 
 
   /***** Slicecam::Interface::make_telemetry_message **************************/
@@ -1058,10 +1159,10 @@ namespace Slicecam {
           const std::string idx   = tokens.at(0);                          // name of this camera is map index
 
           if ( tokens.size() > 2 && tokens.at(1) == "emulate" ) {
-            this->camera.andor[idx] = std::make_shared<Andor::Interface>( std::stoi(tokens.at(2) ) );  // create an Andor::Interface pointer in the map
+            this->camera.andor[idx] = std::make_unique<Andor::Interface>( std::stoi(tokens.at(2) ) );  // create an Andor::Interface pointer in the map
           }
           else {
-            this->camera.andor[idx] = std::make_shared<Andor::Interface>();  // create an Andor::Interface pointer in the map
+            this->camera.andor[idx] = std::make_unique<Andor::Interface>();  // create an Andor::Interface pointer in the map
           }
 
           int sn;
@@ -1610,12 +1711,15 @@ namespace Slicecam {
         // Trigger and wait for acquisition on both cameras.
         // Unfortunately the SDK can only do this one at a time within the same process.
         //
-        for ( const auto &pair : this->camera.andor ) {
-          pair.second->acquire_one();
+        for ( auto &[name, cam] : this->camera.andor ) {
+          cam->acquire_one();
         }
 
         if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
-        if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
+        for ( auto &[name, cam] : this->camera.andor ) {
+          collect_header_info( cam );
+        }
+//      if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
         if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                                this->imagename,
                                                                this->tcs_online.load() );    // write to FITS file
@@ -1661,18 +1765,23 @@ namespace Slicecam {
     // collect_header_info thread for each, passing the function, "this"
     // and the pointer to the andor.
     //
-    for ( const auto &pair : this->camera.andor ) {
-      threads.emplace_back( &Slicecam::Interface::collect_header_info, this, pair.second );
+//  for ( const auto &pair : this->camera.andor ) {
+    for ( auto &[name, cam] : this->camera.andor ) {
+//    threads.emplace_back( &Slicecam::Interface::collect_header_info, this, pair.second );
+//    collect_header_info( pair.second );
+      collect_header_info( cam );
     }
+
+//  for ( auto &[key,val] : this->camera.bob ) {}
 
     // Wait for all threads to complete by joining them to this main thread,
     // not to each other.
     //
-    for ( auto &thread : threads ) {
-      if ( thread.joinable() ) {
-        thread.join();
-      }
-    }
+//  for ( auto &thread : threads ) {
+//    if ( thread.joinable() ) {
+//      thread.join();
+//    }
+//  }
 
     return( this->read_error() );
   }
@@ -2437,6 +2546,97 @@ namespace Slicecam {
   /***** Slicecam::Interface::exptime *****************************************/
 
 
+  /***** Slicecam::Interface::fan_mode ****************************************/
+  /**
+   * @brief      set camera fan mode
+   * @param[in]  args       {full low off}
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::fan_mode( std::string args, std::string &retstring ) {
+    std::string function = "Slicecam::Interface::fan_mode";
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_FAN;
+      retstring.append( " <name> <mode>\n" );
+      retstring.append( "   Set camera fan mode for camera <name> where <mode> is { full low off }.\n" );
+      retstring.append( "   The fan should only be turned off for short periods of time.\n" );
+      retstring.append( "   Fan state cannot be directly read. Reported state is only known\n" );
+      retstring.append( "   by remembering the last state set, so if not set manually then no state\n" );
+      retstring.append( "   can be reported.\n" );
+      return HELP;
+    }
+
+    // If the STL map of Andors is empty then something went wrong
+    // with the configuration.
+    //
+    if ( this->camera.andor.empty() ) {
+      logwrite( function, "ERROR no cameras defined" );
+      retstring="bad_config";
+      return ERROR;
+    }
+
+    // tokenize the args to get the camera name and the rot arg
+    //
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 2 ) {
+      logwrite( function, "ERROR expected 2 args L|R <mode>" );
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    std::string which;
+    int mode;
+
+    // assign the numeric mode value from the string argument
+    //
+    try {
+      which = tokens.at(0);
+      // convert to lowercase
+      std::transform( tokens.at(1).begin(), tokens.at(1).end(), tokens.at(1).begin(), ::tolower );
+      if ( tokens.at(1) == "full" ) mode = 0;
+      else
+      if ( tokens.at(1) == "low" )  mode = 1;
+      else
+      if ( tokens.at(1) == "off" )  mode = 2;
+      else {
+        message.str(""); message << "ERROR bad arg " << tokens.at(1) << ": expected { full low off }";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR processing args: " << e.what();
+      logwrite( function, message.str() );
+      retstring="argument_exception";
+      return ERROR;
+    }
+
+    // perform the image rotation
+    //
+    error = this->camera.andor[which]->set_fan( mode );
+
+    // set the mode
+    //
+    error = this->camera.set_fan( which, mode );
+
+    if ( error == NO_ERROR ) {
+      message.str(""); message << "set fan to " << args;
+      logwrite( function, message.str() );
+    }
+    else logwrite( function, "ERROR setting fan" );
+
+    return error;
+  }
+  /***** Slicecam::Interface::fan_mode ****************************************/
+
+
   /***** Slicecam::Interface::gain ********************************************/
   /**
    * @brief      set or get the CCD gain
@@ -2545,7 +2745,7 @@ namespace Slicecam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::collect_header_info( std::shared_ptr<Andor::Interface> slicecam ) {
+  long Interface::collect_header_info( std::unique_ptr<Andor::Interface> &slicecam ) {
     std::string function = "Slicecam::Interface::collect_header_info";
     std::stringstream message;
 
@@ -2592,6 +2792,72 @@ namespace Slicecam {
                  std::end( slicecam->camera_info.axes ),
                std::begin( this->camera.fitsinfo.axes ) );
 
+    // adjust WCS parameters for binning
+    //
+    auto hbin = this->camera.hbin;
+    auto vbin = this->camera.vbin;
+    auto crpix1 = this->fpoffsets.sliceparams[cam].crpix1 / hbin;
+    auto crpix2 = this->fpoffsets.sliceparams[cam].crpix2 / vbin;
+    auto cdelt1 = this->fpoffsets.sliceparams[cam].cdelt1 * hbin;
+    auto cdelt2 = this->fpoffsets.sliceparams[cam].cdelt2 * vbin;
+
+    // adjusting DATASEC is a little convoluted
+    // datasec = "[h1:h2,v1:v2]"
+    //
+    // remove the [ ]
+    //
+    std::string datasec = this->fpoffsets.sliceparams[cam].datasec;
+    datasec.erase( std::remove( datasec.begin(), datasec.end(), '['), datasec.end() );
+    datasec.erase( std::remove( datasec.begin(), datasec.end(), ']'), datasec.end() );
+
+    // separate the h and v parts separated by comma into hdatasec,vdatasec
+    //
+    auto it = datasec.find(",");
+    if ( it == std::string::npos ) {
+      logwrite( function, "malformed DATASEC from fpoffsets.sliceparams" );
+      datasec.clear();
+    }
+    else {
+      // separate the 1 and 2 parts separated by :
+      //
+      std::string hdatasec = datasec.substr(0,it);
+      std::string vdatasec = datasec.substr(it+1);
+      auto hit = hdatasec.find(":");
+      auto vit = vdatasec.find(":");
+      if ( hit == std::string::npos || vit == std::string::npos ) {
+        logwrite( function, "malformed DATASEC from fpoffsets.sliceparams" );
+        datasec.clear();
+      }
+      else {
+        try {
+          // convert to integers
+          //
+          int h1 = std::stoi(hdatasec.substr(0,hit));
+          int h2 = std::stoi(hdatasec.substr(hit+1));
+          int v1 = std::stoi(vdatasec.substr(0,vit));
+          int v2 = std::stoi(vdatasec.substr(vit+1));
+
+          // scale each by the binning factor
+          // quick way to round up
+          //
+          h1 = ( h1 + hbin - 1 ) / hbin;
+          h2 = ( h2 + hbin - 1 ) / hbin;
+          v1 = ( v1 + vbin - 1 ) / vbin;
+          v2 = ( v2 + vbin - 1 ) / vbin;
+
+          // put the scaled values back into a string
+          //
+          message.str(""); message << "[" << h1 << ":" << h2
+                                   << "," << v1 << ":" << v2 << "]";
+          datasec = message.str();
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "malformed DATASEC from fpoffsets.sliceparams: " << e.what();
+          logwrite( function, message.str() );
+        }
+      }
+    }
+
     // Add information to the Camera::FitsInfo::FitsKeys database
     // either a prioi or from the Andor::Information class
     //
@@ -2635,16 +2901,17 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "CTYPE2",    "DEC--TAN", "" );
 
 
-    slicecam->fitskeys.addkey( "CRPIX1",    this->fpoffsets.sliceparams[cam].crpix1, "" );
-    slicecam->fitskeys.addkey( "CRPIX2",    this->fpoffsets.sliceparams[cam].crpix2, "" );
+    slicecam->fitskeys.addkey( "CRPIX1",    crpix1, "" );
+    slicecam->fitskeys.addkey( "CRPIX2",    crpix2, "" );
+    slicecam->fitskeys.addkey( "DATASEC",   datasec, "" );
 
     slicecam->fitskeys.addkey( "CRVAL1",    ra_slit, "" );
     slicecam->fitskeys.addkey( "CRVAL2",    dec_slit, "" );
     slicecam->fitskeys.addkey( "CUNIT1",    "deg", "" );
     slicecam->fitskeys.addkey( "CUNIT2",    "deg", "" );
 
-    slicecam->fitskeys.addkey( "CDELT1",    this->fpoffsets.sliceparams[cam].cdelt1, "" );
-    slicecam->fitskeys.addkey( "CDELT2",    this->fpoffsets.sliceparams[cam].cdelt2, "" );
+    slicecam->fitskeys.addkey( "CDELT1",    cdelt1, "" );
+    slicecam->fitskeys.addkey( "CDELT2",    cdelt2, "" );
 
     slicecam->fitskeys.addkey( "THETADEG",  this->fpoffsets.sliceparams[cam].thetadeg, "slice camera angle relative to slit in deg" );
 

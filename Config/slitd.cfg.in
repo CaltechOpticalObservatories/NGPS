@@ -11,7 +11,11 @@ EMULATOR_PORT=@SLITD_PI_PORT@     # emulator listens on this port
 
 # Scale factor at slit, ARCSEC_PER_MM
 #
-ARCSEC_PER_MM=2.45
+ARCSEC_PER_MM=1.0 # 2.45
+
+# Minimum slit width in physical units (mm)
+#
+MIN_WIDTH=0.2
 
 # For each actuator's controller specify:
 # MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
@@ -33,8 +37,8 @@ MOTOR_CONTROLLER="B @IP_ETS8P@ @ETS8P_SLIT@ 2 1"
 # valid <ref> types are { neg pos ref na }
 #       (use "na" if axis does not support referencing)
 #
-MOTOR_AXIS="A 1 0 10 10 pos"
-MOTOR_AXIS="B 1 0 10 10 pos"
+MOTOR_AXIS="A 1 1 10 10 pos"
+MOTOR_AXIS="B 1 1 10 10 pos"
 
 # Specify nominal focus positions for each actuator
 # MOTOR_POS="<name> <ID> <pos> <posname>"

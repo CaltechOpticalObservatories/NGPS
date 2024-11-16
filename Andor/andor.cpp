@@ -1511,6 +1511,41 @@ namespace Andor {
   /***** Andor::SDK::_WaitForAcquisitionByHandleTimeOut ***********************/
 
 
+  /***** Andor::SDK::_SetFanMode **********************************************/
+  /**
+   * @brief      wrapper for Andor SDK SetFanMode
+   * @details    Allows the user to control the mode of the camera fan. If the
+   *             system is cooled, the fan should only be turned off for short
+   *             periods of time. During thie time the body of the camera will
+   *             warm up would could compromise cooling capabilities.
+   * @param[in]  mode  fan mode {0,1,2}
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long SDK::_SetFanMode( int mode ) {
+    std::string function = "Andor::SDK::_SetFanMode";
+    std::stringstream message;
+
+    unsigned int ret = SetFanMode( mode );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         /* silent on success */                               break;
+      case DRV_NOT_INITIALIZED: message << "ERROR not initialized";                   break;
+      case DRV_ACQUIRING:       message << "ERROR acquisition already in progress";   break;
+      case DRV_I2CTIMEOUT:      message << "ERROR I2C command timed out";             break;
+      case DRV_I2CDEVNOTFOUND:  message << "ERROR I2C device not present";            break;
+      case DRV_ERROR_ACK:       message << "ERROR Unable to communicate with device"; break;
+      case DRV_P1INVALID:       message << "ERROR invalid mode " << mode;             break;
+      default:                  message << "ERROR unrecognized return code " << ret;
+    }
+
+    if ( !message.str().empty() ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_WaitForAcquisitionByHandleTimeOut ***********************/
+
+
   /***** Andor::Interface::get_handlemap **************************************/
   /**
    * @brief      returns a map of camera handles indexed by serial number
@@ -1631,8 +1666,8 @@ namespace Andor {
     //
     if (error==NO_ERROR) error = ( andor ? andor->_GetDetector( this->camera_info.hend, this->camera_info.vend ) : ERROR );
     if (error==NO_ERROR) {
-      this->camera_info.axes[0] = this->camera_info.hend;
-      this->camera_info.axes[1] = this->camera_info.vend;
+      this->camera_info.axes[0] = (this->camera_info.hend-this->camera_info.hstart+1)/this->camera_info.hbin;
+      this->camera_info.axes[1] = (this->camera_info.vend-this->camera_info.vstart+1)/this->camera_info.vbin;
     }
     if (error==NO_ERROR) error = set_image( 1, 1, 1, this->camera_info.axes[0], 1, this->camera_info.axes[1] );  // no binning, full array
     if (error==NO_ERROR) error = ( andor ? andor->_GetNumberADChannels( this->camera_info.adchans ) : ERROR );
@@ -1683,21 +1718,22 @@ namespace Andor {
          temp >= this->camera_info.temp_min &&
          temp <= -20 ) {
       if ( andor ) {
+        select_camera(this->_handle);
         andor->_SetTemperature( 20 );
         andor->_CoolerOFF();
       }
     }
 
-    // Wait for temperature to rise above -20
-    //
-    while ( error==NO_ERROR &&
-            temp >= this->camera_info.temp_min &&
-            temp <= -20 ) {
-      message.str(""); message << "shutdown waiting for temperature " << temp << " to be above -20 deg C";
-      logwrite( function, message.str() );
-      std::this_thread::sleep_for( std::chrono::seconds(10) );
-      error = this->get_temperature( temp );
-    }
+//  // Wait for temperature to rise above -20
+//  //
+//  while ( error==NO_ERROR &&
+//          temp >= this->camera_info.temp_min &&
+//          temp <= -20 ) {
+//    message.str(""); message << "shutdown waiting for temperature " << temp << " to be above -20 deg C";
+//    logwrite( function, message.str() );
+//    std::this_thread::sleep_for( std::chrono::seconds(10) );
+//    error = this->get_temperature( temp );
+//  }
 
     // close the AndorMCD system down
     //
@@ -1775,6 +1811,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     // Are we acquiring?
     //
     int status;
@@ -1797,6 +1837,19 @@ namespace Andor {
     return error;
   }
   /***** Andor::Interface::abort_acquisition **********************************/
+
+
+  /***** Andor::Interface::get_image_data *************************************/
+  /**
+   * @brief      returns a pointer to the image data
+   * @return     uint16_t*
+   *
+   */
+  uint16_t* Interface::get_image_data() {
+    select_camera(this->_handle);
+    return this->image_data;
+  }
+  /***** Andor::Interface::get_image_data *************************************/
 
 
   /***** Andor::Interface::set_shutter ****************************************/
@@ -1904,6 +1957,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     // send the SetShutter command
     //
     long error = ( andor ? andor->_SetShutter( type, mode, closingtime, openingtime ) : ERROR );
@@ -1933,6 +1990,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     return ( andor ? andor->_GetDetector( x, y ) : ERROR );
   }
   /***** Andor::Interface::get_detector ***************************************/
@@ -1955,6 +2016,10 @@ namespace Andor {
 
     std::string status;
     long error = NO_ERROR;
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     error |= ( andor ? andor->_GetStatus( status ) : ERROR );  // current status of Andor SDK
 
@@ -1991,6 +2056,10 @@ namespace Andor {
       logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     // Get Number of AD Chans and HS Speeds if needed
     //
@@ -2127,6 +2196,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     // find the index of the speed in the vector
     //
     int index = std::distance( vec.begin(), it );
@@ -2187,6 +2260,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     float speed = this->camera_info.vsspeeds[index];
 
     long error = ( andor ? andor->_SetVSSpeed( index ) : ERROR );
@@ -2224,6 +2301,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_SetImage( hbin, vbin, hstart, hend, vstart, vend ) : ERROR );
 
     if ( error==NO_ERROR ) {
@@ -2237,6 +2318,8 @@ namespace Andor {
       this->camera_info.hend   = hend;
       this->camera_info.vstart = vstart;
       this->camera_info.vend   = vend;
+      this->camera_info.axes[0] = (hend-hstart+1)/hbin;
+      this->camera_info.axes[1] = (vend-vstart+1)/vbin;
     }
 
     // allocate a buffer for saving images
@@ -2248,15 +2331,64 @@ namespace Andor {
       this->image_data = nullptr;
     }
 
-    auto bufsz = ( (hend-hstart+1)/hbin ) * ( (vend-vstart+1)/vbin );
-    this->image_data = new uint16_t[ bufsz ];
+    this->bufsz = ( (hend-hstart+1)/hbin ) * ( (vend-vstart+1)/vbin );
+    this->image_data = new uint16_t[ this->bufsz ];
 
-    message.str(""); message << "allocated " << bufsz << " bytes for image_data buffer";
+    message.str(""); message << "allocated " << this->bufsz << " bytes for image_data buffer";
     logwrite( function, message.str() );
 
     return error;
   }
   /***** Andor::Interface::set_image ******************************************/
+
+
+  /***** Andor::Interface::set_fan ********************************************/
+  /**
+   * @brief      set camera fan
+   * @param[in]  mode  fan mode 0=full, 1=low, 2=off
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_fan( int mode ) {
+    std::string function = "Andor::Interface::set_fan";
+    std::stringstream message;
+
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
+      return ERROR;
+    }
+
+    if ( mode < 0 || mode < 2 ) {
+      message.str(""); message << "ERROR " << mode << " outside range { 0 : 2 }";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
+    long error = ( andor ? andor->_SetFanMode( mode ) : ERROR );
+
+    // set class variable if successful
+    //
+    if ( error == NO_ERROR ) {
+      switch ( mode ) {
+        case 0:  this->camera_info.fan_mode = "full";
+                 break;
+        case 1:  this->camera_info.fan_mode = "low";
+                 break;
+        case 2:  this->camera_info.fan_mode = "off";
+                 break;
+        default: this->camera_info.fan_mode = "err";
+      }
+    }
+
+    logwrite( function, this->camera_info.fan_mode );
+
+    return error;
+  }
+  /***** Andor::Interface::set_fan ********************************************/
 
 
   /***** Andor::Interface::set_binning ****************************************/
@@ -2327,6 +2459,10 @@ namespace Andor {
       error = ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     if (error==NO_ERROR) error = ( andor ? andor->_SetImageFlip( hflip, vflip ) : ERROR );
     if (error==NO_ERROR) {
       this->camera_info.hflip = hflip;
@@ -2366,6 +2502,10 @@ namespace Andor {
     }
     logwrite( function, message.str() );
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     if (error==NO_ERROR) error = ( andor ? andor->_SetImageRotate( rotdir ) : ERROR );
 
     return error;
@@ -2390,6 +2530,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     return ( andor ? andor->_GetEMGainRange( low, high ) : ERROR );
   }
   /***** Andor::Interface::get_emgain_range ***********************************/
@@ -2411,6 +2555,10 @@ namespace Andor {
       logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     long error = ( andor ? andor->_GetEMCCDGain( gain ) : ERROR );
 
@@ -2446,6 +2594,10 @@ namespace Andor {
       logwrite( function, message.str() );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetOutputAmplifier( type ) : ERROR );
 
@@ -2492,6 +2644,10 @@ namespace Andor {
       return ERROR;
     }
     else {
+      // for multiple camera systems it is necessary to force the handle!
+      //
+      select_camera(this->_handle);
+
       error = ( andor ? andor->_SetEMCCDGain( gain ) : ERROR );
     }
 
@@ -2524,6 +2680,10 @@ namespace Andor {
     }
 
     long error = NO_ERROR;
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     if ( temp >= this->camera_info.temp_max ) {
       error = ( andor ? andor->_CoolerOFF() : ERROR );
@@ -2584,6 +2744,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     std::string_view status;
 
     long error = ( andor ? andor->_GetTemperature( temp, status ) : ERROR );
@@ -2621,6 +2785,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_SetKineticCycleTime( time ) : ERROR );
 
     // After chaning the kinetic cycle time the exposure timings must be updated.
@@ -2654,6 +2822,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_SetNumberAccumulations( number ) : ERROR );
 
     return error;
@@ -2682,6 +2854,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_SetAccumulationCycleTime( time ) : ERROR );
 
     return error;
@@ -2709,6 +2885,10 @@ namespace Andor {
       logwrite( function, "ERROR number can't be negative" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetNumberKinetics( number ) : ERROR );
 
@@ -2741,6 +2921,10 @@ namespace Andor {
       logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     // Verify that FrameTransfer is supported
     //
@@ -2794,6 +2978,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_SetReadMode( mode ) : ERROR );
 
     if ( error == NO_ERROR ) {
@@ -2842,6 +3030,10 @@ namespace Andor {
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_SetAcquisitionMode( mode ) : ERROR );
 
     if ( error==NO_ERROR ) {
@@ -2883,6 +3075,10 @@ namespace Andor {
       logwrite( function, "ERROR camera not open" );
       return ERROR;
     }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
 
     long error = ( andor ? andor->_WaitForAcquisitionByHandleTimeOut( this->_handle, timeout ) : ERROR );
 
@@ -2927,7 +3123,11 @@ namespace Andor {
       return ERROR;
     }
 
-    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
+    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
 
     // Store the exposure start time
     //
@@ -2978,7 +3178,11 @@ namespace Andor {
       return ERROR;
     }
 
-    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
+    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
 
     // Store the exposure start time
     //
@@ -3043,13 +3247,14 @@ namespace Andor {
 
     // Get the acquired image
     //
+    logwrite( function, message.str() );
     std::lock_guard<std::mutex> lock( image_data_mutex );
     if ( this->image_data == nullptr ) {
       logwrite( function, "ERROR image_data buffer not initialized: no image saved" );
       return ERROR;
     }
 
-    if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->camera_info.axes[0] * this->camera_info.axes[1] ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->bufsz ) : ERROR );
 
     // Store the exposure start time
     //
@@ -3112,7 +3317,7 @@ namespace Andor {
 
     this->camera_info.fits_name = "/tmp/andor.fits";
     this->camera_info.datatype = USHORT_IMG;
-    this->camera_info.section_size = this->camera_info.axes[0] * this->camera_info.axes[1];
+    this->camera_info.section_size = this->bufsz;
 
     FITS_file fits_file( this->camera_info );   // instantiate a FITS_file object
 
@@ -3294,6 +3499,10 @@ return NO_ERROR;
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     // Can't change if acquisition in progress
     //
     int status;
@@ -3380,6 +3589,10 @@ return NO_ERROR;
       return ERROR;
     }
 
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
     // Can't read if acquisition in progress
     //
     int status;
@@ -3431,8 +3644,8 @@ return NO_ERROR;
 
     int num_axis=2;
     long axes[2];
-    axes[0] = (long)this->info.axes[0];
-    axes[1] = (long)this->info.axes[1];
+    axes[0] = static_cast<long>(this->info.axes[0]);
+    axes[1] = static_cast<long>(this->info.axes[1]);
 
     // Check that we can write the file, because CCFits will crash if it cannot
     //

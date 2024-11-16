@@ -488,7 +488,7 @@ namespace Slicecam {
       }
       else
       if ( cmd == SLICECAMD_BIN ) {
-                      ret = this->interface.camera.bin( args, retstring );
+                      ret = this->interface.bin( args, retstring );
       }
       else
       if ( cmd == SLICECAMD_IMFLIP ) {
@@ -502,6 +502,10 @@ namespace Slicecam {
       if ( cmd == SLICECAMD_EXPTIME ) {
                       ret  = this->interface.exptime( args, retstring );         // set exptime
           if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
+      }
+      else
+      if ( cmd == SLICECAMD_FAN ) {
+                      ret = this->interface.fan_mode( args, retstring );
       }
       else
       if ( cmd == SLICECAMD_GAIN ) {

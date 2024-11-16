@@ -66,14 +66,21 @@ namespace Slicecam {
       std::map<at_32, at_32> handlemap;
 
     public:
-      Camera() : image_data( nullptr ), simsize(1024) { };
+      Camera() : image_data( nullptr ), simsize(1024), hbin(1), vbin(1) { };
 
       FITS_file fits_file;        /// instantiate a FITS container object
       FitsInfo  fitsinfo;
 
+      int hbin;
+      int vbin;
+
       std::mutex framegrab_mutex;
 
-      std::map<std::string, std::shared_ptr<Andor::Interface>> andor;     ///< create a container for Andor::Interface objects
+//    typedef std::map<std::string, std::unique_ptr<Andor::Interface>> BobMap;
+//    BobMap bob;
+//    std::map<std::string, std::unique_ptr<Andor::Interface>> bob;
+
+      std::map<std::string, std::unique_ptr<Andor::Interface>> andor;     ///< create a container for Andor::Interface objects
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
@@ -88,7 +95,8 @@ namespace Slicecam {
       long close();
       long get_frame();
       long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
-      long bin( std::string args, std::string &retstring );
+      long bin( const int hbin, const int vbin );
+      long set_fan( std::string which, int mode );
       long imflip( std::string args, std::string &retstring );
       long imrot( std::string args, std::string &retstring );
       long set_gain( int &gain );
@@ -249,6 +257,7 @@ namespace Slicecam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
+      long bin( std::string args, std::string &retstring );
       void make_telemetry_message( std::string &retstring );
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
@@ -266,11 +275,12 @@ namespace Slicecam {
       long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
       long exptime( std::string exptime_in, std::string &retstring );
+      long fan_mode( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
 
       long get_acam_guide_state( bool &is_guiding );
 
-      long collect_header_info( std::shared_ptr<Andor::Interface> slicecam );
+      long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 
       inline void init_names() { imagename=""; wcsname=""; return; }  // TODO still needed?
 

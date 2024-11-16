@@ -618,6 +618,7 @@ namespace SkyInfo {
         PyObject* pCRPIX1   = PyDict_GetItemString( pDict, "CRPIX1" );
         PyObject* pCRPIX2   = PyDict_GetItemString( pDict, "CRPIX2" );
         PyObject* pTHETADEG = PyDict_GetItemString( pDict, "THETADEG" );
+        PyObject* pDATASEC  = PyDict_GetItemString( pDict, "DATASEC" );
 
         // store them in sliceparams map
         if ( pCDELT1   && PyFloat_Check(pCDELT1) )  this->sliceparams[std::string(cam)].cdelt1   = PyFloat_AsDouble( pCDELT1 );
@@ -625,6 +626,10 @@ namespace SkyInfo {
         if ( pCRPIX1   && PyLong_Check(pCRPIX1) )   this->sliceparams[std::string(cam)].crpix1   = PyLong_AsLong( pCRPIX1 );
         if ( pCRPIX2   && PyLong_Check(pCRPIX2) )   this->sliceparams[std::string(cam)].crpix2   = PyLong_AsLong( pCRPIX2 );
         if ( pTHETADEG && PyLong_Check(pTHETADEG) ) this->sliceparams[std::string(cam)].thetadeg = PyLong_AsLong( pTHETADEG );
+        if ( pDATASEC  ) {
+          const char* cDATASEC = PyUnicode_AsUTF8( pDATASEC );
+          this->sliceparams[std::string(cam)].datasec.assign( cDATASEC );
+        }
       }
     }
 

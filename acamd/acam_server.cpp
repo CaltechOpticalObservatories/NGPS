@@ -734,7 +734,7 @@ namespace Acam {
       }
       else
       if ( cmd == ACAMD_BIN ) {
-                      ret = this->interface.camera.bin( args, retstring );
+                      ret = this->interface.bin( args, retstring );
       }
       else
       if ( cmd == ACAMD_IMFLIP ) {
@@ -748,6 +748,10 @@ namespace Acam {
       if ( cmd == ACAMD_EXPTIME ) {
                       ret  = this->interface.exptime( args, retstring );         // set exptime
           if (ret==NO_ERROR) this->interface.guider_settings_control();          // update Guider GUI display igores ret
+      }
+      else
+      if ( cmd == ACAMD_FAN ) {
+                      ret = this->interface.fan_mode( args, retstring );
       }
       else
       if ( cmd == ACAMD_GAIN ) {

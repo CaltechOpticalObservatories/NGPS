@@ -28,17 +28,8 @@ ARCSIM_NUMDEV=0
 #       FIRMWARE  the default firmware to load
 #       READOUT   the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
-### I CHANNEL LODFILE HAS BEEN CHANGED FOR DEBUGGING  --CHAZ
-#CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
-#CONTROLLER=(1 R sg2 yes /home/developer/Software/DSP/lod/sg2_48khz_ft.lod SPLIT1)
-
-## note 10/16/24, these are what Matt has been using:
-#CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_test.lod SPLIT1)
-#CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_48khz_ft.lod.lod SPLIT1)
-
-## note 10/16/24, these are the latest firmware files:
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_20240315.lod U2)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_20240315.lod U1)
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_20241103.lod U2)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_20241103.lod U1)
 
 # -----------------------------------------------------------------------------
 # This defines the default image size and binning for each controller.
@@ -53,8 +44,8 @@ CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_20240315.lod U1)
 #       BINROWS   bin factor rows
 #       BINCOLS   bin factor cols
 #
-IMAGE_SIZE=(I 1020 4114 50 20 1 1)
-IMAGE_SIZE=(R 1020 4114 50 20 1 1)
+IMAGE_SIZE=(I 1020 4114 0 20 1 1)
+IMAGE_SIZE=(R 1020 4114 0 20 1 1)
 
 # -----------------------------------------------------------------------------
 # Detector orientation of ROWS/COLS with respect to X,Y axes
