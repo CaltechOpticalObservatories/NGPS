@@ -115,11 +115,10 @@ namespace TCS {
 
     message << "name host:port connected\n";
 
-    for ( const auto &[key,val] : this->tcsmap ) {
-      message << val->getname() << " " 
-              << val->gethost() << ":" 
-              << val->getport() << " "
-              << ( val->isconnected() ? "true" : "false" ) << "\n";
+    for ( const auto &[key,tcs] : this->tcsmap ) {
+      message << tcs->getname() << " " 
+              << tcs->gethost() << " " 
+              << ( tcs->isconnected() ? "true" : "false" ) << "\n";
     }
 
     retstring = message.str();
@@ -157,8 +156,7 @@ namespace TCS {
     for ( const auto &[key,val] : this->tcsmap ) {
       if ( count++ > 0 ) message << ",";  // add a comma separator if coming through here again
       message << val->getname() << " " 
-              << val->gethost() << ":" 
-              << val->getport() << " "
+              << val->gethost() << " " 
               << ( val->isconnected() ? "true" : "false" );
     }
 
@@ -214,7 +212,7 @@ namespace TCS {
     for ( const auto &[key,val] : this->tcsmap ) {
       if ( val->isconnected() ) {
         message.str(""); message << "ERROR: connection already open to " << val->getname() << " "
-                                 << val->gethost() << ":" << val->getport();
+                                 << val->gethost();
         logwrite( function, message.str() );
         retstring="already_open";
         return ERROR;
@@ -235,7 +233,7 @@ namespace TCS {
     // initialize connection to the TCS
     //
     message.str(""); message << "opening connection to TCS " << tcsloc->first << " on "
-                             << tcsloc->second->gethost() << ":" << tcsloc->second->getport();
+                             << tcsloc->second->gethost();
     logwrite( function, message.str() );
 
     TcsIO &tcs = *(tcsloc->second);
@@ -244,6 +242,7 @@ namespace TCS {
     //
     {
     auto conn = tcs.get_connection(true);  // get a slow-command connection
+    if (conn) conn->open();
     if ( !conn || !tcs.isconnected() ) {
       logwrite( function, "ERROR connecting to "+arg );
       retstring="error_slow_connection";
@@ -254,16 +253,29 @@ namespace TCS {
 
     // check and open connection pool for fast commands
     //
+    tcs.initialize_pool();
+
     for ( size_t i=0; i<TcsIO::poolsize; ++i ) {
       auto conn = tcs.get_connection(false);  // get a fast-command connection
+      if (conn) {
+        if ( !conn->sock.isconnected() ) {
+          if ( conn->open() != NO_ERROR ) {
+            logwrite( function, "ERROR opening fast connection pool "+i );
+            retstring="error_fast_connection";
+            return ERROR;
+          }
+        }
+        logwrite( function, "opened fast-command connection to "+arg );
+      }
       if ( !conn || !tcs.isconnected() ) {
-        logwrite( function, "ERROR connecting to "+arg );
+        logwrite(function, "bob" );
+        logwrite( function, "ERROR opening fast connection pool. conn: " + std::to_string(conn ? 1 : 0) +
+          ", isconnected: " + std::to_string(tcs.isconnected()) );
         retstring="error_fast_connection";
         return ERROR;
       }
-      tcs.return_connection(conn);  // return connection to the pool
+//    tcs.return_connection(conn);  // return connection to the pool
     }
-    logwrite( function, "opened fast-command connections to "+arg );
 
     this->name = tcs.getname();            // save the name of the opened tcs
 
@@ -364,7 +376,7 @@ namespace TCS {
     for ( const auto &[key,tcs] : this->tcsmap ) {
       if ( tcs->isconnected() ) {
         message.str(""); message << "closing connection to " << tcs->getname() << " "
-                                 << tcs->gethost() << ":" << tcs->getport();
+                                 << tcs->gethost();
         logwrite( function, message.str() );
         error = tcs->close();
         this->name.clear();  // clear the name of the opened tcs
@@ -1513,11 +1525,11 @@ namespace TCS {
     // TCS is good, send the command, read the reply
     //
     std::string reply;
-    if ( tcs_loc->second->send( cmd, reply ) != NO_ERROR ) {
-      message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS on fd " << tcs_loc->second->fd();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
+/// if ( tcs_loc->second->send( cmd, reply ) != NO_ERROR ) {
+///   message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS";// on fd " << tcs_loc->second->fd();
+///   logwrite( function, message.str() );
+///   return ERROR;
+/// }
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.

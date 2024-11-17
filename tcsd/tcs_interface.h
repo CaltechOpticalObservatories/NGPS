@@ -96,6 +96,14 @@ namespace TCS {
   /***** TCS::TcsInfo *********************************************************/
 
 
+  class ConnectionPool {
+    public:
+      std::shared_ptr<Network::Interface> conn;
+      bool inuse;
+      bool isopen;
+      ConnectionPool(std::shared_ptr<Network::Interface> c) : conn(std::move(c)), inuse(false), isopen(false) {}
+  };
+
   /***** TCS::TcsIO ***********************************************************/
   /**
    * @class   TcsIO
@@ -121,9 +129,10 @@ namespace TCS {
       std::mutex mtx_slow;
 
       // pool for fast-response commands
-      std::vector<std::shared_ptr<Network::Interface>> pool;
-      std::mutex mtx_fast;
+//    std::vector<std::shared_ptr<Network::Interface>> pool;
+      std::mutex mtx_pool;
       std::condition_variable cv;
+      const int TIMEOUT=3000;
 
     public:
       TcsIO(const std::string &name, const std::string &host, int port, char term_write, char term_read)
@@ -141,39 +150,70 @@ namespace TCS {
 
       static const size_t poolsize = 3;
 
+      std::vector<ConnectionPool> pool;
+
+      long initialize_pool() {
+        logwrite( "TCS::TcsIO::initialize_pool", "here" );
+        for ( size_t i=0; i<TcsIO::poolsize; ++i ) {
+          auto conn = std::make_shared<Network::Interface>();
+          pool.push_back(ConnectionPool(conn));
+          logwrite( "TCS::TcsIO::initialize_pool", "initialized pool connection " + std::to_string(i) );
+        }
+        return NO_ERROR;
+      }
+
       // get a connection for a command
       //
       std::shared_ptr<Network::Interface> get_connection( bool is_slow_command ) {
+        const std::string function="TCS::TcsIO::get_connection";
+
         if ( is_slow_command ) {
           // slow command, lock and return the slow command connection
           std::lock_guard<std::mutex> lock( mtx_slow );
+          logwrite( function, "slow command connection acquired" );
           return conn_slow;
         }
         else {
+          std::unique_lock<std::mutex> lock(mtx_pool);
           // fast command, take a connection from the pool
-          std::unique_lock<std::mutex> lock(mtx_fast);
-          cv.wait( lock, [this]() { return !pool.empty(); } );
-          auto conn = std::move( pool.back() );
-          pool.pop_back();
-          return conn;
+
+          while ( true ) {
+            for ( auto &conn : pool ) {
+              if ( !isopen ) {
+                conn.isopen=true;
+                return conn.conn )
+              if ( !conn.inuse ) {
+                conn.inuse=true;
+                logwrite( function, "fast command connection acquired" );
+                return conn.conn;
+              }
+              logwrite( function, "fast command connection inuse, trying another" );
+            }
+            // wait up to TIMEOUT ms for a connection if not immediately available
+            std::cv_status status = cv.wait_for(lock, std::chrono::milliseconds(TIMEOUT));
+            if ( status == std::cv_status::timeout ) {
+              logwrite( function, "timed out waiting for connection" );
+              return nullptr;
+            }
+          }
         }
       }
 
       // return a fast-response connection to the pool
       //
       void return_connection( std::shared_ptr<Network::Interface> conn ) {
-        {
-        std::lock_guard<std::mutex> lock(mtx_fast);
-        pool.push_back( std::move(conn) );
+        const std::string function="TCS::TcsIO::return_connection";
+        std::lock_guard<std::mutex> lock(mtx_pool);
+        for ( auto &c : pool ) {
+          if ( c.conn == conn ) {
+            c.inuse = false;
+            logwrite( function, "returned connection to pool for fd "+std::to_string(c.conn->sock.getfd()) );
+            cv.notify_one();
+            return;
+          }
+          logwrite( function, "connection not found for fd "+std::to_string(c.conn->sock.getfd()) );
         }
-        cv.notify_one();
       }
-
-      /**
-       * @var    tcs  pointer to Network::Interface
-       * @brief  provides standard TCP/IP socket iterface
-       */
-      std::unique_ptr< Network::Interface > tcs;
 
       long execute_command(const std::string& command, std::string& response, bool is_slow_command) {
         auto conn = get_connection(is_slow_command);
@@ -190,19 +230,60 @@ namespace TCS {
       return error;
       }
 
+      bool isconnected() {
+        // Check if slow connection is connected, or if any connection in the pool is connected
+        if (conn_slow && conn_slow->sock.isconnected()) {
+          return true;
+        }
+        // Check fast connections in the pool
+        std::lock_guard<std::mutex> lock(mtx_pool);
+        for (const auto& conn : pool) {
+          if (conn.conn->sock.isconnected()) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      long close() {
+        long error=NO_ERROR;
+        if (conn_slow && conn_slow->sock.isconnected()) {
+          error |= conn_slow->close();
+        }
+        // Check fast connections in the pool
+        std::lock_guard<std::mutex> lock(mtx_pool);
+        for (const auto& conn : pool) {
+          if (conn.conn->sock.isconnected()) {
+            error |= conn.conn->close();
+          }
+        }
+        return error;
+      }
+
       /**
        * convenience functions provide access to the Network::Interface functions
        */
-      inline std::string device_name() const { return this->tcs->get_name(); }
-      inline long open() const { return tcs->open(); }
-      inline long close() const { return tcs->close(); }
-      inline bool isconnected() const { return tcs->sock.isconnected(); }
-      inline int fd() const { return tcs->sock.getfd(); }
-      inline std::string gethost() const { return tcs->get_host(); }
-      inline std::string getname() const { return tcs->get_name(); }
-      inline int getport() const { return tcs->get_port(); }
-      inline long send( std::string cmd ) { return tcs->send_command( cmd ); }
-      inline long send( std::string cmd, std::string &retstring ) { return tcs->send_command( cmd, retstring ); }
+      inline std::string device_name() {
+        auto conn=get_connection(true);
+        if (conn) return conn->get_name(); else return "";
+      }
+      std::string gethost() {
+        auto conn=get_connection(true);
+        if (conn) return conn->get_host(); else return "";
+      }
+      std::string getname() {
+        auto conn=get_connection(true);
+        if (conn) return conn->get_name(); else return "";
+      }
+        
+//    inline long open() const { return tcs->open(); }
+//    inline long close() const { return tcs->close(); }
+//    inline int fd() const { return tcs->sock.getfd(); }
+//    inline std::string gethost() const { return tcs->get_host(); }
+//    inline std::string getname() const { return tcs->get_name(); }
+//    inline int getport() const { return tcs->get_port(); }
+//    inline long send( std::string cmd ) { return tcs->send_command( cmd ); }
+//    inline long send( std::string cmd, std::string &retstring ) { return tcs->send_command( cmd, retstring ); }
   };
   /***** TCS::TcsIO ***********************************************************/
 
