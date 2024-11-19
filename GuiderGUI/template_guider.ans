@@ -13,12 +13,12 @@ SYNC DISPLAY
 button
 $dir/sync_display.sh guider # | $text
 #############
-CAMERA SETTINGS
+CAM SETTINGS
 *
 button
 $param(guiderSettings) ; acam guideset $exptime $gain $filter $focus # | $text
 #############
-GRAB FITS
+GRAB
 *
 button
 $dir/grabfits.sh guider # | $text
@@ -28,10 +28,15 @@ PUT ON SLIT
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | $text
 #############
+GUIDE HERE
+*
+button
+$message(yesno,Start guiding here?) | $dir/guide_here.sh | $text
+#############
 CALIBRATE
 *
 button
-$message(yesno,Calibrate ACAM?) | acam offsetcal | $text
+$message(yesno,Calibrate ACAM? This will send some offsets.) | acam offsetcal | $text
 #############
 GUI HELP
 *

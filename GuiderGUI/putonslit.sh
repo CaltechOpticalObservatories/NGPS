@@ -13,13 +13,19 @@ source $SCRIPT_DIR/gui.config $camera
 crosscenter=`xpaget $id crosshair wcs degrees`
 slitcenter=`xpaget $id region -format xy -system wcs -group slitcenter -skyformat degrees`
 
-#echo $crosscenter
-#echo $slitcenter
+# Define the slit region coordinates
+hbin=`xpaget SLICEVIEW fits header keyword HBIN`
+vbin=`xpaget SLICEVIEW fits header keyword VBIN`
+xslit=$(( 693 / $hbin ))
+yslit=$(( 512 / $vbin ))
+xwidth=$(( 24 / $hbin ))
+ywidth=$(( 200 / $vbin ))
+slitreg="image; box($xslit,$yslit,$xwidth,$ywidth,0) # color=cyan edit=0 move=0 rotate=0 tag={slitcenter}"
 
 # If the slit result is empty string, try loading the slit region file
 if [ -z "$slitcenter" ]; then
   echo No slit! ;
-  cat $slit_regionfile | xpaset $id region -format ds9 -system physical ;
+  echo "$slitreg" | xpaset $id region
   slitcenter=`xpaget $id region -format xy -system wcs -group slitcenter -skyformat degrees`
 fi
 
