@@ -18,7 +18,7 @@ CAM SETTINGS
 button
 $param(guiderSettings) ; acam guideset $exptime $gain $filter $focus # | $text
 #############
-GRAB
+GRAB FITS
 *
 button
 $dir/grabfits.sh guider # | $text
