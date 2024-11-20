@@ -40,6 +40,8 @@ const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all 
 const std::string ACAMD_PUTONSLIT= "putonslit"; ///< put target on slit
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
 const std::string ACAMD_SHUTDOWN = "shutdown";  ///< shutdown threads and close connections
+const std::string ACAMD_SAVEFRAMES= "saveframes";     ///< num frames to save during target acquire
+const std::string ACAMD_SKIPFRAMES= "skipframes";     ///< num frames to skip before target acquire
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver
 const std::string ACAMD_TCSGET = "tcsget";      ///< 
 const std::string ACAMD_TCSINIT = "tcsinit";    ///< initialize acamd's connection to tcsd
@@ -79,6 +81,8 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_IMROT+" [ ? | <rotdir> ]",
                                                 ACAMD_INIT,
                                                 ACAMD_QUALITY+" [ ? ]",
+                                                ACAMD_SAVEFRAMES+" [ ? | <nsave> ]",
+                                                ACAMD_SKIPFRAMES+" [ ? | <nskip> ]",
                                                 ACAMD_SOLVE+" [ ? | <filename>] [ <key>=<val> ... ]",
                                                 ACAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 ACAMD_TEMP+" [ ? | <setpoint> ]",

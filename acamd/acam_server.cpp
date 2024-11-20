@@ -828,6 +828,14 @@ namespace Acam {
                       ret = this->interface.framegrab_fix( args, retstring );
       }
       else
+      if ( cmd == ACAMD_SAVEFRAMES ) {
+                      ret = this->interface.saveframes( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_SKIPFRAMES ) {
+                      ret = this->interface.skipframes( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_INIT ) {
                       this->interface.init_names();
                       ret = NO_ERROR;  // init_names() returns void, never fails

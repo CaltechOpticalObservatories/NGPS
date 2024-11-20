@@ -345,7 +345,7 @@ namespace Acam {
 
       double tcs_max_offset;
 
-      double offset_cal_offset;
+      double offset_cal_offset, offset_cal_raoff, offset_cal_decoff;
 
       std::chrono::time_point<std::chrono::steady_clock,
                               std::chrono::duration<double>> timeout_time;
@@ -487,6 +487,9 @@ namespace Acam {
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
       std::atomic<bool> is_shutting_down;      ///< set during shutdown
 
+      int nskip_before_acquire;                ///< number of frame grabs to skip before using for target acquisition
+      int nsave_acquire_frames;                ///< number of frame grabs to save during acquisition/guide
+
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
@@ -498,7 +501,9 @@ namespace Acam {
                     motion_port(-1),
                     should_framegrab_run(false),
                     is_framegrab_running(false),
-                    is_shutting_down(false) {
+                    is_shutting_down(false),
+                    nskip_before_acquire(0),
+                    nsave_acquire_frames(0) {
         target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
@@ -544,6 +549,8 @@ namespace Acam {
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
+      long saveframes( std::string args, std::string &retstring );    /// set/get number of frame grabgs to save during acquisition
+      long skipframes( std::string args, std::string &retstring );    /// set/get number of frame grabgs to skip before target acquisition
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long guider_settings_control();          /// get guider settings and push to Guider GUI display
@@ -553,6 +560,7 @@ namespace Acam {
       long offset_cal( const std::string args, std::string &retstring );
       long offset_goal( const std::string args, std::string &retstring );
       long put_on_slit( const std::string args, std::string &retstring );
+      void preserve_framegrab();
       long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
       long exptime( const std::string args, std::string &retstring );

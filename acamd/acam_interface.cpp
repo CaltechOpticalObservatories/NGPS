@@ -12,6 +12,7 @@
 
 namespace Acam {
 
+  int npreserve=0;
 
   /***** Acam::Camera::emulator ***********************************************/
   /**
@@ -102,13 +103,12 @@ namespace Acam {
 
     // Setup camera for continuous readout
     //
-    error |= this->gain(1);
+    error |= this->gain(1);                            // EM gain off
     error |= this->andor.set_vsspeed( 4.33 );          // vertical shift speed
     error |= this->andor.set_hsspeed( 1.0 );           // horizontal shift speed
     error |= this->andor.set_read_mode( 4 );           // image mode
-    error |= this->andor.set_acquisition_mode( 5 );    // run till abort
-    error |= this->andor.set_frame_transfer( "off" );  // disable Frame Transfer mode
-    error |= this->andor.set_kinetic_cycle_time( 0 );
+    error |= this->andor.set_acquisition_mode( 1 );    // single scan
+    error |= this->andor.set_frame_transfer( "on" );   // enable Frame Transfer mode
     error |= this->andor.set_shutter( "open" );        // shutter always open
     error |= this->set_exptime(1);
 
@@ -2285,6 +2285,101 @@ namespace Acam {
   /***** Acam::Interface::framegrab_fix ***************************************/
 
 
+  /***** Acam::Interface::saveframes ******************************************/
+  /**
+   * @brief      set/get number of frame grabs to save during target acquisition
+   * @param[in]  args       optional number of frames or help
+   * @param[out] retstring  return string for help or error status
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::saveframes( std::string args, std::string &retstring ) {
+    const std::string function = "Acam::Interface::saveframes";
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_SAVEFRAMES;
+      retstring.append( " [ <nsave> ]\n" );
+      retstring.append( "   Set/get the number of frame grabs to save during target acquisition\n" );
+      retstring.append( "   and guide. No arg returns the current value.  If skipframes is \n" );
+      retstring.append( "   non-zero then this must be greater than skipframes or else the save\n" );
+      retstring.append( "   will also be skipped. This value is not persistent. After <nsave>\n" );
+      retstring.append( "   have been saved then saving is stopped until manually reset.\n" );
+      return HELP;
+    }
+
+    // args other than help, try to convert to integer
+    //
+    if ( !args.empty() ) {
+      try {
+        int n = std::stoi(args);
+        if ( n >= 0 ) this->nsave_acquire_frames = n;
+        else {
+          logwrite( function, "ERROR value cannot be negative" );
+          retstring="invalid_argument";
+          return ERROR;
+        }
+      }
+      catch ( std::exception & ) {
+        logwrite( function, "ERROR parsing value" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+
+    retstring = std::to_string( this->nsave_acquire_frames );
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::saveframes ******************************************/
+
+
+  /***** Acam::Interface::skipframes ******************************************/
+  /**
+   * @brief      set/get number of frame grabs to skip before target acquisition
+   * @param[in]  args       optional number of frames or help
+   * @param[out] retstring  return string for help or error status
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::skipframes( std::string args, std::string &retstring ) {
+    const std::string function = "Acam::Interface::skipframes";
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_SKIPFRAMES;
+      retstring.append( " [ <nskip> ]\n" );
+      retstring.append( "   Set/get the number of frame grabs to skip before using for target\n" );
+      retstring.append( "   acquisition. No arg returns the current value.\n" );
+      return HELP;
+    }
+
+    // args other than help, try to convert to integer
+    //
+    if ( !args.empty() ) {
+      try {
+        int n = std::stoi(args);
+        if ( n >= 0 ) this->nskip_before_acquire = n;
+        else {
+          logwrite( function, "ERROR value cannot be negative" );
+          retstring="invalid_argument";
+          return ERROR;
+        }
+      }
+      catch ( std::exception & ) {
+        logwrite( function, "ERROR parsing value" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+
+    retstring = std::to_string( this->nskip_before_acquire );
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::skipframes ******************************************/
+
+
   /***** Acam::Interface::framegrab *******************************************/
   /**
    * @brief      wrapper to control Andor frame grabbing
@@ -2457,29 +2552,46 @@ namespace Acam {
     {
     std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
-      BoolState loop_running( iface.is_framegrab_running );    // sets state true here, clears when it goes out of scope
-      if (error==NO_ERROR) error = iface.camera.andor.start_acquisition();
+      BoolState loop_running( iface.is_framegrab_running );             // sets state true here, clears when it goes out of scope
+      int skipframes = iface.nskip_before_acquire;                      // init num of frames to skip before trying to acquire target
       do {
-        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );                       // don't use too much CPU
+        if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
 
-        if ( iface.camera.andor.camera_info.exptime == 0 ) continue;            // wait for non-zero exposure time
+        if ( iface.collect_header_info() == ERROR ) {                   // collect header information
+          logwrite(function,"ERROR collecting header info");
+          continue;
+        }
 
-        // timeout to get frame in msec is exposure time + 3s
-        int to = static_cast<int>(std::round(iface.camera.andor.camera_info.exptime+3.)*1000.);
+        if ( iface.camera.andor.acquire_one() == ERROR ) {              // acquire and get single scan single frame
+          logwrite(function,"ERROR getting frame");
+          continue;
+        }
 
-        if (error==NO_ERROR) error = iface.camera.andor.get_recent(to);         // get latest frame from camera into memory
-        if (error==NO_ERROR) error = iface.collect_header_info();                            // collect header information
-        if (error==NO_ERROR) error = iface.camera.write_frame( sourcefile,
-                                                               iface.imagename,
-                                                               iface.tcs_online.load() );    // write to FITS file
+        error = iface.camera.write_frame( sourcefile,
+                                          iface.imagename,
+                                          iface.tcs_online.load() );    // write to FITS file
+        if (error==ERROR) {
+          logwrite(function,"ERROR writing frame");
+          continue;
+        }
 
         iface.framegrab_time = std::chrono::steady_clock::time_point::min();
 
-        iface.guide_manager.push_guider_image( iface.imagename );                            // send frame to Guider GUI
+        iface.guide_manager.push_guider_image( iface.imagename );       // send frame to Guider GUI
 
-        // acquire target if needed
+        // Normally, frame grabs are overwritten. This optionally preserves
+        // a burst of frames by copying to a different filename, but only
+        // during acquisition or guiding. nsave must be reset by command
+        // each time it's used, it's not automatically reset.
         //
-        if (error==NO_ERROR) {
+        iface.preserve_framegrab();
+
+        if ( skipframes-- > 0 ) {                                       // don't use this frame for target acquisition
+          continue;
+        }
+        else {
+          // acquire target if needed
+          //
           // get currently displayed guide status
           std::string status_og = iface.guide_manager.status;
 
@@ -2487,9 +2599,9 @@ namespace Acam {
           // each time, unless it reaches the max number of retries or otherwise
           // fails.
           //
-          long did_acquire = iface.target.do_acquire();                                      // acquire target here (if needed)
+          long did_acquire = iface.target.do_acquire();                 // acquire target here (if needed)
           if ( did_acquire != NO_ERROR ) {
-            iface.target.acquire( Acam::TARGET_NOP );                                        // disable acquire on failure
+            iface.target.acquire( Acam::TARGET_NOP );                   // disable acquire on failure
           }
           // set guide status
           iface.guide_manager.status = iface.target.acquire_mode_string();
@@ -2498,12 +2610,15 @@ namespace Acam {
             iface.guide_manager.set_update();
             std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
           }
+
+          skipframes = iface.nskip_before_acquire;                      // reset skipframes
         }
 
-      } while ( error==NO_ERROR && iface.should_framegrab_run.load() );
-      error |= iface.camera.andor.abort_acquisition();
+        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );  // don't use too much CPU
+
+      } while ( /*error==NO_ERROR &&*/ iface.should_framegrab_run.load() );
     }
-    else {                                                                                   // this shouldn't even happen
+    else {                                                              // this shouldn't even happen
       logwrite( function, "ERROR another thread is already running" );
       return;
     }
@@ -3094,9 +3209,12 @@ namespace Acam {
       iface->database.add_key_val( "RAoffset",   ra_off );
       iface->database.add_key_val( "DECLoffset", dec_off );
 
-      this->offset_cal_offset += offset;
+      this->offset_cal_raoff  += (ra_off*3600.);
+      this->offset_cal_decoff += (dec_off*3600.);
 
-//    message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
+      this->offset_cal_offset = sqrt( pow(this->offset_cal_raoff,2) + pow(this->offset_cal_decoff,2) );
+
+      message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
 
       // There is a maximum offset allowed to the TCS.
       // This is not a TCS limit (their limit is very large).
@@ -4463,6 +4581,7 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     this->camera.fitsinfo.fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
     this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
+    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS", NAN, "" );
 
     this->camera.fitsinfo.fitskeys.addkey( "EXPSTART", this->camera.andor.camera_info.timestring, "exposure start time" );
     this->camera.fitsinfo.fitskeys.addkey( "MJD0",     this->camera.andor.camera_info.mjd0, "exposure start time (modified Julian Date)" );
@@ -4774,30 +4893,41 @@ namespace Acam {
 
     if (error==NO_ERROR) this->astrometry.get_solution( result, acam_ra, acam_dec, acam_angle, matches, rmsarcsec );
 
-    if (error==NO_ERROR) {
-      retstring = "ACAM CALIBRATION RESULT\n";
-      retstring.append( "Astrometry result = "+result+"\n" );
-      message.str(""); message << "ACAM center = " << acam_ra << " " << acam_dec << " // RA, DEC from solver\n\n";
-      retstring.append( message.str() );
-      message.str(""); message << "Offset RA = <TBD> arcsec\n";
-      retstring.append( message.str() );
-      message.str(""); message << "Offset DEC = <TBD> arcsec\n";
-      retstring.append( message.str() );
-      message.str(""); message << "Total Offset = " << this->target.offset_cal_offset << " arcsec\n\n";
-      retstring.append( message.str() );
-      retstring.append( "Total Offset GOAL = <TBD>\n\n" );
-      retstring.append( "If the total offset is larger than the goal, ask the operator to zero them now.\n" );
-      retstring.append( "Then slew off the target, slew back, and press CALIBRATE again to verify offsets\n" );
-      retstring.append( "are still small.\n\n" );
-      retstring.append( "Calibrating and zeroing the offset improves the efficiency of the Acquisition\n" );
-      retstring.append( "and Guide system but does not affect accuracy.\n" );
+    // assemble the message
+    //
+    retstring = "ACAM CALIBRATION RESULT\n";
+    retstring.append( "Astrometry result = "+result+"\n" );
+    message.str(""); message << "ACAM center = " << acam_ra << " " << acam_dec << " // RA, DEC from solver\n\n";
+    retstring.append( message.str() );
+    message.str(""); message << "Offset RA = " << this->target.offset_cal_raoff << " arcsec\n";
+    retstring.append( message.str() );
+    message.str(""); message << "Offset DEC = " << this->target.offset_cal_decoff << " arcsec\n";
+    retstring.append( message.str() );
+    message.str(""); message << "Total Offset = " << this->target.offset_cal_offset << " arcsec\n\n";
+    retstring.append( message.str() );
+    retstring.append( "Total Offset GOAL = 10 arcsec\n\n" );
+    retstring.append( "If the total offset is larger than the goal, ask the operator to zero them now.\n" );
+    retstring.append( "Then slew off the target, slew back, and press CALIBRATE again to verify offsets\n" );
+    retstring.append( "are still small.\n\n" );
+    retstring.append( "Calibrating and zeroing the offset improves the efficiency of the Acquisition\n" );
+    retstring.append( "and Guide system but does not affect accuracy.\n" );
 
-      // write this to STDOUT and the GUI will pick it up
-      //
-      std::cout << retstring;
-      return HELP;             // returning HELP suppresses DONE|ERROR from being written
+    // zero the offsets
+    //
+    this->target.offset_cal_decoff=0;
+    this->target.offset_cal_raoff=0;
+
+    // overwrite above if not acquired
+    //
+    if ( !this->target.is_acquired ) {
+      retstring = "CALIBRATION FAILED\n";
+      retstring.append( "Astrometry result = "+result+"\n" );
     }
-    else return error;
+
+    // write this to STDOUT and the GUI will pick it up
+    //
+    std::cout << retstring;
+    return HELP;             // returning HELP suppresses DONE|ERROR from being written
   }
   /***** Acam::Interface::offset_cal ******************************************/
 
@@ -4959,4 +5089,42 @@ namespace Acam {
   }
   /***** Acam::Interface::put_on_slit *****************************************/
 
+
+  /***** Acam::Interface::preserve_framegrab **********************************/
+  /**
+   * @brief      optionally preserve some number of frame grabs during guide/acquisition
+   *
+   */
+  void Interface::preserve_framegrab() {
+    if ( this->nsave_acquire_frames > 0 && ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ||
+                                             this->target.acquire_mode == Acam::TARGET_GUIDE ) ) {
+      this->nsave_acquire_frames--;
+
+      try {
+        auto it = this->imagename.find(".fits");
+        if ( it == std::string::npos ) {
+          logwrite( "Acam::Interface::preserve_framegrab", "malformed imeagename" );
+          return;
+        }
+
+        std::string base = this->imagename.substr(0, it)+"_";
+        std::stringstream fn;
+        fn << base << std::setfill('0') << std::setw(5) << npreserve << ".fits";
+        struct stat st;
+        while ( (stat(fn.str().c_str(), &st) == 0) && npreserve < 100000 ) {
+          fn.str(""); fn << base << std::setfill('0') << std::setw(5) << ++npreserve << ".fits";
+        }
+        std::filesystem::copy( this->imagename, fn.str() );
+      }
+      catch ( const std::exception &e ) {
+        logwrite( "Acam::Interface::preserve_framegrab", "ERROR saving frame: "+std::string(e.what()) );
+        return;
+      }
+    }
+    else if ( this->nsave_acquire_frames < 0 ) {
+      this->nsave_acquire_frames=0;  // prevents wrap-around when not in use
+    }
+    return;
+  }
+  /***** Acam::Interface::preserve_framegrab **********************************/
 }
