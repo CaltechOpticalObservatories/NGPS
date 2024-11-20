@@ -1,8 +1,44 @@
-param guiderSettings
+param scamSettings
     # variable type {label} {default} {Long description}
     exptime entry {Exposure time} {DEFexptime} {Exptime in seconds}
     gain entry {Gain} {DEFgain} {Camera conversion gain}
 endparam
+param jogSettings
+    # variable type {label} {default} {Long description}
+    jog_arcsec entry {Offset size} {DEFjog} {Offset in arcsec}
+endparam
+#############
+buttonbar
+#############    $dir macro refers to directory of this file
+JOG SETTINGS
+*
+button
+$param(jogSettings) ; scam jogset $jog_arcsec # | $text
+#############
+NORTH
+*
+button
+echo scam jog N | $text
+SOUTH
+*
+button
+echo scam jog S | $text 
+EAST
+*
+button
+echo scam jog E | $text 
+WEST
+*
+button
+echo scam jog W | $text
+#############
+PUT ON SLIT
+*
+button
+$message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh # | $text
+#############
+endbuttonbar
+#############
 #############
 buttonbar
 #############    $dir macro refers to directory of this file
@@ -14,17 +50,12 @@ $dir/sync_display.sh slicev # | $text
 CAMERA SETTINGS
 *
 button
-$param(guiderSettings) ; scam guiset $exptime $gain # | $text
+$param(scamSettings) ; scam guiset $exptime $gain # | $text
 #############
 GRAB FITS
 *
 button
 $dir/grabfits.sh slicev # | $text
-#############
-PUT ON SLIT
-*
-button
-$message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh # | $text
 #############
 GUI HELP
 *
@@ -54,4 +85,4 @@ endhmenu
 # Show Settings
 # *
 # bind S
-# $param(guiderSettings); ./sync_daemon.sh $exptime $good $filter $gain | $text 
+# $param(scamSettings); ./sync_daemon.sh $exptime $good $filter $gain | $text 
