@@ -1,0 +1,1232 @@
+diff --git a/Andor/andor.cpp b/Andor/andor.cpp
+index be58cc6..b890913 100644
+--- a/Andor/andor.cpp
++++ b/Andor/andor.cpp
+@@ -11,6 +11,38 @@
+ 
+ namespace Andor {
+ 
++  /***** Andor::SDK::_GetCapabilities *****************************************/
++  /**
++   * @brief      wrapper for Andor SDK GetCapabilities
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_GetCapabilities( AndorCapabilities* caps ) {
++    std::string function = "Andor::SDK::_GetCapabilities";
++    std::stringstream message;
++
++    caps->ulSize = sizeof(AndorCapabilities);
++
++    unsigned int ret = GetCapabilities( caps );
++
++    switch ( ret ) {
++      case DRV_SUCCESS:         /* silent on success */                               break;
++      case DRV_NOT_INITIALIZED: message << "ERROR system not initialized";            break;
++      case DRV_P1INVALID:       message << "ERROR invalid pointer";                   break;
++      default:                  message << "ERROR unrecognized return code " << ret;
++    }
++
++    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
++
++    if ( caps == nullptr ) {
++      logwrite( function, "ERROR capabilities not returned" );
++    }
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_GetCapabilities *****************************************/
++
++
+   /***** Andor::SDK::_GetAcquiredData16 ***************************************/
+   /**
+    * @brief      wrapper for Andor SDK GetAcquiredData16
+@@ -123,11 +155,11 @@ namespace Andor {
+    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+    *
+    */
+-  long SDK::_GetCameraHandle( int index, int* handle ) {
++  long SDK::_GetCameraHandle( int index, int &handle ) {
+     std::string function = "Andor::SDK::_GetCameraHandle";
+     std::stringstream message;
+ 
+-    unsigned int ret = GetCameraHandle( index, handle );
++    unsigned int ret = GetCameraHandle( index, &handle );
+ 
+     switch (ret) {
+       case DRV_SUCCESS:         /* silent on success */                                  break;
+@@ -607,6 +639,36 @@ namespace Andor {
+   /***** Andor::SDK::_SetOutputAmplifier **************************************/
+ 
+ 
++  /***** Andor::SDK::_SetFrameTransferMode ************************************/
++  /**
++   * @brief      wrapper for Andor SDK SetFrameTransferMode
++   * @param[out] mode  reference to variable to contain mode setting 1=on, 0=off
++   * @return     NO_ERROR or ERROR
++   *
++   */
++  long SDK::_SetFrameTransferMode( int mode ) {
++    std::string function = "Andor::SDK::_SetFrameTransferMode";
++    std::stringstream message;
++
++    std::string status;
++
++    unsigned int ret = SetFrameTransferMode( mode );
++
++    switch ( ret ) {
++      case DRV_SUCCESS:          message << ( mode==1 ? "on" : "off" );      break;
++      case DRV_NOT_INITIALIZED:  message << "ERROR not initialized";         break;
++      case DRV_ACQUIRING:        message << "ERROR acquisition in progress"; break;
++      case DRV_P1INVALID:        message << "ERROR invalid mode " << mode;   break;
++      default:                   message << "ERROR unrecognized return code " << ret;
++    }
++
++    logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_SetFrameTransferMode ************************************/
++
++
+   /***** Andor::SDK::_GetTemperature ******************************************/
+   /**
+    * @brief      wrapper for Andor SDK GetTemperature
+@@ -938,7 +1000,7 @@ namespace Andor {
+    *
+    */
+   long SDK::_SetKineticCycleTime( float time ) {
+-    std::string function = "Andor::SDK::SetKineticCycleTime";
++    std::string function = "Andor::SDK::_SetKineticCycleTime";
+     std::stringstream message;
+ 
+     unsigned int ret = SetKineticCycleTime( time );
+@@ -958,6 +1020,135 @@ namespace Andor {
+   /***** Andor::SDK::_SetKineticCycleTime *************************************/
+ 
+ 
++  /***** Andor::SDK::_SetNumberAccumulations **********************************/
++  /**
++   * @brief      wrapper for Andor SDK SetNumberAccumulations 
++   * @details    This function will set the number of scans accumulated in memory.
++   *             This will only take effect if the acquisition mode is either
++   *             Accumulate or Kinetic Series.
++   * @param[in]  number  number of scans to accumulate
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_SetNumberAccumulations( int number ) {
++    std::string function = "Andor::SDK::_SetNumberAccumulations";
++    std::stringstream message;
++
++    unsigned int ret = SetNumberAccumulations( number );
++
++    switch (ret) {
++      case DRV_SUCCESS:          message << number;                                       break;
++      case DRV_NOT_INITIALIZED:  message << "ERROR system not initialized";               break;
++      case DRV_ACQUIRING:        message << "ERROR acquisition in progress";              break;
++      case DRV_P1INVALID:        message << "ERROR accumulates " << number << " invalid"; break;
++      default:                   message << "ERROR unknown error " << ret;                break;
++    }
++
++    logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_SetNumberAccumulations **********************************/
++
++
++  /***** Andor::SDK::_SetAccumulationCycleTime ********************************/
++  /**
++   * @brief      wrapper for Andor SDK SetAccumulationCycleTime 
++   * @details    This function will set the accumulation cycle time to the
++   *             nearest valid value not less than the given value. The actual
++   *             cycle time used is obtained by GetAcquisitionTimings.
++   * @param[in]  time  accumulation time in seconds
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_SetAccumulationCycleTime( float time ) {
++    std::string function = "Andor::SDK::_SetAccumulationCycleTime";
++    std::stringstream message;
++
++    unsigned int ret = SetAccumulationCycleTime( time );
++
++    switch (ret) {
++      case DRV_SUCCESS:          message << time;                             break;
++      case DRV_NOT_INITIALIZED:  message << "ERROR system not initialized";   break;
++      case DRV_ACQUIRING:        message << "ERROR acquisition in progress";  break;
++      case DRV_P1INVALID:        message << "ERROR exposure time invalid";    break;
++      default:                   message << "ERROR unknown error " << ret;    break;
++    }
++
++    logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_SetAccumulationCycleTime ********************************/
++
++
++  /***** Andor::SDK::_SetNumberKinetics ***************************************/
++  /**
++   * @brief      wrapper for Andor SDK SetNumberKinetics 
++   * @details    This function will set the number of scans (possibly
++   *             accumulated scans) to be taken during a single acquisition
++   *             sequence. This will only take effect if the acquisition mode
++   *             is Kinetic Series.
++   * @param[in]  number  number of scans to accumulate
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_SetNumberKinetics( int number ) {
++    std::string function = "Andor::SDK::_SetNumberKinetics";
++    std::stringstream message;
++
++    unsigned int ret = SetNumberKinetics( number );
++
++    switch (ret) {
++      case DRV_SUCCESS:          message << number;                                  break;
++      case DRV_NOT_INITIALIZED:  message << "ERROR system not initialized";          break;
++      case DRV_ACQUIRING:        message << "ERROR acquisition in progress";         break;
++      case DRV_P1INVALID:        message << "ERROR number " << number << " invalid"; break;
++      default:                   message << "ERROR unknown error " << ret;           break;
++    }
++
++    logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_SetNumberKinetics ***************************************/
++
++
++  /***** Andor::SDK::_GetAcquisitionTimings ***********************************/
++  /**
++   * @brief      wrapper for Andor SDK GetAcquisitionTimings 
++   * @details    This function will return the current “valid” acquisition
++   *             timing information. This function should be used after all
++   *             the acquisitions settings have been set, e.g. SetExposureTime,
++   *             SetKineticCycleTime and SetReadMode etc. The values returned
++   *             are the actual times used in subsequent acquisitions.
++   * @param[out] exp  valid exposure time in seconds
++   * @param[out] acc  valid accumulate cycle time in seconds
++   * @param[out] kin  valid kinetic cycle time in seconds
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_GetAcquisitionTimings( float &exp, float &acc, float &kin ) {
++    std::string function = "Andor::SDK::_GetAcquisitionTimings";
++    std::stringstream message;
++
++    unsigned int ret = GetAcquisitionTimings( &exp, &acc, &kin );
++
++    switch (ret) {
++      case DRV_SUCCESS:          message << exp << " " << acc << " " << kin;        break;
++      case DRV_NOT_INITIALIZED:  message << "ERROR system not initialized";         break;
++      case DRV_ACQUIRING:        message << "ERROR acquisition in progress";        break;
++      case DRV_INVALID_MODE:     message << "ERROR acq or read mode not available"; break;
++      default:                   message << "ERROR unknown error " << ret;          break;
++    }
++
++    logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_GetAcquisitionTimings ***********************************/
++
++
+   /***** Andor::SDK::_SetImageFlip ********************************************/
+   /**
+    * @brief      wrapper for Andor SDK SetImageFlip
+@@ -1096,6 +1287,38 @@ namespace Andor {
+   /***** Andor::SDK::_SetReadMode *********************************************/
+ 
+ 
++  /***** Andor::SDK::_GetShutterMinTimes **************************************/
++  /**
++   * @brief      wrapper for Andor SDK GetShutterMinTimes
++   * @details    This function will return the minimum opening and closing times
++   *             in milliseconds for the shutter on the current camera.
++   * @param[out] minclosing  minimum supported closing time in milliseconds
++   * @param[out] minopening  minimum supported opening time in milliseconds
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_GetShutterMinTimes( int &minclosing, int &minopening ) {
++    std::string function = "Andor::SDK::_GetShutterMinTimes";
++    std::stringstream message;
++
++    unsigned int ret = GetShutterMinTimes( &minclosing, &minopening );
++
++    switch (ret) {
++      case DRV_SUCCESS:         message << minclosing << " " << minopening;  break;
++      case DRV_NOT_INITIALIZED: message << "ERROR: system not initialized";  break;
++      case DRV_ACQUIRING:       message << "ERROR: acquisition in progress"; break;
++      case DRV_P1INVALID:       message << "ERROR: minclosingtime is NULL";  break;
++      case DRV_P2INVALID:       message << "ERROR: minopeningtime is NULL";  break;
++      default:                  message << "ERROR: unknown error " << ret;   break;
++    }
++
++    logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_GetShutterMinTimes **************************************/
++
++
+   /***** Andor::SDK::_SetShutter **********************************************/
+   /**
+    * @brief      wrapper for Andor SDK SetShutter
+@@ -1196,6 +1419,69 @@ namespace Andor {
+   /***** Andor::SDK::_StartAcquisition ****************************************/
+ 
+ 
++  /***** Andor::SDK::_WaitForAcquisition **************************************/
++  /**
++   * @brief      wrapper for Andor SDK WaitForAcquisition
++   * @details    WaitForAcquisition can be called after an acquisition is started
++   *             using StartAcquisition to put the calling thread to sleep until
++   *             an Acquisition Event occurs. This can be used as a simple
++   *             alternative to the functionality provided by the SetDriverEvent
++   *             function, as all Event creation and handling is performed
++   *             internally by the SDK library.
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_WaitForAcquisition() {
++    std::string function = "Andor::SDK::_WaitForAcquisition";
++    std::stringstream message;
++
++    unsigned int ret = WaitForAcquisition();
++
++    switch ( ret ) {
++      case DRV_SUCCESS:         /* silent on success */                 break;
++      case DRV_NO_NEW_DATA:     /* silent on cancel  */                 break;
++      case DRV_NOT_INITIALIZED: message << "ERROR not initialized";     break;
++      default:                  message << "ERROR unrecognized return code " << ret;
++    }
++
++    if ( !message.str().empty() ) logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_WaitForAcquisition **************************************/
++
++
++  /***** Andor::SDK::_WaitForAcquisitionByHandleTimeOut ***********************/
++  /**
++   * @brief      wrapper for Andor SDK WaitForAcquisitionByHandleTimeOut
++   * @details    Whilst using multiple cameras WaitForAcquisitionByHandle can
++   *             be called after an acquisition is started using StartAcquisition
++   *             to put the calling thread to sleep until an Acquisition Event occurs.
++   * @param[in]  handle   camera handle
++   * @param[in]  timeout  timeout in msec
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long SDK::_WaitForAcquisitionByHandleTimeOut( long handle, int timeout ) {
++    std::string function = "Andor::SDK::_WaitForAcquisitionByHandleTimeOut";
++    std::stringstream message;
++
++    unsigned int ret = WaitForAcquisitionByHandleTimeOut( handle, timeout );
++
++    switch ( ret ) {
++      case DRV_SUCCESS:         /* silent on success */                 break;
++      case DRV_NO_NEW_DATA:     /* silent on cancel  */                 break;
++      case DRV_NOT_INITIALIZED: message << "ERROR not initialized";     break;
++      default:                  message << "ERROR unrecognized return code " << ret;
++    }
++
++    if ( !message.str().empty() ) logwrite( function, message.str() );
++
++    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
++  }
++  /***** Andor::SDK::_WaitForAcquisitionByHandleTimeOut ***********************/
++
++
+   /***** Andor::Interface::open ***********************************************/
+   /**
+    * @brief      open a connection to the Andor
+@@ -1210,7 +1496,6 @@ namespace Andor {
+     long error=NO_ERROR;
+     int ncameras=0;            // number of cameras
+     int index=-1;              // camera index number {0,1,2,...}
+-    int handle=0;              // camera handle
+     int serial=-1;             // camera serial number
+ 
+     // If there was an argument then get the camera index from it
+@@ -1268,7 +1553,7 @@ namespace Andor {
+     //
+     for ( int idx=0; idx < ncameras; idx++ ) {
+       int sn;
+-      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( idx, &handle ) : ERROR );
++      if (error==NO_ERROR) error = ( andor ? andor->_GetCameraHandle( idx, this->handle ) : ERROR );
+       if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( sn ) : ERROR );
+       if (error==NO_ERROR) {
+         this->device_map[sn] = idx;
+@@ -1292,8 +1577,8 @@ namespace Andor {
+ 
+     // Set the current camera handle
+     //
+-    if (error==NO_ERROR) {logwrite(function,"GetCameraHandle");error = ( andor ? andor->_GetCameraHandle( index, &handle ) : ERROR );}
+-    if (error==NO_ERROR) {logwrite(function,"SetCurrentCamera");error = ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );}
++    if (error==NO_ERROR) {logwrite(function,"GetCameraHandle");error = ( andor ? andor->_GetCameraHandle( index, this->handle ) : ERROR );}
++    if (error==NO_ERROR) {logwrite(function,"SetCurrentCamera");error = ( andor ? andor->_SetCurrentCamera( this->handle ) : ERROR );}
+     if (error!=NO_ERROR) {
+       message.str(""); message << "ERROR setting camera handle for camera " << index;
+       logwrite( function, message.str() );
+@@ -1325,7 +1610,8 @@ namespace Andor {
+     if (error==NO_ERROR) error = set_output_amplifier( AMPTYPE_CONV );
+     if (error==NO_ERROR)         this->camera_info.gain = 1;
+     if (error==NO_ERROR) error = ( andor ? andor->_SetHSSpeed( this->camera_info.amptype, 0 ) : ERROR );
+-    if (error==NO_ERROR) error = set_vsspeed(0.6);
++    if (error==NO_ERROR) error = set_vsspeed(4.33);
++    if (error==NO_ERROR) error = set_hsspeed(1);
+ 
+     if (error==NO_ERROR) error = ( andor ? andor->_GetTemperatureRange( this->camera_info.temp_min, this->camera_info.temp_max ) : ERROR );
+     if (error==NO_ERROR) error = ( andor ? andor->_SetTemperature( this->camera_info.setpoint ) : ERROR );
+@@ -1335,7 +1621,7 @@ namespace Andor {
+     if (error==NO_ERROR) error = set_read_mode( 4 );        // image mode
+     if (error==NO_ERROR) error = set_acquisition_mode( 1 ); // single scan mode
+     if (error==NO_ERROR) error = set_exptime( 0 );
+-    if (error==NO_ERROR) error = ( andor ? andor->_SetShutter( 1, 0, 50, 50 ) : ERROR );  // TTL high fully auto shutter
++    if (error==NO_ERROR) error = set_shutter( "auto" );     // set shutter to fully auto
+ 
+     message.str(""); message << "camera s/n " << this->camera_info.serial_number << " initialized";
+     logwrite( function, message.str() );
+@@ -1355,11 +1641,12 @@ namespace Andor {
+     std::string function = "Andor::Interface::close";
+     std::stringstream message;
+ 
+-    if ( this->is_acquiring ) {
+-      logwrite( function, "ERROR cannot close while acquisition in progress" );
+-      return ERROR;
+-    }
++    // closing the shutter will necessarily stop any acquisition in progress
++    //
++    this->set_shutter( "close" );
+ 
++    // close the AndorMCD system down
++    //
+     this->is_andor_open=false;
+     ShutDown();
+ 
+@@ -1421,38 +1708,56 @@ namespace Andor {
+   /***** Andor::Interface::abort_acquisition **********************************/
+ 
+ 
+-  /***** Andor::Interface::shutter ********************************************/
++  /***** Andor::Interface::set_shutter ****************************************/
+   /**
+    * @brief      set shutter open/close/auto by string
+    * @param[in]  state  string can be { auto open close }
+    * @return     ERROR or NO_ERROR
+    *
++   * This function is overridden
++   *
+    */
+-  long Interface::shutter( const std::string &state ) {
+-    std::string function = "Andor::Interface::shutter";
++  long Interface::set_shutter( const std::string &state ) {
++    std::string function = "Andor::Interface::set_shutter";
+     std::stringstream message;
++    long error;
+ 
+     if ( ! this->is_andor_open ) {
+       logwrite( function, "ERROR camera not open" );
+       return ERROR;
+     }
+ 
+-    long error;
++    if ( state != "auto" && state != "open" && state != "close" ) {
++      logwrite( function, "ERROR expected { auto open close }" );
++      return ERROR;
++    }
++
++    // stop acquiring
++    //
++    int status;
++    error = ( andor ? andor->_GetStatus( status ) : ERROR );
++    if ( error==NO_ERROR && status == DRV_ACQUIRING ) {
++      error = ( andor ? andor->_AbortAcquisition() : ERROR );
++    }
++
++    // Get the minimum opening and closing times which are required
++    // when setting the shutter to auto.
++    //
++    int closingtime, openingtime;
++    error = ( andor ? andor->_GetShutterMinTimes( closingtime, openingtime ) : ERROR );
+ 
++    // Set shutter based on requested state
++    //
+     if ( state == "auto" ) {
+-      error = ( andor ? andor->_SetShutter( 1, 0, 50, 50 ) : ERROR );
++      error |= ( andor ? andor->_SetShutter( 1, 0, closingtime, openingtime ) : ERROR );
+     }
+     else
+     if ( state == "open" ) {
+-      error = ( andor ? andor->_SetShutter( 1, 2, 0, 0 ) : ERROR );
++      error |= ( andor ? andor->_SetShutter( 1, 1, 0, 0 ) : ERROR );
+     }
+     else
+     if ( state == "close" ) {
+-      error = ( andor ? andor->_SetShutter( 0, 2, 0, 0 ) : ERROR );
+-    }
+-    else {
+-      error = ERROR;
+-      message << "ERROR invalid state \"" << state << "\": expected { auto open close }";
++      error |= ( andor ? andor->_SetShutter( 1, 2, 0, 0 ) : ERROR );
+     }
+ 
+     if ( error == NO_ERROR ) message << "shutter set to " << state;
+@@ -1461,7 +1766,7 @@ namespace Andor {
+ 
+     return error;
+   }
+-  /***** Andor::Interface::start_acquisition **********************************/
++  /***** Andor::Interface::set_shutter ****************************************/
+ 
+ 
+   /***** Andor::Interface::set_shutter ****************************************/
+@@ -1473,6 +1778,8 @@ namespace Andor {
+    * @param[in]  openingtime  time shutter takes to open in msec
+    * @return     ERROR or NO_ERROR
+    *
++   * This function is overridden
++   *
+    */
+   long Interface::set_shutter( const int type, const int mode, const int closingtime, const int openingtime ) {
+     std::string function = "Andor::Interface::set_shutter";
+@@ -1652,6 +1959,48 @@ namespace Andor {
+   /***** Andor::Interface::get_speeds *****************************************/
+ 
+ 
++  /***** Andor::Interface::hspeed *********************************************/
++  /**
++   * @brief      set/get the horizontal shift speed
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::hspeed( const std::string args, std::string &retstring ) {
++    std::string function = "Andor::Interface::hspeed";
++    std::stringstream message;
++    long error = NO_ERROR;
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    // if an arg was supplied then convert it to float and use that to
++    // set the hsspeed
++    //
++    if ( !args.empty() ) {
++      try {
++        error = this->set_hsspeed( std::stof( args ) );
++      }
++      catch( const std::exception &e ) {
++        message.str(""); message << "ERROR parsing speed " << args << ": " << e.what();
++        logwrite( function, message.str() );
++        error = ERROR;
++      }
++    }
++
++    // return the speed in MHz, whether or not an arg was supplied
++    //
++    message.str(""); message << this->camera_info.hspeed;
++    retstring = message.str();
++    message << " MHz";
++    logwrite( function, message.str() );
++
++    return error;
++  }
++  /***** Andor::Interface::hspeed *********************************************/
++
++
+   /***** Andor::Interface::set_hsspeed ****************************************/
+   /**
+    * @brief      set horizontal shift speed
+@@ -2156,6 +2505,172 @@ namespace Andor {
+   /***** Andor::Interface::get_temperature ************************************/
+ 
+ 
++  /***** Andor::Interface::set_kinetic_cycle_time *****************************/
++  /**
++   * @brief      set kinetic cycle time
++   * @param[in]  time
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::set_kinetic_cycle_time( float time ) {
++    std::string function = "Andor::Interface::set_kinetic_cycle_time";
++    std::stringstream message;
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    if ( time < 0 ) {
++      logwrite( function, "ERROR time can't be negative" );
++      return ERROR;
++    }
++
++    long error = ( andor ? andor->_SetKineticCycleTime( time ) : ERROR );
++
++    return error;
++  }
++  /***** Andor::Interface::set_kinetic_cycle_time *****************************/
++
++
++  /***** Andor::Interface::set_number_accumulations ***************************/
++  /**
++   * @brief      set number of accumulations
++   * @param[in]  number  number of scans to accumulate
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::set_number_accumulations( int number ) {
++    std::string function = "Andor::Interface::set_number_accumulations";
++    std::stringstream message;
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    if ( number < 0 ) {
++      logwrite( function, "ERROR number can't be negative" );
++      return ERROR;
++    }
++
++    long error = ( andor ? andor->_SetNumberAccumulations( number ) : ERROR );
++
++    return error;
++  }
++  /***** Andor::Interface::set_number_accumulations ***************************/
++
++
++  /***** Andor::Interface::set_accumulation_cycle_time ************************/
++  /**
++   * @brief      set accumulation cycle time
++   * @param[in]  time  accumulation cycle time in seconds
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::set_accumulation_cycle_time( float time ) {
++    std::string function = "Andor::Interface::set_accumulation_cycle_time";
++    std::stringstream message;
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    if ( time < 0 ) {
++      logwrite( function, "ERROR time can't be negative" );
++      return ERROR;
++    }
++
++    long error = ( andor ? andor->_SetAccumulationCycleTime( time ) : ERROR );
++
++    return error;
++  }
++  /***** Andor::Interface::set_accumulation_cycle_time ************************/
++
++
++  /***** Andor::Interface::set_number_kinetics ********************************/
++  /**
++   * @brief      set number of kinetic scans
++   * @param[in]  number  number of scans to accumulate
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::set_number_kinetics( int number ) {
++    std::string function = "Andor::Interface::set_number_kinetics";
++    std::stringstream message;
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    if ( number < 0 ) {
++      logwrite( function, "ERROR number can't be negative" );
++      return ERROR;
++    }
++
++    long error = ( andor ? andor->_SetNumberKinetics( number ) : ERROR );
++
++    return error;
++  }
++  /***** Andor::Interface::set_number_kinetics ********************************/
++
++
++  /***** Andor::Interface::set_frame_transfer *********************************/
++  /**
++   * @brief      set frame transfer mode
++   * @param[in]  mode  on | off
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::set_frame_transfer( std::string mode ) {
++    std::string function = "Andor::Interface::set_frame_transfer";
++    std::stringstream message;
++    int imode;
++
++    // check input and camera open
++    //
++    if ( mode.empty() || ( mode != "on" && mode != "off" ) ) {
++      logwrite( function, "ERROR expected on | off" );
++      return ERROR;
++    }
++    else imode = ( mode == "on" ? 1 : 0 );
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    // Verify that FrameTransfer is supported
++    //
++    AndorCapabilities caps;
++    long error = ( andor ? andor->_GetCapabilities( &caps ) : ERROR );
++    if ( error == ERROR ) {
++      logwrite( function, "ERROR unable to read Andor capabilities" );
++      return ERROR;
++    }
++
++    if ( !(caps.ulFTReadModes & AC_ACQMODE_FRAMETRANSFER) ) {
++      logwrite( function, "ERROR frame transfer not supported" );
++      return ERROR;
++    }
++
++    // Set the mode now
++    //
++    error = ( andor ? andor->_SetFrameTransferMode( imode ) : ERROR );
++    if ( error == ERROR ) {
++      logwrite( function, "ERROR unable to set frame transfer mode" );
++      return ERROR;
++    }
++
++    logwrite( function, mode );
++
++    return NO_ERROR;
++  }
++  /***** Andor::Interface::set_frame_transfer *********************************/
++
++
+   /***** Andor::Interface::set_read_mode **************************************/
+   /**
+    * @brief      set read mode
+@@ -2243,13 +2758,42 @@ namespace Andor {
+   /***** Andor::Interface::set_acquisition_mode *******************************/
+ 
+ 
++  /***** Andor::Interface::wait_for_acquisition *******************************/
++  /**
++   * @brief      wait for acquisition on this camera handle, with timeout
++   * @param[in]  timeout  timeout in msec
++   * @return     ERROR or NO_ERROR
++   *
++   */
++  long Interface::wait_for_acquisition( int timeout ) {
++    std::string function = "Andor::Interface::wait_for_acquisition";
++    std::stringstream message;
++
++    if ( timeout < 0 ) {
++      logwrite( function, "ERROR timeout cannot be negative" );
++      return ERROR;
++    }
++
++    if ( ! this->is_andor_open ) {
++      logwrite( function, "ERROR camera not open" );
++      return ERROR;
++    }
++
++    long error = ( andor ? andor->_WaitForAcquisitionByHandleTimeOut( this->handle, timeout ) : ERROR );
++
++    return error;
++  }
++  /***** Andor::Interface::wait_for_acquisition *******************************/
++
++
+   /***** Andor::Interface::get_recent *****************************************/
+   /**
+    * @brief      get the most recent image
++   * @param[in]  timeout  timeout in msec
+    * @return     ERROR or NO_ERROR
+    *
+    */
+-  long Interface::get_recent() {
++  long Interface::get_recent( int timeout ) {
+     std::string function = "Andor::Interface::get_recent";
+     std::stringstream message;
+     long error = NO_ERROR;
+@@ -2266,6 +2810,10 @@ namespace Andor {
+       return ERROR;
+     }
+ 
++    // Wait for acquisition, this camera, with timeout
++    //
++    error = this->wait_for_acquisition(timeout);
++
+     // Get the acquired image
+     //
+     std::lock_guard<std::mutex> lock( image_data_mutex );
+@@ -2328,7 +2876,8 @@ namespace Andor {
+     error = ( andor ? andor->_GetStatus( status ) : ERROR );
+     while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = ( andor ? andor->_GetStatus( status ) : ERROR );
+     }
+-    // acquire_state cleared
++    // ^^ acquire_state cleared upon leaving this scope ^^
++
+ 
+     // Get the acquired image
+     //
+@@ -2581,6 +3130,16 @@ return NO_ERROR;
+       return ERROR;
+     }
+ 
++    // Check if acquisition in progress.
++    // If acquiring (and exptime not empty) then stop while changing the exptime.
++    // If exptime is empty then this is only a query.
++    //
++    int orig_acquire_status;
++    error = ( andor ? andor->_GetStatus( orig_acquire_status ) : ERROR );
++    if ( error==NO_ERROR && !exptime.empty() && orig_acquire_status==DRV_ACQUIRING ) {
++      error = ( andor ? andor->_AbortAcquisition() : ERROR );
++    }
++
+     // If an exposure time was passed in then
+     // try to convert it (string) to a double
+     //
+@@ -2593,6 +3152,11 @@ return NO_ERROR;
+           error = ( andor ? andor->_SetExposureTime( exptime_try ) : ERROR );
+           if ( error==NO_ERROR && exptime_try != NAN ) this->camera_info.exposure_time = exptime_try;
+         }
++        // Turn acquisition back on if it was previously on
++        //
++        if ( error==NO_ERROR && orig_acquire_status == DRV_ACQUIRING ) {
++          error = ( andor ? andor->_StartAcquisition() : ERROR );
++        }
+       }
+       catch ( std::invalid_argument &e ) {
+         message.str(""); message << "ERROR: unable to convert exposure time: " << exptime << " to double";
+@@ -2608,10 +3172,20 @@ return NO_ERROR;
+       }
+     }
+ 
+-    retstring = ( error ? "not_set" : std::to_string( this->camera_info.exposure_time ) );
++    // Now must get the actual exposure timings from the camera
++    //
++    float exp=NAN;
++    float acc=NAN;
++    float kin=NAN;
++    error |= ( andor ? andor->_GetAcquisitionTimings( exp, acc, kin ) : ERROR );
++
++    this->camera_info.exposure_time = exp;
+ 
+-    message.str(""); message << "exposure time is " << retstring << ( error ? "" : " sec" );
++    message.str(""); message << exp << " " << acc << " " << kin << " sec";
+     logwrite(function, message.str());
++
++    retstring = message.str();
++
+     return error;
+   }
+   /***** Andor::Interface::set_exptime ****************************************/
+diff --git a/Andor/andor.h b/Andor/andor.h
+index 7dfb2ee..598201b 100644
+--- a/Andor/andor.h
++++ b/Andor/andor.h
+@@ -165,10 +165,11 @@ namespace Andor {
+   class AndorBase {
+     public:
+       virtual ~AndorBase() {}
++      virtual long _GetCapabilities( AndorCapabilities* caps ) = 0;
+       virtual long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) = 0;
+       virtual long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) = 0;
+       virtual long _GetAvailableCameras( int &number ) = 0;
+-      virtual long _GetCameraHandle( int index, int* handle ) = 0;
++      virtual long _GetCameraHandle( int index, int &handle ) = 0;
+       virtual long _GetCameraSerialNumber( int &number ) = 0;
+       virtual long _GetDetector( int &xpix, int &ypix ) = 0;
+       virtual long _GetStatus( std::string &status ) = 0;
+@@ -185,6 +186,7 @@ namespace Andor {
+       virtual long _GetEMCCDGain( int &gain ) = 0;
+       virtual long _GetEMGainRange( int &low, int &high ) = 0;
+       virtual long _SetOutputAmplifier( int type ) = 0;
++      virtual long _SetFrameTransferMode( int mode ) = 0;
+       virtual long _GetTemperature( int &temp, std::string_view &status ) = 0;
+       virtual long _GetTemperatureRange( int &min, int &max ) = 0;
+       virtual long _CoolerON() = 0;
+@@ -196,13 +198,20 @@ namespace Andor {
+       virtual long _SetCurrentCamera( int handle ) = 0;
+       virtual long _SetExposureTime( double exptime ) = 0;
+       virtual long _SetKineticCycleTime( float time ) = 0;
++      virtual long _SetNumberAccumulations( int number ) = 0;
++      virtual long _SetAccumulationCycleTime( float time ) = 0;
++      virtual long _SetNumberKinetics( int number ) = 0;
++      virtual long _GetAcquisitionTimings( float &exp, float &acc, float &kin ) = 0;
+       virtual long _SetImageFlip( int hflip, int vflip ) = 0;
+       virtual long _SetImageRotate( int rotdir ) = 0;
+       virtual long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) = 0;
+       virtual long _SetReadMode( int mode ) = 0;
++      virtual long _GetShutterMinTimes( int &minclosing, int &minopening ) = 0;
+       virtual long _SetShutter( int type, int mode, int closetime, int opentime ) = 0;
+       virtual long _AbortAcquisition( ) = 0;
+       virtual long _StartAcquisition( ) = 0;
++      virtual long _WaitForAcquisition( ) = 0;
++      virtual long _WaitForAcquisitionByHandleTimeOut( long handle, int timeout ) = 0;
+   };
+   /***** Andor::AndorBase *****************************************************/
+ 
+@@ -216,10 +225,11 @@ namespace Andor {
+    */
+   class SDK : public AndorBase {
+     public:
++      long _GetCapabilities( AndorCapabilities* caps ) override;
+       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
+       long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) override;
+       long _GetAvailableCameras( int &number ) override;
+-      long _GetCameraHandle( int index, int* handle ) override;
++      long _GetCameraHandle( int index, int &handle ) override;
+       long _GetCameraSerialNumber( int &number ) override;
+       long _GetDetector( int &xpix, int &ypix ) override;
+       long _GetStatus( std::string &status ) override;
+@@ -236,6 +246,7 @@ namespace Andor {
+       long _GetEMCCDGain( int &gain ) override;
+       long _GetEMGainRange( int &low, int &high ) override;
+       long _SetOutputAmplifier( int type ) override;
++      long _SetFrameTransferMode( int mode ) override;
+       long _GetTemperature( int &temp, std::string_view &status ) override;
+       long _GetTemperatureRange( int &min, int &max ) override;
+       long _CoolerON() override;
+@@ -247,13 +258,20 @@ namespace Andor {
+       long _SetCurrentCamera( int handle ) override;
+       long _SetExposureTime( double exptime ) override;
+       long _SetKineticCycleTime( float time ) override;
++      long _SetNumberAccumulations( int number ) override;
++      long _SetAccumulationCycleTime( float time ) override;
++      long _SetNumberKinetics( int number ) override;
++      long _GetAcquisitionTimings( float &exp, float &acc, float &kin ) override;
+       long _SetImageFlip( int hflip, int vflip ) override;
+       long _SetImageRotate( int rotdir ) override;
+       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
+       long _SetReadMode( int mode ) override;
++      long _GetShutterMinTimes( int &minclosing, int &minopening ) override;
+       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
+       long _AbortAcquisition( ) override;
+       long _StartAcquisition( ) override;
++      long _WaitForAcquisition( ) override;
++      long _WaitForAcquisitionByHandleTimeOut( long handle, int timeout ) override;
+   };
+   /***** Andor::SDK ***********************************************************/
+ 
+@@ -277,10 +295,11 @@ namespace Andor {
+ 
+       inline double get_exptime() { return this->exptime; }
+ 
++      long _GetCapabilities( AndorCapabilities* caps ) override;
+       long _GetAcquiredData16( uint16_t* buf, unsigned long bufsize ) override;
+       long _GetMostRecentImage16( uint16_t* buf, unsigned long bufsize ) override;
+       long _GetAvailableCameras( int &number ) override;
+-      long _GetCameraHandle( int index, int* handle ) override;
++      long _GetCameraHandle( int index, int &handle ) override;
+       long _GetCameraSerialNumber( int &number ) override;
+       long _GetDetector( int &xpix, int &ypix ) override;
+       long _GetStatus( std::string &status ) override;
+@@ -297,6 +316,7 @@ namespace Andor {
+       long _GetEMCCDGain( int &gain ) override;
+       long _GetEMGainRange( int &low, int &high ) override;
+       long _SetOutputAmplifier( int type ) override;
++      long _SetFrameTransferMode( int mode ) override;
+       long _GetTemperature( int &temp, std::string_view &status ) override;
+       long _GetTemperatureRange( int &min, int &max ) override;
+       long _CoolerON() override;
+@@ -308,13 +328,20 @@ namespace Andor {
+       long _SetCurrentCamera( int handle ) override;
+       long _SetExposureTime( double exptime ) override;
+       long _SetKineticCycleTime( float time ) override;
++      long _SetNumberAccumulations( int number ) override;
++      long _SetAccumulationCycleTime( float time ) override;
++      long _SetNumberKinetics( int number ) override;
++      long _GetAcquisitionTimings( float &exp, float &acc, float &kin ) override;
+       long _SetImageFlip( int hflip, int vflip ) override;
+       long _SetImageRotate( int rotdir ) override;
+       long _SetImage( int hbin, int vbin, int hstart, int hend, int vstart, int vend ) override;
+       long _SetReadMode( int mode ) override;
++      long _GetShutterMinTimes( int &minclosing, int &minopening ) override;
+       long _SetShutter( int type, int mode, int closetime, int opentime ) override;
+       long _AbortAcquisition( ) override;
+       long _StartAcquisition( ) override;
++      long _WaitForAcquisition( ) override;
++      long _WaitForAcquisitionByHandleTimeOut( long handle, int timeout ) override;
+ 
+       SkySim skysim;
+   };
+@@ -344,6 +371,7 @@ namespace Andor {
+       uint16_t* image_data;
+       std::atomic<bool> err;
+       std::map<int,int> device_map;  ///< map of device numbers indexed by serial number
++      int handle;
+ 
+     public:
+       Andor::SDK sdk;             ///< object for the real Andor SDK
+@@ -356,7 +384,7 @@ namespace Andor {
+        *
+        */
+       Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( false ),
+-                    andor( &sdk ), image_data( nullptr ), err( false ), emulator( -1 ) { }
++                    andor( &sdk ), image_data( nullptr ), err( false ), handle(-1), emulator( -1 ) { }
+       /***** Andor::Interface::Interface **************************************/
+ 
+       /***** Andor::Interface::Interface **************************************/
+@@ -365,7 +393,7 @@ namespace Andor {
+        *
+        */
+       Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
+-                            andor( &sdk ), image_data( nullptr ), err( false ), emulator( sn ) { }
++                            andor( &sdk ), image_data( nullptr ), err( false ), handle(-1), emulator( sn ) { }
+       /***** Andor::Interface::Interface **************************************/
+ 
+       /**
+@@ -443,11 +471,12 @@ namespace Andor {
+       long open( std::string args );
+       long close();
+       long test();
+-      long shutter( const std::string &state );
++      long set_shutter( const std::string &state );
+       long set_shutter( const int type, const int mode, const int closingtime, const int openingtime );
+       long set_exptime( int exptime );
+       long set_exptime( std::string exptime, std::string &retstring );
+-      long get_recent();
++      long wait_for_acquisition( int timeout );
++      long get_recent(int timeout);
+       long acquire_one();
+       long save_acquired( std::string wcs_in, std::string &imgname );
+       long save_acquired( std::string wcs_in, std::string &imgname, const int simsize );
+@@ -459,12 +488,18 @@ namespace Andor {
+       long set_temperature( int temp );
+       long get_temperature( int &temp );
+       long get_temperature();
++      long set_kinetic_cycle_time( float time );
++      long set_number_accumulations( int number );
++      long set_accumulation_cycle_time( float time );
++      long set_number_kinetics( int number );
++      long set_frame_transfer( std::string mode );
+       long set_read_mode( int mode );
+       long set_acquisition_mode( int mode );
+       long set_output_amplifier( int type );
+       long set_emgain( int gain );
+       long get_emgain_range( int &low, int &high );
+       long get_emgain( int &gain );
++      long hspeed( const std::string args, std::string &retstring );
+       long set_hsspeed( float speed );
+       long set_vsspeed( float speed );
+       long set_image( int hbin, int vbin, int hstart, int hend, int vstart, int vend );
+diff --git a/Andor/andor_emulator.cpp b/Andor/andor_emulator.cpp
+index c6a54cc..20dc5e6 100644
+--- a/Andor/andor_emulator.cpp
++++ b/Andor/andor_emulator.cpp
+@@ -19,6 +19,21 @@ namespace Andor {
+   std::vector<float> sim_vsspeeds = { 0.6, 1.13, 2.2, 4.33 };
+ 
+ 
++  /***** Andor::Emulator::_GetCapabilities ************************************/
++  /**
++   * @brief      wrapper for GetCapabilities.
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_GetCapabilities( AndorCapabilities* caps ) {
++    std::string function = "Andor::Emulator::_GetCapabilities";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_GetCapabilities ************************************/
++
++
+   /***** Andor::Emulator::_GetAcquiredData16 **********************************/
+   /**
+    * @brief      
+@@ -87,7 +102,7 @@ namespace Andor {
+    * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+    *
+    */
+-  long Emulator::_GetCameraHandle( int index, int* handle ) {
++  long Emulator::_GetCameraHandle( int index, int &handle ) {
+     std::string function = "Andor::Emulator::_GetCameraHandle";
+     std::stringstream message;
+ 
+@@ -450,6 +465,22 @@ namespace Andor {
+   /***** Andor::Emulator::_SetOutputAmplifier *********************************/
+ 
+ 
++  /***** Andor::Emulator::_SetFrameTransferMode *******************************/
++  /**
++   * @brief      wrapper for Andor Sim SetFrameTransferMode
++   * @param[in]  mode  1=on 0=off
++   * @return     NO_ERROR or ERROR
++   *
++   */
++  long Emulator::_SetFrameTransferMode( int mode ) {
++    std::string function = "Andor::Emulator::_SetFrameTransferMode";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_SetFrameTransferMode *******************************/
++
++
+   /***** Andor::Emulator::_GetTemperature *************************************/
+   /**
+    * @brief      wrapper for Andor Sim GetTemperature
+@@ -670,6 +701,72 @@ namespace Andor {
+   /***** Andor::Emulator::_SetKineticCycleTime ********************************/
+ 
+ 
++  /***** Andor::Emulator::_SetNumberAccumulations *****************************/
++  /**
++   * @brief      wrapper for Andor Sim SetNumberAccumulations
++   * @param[in]  number
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_SetNumberAccumulations( int number ) {
++    std::string function = "Andor::Emulator::_SetNumberAccumulations";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_SetNumberAccumulations *****************************/
++
++
++  /***** Andor::Emulator::_SetAccumulationCycleTime ***************************/
++  /**
++   * @brief      wrapper for Andor Sim SetAccumulationCycleTime
++   * @param[in]  time
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_SetAccumulationCycleTime( float time ) {
++    std::string function = "Andor::Emulator::_SetAccumulationCycleTime";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_SetAccumulationCycleTime ***************************/
++
++
++  /***** Andor::Emulator::_SetNumberKinetics **********************************/
++  /**
++   * @brief      wrapper for Andor Sim SetNumberKinetics
++   * @param[in]  number
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_SetNumberKinetics( int number ) {
++    std::string function = "Andor::Emulator::_SetNumberKinetics";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_SetNumberKinetics **********************************/
++
++
++  /***** Andor::Emulator::__GetAcquisitionTimings *****************************/
++  /**
++   * @brief      wrapper for Andor Sim GetAcquisitionTimings
++   * @param[out] exp  valid exposure time in seconds
++   * @param[out] acc  valid accumulate cycle time in seconds
++   * @param[out] kin  valid kinetic cycle time in seconds
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_GetAcquisitionTimings( float &exp, float &acc, float &kin ) {
++    std::string function = "Andor::Emulator::_GetAcquisitionTimings";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_GetAcquisitionTimings ******************************/
++
++
+   /***** Andor::Emulator::_SetImageFlip ***************************************/
+   /**
+    * @brief      wrapper for Andor Sim SetImageFlip
+@@ -756,6 +853,23 @@ namespace Andor {
+   /***** Andor::Emulator::_SetReadMode ****************************************/
+ 
+ 
++  /***** Andor::Emulator::_GetShutterMinTimes *********************************/
++  /**
++   * @brief      wrapper for Andor Sim GetShutterMinTimes
++   * @param[out] minclosing
++   * @param[out] minopening
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_GetShutterMinTimes( int &minclosing, int &minopening ) {
++    std::string function = "Andor::Emulator::__GetShutterMinTimes";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_GetShutterMinTimes *********************************/
++
++
+   /***** Andor::Emulator::_SetShutter *****************************************/
+   /**
+    * @brief      wrapper for Andor Sim SetShutter
+@@ -790,7 +904,7 @@ namespace Andor {
+ 
+     return NO_ERROR;
+   }
+-  /***** Andor::Emulator::_StartAcquisition ***********************************/
++  /***** Andor::Emulator::_AbortAcquisition ***********************************/
+ 
+ 
+   /***** Andor::Emulator::_StartAcquisition ***********************************/
+@@ -810,6 +924,40 @@ namespace Andor {
+   /***** Andor::Emulator::_StartAcquisition ***********************************/
+ 
+ 
++  /***** Andor::Emulator::_WaitForAcquisition *********************************/
++  /**
++   * @brief      wrapper for Andor Sim WaitForAcquisition
++   * @details    starts the acquisition
++   * @details    this simply checks return value
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_WaitForAcquisition() {
++    std::string function = "Andor::Emulator::_WaitForAcquisition";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_WaitForAcquisition *********************************/
++
++
++  /***** Andor::Emulator::_WaitForAcquisitionByHandleTimeOut ******************/
++  /**
++   * @brief      wrapper for Andor Sim WaitForAcquisitionByHandleTimeOut
++   * @details    starts the acquisition
++   * @details    this simply checks return value
++   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
++   *
++   */
++  long Emulator::_WaitForAcquisitionByHandleTimeOut( long handle, int timeout ) {
++    std::string function = "Andor::Emulator::_WaitForAcquisitionByHandleTimeOut";
++    std::stringstream message;
++
++    return NO_ERROR;
++  }
++  /***** Andor::Emulator::_WaitForAcquisitionByHandleTimeOut ******************/
++
++
+   /***** Andor::SkySim::initialize_python *************************************/
+   /**
+    * @brief      initializes the Python skysim module

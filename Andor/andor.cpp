@@ -311,6 +311,65 @@ namespace Andor {
   /***** Andor::SDK::_GetStatus ***********************************************/
 
 
+  /***** Andor::SDK::_GetTotalNumberImagesAcquired ****************************/
+  /**
+   * @brief      wrapper for Andor SDK GetTotalNumberImagesAcquired
+   * @details    This function will return the total number of images acquired
+   *             since the current acquisition started. If the camera is idle
+   *             the value returned is the number of images acquired during
+   *             the last acquisition.
+   * @param[out] index  reference to return number of images
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long SDK::_GetTotalNumberImagesAcquired( at_32 &index ) {
+    std::string function = "Andor::SDK::_GetTotalNumberImagesAcquired";
+    std::stringstream message;
+
+    unsigned int ret = GetTotalNumberImagesAcquired( &index );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         message << index; break;
+      case DRV_NOT_INITIALIZED: message << "ERROR not initialized"; break;
+      default:                  message << "ERROR unrecognized status code " << ret;
+    }
+
+    logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_GetTotalNumberImagesAcquired ****************************/
+
+
+  /***** Andor::SDK::_GetSizeOfCircularBuffer *********************************/
+  /**
+   * @brief      wrapper for Andor SDK GetSizeOfCircularBuffer
+   * @details    This function will return the maximum number of images the
+   *             circular buffer can store based on the current acquisition
+   *             settings.
+   * @param[out] index  reference to return size of buffer
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long SDK::_GetSizeOfCircularBuffer( at_32 &index ) {
+    std::string function = "Andor::SDK::_GetSizeOfCircularBuffer";
+    std::stringstream message;
+
+    unsigned int ret = GetSizeOfCircularBuffer( &index );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         message << index; break;
+      case DRV_NOT_INITIALIZED: message << "ERROR not initialized"; break;
+      default:                  message << "ERROR unrecognized status code " << ret;
+    }
+
+    logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_GetSizeOfCircularBuffer *********************************/
+
+
   /***** Andor::SDK::_GetNumberADChannels *************************************/
   /**
    * @brief      wrapper for Andor SDK GetNumberADChannels
@@ -2033,6 +2092,44 @@ namespace Andor {
   /***** Andor::Interface::get_status *****************************************/
 
 
+  /***** Andor::Interface::get_buffer_counts **********************************/
+  /**
+   * @brief      get the horizontal and vertical shift speeds
+   * @details    This reads all allowed clocking speeds and stores them in
+   *             vectors in the class.
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::get_buffer_counts() {
+    std::string function = "Andor::Interface::get_buffer_counts";
+    std::stringstream message;
+
+    long error = NO_ERROR;
+
+    if ( ! this->is_andor_open ) {
+      logwrite( function, "ERROR camera not open" );
+      return ERROR;
+    }
+
+    // for multiple camera systems it is necessary to force the handle!
+    //
+    select_camera(this->_handle);
+
+    // Get Number of AD Chans and HS Speeds if needed
+    //
+    at_32 numbuf=-1;
+    at_32 sizebuf=-1;
+    error |= ( andor ? andor->_GetTotalNumberImagesAcquired( numbuf ) : ERROR );
+    error |= ( andor ? andor->_GetSizeOfCircularBuffer( sizebuf ) : ERROR );
+
+    message.str(""); message << "total acquired=" << numbuf << " bufsize=" << sizebuf;
+    logwrite( function, message.str() );
+
+    return error;
+  }
+  /***** Andor::Interface::get_buffer_counts **********************************/
+
+
   /***** Andor::Interface::get_speeds *****************************************/
   /**
    * @brief      get the horizontal and vertical shift speeds
@@ -2044,11 +2141,6 @@ namespace Andor {
   long Interface::get_speeds() {
     std::string function = "Andor::Interface::get_speeds";
     std::stringstream message;
-
-    if ( ! this->is_andor_open ) {
-      logwrite( function, "ERROR camera not open" );
-      return ERROR;
-    }
 
     long error = NO_ERROR;
 
@@ -3097,7 +3189,6 @@ namespace Andor {
   long Interface::get_recent( int timeout ) {
     std::string function = "Andor::Interface::get_recent";
     std::stringstream message;
-    long error = NO_ERROR;
 
     if ( ! this->is_andor_open ) {
       logwrite( function, "ERROR camera not open" );
@@ -3113,7 +3204,10 @@ namespace Andor {
 
     // Wait for acquisition, this camera, with timeout
     //
-    error = this->wait_for_acquisition(timeout);
+    if ( this->wait_for_acquisition(timeout) != NO_ERROR ) {
+      logwrite( function, "ERROR waiting for acquisition" );
+      return ERROR;
+    }
 
     // Get the acquired image
     //
@@ -3127,7 +3221,11 @@ namespace Andor {
     //
     select_camera(this->_handle);
 
-    if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
+    long error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
+    if ( error == ERROR ) {
+      logwrite( function, "ERROR getting most recent image" );
+      return ERROR;
+    }
 
     // Store the exposure start time
     //
@@ -3137,7 +3235,7 @@ namespace Andor {
 
 //  if (error==NO_ERROR) error = sdk._GetTemperature();
 
-    return error;
+    return NO_ERROR;
   }
   /***** Andor::Interface::get_recent *****************************************/
 
@@ -3247,7 +3345,6 @@ namespace Andor {
 
     // Get the acquired image
     //
-    logwrite( function, message.str() );
     std::lock_guard<std::mutex> lock( image_data_mutex );
     if ( this->image_data == nullptr ) {
       logwrite( function, "ERROR image_data buffer not initialized: no image saved" );

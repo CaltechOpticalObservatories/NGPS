@@ -221,6 +221,34 @@ namespace Andor {
   /***** Andor::Emulator::_GetStatus ******************************************/
 
 
+  /***** Andor::Emulator::_GetTotalNumberImagesAcquired ***********************/
+  /**
+   * @brief      wrapper for Andor Sim GetTotalNumberImagesAcquired
+   * @details    returns the number of AD converter channels available
+   * @param[out] channels  reference to return number of channels
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long Emulator::_GetTotalNumberImagesAcquired( at_32 &index ) {
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_GetTotalNumberImagesAcquired ***********************/
+
+
+  /***** Andor::Emulator::_GetSizeOfCircularBuffer ****************************/
+  /**
+   * @brief      wrapper for Andor Sim GetSizeOfCircularBuffer
+   * @details    returns the number of AD converter channels available
+   * @param[out] channels  reference to return number of channels
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long Emulator::_GetSizeOfCircularBuffer( at_32 &index ) {
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_GetSizeOfCircularBuffer ****************************/
+
+
   /***** Andor::Emulator::_GetNumberADChannels ********************************/
   /**
    * @brief      wrapper for Andor Sim GetNumberADChannels

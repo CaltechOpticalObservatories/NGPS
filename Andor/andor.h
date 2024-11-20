@@ -181,6 +181,8 @@ namespace Andor {
       virtual long _GetStatus( std::string &status ) = 0;
       virtual long _GetStatus( int &status_id ) = 0;
       virtual long _GetStatus( int &status_id, std::string &status_msg ) = 0;
+      virtual long _GetTotalNumberImagesAcquired( at_32 &index ) = 0;
+      virtual long _GetSizeOfCircularBuffer( at_32 &index ) = 0;
       virtual long _GetNumberADChannels( int &channels ) = 0;
       virtual long _GetNumberHSSpeeds( int chan, int type, int &speeds ) = 0;
       virtual long _GetNumberVSSpeeds( int &speeds ) = 0;
@@ -243,6 +245,8 @@ namespace Andor {
       long _GetStatus( std::string &status ) override;
       long _GetStatus( int &status_id ) override;
       long _GetStatus( int &status_id, std::string &status_msg ) override;
+      long _GetTotalNumberImagesAcquired( at_32 &index ) override;
+      long _GetSizeOfCircularBuffer( at_32 &index ) override;
       long _GetNumberADChannels( int &channels ) override;
       long _GetNumberHSSpeeds( int chan, int type, int &speeds ) override;
       long _GetNumberVSSpeeds( int &speeds ) override;
@@ -329,6 +333,8 @@ namespace Andor {
       long _GetStatus( std::string &status ) override;
       long _GetStatus( int &status_id ) override;
       long _GetStatus( int &status_id, std::string &status_msg ) override;
+      long _GetTotalNumberImagesAcquired( at_32 &index ) override;
+      long _GetSizeOfCircularBuffer( at_32 &index ) override;
       long _GetNumberADChannels( int &channels ) override;
       long _GetNumberHSSpeeds( int chan, int type, int &speeds ) override;
       long _GetNumberVSSpeeds( int &speeds ) override;
@@ -520,6 +526,7 @@ namespace Andor {
       unsigned int start_acquisition();
       long get_detector( int &x, int &y );
       long get_status();
+      long get_buffer_counts();
       long get_speeds();
       long set_temperature( int temp );
       long get_temperature( int &temp );
