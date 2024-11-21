@@ -15,19 +15,19 @@ JOG SETTINGS
 button
 $param(jogSettings) ; scam jogset $jog_arcsec # | $text
 #############
-NORTH
+UP
 *
 button
 echo scam jog N | $text
-SOUTH
+DOWN
 *
 button
 echo scam jog S | $text 
-EAST
+LEFT
 *
 button
 echo scam jog E | $text 
-WEST
+RIGHT
 *
 button
 echo scam jog W | $text
@@ -37,6 +37,11 @@ PUT ON SLIT
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh # | $text
 #############
+PUT ON ACAM
+*
+button
+$message(yesno,Move ACAM center to crosshairs?) # $dir/putonslit.sh # | $text
+############
 endbuttonbar
 #############
 #############
