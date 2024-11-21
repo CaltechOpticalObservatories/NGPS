@@ -179,9 +179,6 @@ namespace Power {
       }
 
       // Try to open the nps hardware interface.
-      // If the open fails, then remove that hardware from the map and continue.
-      // Yes, this means that unit will not be available, but if it failed to open
-      // then it's unavailable and this way the other devices can be accessed.
       //
       if ( iter->second.interface.open() != NO_ERROR ) {
         message.str(""); message << "ERROR opening connection to " << iter->second.interface.get_name();
@@ -354,14 +351,24 @@ namespace Power {
           err=nps.second.get_all( maxplugs, retstring ); // get plug status for all plugs in this unit
         }
 
-        std::vector<std::string> tokens;                    // retstring will be CSV format
-        Tokenize( retstring, tokens, "," );                 // so tokenize on comma to get each value
+        // Tokenize the retstring which is in CSV format.
+        // Each token is the plug status for this unit.
+        //
+        std::vector<std::string> tokens;
+        Tokenize( retstring, tokens, "," );
 
-        for ( int tok=0,plug=1; tok<tokens.size(); tok++,plug++ ) {
+        // loop over all plugs (not tokens in the retstring)
+        //
+        for ( int tok=0,plug=1; plug<maxplugs; tok++,plug++ ) {
+          // plugid is the index into the plugname map
           plugid.str(""); plugid << unit << " " << plug;
-          int status = std::stoi( tokens.at(tok) );
+
+          int status = (tok<tokens.size() ? std::stoi( tokens.at(tok) ) : -1 );
+
+          // status_string is the on/off/err state of this plug
           std::string status_string;
           if (err==ERROR) status_string="err"; else status_string=( status==1 ? "\e[1mon\e[0m " : "off" );
+
           message << plugid.str() << " " << status_string
                                   << " " << this->plugname[ plugid.str() ] << "\n";
           this->telemetry_map[this->plugname[plugid.str()]] = status;
