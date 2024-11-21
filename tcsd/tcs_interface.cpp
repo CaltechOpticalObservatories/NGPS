@@ -793,7 +793,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "FOCUSGO " << std::fixed << std::setprecision(2) << value;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, 60000 );
 
     return error;
   }
@@ -1449,6 +1449,9 @@ namespace TCS {
    *
    */
   long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type ) {
+    return send_command( cmd, retstring, conn_type, TIMEOUT );
+  }
+  long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type, int to ) {
     std::string function = "TCS::Interface::send_command";
     std::stringstream message;
     std::string sbuf;
@@ -1474,33 +1477,9 @@ namespace TCS {
 
     TcsIO &tcs = *(tcsloc->second);
 
-    auto conn = tcs.get_connection( conn_type );
-
-    // Is it connected?
-    //
-    if ( ! conn->sock.isconnected() ) {
-      message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to TCS " << this->name;
-      logwrite( function, message.str() );
-      tcs.return_connection( conn, conn_type );
-      return ERROR;
-    }
-
-//  std::optional<std::lock_guard<std::mutex>> lock;
-//  if ( block ) lock.emplace( this->query_mtx );
-    std::lock_guard<std::mutex> lock(this->query_mtx );
-
-    // TCS is good, send the command, read the reply
-    //
     std::string reply;
-/// if ( tcsloc->second->send( cmd, reply ) != NO_ERROR ) {
-    if ( conn->send_command( cmd, reply ) != NO_ERROR ) {
-      tcs.return_connection( conn, conn_type );
-      message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS";// on fd " << tcsloc->second->fd();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
 
-    tcs.return_connection( conn, conn_type );
+    long error = tcs.execute_command( cmd, reply, conn_type, to );
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.

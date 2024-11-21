@@ -101,6 +101,12 @@ namespace TCS {
   /***** TCS::TcsInfo *********************************************************/
 
 
+  /***** TCS::ConnectionPool **************************************************/
+  /**
+   * @class   ConnectionPool
+   * @brief   interface class provides the actual I/O for a TCS device
+   *
+   */
   class ConnectionPool {
     public:
       std::shared_ptr<Network::Interface> socket;
@@ -108,6 +114,8 @@ namespace TCS {
       bool isopen;
       ConnectionPool(std::shared_ptr<Network::Interface> c) : socket(std::move(c)), inuse(false), isopen(false) {}
   };
+  /***** TCS::ConnectionPool **************************************************/
+
 
   /***** TCS::TcsIO ***********************************************************/
   /**
@@ -132,9 +140,8 @@ namespace TCS {
       // socket connection for slow-response commands
       std::shared_ptr<Network::Interface> sock_slow;
       std::mutex mtx_slow;
+      std::atomic<bool> slow_inuse;
 
-      // pool for fast-response commands
-//    std::vector<std::shared_ptr<Network::Interface>> pool;
       std::mutex mtx_pool;
       std::condition_variable cv;
       const int TIMEOUT=3000;
@@ -146,19 +153,12 @@ namespace TCS {
           port(port),
           term_write(term_write),
           term_read(term_read),
-          sock_slow(std::make_shared<Network::Interface>(name, host, port, term_write, term_read))
-      {
-        /*
-          for ( size_t i=0; i < poolsize; ++i ) {
-            pool.emplace_back(std::make_shared<Network::Interface>(name, host, port, term_write, term_read));
-          }
-          logwrite( "TCS::TcsIO::TcsIO", "constructed TcsIO class for host "+host+":"+std::to_string(port) );
-          */
-      }
+          sock_slow(std::make_shared<Network::Interface>(name, host, port, term_write, term_read)),
+          slow_inuse(false) { }
 
-      static const size_t poolsize = 3;
+      static const size_t poolsize = 3;   ///< size of fast-response connection pool
 
-      std::vector<ConnectionPool> pool;
+      std::vector<ConnectionPool> pool;   ///< pool for fast-response commands
 
       long initialize_sockets() {
         logwrite( "TCS::TcsIO::initialize_sockets", name+" host "+host+":"+std::to_string(port) );
@@ -200,14 +200,13 @@ namespace TCS {
         if ( conn_type == TCS::SLOW_RESPONSE ) {
           // slow command, lock and return the slow command socket connection
           std::lock_guard<std::mutex> lock( mtx_slow );
-          logwrite( function, "slow command socket connection acquired on fd "
+          logwrite( function, "------------------------------------------------slow command socket connection acquired on fd "
                               +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           return sock_slow;
         }
         else {
           std::unique_lock<std::mutex> lock(mtx_pool);
           // fast command, take a socket connection from the pool
-
           while ( true ) {
             for ( auto &conn : pool ) {
               logwrite(function, "Checking connection: fd " + std::to_string(conn.socket->sock.getfd()) +
@@ -239,6 +238,42 @@ namespace TCS {
         }
       }
 
+      long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type ) {
+        return execute_command( cmd, reply, conn_type, TIMEOUT );
+      }
+      long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type, int timeout ) {
+        const std::string function="TCS::TcsIO::get_connection";
+        long ret=ERROR;
+
+        if ( conn_type == TCS::SLOW_RESPONSE ) {
+          // slow command
+          {
+          std::lock_guard<std::mutex> lock( mtx_slow );
+          logwrite( function, "----------------------------------------------- slow command socket connection acquired on fd "
+                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+          ret = sock_slow->send_command( cmd, reply, timeout );
+          }
+          logwrite( function, "+++++++++++++++++++++++++++++++++++++++++++++++ releasing slow command socket connection on fd "
+                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+          if (ret!=NO_ERROR) sock_slow->reconnect();
+          return ret;
+        }
+        else {
+          logwrite(function,"[DEBUG] ---------- asking for fast connection");
+          auto conn = this->get_connection( TCS::FAST_RESPONSE );
+          if (conn) {
+            logwrite(function,"[DEBUG] sending fast command");
+            ret = conn->send_command( cmd, reply );
+            logwrite(function,"[DEBUG] fast command sent");
+            logwrite(function,"[DEBUG] ++++++++++ returning fast connection");
+            return_connection( conn, TCS::FAST_RESPONSE );
+          }
+          else {logwrite(function,"[DEBUG] ++++++++++ failed to get fast connection");}
+          if (ret!=NO_ERROR) conn->reconnect();
+          return ret;
+        }
+      }
+
       // return a fast-response socket connection to the pool
       //
       void return_connection( std::shared_ptr<Network::Interface> sock, TCS::ConnectionType conn_type ) {
@@ -257,23 +292,6 @@ namespace TCS {
         }
         else logwrite( function, "slow socket connection available" );
       }
-
-/***
-      long execute_command(const std::string& command, std::string& response, TCS::ConnectionType conn_type ) {
-        auto conn = get_connection(conn_type);
-        if (!conn) {
-          logwrite("TCS::TcsIO::execute_command", "ERROR failed to acquire a socket connection");
-          return ERROR;
-        }
-
-        long error = conn->send_command(command, response);
-        if (conn_type==FAST_RESPONSE) {
-          return_connection(conn); // Return fast socket connections to the pool
-        }
-
-      return error;
-      }
-***/
 
       bool isconnected() {
         // Check if slow socket connection is connected, or if any connection in the pool is connected
@@ -327,47 +345,6 @@ namespace TCS {
 //    inline long send( std::string cmd, std::string &retstring ) { return tcs->send_command( cmd, retstring ); }
   };
   /***** TCS::TcsIO ***********************************************************/
-
-
-/****
-  class ConnectionPool {
-    public:
-      std::queue<std::shared_ptr<TcsIO>> slow_connections;
-      std::queue<std::shared_ptr<TcsIO>> fast_connections;
-
-      std::mutex pool_mutex;
-
-      ConnectionPool( size_t slow_count, size_t fast_count ) {
-        for ( size_t i=0; i<slow_count; ++i ) slow_connections.push( std::make_shared<TcsIO>(true) );
-        for ( size_t i=0; i<fast_count; ++i ) fast_connections.push( std::make_shared<TcsIO>(true) );
-      }
-
-      std::shared_ptr<TcsIO> get_connection( bool slow_command ) {
-        std::lock_guard<std::mutex> lock(pool_mutex);
-
-        auto &queue = slow_command ? slow_connections : fast_connections;
-
-        if ( ! queue.empty() ) {
-          auto conn = queue.front();
-          queue.pop();
-          return conn;
-        }
-        // return a new dynamic connection if pool is exhausted
-        //
-        return std::make_shared<TcsIO>();
-      }
-
-      void release_connection( bool slow_command, std::shared_ptr<TcsIO> conn ) {
-        if ( conn->is_persistent ) {
-          std::lock_guard<std::mutex> lock(pool_mutex);
-
-          auto &queue = slow_command ? slow_connections : fast_connections;
-          queue.push(conn);
-        }
-        // otherwise dynamic connections are destroyed when their shared ptr is released
-      }
-  };
-*****/
 
 
   /***** TCS::Interface *******************************************************/
@@ -432,6 +409,7 @@ namespace TCS {
       long pt_offset( std::string args, std::string &retstring );
       long ret_offsets( std::string args, std::string &retstring );
       long send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type );
+      long send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type, int to );
       long native( std::string args, std::string &retstring );
       long parse_reply_code( std::string codein, std::string &retstring );
       long parse_motion_code( std::string codein, std::string &retstring );
