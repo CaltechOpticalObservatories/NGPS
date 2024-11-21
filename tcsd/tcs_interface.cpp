@@ -232,50 +232,13 @@ namespace TCS {
 
     // initialize connection to the TCS
     //
-    message.str(""); message << "opening connection to TCS " << tcsloc->first << " on "
+    message.str(""); message << "initializing socket connections to TCS " << tcsloc->first << " on "
                              << tcsloc->second->gethost();
     logwrite( function, message.str() );
 
     TcsIO &tcs = *(tcsloc->second);
 
-    // check and open the connection for slow commands
-    //
-    {
-    auto conn = tcs.get_connection(true);  // get a slow-command connection
-    if (conn) conn->open();
-    if ( !conn || !tcs.isconnected() ) {
-      logwrite( function, "ERROR connecting to "+arg );
-      retstring="error_slow_connection";
-      return ERROR;
-    }
-    logwrite( function, "opened slow-command connection to "+arg );
-    }
-
-    // check and open connection pool for fast commands
-    //
-    tcs.initialize_pool();
-
-    for ( size_t i=0; i<TcsIO::poolsize; ++i ) {
-      auto conn = tcs.get_connection(false);  // get a fast-command connection
-      if (conn) {
-        if ( !conn->sock.isconnected() ) {
-          if ( conn->open() != NO_ERROR ) {
-            logwrite( function, "ERROR opening fast connection pool "+i );
-            retstring="error_fast_connection";
-            return ERROR;
-          }
-        }
-        logwrite( function, "opened fast-command connection to "+arg );
-      }
-      if ( !conn || !tcs.isconnected() ) {
-        logwrite(function, "bob" );
-        logwrite( function, "ERROR opening fast connection pool. conn: " + std::to_string(conn ? 1 : 0) +
-          ", isconnected: " + std::to_string(tcs.isconnected()) );
-        retstring="error_fast_connection";
-        return ERROR;
-      }
-//    tcs.return_connection(conn);  // return connection to the pool
-    }
+    tcs.initialize_sockets();
 
     this->name = tcs.getname();            // save the name of the opened tcs
 
@@ -465,7 +428,7 @@ namespace TCS {
     // with each pair separated by a newline character. The first two pairs are 
     // RA and DEC, which is all that is needed here.
     //
-    if ( error != ERROR && this->send_command( "?WEATHER", weather, BLOCK ) != NO_ERROR ) {
+    if ( error != ERROR && this->send_command( "?WEATHER", weather, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       message << "ERROR getting coords from TCS";
       error = ERROR;
     }
@@ -544,7 +507,7 @@ namespace TCS {
     //             air mass = aa.aaa"
     //
     std::string tcsreply;
-    if ( this->send_command( "REQPOS", tcsreply, BLOCK ) != NO_ERROR ) {
+    if ( this->send_command( "REQPOS", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting coords from TCS" );
       error = ERROR;
     }
@@ -642,7 +605,7 @@ namespace TCS {
     //             Cass ring angle = 18.00
     //
     std::string tcsreply;
-    if ( this->send_command( "REQSTAT", tcsreply, BLOCK ) != NO_ERROR ) {
+    if ( this->send_command( "REQSTAT", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting status from TCS" );
       error = ERROR;
     }
@@ -730,7 +693,7 @@ namespace TCS {
     // with each pair separated by a newline character. The first two pairs are 
     // RA and DEC, which is all that is needed here.
     //
-    if ( error != ERROR && this->send_command( "?WEATHER", weather, BLOCK ) != NO_ERROR ) {
+    if ( error != ERROR && this->send_command( "?WEATHER", weather, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting coords from TCS" );
       error = ERROR;
     }
@@ -830,7 +793,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "FOCUSGO " << std::fixed << std::setprecision(2) << value;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
 
     return error;
   }
@@ -890,7 +853,7 @@ namespace TCS {
     //             Cass ring angle = 18.00
     //
     std::string tcsreply;
-    if ( this->send_command( "REQSTAT", tcsreply, BLOCK ) != NO_ERROR ) {
+    if ( this->send_command( "REQSTAT", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting status from TCS" );
       error = ERROR;
     }
@@ -1021,7 +984,7 @@ namespace TCS {
     //             Cass ring angle = 18.00
     //
     std::string tcsreply;
-    if ( this->send_command( "REQSTAT", tcsreply, BLOCK ) != NO_ERROR ) {
+    if ( this->send_command( "REQSTAT", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting status from TCS" );
       return ERROR;
     }
@@ -1146,7 +1109,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "MRATES " << raoff << " " << decoff;
 
-    if ( error==NO_ERROR ) error = this->send_command( cmd.str(), retstring );  // set them
+    if ( error==NO_ERROR ) error = this->send_command( cmd.str(), retstring, TCS::FAST_RESPONSE );  // set them
 
     // If no error on set then assume all OK and save in the class.
     // Unfortunately there is no way to read them back from the TCS.
@@ -1189,7 +1152,7 @@ namespace TCS {
 
     // Send the command
     //
-    if ( this->send_command( "?MOTION", retstring, BLOCK ) != NO_ERROR ) {
+    if ( this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting motion state from TCS" );
       error = ERROR;
     }
@@ -1277,7 +1240,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
 
     return error;
   }
@@ -1323,7 +1286,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "COORDS " << args;
 
-    long error = this->send_command( cmd.str(), retstring );
+    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
 
     asyncmsg << "TCSD:coords:" << ( error == ERROR ? "ERROR" : retstring );
     this->async.enqueue( asyncmsg.str() );
@@ -1411,7 +1374,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "PT " << args;
 
-    long error = this->send_command( cmd.str(), retstring );               // perform the offset here
+    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );  // perform the offset here
 
     std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
 
@@ -1468,7 +1431,7 @@ namespace TCS {
     int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );         // greater of those two times + 50%
     max_t = std::max( max_t, 100 );                                        // minimum 100 msec
 
-    long error = this->send_command( "RET", retstring );                   // perform the offset here
+    long error = this->send_command( "RET", retstring, TCS::FAST_RESPONSE );  // perform the offset here
 
     std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
 
@@ -1485,7 +1448,7 @@ namespace TCS {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::send_command( std::string cmd, std::string &retstring, bool block ) {
+  long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type ) {
     std::string function = "TCS::Interface::send_command";
     std::stringstream message;
     std::string sbuf;
@@ -1499,22 +1462,26 @@ namespace TCS {
     // Find the currently opened TCS (this->name) in the tcsmap.
     // It must be located and connected in order to proceed.
     //
-    auto tcs_loc = this->tcsmap.find( this->name );
+    auto tcsloc = this->tcsmap.find( this->name );
 
     // Is it configured?
     //
-    if ( tcs_loc == tcsmap.end() ) {
+    if ( tcsloc == tcsmap.end() ) {
       message.str(""); message << "ERROR sending \"" << cmd << "\": no TCS " << this->name << " not configured";
       logwrite( function, message.str() );
       return ERROR;
     }
 
+    TcsIO &tcs = *(tcsloc->second);
+
+    auto conn = tcs.get_connection( conn_type );
+
     // Is it connected?
     //
-    if ( ! tcs_loc->second->isconnected() ) {
+    if ( ! conn->sock.isconnected() ) {
       message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to TCS " << this->name;
       logwrite( function, message.str() );
-      tcs_loc->second->close();
+      tcs.return_connection( conn, conn_type );
       return ERROR;
     }
 
@@ -1525,11 +1492,15 @@ namespace TCS {
     // TCS is good, send the command, read the reply
     //
     std::string reply;
-/// if ( tcs_loc->second->send( cmd, reply ) != NO_ERROR ) {
-///   message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS";// on fd " << tcs_loc->second->fd();
-///   logwrite( function, message.str() );
-///   return ERROR;
-/// }
+/// if ( tcsloc->second->send( cmd, reply ) != NO_ERROR ) {
+    if ( conn->send_command( cmd, reply ) != NO_ERROR ) {
+      tcs.return_connection( conn, conn_type );
+      message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS";// on fd " << tcsloc->second->fd();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    tcs.return_connection( conn, conn_type );
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.
@@ -1577,7 +1548,7 @@ namespace TCS {
 
     make_uppercase( args );
 
-    long error = this->send_command( args, retstring );
+    long error = this->send_command( args, retstring, TCS::SLOW_RESPONSE );
 
     // The TCS contains messages that have fields separated by newlines. Replace those with commas.
     //
