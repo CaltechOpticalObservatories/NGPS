@@ -913,7 +913,6 @@ namespace Network {
     std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
     size_t bytesread=0;
-
     retstring.clear();                   // make sure the return string starts empty
 
     // get the time now for timeout purposes
@@ -1182,6 +1181,13 @@ namespace Network {
   /***** Network::Interface::open *********************************************/
 
 
+  long Interface::reconnect() {
+    logwrite("Network::Interface::reconnect","reconnecting");
+    long error = this->close();
+    std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+    if (error==NO_ERROR) error = this->open();
+    return error;
+  }
   /***** Network::Interface::close ********************************************/
   /**
    * @brief      close the connection to the device
@@ -1241,6 +1247,9 @@ namespace Network {
    *
    */
   long Interface::send_command( std::string cmd, std::string &retstring ) {
+    return send_command( cmd, retstring, TIMEOUT );
+  }
+  long Interface::send_command( std::string cmd, std::string &retstring, int timeout ) {
     std::string function = "Network::Interface::send_command";
     std::stringstream message;
     std::string reply;
@@ -1272,7 +1281,7 @@ namespace Network {
 
     if ( needs_reply ) {
       long retval=0;
-      if ( ( retval=this->sock.Poll() ) <= 0 ) {
+      if ( ( retval=this->sock.Poll(timeout) ) <= 0 ) {
         if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd();
                            if (errno) { message << ": " << strerror(errno); }
                            error = TIMEOUT; }

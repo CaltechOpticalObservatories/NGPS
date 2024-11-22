@@ -115,11 +115,10 @@ namespace TCS {
 
     message << "name host:port connected\n";
 
-    for ( const auto &[key,val] : this->tcsmap ) {
-      message << val.name() << " " 
-              << val.host() << ":" 
-              << val.port() << " "
-              << ( val.isconnected() ? "true" : "false" ) << "\n";
+    for ( const auto &[key,tcs] : this->tcsmap ) {
+      message << tcs->getname() << " " 
+              << tcs->gethost() << " " 
+              << ( tcs->isconnected() ? "true" : "false" ) << "\n";
     }
 
     retstring = message.str();
@@ -156,10 +155,9 @@ namespace TCS {
     int count=0;
     for ( const auto &[key,val] : this->tcsmap ) {
       if ( count++ > 0 ) message << ",";  // add a comma separator if coming through here again
-      message << val.name() << " " 
-              << val.host() << ":" 
-              << val.port() << " "
-              << ( val.isconnected() ? "true" : "false" );
+      message << val->getname() << " " 
+              << val->gethost() << " " 
+              << ( val->isconnected() ? "true" : "false" );
     }
 
     retstring = message.str();
@@ -192,24 +190,10 @@ namespace TCS {
       retstring.append( "  Open a connection to the specified TCS device, where\n" );
       retstring.append( "  <name> = { " );
       message.str("");
-      for ( const auto &[key,val] : this->tcsmap ) message << val.name() << " ";
+      for ( const auto &[key,val] : this->tcsmap ) message << val->getname() << " ";
       message << "}\n";
       retstring.append( message.str() );
       return HELP;
-    }
-
-    // Typically, a second call to open might not return an error but this function returns an error
-    // on a second call to open because the user might be trying to open a different TCS, e.g.
-    // opening the real while the sim is already open, so returning an error will catch that.
-    //
-    for ( const auto &[key,val] : this->tcsmap ) {
-      if ( val.isconnected() ) {
-        message.str(""); message << "ERROR: connection already open to " << val.name() << " "
-                                 << val.host() << ":" << val.port();
-        logwrite( function, message.str() );
-        retstring="already_open";
-        return ERROR;
-      }
     }
 
     // Need the name of the tcs to connect to
@@ -219,6 +203,20 @@ namespace TCS {
       logwrite( function, message.str() );
       retstring="missing_argument";
       return ERROR;
+    }
+
+    // Typically, a second call to open might not return an error but this function returns an error
+    // on a second call to open because the user might be trying to open a different TCS, e.g.
+    // opening the real while the sim is already open, so returning an error will catch that.
+    //
+    for ( const auto &[key,val] : this->tcsmap ) {
+      if ( val->isconnected() ) {
+        message.str(""); message << "ERROR: connection already open to " << val->getname() << " "
+                                 << val->gethost();
+        logwrite( function, message.str() );
+        retstring="already_open";
+        return ERROR;
+      }
     }
 
     // Find the requested name in the tcsmap
@@ -234,25 +232,17 @@ namespace TCS {
 
     // initialize connection to the TCS
     //
-    message.str(""); message << "opening connection to TCS " << tcsloc->first << " on "
-                             << tcsloc->second.host() << ":" << tcsloc->second.port();
+    message.str(""); message << "initializing socket connections to TCS " << tcsloc->first << " on "
+                             << tcsloc->second->gethost();
     logwrite( function, message.str() );
 
-    if ( tcsloc->second.open() != 0 ) {
-      message.str(""); message << "ERROR connecting to TCS " << tcsloc->first << " on "
-                               << tcsloc->second.host() << ":" << tcsloc->second.port();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
+    TcsIO &tcs = *(tcsloc->second);
 
-    message.str(""); message << "connected to " << tcsloc->second.name() << " "
-                             << tcsloc->second.host() << ":" << tcsloc->second.port()
-                             << " on fd " << tcsloc->second.fd();
-    logwrite( function, message.str() );
+    tcs.initialize_sockets();
 
-    this->name = tcsloc->second.name();  // save the name of the opened tcs
+    this->name = tcs.getname();            // save the name of the opened tcs
 
-    error = this->isopen( retstring );   // this will broadcast the state and name
+    error = this->isopen( retstring );      // this will broadcast the state and name
 
     return error;
   }
@@ -316,9 +306,9 @@ namespace TCS {
     std::string name;
 
     for ( const auto &[key,val] : this->tcsmap ) {
-      if ( val.isconnected() ) {
-        name = val.name();        // Found a connected TCS
-        break;                    // so get out now.
+      if ( val->isconnected() ) {
+        name = val->getname();        // Found a connected TCS
+        break;                       // so get out now.
       }
     }
 
@@ -346,12 +336,12 @@ namespace TCS {
     std::stringstream message, asyncmsg;
     long error = NO_ERROR;
 
-    for ( const auto &[key,val] : this->tcsmap ) {
-      if ( val.isconnected() ) {
-        message.str(""); message << "closing connection to " << val.name() << " "
-                                 << val.host() << ":" << val.port();
+    for ( const auto &[key,tcs] : this->tcsmap ) {
+      if ( tcs->isconnected() ) {
+        message.str(""); message << "closing connection to " << tcs->getname() << " "
+                                 << tcs->gethost();
         logwrite( function, message.str() );
-        error = val.close();
+        error = tcs->close();
         this->name.clear();  // clear the name of the opened tcs
       }
     }
@@ -372,8 +362,7 @@ namespace TCS {
    *
    */
   long Interface::get_name( const std::string &arg, std::string &retstring ) {
-    std::string function = "TCS::Interface::get_name";
-    std::stringstream message, asyncmsg;
+    const std::string function = "TCS::Interface::get_name";
 
     // Help
     //
@@ -388,21 +377,19 @@ namespace TCS {
 
     if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
 
-    for ( const auto &[key,val] : this->tcsmap ) {
-      if ( val.isconnected() ) {
+    for ( const auto &[key,tcs] : this->tcsmap ) {
+      if ( tcs->isconnected() ) {
         if ( !silent ) {
-          message.str(""); message << "connection open to " << val.name() << " on "
-                                   << val.host() << ":" << val.port();
-          logwrite( function, message.str() );
+          logwrite( function, "connection open to "+tcs->getname() );
         }
-        retstring = val.name();  // Found the connected TCS
-        break;                   // so get out now!
+        retstring = tcs->getname();      // Found the connected TCS
+        this->async.enqueue( "TCSD:name:"+retstring );
+        return NO_ERROR;
       }
     }
-    if ( retstring.empty() ) retstring="offline";
+    retstring="offline";
 
-    asyncmsg << "TCSD:name:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
+    this->async.enqueue( "TCSD:name:offline" );
 
     return NO_ERROR;
   }
@@ -441,7 +428,7 @@ namespace TCS {
     // with each pair separated by a newline character. The first two pairs are 
     // RA and DEC, which is all that is needed here.
     //
-    if ( error != ERROR && this->send_command( "?WEATHER", weather ) != NO_ERROR ) {
+    if ( error != ERROR && this->send_command( "?WEATHER", weather, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       message << "ERROR getting coords from TCS";
       error = ERROR;
     }
@@ -520,7 +507,7 @@ namespace TCS {
     //             air mass = aa.aaa"
     //
     std::string tcsreply;
-    if ( this->send_command( "REQPOS", tcsreply ) != NO_ERROR ) {
+    if ( this->send_command( "REQPOS", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting coords from TCS" );
       error = ERROR;
     }
@@ -618,7 +605,7 @@ namespace TCS {
     //             Cass ring angle = 18.00
     //
     std::string tcsreply;
-    if ( this->send_command( "REQSTAT", tcsreply ) != NO_ERROR ) {
+    if ( this->send_command( "REQSTAT", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting status from TCS" );
       error = ERROR;
     }
@@ -706,7 +693,7 @@ namespace TCS {
     // with each pair separated by a newline character. The first two pairs are 
     // RA and DEC, which is all that is needed here.
     //
-    if ( error != ERROR && this->send_command( "?WEATHER", weather ) != NO_ERROR ) {
+    if ( error != ERROR && this->send_command( "?WEATHER", weather, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting coords from TCS" );
       error = ERROR;
     }
@@ -806,7 +793,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "FOCUSGO " << std::fixed << std::setprecision(2) << value;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, 60000 );
 
     return error;
   }
@@ -866,7 +853,7 @@ namespace TCS {
     //             Cass ring angle = 18.00
     //
     std::string tcsreply;
-    if ( this->send_command( "REQSTAT", tcsreply ) != NO_ERROR ) {
+    if ( this->send_command( "REQSTAT", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting status from TCS" );
       error = ERROR;
     }
@@ -997,7 +984,7 @@ namespace TCS {
     //             Cass ring angle = 18.00
     //
     std::string tcsreply;
-    if ( this->send_command( "REQSTAT", tcsreply ) != NO_ERROR ) {
+    if ( this->send_command( "REQSTAT", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting status from TCS" );
       return ERROR;
     }
@@ -1122,7 +1109,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "MRATES " << raoff << " " << decoff;
 
-    if ( error==NO_ERROR ) error = this->send_command( cmd.str(), retstring );  // set them
+    if ( error==NO_ERROR ) error = this->send_command( cmd.str(), retstring, TCS::FAST_RESPONSE );  // set them
 
     // If no error on set then assume all OK and save in the class.
     // Unfortunately there is no way to read them back from the TCS.
@@ -1165,7 +1152,7 @@ namespace TCS {
 
     // Send the command
     //
-    if ( this->send_command( "?MOTION", retstring ) != NO_ERROR ) {
+    if ( this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE ) != NO_ERROR ) {
       logwrite( function, "ERROR getting motion state from TCS" );
       error = ERROR;
     }
@@ -1253,7 +1240,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
 
     return error;
   }
@@ -1299,7 +1286,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "COORDS " << args;
 
-    long error = this->send_command( cmd.str(), retstring );
+    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
 
     asyncmsg << "TCSD:coords:" << ( error == ERROR ? "ERROR" : retstring );
     this->async.enqueue( asyncmsg.str() );
@@ -1387,7 +1374,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "PT " << args;
 
-    long error = this->send_command( cmd.str(), retstring );               // perform the offset here
+    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );  // perform the offset here
 
     std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
 
@@ -1444,7 +1431,7 @@ namespace TCS {
     int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );         // greater of those two times + 50%
     max_t = std::max( max_t, 100 );                                        // minimum 100 msec
 
-    long error = this->send_command( "RET", retstring );                   // perform the offset here
+    long error = this->send_command( "RET", retstring, TCS::FAST_RESPONSE );  // perform the offset here
 
     std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
 
@@ -1461,7 +1448,10 @@ namespace TCS {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::send_command( std::string cmd, std::string &retstring ) {
+  long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type ) {
+    return send_command( cmd, retstring, conn_type, TIMEOUT );
+  }
+  long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type, int to ) {
     std::string function = "TCS::Interface::send_command";
     std::stringstream message;
     std::string sbuf;
@@ -1475,33 +1465,21 @@ namespace TCS {
     // Find the currently opened TCS (this->name) in the tcsmap.
     // It must be located and connected in order to proceed.
     //
-    auto tcs_loc = this->tcsmap.find( this->name );
+    auto tcsloc = this->tcsmap.find( this->name );
 
     // Is it configured?
     //
-    if ( tcs_loc == tcsmap.end() ) {
+    if ( tcsloc == tcsmap.end() ) {
       message.str(""); message << "ERROR sending \"" << cmd << "\": no TCS " << this->name << " not configured";
       logwrite( function, message.str() );
       return ERROR;
     }
 
-    // Is it connected?
-    //
-    if ( ! tcs_loc->second.isconnected() ) {
-      message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to TCS " << this->name;
-      logwrite( function, message.str() );
-      tcs_loc->second.close();
-      return ERROR;
-    }
+    TcsIO &tcs = *(tcsloc->second);
 
-    // TCS is good, send the command, read the reply
-    //
     std::string reply;
-    if ( tcs_loc->second.send( cmd, reply ) != NO_ERROR ) {
-      message.str(""); message << "ERROR writing \"" << cmd << "\" to TCS on fd " << tcs_loc->second.fd();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
+
+    tcs.execute_command( cmd, reply, conn_type, to );
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.
@@ -1549,7 +1527,7 @@ namespace TCS {
 
     make_uppercase( args );
 
-    long error = this->send_command( args, retstring );
+    long error = this->send_command( args, retstring, TCS::SLOW_RESPONSE );
 
     // The TCS contains messages that have fields separated by newlines. Replace those with commas.
     //

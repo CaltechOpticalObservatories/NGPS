@@ -85,8 +85,10 @@ namespace TCS {
     // constructing a TCS::TcsIO object at the same time, using the loaded {name,host,port}
     // and the terminating characters for TCS writes (\r) and reads (\0).
     //
+//  this->interface.tcsmap.emplace( tryname, 
+//                                  TCS::TcsIO{std::make_unique<Network::Interface>(tryname, tryhost, tryport, '\r', '\0')});
     this->interface.tcsmap.emplace( tryname, 
-                                    TCS::TcsIO{std::make_unique<Network::Interface>(tryname, tryhost, tryport, '\r', '\0')});
+                                    std::make_shared<TCS::TcsIO>(tryname, tryhost, tryport, '\r', '\0') );
 
     return NO_ERROR;
   }
@@ -458,6 +460,32 @@ namespace TCS {
 
     bool connection_open=true;
 
+/****
+void Interface::doit(const std::string& client_command, std::string& response) {
+    std::string function = "Interface::doit";
+    bool is_slow_command = is_slow(client_command); // Determine command type (implement `is_slow()` as needed)
+
+    long result = this->tcsio.execute_command(client_command, response, is_slow_command);
+    if (result != NO_ERROR) {
+        logwrite(function, "ERROR executing command: " + client_command);
+        response = "ERROR";
+    }
+}
+
+void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
+    std::string response;
+
+    try {
+        long status = execute_command(tcs_io, client_cmd, is_slow_command, response);
+
+        // Log the response or send it back to the client
+        std::cout << "Command executed successfully. Status: " << status << "\n";
+        std::cout << "Response: " << response << "\n";
+    } catch (const std::exception &e) {
+        std::cerr << "Error executing command: " << e.what() << "\n";
+    }
+}
+***/
     while (connection_open) {
 
       // Wait (poll) connected socket for incoming data...

@@ -202,8 +202,10 @@ namespace Network {
 
       long open();                ///< open a connection to LKS device
       long close();               ///< close the connection to the LKS device
+      long reconnect();
       long send_command( std::string cmd );
       long send_command( std::string cmd, std::string &retstring );
+      long send_command( std::string cmd, std::string &retstring, int timeout );
 
       inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
 
