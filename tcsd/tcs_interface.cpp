@@ -1479,7 +1479,7 @@ namespace TCS {
 
     std::string reply;
 
-    long error = tcs.execute_command( cmd, reply, conn_type, to );
+    tcs.execute_command( cmd, reply, conn_type, to );
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.

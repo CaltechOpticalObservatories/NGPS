@@ -101,20 +101,20 @@ namespace TCS {
   /***** TCS::TcsInfo *********************************************************/
 
 
-  /***** TCS::ConnectionPool **************************************************/
+  /***** TCS::Connection ******************************************************/
   /**
-   * @class   ConnectionPool
-   * @brief   interface class provides the actual I/O for a TCS device
+   * @class   Connection
+   * @brief   provides a connection for use in the TcsIO connection pool
    *
    */
-  class ConnectionPool {
+  class Connection {
     public:
       std::shared_ptr<Network::Interface> socket;
       bool inuse;
       bool isopen;
-      ConnectionPool(std::shared_ptr<Network::Interface> c) : socket(std::move(c)), inuse(false), isopen(false) {}
+      Connection(std::shared_ptr<Network::Interface> c) : socket(std::move(c)), inuse(false), isopen(false) {}
   };
-  /***** TCS::ConnectionPool **************************************************/
+  /***** TCS::Connection ******************************************************/
 
 
   /***** TCS::TcsIO ***********************************************************/
@@ -158,8 +158,20 @@ namespace TCS {
 
       static const size_t poolsize = 3;   ///< size of fast-response connection pool
 
-      std::vector<ConnectionPool> pool;   ///< pool for fast-response commands
+      std::vector<Connection> pool;       ///< pool for fast-response commands
 
+      std::string gethost() const { return this->host; }
+      std::string getname() const { return this->name; }
+
+      /***** TCS::TcsIO::initialize_sockets ***********************************/
+      /**
+       * @brief      create and open sockets to TCS
+       * @details    This creates and opens poolsize+1 sockets, 1 for slow-response
+       *             commands and poolsize for fast-response commands, which are
+       *             placed into a pool.
+       * @return     ERROR | NO_ERROR
+       *
+       */
       long initialize_sockets() {
         logwrite( "TCS::TcsIO::initialize_sockets", name+" host "+host+":"+std::to_string(port) );
 
@@ -183,7 +195,7 @@ namespace TCS {
             logwrite( "TCS::TcsIO::initialize_sockets", "ERROR initializing pool socket connection " + std::to_string(i) );
             return ERROR;
           }
-          pool.push_back(ConnectionPool(sock));
+          pool.push_back(Connection(sock));
           logwrite( "TCS::TcsIO::initialize_sockets", "initialized fast-command socket connection "
                     +std::to_string(i) + " on fd " + std::to_string(sock->sock.getfd())
                     +" at "+host+":"+std::to_string(port) );
@@ -191,17 +203,23 @@ namespace TCS {
         }
         return NO_ERROR;
       }
+      /***** TCS::TcsIO::initialize_sockets ***********************************/
 
-      // get a socket connection for a command
-      //
+      /***** TCS::TcsIO::get_connections **************************************/
+      /**
+       * @brief      return a shared pointer to a socket connection
+       * @param[in]  conn_type  TCS::ConnectionType specifies slow or fast response
+       * @return     shared_ptr<Network::Interface>
+       *
+       */
       std::shared_ptr<Network::Interface> get_connection( TCS::ConnectionType conn_type ) {
         const std::string function="TCS::TcsIO::get_connection";
 
         if ( conn_type == TCS::SLOW_RESPONSE ) {
           // slow command, lock and return the slow command socket connection
           std::lock_guard<std::mutex> lock( mtx_slow );
-          logwrite( function, "------------------------------------------------slow command socket connection acquired on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+//        logwrite( function, "[DEBUG] slow command socket connection acquired on fd "
+//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           return sock_slow;
         }
         else {
@@ -209,21 +227,24 @@ namespace TCS {
           // fast command, take a socket connection from the pool
           while ( true ) {
             for ( auto &conn : pool ) {
-              logwrite(function, "Checking connection: fd " + std::to_string(conn.socket->sock.getfd()) +
-                                 ", inuse: " + std::to_string(conn.inuse) +
-                                 ", connected: " + std::to_string(conn.socket->sock.isconnected()));
+//            logwrite(function, "[DEBUG] checking connection: fd " + std::to_string(conn.socket->sock.getfd()) +
+//                               ", inuse: " + std::to_string(conn.inuse) +
+//                               ", connected: " + std::to_string(conn.socket->sock.isconnected()));
               if ( !conn.socket->sock.isconnected() ) {
-                logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())+" not open, attempting to reconnect" );
+                logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())
+                                    +" not open, attempting to reconnect" );
                 if ( conn.socket->open() != NO_ERROR ) {
                   logwrite( function, "ERROR opening fast command socket connection" );
                   return nullptr;
                 }
-                logwrite( function, "returning fast command socket connection on fd "+std::to_string(conn.socket->sock.getfd()) );
+//              logwrite( function, "[DEBUG] returning fast command socket connection on fd "
+//                                  +std::to_string(conn.socket->sock.getfd()) );
                 return conn.socket;
               }
               if ( !conn.inuse ) {
                 conn.inuse=true;
-                logwrite( function, "fast command socket connection acquired on fd "+std::to_string(conn.socket->sock.getfd()) );
+//              logwrite( function, "[DEBUG] fast command socket connection acquired on fd "
+//                                  +std::to_string(conn.socket->sock.getfd()) );
                 return conn.socket;
               }
               logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())+" inuse, trying another" );
@@ -237,10 +258,34 @@ namespace TCS {
           }
         }
       }
+      /***** TCS::TcsIO::get_connections **************************************/
 
+      /***** TCS::TcsIO::execute_command **************************************/
+      /**
+       * @brief      get a connection and send a command to that connection
+       * @param[in]  cmd        command to send to TCS
+       * @param[in]  reply      reference to string holds reply
+       * @param[in]  conn_type  TCS::ConnectionType specifies connection type
+       * @return     ERROR | NO_ERROR
+       *
+       * This command is overloaded, calls execute_command with a default timeout.
+       *
+       */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type ) {
         return execute_command( cmd, reply, conn_type, TIMEOUT );
       }
+      /***** TCS::TcsIO::execute_command **************************************/
+      /**
+       * @brief      get a connection and send a command to that connection
+       * @param[in]  cmd        command to send to TCS
+       * @param[in]  reply      reference to string holds reply
+       * @param[in]  conn_type  TCS::ConnectionType specifies connection type
+       * @param[in]  timeout    timeout for Poll in milliseconds
+       * @return     ERROR | NO_ERROR
+       *
+       * This command is overloaded.
+       *
+       */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type, int timeout ) {
         const std::string function="TCS::TcsIO::get_connection";
         long ret=ERROR;
@@ -249,50 +294,65 @@ namespace TCS {
           // slow command
           {
           std::lock_guard<std::mutex> lock( mtx_slow );
-          logwrite( function, "----------------------------------------------- slow command socket connection acquired on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+//        logwrite( function, "[DEBUG] slow command socket connection acquired on fd "
+//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           ret = sock_slow->send_command( cmd, reply, timeout );
           }
-          logwrite( function, "+++++++++++++++++++++++++++++++++++++++++++++++ releasing slow command socket connection on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+//        logwrite( function, "[DEBUG] releasing slow command socket connection on fd "
+//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           if (ret!=NO_ERROR) sock_slow->reconnect();
           return ret;
         }
         else {
-          logwrite(function,"[DEBUG] ---------- asking for fast connection");
+//        logwrite(function,"[DEBUG] asking for fast connection");
           auto conn = this->get_connection( TCS::FAST_RESPONSE );
           if (conn) {
-            logwrite(function,"[DEBUG] sending fast command");
+//          logwrite(function,"[DEBUG] sending fast command");
             ret = conn->send_command( cmd, reply );
-            logwrite(function,"[DEBUG] fast command sent");
-            logwrite(function,"[DEBUG] ++++++++++ returning fast connection");
-            return_connection( conn, TCS::FAST_RESPONSE );
+//          logwrite(function,"[DEBUG] fast command sent");
+//          logwrite(function,"[DEBUG] returning fast connection");
+            return_connection( conn );
           }
-          else {logwrite(function,"[DEBUG] ++++++++++ failed to get fast connection");}
+          else {
+            logwrite( function, "failed to get fast connection" );
+            return ERROR;
+          }
           if (ret!=NO_ERROR) conn->reconnect();
           return ret;
         }
       }
+      /***** TCS::TcsIO::execute_command **************************************/
 
-      // return a fast-response socket connection to the pool
-      //
-      void return_connection( std::shared_ptr<Network::Interface> sock, TCS::ConnectionType conn_type ) {
+      /***** TCS::TcsIO::return_connection ************************************/
+      /**
+       * @brief      return a connection to the pool
+       * @details    Returns a fast-response socket to the pool for use by another
+       *             thread.
+       * @param[in]  sock  shared pointer to socket connection
+       *
+       */
+      void return_connection( std::shared_ptr<Network::Interface> sock ) {
         const std::string function="TCS::TcsIO::return_connection";
-        if ( conn_type == TCS::FAST_RESPONSE ) {
-          std::lock_guard<std::mutex> lock(mtx_pool);
-          for ( auto &conn : pool ) {
-            if ( conn.socket == sock ) {
-              conn.inuse = false;
-              logwrite( function, "returned socket connection to pool for fd "+std::to_string(conn.socket->sock.getfd()) );
-              cv.notify_one();
-              return;
-            }
-            logwrite( function, "socket connection not found for fd "+std::to_string(conn.socket->sock.getfd()) );
+        std::lock_guard<std::mutex> lock(mtx_pool);
+        for ( auto &conn : pool ) {
+          if ( conn.socket == sock ) {
+            conn.inuse = false;
+//          logwrite( function, "[DEBUG] returned socket connection to pool for fd "
+//                              +std::to_string(conn.socket->sock.getfd()) );
+            cv.notify_one();  // notifies any waiting get_connections()
+            return;
           }
+          logwrite( function, "socket connection not found for fd "+std::to_string(conn.socket->sock.getfd()) );
         }
-        else logwrite( function, "slow socket connection available" );
       }
+      /***** TCS::TcsIO::return_connection ************************************/
 
+      /***** TCS::TcsIO::isconnected ******************************************/
+      /**
+       * @brief      returns true if any sockets are connected to the TCS
+       * @return     true | false
+       *
+       */
       bool isconnected() {
         // Check if slow socket connection is connected, or if any connection in the pool is connected
         if (sock_slow && sock_slow->sock.isconnected()) {
@@ -307,7 +367,14 @@ namespace TCS {
         }
         return false;
       }
+      /***** TCS::TcsIO::isconnected ******************************************/
 
+      /***** TCS::TcsIO::close ************************************************/
+      /**
+       * @brief      closes all socket connections
+       * @return     ERROR | NO_ERROR
+       *
+       */
       long close() {
         long error=NO_ERROR;
         if (sock_slow && sock_slow->sock.isconnected()) {
@@ -324,25 +391,7 @@ namespace TCS {
         }
         return error;
       }
-
-      /**
-       * convenience functions provide access to the Network::Interface functions
-       */
-///   inline std::string device_name() {
-///     auto conn=get_connection(true);
-///     if (conn) return conn->get_name(); else return "";
-///   }
-      std::string gethost() const { return this->host; }
-      std::string getname() const { return this->name; }
-
-//    inline long open() const { return tcs->open(); }
-//    inline long close() const { return tcs->close(); }
-//    inline int fd() const { return tcs->sock.getfd(); }
-//    inline std::string gethost() const { return tcs->get_host(); }
-//    inline std::string getname() const { return tcs->get_name(); }
-//    inline int getport() const { return tcs->get_port(); }
-//    inline long send( std::string cmd ) { return tcs->send_command( cmd ); }
-//    inline long send( std::string cmd, std::string &retstring ) { return tcs->send_command( cmd, retstring ); }
+      /***** TCS::TcsIO::close ************************************************/
   };
   /***** TCS::TcsIO ***********************************************************/
 
