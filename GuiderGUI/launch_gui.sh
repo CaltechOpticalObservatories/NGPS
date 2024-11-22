@@ -33,7 +33,7 @@ else
   ds9 -png $startfile -title $id \
     -zoom to fit -cmap $cmap -scale linear -scale mode zscale -scale datasec yes \
     -preserve pan yes -preserve regions yes \
-    -view filename no -view object no -view colorbar no \
+    -view filename no -view object no -view colorbar no -view frame no -view physical no \
     -prefs theme awbreezedark -geometry $geometry  \
     -analysis load $anstemplate -analysis task startsync
   #  -region command "$region_cmd" \
