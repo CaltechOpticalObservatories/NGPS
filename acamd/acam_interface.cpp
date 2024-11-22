@@ -101,15 +101,23 @@ namespace Acam {
       error = this->andor.open( handle );
     }
 
+    // copy of the Andor::DefaultValues object
+    //
+    auto cfg = this->default_config;
+
     // Setup camera for continuous readout
     //
-    error |= this->gain(1);                            // EM gain off
-    error |= this->andor.set_vsspeed( 4.33 );          // vertical shift speed
-    error |= this->andor.set_hsspeed( 1.0 );           // horizontal shift speed
-    error |= this->andor.set_read_mode( 4 );           // image mode
-    error |= this->andor.set_acquisition_mode( 1 );    // single scan
-    error |= this->andor.set_frame_transfer( "on" );   // enable Frame Transfer mode
-    error |= this->andor.set_shutter( "open" );        // shutter always open
+    error |= this->gain(1);                                   // EM gain off
+    error |= this->andor.set_vsspeed( 4.33 );                 // vertical shift speed
+    error |= this->andor.set_hsspeed( 1.0 );                  // horizontal shift speed
+    error |= this->andor.set_read_mode( 4 );                  // image mode
+    error |= this->andor.set_acquisition_mode( 1 );           // single scan
+    error |= this->andor.set_frame_transfer( "on" );          // enable Frame Transfer mode
+    error |= this->andor.set_shutter( "open" );               // shutter always open
+    error |= this->andor.set_imrot( cfg.rotstr );             // set imrot to configured value
+    error |= this->andor.set_imflip( cfg.hflip, cfg.vflip );  // set imflip to configured value
+    error |= this->andor.set_binning( cfg.hbin, cfg.vbin );   // set binning to configured value
+    error |= this->andor.set_temperature( cfg.setpoint );     // set temp setpoint to configured value
     error |= this->set_exptime(1);
 
     message.str(""); message << ( error==ERROR ? "ERROR opening" : "opened" ) << " camera s/n " << sn;
@@ -1653,33 +1661,67 @@ namespace Acam {
         applied++;
       }
 
-      if ( starts_with( config.param[entry], "ANDOR_SN" ) ) {
+      // ANDOR: expected ( <name> [emulate] <sn> <scale> <hflip> <vflip> <rot> <temp> <hbin> <vbin> )
 
+      if ( config.param[entry] == "ANDOR" ) {
+        bool emulator_state;  // true if emulated
+
+        // Is "emulate" in the config arg anywhere? If it is then
+        // set a flag and remove it from the args.
+        //
+        auto it = config.arg[entry].find("emulate");
+        if ( it != std::string::npos ) {
+          emulator_state=true;
+          config.arg[entry].erase(it, strlen("emulate"));  // remove from the arg
+        }
+        else {
+          emulator_state=false;
+        }
+
+        // now args should have ( <name> <sn> <scale> <hflip> <vflip> <rot> <temp> <hbin> <vbin> )
         std::vector<std::string> tokens;
         Tokenize( config.arg[entry], tokens, " " );
 
-        // When the SN is set to "emulate" (case-insensitive) then this enables the Andor emulator
-        // and the next token is the emulated serial number.
-        //
-        if ( tokens.size() > 1 && tokens[0] == "emulate" ) {
-          this->camera.andor.andor_emulator( true );
-          this->camera.andor.camera_info.serial_number=std::stoi(tokens[1]);
-          applied++;
+        if ( tokens.size() != 9 ) {
+          message.str(""); message << "ERROR invalid args ANDOR=\"" << config.arg[entry]
+                                   << "\" : expected <NAME> [emulate] <SN> <SCALE> <HFLIP> <VFLIP> <ROT> <TEMP> <HBIN> <VBIN>";
+          logwrite( function, message.str() );
+          error |= ERROR;
+          continue;
         }
-        else if ( tokens.size() > 0 ) {
-          this->camera.andor.andor_emulator( false );
-          try {
-            this->camera.andor.camera_info.serial_number=std::stoi(tokens.at(0));
-            applied++;
-          }
-          catch ( const std::exception &e ) {
-            message.str(""); message << "ERROR parsing ANDOR_SN: " << e.what();
-            logwrite( function, message.str() );
-            error=ERROR;
-          }
+
+        try {
+          this->camera.andor.andor_emulator( emulator_state );
+          this->camera.andor.camera_info.camera_name   = tokens.at(0);
+          this->camera.andor.camera_info.serial_number = std::stoi(tokens.at(1));
+
+          // set the defaults
+          this->camera.default_config.pixel_scale      = std::stod(tokens.at(2));
+          this->camera.default_config.hflip            = std::stoi(tokens.at(3));
+          this->camera.default_config.vflip            = std::stoi(tokens.at(4));
+          this->camera.default_config.rotstr           = tokens.at(5);
+          this->camera.default_config.setpoint         = std::stoi(tokens.at(6));
+          this->camera.default_config.hbin             = std::stoi(tokens.at(7));
+          this->camera.default_config.vbin             = std::stoi(tokens.at(8));
+
+          // copy them into camera_info
+          this->camera.andor.camera_info.pixel_scale   = camera.default_config.pixel_scale;
+          this->camera.andor.camera_info.hflip         = camera.default_config.hflip;
+          this->camera.andor.camera_info.vflip         = camera.default_config.vflip;
+          this->camera.andor.camera_info.rotstr        = camera.default_config.rotstr;
+          this->camera.andor.camera_info.setpoint      = camera.default_config.setpoint;
+          this->camera.andor.camera_info.hbin          = camera.default_config.hbin;
+          this->camera.andor.camera_info.vbin          = camera.default_config.vbin;
         }
-        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        catch( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing \"" << config.arg[entry] << "\": " << e.what();
+          logwrite( function, message.str() );
+          error |= ERROR;
+        }
+
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
+        applied++;
       }
 
       if ( starts_with( config.param[entry], "TCSD_PORT" ) ) {
@@ -4589,6 +4631,9 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "SERNO",    this->camera.andor.camera_info.serial_number, "camera serial number" );
     this->camera.fitsinfo.fitskeys.addkey( "ACQMODE",  this->camera.andor.camera_info.acqmodestr, "acquisition mode" );
     this->camera.fitsinfo.fitskeys.addkey( "READMODE", this->camera.andor.camera_info.readmodestr, "read mode" );
+    this->camera.fitsinfo.fitskeys.addkey( "IMROT",    this->camera.andor.camera_info.rotstr, "image rotation (cw ccw none)" );
+    this->camera.fitsinfo.fitskeys.addkey( "HFLIP",    this->camera.andor.camera_info.hflip, "horizontal flip" );
+    this->camera.fitsinfo.fitskeys.addkey( "VFLIP",    this->camera.andor.camera_info.vflip, "vertical flip" );
     this->camera.fitsinfo.fitskeys.addkey( "TEMPSETP", this->camera.andor.camera_info.setpoint, "detector temperature setpoint deg C" );
     this->camera.fitsinfo.fitskeys.addkey( "TEMPREAD", this->camera.andor.camera_info.ccdtemp, "CCD temperature deg C" );
     this->camera.fitsinfo.fitskeys.addkey( "TEMPSTAT", this->camera.andor.camera_info.temp_status, "CCD temperature status" );

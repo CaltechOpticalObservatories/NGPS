@@ -1728,14 +1728,17 @@ namespace Andor {
       this->camera_info.axes[0] = (this->camera_info.hend-this->camera_info.hstart+1)/this->camera_info.hbin;
       this->camera_info.axes[1] = (this->camera_info.vend-this->camera_info.vstart+1)/this->camera_info.vbin;
     }
-    if (error==NO_ERROR) error = set_image( 1, 1, 1, this->camera_info.axes[0], 1, this->camera_info.axes[1] );  // no binning, full array
+    if (error==NO_ERROR) error = set_image( this->camera_info.hbin, this->camera_info.vbin,
+                                            1, this->camera_info.hend,
+                                            1, this->camera_info.vend );
     if (error==NO_ERROR) error = ( andor ? andor->_GetNumberADChannels( this->camera_info.adchans ) : ERROR );
     if (error==NO_ERROR) error = get_speeds();
     if (error==NO_ERROR) error = set_output_amplifier( AMPTYPE_CONV );
     if (error==NO_ERROR)         this->camera_info.gain = 1;
     if (error==NO_ERROR) error = ( andor ? andor->_SetHSSpeed( this->camera_info.amptype, 0 ) : ERROR );
 
-    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperatureRange( this->camera_info.temp_min, this->camera_info.temp_max ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperatureRange( this->camera_info.temp_min,
+                                                                        this->camera_info.temp_max ) : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_SetTemperature( this->camera_info.setpoint ) : ERROR );
 
     if (error==NO_ERROR) error = update_timings();
@@ -2569,8 +2572,29 @@ namespace Andor {
   /***** Andor::Interface::set_imrot ******************************************/
   /**
    * @brief      rotate CCD image
+   * @param[in]  rotstr  accepts string { none cw ccw }
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::set_imrot( std::string rotstr ) {
+    if ( rotstr == "none" ) return set_imrot(0);
+    else
+    if ( rotstr == "cw" )   return set_imrot(1);
+    else
+    if ( rotstr == "ccw" )  return set_imrot(2);
+    else {
+      logwrite( "Andor::Interface::set_imrot",
+                "ERROR invalid arg "+rotstr+": expected { none cw ccw }" );
+      return ERROR;
+    }
+  }
+  /***** Andor::Interface::set_imrot ******************************************/
+  /**
+   * @brief      rotate CCD image
    * @param[in]  rotdir  0=no rotation, 1=90deg CW, 2=90deg CCW
    * @return     ERROR or NO_ERROR
+   *
+   * This function is overloaded
    *
    */
   long Interface::set_imrot( int rotdir ) {

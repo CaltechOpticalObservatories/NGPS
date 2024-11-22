@@ -30,6 +30,28 @@ namespace Andor {
   constexpr int AMPTYPE_EMCCD = 0;
   constexpr int AMPTYPE_CONV  = 1;
 
+  /***** Andor::DefaultValues *************************************************/
+  /**
+   * @class  DefaultValues
+   * @brief  stores default values
+   *
+   */
+  class DefaultValues {
+    public:
+      double pixel_scale;
+      int hflip;
+      int vflip;
+      std::string rotstr;
+      int setpoint;
+      int hbin;
+      int vbin;
+
+      DefaultValues()
+        : pixel_scale(NAN), hflip(-1), vflip(-1), setpoint(999), hbin(-1), vbin(-1) { }
+  };
+  /***** Andor::DefaultValues *************************************************/
+
+
   /***** Andor::Information ***************************************************/
   /**
    * @class     Information
@@ -77,6 +99,7 @@ namespace Andor {
       int emgain_high;                             ///< EM gain high
       int hflip;                                   ///< flipped horizontal? 1=yes 0=no
       int vflip;                                   ///< flipped vertical? 1=yes 0=no
+      std::string rotstr;                          ///< image rotation expects { cw ccw none }
       std::string temp_status;
       int rows;
       int cols;
@@ -549,6 +572,7 @@ namespace Andor {
       long set_fan( int mode );
       long set_binning( int hbin, int vbin );
       long set_imflip( int hflip, int vflip );
+      long set_imrot( std::string rotstr );
       long set_imrot( int rotdir );
 
       template <typename T>

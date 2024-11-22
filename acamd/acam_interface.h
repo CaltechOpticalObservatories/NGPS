@@ -95,6 +95,8 @@ namespace Acam {
 
       Andor::Interface andor;     ///< create an Andor::Interface object for interfacing with the camera
 
+      Andor::DefaultValues default_config;  ///< holds defaults for the camera
+
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
 

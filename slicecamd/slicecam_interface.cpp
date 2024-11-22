@@ -149,9 +149,16 @@ namespace Slicecam {
     }
 
     long ret;
+
     // Loop through all defined Andors
     //
     for ( const auto &pair : this->andor ) {
+
+      // get a copy of the Andor::DefaultValues object for
+      // the currently indexed andor
+      //
+      auto cfg = this->default_config[pair.first];
+
       // If a "which" was specified AND it's not this one, then skip it
       //
       if ( !which.empty() && pair.first != which ) continue;
@@ -172,13 +179,16 @@ namespace Slicecam {
       // support continuous readout for multiple cameras in the same process.
       //
       error |= this->set_gain(pair.first, 1);
-      error |= pair.second->set_vsspeed( 4.33 );          // vertical shift speed
-      error |= pair.second->set_hsspeed( 1.0 );           // horizontal shift speed
-      error |= pair.second->set_read_mode( 4 );           // image mode
-      error |= pair.second->set_acquisition_mode( 1 );    // single scan
-      error |= pair.second->set_frame_transfer( "off" );  // disable Frame Transfer mode
-      error |= pair.second->set_kinetic_cycle_time( 0 );
-      error |= pair.second->set_shutter( "open" );        // shutter always open
+      error |= pair.second->set_vsspeed( 4.33 );                 // vertical shift speed
+      error |= pair.second->set_hsspeed( 1.0 );                  // horizontal shift speed
+      error |= pair.second->set_read_mode( 4 );                  // image mode
+      error |= pair.second->set_acquisition_mode( 1 );           // single scan
+      error |= pair.second->set_frame_transfer( "on" );          // enable Frame Transfer mode
+      error |= pair.second->set_shutter( "open" );               // shutter always open
+      error |= pair.second->set_imrot( cfg.rotstr );             // set imrot to configured value
+      error |= pair.second->set_imflip( cfg.hflip, cfg.vflip );  // set imflip to configured value
+      error |= pair.second->set_binning( cfg.hbin, cfg.vbin );   // set binning to configured value
+      error |= pair.second->set_temperature( cfg.setpoint );     // set temp setpoint to configured value
       error |= this->set_exptime(pair.first, 1 );
 
       if ( error != NO_ERROR ) {
@@ -1059,11 +1069,6 @@ namespace Slicecam {
       vbin = cam->camera_info.vbin;
     }
 
-    // save to the Camera class
-    //
-    this->camera.hbin = hbin;
-    this->camera.vbin = vbin;
-
     message.str(""); message << hbin << " " << vbin;
     retstring = message.str();
 
@@ -1140,43 +1145,67 @@ namespace Slicecam {
     //
     for (int entry=0; entry < config.n_entries; entry++) {
 
+      // ANDOR: expected ( <name> [emulate] <sn> <scale> <hflip> <vflip> <rot> <temp> <hbin> <vbin> )
+
       if ( config.param[entry] == "ANDOR" ) {
+        bool emulator_state;  // true if emulated
+
+        // Is "emulate" in the config arg anywhere? If it is then
+        // set a flag and remove it from the args.
+        //
+        auto it = config.arg[entry].find("emulate");
+        if ( it != std::string::npos ) {
+          emulator_state=true;
+          config.arg[entry].erase(it, strlen("emulate"));  // remove from the arg
+        }
+        else {
+          emulator_state=false;
+        }
+
+        // now args should have ( <name> <sn> <scale> <hflip> <vflip> <rot> <temp> <hbin> <vbin> )
         std::vector<std::string> tokens;
         Tokenize( config.arg[entry], tokens, " " );
-        if ( tokens.size() < 3 ) {
-          message.str(""); message << "ERROR invalid args ANDOR=\"" << config.arg[entry] << "\" : expected <NAME> [emulate] <SN> <SCALE>";
+
+        if ( tokens.size() != 9 ) {
+          message.str(""); message << "ERROR invalid args ANDOR=\"" << config.arg[entry]
+                                   << "\" : expected <NAME> [emulate] <SN> <SCALE> <HFLIP> <VFLIP> <ROT> <TEMP> <HBIN> <VBIN>";
           logwrite( function, message.str() );
           error |= ERROR;
           continue;
         }
+
         if ( tokens[0] != "L" && tokens[0] != "R" ) {
           message.str(""); message << "ERROR invalid ANDOR name \"" << tokens[0] << "\" : expected { L R }";
           logwrite( function, message.str() );
           error |= ERROR;
           continue;
         }
+
         try {
-          const std::string idx   = tokens.at(0);                          // name of this camera is map index
+          const std::string idx   = tokens.at(0);
+          this->camera.andor[idx] = std::make_unique<Andor::Interface>();  // create an Andor::Interface pointer in the map
+          this->camera.andor[idx]->andor_emulator( emulator_state );
+          this->camera.andor[idx]->camera_info.camera_name   = idx;        // name of this camera is map index
 
-          if ( tokens.size() > 2 && tokens.at(1) == "emulate" ) {
-            this->camera.andor[idx] = std::make_unique<Andor::Interface>( std::stoi(tokens.at(2) ) );  // create an Andor::Interface pointer in the map
-          }
-          else {
-            this->camera.andor[idx] = std::make_unique<Andor::Interface>();  // create an Andor::Interface pointer in the map
-          }
+          this->camera.andor[idx]->camera_info.serial_number = std::stoi(tokens.at(1));
 
-          int sn;
-          if ( tokens.size() > 2 && tokens.at(1) == "emulate" ) {
-            sn=std::stoi(tokens.at(2));
-            this->camera.andor[idx]->andor_emulator( true );
-          }
-          else {
-            sn=std::stoi( tokens.at(1) );
-            this->camera.andor[idx]->andor_emulator( false );
-          }
-          this->camera.andor[idx]->camera_info.camera_name   = idx;
-          this->camera.andor[idx]->camera_info.serial_number = sn;
-          if ( tokens.size() > 3 ) this->camera.andor[idx]->camera_info.pixel_scale   = std::stod( tokens.at(3) );
+          // set the defaults
+          this->camera.default_config[idx].pixel_scale       = std::stod(tokens.at(2));
+          this->camera.default_config[idx].hflip             = std::stoi(tokens.at(3));
+          this->camera.default_config[idx].vflip             = std::stoi(tokens.at(4));
+          this->camera.default_config[idx].rotstr            = tokens.at(5);
+          this->camera.default_config[idx].setpoint          = std::stoi(tokens.at(6));
+          this->camera.default_config[idx].hbin              = std::stoi(tokens.at(7));
+          this->camera.default_config[idx].vbin              = std::stoi(tokens.at(8));
+
+          // copy them into camera_info
+          this->camera.andor[idx]->camera_info.pixel_scale   = camera.default_config[idx].pixel_scale;
+          this->camera.andor[idx]->camera_info.hflip         = camera.default_config[idx].hflip;
+          this->camera.andor[idx]->camera_info.vflip         = camera.default_config[idx].vflip;
+          this->camera.andor[idx]->camera_info.rotstr        = camera.default_config[idx].rotstr;
+          this->camera.andor[idx]->camera_info.setpoint      = camera.default_config[idx].setpoint;
+          this->camera.andor[idx]->camera_info.hbin          = camera.default_config[idx].hbin;
+          this->camera.andor[idx]->camera_info.vbin          = camera.default_config[idx].vbin;
         }
         catch( const std::exception &e ) {
           message.str(""); message << "ERROR parsing \"" << config.arg[entry] << "\": " << e.what();
@@ -2794,8 +2823,8 @@ namespace Slicecam {
 
     // adjust WCS parameters for binning
     //
-    auto hbin = this->camera.hbin;
-    auto vbin = this->camera.vbin;
+    auto hbin   = slicecam->camera_info.hbin;
+    auto vbin   = slicecam->camera_info.vbin;
     auto crpix1 = this->fpoffsets.sliceparams[cam].crpix1 / hbin;
     auto crpix2 = this->fpoffsets.sliceparams[cam].crpix2 / vbin;
     auto cdelt1 = this->fpoffsets.sliceparams[cam].cdelt1 * hbin;
@@ -2876,6 +2905,9 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "SERNO",    slicecam->camera_info.serial_number, "camera serial number" );
     slicecam->fitskeys.addkey( "NAME",     cam, "camera name" );
     slicecam->fitskeys.addkey( "READMODE", slicecam->camera_info.readmodestr, "read mode" );
+    slicecam->fitskeys.addkey( "IMROT",    slicecam->camera_info.rotstr, "image rotation (cw ccw none)" );
+    slicecam->fitskeys.addkey( "HFLIP",    slicecam->camera_info.hflip, "horizontal flip" );
+    slicecam->fitskeys.addkey( "VFLIP",    slicecam->camera_info.vflip, "vertical flip" );
     slicecam->fitskeys.addkey( "TEMPSETP", slicecam->camera_info.setpoint, "detector temperature setpoint deg C" );
     slicecam->fitskeys.addkey( "TEMPREAD", slicecam->camera_info.ccdtemp, "CCD temperature deg C" );
     slicecam->fitskeys.addkey( "TEMPSTAT", slicecam->camera_info.temp_status, "CCD temperature status" );

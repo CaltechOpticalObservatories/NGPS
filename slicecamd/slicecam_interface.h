@@ -66,21 +66,16 @@ namespace Slicecam {
       std::map<at_32, at_32> handlemap;
 
     public:
-      Camera() : image_data( nullptr ), simsize(1024), hbin(1), vbin(1) { };
+      Camera() : image_data( nullptr ), simsize(1024) { };
 
       FITS_file fits_file;        /// instantiate a FITS container object
       FitsInfo  fitsinfo;
 
-      int hbin;
-      int vbin;
-
       std::mutex framegrab_mutex;
 
-//    typedef std::map<std::string, std::unique_ptr<Andor::Interface>> BobMap;
-//    BobMap bob;
-//    std::map<std::string, std::unique_ptr<Andor::Interface>> bob;
+      std::map<std::string, std::unique_ptr<Andor::Interface>> andor;     ///< container for Andor::Interface objects
 
-      std::map<std::string, std::unique_ptr<Andor::Interface>> andor;     ///< create a container for Andor::Interface objects
+      std::map<std::string, Andor::DefaultValues> default_config;         ///< container to hold defaults for each camera
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }

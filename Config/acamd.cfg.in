@@ -32,28 +32,25 @@ EMULATOR_PORT=@ACAMD_EMULATOR@
 #
 PIXSCALE=0.26
 
-# Specify the Andor serial number for the ACAM, required to identify the
-# correct camera when more than one is present, or
-# set "ANDOR_SN=(emulate <sn>)" to emulate the Andor where <sn> is
-# an emulated serial nunmber of {1001,1002,...,1008}.
+# ANDOR=( <name> [emulate] <sn> <scale> <hflip> <vflip> <rot> <temp> <hbin> <vbin> )
 #
-ANDOR_SN=13452
-#ANDOR_SN=(emulate 1001)
-
-# ANDOR=( [emulate] <SN> <HFLIP> <VFLIP> <ROTDIR> )
-# Specify the Andor serial number, image flip and rotation.
-# The serial number identifies the correct camera to use, or
-# use SN="emulate <sn>" to emulate the Andor where <sn> is
-# an emulated serial nunmber of {1001,1002,...,1008}.
+#       <name>  name which is expected to be { L R }
+#       <sn>    Andor serial number (or "emulate")
+#       <scale> pixel scale in arcsec/pixel
+#       <hflip> horizontal flip 1=enable 0=disable
+#       <vflip> vertical flip 1=enable 0=disable
+#       <rot>   rotate 90 deg: { cw ccw none }
+#       <temp>  temperature setpoint in deg C
+#       <hbin>  horizontal binning (power of 2)
+#       <vbin>  vertical binning (power of 2)
 #
-# Set <HFLIP> or <VFLIP> to 1 to enable flipping horizontally
-# or vertically. Set to 0 to disable flipping.
+# The name for acam is not used for anything but set here to conform
+# to the general format for configuration.
 #
-# Set <ROTDIR> to "cw"   to rotate 90 deg clockwise
-#                 "ccw"  to rotate 90 deg counter clockwise
-#                 "none" to set rotation to none
+# Include "emulate" to emulate the Andor and use a serial number in {1001,1002,...,1008}.
 #
-ANDOR=(13452 1 0 cw)
+ANDOR=("acam" 13452 0.06 0 0 ccw -60 1 1)
+#ANDOR=("acam" emulate 1001 0.06 0 0 ccw 0 1 1)
 
 # PUSH_GUIDER_SETTINGS
 # This defines the shell script which pushes guider settings to the
