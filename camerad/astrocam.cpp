@@ -1750,7 +1750,7 @@ logwrite(function,message.str() );
     //
     if ( interface.camera.ext_shutter ) interface.do_native( "OSH" );
 
-    // open the Bonn shutter
+    // open the Bonn shutter if enabled
     //
     interface.camera.shutter.set_open();
 
@@ -1760,9 +1760,9 @@ logwrite(function,message.str() );
     timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     mjd0 = mjd_from( timenow );              // modified Julian date of start
 
-
-    message.str(""); message << "NOTICE:shutter opened at " << timestring;
-    interface.camera.async.enqueue_and_log( function, message.str() );
+    if ( interface.camera.shutter.is_enabled ) {
+      interface.camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
+    }
 
     // Here is the shutter timer
     //
@@ -1779,8 +1779,9 @@ logwrite(function,message.str() );
     mjd1 = mjd_from( timenow );              // modified Julian date of stop
     mjd = (mjd1+mjd0)/2.;                    // average mjd
 
-    message.str(""); message << "NOTICE:shutter closed at " << timestring;
-    interface.camera.async.enqueue_and_log( function, message.str() );
+    if ( interface.camera.shutter.is_enabled ) {
+      interface.camera.async.enqueue_and_log( function, "NOTICE:shutter closed at "+timestring );
+    }
 
     // Send external close shutter command, if configured.
     //
@@ -1804,8 +1805,9 @@ logwrite(function,message.str() );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
-    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "SHUTTIME", interface.camera.shutter.get_duration(),
-                                                                         "actual shutter open time in sec", 3 );
+    interface.fitsinfo[expbuf]->systemkeys.primary().addkey(
+        "SHUTTIME", (interface.camera.shutter.is_enabled ? interface.camera.shutter.get_duration() : NAN ),
+        "actual shutter open time in sec", 3 );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS0", airmass0, "airmass at start of exposure" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS1", airmass1, "airmass at end of exposure" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS", airmass, "average of AIRMASS0 and AIRMASS1" );
@@ -4286,7 +4288,6 @@ logwrite(function, message.str());
     std::string function = "AstroCam::Interface::shutter";
     std::stringstream message;
     long error = NO_ERROR;
-    bool shutten;
     shutter_out = "undefined";  // undefined until set below
 
     // Help
@@ -4299,9 +4300,12 @@ logwrite(function, message.str());
       shutter_out.append( "  to enable and disable, respectively. If no arg is given then the\n" );
       shutter_out.append( "  current shutterenable state is returned.\n" );
       shutter_out.append( "\n" );
-      shutter_out.append( "  A PCI connection must be opened to a controller before the enable\n" );
-      shutter_out.append( "  state can be set or read.\n" );
-      shutter_out.append( "\n" );
+      if ( this->camera.ext_shutter ) {
+        shutter_out.append( "  For external shutter (i.e. controlled by Leach controller) a PCI\n" );
+        shutter_out.append( "  connection must be opened to a controller before the enable\n" );
+        shutter_out.append( "  state can be set or read.\n" );
+        shutter_out.append( "\n" );
+      }
       shutter_out.append( "  See also \""+CAMERAD_TEST+" shutter\" for manual shutter operation.\n" );
       return HELP;
     }
@@ -4311,9 +4315,9 @@ logwrite(function, message.str());
     if ( !shutter_in.empty() ) {
       try {
         std::transform( shutter_in.begin(), shutter_in.end(), shutter_in.begin(), ::tolower );  // make lowercase
-        if ( shutter_in == "disable" || shutter_in == "0" ) shutten = false;
+        if ( shutter_in == "disable" || shutter_in == "0" ) this->camera.shutter.is_enabled = false;
         else
-        if ( shutter_in == "enable"  || shutter_in == "1" ) shutten = true;
+        if ( shutter_in == "enable"  || shutter_in == "1" ) this->camera.shutter.is_enabled = true;
         else {
           message.str(""); message << "ERROR: " << shutter_in << " is invalid. Expecting enable or disable";
           logwrite( function, message.str() );
@@ -4327,18 +4331,21 @@ logwrite(function, message.str());
 
       // Set shutterenable the same for all devices
       //
-      if ( error == NO_ERROR ) for ( const auto &dev : this->devnums ) {
-        this->controller[dev].info.shutterenable = shutten;
+      if ( error==NO_ERROR && this->camera.ext_shutter ) for ( const auto &dev : this->devnums ) {
+        this->controller[dev].info.shutterenable = this->camera.shutter.is_enabled;
       }
     }
 
-    // Get shutterenable state from the controller class
+    // For external shutter (i.e. triggered by Leach controller)
+    // read the shutterenable state back from the controller class.
     //
-    for ( const auto &dev : this->devnums ) {
-      this->camera_info.shutterenable = this->controller[dev].info.shutterenable;
-      shutter_out = this->camera_info.shutterenable ? "enabled" : "disabled";
+    if ( this->camera.ext_shutter ) for ( const auto &dev : this->devnums ) {
+      this->camera.shutter.is_enabled = this->controller[dev].info.shutterenable;
       break;  // just need one since they're all the same
     }
+    // otherwise shutterenable state is whatever is in the camera_info class
+
+    shutter_out = this->camera.shutter.is_enabled ? "enabled" : "disabled";
 
     // set the return value and report the state now, either setting or getting
     //
@@ -4347,7 +4354,7 @@ logwrite(function, message.str());
 
     // Add the shutter enable keyword to the system keys db
     //
-    this->camera_info.systemkeys.primary().addkey( "SHUTTEN", ( this->camera_info.shutterenable ? "T" : "F" ), "shutter was enabled" );
+    this->camera_info.systemkeys.primary().addkey( "SHUTTEN", ( this->camera.shutter.is_enabled ? "T" : "F" ), "shutter was enabled" );
 
     return error;
   }

@@ -67,6 +67,12 @@ namespace Camera {
    *           is read by DCD(1). Consequently, these are active-LO outputs.
    *           Since the computer has no RS232 port, a USB-RS232 converter is used.
    *
+   *           If is_enabled is cleared (false) then everything goes through the
+   *           motions except do not send the ioctl commands to actually operate
+   *           the shutter. This allows conditions that might wait on shutter open
+   *           and close to behave as normal. The only difference is that the
+   *           mechanism doesn't move.
+   *
    */
   class Shutter {
     private:
@@ -78,6 +84,7 @@ namespace Camera {
     public:
       std::condition_variable condition;
       std::mutex lock;
+      bool is_enabled;  //!< is shutter enabled?
 
       inline bool isopen()   const { return ( this->state==1 ? true : false ); }
       inline bool isclosed() const { return ( this->state==0 ? true : false ); }
@@ -163,7 +170,10 @@ namespace Camera {
         this->state=1;
         this->duration_sec=NAN;  // reset duration, set on shutter close
         this->open_time = std::chrono::high_resolution_clock::now();
-        return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+        if ( this->is_enabled ) {  // operate the mechanism only if enabled
+          return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+        }
+        else return NO_ERROR;
       }
       /***** Camera::Shutter:set_open *****************************************/
 
@@ -182,7 +192,11 @@ namespace Camera {
         this->state=0;
         this->close_time = std::chrono::high_resolution_clock::now();
         // close shutter here
-        long ret = ( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+        long ret;
+        if ( this->is_enabled ) {  // operate the mechanism only if enabled
+          ret=( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
+        }
+        else ret=NO_ERROR;
         // set shutter duration now
         this->duration_sec = std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
                                                                                 - this->open_time).count() / 1000000000.;
@@ -294,7 +308,7 @@ namespace Camera {
       /***** Camera::Shutter:get_state ****************************************/
 
 
-      Shutter() : state(-1), RTS_bit(TIOCM_RTS), fd(-1), duration_sec(NAN) {
+      Shutter() : state(-1), RTS_bit(TIOCM_RTS), fd(-1), duration_sec(NAN), is_enabled(true) {
         this->open_time = this->close_time = std::chrono::high_resolution_clock::now();
       }
 
