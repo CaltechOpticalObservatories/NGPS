@@ -12,6 +12,8 @@
 
 namespace Slit {
 
+  float SlitDimension::_arcsec_per_mm = NAN;  /// initialized by Slit::Server::configure_slitd
+
   /***** Slit::Interface::initialize_class ************************************/
   /**
    * @brief      initializes the class from configure_slitd()
@@ -51,8 +53,7 @@ namespace Slit {
       error = ERROR;
     }
 
-//  this->minwidth=0;
-    this->maxwidth=0;
+    this->maxwidth = SlitDimension(0, Unit::MM);
 
     // Loop through the expected motor names, and
     // sum their min/max values which will have to be the min/max slit width.
@@ -64,8 +65,7 @@ namespace Slit {
 
       if ( loc != _motormap.end() ) {
         if ( _motormap[name].axes.find(1) != _motormap[name].axes.end() ) {
-          this->maxwidth += ( _motormap[name].axes[1].max /*- _motormap[name].axes[1].min*/ );
-//        this->minwidth +=   _motormap[name].axes[1].min ;
+          this->maxwidth.mm() += (_motormap[name].axes[1].max-this->center.mm());
         }
         else {
           message.str(""); message << "ERROR motor " << name << " missing configuration for axis 1";
@@ -78,12 +78,6 @@ namespace Slit {
         error = ERROR;
       }
     }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] numdev=" << this->numdev 
-                             << " minwidth=" << this->minwidth << " maxwidth=" << this->maxwidth;
-    logwrite( function, message.str() );
-#endif
 
     return( error );
   }
@@ -107,7 +101,7 @@ namespace Slit {
     error |= this->motorinterface.clear_errors();
     error |= this->motorinterface.set_servo( true );
 
-    return( error );
+    return error;
   }
   /***** Slit::Interface::open ************************************************/
 
@@ -181,7 +175,7 @@ namespace Slit {
       logwrite( function, message.str() );
     }
 
-    return( error );
+    return error;
   }
   /***** Slit::Interface::is_open *********************************************/
 
@@ -210,7 +204,7 @@ namespace Slit {
     if ( ! arg.empty() ) {
       retstring="invalid_argument";
       logwrite( "Slit::Interface::home", "ERROR expected no arguments" );
-      return( ERROR );
+      return ERROR;
     }
 
     // All the work is done by the PI motor interface class
@@ -244,7 +238,7 @@ namespace Slit {
     if ( ! arg.empty() ) {
       retstring="invalid_argument";
       logwrite( "Slit::Interface::is_home", "ERROR expected no arguments" );
-      return( ERROR );
+      return ERROR;
     }
 
     // All the work is done by the PI motor interface class
@@ -283,7 +277,12 @@ namespace Slit {
       retstring.append( " <width> [ <offset> ]\n" );
       retstring.append( "  Set <width> and optionally <offset>. If offset is omitted then\n" );
       retstring.append( "  both motors are moved symmetrically to achieve the requested width.\n" );
-      retstring.append( "  Using an offset will reduce the maximum width available.\n" );
+      retstring.append( "  Using an offset will reduce the maximum width available.\n\n" );
+      retstring.append( "  Default units are arcsec. Add \"mm\" to use actuator units,\n" );
+      retstring.append( "  E.G. "+SLITD_SET+" 5mm to set a slit width of 5mm\n\n" );
+      message.str(""); message << "  For 0 offset, range of allowable slit widths is { "
+                               << minwidth.arcsec() <<" : " << maxwidth.arcsec() << " } arcsec\n";
+      retstring.append( message.str() );
       return HELP;
     }
 
@@ -299,121 +298,114 @@ namespace Slit {
                                << ". expected <width> or <width> <offset>";
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
-    float setwidth  = 0.0;  // slit width
-    float setoffset = 0.0;  // default offset unless otherwise set below
+    SlitDimension reqwidth, reqoffset;
 
     // tokens.size() is guaranteed to be either 1 OR 2 at this point
     //
     try {
+      // default unit is arcsec, can override if "mm" is present with the value
+      auto unit = Unit::ARCSEC;
+
+      // Get the reqwidth, reqoffset in the requested unit (default arcsecC)
+      //
       switch ( tokens.size() ) {
 
         case 2:    // the 2nd arg is the setoffset (and if not set here then use default above)
-          setoffset = std::stof( tokens.at(1) );
+          if ( tokens.at(1).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
+          reqoffset = SlitDimension( std::stof( tokens.at(1) ), unit );
 
           // do not break!
           // let this case drop through because if there is a 2nd arg then there's a 1st
 
-        case 1:    // the 1st arg is the setwidth
-          setwidth = std::stof( tokens.at(0) );
+        case 1:    // the 1st arg is the reqwidth
+          if ( tokens.at(0).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
+          reqwidth = SlitDimension( std::stof( tokens.at(0) ), unit );
           break;
 
         default:   // impossible! because I already checked that tokens.size was 1 or 2
-          message.str(""); message << "ERROR: impossible! num args=" << tokens.size() << ": " << args;
-          logwrite( function, message.str() );
+          logwrite( function, "ERROR args: "+args );
           retstring="internal_error";
-          return( ERROR );
+          return ERROR;
       }
     }
     catch( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing args " << args << " : " << e.what();
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR parsing args "+args+": "+e.what() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     // Now range-check values
     //
-    if ( setwidth > this->maxwidth || setwidth < this->minwidth ) {
-      message.str(""); message << "ERROR: width " << setwidth << " out of range. expected {" 
-                               << minwidth <<":" << maxwidth << "}";
+    if ( reqwidth.arcsec() > this->maxwidth.arcsec() || reqwidth.arcsec() < this->minwidth.arcsec() ) {
+      message.str(""); message << "ERROR: width " << reqwidth.arcsec() << " out of range. expected { "
+                               << minwidth.arcsec() <<" : " << maxwidth.arcsec() << " }";
       logwrite( function, message.str() );
-      retstring="out_of_range";
-      return( ERROR );
+      retstring="width_exceeds_range";
+      return ERROR;
     }
-
-    // offset can be limited by either of these so pick the smaller of the two:
-    //
-    std::vector<float> checkoffsets;
-    checkoffsets.push_back( ( this->maxwidth - setwidth ) / 2 );
-    checkoffsets.push_back( setwidth / 2 );
-
-    float max_offset = *min_element( checkoffsets.begin(), checkoffsets.end() );
 
     // range check requested width and offset
     //
-    if ( std::abs( setoffset ) > max_offset ) {
-      message.str(""); message << "ERROR: requested offset " << std::abs(setoffset) 
-                               << " exceeds maximum " << max_offset << " allowed for this width";
+    SlitDimension maxoffset( ( ( this->maxwidth.arcsec() - reqwidth.arcsec() ) / 2.0 ), Unit::ARCSEC );
+    if ( std::abs( reqoffset.arcsec() ) > maxoffset.arcsec() ) {
+      message.str(""); message << "ERROR: requested offset " << std::abs(reqoffset.arcsec())
+                               << " exceeds maximum " << maxoffset.arcsec() << " allowed for this width";
       logwrite( function, message.str() );
-      retstring="out_of_range";
-      return( ERROR );
+      retstring="offset_exceeds_range";
+      return ERROR;
     }
 
-    if ( setoffset < 0 && this->numdev < 2 ) {
-      message.str(""); message << "ERROR: negative offset " << setoffset << " not allowed with only one motor";
+    if ( reqoffset.arcsec() < 0 && this->numdev < 2 ) {
+      message.str(""); message << "ERROR: negative offset " << reqoffset.arcsec() << " not allowed with only one motor";
       logwrite( function, message.str() );
       retstring="invalid_offset";
-      return( ERROR );
+      return ERROR;
     }
 
-    float pos_A, pos_B;
+    // requested actuator positions
+    //
+    auto posA = SlitDimension( this->center.mm() + reqwidth.mm()/2. + reqoffset.mm(), Unit::MM );
+    auto posB = SlitDimension( this->center.mm() + reqwidth.mm()/2. - reqoffset.mm(), Unit::MM );
 
-    pos_A = 2.2 + setwidth/2 + setoffset;
-    pos_B = 2.2 + setwidth/2 - setoffset;
-
+    // actuator limits
+    //
     auto _motormap = this->motorinterface.get_motormap();
 
-    if ( pos_A < _motormap["A"].axes[1].min ||
-         pos_A > _motormap["A"].axes[1].max ) {
-      message.str(""); message << "ERROR actuator A " << pos_A << " outside range { "
-                               << _motormap["A"].axes[1].min << " : "
-                               << _motormap["A"].axes[1].max << " }";
+    auto minA = SlitDimension( _motormap["A"].axes[1].min, Unit::MM );
+    auto maxA = SlitDimension( _motormap["A"].axes[1].max, Unit::MM );
+    auto minB = SlitDimension( _motormap["B"].axes[1].min, Unit::MM );
+    auto maxB = SlitDimension( _motormap["B"].axes[1].max, Unit::MM );
+
+    if ( posA < minA || posA > maxA ) {
+      message.str(""); message << "ERROR requested actuator A position " << posA.arcsec()
+                               << " outside range { " << minA.arcsec() << " : " << maxA.arcsec() << " }"
+                               << " for this width";
       logwrite( function, message.str() );
-      retstring="invalid_position";
+      retstring="actuatorA_outside_range";
       return ERROR;
     }
 
-    if ( pos_B < _motormap["B"].axes[1].min ||
-         pos_B > _motormap["B"].axes[1].max ) {
-      message.str(""); message << "ERROR actuator B " << pos_B << " outside range { "
-                               << _motormap["B"].axes[1].min << " : "
-                               << _motormap["B"].axes[1].max << " }";
+    if ( posB < minB || posB > maxB ) {
+      message.str(""); message << "ERROR requested actuator B position " << posB.arcsec()
+                               << " outside range { " << minB.arcsec() << " : " << maxB.arcsec() << " }"
+                               << " for this width";
       logwrite( function, message.str() );
-      retstring="invalid_position";
+      retstring="actuatorB_outside_range";
       return ERROR;
     }
-
-//  if ( setoffset >= 0 ) {
-//    pos_B = setoffset + setwidth/this->numdev;
-//    pos_A = std::abs( setwidth - pos_B );
-//  }
-//  else {
-//    pos_A = setwidth/this->numdev - setoffset;
-//    pos_B = std::abs( setwidth - pos_A );
-//  }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " width=" << setwidth
-                             << " offset=" << setoffset;
+    message.str(""); message << "[DEBUG] posA=" << posA.mm() << " posB=" << posB.mm() << " width=" << reqwidth.arcsec()
+                             << " offset=" << reqoffset.arcsec();
     logwrite( function, message.str() );
 #endif
 
     std::stringstream posAstring, posBstring;
-    posAstring << std::setprecision(3) << std::fixed << pos_A;
-    posBstring << std::setprecision(3) << std::fixed << pos_B;
+    posAstring << std::setprecision(3) << std::fixed << posA.mm();
+    posBstring << std::setprecision(3) << std::fixed << posB.mm();
 
     // move the A and B motors now together --
     // When motorinterface::moveto() receives vectors then it will move
@@ -429,7 +421,7 @@ namespace Slit {
     //
     if ( error == NO_ERROR ) error = this->get( retstring );
 
-    return( error );
+    return error;
   }
   /***** Slit::Interface::set *************************************************/
 
@@ -446,14 +438,14 @@ namespace Slit {
     std::string function = "Slit::Interface::get";
     std::stringstream message;
     long error  = NO_ERROR;
-    float pos_A = 0.0;
-    float pos_B = 0.0;
-    float width = 0.0;
-    float offs  = 0.0;
+    float posA=NAN;
+    float posB=NAN;
+    float poswidth=NAN;
+    float posoffset=NAN;
 
     // Help
     //
-    if ( args == "?" || args == "help" ) {
+    if ( args == "?" || args == "help" || args == "-h" ) {
       retstring = SLITD_GET;
       retstring.append( " \n" );
       retstring.append( "  returns the current slit width and offset in arcseconds\n" );
@@ -462,24 +454,21 @@ namespace Slit {
 
     // this call reads the controller and returns the numeric values
     //
-    error = this->read_positions( width, offs, pos_A, pos_B );
+    error = this->read_positions( poswidth, posoffset, posA, posB );
 
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] pos_A=" << pos_A << " pos_B=" << pos_B << " numdev=" << this->numdev
-                             << " width=" << width << " offset=" << offs;
-    logwrite( function, message.str() );
-#endif
+    auto width  = SlitDimension( poswidth, Unit::MM );
+    auto offset = SlitDimension( posoffset, Unit::MM );
 
     // form the return value
     //
     std::stringstream s;
-    s << width << " " << offs;
+    s << width.arcsec() << " " << offset.arcsec();
     retstring = s.str();
 
     message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " " << retstring;
     this->async.enqueue( message.str() );
 
-    return( error );
+    return error;
   }
   /***** Slit::Interface::get *************************************************/
   long Interface::get( std::string &retstring ) {
@@ -491,14 +480,14 @@ namespace Slit {
   /***** Slit::Interface::read_positions **************************************/
   /**
    * @brief      read the actuator positions
-   * @param[out] width   calculated slit width in arcsec
-   * @param[out] offset  calculated slit offset in arcsec
-   * @param[out] posa    actuator A position in mm
-   * @param[out] posb    actuator B position in mm
+   * @param[out] poswidth   width in actuator units (mm)
+   * @param[out] posoffset  offset in actuator units (mm)
+   * @param[out] posA       actuator A position in mm
+   * @param[out] posB       actuator B position in mm
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::read_positions( float &width, float &offset, float &posa, float &posb ) {
+  long Interface::read_positions( float &poswidth, float &posoffset, float &posA, float &posB ) {
 
     long error = NO_ERROR;
 
@@ -509,16 +498,17 @@ namespace Slit {
       return ERROR;
     }
 
-    // get the position for each address in controller_info
+    // get the actuator position for each address in controller_info
     //
     int axis=1;
-    error |= this->motorinterface.get_pos( "A", axis, posa );
-    error |= this->motorinterface.get_pos( "B", axis, posb );
+    error |= this->motorinterface.get_pos( "A", axis, posA );
+    error |= this->motorinterface.get_pos( "B", axis, posB );
 
-    // calculate width and offset, converting to arcseconds
+    // calculate poswidth and posoffset from actuator positions,
+    // which is width and offset in actuator units (mm)
     //
-    width = ( posa + posb ) * this->arcsec_per_mm;
-    offset  = ( ( posb - posa ) / this->numdev ) * this->arcsec_per_mm;
+    poswidth  = ( ( posA - this->center.mm() ) + ( posB - this->center.mm() ) );
+    posoffset = ( ( posA - posB ) / this->numdev );
 
     return error;
   }
@@ -526,14 +516,14 @@ namespace Slit {
   /**
    * @brief      read the actuator positions
    * @details    This overloads read_positions to return only width and offset.
-   * @param[out] width   calculated slit width in arcsec
-   * @param[out] width   calculated slit width in arcsec
+   * @param[out] poswidth   width in actuator units (mm)
+   * @param[out] posoffset  offset in actuator units (mm)
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::read_positions( float &width, float &offset ) {
-    float posa=NAN, posb=NAN;
-    return read_positions( width, offset, posa, posb );
+  long Interface::read_positions( float &poswidth, float &posoffset ) {
+    float posA=NAN, posB=NAN;
+    return read_positions( poswidth, posoffset, posA, posB );
   }
   /***** Slit::Interface::read_positions **************************************/
 
@@ -556,7 +546,7 @@ namespace Slit {
       this->motorinterface.stop_motion( mot.second.name, mot.second.addr );
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Slit::Interface::stop ************************************************/
 
@@ -664,15 +654,18 @@ namespace Slit {
     if ( this->numdev > 0 ) {
       // get the position for each address in controller_info
       //
-      float width=NAN, offs=NAN, pos_A=NAN, pos_B=NAN;
-      this->read_positions( width, offs, pos_A, pos_B );
+      float poswidth=NAN, posoffset=NAN, posA=NAN, posB=NAN;
+      this->read_positions( poswidth, posoffset, posA, posB );
+
+      auto width  = SlitDimension( poswidth, Unit::MM );
+      auto offset = SlitDimension( posoffset, Unit::MM );
 
       // fill the jmessage with the positions just retrieved
       //
-      if ( !std::isnan(width) ) jmessage["SLITW"] = width;
-      if ( !std::isnan(offs) )  jmessage["SLITO"] = offs;
-      if ( !std::isnan(pos_A) ) jmessage["SLITPOSA"] = pos_A;
-      if ( !std::isnan(pos_B) ) jmessage["SLITPOSB"] = pos_B;
+      if ( !std::isnan(poswidth) )  jmessage["SLITW"]    = width.arcsec();
+      if ( !std::isnan(posoffset) ) jmessage["SLITO"]    = offset.arcsec();
+      if ( !std::isnan(posA) )      jmessage["SLITPOSA"] = posA;
+      if ( !std::isnan(posB) )      jmessage["SLITPOSB"] = posB;
     }
 
     retstring = jmessage.dump();  // serialize the json message into retstring

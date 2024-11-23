@@ -6,8 +6,7 @@
  *
  */
 
-#ifndef SLIT_INTERFACE_H
-#define SLIT_INTERFACE_H
+#pragma once
 
 #include "network.h"
 #include "pi.h"
@@ -32,6 +31,138 @@ namespace Slit {
 
   const std::string DAEMON_NAME = "slitd";       ///< when run as a daemon, this is my name
 
+  enum class Unit { MM, ARCSEC };
+
+  /***** Slit::SlitDimension **************************************************/
+  /**
+   * @class    SlitDimension
+   * @brief    helper class encapsulates a slit dimension value with its unit
+   * @details  This class allows setting and getting a slit dimension with
+   *           its unit. Retrieve the value in the desired unit with the
+   *           .mm() and .arcsec() functions.
+   *
+   */
+  class SlitDimension {
+    private:
+      static float _arcsec_per_mm;  ///< static scale factor shared by all objects
+      float _value;                 ///< currernt value in the stored unit
+      Unit _unit;                   ///< unit for the current value
+
+      /**
+       * cahced variables in case mm() or arcsec()
+       * needs to perform a unit conversion
+       */
+      mutable float _cached_mm;
+      mutable float _cached_arcsec;
+
+    public:
+      explicit SlitDimension( float v=0, Unit u=Unit::MM )
+        : _value(v), _unit(u) { }
+
+      SlitDimension( const SlitDimension &other )
+        : _value(other._value),
+          _unit(other._unit) { }
+
+      static void initialize_arcsec_per_mm( float value ) {
+        _arcsec_per_mm = ( value > 0 ? value : NAN );
+      }
+
+      /**
+       * @brief  return modifiable reference to value in mm
+       */
+      float &mm() const {
+        if (_arcsec_per_mm==0) _arcsec_per_mm=NAN;
+        if ( _unit==Unit::MM ) return const_cast<float&>(_value);
+        else {
+          _cached_mm = _value / _arcsec_per_mm;
+          return _cached_mm;
+        }
+      }
+
+      /**
+       * @brief  return modifiable reference to value in arcsec
+       */
+      float &arcsec() const {
+        if (_arcsec_per_mm==0) _arcsec_per_mm=NAN;
+        if ( _unit==Unit::ARCSEC ) return const_cast<float&>(_value);
+        else {
+          _cached_arcsec = _value * _arcsec_per_mm;
+          return _cached_arcsec;
+        }
+      }
+
+      /**
+       * overload operators
+       */
+      SlitDimension operator+( float scalar ) const {
+        return SlitDimension( ( _unit==Unit::MM ? mm() : arcsec() )+scalar, _unit );
+      }
+      SlitDimension operator-( float scalar ) const {
+        return SlitDimension( ( _unit==Unit::MM ? mm() : arcsec() )-scalar, _unit );
+      }
+      SlitDimension operator*( float scalar ) const {
+        return SlitDimension( ( _unit==Unit::MM ? mm() : arcsec() )*scalar, _unit );
+      }
+      SlitDimension operator/( float scalar ) const {
+        if (scalar==0) throw std::invalid_argument("division by zero");
+        return SlitDimension( ( _unit==Unit::MM ? mm() : arcsec() )/scalar, _unit );
+      }
+      bool operator<( float scalar ) const {
+        return ( ( _unit==Unit::MM ? mm() : arcsec() ) < scalar );
+      }
+      bool operator>( float scalar ) const {
+        return ( ( _unit==Unit::MM ? mm() : arcsec() ) > scalar );
+      }
+      bool operator==( float scalar ) const {
+        return ( ( _unit==Unit::MM ? mm() : arcsec() ) == scalar );
+      }
+      bool operator<=( float scalar ) const {
+        return ( ( _unit==Unit::MM ? mm() : arcsec() ) <= scalar );
+      }
+      bool operator>=( float scalar ) const {
+        return ( ( _unit==Unit::MM ? mm() : arcsec() ) >= scalar );
+      }
+      bool operator<(const SlitDimension& other) const {
+        if (_unit == Unit::MM) return mm() < other.mm();
+        else return arcsec() < other.arcsec();
+      }
+      bool operator>(const SlitDimension& other) const {
+        if (_unit == Unit::MM) return mm() > other.mm();
+        else return arcsec() > other.arcsec();
+      }
+      bool operator==(const SlitDimension& other) const {
+        if (_unit == Unit::MM) return mm() == other.mm();
+        else return arcsec() == other.arcsec();
+      }
+      bool operator<=(const SlitDimension& other) const {
+        if (_unit == Unit::MM) return mm() <= other.mm();
+        else return arcsec() <= other.arcsec();
+      }
+      bool operator>=(const SlitDimension& other) const {
+        if (_unit == Unit::MM) return mm() >= other.mm();
+        else return arcsec() >= other.arcsec();
+      }
+      SlitDimension& operator+=(float scalar) {
+        _value = ( _unit==Unit::MM ? mm() : arcsec() ) + scalar;
+        return *this;
+      }
+      SlitDimension& operator-=(float scalar) {
+        _value = ( _unit==Unit::MM ? mm() : arcsec() ) - scalar;
+        return *this;
+      }
+      SlitDimension& operator*=(float scalar) {
+        _value = ( _unit==Unit::MM ? mm() : arcsec() ) * scalar;
+        return *this;
+      }
+      SlitDimension& operator/=(float scalar) {
+        if (scalar == 0) throw std::invalid_argument("division by zero");
+        _value = ( _unit==Unit::MM ? mm() : arcsec() ) / scalar;
+        return *this;
+      }
+  };
+  /***** Slit::SlitDimension **************************************************/
+
+
   /***** Slit::Interface ******************************************************/
   /**
    * @class  Interface
@@ -44,19 +175,19 @@ namespace Slit {
   class Interface {
     private:
       size_t numdev;
-      float maxwidth;
 
     public:
-      float minwidth;
-      Interface() : numdev(-1), maxwidth(NAN), minwidth(NAN), arcsec_per_mm(NAN) { };
+      Interface() : numdev(0) { }
+
+      SlitDimension maxwidth;
+      SlitDimension minwidth;  ///< set by config file
+      SlitDimension center;    ///< position of center in actuator units
 
       Common::Queue async;
 
       // PI Interface class for Servo type
       //
       Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
-
-      double arcsec_per_mm;
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
@@ -91,4 +222,3 @@ namespace Slit {
 
 }
 /***** Slit *******************************************************************/
-#endif

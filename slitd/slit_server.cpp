@@ -9,7 +9,6 @@
 
 namespace Slit {
 
-
   /***** Slit::Server::exit_cleanly *******************************************/
   /**
    * @brief      shutdown nicely
@@ -60,8 +59,7 @@ namespace Slit {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
@@ -81,8 +79,7 @@ namespace Slit {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
@@ -102,8 +99,7 @@ namespace Slit {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
@@ -111,8 +107,7 @@ namespace Slit {
       //
       if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
@@ -120,8 +115,7 @@ namespace Slit {
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
         if ( this->interface.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
-          message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
+          this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
           applied++;
         }
       }
@@ -143,8 +137,7 @@ namespace Slit {
         auto loc = _motormap.find( AXIS.motorname );
         if ( loc != _motormap.end() ) {
           this->interface.motorinterface.add_axis( AXIS );
-          message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
+          this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
           applied++;
         }
         else {
@@ -161,18 +154,31 @@ namespace Slit {
 
       // MIN_WIDTH: minimum slit width in physical units (mm)
       //
-      if ( config.param[entry] == "MIN_WIDTH" ) {
+      if ( config.param[entry] == "MIN_WIDTH_MM" ) {
         try {
-          this->interface.minwidth = std::stod( config.arg[entry] );
+          this->interface.minwidth = SlitDimension( std::stof( config.arg[entry] ), Unit::MM );
         }
         catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing MIN_WIDTH " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
+          logwrite( function, "ERROR parsing MIN_WIDTH "+config.arg[entry]+": "+e.what() );
           error=ERROR;
           break;
         }
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
+      // SLIT_CENTER_MM: Position of center in actuator units (mm)
+      //
+      if ( config.param[entry] == "SLIT_CENTER_MM" ) {
+        try {
+          this->interface.center = SlitDimension( std::stof( config.arg[entry] ), Unit::MM );
+        }
+        catch ( const std::exception &e ) {
+          logwrite( function, "ERROR parsing SLIT_CENTER_MM "+config.arg[entry]+": "+e.what() );
+          error=ERROR;
+          break;
+        }
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
@@ -180,7 +186,7 @@ namespace Slit {
       //
       if ( config.param[entry] == "ARCSEC_PER_MM" ) {
         try {
-          this->interface.arcsec_per_mm = std::stod( config.arg[entry] );
+          SlitDimension::initialize_arcsec_per_mm(std::stof(config.arg[entry]));
         }
         catch ( const std::exception &e ) {
           message.str(""); message << "ERROR parsing ARCSEC_PER_MM " << config.arg[entry] << ": " << e.what();
@@ -188,8 +194,7 @@ namespace Slit {
           error=ERROR;
           break;
         }
-        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
