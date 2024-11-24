@@ -28,8 +28,8 @@ ARCSIM_NUMDEV=0
 #       FIRMWARE  the default firmware to load
 #       READOUT   the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2_20241103.lod U2)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg_20241103.lod U1)
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2-20241115.lod U2)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
 
 # -----------------------------------------------------------------------------
 # This defines the default image size and binning for each controller.

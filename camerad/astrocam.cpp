@@ -2695,6 +2695,21 @@ this->camera_info.userkeys.primary().listkeys();
         auto &_telemkeys  = this->controller[dev].expinfo[this_expbuf].telemkeys;
         auto &_userkeys   = this->controller[dev].expinfo[this_expbuf].userkeys;
 
+        // store BOI in this local _systemkeys so that it's overwritten each exposure
+        //
+        int nboi=0;
+        int lastrowread=0;
+        int stop=0;
+        for ( const auto &[nskip,nread] : this->controller[dev].info.interest_bands ) {
+          nboi++;
+          std::string boikey = "BOI"+std::to_string(nboi);
+          lastrowread += nskip;
+          stop = lastrowread+nread;
+          std::string boival = std::to_string(lastrowread)+":"+std::to_string(stop);
+          _systemkeys.add_key( boikey, boival, "band of interest "+std::to_string(nboi), EXT, this->controller[dev].channel  );
+          lastrowread = stop;
+        }
+
         // merge the primary keyword databases from fitsinfo into expinfo
         //
         _systemkeys.primary().merge( this->fitsinfo[this_expbuf]->systemkeys.primary().keydb );
@@ -3796,8 +3811,7 @@ for ( const auto &dev : selectdev ) {
     // don't continue if that controller is not connected now
     //
     if ( !this->controller[dev].connected ) {
-      message.str(""); message << "ERROR controller channel " << chan << " not connected";
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR controller channel "+chan+" not connected" );
       retstring="not_connected";
       return ERROR;
     }
@@ -3807,7 +3821,7 @@ for ( const auto &dev : selectdev ) {
     //
     if ( args.find("full") != std::string::npos ) {
       this->controller[dev].info.interest_bands.clear();
-      // This native 3-letter command with three zeros "SIB 0 0 0" will initialize
+      // This native 3-letter command with three zeros "BOI 0 0 0" will initialize
       // the Y:NBOXES address which disables band-of-interest skips/reads in the firmware.
       // It's the 3rd zero that triggers the initialization.
       //
@@ -3819,7 +3833,11 @@ for ( const auto &dev : selectdev ) {
       cmd.str(""); cmd << chan << " " << this->controller[dev].imsize_args;
       if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
     }
-    else {
+    // if the only thing passed-in is the chan, then extract_dev_chan will
+    // return an empty retstring (which means read-only). If not then there
+    // are args to parse...
+    //
+    else if ( !retstring.empty() ) {
 
       // Any args(s) other than "full" are parsed here.
       // I'm expecting pairs of <nskip> <nread> ...
@@ -3836,14 +3854,20 @@ for ( const auto &dev : selectdev ) {
         return ERROR;
       }
 
-      // the total number rows for imsize will be the sum
-      // of all the nreads
+      // initialize the table before writing
+      //
+      this->controller[dev].info.interest_bands.clear();
+      if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
+
+      // the total number rows in the image will be the sum of all the nreads
+      // which is initialized here and summed in the loop
       //
       int total_rows = 0;
 
       try {
-        // loop through the tokens (which have already been checked to be in pairs)
-        // and place each pair into the vector of interest_bands
+        // This loops through the tokens (which have already been checked to be
+        // in pairs). It writes each pair to the BOI table in the controller and
+        // places each pair into the vector of interest_bands.
         //
         for ( size_t i=1; i<tokens.size(); i+=2 ) {
           int nskip = std::stoi( tokens.at(i) );
@@ -3865,9 +3889,19 @@ for ( const auto &dev : selectdev ) {
             return ERROR;
           }
 
-          this->camera_info.interest_bands.emplace_back( nskip, nread );
+          // Load this interest band into a table on the controller.
+          // Supply a non-zero 3rd value because the 3rd value = 0 is used
+          // to initialize the number of rows in the firmware.
+          //
+          cmd.str(""); cmd << "BOI " << nskip << " " << nread << " " << 0xFFFF;
+          if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+          logwrite( function, "chan "+chan+": "+cmd.str() );
 
-          // total number of rows in image size
+          // add this row to the interest_bands table for this controller
+          //
+          this->controller[dev].info.interest_bands.emplace_back( nskip, nread );
+
+          // running summation of rows of each band in the table
           //
           total_rows += nread;
         }
@@ -3876,16 +3910,6 @@ for ( const auto &dev : selectdev ) {
         //
         if ( this->do_bin("row 1", retstring) != NO_ERROR ) return ERROR;
         if ( this->do_bin("col 1", retstring) != NO_ERROR ) return ERROR;
-
-        // Load the interest bands into a table on the controller.
-        // Supply a non-zero 3rd value because the 3rd value = 0 is used
-        // to initialize the number of rows in the firmware.
-        //
-        for ( const auto &[nskip,nread] : this->camera_info.interest_bands ) {
-          cmd.str(""); cmd << "BOI " << nskip << " " << nread << 0xFFFF;
-          if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
-          logwrite( function, cmd.str() );
-        }
 
         // Now update the image size
         //
@@ -3907,16 +3931,12 @@ for ( const auto &dev : selectdev ) {
       }
     } // end if args != full
 
-    // Whether setting boi or not, the retstring contains the current image size
-    // and the list of interest bands. Here's the current image size,
+    // Whether setting boi or not, the retstring contains the list of
+    // interest bands.
     //
     retstring.clear();
-    this->image_size("", retstring);
-
-    // and here append the list of interest bands.
-    //
     int boinum=1;
-    for ( const auto &[nskip,nread] : this->camera_info.interest_bands ) {
+    for ( const auto &[nskip,nread] : this->controller[dev].info.interest_bands ) {
       message.str(""); message << boinum++ << ": " << nskip << " " << nread << "\n";
       retstring.append( message.str() );
     }
@@ -4539,7 +4559,7 @@ logwrite(function, message.str());
 
     if ( ! tokens.empty() ) {
 
-      // Having other than 4 tokens is automatic disqualification so get out now
+      // Having other than 6 tokens is automatic disqualification so get out now
       //
       if ( tokens.size() != 6 ) {
         message.str(""); message << "ERROR: invalid arguments: " << retstring << ": expected <rows> <cols> <osrows> <oscols> <binrows> <bincols>";
@@ -4645,6 +4665,7 @@ logwrite(function, message.str());
       if ( save_as_default ) {
         message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
         this->controller[dev].imsize_args = message.str();
+        logwrite( function, "saved as default for chan "+chan+": "+message.str() );
       }
 
       // This is as far as we can get without a connected controller.
