@@ -675,7 +675,7 @@ logwrite(function,message.str() );
     // By now, these must both be known.
     //
     if ( dev < 0 || chan.empty() || this->controller.find(dev)==this->controller.end() ) {
-      message.str(""); message << "ERROR: unrecognized channel or device \"" << tryme << "\"";
+      message.str(""); message << "unrecognized channel or device \"" << tryme << "\"";
       logwrite( function, message.str() );
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] dev=" << dev << " chan=" << chan << " controller.find(dev)==controller.end ? "
@@ -1410,26 +1410,61 @@ logwrite(function,message.str() );
 
   /***** AstroCam::Interface::do_native ***************************************/
   /**
-   * @brief      send a 3-letter command to the Leach controller
-   * @param[in]  cmdstr  string containing command and arguments
+   * @brief      send a 3-letter command to specified or all open Leach controllers
+   * @details    See details in overloaded do_native(std::string args, std::string &retstring)
+   * @param[in]  args  string containing optional DEV|CHAN plus command and arguments
    * @return     NO_ERROR on success, ERROR on error
    *
    */
-  long Interface::do_native( std::string cmdstr ) {
-    std::string retstring;
-    std::vector<uint32_t> selectdev;
-    for ( const auto &dev : this->devnums ) {
-      // build selectdev vector from all connected controllers
-      if ( this->controller[dev].connected ) selectdev.push_back( dev );
+  long Interface::do_native( std::string args ) {
+    std::string dontcare;
+    return this->do_native( args, dontcare );
+  }
+  /***** AstroCam::Interface::do_native ***************************************/
+  /**
+   * @brief      send a 3-letter command to specified or all open Leach controllers
+   * @details    The input args are checked for the presence of a recognized
+   *             channel name or device number. If one is present then the
+   *             remaining part of args is sent to that specified controller only,
+   *             otherwise the entire args string is sent to all open controllers.
+   * @param[in]  args       string containing optional DEV|CHAN plus command and arguments
+   * @param[out] retstring  return string
+   * @return     NO_ERROR on success, ERROR on error
+   *
+   * args can be <CMD>
+   *             <CMD> <ARG> ...
+   *             <DEV|CHAN> <CMD>
+   *             <DEV|CHAN> <CMD> <ARG> ...
+   */
+  long Interface::do_native( std::string args, std::string &retstring ) {
+    // Try to get the requested dev# and channel from supplied args.
+    // If extract_dev_chan() returns NO_ERROR, dev can be trusted as
+    // a valid index without needing a try/catch and cmdstr will hold
+    // the full command (args minus the dev/chan).
+    //
+    int dev=-1;
+    std::string chan, cmdstr;
+    if (this->extract_dev_chan( args, dev, chan, cmdstr )==NO_ERROR) {
+      // found a dev so send native command to this dev only
+      std::string dontcare;
+      return this->do_native( dev, cmdstr, dontcare );
     }
-    return this->do_native( selectdev, cmdstr, retstring );
+    else {
+      // didn't find a dev in args so build vector of all open controllers
+      std::vector<uint32_t> selectdev;
+      for ( const auto &dev : this->devnums ) {
+        if ( this->controller[dev].connected ) selectdev.push_back( dev );
+      }
+      // this will send the native command to all controllers in that vector
+      return this->do_native( selectdev, args, retstring );
+    }
   }
   /***** AstroCam::Interface::do_native ***************************************/
 
 
   /***** AstroCam::Interface::do_native ***************************************/
   /**
-   * @brief      send a 3-letter command to the Leach controller
+   * @brief      send a 3-letter command to Leach controllers specified by vector
    * @param[in]  selectdev  vector of devices to use
    * @param[in]  cmdstr     string containing command and arguments
    * @return     NO_ERROR on success, ERROR on error
@@ -1450,7 +1485,7 @@ logwrite(function,message.str() );
 
   /***** AstroCam::Interface::do_native ***************************************/
   /**
-   * @brief      send a 3-letter command to the Leach controller
+   * @brief      send a 3-letter command to individual Leach controller by devnum
    * @param[in]  dev        individual device to use
    * @param[in]  cmdstr     string containing command and arguments
    * @param[out] retstring  reference to string to contain reply
@@ -1467,25 +1502,7 @@ logwrite(function,message.str() );
 
   /***** AstroCam::Interface::do_native ***************************************/
   /**
-   * @brief      send a 3-letter command to the Leach controller
-   * @param[in]  cmdstr     string containing command and arguments
-   * @param[out] retstring  reference to string to contain reply
-   * @return     NO_ERROR on success, ERROR on error
-   *
-   */
-  long Interface::do_native( std::string cmdstr, std::string &retstring ) {
-    std::vector<uint32_t> selectdev;
-    for ( const auto &dev : this->devnums ) {
-      selectdev.push_back( dev );                        // build selectdev vector from all connected controllers
-    }
-    return this->do_native( selectdev, cmdstr, retstring );
-  }
-  /***** AstroCam::Interface::do_native ***************************************/
-
-
-  /***** AstroCam::Interface::do_native ***************************************/
-  /**
-   * @brief      send a 3-letter command to the Leach controller
+   * @brief      send a 3-letter command to Leach controllers specified by vector
    * @param[in]  selectdev  vector of devices to use
    * @param[in]  cmdstr     string containing command and arguments
    * @param[out] retstring  reference to string to contain reply

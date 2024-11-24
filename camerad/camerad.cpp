@@ -599,7 +599,6 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if ( cmd == CAMERAD_NATIVE ) {
-      logwrite(function, " CALLING NATIVE");
                     ret = server.native(args, retstring);  // @todo make this work with Archon
                     }
 #ifdef ASTROCAM

@@ -1004,11 +1004,16 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       void collect_telemetry(std::string name, std::string &retstring);
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);
-      long do_native(std::string cmdstr);
-      long do_native(std::string cmdstr, std::string &retstring);
-      long do_native(std::vector<uint32_t> selectdev, std::string cmdstr);
-      long do_native( int dev, std::string cmdstr, std::string &retstring );
-      long do_native( std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring );
+
+      /**
+       * send 3-letter command to ...
+       */
+      long do_native(std::string cmdstr);                          ///< selected or all open controllers
+      long do_native(std::string cmdstr, std::string &retstring);  ///< selected or all open controllers, return reply
+      long do_native(std::vector<uint32_t> selectdev, std::string cmdstr);    ///< specified by vector
+      long do_native(std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring);  ///< specified by vector
+      long do_native(int dev, std::string cmdstr, std::string &retstring);  ///< specified by devnum
+
       long write_frame( int expbuf, int devnum, const std::string chan, int fpbcount );
 
       static void dothread_load( Controller &con, std::string timlodfile );

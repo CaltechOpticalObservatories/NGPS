@@ -72,7 +72,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_MEX,
                                                   CAMERAD_MEXAMPS,
                                                   CAMERAD_MODEXPTIME,
-                                                  CAMERAD_NATIVE+" ? | <CMD> [ <ARG1> [ < ARG2> [ <ARG3> [ <ARG4> ] ] ] ]",
+                                                  CAMERAD_NATIVE+" ? | [<DEV>|<CHAN>] <CMD> [ <ARG1> [ < ARG2> [ <ARG3> [ <ARG4> ] ] ] ]",
                                                   CAMERAD_OPEN+" [ ? | <devlist> ]",
                                                   CAMERAD_PAUSE,
                                                   CAMERAD_PREEXPOSURES,

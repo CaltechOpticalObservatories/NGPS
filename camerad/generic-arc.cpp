@@ -169,13 +169,14 @@ namespace AstroCam {
   /***** AstroCam::Interface::native ****************8*************************/
   /**
    * @brief      wrapper for do_native
-   * @details    send a 3-letter command to the Leach controller
+   * @details    send a 3-letter command to all or specified Leach controller(s)
    * @param[in]  cmdstr  command to send
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::native( std::string cmdstr ) {
-    return this->do_native( cmdstr );
+    std::string dontcare;
+    return this->do_native( cmdstr, dontcare );
   }
   /***** AstroCam::Interface::native ****************8*************************/
 
@@ -183,22 +184,15 @@ namespace AstroCam {
   /***** AstroCam::Interface::native ****************8*************************/
   /**
    * @brief      wrapper for do_native
-   * @details    send a 3-letter command to the Leach controller
+   * @details    send a 3-letter command to all or specified Leach controller(s)
+   *             and return reply
    * @param[in]  cmdstr     command to send
    * @param[out] retstring  reference to string to contain reply
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::native( std::string cmdstr, std::string &retstring ) {
-
-    // temporary kludge to allow sending native commands to each controller
-    // not safe so fix this later
-    //
-    size_t it = cmdstr.find(" ");
-    int dev = std::stoi(cmdstr.substr(0, it));
-    std::string cmd = cmdstr.substr(it+1);
-    return this->do_native( dev, cmd, retstring );
-//  return this->do_native( cmdstr, retstring );
+    return this->do_native( cmdstr, retstring );
   }
   /***** AstroCam::Interface::native ****************8*************************/
 
