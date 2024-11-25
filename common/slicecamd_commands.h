@@ -27,9 +27,9 @@ const std::string SLICECAMD_GUISET   = "guiset";    ///< set params for gui disp
 const std::string SLICECAMD_INIT     = "init";      ///< ***
 const std::string SLICECAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
 const std::string SLICECAMD_ISOPEN   = "isopen";    ///< *** close connection to all devices
-const std::string SLICECAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
+const std::string SLICECAMD_OPEN     = "open";      const int SLICECAMD_OPEN_TIMEOUT = 15000;  ///< *** open connection to all devices, camera and motion
 const std::string SLICECAMD_PUTONSLIT= "putonslit"; ///< put target on slit
-const std::string SLICECAMD_SHUTDOWN = "shutdown";      ///< shut down slicecam
+const std::string SLICECAMD_SHUTDOWN = "shutdown";  const int SLICECAMD_SHUTDOWN_TIMEOUT = 40000;  ///< shut down slicecam
 const std::string SLICECAMD_TCSGET = "tcsget";      ///< 
 const std::string SLICECAMD_TCSINIT = "tcsinit";    ///< initialize slicecamd's connection to tcsd
 const std::string SLICECAMD_TCSISCONNECTED = "tcsisconnected";  ///< 

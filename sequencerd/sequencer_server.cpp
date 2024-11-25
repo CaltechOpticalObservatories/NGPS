@@ -820,8 +820,8 @@ namespace Sequencer {
   /***** Server::block_main ***************************************************/
   /**
    * @brief      main function for blocking connection thread
-   * @param[in]  seq   reference to Sequencer::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to Sequencer::Server object
+   * @param[in]  sock    Network::TcpSocket socket object
    *
    * accepts a socket connection and processes the request by
    * calling function doit()
@@ -829,13 +829,13 @@ namespace Sequencer {
    * This thread never terminates.
    *
    */
-  void Server::block_main( Sequencer::Server &seq, Network::TcpSocket sock ) {
-    while(1) {
-      sock.Accept();
-      sock.Write("CONNECTED\n");
-      seq.doit(seq, sock);          // call function to do the work
-      sock.Close();
-    }
+  void Server::block_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
+    server.threads_active.fetch_add(1);  // atomically increment threads_busy counter
+    sock->Write("CONNECTED\n");
+    server.doit(*sock);
+    sock->Close();
+    server.threads_active.fetch_sub(1);  // atomically increment threads_busy counter
+    server.id_pool.release_number( sock->id );
     return;
   }
   /***** Server::block_main ***************************************************/
@@ -844,8 +844,8 @@ namespace Sequencer {
   /**** Server::thread_main ***************************************************/
   /**
    * @brief      main function for all non-blocked threads
-   * @param[in]  seq   reference to Sequencer::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to Sequencer::Server object
+   * @param[in]  sock    Network::TcpSocket socket object
    *
    * accepts a socket connection and processes the request by
    * calling function doit()
@@ -857,17 +857,15 @@ namespace Sequencer {
    * is mutex-protected.
    *
    */
-  void Server::thread_main( Sequencer::Server &seq, Network::TcpSocket &sock ) {
+  void Server::thread_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
     while (1) {
-      seq.conn_mutex.lock();
-      sock.Accept();
-      seq.conn_mutex.unlock();
-#ifdef LOGLEVEL_DEBUG
-      std::stringstream message;
-      message.str(""); message << "[DEBUG] thread " << sock.id << " spawning doit to handle connection on fd " << sock.getfd();
-      logwrite( "Server::thread_main", message.str() );
-#endif
-      std::thread( doit, std::ref(seq), std::ref(sock) ).detach();  // spawn a thread to handle this connection
+      {
+      std::lock_guard<std::mutex> lock(server.conn_mutex);
+      sock->Accept();
+      }
+      // Spawn a thread to handle this command in the background,
+      // which is responsible for closing this socket.
+      std::thread( &Sequencer::Server::doit, &server, std::ref(*sock) ).detach();
     }
     return;
   }
@@ -877,8 +875,8 @@ namespace Sequencer {
   /**** Server::gui_main ******************************************************/
   /**
    * @brief      main function for gui thread
-   * @param[in]  seq   reference to Sequencer::Server object
-   * @param[in]  sock  Network::TcpSocket socket object
+   * @param[in]  server  reference to Sequencer::Server object
+   * @param[in]  sock    Network::TcpSocket socket object
    *
    * accepts a socket connection and processes the request by
    * calling function doit()
@@ -888,11 +886,15 @@ namespace Sequencer {
    * This function differs from block_main only in that doit is spawned in its own thread.
    *
    */
-  void Server::gui_main( Sequencer::Server &seq, Network::TcpSocket &sock ) {
+  void Server::gui_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock ) {
     while (1) {
-      sock.Accept();
-      sock.Write("CONNECTED\n");
-      std::thread( doit, std::ref(seq), std::ref(sock) ).detach();  // spawn a thread to handle this connection
+      {
+      std::lock_guard<std::mutex> lock(server.conn_mutex);
+      sock->Accept();
+      }
+      sock->Write("CONNECTED\n");
+      // spawn a thread to handle this command in the background
+      std::thread( &Sequencer::Server::doit, &server, std::ref(*sock) ).detach();
     }
     return;
   }
@@ -953,7 +955,7 @@ namespace Sequencer {
    *   "<device> [all|<app>] [_BLOCK_] <command> [<arg>]"
    *
    */
-  void Server::doit( Sequencer::Server &seq, Network::TcpSocket &sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Sequencer::Server::doit";
     long  ret;
     std::stringstream message;
@@ -977,11 +979,11 @@ namespace Sequencer {
       if ( ( pollret=sock.Poll() ) <= 0 ) {
         if (pollret==0) {
           message.str(""); message << "ERROR: Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
-          seq.sequence.async.enqueue_and_log( function, message.str() );
+          this->sequence.async.enqueue_and_log( function, message.str() );
         }
         if ( pollret <0 && errno ) {
           message.str(""); message << "ERROR: Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
-          seq.sequence.async.enqueue_and_log( function, message.str() );
+          this->sequence.async.enqueue_and_log( function, message.str() );
         }
         break;                      // this will close the connection
       }
@@ -997,11 +999,11 @@ namespace Sequencer {
 #endif
         if ( ret<0 && errno ) {     // could be an actual read error
           message.str(""); message << "ERROR: Read error on fd " << sock.getfd() << ": " << strerror(errno);
-          seq.sequence.async.enqueue_and_log( function, message.str() );
+          this->sequence.async.enqueue_and_log( function, message.str() );
         }
         if (ret==-2) {              // or a timeout
           message.str(""); message << "ERROR: timeout reading from fd " << sock.getfd();
-          seq.sequence.async.enqueue_and_log( function, message.str() );
+          this->sequence.async.enqueue_and_log( function, message.str() );
         }
         break;                      // Breaking out of the while loop will close the connection.
                                     // This probably means that the client has terminated abruptly, 
@@ -1031,8 +1033,8 @@ namespace Sequencer {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
         }
 
-        sock.id = ++seq.cmd_num;
-        if ( seq.cmd_num == INT_MAX ) seq.cmd_num = 0;
+        sock.id = ++this->cmd_num;
+        if ( this->cmd_num == INT_MAX ) this->cmd_num = 0;
 
         message.str(""); message << "received command (" << sock.id << ") on fd " << sock.getfd() << ": " << cmd << " " << args;
         logwrite(function, message.str());
@@ -1040,18 +1042,17 @@ namespace Sequencer {
       catch ( std::runtime_error &e ) {
         std::stringstream errstream; errstream << e.what();
         message.str(""); message << "ERROR: parsing arguments: " << errstream.str();
-        seq.sequence.async.enqueue_and_log( function, message.str() );
+        this->sequence.async.enqueue_and_log( function, message.str() );
         ret = -1;
       }
       catch ( ... ) {
         message.str(""); message << "ERROR: unknown error parsing arguments: " << args;
-        seq.sequence.async.enqueue_and_log( function, message.str() );
+        this->sequence.async.enqueue_and_log( function, message.str() );
         ret = -1;
       }
 
-      /**
-       * process commands here
-       */
+      // process commands here
+      //
       ret = NOTHING;
       std::string retstring;
 
@@ -1065,7 +1066,7 @@ namespace Sequencer {
       }
       else
       if ( cmd.compare( SEQUENCERD_EXIT )==0 ) {
-                      seq.exit_cleanly();                        // shutdown the sequencer
+                      this->exit_cleanly();                        // shutdown the sequencer
       }
       else
 
@@ -1079,10 +1080,10 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( seq.sequence.acamd ), args ).detach();
+                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.acamd ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.acamd.command( args, retstring );
+                        ret = this->sequence.acamd.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "acamd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1102,10 +1103,10 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( seq.sequence.calibd ), args ).detach();
+                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.calibd ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.calibd.command( args, retstring );
+                        ret = this->sequence.calibd.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "calibd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1125,10 +1126,10 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( seq.sequence.camerad ), args ).detach();
+                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.camerad ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.camerad.command( args, retstring );
+                        ret = this->sequence.camerad.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "camerad reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1148,10 +1149,10 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( seq.sequence.filterd ), args ).detach();
+                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.filterd ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.filterd.command( args, retstring );
+                        ret = this->sequence.filterd.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "filterd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1173,10 +1174,10 @@ namespace Sequencer {
                       else
                       if ( sock.isasync() ) {
                         std::thread( std::ref( Common::DaemonClient::dothread_command ),
-                                     std::ref( seq.sequence.powerd ), args ).detach();
+                                     std::ref( this->sequence.powerd ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.powerd.command( args, retstring );
+                        ret = this->sequence.powerd.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "powerd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1196,10 +1197,10 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( seq.sequence.slitd ), args ).detach();
+                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.slitd ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.slitd.command( args, retstring );
+                        ret = this->sequence.slitd.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "slitd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1219,10 +1220,10 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( seq.sequence.tcsd ), args ).detach();
+                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.tcsd ), args ).detach();
                       }
                       else {
-                        ret = seq.sequence.tcsd.command( args, retstring );
+                        ret = this->sequence.tcsd.command( args, retstring );
                         if ( !retstring.empty() ) {
                           message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1236,14 +1237,14 @@ namespace Sequencer {
       // This is needed before any sequences can be run.
       //
       if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
-///                   seq.sequence.is_tcs_ontarget.store( false );
-                      seq.sequence.tcs_nowait.store( false );
-                      seq.sequence.dome_nowait.store( true );
+///                   this->sequence.is_tcs_ontarget.store( false );
+                      this->sequence.tcs_nowait.store( false );
+                      this->sequence.dome_nowait.store( true );
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Sequencer::Sequence::dothread_startup ), std::ref( seq.sequence ) ).detach();
+                        std::thread( std::ref( Sequencer::Sequence::dothread_startup ), std::ref( this->sequence ) ).detach();
                       }
                       else {
-                        ret = seq.sequence.startup( seq.sequence );
+                        ret = this->sequence.startup( this->sequence );
                       }
       }
       else
@@ -1253,10 +1254,10 @@ namespace Sequencer {
       //
       if ( cmd.compare( SEQUENCERD_SHUTDOWN ) == 0 ) {
                       if ( sock.isasync() ) {
-                        std::thread( std::ref( Sequencer::Sequence::dothread_shutdown ), std::ref( seq.sequence ) ).detach();
+                        std::thread( std::ref( Sequencer::Sequence::dothread_shutdown ), std::ref( this->sequence ) ).detach();
                       }
                       else {
-                        ret = seq.sequence.shutdown( seq.sequence );
+                        ret = this->sequence.shutdown( this->sequence );
                       }
       }
       else
@@ -1264,27 +1265,27 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
-///                   seq.sequence.is_tcs_ontarget.store( false );
-                      seq.sequence.tcs_nowait.store( false );
-                      seq.sequence.dome_nowait.store( true );
+///                   this->sequence.is_tcs_ontarget.store( false );
+                      this->sequence.tcs_nowait.store( false );
+                      this->sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
                       //
-                      if ( seq.sequence.seqstate.load() != Sequencer::SEQ_READY ) {
+                      if ( this->sequence.seqstate.load() != Sequencer::SEQ_READY ) {
                         // log applicable causes
                         //
-                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_RUNNING ) ) {
-                          seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer already running" );
+                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_RUNNING ) ) {
+                          this->sequence.async.enqueue_and_log( function, "ERROR: sequencer already running" );
                         }
                         else
-                        if ( seq.sequence.seq_state.is_any_set( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_STOPREQ ) ) {
-                          seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer waiting for stop" );
+                        if ( this->sequence.seq_state.is_any_set( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_STOPREQ ) ) {
+                          this->sequence.async.enqueue_and_log( function, "ERROR: sequencer waiting for stop" );
                         }
                         else
-                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_OFFLINE ) ) {
-                          seq.sequence.async.enqueue_and_log( function, "ERROR: sequencer is offline. run startup" );
+                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_OFFLINE ) ) {
+                          this->sequence.async.enqueue_and_log( function, "ERROR: sequencer is offline. run startup" );
                         }
                         else {
-                          seq.sequence.async.enqueue_and_log( function, "ERROR: unable to start sequencer" );
+                          this->sequence.async.enqueue_and_log( function, "ERROR: unable to start sequencer" );
                         }
                         ret = ERROR;
                       }
@@ -1293,12 +1294,12 @@ namespace Sequencer {
                       // then spawn a thread to start
                       //
                       else {
-                        seq.sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
-                        seq.sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
-                        seq.sequence.broadcast_seqstate();
+                        this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
+                        this->sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
+                        this->sequence.broadcast_seqstate();
 
                         std::thread( std::ref( Sequencer::Sequence::dothread_sequence_start ),
-                                     std::ref( seq.sequence) ).detach();
+                                     std::ref( this->sequence) ).detach();
                         ret = NO_ERROR;
                       }
       }
@@ -1309,8 +1310,8 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_STOP ) == 0 ) {
                       // Can only stop during an active or paused exposure
                       //
-                      if ( ! seq.sequence.seq_state.is_any_set( Sequencer::SEQ_PAUSE, Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: can only stop during an active or paused exposure" );
+                      if ( ! this->sequence.seq_state.is_any_set( Sequencer::SEQ_PAUSE, Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                        this->sequence.async.enqueue_and_log( function, "ERROR: can only stop during an active or paused exposure" );
                         ret = ERROR;
                       }
 
@@ -1319,29 +1320,29 @@ namespace Sequencer {
                       else {
                         logwrite( function, "stop requested" );
 
-                        seq.sequence.req_state.set_and_clear( Sequencer::SEQ_STOPREQ, Sequencer::SEQ_RUNNING );
-                        seq.sequence.seq_state.set_and_clear( {Sequencer::SEQ_STOPREQ}, {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // set STOPREQ, clear RUNNING|EXPOSE
-                        seq.sequence.broadcast_seqstate();
+                        this->sequence.req_state.set_and_clear( Sequencer::SEQ_STOPREQ, Sequencer::SEQ_RUNNING );
+                        this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_STOPREQ}, {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // set STOPREQ, clear RUNNING|EXPOSE
+                        this->sequence.broadcast_seqstate();
 
                         // If exposing then modify the exposure time to end immediately (-1)
                         //
-                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                          seq.sequence.dothread_modify_exptime( std::ref( seq.sequence ), -1 );
+                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                          this->sequence.dothread_modify_exptime( std::ref( this->sequence ), -1 );
                         }
 
                         // If paused then send the RESUME command to the camera daemon.
                         //
-                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
-                          seq.sequence.camerad.async( CAMERAD_RESUME );                // tell the camera to resume exposure
-                          seq.sequence.seq_state.clear( Sequencer::SEQ_PAUSE );        // clear the PAUSE bit
-                          seq.sequence.broadcast_seqstate();
+                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
+                          this->sequence.camerad.async( CAMERAD_RESUME );                // tell the camera to resume exposure
+                          this->sequence.seq_state.clear( Sequencer::SEQ_PAUSE );        // clear the PAUSE bit
+                          this->sequence.broadcast_seqstate();
                         }
 
 ///                     // If not already running then spawn a thread to wait for this state,
 ///                     // which will send out any needed notifications.
 ///                     //
-///                     if ( not seq.sequence.waiting_for_state.load() ) {
-///                       std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
+///                     if ( not this->sequence.waiting_for_state.load() ) {
+///                       std::thread( this->sequence.dothread_wait_for_state, std::ref(this->sequence) ).detach();
 ///                     }
                         ret = NO_ERROR;
                       }
@@ -1355,59 +1356,59 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
                       // don't allow an abort unless SEQ_RUNNING or SEQ_PAUSED bit is set
                       //
-                      if ( seq.sequence.seq_state.is_any_set( Sequencer::SEQ_RUNNING,
+                      if ( this->sequence.seq_state.is_any_set( Sequencer::SEQ_RUNNING,
                                                               Sequencer::SEQ_PAUSE ) ) {
                         logwrite( function, "abort requested" );
 
                         // If exposing then asynchronously send the ABORT command to the camera daemon
                         //
-                        if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                          seq.sequence.camerad.async( CAMERAD_ABORT );                       // tell camera to abort exposure
-                          seq.sequence.seq_state.clear( Sequencer::SEQ_WAIT_EXPOSE );        // clear the EXPOSE bit
-                          seq.sequence.broadcast_seqstate();
+                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                          this->sequence.camerad.async( CAMERAD_ABORT );                       // tell camera to abort exposure
+                          this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_EXPOSE );        // clear the EXPOSE bit
+                          this->sequence.broadcast_seqstate();
                         }
 
 //                      {
 //                        I was here
-//                      std::lock_guard<std::mutex> lock(seq.tcs_ontarget_mtx); // Lock the mutex
-                        seq.sequence.req_state.set_and_clear( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_RUNNING );
-                        seq.sequence.seq_state.set_and_clear( {Sequencer::SEQ_ABORTREQ},
+//                      std::lock_guard<std::mutex> lock(this->tcs_ontarget_mtx); // Lock the mutex
+                        this->sequence.req_state.set_and_clear( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_RUNNING );
+                        this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_ABORTREQ},
                                                               {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // clear RUNNING|EXPOSE
-                        seq.sequence.broadcast_seqstate();
+                        this->sequence.broadcast_seqstate();
 
                         // Set the do-type to single-step
                         //
-                        seq.sequence.dotype( "ONE" );
+                        this->sequence.dotype( "ONE" );
 
                         // Update the target state to unassigned
                         //
-                        ret = seq.sequence.target.update_state( Sequencer::TARGET_UNASSIGNED );
-                        message.str(""); message << ( ret==NO_ERROR ? "" : "ERROR " ) << "marking target " << seq.sequence.target.name
-                                                 << " id " << seq.sequence.target.obsid << " order " << seq.sequence.target.obsorder
+                        ret = this->sequence.target.update_state( Sequencer::TARGET_UNASSIGNED );
+                        message.str(""); message << ( ret==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->sequence.target.name
+                                                 << " id " << this->sequence.target.obsid << " order " << this->sequence.target.obsorder
                                                  << " as " << Sequencer::TARGET_UNASSIGNED;
                         logwrite( function, message.str() );
 
 ///                     // If this thread is not already running then spawn a thread to wait for this state,
 ///                     // which will send out any needed notifications.
 ///                     //
-///                     if ( ! seq.sequence.waiting_for_state.load() ) {
+///                     if ( ! this->sequence.waiting_for_state.load() ) {
 #ifdef LOGLEVEL_DEBUG
 ///                       logwrite( function, "[DEBUG] spawning waiting_for_state thread" );
 #endif
-///                       std::thread( seq.sequence.dothread_wait_for_state, std::ref(seq.sequence) ).detach();
+///                       std::thread( this->sequence.dothread_wait_for_state, std::ref(this->sequence) ).detach();
 ///                     }
 
 //                      {
-//                      std::lock_guard<std::mutex> lock(seq.tcs_ontarget_mtx); // Lock the mutex
-//                      seq.set_seqstate(Sequencer::SEQ_ABORTREQ); // Update the state
+//                      std::lock_guard<std::mutex> lock(this->tcs_ontarget_mtx); // Lock the mutex
+//                      this->set_seqstate(Sequencer::SEQ_ABORTREQ); // Update the state
 //                      }
-//                      seq.tcs_ontarget_cv.notify_all(); // Notify waiting threads
+//                      this->tcs_ontarget_cv.notify_all(); // Notify waiting threads
 
-///                     seq.sequence.tcs_ontarget_cv.notify_all();
+///                     this->sequence.tcs_ontarget_cv.notify_all();
                         ret |= NO_ERROR;
                       }
                       else {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: cannot abort unless sequencer is running or paused" );
+                        this->sequence.async.enqueue_and_log( function, "ERROR: cannot abort unless sequencer is running or paused" );
                         ret = ERROR;
                       }
       }
@@ -1419,8 +1420,8 @@ namespace Sequencer {
       // This will notify the waiting thread which will proceed with the observation.
       //
       if ( cmd == SEQUENCERD_ONTARGET ) {
-                      seq.sequence.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
-///                   seq.sequence.is_tcs_ontarget.store( true );
+                      this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
+///                   this->sequence.is_tcs_ontarget.store( true );
                       ret = NO_ERROR;
       }
       else
@@ -1428,7 +1429,7 @@ namespace Sequencer {
       // skip slew
       //
       if ( cmd.compare( SEQUENCERD_TCSNOWAIT ) == 0) {
-                      seq.sequence.tcs_nowait.store( true );
+                      this->sequence.tcs_nowait.store( true );
                       ret = NO_ERROR;
       }
       else
@@ -1436,7 +1437,7 @@ namespace Sequencer {
       // skip dome
       //
       if ( cmd.compare( SEQUENCERD_DOMENOWAIT ) == 0) {
-                      seq.sequence.dome_nowait.store( true );
+                      this->sequence.dome_nowait.store( true );
                       ret = NO_ERROR;
       }
       else
@@ -1445,7 +1446,7 @@ namespace Sequencer {
       // which can be single-step (do one) or continuous (do all).
       //
       if ( cmd.compare( SEQUENCERD_DOTYPE ) == 0) {
-                      ret = seq.sequence.dotype( args, retstring );
+                      ret = this->sequence.dotype( args, retstring );
                       retstring.append( " " );
       }
       else
@@ -1454,8 +1455,8 @@ namespace Sequencer {
       // which will be returned, logged, and written to the async message port.
       //
       if ( cmd.compare( SEQUENCERD_STATE ) == 0) {
-                      seq.sequence.broadcast_seqstate();
-                      retstring = seq.sequence.seqstate_string( seq.sequence.seqstate.load() );
+                      this->sequence.broadcast_seqstate();
+                      retstring = this->sequence.seqstate_string( this->sequence.seqstate.load() );
                       ret = NO_ERROR;
       }
       else
@@ -1463,9 +1464,9 @@ namespace Sequencer {
       // Set/Get the Target Set ID
       //
       if ( cmd.compare( SEQUENCERD_TARGETSET ) == 0) {
-                      ret= seq.sequence.target.targetset( args, retstring );
+                      ret= this->sequence.target.targetset( args, retstring );
                       message.str(""); message << "TARGETSET: " << retstring;
-                      seq.sequence.async.enqueue( message.str() );
+                      this->sequence.async.enqueue( message.str() );
                       retstring.append( " " );
       }
       else
@@ -1475,21 +1476,21 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_PAUSE ) == 0) {
                       // Can only pause during an exposure
                       //
-                      if ( seq.sequence.seq_state.is_clear( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
+                      if ( this->sequence.seq_state.is_clear( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                        this->sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
                         ret = ERROR;
                       }
                       else
                       // Can't already be paused
                       //
-                      if ( seq.sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: already paused" );
+                      if ( this->sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
+                        this->sequence.async.enqueue_and_log( function, "ERROR: already paused" );
                         ret = ERROR;
                       }
                       else {
-                        seq.sequence.camerad.async( CAMERAD_PAUSE );
-                        seq.sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
-                        seq.sequence.broadcast_seqstate();
+                        this->sequence.camerad.async( CAMERAD_PAUSE );
+                        this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+                        this->sequence.broadcast_seqstate();
                         ret = NO_ERROR;
                       }
       }
@@ -1500,14 +1501,14 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_RESUME ) == 0) {
                       // Can only resume when paused
                       //
-                      if ( seq.sequence.seq_state.is_clear( Sequencer::SEQ_PAUSE ) ) {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
+                      if ( this->sequence.seq_state.is_clear( Sequencer::SEQ_PAUSE ) ) {
+                        this->sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
                         ret = ERROR;
                       }
                       else {
-                        seq.sequence.camerad.async( CAMERAD_RESUME );
-                        seq.sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
-                        seq.sequence.broadcast_seqstate();
+                        this->sequence.camerad.async( CAMERAD_RESUME );
+                        this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
+                        this->sequence.broadcast_seqstate();
                         ret = NO_ERROR;
                       }
       }
@@ -1516,7 +1517,7 @@ namespace Sequencer {
       // Call TCS Initialization
       //
       if ( cmd.compare( SEQUENCERD_TCSINIT ) == 0 ) {
-                      ret = seq.sequence.tcs_init( args, retstring );
+                      ret = this->sequence.tcs_init( args, retstring );
                       if ( ! retstring.empty() ) retstring.append( " " );
       }
       else
@@ -1525,7 +1526,7 @@ namespace Sequencer {
       // routine specified by args.
       //
       if ( cmd.compare( SEQUENCERD_TEST ) == 0 ) {
-                      ret = seq.sequence.test( args, retstring );
+                      ret = this->sequence.test( args, retstring );
                       if ( not retstring.empty() ) retstring.append( " " );
       }
       else
@@ -1535,7 +1536,7 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_MODEXPTIME ) == 0 ) {
                       Tokenize( args, tokens, " " );
                       if ( tokens.size() != 1 ) {
-                        seq.sequence.async.enqueue_and_log( function, "ERROR: expected MODEXPTIME <exptime>" );
+                        this->sequence.async.enqueue_and_log( function, "ERROR: expected MODEXPTIME <exptime>" );
                         ret = ERROR;
                       }
                       else {
@@ -1545,19 +1546,19 @@ namespace Sequencer {
                         try { exptime_req = std::stod( tokens.at(0) ); }
                         catch( std::out_of_range &e ) {
                           message.str(""); message << "ERROR: out of range parsing args " << args << ": " << e.what();
-                          seq.sequence.async.enqueue_and_log( function, message.str() );
+                          this->sequence.async.enqueue_and_log( function, message.str() );
                           ret = ERROR;
                         }
                         catch( std::invalid_argument &e ) {
                           message.str(""); message << "ERROR: invalid argument parsing args " << args << ": " << e.what();
-                          seq.sequence.async.enqueue_and_log( function, message.str() );
+                          this->sequence.async.enqueue_and_log( function, message.str() );
                           ret = ERROR;
                         }
 
                         // spawn a thread to modify the exposure time
                         //
                         std::thread( std::ref( Sequencer::Sequence::dothread_modify_exptime ),
-                                     std::ref( seq.sequence), exptime_req ).detach();
+                                     std::ref( this->sequence), exptime_req ).detach();
                         ret = NO_ERROR;
                       }
       }
@@ -1566,9 +1567,9 @@ namespace Sequencer {
       // Configure sequencer (read config file and apply)
       //
       if ( cmd.compare( SEQUENCERD_CONFIG ) == 0 ) {
-                      ret = seq.config.read_config(seq.config);  // read configuration file specified on command line
+                      ret = this->config.read_config(this->config);  // read configuration file specified on command line
                       if ( ret != NO_ERROR ) logwrite(function, "ERROR: unable to load config file");
-                      else ret = seq.configure_sequencer();
+                      else ret = this->configure_sequencer();
       }
       else
 
@@ -1582,7 +1583,7 @@ namespace Sequencer {
                         ret=HELP;
                       }
                       else {
-                        seq.sequence.make_telemetry_message( retstring );
+                        this->sequence.make_telemetry_message( retstring );
                         ret = JSON;
                       }
       }
@@ -1591,7 +1592,7 @@ namespace Sequencer {
       //
       else {
         message.str(""); message << "ERROR: unknown command: " << cmd;
-        seq.sequence.async.enqueue_and_log( function, message.str() );
+        this->sequence.async.enqueue_and_log( function, message.str() );
         ret = ERROR;
       }
 
@@ -1614,13 +1615,13 @@ namespace Sequencer {
           retstring.append( ret == 0 ? "DONE" : "ERROR" );
 
           if ( ret == JSON ) {
-            message.str(""); message << "command (" << seq.cmd_num << ") reply with JSON message";
+            message.str(""); message << "command (" << this->cmd_num << ") reply with JSON message";
             logwrite( function, message.str() );
           }
           else
           if ( ret != HELP && buf.find("help")==std::string::npos && buf.find("?")==std::string::npos ) {
             retstring.append( "\n" );
-            message.str(""); message << "command (" << seq.cmd_num << ") reply: " << retstring;
+            message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
             logwrite( function, message.str() );
           }
         }
@@ -1635,7 +1636,6 @@ namespace Sequencer {
     connection_open = false;
     sock.Close();
     logwrite( function, "connection closed" );
-
     return;
   }
   /***** Server::doit *********************************************************/

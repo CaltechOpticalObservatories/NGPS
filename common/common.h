@@ -722,6 +722,7 @@ namespace Common {
 
       static void dothread_command( Common::DaemonClient &daemon, std::string args );
       long command_timeout( std::string args, const long to );     ///< commands to daemon with timeout override
+      long command_timeout( std::string args, std::string &retstring, const long to );     ///< commands to daemon with timeout override
       long command( std::string args );                            ///< commands to daemon
       long command( std::string args, std::string &retstring );    ///< commands to daemon that need a reply
       long send( std::string command,

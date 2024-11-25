@@ -28,7 +28,8 @@ const std::string ACAMD_EXPTIME  = "exptime";   ///< set/get camera exposure tim
 const std::string ACAMD_FAN      = "fan";       ///< set Andor fan mode
 const std::string ACAMD_FILTER   = "filter";    ///< filter [ name ] to set or get the filter
 const std::string ACAMD_GUIDESET = "guideset";  ///< set params for guider display
-const std::string ACAMD_HOME     = "home";      ///< home all motors
+const std::string ACAMD_HOME     = "home";      const int ACAMD_HOME_TIMEOUT = 180000; ///< home all motors
+                                                const int ACAMD_MOVE_TIMEOUT = 40000;  ///< covers filter and cover moves
 const std::string ACAMD_INIT     = "init";      ///< ***
 const std::string ACAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?
@@ -36,10 +37,10 @@ const std::string ACAMD_ISOPEN   = "isopen";    ///< *** close connection to all
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OFFSETCAL = "offsetcal";  ///< perform TCS offset calibration
 const std::string ACAMD_OFFSETGOAL = "offsetgoal";  ///< add dRA,dDEC offset to goal
-const std::string ACAMD_OPEN     = "open";      ///< *** open connection to all devices, camera and motion
+const std::string ACAMD_OPEN     = "open";      const int ACAMD_OPEN_TIMEOUT = 180000; ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_PUTONSLIT= "putonslit"; ///< put target on slit
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
-const std::string ACAMD_SHUTDOWN = "shutdown";  ///< shutdown threads and close connections
+const std::string ACAMD_SHUTDOWN = "shutdown";  const int ACAMD_SHUTDOWN_TIMEOUT = 40000; ///< shutdown threads and close connections
 const std::string ACAMD_SAVEFRAMES= "saveframes";     ///< num frames to save during target acquire
 const std::string ACAMD_SKIPFRAMES= "skipframes";     ///< num frames to skip before target acquire
 const std::string ACAMD_SOLVE    = "solve";     ///< *** call the Python astrometry solver

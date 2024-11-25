@@ -749,6 +749,27 @@ namespace Common {
   /***** Common::DaemonClient::command_timeout ****************************************/
 
 
+  /***** Common::DaemonClient::command_timeout ****************************************/
+  /**
+   * @brief      special daemon commands or send any command, with reply, timeout override
+   * @details    temporarily override the default Poll timeout with the to provided,
+   *             for this command only, then restores class timeout to default
+   * @param[in]  args       string to send
+   * @param[out] retstring  reference to string for reply
+   * @param[in]  to         timeout in ms
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Common::DaemonClient::command_timeout( std::string args, std::string &retstring, const long to ) {
+    long timeout_og = this->timeout;
+    this->timeout = to;
+    long error = this->command( args, retstring );
+    this->timeout = timeout_og;
+    return error;
+  }
+  /***** Common::DaemonClient::command_timeout ****************************************/
+
+
   /***** Common::DaemonClient::command ************************************************/
   /**
    * @brief      special daemon commands or send any command, no reply
@@ -808,11 +829,11 @@ namespace Common {
       // initialize socket connection
       //
       if ( ( error = this->connect() ) != NO_ERROR ) retstring="ERROR"; else retstring="DONE"; 
-//#ifdef LOGLEVEL_DEBUG  //TODO
-      message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
-                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
-      logwrite( function, message.str() );
-//#endif  //TODO
+#ifdef LOGLEVEL_DEBUG
+//    message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
+//                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+//    logwrite( function, message.str() );
+#endif
     }
     else
 
@@ -824,11 +845,11 @@ namespace Common {
     // disconnect from the daemon
     //
     if ( args == "disconnect" ) {
-//#ifdef LOGLEVEL_DEBUG  //TODO
-      message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
-                               << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
-      logwrite( function, message.str() );
-//#endif  //TODO
+#ifdef LOGLEVEL_DEBUG
+//    message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
+//                             << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
+//    logwrite( function, message.str() );
+#endif
       // then close the connection
       //
       this->socket.Close();
@@ -847,18 +868,18 @@ namespace Common {
       }
       else {
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] sending to " << this->name << " socket " << this->socket.gethost()
-                                 << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << args;
-        logwrite( function, message.str() );
+//      message.str(""); message << "[DEBUG] sending to " << this->name << " socket " << this->socket.gethost()
+//                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << args;
+//      logwrite( function, message.str() );
 #endif
         error = this->send( args, retstring );
       }
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
-                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
-    logwrite( function, message.str() );
+//  message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
+//                           << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
+//  logwrite( function, message.str() );
 #endif
 
     return( error );

@@ -136,6 +136,7 @@ int main(int argc, char **argv) {
   //
   // TcpSocket objects are instantiated with (PORT#, BLOCKING_STATE, POLL_TIMEOUT_MSEC, THREAD_ID#)
   //
+/*****
   std::vector<Network::TcpSocket> socklist;          // create a vector container to hold N_THREADS TcpSocket objects
   socklist.reserve(Sequencer::N_THREADS);
 
@@ -148,7 +149,33 @@ int main(int argc, char **argv) {
   std::thread( std::ref(Sequencer::Server::block_main),
                std::ref(sequencerd),
                std::ref(socklist[0]) ).detach();     // spawn a thread to handle requests on this socket
+*****/
 
+  // First create the threads and add them to the map container
+  // instantiate TcpSocket object, non-blocking port, CONN_TIMEOUT timeout
+  //
+  Network::TcpSocket sock_main(sequencerd.nbport, false, CONN_TIMEOUT, 1);
+  if ( sock_main.Listen() < 0 ) {                                              // create a listening socket
+    logwrite( function, "ERROR could not create listening socket" );
+    sequencerd.exit_cleanly();
+  }
+  sequencerd.socklist[1] = std::make_shared<Network::TcpSocket>(sock_main);    // add it to the socklist map
+
+  for (int i = 2; i < Sequencer::N_THREADS; i++) {
+    sequencerd.socklist[i] = std::make_shared<Network::TcpSocket>(sock_main);  // copy the first one, which has a valid listening socket
+    sequencerd.socklist[i]->id = i;                                            // update the id of the copied socket
+  }
+
+  // Create the threads for the above sockets
+  //
+  for ( int i = 1; i < Sequencer::N_THREADS; i++) {
+    std::thread( Sequencer::Server::thread_main,
+                 std::ref(sequencerd),
+                 sequencerd.socklist[i] ).detach();
+  }
+
+
+/*****
   // pre-thread N_THREADS-1 detached threads to handle requests on the non-blocking port
   // thread #0 is reserved for the blocking port (above)
   //
@@ -174,10 +201,11 @@ int main(int argc, char **argv) {
 
   Network::TcpSocket async( Sequencer::DAEMON_NAME, sequencerd.asyncport, true, true, -1, thrid );    // instantiate TcpSocket object as blocking and asynchronous
   async.Listen();                                    // create a listening socket
-  socklist.push_back(async);                         // add it to the socklist vector
+  sequencerd.socklist.push_back(async);              // add it to the socklist vector
   std::thread( std::ref(Sequencer::Server::block_main),
                std::ref(sequencerd),
                std::ref(socklist[thrid]) ).detach(); // spawn a thread to handle requests on this socket
+*****/
 
   // Instantiate a multicast UDP object and spawn a thread to send asynchronous messages
   //
@@ -205,6 +233,32 @@ int main(int argc, char **argv) {
   sequencerd.sequence.async.enqueue( "SEQUENCERD:started" );  // broadcast that I have started
 
   sequencerd.sequence.broadcast_seqstate();                   // broadcast the seqstate
+
+  // Dynamically create a new listening socket and thread to handle
+  // each connection request on the blocking port.
+  //
+  Network::TcpSocket sock_block(sequencerd.blkport, true, -1, 0);        // instantiate TcpSocket object with blocking port
+  if ( sock_block.Listen() < 0 ) {                                       // create a listening socket
+    logwrite( function, "ERROR could not create listening socket" );
+    sequencerd.exit_cleanly();
+  }
+
+  while (true) {
+    auto newid = sequencerd.id_pool.get_next_number();  // get the next available number from the pool
+
+    // Lock the mutex before creating and initializing the new socket
+    //
+    {
+    std::lock_guard<std::mutex> lock(sequencerd.sock_block_mutex);
+    sequencerd.socklist[newid] = std::make_shared<Network::TcpSocket>(sock_block);  // create a new socket
+    sequencerd.socklist[newid]->id = newid;             // update the id of the copied socket
+    sequencerd.socklist[newid]->Accept();               // accept connections on the new socket
+    }
+
+    // Create a new thread to handle the connection
+    //
+    std::thread(Sequencer::Server::block_main, std::ref(sequencerd), sequencerd.socklist[newid]).detach();
+  }
 
   for (;;) pause();                                           // main thread suspends
 

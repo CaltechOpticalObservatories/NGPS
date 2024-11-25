@@ -32,5 +32,7 @@
 #include "daemonize.h"
 #include "sequencer_server.h"
 
+#define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds
+
 void signal_handler(int signo);   ///< handles ctrl-C
 int main(int argc, char **argv);  ///< the main function

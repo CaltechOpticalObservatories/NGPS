@@ -661,7 +661,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     //
     slitcmd << SLITD_SET << " " << seq.target.slitwidth << " " << seq.target.slitoffset;
 
-    error = seq.slitd.send( slitcmd.str(), reply );
+    error = seq.slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT );
 
     if ( error != NO_ERROR ) {
       seq.async.enqueue_and_log( function, "ERROR: unable to set slit" );
@@ -828,12 +828,10 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to slit daemon" );
     }
 
-    seq.slitd.socket.set_totime( 30000 );
-
     // Ask slitd if hardware connection is open,
     //
     if ( error == NO_ERROR ) {
-      error  = seq.slitd.send( SLITD_ISOPEN, reply );
+      error  = seq.slitd.command( SLITD_ISOPEN, reply );
       error |= seq.parse_state( function, reply, isopen );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with slit hardware" );
     }
@@ -842,14 +840,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to slit hardware" );
-      error = seq.slitd.send( SLITD_OPEN, reply );
+      error = seq.slitd.command( SLITD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to slit hardware" );
     }
 
     // Ask slitd if the slit motors are homed,
     //
     if ( error == NO_ERROR ) {
-      error  = seq.slitd.send( SLITD_ISHOME, reply );
+      error  = seq.slitd.command( SLITD_ISHOME, reply );
       error |= seq.parse_state( function, reply, ishomed );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with slit hardware" );
     }
@@ -858,7 +856,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !ishomed ) {
       logwrite( function, "sending home command" );
-      error = seq.slitd.send( SLITD_HOME, reply );
+      error = seq.slitd.command_timeout( SLITD_HOME, reply, SLITD_HOME_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with slit hardware" );
     }
 
@@ -1014,17 +1012,17 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to slicecam hardware" );
-      error = seq.slicecamd.send( SLICECAMD_OPEN, reply );
+      error = seq.slicecamd.command_timeout( SLICECAMD_OPEN, reply, SLICECAMD_OPEN_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to slicecam hardware" );
     }
 
-    // turn on cooling
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "turning on slicecam cooling" );
-      error = seq.slicecamd.send( SLICECAMD_TEMP+" -100", reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR requesting slicecam preamble" );
-    }
+//  // turn on cooling
+//  //
+//  if ( error==NO_ERROR && !isopen ) {
+//    logwrite( function, "turning on slicecam cooling" );
+//    error = seq.slicecamd.send( SLICECAMD_TEMP+" -100", reply );
+//    if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR requesting slicecam preamble" );
+//  }
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -1073,7 +1071,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR ) {
       logwrite( function, "closing slicecam hardware" );
-      error = seq.slicecamd.send( SLICECAMD_SHUTDOWN, reply );
+      error = seq.slicecamd.command_timeout( SLICECAMD_SHUTDOWN, reply, SLICECAMD_SHUTDOWN_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR shutting down slicecamd" );
     }
 
@@ -1254,7 +1252,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !isopen ) {
       logwrite( function, "connecting to acam hardware" );
-      error = seq.acamd.command_timeout( ACAMD_OPEN, 180000 );  // TODO get this from motion_interface.h, don't hard-code here!
+      error = seq.acamd.command_timeout( ACAMD_OPEN, ACAMD_OPEN_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to acam hardware" );
     }
 
@@ -1313,7 +1311,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR ) {
       logwrite( function, "closing acam hardware" );
-      error = seq.acamd.command_timeout( ACAMD_SHUTDOWN, 40000 );  // TODO don't hardcode timeout
+      error = seq.acamd.command_timeout( ACAMD_SHUTDOWN, ACAMD_SHUTDOWN_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR shutting down acam" );
     }
 
@@ -1418,7 +1416,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
     if ( error==NO_ERROR && !ishomed ) {
       logwrite( function, "sending home command" );
-      error = seq.calibd.command_timeout( CALIBD_HOME, 60000 );  // TODO get timeout from calib_interface instead of hard-code
+      error = seq.calibd.command_timeout( CALIBD_HOME, CALIBD_HOME_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
     }
 
@@ -1427,7 +1425,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error==NO_ERROR ) {
       logwrite( function, "closing calib door and cover" );
       message.str(""); message << CALIBD_SET << " cover=close door=close";
-      error = seq.calibd.command_timeout( message.str(), 25000 );  // TODO get timeout from calib_interface
+      error = seq.calibd.command_timeout( message.str(), CALIBD_SET_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
     }
 
@@ -1478,7 +1476,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     if ( error==NO_ERROR ) {
       logwrite( function, "closing calib door and cover" );
       message.str(""); message << CALIBD_SET << " cover=close door=close";
-      error = seq.calibd.command_timeout( message.str(), 25000 );  // TODO get timeout from calib_interface
+      error = seq.calibd.command_timeout( message.str(), CALIBD_SET_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
     }
 
