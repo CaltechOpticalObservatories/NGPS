@@ -359,7 +359,7 @@ namespace Power {
 
         // loop over all plugs (not tokens in the retstring)
         //
-        for ( int tok=0,plug=1; plug<maxplugs; tok++,plug++ ) {
+        for ( int tok=0,plug=1; plug<maxplugs+1; tok++,plug++ ) {
           // plugid is the index into the plugname map
           plugid.str(""); plugid << unit << " " << plug;
 
