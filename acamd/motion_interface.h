@@ -20,8 +20,6 @@
 #include <atomic>
 #include <cmath>  // for NAN
 
-#define ACAM_MOVE_TIMEOUT      40000     ///< timeout in sec before a move fails
-#define ACAM_HOME_TIMEOUT     180000     ///< timeout in sec before a home fails
 #define ACAM_POSNAME_TOLERANCE     0.01  ///< tolerance to determine posname from position
 
 /***** Acam *******************************************************************/
@@ -51,7 +49,8 @@ namespace Acam {
       MotionInterface() : numdev(-1), 
                           class_initialized(false),
                           current_filter_name("unknown"),
-                          motorinterface( ACAM_MOVE_TIMEOUT, ACAM_HOME_TIMEOUT, ACAM_POSNAME_TOLERANCE ) { }
+                          motorinterface( ACAMD_MOVE_TIMEOUT, ACAMD_HOME_TIMEOUT, ACAM_POSNAME_TOLERANCE ) { }
+                          // timeouts are defined in common/acamd_commands.h
 
       // map of all motor controllers
       //
