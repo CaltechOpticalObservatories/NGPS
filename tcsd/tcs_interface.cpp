@@ -77,13 +77,16 @@ namespace TCS {
     // Call the three native functions and the associated parsing function,
     // which will populate the tcs_info class.
     //
-    error |= this->native( "REQPOS", retstring );
+    error |= this->send_command( "REQPOS", retstring, TCS::FAST_RESPONSE );
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
     this->tcs_info.parse_reqpos( retstring );
 
-    error |= this->native( "REQSTAT", retstring );
+    error |= this->send_command( "REQSTAT", retstring, TCS::FAST_RESPONSE );
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
     this->tcs_info.parse_reqstat( retstring );
 
-    error |= this->native( "?WEATHER", retstring );
+    error |= this->send_command( "?WEATHER", retstring, TCS::FAST_RESPONSE );
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
     this->tcs_info.parse_weather( retstring );
 
     return error;
