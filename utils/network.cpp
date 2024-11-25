@@ -1247,7 +1247,7 @@ namespace Network {
    *
    */
   long Interface::send_command( std::string cmd, std::string &retstring ) {
-    return send_command( cmd, retstring, TIMEOUT );
+    return send_command( cmd, retstring, this->sock.polltimeout() );
   }
   long Interface::send_command( std::string cmd, std::string &retstring, int timeout ) {
     std::string function = "Network::Interface::send_command";
