@@ -467,7 +467,7 @@ class LayoutService:
             QPushButton {
                 background-color: green;
                 color: white;
-                font-size: 50px;
+                font-size: 80px;
                 width: 80px;
                 height: 80px;
                 text-align: center;
@@ -483,9 +483,9 @@ class LayoutService:
         self.parent.giant_x_button = QPushButton("❌")
         self.parent.giant_x_button.setStyleSheet("""
             QPushButton {
-                background-color: red;
-                color: white;
-                font-size: 50px;
+                background-color: red;  /* Red background */
+                color: white;  /* White text color */
+                font-size: 80px;
                 width: 80px;
                 height: 80px;
                 text-align: center;
@@ -493,7 +493,7 @@ class LayoutService:
                 border-radius: 10px;
             }
             QPushButton:hover {
-                background-color: darkred;
+                background-color: darkred;  /* Dark red background on hover */
             }
         """)
 
