@@ -1,0 +1,213 @@
+/* General Gray Theme with Larger and Bold Font */
+QWidget {
+    background-color: #3a3a3a;  /* Lighter gray background for the main window */
+    color: #e0e0e0;  /* Light gray text */
+    font-family: "Helvetica", sans-serif;  /* Helvetica font */
+    font-size: 14pt;  /* Larger font size */
+    font-weight: bold;  /* Bold font */
+}
+
+/* Menu Bar: Keep the same color (dark gray) */
+QMenuBar {
+    background-color: #2e2e2e;  /* Dark gray menu bar background */
+    color: #e0e0e0;  /* Light gray text */
+    font-family: "Helvetica", sans-serif;
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+QMenuBar::item {
+    background-color: #2e2e2e;  /* Darker background for menu items */
+    color: #e0e0e0;  /* Light gray text */
+    padding: 5px 20px;
+}
+
+QMenuBar::item:selected {
+    background-color: #4CAF50;  /* Highlight menu item with green */
+    color: white;  /* White text on selected item */
+}
+
+/* Style for QPushButton */
+QPushButton {
+    background-color: #666666;  /* Medium gray button background */
+    color: #e0e0e0;  /* Light gray text */
+    border: 1px solid #888888;  /* Slightly lighter gray border */
+    border-radius: 5px;  /* Rounded corners */
+    padding: 8px 16px;  /* Button padding */
+    font-size: 14pt;  /* Larger font size for buttons */
+    font-weight: bold;  /* Bold font */
+}
+
+QPushButton:hover {
+    background-color: #777777;  /* Button hover effect (slightly lighter gray) */
+}
+
+QPushButton:pressed {
+    background-color: #888888;  /* Button pressed effect (darker gray) */
+}
+
+/* Style for QCheckBox */
+QCheckBox {
+    color: #e0e0e0;  /* Light gray text */
+    font-size: 14pt;  /* Larger font size */
+    font-weight: bold;  /* Bold font */
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #777777;  /* Light gray border */
+    border-radius: 4px;  /* Rounded corners */
+    background-color: #444444;  /* Dark gray background */
+}
+
+QCheckBox::indicator:checked {
+    background-color: #4CAF50;  /* Green background when checked */
+    border-color: #4CAF50;  /* Green border when checked */
+}
+
+QCheckBox::indicator:unchecked {
+    background-color: #333333;  /* Darker gray when unchecked */
+}
+
+QCheckBox::indicator:hover {
+    border-color: #8e8e8e;  /* Lighter border on hover */
+}
+
+/* Style for QRadioButton */
+QRadioButton {
+    color: #e0e0e0;  /* Light gray text */
+    font-size: 14pt;  /* Larger font size */
+    font-weight: bold;  /* Bold font */
+}
+
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #777777;  /* Light gray border */
+    border-radius: 10px;  /* Round shape for the radio button */
+    background-color: #444444;  /* Dark gray background */
+}
+
+QRadioButton::indicator:checked {
+    background-color: #4CAF50;  /* Green background when checked */
+    border-color: #4CAF50;  /* Green border when checked */
+}
+
+QRadioButton::indicator:unchecked {
+    background-color: #333333;  /* Darker gray when unchecked */
+}
+
+QRadioButton::indicator:hover {
+    border-color: #8e8e8e;  /* Lighter border on hover */
+}
+
+/* Style for QLineEdit (input fields) */
+QLineEdit {
+    background-color: #555555;  /* Darker gray input background */
+    color: #e0e0e0;  /* Light gray text */
+    border: 1px solid #777777;  /* Lighter gray border */
+    padding: 6px 12px;
+    border-radius: 5px;  /* Rounded corners */
+    font-size: 14pt;  /* Larger font size */
+    font-weight: bold;  /* Bold font */
+}
+
+/* Style for QLabel */
+QLabel {
+    color: #e0e0e0;  /* Light gray text */
+    font-size: 14pt;  /* Larger font size */
+    font-weight: bold;  /* Bold font */
+}
+
+/* Style for QProgressBar */
+QProgressBar {
+    background-color: #444444;  /* Very dark gray progress bar background */
+    border: 1px solid #777777;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 14pt;  /* Larger font size */
+    font-weight: bold;  /* Bold font */
+}
+
+QProgressBar::chunk {
+    background-color: #7e7e7e;  /* Lighter gray for the progress chunk */
+    width: 10px;
+    margin: 0.5px;
+}
+
+/* Style for QTabWidget */
+QTabWidget::pane {
+    border: 1px solid #888888;  /* Light border around tabs */
+}
+
+QTabWidget::tab-bar {
+    alignment: center;
+}
+
+QTabWidget::tab {
+    background-color: #555555;
+    color: #e0e0e0;
+    padding: 8px;
+    border: 1px solid #888888;
+    border-radius: 5px;
+    margin: 2px;
+}
+
+QTabWidget::tab:selected {
+    background-color: #4CAF50;  /* Green background for selected tab */
+    color: white;  /* White text for selected tab */
+}
+
+/* ScrollBars */
+QScrollBar {
+    background-color: #555555;  /* Dark gray scrollbar background */
+    width: 10px;
+}
+
+QScrollBar::handle {
+    background-color: #777777;  /* Lighter gray handle */
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    background-color: #555555;  /* Same as the background */
+}
+
+/* Style for the green checkmark and red X */
+.checkmark, .xmark {
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+    font-size: 24pt;
+    text-align: center;
+    line-height: 30px;
+    background-color: #444444;  /* Dark gray background */
+}
+
+.checkmark {
+    color: #4CAF50;  /* Green color for checkmark */
+    border: 2px solid #4CAF50;  /* Green border */
+}
+
+.xmark {
+    color: #F44336;  /* Red color for X */
+    border: 2px solid #F44336;  /* Red border */
+}
+
+/* Styling for Layout Columns */
+.column-left, .column-right {
+    background-color: #4f4f4f;  /* Light gray background for the first two columns */
+}
+
+.column-third {
+    background-color: #3a3a3a;  /* Darker gray background for the third column */
+}
+
+/* Apply styling to individual widgets in specific columns (optional) */
+.column-left QWidget, .column-right QWidget {
+    background-color: #4f4f4f;  /* Lighter gray */
+}
+
+.column-third QWidget {
+    background-color: #3a3a3a;  /* Darker gray */
+}
