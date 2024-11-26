@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QWidget, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QPushButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from menu_service import MenuService
@@ -22,6 +22,7 @@ class NgpsGUI(QMainWindow):
         # Initialize the InstrumentStatusService after UI setup
         self.instrument_status_service = InstrumentStatusService(self)
 
+
     def init_ui(self):
         # Set up Menu
         menubar = self.menuBar()
@@ -29,8 +30,10 @@ class NgpsGUI(QMainWindow):
         menu_service.create_menus()
 
         # Set up Layout
-        layout_service = LayoutService(self)
-        main_layout = layout_service.create_layout()
+        self.layout_service = LayoutService(self)
+        main_layout = self.layout_service.create_layout()
+
+        self.logic_service = LogicService(self)
 
         # Add layout to central widget
         central_widget = QWidget()
@@ -49,6 +52,23 @@ class NgpsGUI(QMainWindow):
         with open(qss_file, "r") as f:
             qss = f.read()
             self.setStyleSheet(qss)
+
+    def load_csv_file(self):
+        # Open file dialog to select a CSV file
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv)")
+
+        if file_path:
+
+            file_name_only = file_path.split("/")[-1]  # Get the file name only (without the path)
+        
+            # Update the target list combo box with the file name
+            self.target_list_name.addItem(file_name_only)
+        
+            # You could add more logic here to process the CSV file as needed
+            print(f"CSV file {file_name_only} loaded.")
+
+            # Use LogicService to load CSV and update the table
+            self.logic_service.load_csv_and_update_target_list(file_path)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
