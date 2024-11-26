@@ -503,7 +503,6 @@ class LayoutService:
 
         return check_x_layout
 
-
     def create_target_info_group(self):
         # Create a group box for target information
         target_info_group = QGroupBox("Target Information")
@@ -524,10 +523,16 @@ class LayoutService:
         # Add the label to the layout above the form
         target_info_layout.addWidget(self.no_target_label)
 
-        # Set the layout for the group box
+        # Create a QScrollArea to make the target info area scrollable
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)  # This allows the widget to resize with the scroll area
+        scroll_area.setWidget(target_info_group)  # Set the group box as the widget inside the scroll area
+
+        # Set the layout for the group box (now inside the scroll area)
         target_info_group.setLayout(target_info_layout)
 
-        return target_info_group
+        # Return the scroll area (not the group box directly)
+        return scroll_area
 
     def update_target_info_form(self, target_data):
         # Clear the current form before updating
