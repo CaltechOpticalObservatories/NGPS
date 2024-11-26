@@ -67,23 +67,24 @@ class LayoutService:
     def create_third_column(self):
         third_column_layout = QVBoxLayout()
 
+        # Create the QTabWidget and the Control tab
         self.parent.tabs = QTabWidget()
         self.parent.control_tab = QWidget()
         self.parent.status_tab = QWidget()
         self.parent.engineering_tab = QWidget()
 
+        # Add the tabs to the QTabWidget
         self.parent.tabs.addTab(self.parent.control_tab, "Control")
         self.parent.tabs.addTab(self.parent.status_tab, "Status")
         self.parent.tabs.addTab(self.parent.engineering_tab, "Engineering")
 
-        # Set minimum width and height for the QTabWidget
-        self.parent.tabs.setMinimumWidth(300)  # Set your desired minimum width
-        self.parent.tabs.setMinimumHeight(200)  # Set your desired minimum height
-
+        # Add the QTabWidget to the third column layout
         third_column_layout.addWidget(self.parent.tabs)
 
-        return third_column_layout
+        # Create and set up the layout for the Control tab
+        self.create_control_tab(self.parent.control_tab)
 
+        return third_column_layout
 
     def create_top_section(self):
         top_section_layout = QHBoxLayout()
@@ -551,3 +552,131 @@ class LayoutService:
 
         # Optionally, update the widget (forces a refresh)
         self.target_info_form.update()
+
+
+    def create_control_tab(self, control_tab):
+        # Create the main layout for the Control tab
+        control_layout = QVBoxLayout()
+
+        # Create and add Row 1 layout (Image Path, Exposure Time, Slit Width)
+        row1_widget = QWidget()  # Create a QWidget to control the size of the row
+        row1_layout = QVBoxLayout(row1_widget)  # Assign the layout to the QWidget
+        row1_layout.setContentsMargins(5, 5, 5, 5)  # Set margins to a small value
+        row1_layout.setSpacing(5)  # Set the spacing to a small value
+        row1_widget.setFixedHeight(120)  # Set a fixed height for Row 1
+
+        # Image Path Section (on top)
+        self.image_path_label = QLabel("Image Path:")
+        self.image_path_box = QLineEdit()
+        self.image_path_box.setPlaceholderText("Current Image Path")
+        self.image_path_box.setMaximumWidth(300)  # Set max width for the input box
+        self.image_path_box.setMaximumHeight(30)  # Set max height for the input box
+
+        # Add Image Path to row1_layout first
+        row1_layout.addWidget(self.image_path_label)
+        row1_layout.addWidget(self.image_path_box)
+
+        # Exposure Time and SlitWidth Section (on bottom)
+        row2_layout = QHBoxLayout()  # Horizontal layout for Exposure Time and Slit Width
+        row2_layout.setSpacing(10)  # Spacing between widgets in this row
+        row2_widget = QWidget()  # Create a QWidget to control Row 2 size
+        row2_widget.setFixedHeight(50)  # Set fixed height for Row 2
+        row2_widget.setLayout(row2_layout)
+
+        self.exposure_time_label = QLabel("Exposure Time:")
+        self.exposure_time_box = QLineEdit()
+        self.exposure_time_box.setPlaceholderText("Enter Exposure Time")
+        self.exposure_time_box.setMaximumWidth(100)  # Set max width for the input box
+        self.exposure_time_box.setMaximumHeight(30)  # Set max height for the input box
+
+        self.slit_width_label = QLabel("Slit Width:")
+        self.slit_width_box = QLineEdit()
+        self.slit_width_box.setPlaceholderText("Enter Slit Width")
+        self.slit_width_box.setMaximumWidth(100)  # Set max width for the input box
+        self.slit_width_box.setMaximumHeight(30)  # Set max height for the input box
+
+        # Add Exposure Time and Slit Width widgets to row2_layout
+        row2_layout.addWidget(self.exposure_time_label)
+        row2_layout.addWidget(self.exposure_time_box)
+        row2_layout.addWidget(self.slit_width_label)
+        row2_layout.addWidget(self.slit_width_box)
+
+        # Add Row 1 and Row 2 to the control_layout
+        control_layout.addWidget(row1_widget)  # Add Row 1 widget to the control_layout
+        control_layout.addWidget(row2_widget)  # Add Row 2 widget to the control_layout
+
+        # Create and add Row 3 layout (Buttons: Binning, Headers, Display, Temp, Lamps)
+        row3_widget = QWidget()  # Create a QWidget to control the size of Row 3
+        row3_layout = QHBoxLayout(row3_widget)
+        row3_layout.setSpacing(10)  # Spacing between widgets in this row
+        row3_widget.setFixedHeight(100)  # Set fixed height for Row 3
+
+        # Column 1: Binning Button
+        self.binning_button = QPushButton("Binning")
+        self.binning_button.setMaximumWidth(150)  # Set max width for the button
+        self.binning_button.setMaximumHeight(50)  # Set max height for the button
+
+        # Column 2: Headers and Display Buttons stacked vertically
+        headers_display_layout = QVBoxLayout()
+        self.headers_button = QPushButton("Headers")
+        self.headers_button.setMaximumWidth(150)  # Set max width for the button
+        self.headers_button.setMaximumHeight(50)  # Set max height for the button
+
+        self.display_button = QPushButton("Display")
+        self.display_button.setMaximumWidth(150)  # Set max width for the button
+        self.display_button.setMaximumHeight(50)  # Set max height for the button
+
+        headers_display_layout.addWidget(self.headers_button)
+        headers_display_layout.addWidget(self.display_button)
+
+        # Column 3: Temp and Lamps Buttons stacked vertically
+        temp_lamps_layout = QVBoxLayout()
+        self.temp_button = QPushButton("Temp")
+        self.temp_button.setMaximumWidth(150)  # Set max width for the button
+        self.temp_button.setMaximumHeight(50)  # Set max height for the button
+
+        self.lamps_button = QPushButton("Lamps")
+        self.lamps_button.setMaximumWidth(150)  # Set max width for the button
+        self.lamps_button.setMaximumHeight(50)  # Set max height for the button
+
+        # Add Temp and Lamps buttons to temp_lamps_layout (Temp on top, Lamps on bottom)
+        temp_lamps_layout.addWidget(self.temp_button)
+        temp_lamps_layout.addWidget(self.lamps_button)
+
+        # Add buttons to row3_layout
+        row3_layout.addWidget(self.binning_button)
+        row3_layout.addLayout(headers_display_layout)  # Add the vertical layout for Headers and Display
+        row3_layout.addLayout(temp_lamps_layout)  # Add the vertical layout for Temp and Lamps
+
+        # Add Row 3 to the control_layout
+        control_layout.addWidget(row3_widget)  # Add the QWidget wrapper
+
+        # --- Add Row 4 for Pause, Stop After Current Image, and Stop Now Buttons ---
+        row4_widget = QWidget()  # Create a QWidget to control the size of Row 4
+        row4_layout = QHBoxLayout(row4_widget)
+        row4_layout.setSpacing(10)  # Spacing between widgets in this row
+        row4_widget.setFixedHeight(80)  # Set fixed height for Row 4
+
+        # Column 1: Pause Button
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.setMaximumWidth(150)  # Set max width for the button
+        self.pause_button.setMaximumHeight(50)  # Set max height for the button
+
+        # Column 2: Stop After Current Image Button
+        self.stop_after_button = QPushButton("Stop After Current Image")
+
+        # Column 3: Stop Now Button
+        self.stop_now_button = QPushButton("Stop Now")
+        self.stop_now_button.setMaximumWidth(150)  # Set max width for the button
+        self.stop_now_button.setMaximumHeight(50)  # Set max height for the button
+
+        # Add buttons to row4_layout
+        row4_layout.addWidget(self.pause_button)
+        row4_layout.addWidget(self.stop_after_button)
+        row4_layout.addWidget(self.stop_now_button)
+
+        # Add Row 4 to the control_layout
+        control_layout.addWidget(row4_widget)  # Add the QWidget wrapper for Row 4
+
+        # Set the layout for the control tab
+        control_tab.setLayout(control_layout)
