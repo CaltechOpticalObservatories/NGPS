@@ -462,7 +462,7 @@ class LayoutService:
         check_x_layout.setSpacing(10)
 
         # Checkmark button
-        self.parent.giant_checkmark_button = QPushButton("✔️")
+        self.parent.giant_checkmark_button = QPushButton("\u2713")
         self.parent.giant_checkmark_button.setStyleSheet("""
             QPushButton {
                 background-color: green;
@@ -480,7 +480,7 @@ class LayoutService:
         """)
 
         # X button
-        self.parent.giant_x_button = QPushButton("❌")
+        self.parent.giant_x_button = QPushButton("\u2717")
         self.parent.giant_x_button.setStyleSheet("""
             QPushButton {
                 background-color: red;  /* Red background */
