@@ -489,8 +489,13 @@ namespace Acam {
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
       std::atomic<bool> is_shutting_down;      ///< set during shutdown
 
-      int nskip_before_acquire;                ///< number of frame grabs to skip before using for target acquisition
-      int nsave_acquire_frames;                ///< number of frame grabs to save during acquisition/guide
+      std::atomic<int> nskip_before_acquire;   ///< number of frame grabs to skip before using for target acquisition
+
+      /** these are set by Interface::saveframes()
+       */
+      std::atomic<int> nsave_preserve_frames;  ///< number of frames to preserve (normally overwritten)
+      std::atomic<int> nskip_preserve_frames;  ///< number of frames to skip before saving nsave... frames
+
 
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
@@ -498,15 +503,17 @@ namespace Acam {
 
       nlohmann::json tcs_jmessage;             ///< JSON message containing TCS telemetry
 
-      Interface() : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
-                    tcs_online(false),
-                    motion_port(-1),
-                    should_framegrab_run(false),
-                    is_framegrab_running(false),
-                    is_shutting_down(false),
-                    nskip_before_acquire(0),
-                    nsave_acquire_frames(0) {
-        target.set_interface_instance( this ); ///< Set the Interface instance in Target
+      Interface()
+        : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
+          tcs_online(false),
+          motion_port(-1),
+          should_framegrab_run(false),
+          is_framegrab_running(false),
+          is_shutting_down(false),
+          nskip_before_acquire(0),
+          nsave_preserve_frames(0),
+          nskip_preserve_frames(0) {
+          target.set_interface_instance( this ); ///< Set the Interface instance in Target
       }
 
       inline bool is_target_acquired()   { return this->target.is_acquired; }

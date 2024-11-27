@@ -12,7 +12,7 @@
 
 namespace Acam {
 
-  int npreserve=0;
+  int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
   /***** Acam::Camera::emulator ***********************************************/
   /**
@@ -107,17 +107,16 @@ namespace Acam {
 
     // Setup camera for continuous readout
     //
-    error |= this->gain(1);                                   // EM gain off
+    error |= this->andor.set_acquisition_mode( 1 );           // single scan
+    error |= this->andor.set_read_mode( 4 );                  // image mode
     error |= this->andor.set_vsspeed( 4.33 );                 // vertical shift speed
     error |= this->andor.set_hsspeed( 1.0 );                  // horizontal shift speed
-    error |= this->andor.set_read_mode( 4 );                  // image mode
-    error |= this->andor.set_acquisition_mode( 1 );           // single scan
-    error |= this->andor.set_frame_transfer( "on" );          // enable Frame Transfer mode
     error |= this->andor.set_shutter( "open" );               // shutter always open
     error |= this->andor.set_imrot( cfg.rotstr );             // set imrot to configured value
     error |= this->andor.set_imflip( cfg.hflip, cfg.vflip );  // set imflip to configured value
     error |= this->andor.set_binning( cfg.hbin, cfg.vbin );   // set binning to configured value
     error |= this->andor.set_temperature( cfg.setpoint );     // set temp setpoint to configured value
+    error |= this->gain(1);                                   // EM gain off
     error |= this->set_exptime(1);
 
     message.str(""); message << ( error==ERROR ? "ERROR opening" : "opened" ) << " camera s/n " << sn;
@@ -1719,7 +1718,7 @@ namespace Acam {
           error |= ERROR;
         }
 
-        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "ACAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         applied++;
       }
@@ -1864,6 +1863,7 @@ namespace Acam {
     }
     message.str(""); message << "applied " << applied << " configuration lines to the acam interface";
     logwrite(function, message.str());
+
     return error;
   }
   /***** Acam::Interface::configure_interface *********************************/
@@ -2342,26 +2342,28 @@ namespace Acam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = ACAMD_SAVEFRAMES;
-      retstring.append( " [ <nsave> ]\n" );
-      retstring.append( "   Set/get the number of frame grabs to save during target acquisition\n" );
-      retstring.append( "   and guide. No arg returns the current value.  If skipframes is \n" );
-      retstring.append( "   non-zero then this must be greater than skipframes or else the save\n" );
-      retstring.append( "   will also be skipped. This value is not persistent. After <nsave>\n" );
-      retstring.append( "   have been saved then saving is stopped until manually reset.\n" );
+      retstring.append( " [ <nsave> <nskip> ]\n" );
+      retstring.append( "   Set/get the number of frame grabs to save and skip\n" );
+      retstring.append( "   This will save <nsave> frames in a row, followed by <nskip>\n" );
+      retstring.append( "   frames not saved, and repeat.\n" );
+      retstring.append( "   <nsave> = 0 stops saving\n" );
+      retstring.append( "   <nskip> = 0 saves every frame (when <nsave> is > 0)\n" );
       return HELP;
     }
 
     // args other than help, try to convert to integer
     //
     if ( !args.empty() ) {
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <nsave> <nskip>" );
+        retstring="invalid_number_args";
+        return ERROR;
+      }
       try {
-        int n = std::stoi(args);
-        if ( n >= 0 ) this->nsave_acquire_frames = n;
-        else {
-          logwrite( function, "ERROR value cannot be negative" );
-          retstring="invalid_argument";
-          return ERROR;
-        }
+        this->nsave_preserve_frames.store( std::stoi(tokens.at(0)) );
+        this->nskip_preserve_frames.store( std::stoi(tokens.at(1)) );
       }
       catch ( std::exception & ) {
         logwrite( function, "ERROR parsing value" );
@@ -2370,7 +2372,9 @@ namespace Acam {
       }
     }
 
-    retstring = std::to_string( this->nsave_acquire_frames );
+    retstring = std::to_string(this->nsave_preserve_frames.load())+" "
+              + std::to_string(this->nskip_preserve_frames.load());
+
     return NO_ERROR;
   }
   /***** Acam::Interface::saveframes ******************************************/
@@ -2402,7 +2406,7 @@ namespace Acam {
     if ( !args.empty() ) {
       try {
         int n = std::stoi(args);
-        if ( n >= 0 ) this->nskip_before_acquire = n;
+        if ( n >= 0 ) this->nskip_before_acquire.store(n);
         else {
           logwrite( function, "ERROR value cannot be negative" );
           retstring="invalid_argument";
@@ -2416,7 +2420,7 @@ namespace Acam {
       }
     }
 
-    retstring = std::to_string( this->nskip_before_acquire );
+    retstring = std::to_string( this->nskip_before_acquire.load() );
     return NO_ERROR;
   }
   /***** Acam::Interface::skipframes ******************************************/
@@ -2594,8 +2598,13 @@ namespace Acam {
     {
     std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
     if ( lock.try_lock() ) {
+
       BoolState loop_running( iface.is_framegrab_running );             // sets state true here, clears when it goes out of scope
-      int skipframes = iface.nskip_before_acquire;                      // init num of frames to skip before trying to acquire target
+
+      int _skipframes = iface.nskip_before_acquire.load();              // init num of frames to skip before trying to acquire target
+      int _nsave = iface.nsave_preserve_frames.load();                  // number of frames to save in a row
+      int _nskip = iface.nskip_preserve_frames.load();                  // number of frames to skip before saving _nsave frames
+
       do {
         if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
 
@@ -2621,14 +2630,24 @@ namespace Acam {
 
         iface.guide_manager.push_guider_image( iface.imagename );       // send frame to Guider GUI
 
-        // Normally, frame grabs are overwritten. This optionally preserves
-        // a burst of frames by copying to a different filename, but only
-        // during acquisition or guiding. nsave must be reset by command
-        // each time it's used, it's not automatically reset.
+        // Normally, framegrabs are overwritten to the same file.
+        // This optionally saves them at the requested cadence by
+        // copying to a different filename.
         //
-        iface.preserve_framegrab();
+        // Save a number of frames in a row
+        //
+        if ( _nsave-- > 0 ) {
+          iface.preserve_framegrab();
+        }
+        // skip the next _nskip number of frames before saving _nsave again
+        if ( _nsave<1 && _nskip--<1 ) {
+          _nsave = iface.nsave_preserve_frames.load();
+          _nskip = iface.nskip_preserve_frames.load();
+        }
 
-        if ( skipframes-- > 0 ) {                                       // don't use this frame for target acquisition
+        // don't use this frame for target acquisition
+        //
+        if ( _skipframes-- > 0 ) {
           continue;
         }
         else {
@@ -2653,7 +2672,7 @@ namespace Acam {
             std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
           }
 
-          skipframes = iface.nskip_before_acquire;                      // reset skipframes
+          _skipframes = iface.nskip_before_acquire.load();              // reset _skipframes
         }
 
         std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );  // don't use too much CPU
@@ -5137,37 +5156,51 @@ namespace Acam {
 
   /***** Acam::Interface::preserve_framegrab **********************************/
   /**
-   * @brief      optionally preserve some number of frame grabs during guide/acquisition
+   * @brief      preserve frame grab by making a copy
    *
    */
   void Interface::preserve_framegrab() {
-    if ( this->nsave_acquire_frames > 0 && ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ||
-                                             this->target.acquire_mode == Acam::TARGET_GUIDE ) ) {
-      this->nsave_acquire_frames--;
-
-      try {
-        auto it = this->imagename.find(".fits");
-        if ( it == std::string::npos ) {
-          logwrite( "Acam::Interface::preserve_framegrab", "malformed imeagename" );
-          return;
-        }
-
-        std::string base = this->imagename.substr(0, it)+"_";
-        std::stringstream fn;
-        fn << base << std::setfill('0') << std::setw(5) << npreserve << ".fits";
-        struct stat st;
-        while ( (stat(fn.str().c_str(), &st) == 0) && npreserve < 100000 ) {
-          fn.str(""); fn << base << std::setfill('0') << std::setw(5) << ++npreserve << ".fits";
-        }
-        std::filesystem::copy( this->imagename, fn.str() );
-      }
-      catch ( const std::exception &e ) {
-        logwrite( "Acam::Interface::preserve_framegrab", "ERROR saving frame: "+std::string(e.what()) );
+    try {
+      size_t loc;
+      // filename is after the last "/"
+      if ( (loc=this->imagename.find_last_of("/")) == std::string::npos ) {
+        logwrite( "Acam::Interface::preserve_framegrab", "malformed imagename" );
         return;
       }
+      std::string filename=this->imagename.substr(loc+1);
+
+      // insert number before the extension
+      if ( (loc=filename.find(".fits"))==std::string::npos ) {
+        logwrite( "Acam::Interface::preserve_framegrab", "malformed imagename" );
+        return;
+      }
+
+      // build the filename
+      std::string basename = filename.substr(0, loc);
+      std::string path = "/data/acam/" + get_system_date();
+
+      // make sure the path exists and is writable
+      if ( !validate_path( path ) ) {
+        logwrite( "Acam::Interface::preserve_framegrab", "cannot write to "+path );
+        return;
+      }
+
+      std::stringstream fn;
+      fn << path << "/" << basename << "_" << std::setfill('0') << std::setw(5) << npreserve << ".fits";
+
+      // increment until a unique file is found so that it never overwrites
+      struct stat st;
+      while ( (stat(fn.str().c_str(), &st) == 0) && npreserve < 100000 ) {
+        fn.str("");
+        fn << path << "/" << basename << "_" << std::setfill('0') << std::setw(5) << ++npreserve << ".fits";
+      }
+
+      // copy this framegrab to the file
+      std::filesystem::copy( this->imagename, fn.str() );
     }
-    else if ( this->nsave_acquire_frames < 0 ) {
-      this->nsave_acquire_frames=0;  // prevents wrap-around when not in use
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::preserve_framegrab", "ERROR saving frame: "+std::string(e.what()) );
+      return;
     }
     return;
   }
