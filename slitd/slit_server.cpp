@@ -111,6 +111,15 @@ namespace Slit {
         applied++;
       }
 
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_topic = DAEMON_NAME;
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
@@ -559,6 +568,11 @@ namespace Slit {
         logwrite( function, message.str() );
         ret = ERROR;
       }
+
+      // any command forces a publish  //TODO clean this up later
+      //
+      std::string dummy;
+      this->interface.make_telemetry_message( dummy );
 
       // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
       // and log the reply along with the command number. Write the reply back to the socket.

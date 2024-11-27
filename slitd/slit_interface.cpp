@@ -79,6 +79,22 @@ namespace Slit {
       }
     }
 
+    // connect publisher to the messaged ZMQ broker
+    //
+    try {
+      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+      logwrite( function, "binding publisher topic "
+                          +this->publisher_topic+" to "+this->publisher_address );
+      this->publisher = std::make_unique<Common::PubSub>( this->context,
+                                                         Common::PubSub::Mode::PUB );
+      this->publisher->connect_to_broker( this->publisher_address, this->publisher_topic );
+    }
+    catch ( const zmqpp::zmq_internal_exception &e ) {
+      message.str(""); message << "ERROR connecting publisher to broker: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
     return( error );
   }
   /***** Slit::Interface::initialize_class ************************************/
@@ -666,6 +682,15 @@ namespace Slit {
       if ( !std::isnan(posoffset) ) jmessage["SLITO"]    = offset.arcsec();
       if ( !std::isnan(posA) )      jmessage["SLITPOSA"] = posA;
       if ( !std::isnan(posB) )      jmessage["SLITPOSB"] = posB;
+    }
+
+    try {
+      this->publisher->publish( jmessage );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slit::Interface::make_telemetry_message",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
     }
 
     retstring = jmessage.dump();  // serialize the json message into retstring

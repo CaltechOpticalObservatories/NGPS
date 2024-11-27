@@ -17,6 +17,7 @@
 #include <map>
 #include <condition_variable>
 #include <atomic>
+#include <memory>
 
 #define MOVE_TIMEOUT 25000  ///< number of milliseconds before a move fails
 #define HOME_TIMEOUT 25000  ///< number of milliseconds before a home fails
@@ -175,9 +176,15 @@ namespace Slit {
   class Interface {
     private:
       size_t numdev;
+      zmqpp::context context;
 
     public:
-      Interface() : numdev(0) { }
+      Interface()
+        : numdev(0),
+          context() { }
+
+      std::unique_ptr<Common::PubSub> publisher;
+      std::string publisher_topic, publisher_address;
 
       SlitDimension maxwidth;
       SlitDimension minwidth;  ///< set by config file

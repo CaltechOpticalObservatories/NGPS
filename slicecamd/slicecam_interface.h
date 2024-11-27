@@ -216,8 +216,12 @@ namespace Slicecam {
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
       std::chrono::steady_clock::time_point framegrab_time;
+      zmqpp::context context;
 
     public:
+      std::unique_ptr<Common::PubSub> subscriber;
+      std::vector<std::string> subscriber_topics;
+      std::atomic<bool> is_subscriber_thread_running;
 
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
@@ -226,6 +230,8 @@ namespace Slicecam {
 
       Interface() : tcs_online(false),
                     err(false),
+                    subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+                    is_subscriber_thread_running(false),
                     should_framegrab_run(false),
                     is_framegrab_running(false) {
       }
@@ -239,6 +245,8 @@ namespace Slicecam {
       inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
 
       Slicecam::FitsInfo fitsinfo;
+
+      Common::Header telemkeys;
 
       Common::Queue async;                     /// asynchronous message queue
 
@@ -254,6 +262,9 @@ namespace Slicecam {
 
       long bin( std::string args, std::string &retstring );
       void make_telemetry_message( std::string &retstring );
+      void start_subscriber_thread();
+      void subscriber_thread();
+      long handle_json_message( std::string topic, std::string message );
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
       long isopen( std::string which, bool &state, std::string &help );     /// wrapper for slicecams

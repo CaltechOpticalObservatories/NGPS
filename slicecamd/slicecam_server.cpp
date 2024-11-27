@@ -77,6 +77,10 @@ namespace Slicecam {
     int applied=0;
     long error;
 
+    // build a fresh list of subscriber topics
+    //
+    this->interface.subscriber_topics.clear();
+
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
@@ -174,6 +178,33 @@ namespace Slicecam {
         applied++;
       }
 
+      // SUB_ENDPOINT
+      // (these don't get counted with "applied++")
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        try {
+          // connect to the message broker and wait for connection to establish
+          //
+          this->interface.subscriber->connect( config.arg[entry] );
+          std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+        }
+        catch ( const zmqpp::zmq_internal_exception &e ) {
+          logwrite( function, "ERROR connecting to endpoint "+config.arg[entry]+" : "+std::string(e.what()) );
+          error = ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+      }
+
+      // SUBSCRIBE_TO : topics that I subscribe to
+      // (these don't get counted with "applied++")
+      //
+      if ( config.param[entry] == "SUBSCRIBE_TO" ) {
+        this->interface.subscriber_topics.push_back( config.arg[entry] );
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -186,6 +217,27 @@ namespace Slicecam {
     }
     message << "applied " << applied << " configuration lines to slicecamd";
     logwrite(function, message.str());
+
+    try {
+      // subscribe to configured topic(s)
+      //
+      for ( const auto &topic : this->interface.subscriber_topics ) {
+        this->interface.subscriber->subscribe( topic );
+        logwrite( function, "subscribed to topic: "+topic );
+      }
+    }
+    catch ( const zmqpp::zmq_internal_exception &e ) {
+      logwrite( function, "ERROR subscribing to topic: "+std::string(e.what()) );
+      error = ERROR;
+    }
+
+    // start the subscriber thread only if one or more topics were
+    // specified
+    //
+    if ( !this->interface.subscriber_topics.empty() ) {
+      this->interface.start_subscriber_thread();
+    }
+    else logwrite( function, "not starting subscriber thread because no topics were configured" );
 
     // Initialize the class using the config parameters just read
     //

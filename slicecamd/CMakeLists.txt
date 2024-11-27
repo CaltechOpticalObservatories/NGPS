@@ -16,6 +16,11 @@ find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
 
+# ZeroMQ
+#
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
 # CFITSIO, CCfits
 #
 find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib )
@@ -45,6 +50,8 @@ target_link_libraries(slicecamd
         logentry
         utilities
         skyinfo
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}

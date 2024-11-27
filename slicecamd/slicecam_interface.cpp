@@ -1120,6 +1120,93 @@ namespace Slicecam {
   /***** Slicecam::Interface::make_telemetry_message **************************/
 
 
+  void Interface::start_subscriber_thread() {
+    if ( !this->is_subscriber_thread_running.load() ) {
+      std::thread( &Slicecam::Interface::subscriber_thread, this ).detach();
+    }
+    else logwrite( "Slicecam::Interface::start_subscriber_thread", "already running" );
+  }
+
+  void Interface::subscriber_thread() {
+    logwrite( "Slicecam::Interface::subscriber_thread", "subscriber started" );
+
+    BoolState thread_running( this->is_subscriber_thread_running );
+
+    // listen for published messages and handle them
+    //
+    while ( true ) {
+      try {
+        auto [topic,payload] = this->subscriber->receive();
+        handle_json_message(topic, payload);
+      }
+      catch ( const std::exception &e ) {
+        logwrite( "Slicecam::Interface::subscriber_thread", "ERROR "+std::string(e.what()) );
+        continue;
+      }
+    }
+  }
+
+
+  /***** Slicecam::Interface::handle_json_message *****************************/
+  /**
+   * @brief      parses incoming telemetry messages
+   * @param[in]  message_in  incoming serialized JSON message (as a string)
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::handle_json_message( std::string topic, std::string message_in ) {
+    const std::string function="Slicecam::Interface::handle_json_message";
+    std::stringstream message;
+
+    // nothing to do if the message is empty
+    //
+    if ( message_in.empty() ) {
+      logwrite( function, "ERROR empty JSON message" );
+      return ERROR;
+    }
+
+    try {
+      nlohmann::json jmessage = nlohmann::json::parse( message_in );
+      std::string messagetype;
+
+      // jmessage must not contain key "error"
+      //
+      if ( jmessage.contains("error") ) {
+        logwrite( function, "ERROR in JSON message" );
+        return ERROR;
+      }
+
+      if ( topic.empty() ) {
+        logwrite( function, "ERROR in JSON message" );
+        return ERROR;
+      }
+      else
+      if ( topic == "slitd" ) {
+        this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
+        this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
+      }
+      else {
+        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+    catch ( const nlohmann::json::parse_error &e ) {
+      message.str(""); message << "ERROR json exception parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing message: " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::handle_json_message *****************************/
+
+
   /***** Slicecam::Interface::configure_interface *****************************/
   /**
    * @brief      configure the interface from the .cfg file
@@ -1265,6 +1352,7 @@ namespace Slicecam {
     }
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
     logwrite(function, message.str());
+
     return error;
   }
   /***** Slicecam::Interface::configure_interface *****************************/
@@ -2891,6 +2979,8 @@ namespace Slicecam {
     // either a prioi or from the Andor::Information class
     //
     slicecam->fitskeys.erase_db();
+
+    slicecam->fitskeys = this->telemkeys.primary();
 
     slicecam->fitskeys.addkey( "TCS",  tcsname, "" );
 
