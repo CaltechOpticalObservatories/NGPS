@@ -610,6 +610,10 @@ namespace Slicecam {
                       ret = this->interface.framegrab_fix( args, retstring );
       }
       else
+      if ( cmd == SLICECAMD_SAVEFRAMES ) {
+                      ret = this->interface.saveframes( args, retstring );
+      }
+      else
       if ( cmd == SLICECAMD_PUTONSLIT ) {
                       ret = this->interface.put_on_slit( args, retstring );
       }

@@ -226,6 +226,11 @@ namespace Slicecam {
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
 
+      /** these are set by Interface::saveframes()
+       */
+      std::atomic<int> nsave_preserve_frames;  ///< number of frames to preserve (normally overwritten)
+      std::atomic<int> nskip_preserve_frames;  ///< number of frames to skip before saving nsave... frames
+
       GUIManager gui_manager;
 
       Interface() : tcs_online(false),
@@ -233,7 +238,9 @@ namespace Slicecam {
                     subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
                     is_subscriber_thread_running(false),
                     should_framegrab_run(false),
-                    is_framegrab_running(false) {
+                    is_framegrab_running(false),
+                    nsave_preserve_frames(0),
+                    nskip_preserve_frames(0) {
       }
 
       inline long read_error() { return( this->err.exchange( false ) ? ERROR : NO_ERROR ); };
@@ -271,6 +278,7 @@ namespace Slicecam {
       bool isopen( std::string which );     /// wrapper for slicecams
       long close( std::string args, std::string &retstring );      /// wrapper to open all slicecams
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
+      long saveframes( std::string args, std::string &retstring );
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
@@ -280,7 +288,7 @@ namespace Slicecam {
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long shutdown( std::string args, std::string &retstring );
       long test( std::string args, std::string &retstring );
-      long exptime( std::string exptime_in, std::string &retstring );
+      long exptime( std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
 
@@ -294,6 +302,7 @@ namespace Slicecam {
 
       static void dothread_fpoffset( Slicecam::Interface &iface );
       void dothread_framegrab( const std::string whattodo, const std::string sourcefile );
+      void preserve_framegrab();
       long collect_header_info_threaded();
   };
   /***** Slicecam::Interface **************************************************/

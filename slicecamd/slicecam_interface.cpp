@@ -12,6 +12,7 @@
 
 namespace Slicecam {
 
+  int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
   /***** Slicecam::Camera::emulator *******************************************/
   /**
@@ -125,7 +126,7 @@ namespace Slicecam {
     }
 
     // Get a map of camera handles, indexed by serial number.
-    // This must be called before open because open uses handles.
+    // This must be called before open() because open() uses handles.
     //
     if ( this->handlemap.size() == 0 ) {
       error = this->andor.begin()->second->get_handlemap( this->handlemap );
@@ -178,17 +179,16 @@ namespace Slicecam {
       // Now set up for single scan readout -- cannot software-trigger acquisition to
       // support continuous readout for multiple cameras in the same process.
       //
-      error |= this->set_gain(pair.first, 1);
+      error |= pair.second->set_acquisition_mode( 1 );           // single scan
+      error |= pair.second->set_read_mode( 4 );                  // image mode
       error |= pair.second->set_vsspeed( 4.33 );                 // vertical shift speed
       error |= pair.second->set_hsspeed( 1.0 );                  // horizontal shift speed
-      error |= pair.second->set_read_mode( 4 );                  // image mode
-      error |= pair.second->set_acquisition_mode( 1 );           // single scan
-      error |= pair.second->set_frame_transfer( "on" );          // enable Frame Transfer mode
       error |= pair.second->set_shutter( "open" );               // shutter always open
       error |= pair.second->set_imrot( cfg.rotstr );             // set imrot to configured value
       error |= pair.second->set_imflip( cfg.hflip, cfg.vflip );  // set imflip to configured value
       error |= pair.second->set_binning( cfg.hbin, cfg.vbin );   // set binning to configured value
       error |= pair.second->set_temperature( cfg.setpoint );     // set temp setpoint to configured value
+      error |= this->set_gain(pair.first, 1);
       error |= this->set_exptime(pair.first, 1 );
 
       if ( error != NO_ERROR ) {
@@ -1584,6 +1584,59 @@ namespace Slicecam {
   /***** Slicecam::Interface::tcs_init ****************************************/
 
 
+  /***** Slicecam::Interface::saveframes **************************************/
+  /**
+   * @brief      set/get number of frame grabs to save during target acquisition
+   * @param[in]  args       optional number of frames or help
+   * @param[out] retstring  return string for help or error status
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::saveframes( std::string args, std::string &retstring ) {
+    const std::string function = "Slicecam::Interface::saveframes";
+
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_SAVEFRAMES;
+      retstring.append( " [ <nsave> <nskip> ]\n" );
+      retstring.append( "   Set/get the number of frame grabs to save and skip\n" );
+      retstring.append( "   This will save <nsave> frames in a row, followed by <nskip>\n" );
+      retstring.append( "   frames not saved, and repeat.\n" );
+      retstring.append( "   <nsave> = 0 stops saving\n" );
+      retstring.append( "   <nskip> = 0 saves every frame (when <nsave> is > 0)\n" );
+      return HELP;
+    }
+
+    // args other than help, try to convert to integer
+    //
+    if ( !args.empty() ) {
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+      if ( tokens.size() != 2 ) {
+        logwrite( function, "ERROR expected <nsave> <nskip>" );
+        retstring="invalid_number_args";
+        return ERROR;
+      }
+      try {
+        this->nsave_preserve_frames.store( std::stoi(tokens.at(0)) );
+        this->nskip_preserve_frames.store( std::stoi(tokens.at(1)) );
+      }
+      catch ( std::exception & ) {
+        logwrite( function, "ERROR parsing value" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+
+    retstring = std::to_string(this->nsave_preserve_frames.load())+" "
+              + std::to_string(this->nskip_preserve_frames.load());
+
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::saveframes **************************************/
+
+
   /***** Slicecam::Interface::framegrab_fix ***********************************/
   /**
    * @brief      wrapper to control Andor frame grabbing using last WCSfix filename
@@ -1816,6 +1869,9 @@ namespace Slicecam {
     if ( lock.try_lock() ) {
       BoolState loop_running( this->is_framegrab_running );    // sets state true here, clears when it goes out of scope
 
+      int _nsave = this->nsave_preserve_frames.load();  // number of frames to save in a row
+      int _nskip = this->nskip_preserve_frames.load();  // number of frames to skip before saving _nsave frames
+
       do {
         // they will both have the same exptime so just get the first one
         //
@@ -1825,7 +1881,7 @@ namespace Slicecam {
         }
         if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
 
-        // Trigger and wait for acquisition on both cameras.
+        // Trigger and wait for acquisition on each camera sequentially.
         // Unfortunately the SDK can only do this one at a time within the same process.
         //
         for ( auto &[name, cam] : this->camera.andor ) {
@@ -1833,10 +1889,11 @@ namespace Slicecam {
         }
 
         if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
+
         for ( auto &[name, cam] : this->camera.andor ) {
           collect_header_info( cam );
         }
-//      if (error==NO_ERROR) error = this->collect_header_info_threaded();  // collect header info for both cameras
+
         if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                                this->imagename,
                                                                this->tcs_online.load() );    // write to FITS file
@@ -1844,6 +1901,21 @@ namespace Slicecam {
         this->framegrab_time = std::chrono::steady_clock::time_point::min();
 
         this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
+
+        // Normally, framegrabs are overwritten to the same file.
+        // This optionally saves them at the requested cadence by
+        // copying to a different filename.
+        //
+        // Save a number of frames in a row
+        //
+        if ( _nsave-- > 0 ) {
+          this->preserve_framegrab();
+        }
+        // skip the next _nskip number of frames before saving _nsave again
+        if ( _nsave<1 && _nskip--<1 ) {
+          _nsave = this->nsave_preserve_frames.load();
+          _nskip = this->nskip_preserve_frames.load();
+        }
 
       } while ( error==NO_ERROR && this->should_framegrab_run.load() );
     }
@@ -1862,6 +1934,59 @@ namespace Slicecam {
     return;
   }
   /***** Slicecam::Interface::dothread_framegrab ******************************/
+
+
+  /***** Slicecam::Interface::preserve_framegrab ******************************/
+  /**
+   * @brief      preserve frame grab by making a copy
+   *
+   */
+  void Interface::preserve_framegrab() {
+    try {
+      size_t loc;
+      // filename is after the last "/"
+      if ( (loc=this->imagename.find_last_of("/")) == std::string::npos ) {
+        logwrite( "Slicecam::Interface::preserve_framegrab", "malformed imagename" );
+        return;
+      }
+      std::string filename=this->imagename.substr(loc+1);
+
+      // insert number before the extension
+      if ( (loc=filename.find(".fits"))==std::string::npos ) {
+        logwrite( "Slicecam::Interface::preserve_framegrab", "malformed imagename" );
+        return;
+      }
+
+      // build the filename
+      std::string basename = filename.substr(0, loc);
+      std::string path = "/data/slicecam/" + get_system_date();
+
+      // make sure the path exists and is writable
+      if ( !validate_path( path ) ) {
+        logwrite( "Slicecam::Interface::preserve_framegrab", "cannot write to "+path );
+        return;
+      }
+
+      std::stringstream fn;
+      fn << path << "/" << basename << "_" << std::setfill('0') << std::setw(5) << npreserve << ".fits";
+
+      // increment until a unique file is found so that it never overwrites
+      struct stat st;
+      while ( (stat(fn.str().c_str(), &st) == 0) && npreserve < 100000 ) {
+        fn.str("");
+        fn << path << "/" << basename << "_" << std::setfill('0') << std::setw(5) << ++npreserve << ".fits";
+      }
+
+      // copy this framegrab to the file
+      std::filesystem::copy( this->imagename, fn.str() );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::preserve_framegrab", "ERROR saving frame: "+std::string(e.what()) );
+      return;
+    }
+    return;
+  }
+  /***** Slicecam::Interface::preserve_framegrab ******************************/
 
 
   /***** Slicecam::Interface::collect_header_info_threaded ********************/
@@ -2582,16 +2707,16 @@ namespace Slicecam {
   /***** Slicecam::Interface::exptime *****************************************/
   /**
    * @brief      wrapper to set/get exposure time
-   * @param[in]  exptime_in  optional requested exposure time
-   * @param[out] retstring   return string contains current exposure time
+   * @param[in]  args       optional requested exposure time
+   * @param[out] retstring  return string contains current exposure time
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::exptime( std::string exptime_in, std::string &retstring ) {
+  long Interface::exptime( std::string args, std::string &retstring ) {
     std::string function = "Slicecam::Interface::exptime";
     std::stringstream message;
 
-    if ( exptime_in == "?" || exptime_in == "help" ) {
+    if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_EXPTIME;
       retstring.append( " [ <exptime> ]\n" );
       retstring.append( "  Set or get camera exposure time in decimal seconds.\n" );
@@ -2612,7 +2737,7 @@ namespace Slicecam {
     // No arg just return the exposure time stored in the Andor Information class
     // without reading from the Andor
     //
-    if ( exptime_in.empty() ) {
+    if ( args.empty() ) {
       retstring = std::to_string( this->camera.andor.begin()->second->camera_info.exptime );
       return NO_ERROR;
     }
@@ -2621,7 +2746,7 @@ namespace Slicecam {
     //
     float fval=NAN;
     try {
-      fval = std::stof( exptime_in );
+      fval = std::stof( args );
       if ( std::isnan(fval) || fval < 0 ) {
         logwrite( function, "ERROR invalid exposure time" );
         retstring="invalid_argument";
@@ -2629,7 +2754,7 @@ namespace Slicecam {
       }
     }
     catch( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing exptime value " << exptime_in << ": " << e.what();
+      message.str(""); message << "ERROR parsing exptime value " << args << ": " << e.what();
       logwrite( function, message.str() );
       return ERROR;
     }
