@@ -15,6 +15,9 @@
 #include <condition_variable>
 #include <regex>
 #include <json.hpp>
+#include <zmqpp/zmqpp.hpp>
+#include <thread>
+#include <iostream>
 
 #include "logentry.h"
 #include "network.h"
@@ -43,6 +46,115 @@ constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Head
  */
 namespace Common {
 
+  using json = nlohmann::json;
+
+  /**************** Common::PubSub ********************************************/
+  /*
+   * @class  PubSub
+   * @brief  provides a publish/subscribe interface using ZeroMQ
+   *
+   */
+  class PubSub {
+    public:
+      enum class Mode { PUB, SUB };
+
+    private:
+      zmqpp::context &_context;
+      zmqpp::socket _socket;
+      Mode _mode;                        ///< publisher or subscriber?
+      std::string _topic;                ///< publisher topic
+      std::vector<std::string> _topics;  ///< list of subscriber topics
+
+    public:
+      /**
+       * @brief    generic constructor sets up the socket and mode
+       */
+      PubSub( zmqpp::context &context, Mode mode )
+        : _context(context),
+          _socket(context, (mode==Mode::PUB ? zmqpp::socket_type::publish : zmqpp::socket_type::subscribe)),
+          _mode(mode) { }
+
+      // publishers bind
+      //
+      void bind( const std::string &addr, const std::string &topic ) {
+        if ( _mode != Mode::PUB ) {
+          throw std::runtime_error( "(Common::PubSub::bind) not a publisher" );
+        }
+        _socket.bind( addr );
+        _topic = topic;
+      }
+
+      // even publishers will use connect when publishing to a broker
+      //
+      void connect_to_broker( const std::string &addr, const std::string &topic ) {
+        if ( _mode != Mode::PUB ) {
+          throw std::runtime_error( "(Common::PubSub::connect_to_broker) not a publisher" );
+        }
+        _socket.connect( addr );
+        _topic = topic;
+      }
+
+      // subscribers connect
+      //
+      void connect( const std::string &addr ) {
+        if ( _mode != Mode::SUB ) {
+          throw std::runtime_error( "(Common::PubSub::connect) not a subscriber" );
+        }
+        _socket.connect( addr );
+      }
+
+      void subscribe( const std::string &topic ) {
+        if ( _mode != Mode::SUB ) {
+          throw std::runtime_error( "(Common::PubSub::subscribe) not a subscriber" );
+        }
+        _topics.push_back(topic);
+        _socket.subscribe(topic);
+      }
+
+      void unsubscribe( const std::string &topic ) {
+        if ( _mode != Mode::SUB ) {
+          throw std::runtime_error( "(Common::PubSub::unsubscribe) not a subscriber" );
+        }
+        auto it = std::find( _topics.begin(), _topics.end(), topic );
+        if ( it != _topics.end() ) {
+          _topics.erase(it);
+          _socket.unsubscribe(topic);
+        }
+      }
+
+      std::pair<std::string,std::string> receive() {
+        if ( _mode != Mode::SUB ) {
+          throw std::runtime_error( "(Common::PubSub::receive) not a subscriber" );
+        }
+        zmqpp::message message_zmq;
+        _socket.receive( message_zmq );
+        std::string topic, payload;
+        message_zmq >> topic >> payload;
+        return { topic, payload };
+      }
+
+      /***** Common::PubSub::publish ******************************************/
+      /**
+       * @brief      publisher
+       * @param[in]  message  reference to JSON message
+       *
+       */
+      void publish( const json &message_out, const std::string &topic="" ) {
+        if ( _mode != Mode::PUB ) {
+          throw std::runtime_error( "(Common::PubSub::publish) not a publisher" );
+        }
+        zmqpp::message message_zmq;
+        // publish with class topic
+        message_zmq.add( topic.empty() ? _topic : topic );
+        message_zmq.add(message_out.dump());
+        _socket.send( message_zmq );
+      }
+      /***** Common::PubSub::publish ******************************************/
+
+  };
+  /**************** Common::PubSub ********************************************/
+
+
   void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
 
   /***** Common::extract_telemetry_value **************************************/
@@ -53,7 +165,6 @@ namespace Common {
    * @param[out] value    reference of type T to value to return
    *
    */
-  using json = nlohmann::json;
   template <typename T>
   void extract_telemetry_value( const std::string &jstring, const std::string &jkey, T &value ) {
     const std::string function="Common::extract_telemetry_value";
@@ -493,9 +604,6 @@ namespace Common {
                          const std::string &chan="") {
         const std::string function="Common::Header::add_json_key";
         std::stringstream message;
-
-        message.str(""); message << "[DEBUG] jkey=" << jkey << " keyword=" << keyword << " chan=" << chan;
-        logwrite(function,message.str());
 
         if ( use_extension && !has_chan(chan) ) {
           FitsKeys newdb;
