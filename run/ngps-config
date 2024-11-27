@@ -5,6 +5,11 @@
 
 BASEDIR="/home/developer/Software"
 
+# message broker daemon
+#
+MESSAGED=$BASEDIR"/bin/messaged"
+MESSAGED_CONFIG=$BASEDIR"/Config/messaged.cfg"
+
 # observation sequencer
 #
 SEQUENCERD=$BASEDIR"/bin/sequencerd"
@@ -71,8 +76,8 @@ THERMALD_CONFIG=$BASEDIR"/Config/thermald.cfg"
 #
 # sequencer must be last!
 #
-PROCS=("$TELEMD" "$ACAMD" "$SLICECAMD" "$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$THERMALD" "$POWERD" "$SLITD" "$TCSD" "$SEQUENCERD")
-PROCNAMES=("telemd" "acamd" "slicecamd" "calibd" "camerad" "flexured" "focusd" "thermald" "powerd" "slitd" "tcsd" "sequencerd")
-PROCSOCK=("" "acam" "slicecam" "calib" "camera" "" "" "thermal" "power" "slit" "tcs" "seq")
-CONFIGS=("$TELEMD_CONFIG" "$ACAMD_CONFIG" "$SLICECAMD_CONFIG" "$CALIBD_CONFIG" "$CAMERAD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" \
+PROCS=("$MESSAGED" "$ACAMD" "$SLICECAMD" "$CALIBD" "$CAMERAD" "$FLEXURED" "$FOCUSD" "$THERMALD" "$POWERD" "$SLITD" "$TCSD" "$SEQUENCERD")
+PROCNAMES=("messaged" "acamd" "slicecamd" "calibd" "camerad" "flexured" "focusd" "thermald" "powerd" "slitd" "tcsd" "sequencerd")
+PROCSOCK=("" "acam" "slicecam" "calib" "camera" "flexure" "focus" "thermal" "power" "slit" "tcs" "seq")
+CONFIGS=("$MESSAGED_CONFIG" "$ACAMD_CONFIG" "$SLICECAMD_CONFIG" "$CALIBD_CONFIG" "$CAMERAD_CONFIG" "$FLEXURED_CONFIG" "$FOCUSD_CONFIG" \
          "$THERMALD_CONFIG" "$POWERD_CONFIG" "$SLITD_CONFIG" "$TCSD_CONFIG" "$SEQUENCERD_CONFIG")
