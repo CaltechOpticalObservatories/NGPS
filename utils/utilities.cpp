@@ -424,6 +424,82 @@ std::mutex generate_tmpfile_mtx;
   /***** timestamp_from *******************************************************/
 
 
+  /***** validate_path ********************************************************/
+  /**
+   * @brief      validate a directory path, creating subdirs as needed
+   * @param[in]  path
+   * @return     true|false
+   *
+   */
+  bool validate_path( const std::string path ) {
+    if ( path.empty() ) return false;
+
+    // Tokenize the input string on the '/' character to get each requested
+    // subdirectory as a separate token.
+    //
+    std::vector<std::string> tokens;
+    Tokenize(path, tokens, "/");
+
+    std::stringstream nextdir;  // the next subdirectory to check and/or create
+
+    // Loop through each requested subdirectory to check if they exist.
+    // Try to create them if they don't exist.
+    //
+    for ( const auto &tok : tokens ) {
+
+      // The next directory to create --
+      // start from the bottom and append each successive token.
+      //
+      nextdir << "/" << tok;
+
+      // Check if each directory exists
+      //
+      DIR *dirp;                                             // pointer to the directory
+      if ( (dirp = opendir(nextdir.str().c_str())) == nullptr ) {
+        // If directory doesn't exist then try to create it.
+        //
+        if ( ( mkdir( nextdir.str().c_str(), S_IRWXU ) ) == 0 ) {
+          std::cout << "created directory " << nextdir.str() << "\n";
+        }
+        else {                                               // error creating date subdirectory
+          std::cerr << "ERROR creating directory " << nextdir.str() << ": " << strerror(errno) << "\n";
+          return false;
+        }
+      }
+      else {
+        closedir(dirp);                                      // directory already existed so close it
+      }
+    }
+
+    // Make sure the directory can be written to by writing a test file.
+    //
+    try {
+      std::string testfile;
+      testfile = path + "/.tmp";
+      FILE* fp = std::fopen(testfile.c_str(), "w");    // create the test file
+      if (!fp) {
+        std::cerr << "ERROR cannot write to requested image directory " << path << "\n";
+        return false;
+      }
+      else {                                           // remove the test file
+        std::fclose(fp);
+        if (std::remove(testfile.c_str()) != 0) {
+          std::cerr << "ERROR removing temporary file " << testfile << "\n";
+          return false;
+        }
+      }
+    }
+    catch( const std::exception &e ) {
+      std::cerr << "ERROR writing to " << path << ": " << e.what() << "\n";
+      return false;
+    }
+
+    return true;
+
+  }
+  /***** validate_path ********************************************************/
+
+
   /***** get_system_date ******************************************************/
   /**
    * @brief      return current date in formatted string "YYYYMMDD"

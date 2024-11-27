@@ -33,6 +33,7 @@
 #include <limits>
 #include <ctime>
 #include "time.h"
+#include <dirent.h>
 #include <map>
 #include <json.hpp>
 #include <condition_variable>
@@ -88,6 +89,7 @@ inline std::string get_datetime() {
   return str;
 }
 
+bool validate_path( const std::string path );  /// validate a directory path, creating subdirs as needed
 std::string get_system_date();                      /// return current date in formatted string "YYYYMMDD"
 std::string get_system_date( const std::string &tmzone_in );
 
