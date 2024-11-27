@@ -213,6 +213,7 @@ namespace Andor {
       virtual long _SetHSSpeed( int type, int index ) = 0;
       virtual long _GetVSSpeed( int index, float &speed ) = 0;
       virtual long _SetVSSpeed( int index ) = 0;
+      virtual long _SetPreAmpGain( int index ) = 0;
       virtual long _SetEMCCDGain( int gain ) = 0;
       virtual long _GetEMCCDGain( int &gain ) = 0;
       virtual long _GetEMGainRange( int &low, int &high ) = 0;
@@ -222,7 +223,9 @@ namespace Andor {
       virtual long _GetTemperatureRange( int &min, int &max ) = 0;
       virtual long _CoolerON() = 0;
       virtual long _CoolerOFF() = 0;
+      virtual long _SetCoolerMode( int mode ) = 0;
       virtual long _SetTemperature( int temp ) = 0;
+      virtual long _SetTriggerMode( int mode ) = 0;
       virtual long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) = 0;
       virtual long _Initialize( ) = 0;
       virtual long _SetAcquisitionMode( int mode ) = 0;
@@ -277,6 +280,7 @@ namespace Andor {
       long _SetHSSpeed( int type, int index ) override;
       long _GetVSSpeed( int index, float &speed ) override;
       long _SetVSSpeed( int index ) override;
+      long _SetPreAmpGain( int index ) override;
       long _SetEMCCDGain( int gain ) override;
       long _GetEMCCDGain( int &gain ) override;
       long _GetEMGainRange( int &low, int &high ) override;
@@ -286,7 +290,9 @@ namespace Andor {
       long _GetTemperatureRange( int &min, int &max ) override;
       long _CoolerON() override;
       long _CoolerOFF() override;
+      long _SetCoolerMode( int mode ) override;
       long _SetTemperature( int temp ) override;
+      long _SetTriggerMode( int mode ) override;
       long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) override;
       long _Initialize( ) override;
       long _SetAcquisitionMode( int mode ) override;
@@ -365,6 +371,7 @@ namespace Andor {
       long _SetHSSpeed( int type, int index ) override;
       long _GetVSSpeed( int index, float &speed ) override;
       long _SetVSSpeed( int index ) override;
+      long _SetPreAmpGain( int index ) override;
       long _SetEMCCDGain( int gain ) override;
       long _GetEMCCDGain( int &gain ) override;
       long _GetEMGainRange( int &low, int &high ) override;
@@ -374,7 +381,9 @@ namespace Andor {
       long _GetTemperatureRange( int &min, int &max ) override;
       long _CoolerON() override;
       long _CoolerOFF() override;
+      long _SetCoolerMode( int mode ) override;
       long _SetTemperature( int temp ) override;
+      long _SetTriggerMode( int mode ) override;
       long _GetVersionInfo( AT_VersionInfoId arr, char* info, at_u32 len ) override;
       long _Initialize( ) override;
       long _SetAcquisitionMode( int mode ) override;

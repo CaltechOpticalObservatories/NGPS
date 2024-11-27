@@ -425,6 +425,19 @@ namespace Andor {
   /***** Andor::Emulator::_SetVSSpeed *****************************************/
 
 
+  /***** Andor::Emulator::_SetPreAmpGain **************************************/
+  /**
+   * @brief      wrapper for Andor Sim SetPreAmpGain
+   * @param[in]  index  index of gain vector
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long Emulator::_SetPreAmpGain( int index ) {
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetPreAmpGain **************************************/
+
+
   /***** Andor::Emulator::_SetEMCCDGain ***************************************/
   /**
    * @brief      wrapper for Andor Sim SetEMCCDGain
@@ -591,6 +604,18 @@ namespace Andor {
   /***** Andor::Emulator::_CoolerOFF ******************************************/
 
 
+  /***** Andor::Emulator::_SetCoolerMode **************************************/
+  /**
+   * @brief      wrapper for Andor Sim SetCoolerMode
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long Emulator::_SetCoolerMode( int mode ) {
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetCoolerMode **************************************/
+
+
   /***** Andor::Emulator::_SetTemperature *************************************/
   /**
    * @brief      wrapper for Andor Sim SetTemperature
@@ -605,6 +630,20 @@ namespace Andor {
 
     this->temperature = temp;
 
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_SetTemperature *************************************/
+
+
+  /***** Andor::Emulator::_SetTriggerMode *************************************/
+  /**
+   * @brief      wrapper for Andor Sim SetTriggerMode
+   * @details    set the trigger mode
+   * @param[in]  mode  trigger mode
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long Emulator::_SetTriggerMode( int mode ) {
     return NO_ERROR;
   }
   /***** Andor::Emulator::_SetTemperature *************************************/

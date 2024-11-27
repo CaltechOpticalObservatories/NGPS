@@ -580,6 +580,39 @@ namespace Andor {
   /***** Andor::SDK::_SetVSSpeed **********************************************/
 
 
+  /***** Andor::SDK::_SetPreAmpGain *******************************************/
+  /**
+   * @brief      wrapper for Andor SDK SetPreAmpGain
+   * @details    This function will set the pre amp gain to be used for
+   *             subsequent acquisitions. The actual gain factor that will be
+   *             applied can be found through a call to the GetPreAmpGain
+   *             function. The number of Pre Amp Gains available is found by
+   *             calling the GetNumberPreAmpGains function.
+   * @param[in]  index
+   * @return     NO_ERROR | ERROR
+   *
+   */
+  long SDK::_SetPreAmpGain( int index ) {
+    std::string function = "Andor::SDK::_SetPreAmpGain";
+    std::stringstream message;
+
+    unsigned int ret = SetPreAmpGain( index );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:             /* silent on success */                              break;
+      case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                  break;
+      case DRV_ACQUIRING:           message << "ERROR acquisition in progress";          break;
+      case DRV_P1INVALID:           message << "ERROR invalid index " << index;          break;
+      default:                      message << "ERROR unrecognized status code " << ret;
+    }
+
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_SetPreAmpGain *******************************************/
+
+
   /***** Andor::SDK::_SetEMCCDGain ********************************************/
   /**
    * @brief      wrapper for Andor SDK SetEMCCDGain
@@ -849,6 +882,37 @@ namespace Andor {
   /***** Andor::SDK::_CoolerOFF ***********************************************/
 
 
+  /***** Andor::SDK::_SetCoolerMode *******************************************/
+  /**
+   * @brief      wrapper for Andor SDK SetCoolerMode
+   * @details    This function determines whether the cooler is switched off
+   *             when the camera is shut down.
+   * @param[in]  mode 1=temp maintained on shutdown, 0=return to ambient
+   * @return     NO_ERROR | ERROR
+   *
+   */
+  long SDK::_SetCoolerMode( int mode ) {
+    std::string function = "Andor::SDK::_SetCoolerMode";
+    std::stringstream message;
+
+    unsigned int ret = SetCoolerMode( mode );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:             /* silent on success */                                  break;
+      case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                      break;
+      case DRV_ACQUIRING:           message << "ERROR acquisition in progress";              break;
+      case DRV_P1INVALID:           message << "ERROR invalid mode " << mode;                break;
+      case DRV_NOT_SUPPORTED:       message << "ERROR camera doesn't support setting mode";  break;
+      default:                      message << "ERROR unrecognized status code " << ret;
+    }
+
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_SetCoolerMode *******************************************/
+
+
   /***** Andor::SDK::_SetTemperature ******************************************/
   /**
    * @brief      wrapper for Andor SDK SetTemperature
@@ -878,6 +942,35 @@ namespace Andor {
     return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
   }
   /***** Andor::SDK::_SetTemperature ******************************************/
+
+
+  /***** Andor::SDK::_SetTriggerMode ******************************************/
+  /**
+   * @brief      wrapper for Andor SDK SetTriggerMode
+   * @details    set the trigger mode
+   * @param[in]  mode  trigger mode {0,1,6,7,9,10}
+   * @return     NO_ERROR or ERROR
+   *
+   */
+  long SDK::_SetTriggerMode( int mode ) {
+    std::string function = "Andor::SDK::_SetTriggerMode";
+    std::stringstream message;
+
+    unsigned int ret = SetTriggerMode( mode );
+
+    switch ( ret ) {
+      case DRV_SUCCESS:             /* silent on success */                               break;
+      case DRV_NOT_INITIALIZED:     message << "ERROR not initialized";                   break;
+      case DRV_ACQUIRING:           message << "ERROR acquisition in progress";           break;
+      case DRV_P1INVALID:           message << "ERROR invalid trigger mode " << mode;     break;
+      default:                      message << "ERROR unrecognized status code " << ret;
+    }
+
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_SetTriggerMode ******************************************/
 
 
   /***** Andor::SDK::_GetVersionInfo ******************************************/
@@ -1728,6 +1821,9 @@ namespace Andor {
       this->camera_info.axes[0] = (this->camera_info.hend-this->camera_info.hstart+1)/this->camera_info.hbin;
       this->camera_info.axes[1] = (this->camera_info.vend-this->camera_info.vstart+1)/this->camera_info.vbin;
     }
+    if (error==NO_ERROR) error = ( andor ? andor->_SetTriggerMode( 0 ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetPreAmpGain( 0 ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_SetCoolerMode( 1 ) : ERROR );
     if (error==NO_ERROR) error = set_image( this->camera_info.hbin, this->camera_info.vbin,
                                             1, this->camera_info.hend,
                                             1, this->camera_info.vend );
@@ -3331,10 +3427,6 @@ namespace Andor {
     std::stringstream message;
     long error = NO_ERROR;
 
-    // for multiple camera systems it is necessary to force the handle!
-    //
-    select_camera(this->_handle);
-
     if ( ! this->is_andor_open ) {
       logwrite( function, "ERROR camera not open" );
       return ERROR;
@@ -3358,11 +3450,10 @@ namespace Andor {
     //
     error = this->start_acquisition();
 
-    // Wait for acquisition
+    // Wait for acquisition (timeout set to 5s over exptime)
     //
-    int status;
-    error = ( andor ? andor->_GetStatus( status ) : ERROR );
-    while ( error==NO_ERROR && status == DRV_ACQUIRING ) error = ( andor ? andor->_GetStatus( status ) : ERROR );
+    int timeout = static_cast<int>( (this->camera_info.exptime + 5.)*1000. );
+    if (error==NO_ERROR) error = ( andor ? andor->_WaitForAcquisitionTimeOut( timeout ) : ERROR );
     }
     // ^^ acquire_state cleared upon leaving this scope ^^
 
@@ -3374,6 +3465,7 @@ namespace Andor {
       logwrite( function, "ERROR image_data buffer not initialized: no image saved" );
       return ERROR;
     }
+    memset( this->image_data, '\0', this->bufsz*sizeof(uint16_t) );
 
     if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->bufsz ) : ERROR );
 
@@ -3382,8 +3474,6 @@ namespace Andor {
     timespec timenow             = Time::getTimeNow();         // get the time NOW
     this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
-
-//  if (error==NO_ERROR) error = sdk._GetTemperature();
 
     return error;
   }
@@ -3647,6 +3737,8 @@ return NO_ERROR;
     // Now read the actual exposure time which updates the exptime reference
     //
     error |= read_exptime( exptime );
+
+    this->camera_info.exptime = exptime;
 
     return error;
   }
