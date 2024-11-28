@@ -448,28 +448,28 @@ namespace Common {
 
     // Create a local socket object for non-blocking communication with the daemon
     //
-    Network::TcpSocket _sock( this->name, this->nbport );
+    Network::TcpSocket _sock( "127.0.0.1", this->nbport );
 
     // Create and connect to the non-blocking socket
     //
     if ( _sock.Connect() < 0 ) {
-      message.str(""); message << "ERROR connecting to " << this->name << " on port " << this->nbport;
+      message.str(""); message << "ERROR connecting to " << this->name << " on localhost/" << this->nbport;
       logwrite( function, message.str() );
       return( ERROR );
     } else {
-      message.str(""); message << "connected to " << this->name << " on port " << this->nbport;
+      message.str(""); message << "connected to " << this->name << " on localhost/" << this->nbport;
       logwrite( function, message.str() );
     }
 
     // Send the command to the non-blocking socket
     //
-    message.str(""); message << "sending \"" << strip_newline(command) << "\" to " << this->name << "/" << this->nbport;
+    message.str(""); message << "sending \"" << strip_newline(command) << "\" to " << this->name << " localhost/" << this->nbport;
     logwrite( function, message.str() );
     command.append( "\n" );
     int wrote = _sock.Write( command );
 
     if ( wrote <= 0 ) {
-      message.str(""); message << "ERROR no bytes written for \"" << strip_newline(command) << "\" to " << this->name << "/" << this->nbport;
+      message.str(""); message << "ERROR no bytes written for \"" << strip_newline(command) << "\" to " << this->name << " localhost/" << this->nbport;
       logwrite( function, message.str() );
       error = ERROR;
     }
