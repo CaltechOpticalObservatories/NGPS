@@ -4671,11 +4671,24 @@ namespace Acam {
     //
     this->fpoffsets.get_acam_params();
 
-    this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE", this->fpoffsets.acamparams.pixscale, "arcsec per pixel" );
-    this->camera.fitsinfo.fitskeys.addkey( "CRPIX1",   this->fpoffsets.acamparams.crpix1, "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CRPIX2",   this->fpoffsets.acamparams.crpix2, "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CDELT1",   this->fpoffsets.acamparams.cdelt1, "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CDELT2",   this->fpoffsets.acamparams.cdelt2, "" );
+    // and adjust for binning
+    //
+    auto hbin   = this->camera.andor.camera_info.hbin;
+    auto vbin   = this->camera.andor.camera_info.vbin;
+    auto pixscale = ( hbin==vbin ? this->fpoffsets.acamparams.pixscale : NAN );
+    auto crpix1 = this->fpoffsets.acamparams.crpix1 / hbin;
+    auto crpix2 = this->fpoffsets.acamparams.crpix2 / vbin;
+    auto cdelt1 = this->fpoffsets.acamparams.cdelt1 * hbin;
+    auto cdelt2 = this->fpoffsets.acamparams.cdelt2 * vbin;
+
+    this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE", pixscale, "arcsec per pixel" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRPIX1",   crpix1, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRPIX2",   crpix2, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CDELT1",   cdelt1, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CDELT2",   cdelt2, "" );
+
+    this->camera.fitsinfo.fitskeys.addkey( "HBIN",     hbin, "horizontal binning pixels" );
+    this->camera.fitsinfo.fitskeys.addkey( "VBIN",     vbin, "vertical binning pixels" );
 
     this->camera.fitsinfo.fitskeys.addkey( "EXPSTART", this->camera.andor.camera_info.timestring, "exposure start time" );
     this->camera.fitsinfo.fitskeys.addkey( "MJD0",     this->camera.andor.camera_info.mjd0, "exposure start time (modified Julian Date)" );
@@ -4690,8 +4703,6 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "TEMPREAD", this->camera.andor.camera_info.ccdtemp, "CCD temperature deg C" );
     this->camera.fitsinfo.fitskeys.addkey( "TEMPSTAT", this->camera.andor.camera_info.temp_status, "CCD temperature status" );
     this->camera.fitsinfo.fitskeys.addkey( "FITSNAME", this->camera.andor.camera_info.fits_name, "this filename" );
-    this->camera.fitsinfo.fitskeys.addkey( "HBIN",     this->camera.andor.camera_info.hbin, "horizontal binning pixels" );
-    this->camera.fitsinfo.fitskeys.addkey( "VBIN",     this->camera.andor.camera_info.vbin, "vertical binning pixels" );
     this->camera.fitsinfo.fitskeys.addkey( "HSPEED",   this->camera.andor.camera_info.hspeed, "horizontal clocking speed MHz" );
     this->camera.fitsinfo.fitskeys.addkey( "VSPEED",   this->camera.andor.camera_info.vspeed, "vertical clocking speed MHz" );
     this->camera.fitsinfo.fitskeys.addkey( "AMPTYPE",  this->camera.andor.camera_info.amptypestr, "CCD amplifier type" );
