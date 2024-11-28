@@ -770,7 +770,7 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long SDK::_GetTemperature( int &temp, std::string_view &status ) {
+  long SDK::_GetTemperature( int &temp, std::string &status ) {
     std::string function = "Andor::SDK::_GetTemperature";
     std::stringstream message;
 
@@ -2960,7 +2960,7 @@ namespace Andor {
     //
     select_camera(this->_handle);
 
-    std::string_view status;
+    std::string status;
 
     long error = ( andor ? andor->_GetTemperature( temp, status ) : ERROR );
 
@@ -3347,13 +3347,16 @@ namespace Andor {
       return ERROR;
     }
 
+    // get the temperature reading
+    //
+    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperature( this->camera_info.ccdtemp,
+                                                                   this->camera_info.temp_status ) : ERROR );
+
     // Store the exposure start time
     //
     timespec timenow             = Time::getTimeNow();         // get the time NOW
     this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
-
-//  if (error==NO_ERROR) error = sdk._GetTemperature();
 
     return NO_ERROR;
   }
@@ -3402,13 +3405,16 @@ namespace Andor {
 
     if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
 
+    // get the temperature reading
+    //
+    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperature( this->camera_info.ccdtemp,
+                                                                   this->camera_info.temp_status ) : ERROR );
+
     // Store the exposure start time
     //
     timespec timenow             = Time::getTimeNow();         // get the time NOW
     this->camera_info.timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
     this->camera_info.mjd0       = mjd_from( timenow );        // modified Julian date
-
-//  if (error==NO_ERROR) error = sdk._GetTemperature();
 
     return error;
   }
@@ -3467,7 +3473,14 @@ namespace Andor {
     }
     memset( this->image_data, '\0', this->bufsz*sizeof(uint16_t) );
 
+    // get the data
+    //
     if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->bufsz ) : ERROR );
+
+    // get the temperature reading
+    //
+    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperature( this->camera_info.ccdtemp,
+                                                                   this->camera_info.temp_status ) : ERROR );
 
     // Store the exposure start time
     //

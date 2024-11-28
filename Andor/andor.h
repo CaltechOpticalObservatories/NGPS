@@ -219,7 +219,7 @@ namespace Andor {
       virtual long _GetEMGainRange( int &low, int &high ) = 0;
       virtual long _SetOutputAmplifier( int type ) = 0;
       virtual long _SetFrameTransferMode( int mode ) = 0;
-      virtual long _GetTemperature( int &temp, std::string_view &status ) = 0;
+      virtual long _GetTemperature( int &temp, std::string &status ) = 0;
       virtual long _GetTemperatureRange( int &min, int &max ) = 0;
       virtual long _CoolerON() = 0;
       virtual long _CoolerOFF() = 0;
@@ -286,7 +286,7 @@ namespace Andor {
       long _GetEMGainRange( int &low, int &high ) override;
       long _SetOutputAmplifier( int type ) override;
       long _SetFrameTransferMode( int mode ) override;
-      long _GetTemperature( int &temp, std::string_view &status ) override;
+      long _GetTemperature( int &temp, std::string &status ) override;
       long _GetTemperatureRange( int &min, int &max ) override;
       long _CoolerON() override;
       long _CoolerOFF() override;
@@ -377,7 +377,7 @@ namespace Andor {
       long _GetEMGainRange( int &low, int &high ) override;
       long _SetOutputAmplifier( int type ) override;
       long _SetFrameTransferMode( int mode ) override;
-      long _GetTemperature( int &temp, std::string_view &status ) override;
+      long _GetTemperature( int &temp, std::string &status ) override;
       long _GetTemperatureRange( int &min, int &max ) override;
       long _CoolerON() override;
       long _CoolerOFF() override;

@@ -537,7 +537,7 @@ namespace Andor {
    * @return     NO_ERROR or ERROR
    *
    */
-  long Emulator::_GetTemperature( int &temp, std::string_view &status ) {
+  long Emulator::_GetTemperature( int &temp, std::string &status ) {
     std::string function = "Andor::Emulator::_GetTemperature";
     std::stringstream message;
 
@@ -1209,7 +1209,25 @@ namespace Andor {
     PyObject* pReturn = PyObject_Call( pFunction, pArgs, pKwArgs );
 
     if ( !pReturn ) {
-      logwrite( function, "ERROR calling Python skysim function" );
+      // Print representations of the objects on error
+      PyObject* pFunctionRepr = PyObject_Repr(pFunction);
+      PyObject* pArgsRepr     = PyObject_Repr(pArgs);
+      PyObject* pKwArgsRepr   = PyObject_Repr(pKwArgs);
+
+      if ( pFunctionRepr && pArgsRepr && pKwArgsRepr ) {
+        const char* pfunc = PyUnicode_AsUTF8(pFunctionRepr);
+        const char* pargs = PyUnicode_AsUTF8(pArgsRepr);
+        const char* pkwar = PyUnicode_AsUTF8(pKwArgsRepr);
+        message.str(""); message << "ERROR calling Python skysim function: "
+                                 << pfunc << "( " << pargs << ", " << pkwar << " )";
+        logwrite( function, message.str() );
+      }
+      else logwrite( function, "ERROR calling Python skysim function" );
+
+      Py_XDECREF(pFunctionRepr);
+      Py_XDECREF(pArgsRepr);
+      Py_XDECREF(pKwArgsRepr);
+
       py_instance.print_python_error( function );
       error = ERROR;
     }
