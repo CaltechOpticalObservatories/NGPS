@@ -3725,6 +3725,7 @@ namespace Acam {
       retstring = ACAMD_TEST;
       retstring.append( "\n" );
       retstring.append( "  Test Routines\n" );
+      retstring.append( "   acamparams [ ? ]\n" );
       retstring.append( "   camera ? | <args...>\n" );
       retstring.append( "   collect [ ? ] \n" );
       retstring.append( "   database\n" );
@@ -3750,6 +3751,28 @@ namespace Acam {
 
     std::string testname = tokens[0];
 
+    // --------------------------------
+    // get acamparams
+    //
+    if ( testname == "acamparams" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = ACAMD_TEST;
+        retstring.append( " acamparams\n" );
+        retstring.append( "  Show the acam params calculated by Python FPOffsets.\n" );
+        return HELP;
+      }
+      // read acam params into fpoffsets class
+      this->fpoffsets.get_acam_params();
+      // log those params
+      message.str(""); message << "pixscale=" << this->fpoffsets.acamparams.pixscale
+                               << " cdelt1=" << this->fpoffsets.acamparams.cdelt1
+                               << " cdelt2=" << this->fpoffsets.acamparams.cdelt2
+                               << " crpix1=" << this->fpoffsets.acamparams.crpix1
+                               << " crpix2=" << this->fpoffsets.acamparams.crpix2 << "\n";
+      retstring=message.str();
+      return HELP;
+    }
+    else
     // --------------------------------
     // set optional external solver args
     //
@@ -4644,6 +4667,16 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
     this->camera.fitsinfo.fitskeys.addkey( "AIRMASS", NAN, "" );
 
+    // get parameters from FPOffsets, results are stored in the class
+    //
+    this->fpoffsets.get_acam_params();
+
+    this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE", this->fpoffsets.acamparams.pixscale, "arcsec per pixel" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRPIX1",   this->fpoffsets.acamparams.crpix1, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CRPIX2",   this->fpoffsets.acamparams.crpix2, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CDELT1",   this->fpoffsets.acamparams.cdelt1, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "CDELT2",   this->fpoffsets.acamparams.cdelt2, "" );
+
     this->camera.fitsinfo.fitskeys.addkey( "EXPSTART", this->camera.andor.camera_info.timestring, "exposure start time" );
     this->camera.fitsinfo.fitskeys.addkey( "MJD0",     this->camera.andor.camera_info.mjd0, "exposure start time (modified Julian Date)" );
     this->camera.fitsinfo.fitskeys.addkey( "EXPTIME",  this->camera.andor.camera_info.exptime, "exposure time (sec)" );
@@ -4667,7 +4700,6 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "GAIN",     1, "e-/ADU fixed" );
     this->camera.fitsinfo.fitskeys.addkey( "SATURATE", 65535, "saturation level fixed by 16 bit readout" );
 
-    this->camera.fitsinfo.fitskeys.addkey( "PIXSCALE",  this->camera.andor.camera_info.pixel_scale, "arcsec per pixel" );
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
     this->camera.fitsinfo.fitskeys.addkey( "TARGET",    this->target.get_name(), "target name" );
     this->camera.fitsinfo.fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
@@ -4677,14 +4709,10 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE2",    "DEC--TAN", "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CRPIX1",    this->camera.andor.camera_info.hend/2, "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CRPIX2",    this->camera.andor.camera_info.vend/2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "CRVAL1",    ra_acam, "" );
     this->camera.fitsinfo.fitskeys.addkey( "CRVAL2",    dec_acam, "" );
     this->camera.fitsinfo.fitskeys.addkey( "CUNIT1",    "deg", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CUNIT2",    "deg", "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CDELT1",    this->camera.andor.camera_info.pixel_scale/3600., "" );
-    this->camera.fitsinfo.fitskeys.addkey( "CDELT2",    this->camera.andor.camera_info.pixel_scale/3600., "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC1_1",     ( -1.0 * cos( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC1_2",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );

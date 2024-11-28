@@ -18,6 +18,7 @@
 #define PYTHON_SOLVEOFFSETDEG_FUNCTION "solve_offset_deg"
 #define PYTHON_APPLYOFFSETDEG_FUNCTION "apply_offset_deg"
 #define PYTHON_GETSLICEPARAMS_FUNCTION "getSlicevParams"
+#define PYTHON_GETACAMPARAMS_FUNCTION "getAcamParams"
 
 namespace SkyInfo {
 
@@ -42,6 +43,18 @@ namespace SkyInfo {
 
       inline bool is_initialized() { return this->python_initialized; };
 
+      // acam parameters
+      //
+      typedef struct {
+        double pixscale;
+        double cdelt1;
+        double cdelt2;
+        long crpix1;
+        long crpix2;
+      } acamparam_t;
+
+      acamparam_t acamparams;
+
       // slicecam parameters
       //
       typedef struct {
@@ -53,7 +66,7 @@ namespace SkyInfo {
         std::string datasec;
       } sliceparam_t;
 
-      // this map holds the output of get_slicecam_params()
+      // this map holds the output of get_slicecam_params() indexed by camera
       //
       std::map<std::string, sliceparam_t> sliceparams;
 
@@ -108,6 +121,7 @@ namespace SkyInfo {
       long apply_offset( double &ra_in,  const double ra_off,
                          double &dec_in, const double dec_off );
 
+      long get_acam_params();
       long get_slicecam_params();
 
   };

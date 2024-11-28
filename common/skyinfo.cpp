@@ -527,6 +527,94 @@ namespace SkyInfo {
   /***** SkyInfo::FPOffsets::apply_offset *************************************/
 
 
+  /***** SkyInfo::FPOffsets::get_acam_params **********************************/
+  /**
+   * @brief      get parameters needed for acam image headers
+   * @details    This calls Python function getiAcamParams in the FPOffsets
+   *             module and stores the results in the class. The call needs no
+   *             arguments and returns a dictionary of the form:
+   *'''
+   *             { "PIXSCALE"  : pixscale,       # arcsec/px
+   *               "CDELT1"    : pixscale/3600., # deg/px
+   *               "CDELT2"    : pixscale/3600., # deg/px
+   *               "CRPIX1"    : 512,            # ACAM center
+   *               "CRPIX2"    : 512 }
+   *'''
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long FPOffsets::get_acam_params() {
+    std::string function = "SkyInfo::FPOffsets::get_acam_params";
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return ERROR;
+    }
+
+    if ( this->pModule==NULL ) {
+      logwrite( function, "ERROR: Python module not imported" );
+      return ERROR;
+    }
+
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_GETACAMPARAMS_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      logwrite( function, "ERROR Python function "+std::string(PYTHON_GETACAMPARAMS_FUNCTION)+" not callable" );
+      Py_XDECREF( pFunction );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Call the Python function here
+    //
+    PyObject* pReturn = PyObject_CallObject( pFunction, NULL );
+    Py_XDECREF( pFunction );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      logwrite( function, "ERROR calling Python function: "+std::string(PYTHON_GETACAMPARAMS_FUNCTION) );
+      PyErr_Print();
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Expect a dictionary
+    //
+    if ( !PyDict_Check( pReturn ) ) {
+      logwrite( function, "ERROR Python function "+std::string(PYTHON_GETACAMPARAMS_FUNCTION)+" did not return expected dictionary" );
+      Py_DECREF( pReturn );
+      PyGILState_Release(gstate);
+      return ERROR;
+    }
+
+    // Now extract the named values from this sub-dictionary,
+    // and store them in a class map indexed by camera name.
+    //
+    // extract the values
+    PyObject* pPIXSCALE = PyDict_GetItemString( pReturn, "PIXSCALE" );
+    PyObject* pCDELT1   = PyDict_GetItemString( pReturn, "CDELT1" );
+    PyObject* pCDELT2   = PyDict_GetItemString( pReturn, "CDELT2" );
+    PyObject* pCRPIX1   = PyDict_GetItemString( pReturn, "CRPIX1" );
+    PyObject* pCRPIX2   = PyDict_GetItemString( pReturn, "CRPIX2" );
+
+    // store them in acamparams struct
+    if (pPIXSCALE && PyFloat_Check(pPIXSCALE)) this->acamparams.pixscale = PyFloat_AsDouble( pPIXSCALE );
+    if (pCDELT1   && PyFloat_Check(pCDELT1))   this->acamparams.cdelt1   = PyFloat_AsDouble( pCDELT1 );
+    if (pCDELT2   && PyFloat_Check(pCDELT2))   this->acamparams.cdelt2   = PyFloat_AsDouble( pCDELT2 );
+    if (pCRPIX1   && PyLong_Check(pCRPIX1))    this->acamparams.crpix1   = PyLong_AsLong( pCRPIX1 );
+    if (pCRPIX2   && PyLong_Check(pCRPIX2))    this->acamparams.crpix2   = PyLong_AsLong( pCRPIX2 );
+
+    Py_DECREF( pReturn );
+    PyGILState_Release( gstate );
+
+    return NO_ERROR;
+  }
+  /***** SkyInfo::FPOffsets::get_acam_params **********************************/
+
+
   /***** SkyInfo::FPOffsets::get_slicecam_params ******************************/
   /**
    * @brief      get parameters needed for slicecam image headers
