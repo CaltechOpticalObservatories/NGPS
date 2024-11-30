@@ -79,22 +79,6 @@ namespace Slit {
       }
     }
 
-    // connect publisher to the messaged ZMQ broker
-    //
-    try {
-      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-      logwrite( function, "binding publisher topic "
-                          +this->publisher_topic+" to "+this->publisher_address );
-      this->publisher = std::make_unique<Common::PubSub>( this->context,
-                                                         Common::PubSub::Mode::PUB );
-      this->publisher->connect_to_broker( this->publisher_address, this->publisher_topic );
-    }
-    catch ( const zmqpp::zmq_internal_exception &e ) {
-      message.str(""); message << "ERROR connecting publisher to broker: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
     return( error );
   }
   /***** Slit::Interface::initialize_class ************************************/
@@ -472,13 +456,15 @@ namespace Slit {
     //
     error = this->read_positions( poswidth, posoffset, posA, posB );
 
-    auto width  = SlitDimension( poswidth, Unit::MM );
-    auto offset = SlitDimension( posoffset, Unit::MM );
+    // store the current readings in the class
+    //
+    this->width  = SlitDimension( poswidth, Unit::MM );
+    this->offset = SlitDimension( posoffset, Unit::MM );
 
     // form the return value
     //
     std::stringstream s;
-    s << width.arcsec() << " " << offset.arcsec();
+    s << this->width.arcsec() << " " << this->offset.arcsec();
     retstring = s.str();
 
     message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " " << retstring;
@@ -701,4 +687,26 @@ namespace Slit {
   }
   /***** Slit::Interface::make_telemetry_message ******************************/
 
+
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( Slit::DAEMON_NAME ) ) {
+      std::string dontcare;
+      this->make_telemetry_message(dontcare);
+    }
+    else
+    if ( jmessage.contains( "test" ) ) {
+      logwrite( "Slit::Interface::handletopic_snapshot", jmessage.dump() );
+    }
+  }
+
+
+  /*
+  void Interface::send_telemetry_message() {
+    nlohmann::json jmessage;
+    jmessage["SLITW"]    = this->width.arcsec();
+    jmessage["SLITO"]    = this->offset.arcsec();
+    jmessage["SLITPOSA"] = posA;
+    jmessage["SLITPOSB"] = posB;
+  }
+  */
 }

@@ -175,26 +175,55 @@ namespace Slit {
    */
   class Interface {
     private:
-      size_t numdev;
       zmqpp::context context;
+      size_t numdev;
 
     public:
       Interface()
-        : numdev(0),
-          context() { }
+        : context(),
+          numdev(0),
+          subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false) {
+        topic_handlers = {
+          { "_snapshot", std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+        };
+      }
 
-      std::unique_ptr<Common::PubSub> publisher;
-      std::string publisher_topic, publisher_address;
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
 
       SlitDimension maxwidth;
       SlitDimension minwidth;  ///< set by config file
       SlitDimension center;    ///< position of center in actuator units
+
+      SlitDimension width,offset;  ///< holds current values
 
       Common::Queue async;
 
       // PI Interface class for Servo type
       //
       Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
+
+      // publish/subscribe functions
+      //
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
+
+      void handletopic_snapshot( const nlohmann::json &jmessage );
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection

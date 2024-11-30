@@ -9,15 +9,52 @@
 
 namespace Slit {
 
+  Server* Server::instance = nullptr;
+
+  /***** Slit::Server::handle_signal ******************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  int signo
+   *
+   */
+  void Server::handle_signal(int signo) {
+    std::string function = "Slit::Server::handle_signal";
+    std::stringstream message;
+
+    switch (signo) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite(function, "received termination signal");
+        message << "NOTICE:" << Slit::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        Server::instance->exit_cleanly();                      // shutdown the daemon
+        break;
+      case SIGHUP:
+        logwrite(function, "ignored SIGHUP");
+        break;
+      case SIGPIPE:
+        logwrite(function, "ignored SIGPIPE");
+        break;
+      default:
+        message << "received unknown signal " << strsignal(signo);
+        logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        break;
+    }
+    return;
+  }
+  /***** Slit::Server::handle_signal ******************************************/
+
+
   /***** Slit::Server::exit_cleanly *******************************************/
   /**
    * @brief      shutdown nicely
    *
    */
   void Server::exit_cleanly(void) {
-    std::string function = "Slit::Server::exit_cleanly";
-    logwrite( function, "exiting" );
-
+    Server::instance->interface.stop_subscriber_thread();
+    logwrite( "Slit::Server::exit_cleanly", "exiting" );
     exit(EXIT_SUCCESS);
   }
   /***** Slit::Server::exit_cleanly *******************************************/
@@ -114,8 +151,16 @@ namespace Slit {
       // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
       //
       if ( config.param[entry] == "PUB_ENDPOINT" ) {
-        this->interface.publisher_topic = DAEMON_NAME;
         this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
+      // SUB_ENDPOINT
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
         this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }

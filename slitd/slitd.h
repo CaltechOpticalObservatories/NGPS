@@ -5,8 +5,7 @@
  *
  */
 
-#ifndef SLITD_H
-#define SLITD_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -31,9 +30,5 @@
 #define  N_THREADS    10          ///< total number of threads spawned by daemon, one for blocking and the rest for non-blocking
 #define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds
 
-Slit::Server slitd;               ///< global Slit::Server object so that the main daemon can access the namespace
-
 void signal_handler(int signo);   ///< handles ctrl-C
 int main(int argc, char **argv);  ///< the main function
-
-#endif
