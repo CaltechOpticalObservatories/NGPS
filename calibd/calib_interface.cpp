@@ -504,6 +504,18 @@ namespace Calib {
   /***** Calib::Interface::make_telemetry_message *****************************/
 
 
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( Calib::DAEMON_NAME ) ) {
+      std::string dontcare;
+      this->make_telemetry_message(dontcare);
+    }
+    else
+    if ( jmessage.contains( "test" ) ) {
+      logwrite( "Calib::Interface::handletopic_snapshot", jmessage.dump() );
+    }
+  }
+
+
   /***** Calib::Modulator::configure_host *************************************/
   /**
    * @brief      parse LAMPMOD_HOST key to configure the lamp modulator Arduino host
