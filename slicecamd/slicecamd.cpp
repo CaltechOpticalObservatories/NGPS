@@ -143,6 +143,14 @@ int main(int argc, char **argv) {
     slicecamd.exit_cleanly();
   }
 
+  // initialize the pub/sub handler, which
+  // takes a list of subscription topics
+  //
+  if ( slicecamd.interface.init_pubsub({"slitd"}) == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    slicecamd.exit_cleanly();
+  }
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.

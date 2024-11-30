@@ -40,8 +40,6 @@
  */
 namespace Slicecam {
 
-  const std::string DAEMON_NAME = "slicecamd";       ///< when run as a daemon, this is my name
-
   const int N_THREADS = 10;
 
   /***** Slicecam::Server *****************************************************/
@@ -55,7 +53,6 @@ namespace Slicecam {
   class Server {
     private:
     public:
-
       static Server* instance;
 
       /***** Slicecam::Server::Server *****************************************/

@@ -45,6 +45,8 @@
  */
 namespace Slicecam {
 
+  const std::string DAEMON_NAME = "slicecamd";       ///< when run as a daemon, this is my name
+
   constexpr std::string_view DEFAULT_IMAGENAME = "/tmp/slicecam.fits";
 
   constexpr double PI = 3.14159265358979323846;
@@ -209,6 +211,7 @@ namespace Slicecam {
    */
   class Interface {
     private:
+      zmqpp::context context;
       std::mutex framegrab_mutex;
       std::atomic<bool> tcs_online;
       std::atomic<bool> err;
@@ -216,12 +219,19 @@ namespace Slicecam {
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
       std::chrono::steady_clock::time_point framegrab_time;
-      zmqpp::context context;
 
     public:
-      std::unique_ptr<Common::PubSub> subscriber;
-      std::vector<std::string> subscriber_topics;
-      std::atomic<bool> is_subscriber_thread_running;
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
 
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
@@ -233,14 +243,23 @@ namespace Slicecam {
 
       GUIManager gui_manager;
 
-      Interface() : tcs_online(false),
-                    err(false),
-                    subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
-                    is_subscriber_thread_running(false),
-                    should_framegrab_run(false),
-                    is_framegrab_running(false),
-                    nsave_preserve_frames(0),
-                    nskip_preserve_frames(0) {
+      Interface()
+        : context(),
+          tcs_online(false),
+          err(false),
+          subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false),
+          should_framegrab_run(false),
+          is_framegrab_running(false),
+          nsave_preserve_frames(0),
+          nskip_preserve_frames(0) {
+        topic_handlers = {
+          { "_snapshot", std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+          { "slitd", std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
+        };
       }
 
       inline long read_error() { return( this->err.exchange( false ) ? ERROR : NO_ERROR ); };
@@ -267,11 +286,19 @@ namespace Slicecam {
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
+      // publish/subscribe functions
+      //
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
+
+      void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_slitd( const nlohmann::json &jmessage );
+
       long bin( std::string args, std::string &retstring );
       void make_telemetry_message( std::string &retstring );
-      void start_subscriber_thread();
-      void subscriber_thread();
-      long handle_json_message( std::string topic, std::string message );
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
       long isopen( std::string which, bool &state, std::string &help );     /// wrapper for slicecams

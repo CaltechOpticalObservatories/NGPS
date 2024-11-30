@@ -13,11 +13,9 @@ MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
 # Message pub/sub
 # PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
 # SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
-# SUBSCRIBE_TO: topic(s) to subscribe to, enter one per line
 #
 PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
 SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
-SUBSCRIBE_TO=slitd
 
 # daemon ports
 # These are the ports for other daemons that slicecamd talks to

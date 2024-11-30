@@ -58,8 +58,8 @@ namespace Slicecam {
    *
    */
   void Server::exit_cleanly(void) {
-    std::string function = "Slicecam::Server::exit_cleanly";
-    logwrite( function, "exiting" );
+    Server::instance->interface.stop_subscriber_thread();
+    logwrite( "Slicecam::Server::exit_cleanly", "exiting" );
     _exit(EXIT_SUCCESS);
   }
   /***** Slicecam::Server::exit_cleanly ***************************************/
@@ -76,10 +76,6 @@ namespace Slicecam {
     std::stringstream message;
     int applied=0;
     long error;
-
-    // build a fresh list of subscriber topics
-    //
-    this->interface.subscriber_topics.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -178,31 +174,21 @@ namespace Slicecam {
         applied++;
       }
 
-      // SUB_ENDPOINT
-      // (these don't get counted with "applied++")
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
       //
-      if ( config.param[entry] == "SUB_ENDPOINT" ) {
-        try {
-          // connect to the message broker and wait for connection to establish
-          //
-          this->interface.subscriber->connect( config.arg[entry] );
-          std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-        }
-        catch ( const zmqpp::zmq_internal_exception &e ) {
-          logwrite( function, "ERROR connecting to endpoint "+config.arg[entry]+" : "+std::string(e.what()) );
-          error = ERROR;
-        }
-        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
+        this->interface.async.enqueue_and_log( function, "SLICECAMD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
       }
 
-      // SUBSCRIBE_TO : topics that I subscribe to
-      // (these don't get counted with "applied++")
+      // SUB_ENDPOINT
       //
-      if ( config.param[entry] == "SUBSCRIBE_TO" ) {
-        this->interface.subscriber_topics.push_back( config.arg[entry] );
-        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        this->interface.async.enqueue_and_log( function, "SLICECAMD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
       }
 
     } // end loop through the entries in the configuration file
@@ -217,27 +203,6 @@ namespace Slicecam {
     }
     message << "applied " << applied << " configuration lines to slicecamd";
     logwrite(function, message.str());
-
-    try {
-      // subscribe to configured topic(s)
-      //
-      for ( const auto &topic : this->interface.subscriber_topics ) {
-        this->interface.subscriber->subscribe( topic );
-        logwrite( function, "subscribed to topic: "+topic );
-      }
-    }
-    catch ( const zmqpp::zmq_internal_exception &e ) {
-      logwrite( function, "ERROR subscribing to topic: "+std::string(e.what()) );
-      error = ERROR;
-    }
-
-    // start the subscriber thread only if one or more topics were
-    // specified
-    //
-    if ( !this->interface.subscriber_topics.empty() ) {
-      this->interface.start_subscriber_thread();
-    }
-    else logwrite( function, "not starting subscriber thread because no topics were configured" );
 
     // Initialize the class using the config parameters just read
     //
@@ -627,16 +592,18 @@ namespace Slicecam {
       // send telemetry as json message
       //
       if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
+                      logwrite( function, "ERROR telemrequest blocked" );
+                      ret=ERROR;
+///                   if ( args=="?" || args=="help" ) {
+///                     retstring=TELEMREQUEST+"\n";
+///                     retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+///                     retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+///                     ret=HELP;
+///                   }
+///                   else {
+///                     this->interface.make_telemetry_message( retstring );
+///                     ret = JSON;
+///                   }
       }
       else
 
