@@ -74,8 +74,22 @@ namespace Common {
           _socket(context, (mode==Mode::PUB ? zmqpp::socket_type::publish : zmqpp::socket_type::subscribe)),
           _mode(mode) { }
 
-      // publishers bind
-      //
+      ~PubSub() { _socket.close(); }
+
+      /**
+       * @brief       publishers bind to a socket endpoint (not for brokers)
+       */
+      bool has_message() {
+        zmqpp::poller poller;
+        poller.add(_socket, zmqpp::poller::poll_in);
+        return ( poller.poll(100) > 0 );
+      }
+
+      /**
+       * @brief       publishers bind to a socket endpoint (not for brokers)
+       * @param[in]   addr   broker endpoint
+       * @param[in]   topic  default topic that publisher will use
+       */
       void bind( const std::string &addr, const std::string &topic ) {
         if ( _mode != Mode::PUB ) {
           throw std::runtime_error( "(Common::PubSub::bind) not a publisher" );
@@ -84,8 +98,11 @@ namespace Common {
         _topic = topic;
       }
 
-      // even publishers will use connect when publishing to a broker
-      //
+      /**
+       * @brief       publishers will use connect when publishing to a broker
+       * @param[in]   addr   broker endpoint
+       * @param[in]   topic  default topic that publisher will use
+       */
       void connect_to_broker( const std::string &addr, const std::string &topic ) {
         if ( _mode != Mode::PUB ) {
           throw std::runtime_error( "(Common::PubSub::connect_to_broker) not a publisher" );
@@ -94,8 +111,10 @@ namespace Common {
         _topic = topic;
       }
 
-      // subscribers connect
-      //
+      /**
+       * @brief       subscribers connect to publishers
+       * @param[in]   addr   publisher's endpoint
+       */
       void connect( const std::string &addr ) {
         if ( _mode != Mode::SUB ) {
           throw std::runtime_error( "(Common::PubSub::connect) not a subscriber" );
@@ -103,6 +122,10 @@ namespace Common {
         _socket.connect( addr );
       }
 
+      /**
+       * @brief       subscribe to a topic. can be called more than once
+       * @param[in]   topic  topic to subscribe to
+       */
       void subscribe( const std::string &topic ) {
         if ( _mode != Mode::SUB ) {
           throw std::runtime_error( "(Common::PubSub::subscribe) not a subscriber" );
@@ -111,6 +134,10 @@ namespace Common {
         _socket.subscribe(topic);
       }
 
+      /**
+       * @brief       unsubscribe from a topic. can be called more than once
+       * @param[in]   topic  topic to unsubscribe from
+       */
       void unsubscribe( const std::string &topic ) {
         if ( _mode != Mode::SUB ) {
           throw std::runtime_error( "(Common::PubSub::unsubscribe) not a subscriber" );
@@ -122,6 +149,10 @@ namespace Common {
         }
       }
 
+      /**
+       * @brief       receive a message from a publisher
+       * @return      topic,payload
+       */
       std::pair<std::string,std::string> receive() {
         if ( _mode != Mode::SUB ) {
           throw std::runtime_error( "(Common::PubSub::receive) not a subscriber" );
@@ -133,10 +164,10 @@ namespace Common {
         return { topic, payload };
       }
 
-      /***** Common::PubSub::publish ******************************************/
       /**
-       * @brief      publisher
+       * @brief      publish
        * @param[in]  message  reference to JSON message
+       * @param[in]  topic    publishing topic
        *
        */
       void publish( const json &message_out, const std::string &topic="" ) {
@@ -144,15 +175,186 @@ namespace Common {
           throw std::runtime_error( "(Common::PubSub::publish) not a publisher" );
         }
         zmqpp::message message_zmq;
-        // publish with class topic
+        // Publish to either class default _topic or topic specified as
+        // optional arg.
         message_zmq.add( topic.empty() ? _topic : topic );
-        message_zmq.add(message_out.dump());
+        message_zmq.add( message_out.dump() );
         _socket.send( message_zmq );
       }
       /***** Common::PubSub::publish ******************************************/
 
   };
   /**************** Common::PubSub ********************************************/
+
+
+  class PubSubHandler {
+    public:
+      template <typename Interface>
+      /***** Common::PubSubHandler::init_pubsub *******************************/
+      /**
+       * @brief      initialize publisher, subscriber, and start subscriber thread
+       * @return     ERROR | NO_ERROR
+       *
+       */
+      static long init_pubsub( zmqpp::context &context, Interface &iface,
+                               const std::initializer_list<std::string> &topics={} ) {
+        const std::string function="Common::PubSubHandler::init_pubsub";
+
+        // Initialize the message subscriber. All daemons minimally subscribe to "_snapshot"
+        // which causes them to publish their current status.
+        //
+        iface.subscriber_topics.clear();
+        iface.subscriber_topics.push_back("_snapshot");
+
+        for ( const auto &topic : topics ) {
+          iface.subscriber_topics.push_back(topic);
+        }
+
+        try {
+          // connect to the message broker and wait for connection to establish
+          //
+          iface.subscriber->connect( iface.subscriber_address );
+          std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+
+          // subscribe to configured topic(s)
+          //
+          for ( const auto &topic : iface.subscriber_topics ) {
+            iface.subscriber->subscribe( topic );
+            logwrite( function, "subscribed to topic: "+topic );
+          }
+
+          // connect publisher to the message broker and register my default topic
+          //
+          logwrite( function, "binding publisher to "+iface.publisher_address
+                             +" with default topic " +iface.publisher_topic );
+          iface.publisher = std::make_unique<Common::PubSub>( context, Common::PubSub::Mode::PUB );
+          iface.publisher->connect_to_broker( iface.publisher_address, iface.publisher_topic );
+        }
+        catch ( const zmqpp::zmq_internal_exception &e ) {
+          logwrite( function, "ERROR initializing message handler: "+std::string(e.what()) );
+          return ERROR;
+        }
+        catch ( const std::runtime_error &e ) {
+          logwrite( function, "ERROR initializing message handler: "+std::string(e.what()) );
+          return ERROR;
+        }
+        catch ( const std::exception &e ) {
+          logwrite( function, "ERROR initializing message handler: "+std::string(e.what()) );
+          return ERROR;
+        }
+
+        // start the subscriber thread now
+        //
+        iface.start_subscriber_thread();
+
+        return NO_ERROR;
+      }
+      /***** Common::PubSubHandler::init_pubsub *******************************/
+
+
+      /***** Common::PubSubHandler::start_subscriber_thread *******************/
+      /**
+       * @brief      starts subscriber thread if needed
+       *
+       */
+      template <typename Interface>
+      static void start_subscriber_thread(Interface &iface) {
+        iface.should_subscriber_thread_run.store(true);
+        if ( !iface.is_subscriber_thread_running.load() ) {
+          std::thread( &PubSubHandler::subscriber_thread<Interface>, std::ref(iface) ).detach();
+        }
+        else logwrite( "Common::PubSubHandler::start_subscriber_thread", "already running" );
+      }
+      /***** Common::PubSubHandler::start_subscriber_thread *******************/
+
+
+      /***** Common::PubSubHandler::subscriber_thread *************************/
+      /**
+       * @brief      the actual subscriber thread
+       *
+       */
+      template <typename Interface>
+      static void subscriber_thread(Interface &iface) {
+        logwrite( "Common::PubSubHandler::subscriber_thread", "subscriber started" );
+
+        BoolState thread_running( iface.is_subscriber_thread_running );
+
+        // listen for published messages and handle them
+        //
+        while ( iface.should_subscriber_thread_run ) {
+          try {
+            if ( iface.subscriber->has_message() ) {
+              auto [topic,payload] = iface.subscriber->receive();
+              process_incoming_message(iface, topic, payload);
+            }
+          }
+          catch ( const std::exception &e ) {
+            logwrite( "Common::PubSubHandler::subscriber_thread", "ERROR "+std::string(e.what()) );
+            continue;
+          }
+        }
+        logwrite( "Common::PubSubHandler::subscriber_thread", "subscriber terminated" );
+      }
+      /***** Common::PubSubHandler::subscriber_thread *************************/
+
+
+      /***** Common::PubSubHandler::stop_subscriber_thread ********************/
+      /**
+       * @brief      stop the subscriber thread
+       *
+       */
+      template <typename Interface>
+      static void stop_subscriber_thread(Interface &iface) {
+        iface.should_subscriber_thread_run.store(false);
+        while ( iface.is_subscriber_thread_running.load() );
+      }
+      /***** Common::PubSubHandler::stop_subscriber_thread ********************/
+
+
+      /***** Common::PubSubHandler::process_incomming_message *****************/
+      /**
+       * @brief      processes incoming subscribed telemetry messages
+       * @param[in]  message_in  incoming message, expects serialized JSON string
+       * @return     ERROR | NO_ERROR
+       *
+       */
+      template <typename Interface>
+      static long process_incoming_message( Interface &iface, std::string topic, std::string message_in ) {
+        const std::string function="Common::PubSubHandler::process_incoming_message";
+
+        // nothing to do if the message is empty
+        //
+        if ( message_in.empty() ) {
+          logwrite( function, "ERROR empty message" );
+          return ERROR;
+        }
+
+        try {
+          nlohmann::json jmessage = nlohmann::json::parse( message_in );
+
+          // find this topic in the map of topic handlers
+          //
+          auto it = iface.topic_handlers.find( topic );
+
+          // if this topic has a mapped handling function, then call it,
+          // passing it the json message
+          //
+          if ( it != iface.topic_handlers.end() ) it->second( jmessage );
+        }
+        catch ( const nlohmann::json::parse_error &e ) {
+          logwrite( function, "ERROR json exception parsing message: "+std::string(e.what()) );
+          return ERROR;
+        }
+        catch ( const std::exception &e ) {
+          logwrite( function, "ERROR parsing message: "+std::string(e.what()) );
+          return ERROR;
+        }
+
+        return NO_ERROR;
+      }
+      /***** Common::PubSubHandler::process_incomming_message *****************/
+
+  };
 
 
   void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
