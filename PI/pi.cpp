@@ -660,7 +660,7 @@ namespace Physik_Instrumente {
                                                    const int addr,
                                                    const int axis,
                                                    const float pos ) {
-    std::string function = "Focus::Interface::_dothread_moveto";
+    std::string function = "Physik_Instrumente::Interface::_dothread_moveto";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -675,12 +675,12 @@ namespace Physik_Instrumente {
 
       // send the move command by calling move_axis()
       //
-      error |= iface._move_abs( name, addr, axis, pos );
+      error = iface._move_abs( name, addr, axis, pos );
 
-      message.str(""); message << "waiting for " << name;
-      logwrite( function, message.str() );
-
-      error |= iface._move_axis_wait( name, addr, axis );   // this can time out
+      if ( error == NO_ERROR ) {
+        logwrite( function, "waiting for "+name );
+        error = iface._move_axis_wait( name, addr, axis );   // this can time out
+      }
     }
 
     iface.thread_error.fetch_or( error );        // preserve any error returned
@@ -836,7 +836,7 @@ namespace Physik_Instrumente {
    */
   template <typename ControllerType>
   void Interface<ControllerType>::_dothread_home( Interface<ControllerType> &iface, const std::string name ) {
-    std::string function = "Focus::Interface::_dothread_home";
+    std::string function = "Physik_Instrumente::Interface::_dothread_home";
     std::stringstream message;
     std::string reftype;
     int axis=1;  // TODO remove limitation of single axis
@@ -873,12 +873,12 @@ namespace Physik_Instrumente {
 
       // send the home command by calling home_axis()
       //
-      error |= iface._home_axis( name, addr, axis, reftype );
+      error = iface._home_axis( name, addr, axis, reftype );
 
-      message.str(""); message << "waiting for " << name;
-      logwrite( function, message.str() );
-
-      error |= iface._home_axis_wait( name, addr, axis );  // this can time out
+      if ( error == NO_ERROR ) {
+        logwrite( function, "waiting for "+name );
+        error = iface._home_axis_wait( name, addr, axis );  // this can time out
+      }
     }
 
     // If successful, apply the zeropos if necessary
@@ -890,7 +890,10 @@ namespace Physik_Instrumente {
 //    std::stringstream cmd;
 //    cmd << addr << " DFH " << axis;
 //    if ( error==NO_ERROR ) error = iface.send_command( name, cmd.str() );  // define this as the home position
-      error |= iface._move_axis_wait( name, addr, axis );   // this can time out
+      if ( error==NO_ERROR ) {
+        logwrite( function, "waiting for "+name );
+        error = iface._move_axis_wait( name, addr, axis );   // this can time out
+      }
     }
 
     iface.thread_error.fetch_or( error );        // preserve any error returned
