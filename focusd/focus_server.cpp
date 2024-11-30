@@ -9,6 +9,43 @@
 
 namespace Focus {
 
+  Server* Server::instance = nullptr;
+
+  /***** Focus::Server::handle_signal *****************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  int signo
+   *
+   */
+  void Server::handle_signal(int signo) {
+    std::string function = "Focus::Server::handle_signal";
+    std::stringstream message;
+
+    switch (signo) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite(function, "received termination signal");
+        message << "NOTICE:" << Focus::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        Server::instance->exit_cleanly();                      // shutdown the daemon
+        break;
+      case SIGHUP:
+        logwrite(function, "ignored SIGHUP");
+        break;
+      case SIGPIPE:
+        logwrite(function, "ignored SIGPIPE");
+        break;
+      default:
+        message << "received unknown signal " << strsignal(signo);
+        logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << Focus::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        break;
+    }
+    return;
+  }
+  /***** Focus::Server::handle_signal *****************************************/
+
 
   /***** Focus::Server::exit_cleanly ******************************************/
   /**
@@ -16,10 +53,10 @@ namespace Focus {
    *
    */
   void Server::exit_cleanly(void) {
-    std::string function = "Focus::Server::exit_cleanly";
-    logwrite( function, "exiting" );
-
-    exit(EXIT_SUCCESS);
+    Server::instance->interface.stop_subscriber_thread();
+    logwrite( "Focus::Server::exit_cleanly", "exiting" );
+    close_log();
+    _exit(EXIT_SUCCESS);
   }
   /***** Focus::Server::exit_cleanly ******************************************/
 
@@ -113,6 +150,23 @@ namespace Focus {
         this->asyncgroup = config.arg[entry];
         message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
+      // SUB_ENDPOINT
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 

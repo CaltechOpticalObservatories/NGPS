@@ -14,6 +14,9 @@ include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/PI )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(focusd 
@@ -28,6 +31,8 @@ target_link_libraries(focusd
         common
         logentry
         utilities
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         ${CMAKE_THREAD_LIBS_INIT}
         )
 

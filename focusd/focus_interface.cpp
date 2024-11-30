@@ -573,12 +573,25 @@ namespace Focus {
 
     retstring = jmessage.dump();  // serialize the json message into retstring
 
+    this->publisher->publish(retstring);
+
     retstring.append(JEOF);       // append the JSON message terminator
 
     return;
   }
   /***** Focus::Interface::make_telemetry_message *****************************/
 
+
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( Focus::DAEMON_NAME ) ) {
+      std::string dontcare;
+      this->make_telemetry_message(dontcare);
+    }
+    else
+    if ( jmessage.contains( "test" ) ) {
+      logwrite( "Focusd::Interface::handletopic_snapshot", jmessage.dump() );
+    }
+  }
 
   /***** Focus::Interface::test ***********************************************/
   /**

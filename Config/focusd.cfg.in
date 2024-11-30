@@ -8,6 +8,13 @@ DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
+# Message pub/sub
+# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
+
 # this is the port number that the emulator listens to
 #
 EMULATOR_PORT=@FOCUSD_EMULATOR@

@@ -19,16 +19,35 @@
 int main(int argc, char **argv) {
   std::string function = "Focus::main";
   std::stringstream message;
+
+  bool start_daemon = true;
+
+  // Allow running in the foreground
+  //
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
+  }
+
+  // TODO make configurable
+  //
+  std::string daemon_stdout="/dev/null";                              // where daemon sends stdout
+  std::string daemon_stderr="/tmp/"+Focus::DAEMON_NAME+".stderr";     // where daemon sends stderr
+
+  // daemonize, but don't close all file descriptors, required for the Andor camera
+  //
+  if ( start_daemon ) {
+    logwrite( function, "starting daemon" );
+    Daemon::daemonize( Focus::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
+  }
+
+  logwrite( function, "daemonized. child process running" );
+
+  // Now the child process instantiates a Server object
+  //
+  Focus::Server focusd;
+
   std::string logpath;
   long ret=NO_ERROR;
-  std::string daemon_in;     // daemon setting read from config file
-  bool start_daemon = false; // don't start as daemon unless specifically requested
-
-  // capture these signals
-  //
-  signal(SIGINT, signal_handler);
-  signal(SIGPIPE, signal_handler);
-  signal(SIGHUP, signal_handler);
 
   // check for "-f <filename>" command line option to specify config file
   //
@@ -58,7 +77,6 @@ int main(int argc, char **argv) {
 
   for (int entry=0; entry < focusd.config.n_entries; entry++) {
     if (focusd.config.param[entry] == "LOGPATH") logpath = focusd.config.arg[entry];
-    if (focusd.config.param[entry] == "DAEMON")  daemon_in = focusd.config.arg[entry];
 
     if (focusd.config.param[entry] == "TM_ZONE") {
       if ( focusd.config.arg[entry] != "UTC" && focusd.config.arg[entry] != "local" ) {
@@ -76,27 +94,6 @@ int main(int argc, char **argv) {
   if (logpath.empty()) {
     logwrite(function, "ERROR: LOGPATH not specified in configuration file");
     focusd.exit_cleanly();
-  }
-
-  if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
-  else
-  if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
-    message.str(""); message << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }";
-    logwrite( function, message.str() );
-    focusd.exit_cleanly();
-  }
-
-  // check for "-d" command line option last so that the command line
-  // can override the config file to start as daemon
-  //
-  if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
-    start_daemon = true;
-  }
-
-  if ( start_daemon ) {
-    logwrite( function, "starting daemon" );
-    Daemon::daemonize( Focus::DAEMON_NAME, "/tmp", "", "", "" );
   }
 
   if ( ( init_log( logpath, Focus::DAEMON_NAME ) != 0 ) ) {          // initialize the logging system
@@ -119,6 +116,14 @@ int main(int argc, char **argv) {
 
   if (focusd.nbport == -1 || focusd.blkport == -1) {
     logwrite(function, "ERROR: focusd ports not configured");
+    focusd.exit_cleanly();
+  }
+
+  // initialize the pub/sub handler, which
+  // takes a list of subscription topics
+  //
+  if ( focusd.interface.init_pubsub() == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
     focusd.exit_cleanly();
   }
 
@@ -183,40 +188,3 @@ int main(int argc, char **argv) {
   return 0;
 }
 /***** main *******************************************************************/
-
-
-/***** signal_handler *********************************************************/
-/**
- * @brief      handles ctrl-C
- * @param[in]  signo
- *
- */
-void signal_handler(int signo) {
-  std::string function = "Focus::signal_handler";
-  std::stringstream message;
-
-  switch (signo) {
-    case SIGTERM:
-    case SIGINT:
-      logwrite(function, "received termination signal");
-      message << "NOTICE:" << Focus::DAEMON_NAME << " exit";
-      focusd.interface.async.enqueue( message.str() );
-      focusd.exit_cleanly();                     // shutdown the daemon
-      break;
-    case SIGHUP:
-      logwrite(function, "caught SIGHUP");
-      break;
-    case SIGPIPE:
-      logwrite(function, "caught SIGPIPE");
-      break;
-    default:
-      message << "received unknown signal " << strsignal(signo);
-      logwrite( function, message.str() );
-      message.str(""); message << "NOTICE:" << Focus::DAEMON_NAME << " exit";
-      focusd.interface.async.enqueue( message.str() );
-      focusd.exit_cleanly();                     // shutdown the daemon
-      break;
-  }
-  return;
-}
-/***** signal_handler *********************************************************/

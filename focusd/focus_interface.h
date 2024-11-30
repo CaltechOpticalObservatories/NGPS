@@ -43,16 +43,51 @@ namespace Focus {
    */
   class Interface {
     private:
+      zmqpp::context context;
       size_t numdev;
       bool class_initialized;
     public:
-      Interface() : numdev(-1), motorinterface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ) {}
+      Interface()
+        : context(),
+          numdev(-1),
+          motorinterface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ),
+          subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false)
+      {
+        topic_handlers = {
+          { "_snapshot", std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+        };
+      }
+
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
 
       Common::Queue async;
 
       // PI Interface class for the Stepper type
       //
       Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo> motorinterface;
+
+      // publish/subscribe functions
+      //
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
+
+      void handletopic_snapshot( const nlohmann::json &jmessage );
 
       long initialize_class();
       long open();                                              ///< opens the PI socket connection
