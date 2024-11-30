@@ -1236,11 +1236,12 @@ namespace Sequencer {
       // system startup (nightly)
       // This is needed before any sequences can be run.
       //
-      if ( cmd.compare( SEQUENCERD_STARTUP ) == 0 ) {
+      if ( cmd == SEQUENCERD_STARTUP ) {
 ///                   this->sequence.is_tcs_ontarget.store( false );
                       this->sequence.tcs_nowait.store( false );
                       this->sequence.dome_nowait.store( true );
-                      if ( sock.isasync() ) {
+//                    if ( sock.isasync() ) {
+                      if ( !sock.isblocking() ) {
                         std::thread( std::ref( Sequencer::Sequence::dothread_startup ), std::ref( this->sequence ) ).detach();
                       }
                       else {
@@ -1270,7 +1271,7 @@ namespace Sequencer {
                       this->sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
                       //
-                      if ( this->sequence.seqstate.load() != Sequencer::SEQ_READY ) {
+                      if ( ! this->sequence.seq_state.is_set( Sequencer::SEQ_READY ) ) {
                         // log applicable causes
                         //
                         if ( this->sequence.seq_state.is_set( Sequencer::SEQ_RUNNING ) ) {
@@ -1285,7 +1286,9 @@ namespace Sequencer {
                           this->sequence.async.enqueue_and_log( function, "ERROR: sequencer is offline. run startup" );
                         }
                         else {
-                          this->sequence.async.enqueue_and_log( function, "ERROR: unable to start sequencer" );
+                          message.str("");
+                          message << "ERROR cannot start sequencer with state: " << this->sequence.seq_state.get_set_names();
+                          this->sequence.async.enqueue_and_log( function, message.str() );
                         }
                         ret = ERROR;
                       }
@@ -1605,7 +1608,6 @@ namespace Sequencer {
 
       if (ret != NOTHING) {
         if ( ! retstring.empty() ) retstring.append(" ");
-
         // If the retstring doesn't already have a DONE or ERROR in it,
         // then append that to the retstring.
         //

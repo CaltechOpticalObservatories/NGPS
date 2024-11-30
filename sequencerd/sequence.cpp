@@ -473,7 +473,7 @@ namespace Sequencer {
       seq.async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
 */
 
-      if ( seq.target.pointmode == Acam::POINTMODE_ACAM ) {
+      if ( seq.target.pointmode == Acam::POINTMODE_SLIT ) {
         logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
         // Start the exposure in a thread...
@@ -659,7 +659,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
 
     // send the SET command to slitd
     //
-    slitcmd << SLITD_SET << " " << seq.target.slitwidth << " " << seq.target.slitoffset;
+    slitcmd << SLITD_SET << " " << seq.target.slitwidth_req << " " << seq.target.slitoffset_req;
 
     error = seq.slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT );
 
@@ -2243,6 +2243,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       //
       seq.async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
+      seq.seq_state.set( Sequencer::SEQ_WAIT_TCSOP );
+
       try {
         seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_TCSOP );
       }
@@ -2625,8 +2627,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::string function = "Sequencer::Sequence::dothread_focus_set";
     long error=NO_ERROR;
 
-    logwrite( function, "[TODO] focus not yet implemented. sleeping 5s" );
-    std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
+    logwrite( function, "[TODO] focus not yet implemented." );
+    std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -2656,8 +2658,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::string function = "Sequencer::Sequence::dothread_flexure_set";
     long error=NO_ERROR;
 
-    logwrite( function, "[TODO] flexure not yet implemented. sleeping 5s" );
-    std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
+    logwrite( function, "[TODO] flexure not yet implemented." );
+    std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -2687,8 +2689,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::string function = "Sequencer::Sequence::dothread_calib_set";
     long error=NO_ERROR;
 
-    logwrite( function, "[TODO] calibrator not yet implemented. sleeping 6s" );
-    std::this_thread::sleep_for( std::chrono::seconds( 6 ) );
+    logwrite( function, "[TODO] calibrator not yet implemented." );
+    std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -3180,7 +3182,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       return ERROR;
     }
     else {
-logwrite( function, "[DEBUG] setting READY bit" );
       seq.seq_state.set_and_clear( Sequencer::SEQ_READY, Sequencer::SEQ_STARTING );
       seq.req_state.set_and_clear( Sequencer::SEQ_READY, Sequencer::SEQ_STARTING );
       seq.broadcast_seqstate();
