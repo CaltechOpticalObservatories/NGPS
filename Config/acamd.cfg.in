@@ -10,6 +10,13 @@ STDERR=/tmp/acamd.stderr          # where to send stderr
 MESSAGEPORT=@MESSAGEPORT@
 MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
 
+# Message pub/sub
+# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
+
 # database configuration
 #
 DB_HOST=localhost
@@ -170,4 +177,6 @@ SKYSIM_IMAGE_SIZE=1024
 #
 TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
 TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
-
+#
+SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
+SUBSCRIBE_TO=(sequencerd "tcp://127.0.0.1:@SEQUENCERD_PUB_PORT@")

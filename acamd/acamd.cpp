@@ -147,6 +147,14 @@ int main(int argc, char **argv) {
     acamd.exit_cleanly();
   }
 
+  // initialize the pub/sub handler, which
+  // takes a list of subscription topics
+  //
+  if ( acamd.interface.init_pubsub( {"tcsd", "targetinfo", "slitd"} ) == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    acamd.exit_cleanly();
+  }
+
   // This will pre-thread N_THREADS threads.
   // There will be N_THREADS-1 non-blocking threads, then
   // loop forever on Accept to dynamically spawn a new thread for each

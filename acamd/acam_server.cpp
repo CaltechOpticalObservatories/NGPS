@@ -58,8 +58,8 @@ namespace Acam {
    *
    */
   void Server::exit_cleanly(void) {
-    std::string function = "Acam::Server::exit_cleanly";
-    logwrite( function, "exiting" );
+    Server::instance->interface.stop_subscriber_thread();
+    logwrite( "Acam::Server::exit_cleanly", "exiting" );
     _exit(EXIT_SUCCESS);
   }
   /***** Acam::Server::exit_cleanly *******************************************/
@@ -244,6 +244,23 @@ namespace Acam {
         applied++;
       }
 
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
+        this->interface.async.enqueue_and_log( function, "ACAMD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
+      // SUB_ENDPOINT
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        this->interface.async.enqueue_and_log( function, "ACAMD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
     } // end loop through the entries in the configuration file
 
     message.str("");
@@ -371,6 +388,8 @@ namespace Acam {
       }
 
     } // end loop through the entries in the configuration file
+
+    this->interface.start_subscriber_thread();
 
     this->interface.db_info = { db_host, db_port, db_user, db_pass, db_schema, db_table };
 

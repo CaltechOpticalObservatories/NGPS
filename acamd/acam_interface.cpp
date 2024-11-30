@@ -1440,11 +1440,57 @@ namespace Acam {
 
     retstring = jmessage.dump();  // serialize the json message into retstring
 
+    this->publisher->publish(retstring);
+
     retstring.append(JEOF);       // append the JSON message terminator
 
     return;
   }
   /***** Acam::Interface::make_telemetry_message ******************************/
+
+
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( Acam::DAEMON_NAME ) ) {
+      std::string dontcare;
+      this->make_telemetry_message(dontcare);
+    }
+    else
+    if ( jmessage.contains( "test" ) ) {
+      logwrite( "Acamd::Interface::handletopic_snapshot", jmessage.dump() );
+    }
+  }
+
+
+  void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
+    this->database.add_from_json<double>( jmessage, "CASANGLE" );
+    this->database.add_from_json<std::string>( jmessage, "TELRA", "RAtel" );
+    this->database.add_from_json<std::string>( jmessage, "TELDEC", "DECLtel" );
+    this->database.add_from_json<double>( jmessage, "AZ" );
+    this->database.add_from_json<double>( jmessage, "TELFOCUS", "focus" );
+    this->database.add_from_json<double>( jmessage, "AIRMASS" );
+  }
+
+
+  void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
+    this->database.add_from_json<int>( jmessage, "OBS_ID" );
+    this->database.add_from_json<std::string>( jmessage, "NAME" );
+    this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
+    this->database.add_from_json<std::string>( jmessage, "RA" );
+    this->database.add_from_json<std::string>( jmessage, "DECL" );
+  }
+
+
+  /***** Acam::Interface::handletopic_slitd ***********************************/
+  /**
+   * @brief      handles topic subscription to slitd
+   * @param[in]  jmessage  incoming json message
+   *
+   */
+  void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
+    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
+    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
+  }
+  /***** Acam::Interface::handletopic_slitd ***********************************/
 
 
   /***** Acam::Interface::get_external_telemetry ******************************/
@@ -1530,6 +1576,14 @@ namespace Acam {
         this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
         this->database.add_from_json<std::string>( jmessage, "RA" );
         this->database.add_from_json<std::string>( jmessage, "DECL" );
+      }
+      else
+      if ( messagetype == "slitinfo" ) {
+        float slitw, slito;
+        Common::extract_telemetry_value( message_in, "SLITW", slitw );
+        this->camera.fitsinfo.fitskeys.addkey( "SLITW", slitw, "slit width in arcsec" );
+        Common::extract_telemetry_value( message_in, "SLITO", slito );
+        this->camera.fitsinfo.fitskeys.addkey( "SLITO", slito, "slit offset in arcsec" );
       }
       else
       if ( messagetype == "test" ) {
@@ -4658,6 +4712,10 @@ namespace Acam {
     // either a prioi or from the Andor::Information class
     //
     this->camera.fitsinfo.fitskeys.erase_db();
+
+    // copy the telemkeys db into fitsinfo
+    //
+    this->camera.fitsinfo.fitskeys = this->telemkeys.primary();
 
     this->camera.fitsinfo.fitskeys.addkey( "TCS",  tcsname, "" );
 

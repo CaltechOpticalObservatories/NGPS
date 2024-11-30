@@ -41,6 +41,8 @@
  */
 namespace Acam {
 
+  const std::string DAEMON_NAME = "acamd";       ///< when run as a daemon, this is my name
+
   constexpr std::string_view DEFAULT_IMAGENAME = "/tmp/acam.fits";
 
   constexpr const char* PYTHON_PATH = "/home/developer/dhale/sandbox/NGPS/Python:/home/developer/dhale/sandbox/NGPS/Python/acam_skyinfo";
@@ -473,6 +475,7 @@ namespace Acam {
    */
   class Interface {
     private:
+      zmqpp::context context;
       std::mutex framegrab_mutex;
       std::atomic<Acam::FocusThreadStates> monitor_focus_state;
       std::atomic<bool> tcs_online;         ///< set if TCS is online / connected
@@ -482,6 +485,7 @@ namespace Acam {
       std::chrono::steady_clock::time_point framegrab_time;
 
     public:
+
       std::string motion_host;
       int motion_port;
 
@@ -504,7 +508,8 @@ namespace Acam {
       nlohmann::json tcs_jmessage;             ///< JSON message containing TCS telemetry
 
       Interface()
-        : monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
+        : context(),
+          monitor_focus_state(Acam::FOCUS_MONITOR_STOPPED),
           tcs_online(false),
           motion_port(-1),
           should_framegrab_run(false),
@@ -512,9 +517,35 @@ namespace Acam {
           is_shutting_down(false),
           nskip_before_acquire(0),
           nsave_preserve_frames(0),
-          nskip_preserve_frames(0) {
-          target.set_interface_instance( this ); ///< Set the Interface instance in Target
+          nskip_preserve_frames(0),
+          subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false)
+      {
+            target.set_interface_instance( this ); ///< Set the Interface instance in Target
+            topic_handlers = {
+              { "_snapshot", std::function<void(const nlohmann::json&)>(
+                         [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+              { "tcsd", std::function<void(const nlohmann::json&)>(
+                         [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
+              { "targetinfo", std::function<void(const nlohmann::json&)>(
+                         [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) },
+              { "slitd", std::function<void(const nlohmann::json&)>(
+                         [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
+            };
       }
+
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
 
       inline bool is_target_acquired()   { return this->target.is_acquired; }
       inline std::string get_imagename() { return this->imagename; }
@@ -528,6 +559,8 @@ namespace Acam {
       Database::Database database;
 
       Acam::FitsInfo fitsinfo;
+
+      Common::Header telemkeys;                ///< subscribed telemetry goes here
 
       Target target;                           /// for target acquisition
 
@@ -544,6 +577,19 @@ namespace Acam {
       TcsDaemonClient tcsd;                    /// for communicating with the TCS daemon, defined in ~/Software/tcsd/tcsd_client.h
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
+
+      // publish/subscribe functions
+      //
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
+
+      void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_tcsd( const nlohmann::json &jmessage );
+      void handletopic_targetinfo( const nlohmann::json &jmessage );
+      void handletopic_slitd( const nlohmann::json &jmessage );
 
       long bin( std::string args, std::string &retstring );
       void make_telemetry_message( std::string &retstring );
