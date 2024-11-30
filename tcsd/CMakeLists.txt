@@ -16,6 +16,11 @@ include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+# ZeroMQ
+#
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
 add_executable(tcsd 
         ${TCSD_DIR}/tcsd.cpp 
         ${TCSD_DIR}/tcs_server.cpp 
@@ -28,6 +33,8 @@ target_link_libraries(tcsd
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         )
 
 add_library(tcsd_client STATIC

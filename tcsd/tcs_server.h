@@ -37,8 +37,6 @@
  */
 namespace TCS {
 
-  const std::string DAEMON_NAME = "tcsd";        ///< when run as a daemon, this is my name
-
   const int N_THREADS = 10;
 
   /***** TCS::Server **********************************************************/
@@ -52,11 +50,21 @@ namespace TCS {
   class Server {
     private:
     public:
+      static Server* instance;
+
       /***** TCS::Server ******************************************************/
       /**
        * @brief  class constructor
        */
-      Server() : nbport(-1), blkport(-1), asyncport(-1), cmd_num(0), threads_active(0), id_pool(TCS::N_THREADS) { }
+      Server() : nbport(-1), blkport(-1), asyncport(-1), cmd_num(0), threads_active(0), id_pool(TCS::N_THREADS) {
+        instance=this;
+
+        // Register these signals
+        //
+        signal( SIGINT,  signal_handler );
+        signal( SIGPIPE, signal_handler );
+        signal( SIGHUP,  signal_handler );
+      }
       /***** TCS::Server ******************************************************/
 
 
@@ -117,6 +125,12 @@ namespace TCS {
       long configure_interface();           ///< read and apply the configuration file
       void doit(Network::TcpSocket &sock);   ///< the workhorse of each thread connetion
 
+      void handle_signal( int signo );
+
+      static inline void signal_handler( int signo ) {
+        if ( instance ) { instance->handle_signal( signo ); }
+        return;
+      }
   };
   /***** TCS::Server **********************************************************/
 

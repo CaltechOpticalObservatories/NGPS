@@ -7,8 +7,7 @@
  *
  */
 
-#ifndef TCSD_H
-#define TCSD_H
+#pragma once
 
 #include <fstream>
 #include <iostream>
@@ -35,9 +34,5 @@
 
 #define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds
 
-TCS::Server tcsd;                 ///< global TCS::Server object so that the main daemon can access the namespace
-
 void signal_handler(int signo);   ///< handles ctrl-C
 int main(int argc, char **argv);  ///< the main function
-
-#endif

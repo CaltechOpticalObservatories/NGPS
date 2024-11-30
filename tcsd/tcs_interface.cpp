@@ -49,11 +49,25 @@ namespace TCS {
 
     retstring = jmessage.dump();  // serialize the json message into retstring
 
+    this->publisher->publish( retstring );
+
     retstring.append(JEOF);       // append the JSON message terminator
 
     return;
   }
   /***** TCS::Interface::make_telemetry_message *******************************/
+
+
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( TCS::DAEMON_NAME ) ) {
+      std::string dontcare;
+      this->make_telemetry_message(dontcare);
+    }
+    else
+    if ( jmessage.contains( "test" ) ) {
+      logwrite( "TCS::Interface::handletopic_snapshot", jmessage.dump() );
+    }
+  }
 
 
   /***** TCS::Interface::get_tcs_info *****************************************/
