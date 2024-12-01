@@ -4,17 +4,18 @@ import logging
 
 class SequencerService:
     def __init__(self, config_file):
+        # Read the config without sections
         self.config = self.load_config(config_file)
 
-        # Access the keys directly (without section headers)
-        self.server_name = self.config.get('SERVERNAME', fallback=None)
-        self.instrument_name = self.config.get('INSTRUMENT_NAME', fallback=None)
-        self.command_server_port = int(self.config.get('COMMAND_SERVERPORT', fallback='8000'))
-        self.blocking_server_port = int(self.config.get('BLOCKING_SERVERPORT', fallback='9000'))
-        self.async_host = self.config.get('ASYNC_HOST', fallback=None)
-        self.async_server_port = int(self.config.get('ASYNC_SERVERPORT', fallback='1300'))
-        self.basename = self.config.get('BASENAME', fallback=None)
-        self.log_directory = self.config.get('LOG_DIRECTORY', fallback='/data/logs')
+        # Access keys directly as if it's a dictionary
+        self.server_name = self.config.get('SERVERNAME')
+        self.instrument_name = self.config.get('INSTRUMENT_NAME')
+        self.command_server_port = int(self.config.get('COMMAND_SERVERPORT'))
+        self.blocking_server_port = int(self.config.get('BLOCKING_SERVERPORT'))
+        self.async_host = self.config.get('ASYNC_HOST')
+        self.async_server_port = int(self.config.get('ASYNC_SERVERPORT'))
+        self.basename = self.config.get('BASENAME')
+        self.log_directory = self.config.get('LOG_DIRECTORY')
 
         # Set up logging
         self.setup_logging()
@@ -25,10 +26,16 @@ class SequencerService:
         self.async_socket = None
 
     def load_config(self, config_file):
-        """Load the configuration from the file."""
+        """ Load the configuration from the file as a flat dictionary """
         config = configparser.ConfigParser()
-        config.read(config_file)  # Read the configuration file
-        return config
+        config.read(config_file)
+        
+        # Get rid of the section headers, treat everything as flat
+        config_dict = {}
+        for key, value in config.items("DEFAULT"):  # Use "DEFAULT" section as fallback
+            config_dict[key] = value
+        
+        return config_dict
 
     def setup_logging(self):
         """ Set up logging for the sequencer service. """
