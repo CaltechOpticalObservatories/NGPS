@@ -143,7 +143,7 @@ class LogicService:
         Populates the UI table with data from the MySQL database.
         The columns and rows will be dynamically created based on the data.
         """
-        target_list_display = self.layout_service.target_list_display
+        target_list_display = self.parent.layout_service.target_list_display
         
         # Step 1: Clear existing rows in the target list
         target_list_display.setRowCount(0)
@@ -174,7 +174,7 @@ class LogicService:
             target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
             # Step 5: Hide the button and show the table once the data is loaded
-            self.layout_service.load_target_button.setVisible(False)  # Hide the load button
+            self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
             target_list_display.setVisible(True)  # Show the table
 
 

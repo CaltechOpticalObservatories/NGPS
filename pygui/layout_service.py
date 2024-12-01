@@ -330,27 +330,17 @@ class LayoutService:
         if selected_rows:
             selected_row = selected_rows[0].row()  # Get the first selected row (you can handle multi-row selection here)
 
+            # Get the column headers dynamically
+            column_headers = [self.target_list_display.horizontalHeaderItem(i).text() for i in range(self.target_list_display.columnCount())]
+
             # Create a dictionary to hold the target data from the selected row
-            target_data = {
-                "Name": self.target_list_display.item(selected_row, 0).text() if self.target_list_display.item(selected_row, 0) else "",
-                "RA": self.target_list_display.item(selected_row, 1).text() if self.target_list_display.item(selected_row, 1) else "",
-                "Declination": self.target_list_display.item(selected_row, 2).text() if self.target_list_display.item(selected_row, 2) else "",
-                "EXPTime Request": self.target_list_display.item(selected_row, 3).text() if self.target_list_display.item(selected_row, 3) else "",
-                "Exposure Time (s)": self.target_list_display.item(selected_row, 4).text() if self.target_list_display.item(selected_row, 4) else "",
-                "SlitWidth Request": self.target_list_display.item(selected_row, 5).text() if self.target_list_display.item(selected_row, 5) else "",
-                "Slit Width (arcsec)": self.target_list_display.item(selected_row, 6).text() if self.target_list_display.item(selected_row, 6) else "",
-                "Airmass": self.target_list_display.item(selected_row, 7).text() if self.target_list_display.item(selected_row, 7) else "",
-                "OTMSNR": self.target_list_display.item(selected_row, 8).text() if self.target_list_display.item(selected_row, 8) else "",
-                "Observer's Priority": self.target_list_display.item(selected_row, 9).text() if self.target_list_display.item(selected_row, 9) else "",
-                "CCD Mode": self.target_list_display.item(selected_row, 10).text() if self.target_list_display.item(selected_row, 10) else "",
-                "Bin Spectral (int)": self.target_list_display.item(selected_row, 11).text() if self.target_list_display.item(selected_row, 11) else "",
-                "Bin Spatial (int)": self.target_list_display.item(selected_row, 12).text() if self.target_list_display.item(selected_row, 12) else "",
-                "Slit Angle Request (deg)": self.target_list_display.item(selected_row, 13).text() if self.target_list_display.item(selected_row, 13) else "",
-                "Airmass limit": self.target_list_display.item(selected_row, 14).text() if self.target_list_display.item(selected_row, 14) else "",
-                "Point Mode": self.target_list_display.item(selected_row, 15).text() if self.target_list_display.item(selected_row, 15) else "",
-                "Not Before": self.target_list_display.item(selected_row, 16).text() if self.target_list_display.item(selected_row, 16) else "",
-                "Comment": self.target_list_display.item(selected_row, 17).text() if self.target_list_display.item(selected_row, 17) else ""
-            }
+            target_data = {}
+
+            for col_index, header in enumerate(column_headers):
+                # Get the value from the selected row in each column
+                item = self.target_list_display.item(selected_row, col_index)
+                value = item.text() if item else ""  # Get text or default to an empty string
+                target_data[header] = value  # Add the data to the dictionary
 
             # Pass the dictionary of target data to LogicService
             self.parent.logic_service.update_target_information(target_data)
