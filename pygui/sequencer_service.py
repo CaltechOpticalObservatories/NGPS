@@ -5,7 +5,6 @@ class SequencerService:
     def __init__(self):
         # Hardcoded values for the server connection
         self.server_name = 'localhost'  # Hardcoded value
-        self.command_server_port = 8000  # Hardcoded value
         self.blocking_server_port = 9000  # Hardcoded value
         self.async_host = '239.1.1.234'  # Hardcoded value
         self.async_server_port = 1300  # Hardcoded value
@@ -30,20 +29,16 @@ class SequencerService:
     def connect(self):
         """ Establish connections to the sequencer backend. """
         try:
-            # Connect to the command server
-            self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.command_socket.connect((self.server_name, self.command_server_port))
-            logging.info(f"Connected to command server at {self.server_name}:{self.command_server_port}")
 
             # Connect to the blocking server (for synchronous requests)
             self.blocking_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.blocking_socket.connect((self.server_name, self.blocking_server_port))
             logging.info(f"Connected to blocking server at {self.server_name}:{self.blocking_server_port}")
 
-            # Connect to the async server (for asynchronous requests)
-            self.async_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.async_socket.connect((self.async_host, self.async_server_port))
-            logging.info(f"Connected to async server at {self.async_host}:{self.async_server_port}")
+            # # Connect to the async server (for asynchronous requests)
+            # self.async_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # self.async_socket.connect((self.async_host, self.async_server_port))
+            # logging.info(f"Connected to async server at {self.async_host}:{self.async_server_port}")
 
         except Exception as e:
             logging.error(f"Failed to connect to one or more servers: {e}")
@@ -52,22 +47,19 @@ class SequencerService:
     def disconnect(self):
         """ Close all active connections. """
         try:
-            if self.command_socket:
-                self.command_socket.close()
-                logging.info("Disconnected from command server.")
             if self.blocking_socket:
                 self.blocking_socket.close()
                 logging.info("Disconnected from blocking server.")
-            if self.async_socket:
-                self.async_socket.close()
-                logging.info("Disconnected from async server.")
+            # if self.async_socket:
+            #     self.async_socket.close()
+            #     logging.info("Disconnected from async server.")
         except Exception as e:
             logging.error(f"Error while disconnecting: {e}")
 
     def send_command(self, command):
         """ Send a command to the sequencer via the command server. """
-        if self.command_socket:
-            self.command_socket.sendall(command.encode('utf-8'))
+        if self.blocking_socket:
+            self.blocking_socket.sendall(command.encode('utf-8'))
             logging.info(f"Sent command: {command}")
         else:
             logging.error("No connection to command server.")
