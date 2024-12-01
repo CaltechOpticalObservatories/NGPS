@@ -27,7 +27,7 @@ class NgpsGUI(QMainWindow):
         self.instrument_status_service = InstrumentStatusService(self)
 
         # Initialize the SequencerService
-        self.sequencer_service = None
+        self.sequencer_service = self.load_sequencer_config()
 
     def init_ui(self):
         # Set up Menu
@@ -52,13 +52,10 @@ class NgpsGUI(QMainWindow):
         # Connect the DateTimeEdit to the on_date_time_changed function
         self.start_date_time_edit.dateTimeChanged.connect(self.on_date_time_changed)
 
-        # Load the configuration and initialize SequencerService
-        self.load_sequencer_config("config/sequencer_config.ini")  # Path to your config file
-
-    def load_sequencer_config(self, config_file):
+    def load_sequencer_config(self):
         """ Initialize the SequencerService with the provided config file. """
         try:
-            self.sequencer_service = SequencerService(config_file)
+            self.sequencer_service = SequencerService()
             self.sequencer_service.connect()  # Connect to the sequencer
             print("Connected to the sequencer successfully.")
         except Exception as e:
