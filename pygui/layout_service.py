@@ -583,6 +583,25 @@ class LayoutService:
         # Add a thin gray line between rows
         self.add_separator_line(control_layout)
 
+        # --- Add Row 3 layout for "Go" button ---
+        row3_widget = QWidget()  # Row 3 - Go Button
+        row3_layout = QHBoxLayout(row3_widget)
+        row3_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for Row 3
+        row3_layout.setSpacing(10)  # Add spacing between widgets in this row
+
+        # "Go" Button
+        self.go_button = QPushButton("Go")
+        self.go_button.setEnabled(False)  # Initially disabled
+
+        # Add the "Go" button to row3_layout
+        row3_layout.addWidget(self.go_button)
+
+        # Add Row 3 layout to the control layout
+        control_layout.addWidget(row3_widget)
+
+        # Add a thin gray line between rows
+        self.add_separator_line(control_layout)
+
         # --- Add Row 4 layout for Pause, Stop After Current Image, Stop Now Buttons ---
         row4_widget = QWidget()  # Row 4 - Control Buttons
         row4_layout = QHBoxLayout(row4_widget)
@@ -611,11 +630,11 @@ class LayoutService:
         # Add a thin gray line between rows
         self.add_separator_line(control_layout)
 
-        # --- Add Row 3 layout for Buttons ---
-        row3_widget = QWidget()  # Row 3 - Buttons (Binning, Headers, etc.)
-        row3_layout = QHBoxLayout(row3_widget)
-        row3_layout.setSpacing(10)
-        row3_widget.setContentsMargins(0, 0, 0, 0)  # Remove margins for Row 3
+        # --- Add Row 5 layout for Buttons ---
+        row5_widget = QWidget()  # Row 5 - Buttons (Binning, Headers, etc.)
+        row5_layout = QHBoxLayout(row5_widget)
+        row5_layout.setSpacing(10)
+        row5_widget.setContentsMargins(0, 0, 0, 0)  # Remove margins for Row 5
 
         # Binning Button
         self.binning_button = QPushButton("Binning")
@@ -635,19 +654,36 @@ class LayoutService:
         temp_lamps_layout.addWidget(self.temp_button)
         temp_lamps_layout.addWidget(self.lamps_button)
 
-        # Add widgets to row3_layout
-        row3_layout.addWidget(self.binning_button)
-        row3_layout.addLayout(headers_display_layout)
-        row3_layout.addLayout(temp_lamps_layout)
+        # Add widgets to row5_layout
+        row5_layout.addWidget(self.binning_button)
+        row5_layout.addLayout(headers_display_layout)
+        row5_layout.addLayout(temp_lamps_layout)
 
-        # Add Row 3 layout to the control layout
-        control_layout.addWidget(row3_widget)
+        # Add Row 5 layout to the control layout
+        control_layout.addWidget(row5_widget)
 
         # Add a thin gray line between rows
         self.add_separator_line(control_layout)
 
         # Set the layout for the control tab
         control_tab.setLayout(control_layout)
+
+
+    def on_row_selection_change(self):
+        """
+        This method is called whenever the selection in the target list changes.
+        It updates the "Go" button's color and enables/disables it based on row selection.
+        """
+        selected_rows = self.parent.layout_service.target_list_display.selectionModel().selectedRows()
+        
+        if selected_rows:
+            # If a row is selected, change the "Go" button's color to green and enable it
+            self.go_button.setStyleSheet("background-color: green; color: white;")
+            self.go_button.setEnabled(True)
+        else:
+            # If no row is selected, reset the "Go" button's color and disable it
+            self.go_button.setStyleSheet("background-color: lightgray; color: black;")
+            self.go_button.setEnabled(False)
 
     def add_separator_line(self, layout):
         """ Helper method to add a thin light gray line (separator) between rows. """

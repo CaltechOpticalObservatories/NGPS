@@ -151,11 +151,11 @@ class LogicService:
 
         # List of columns to hide
         columns_to_hide = [
-            "OBSERVATION_ID", "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER",
+            "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER",
             "SEQUENCE_NUMBER", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
             "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start", "OTMexp_end",
             "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew", "OTMmoon", "OTMSNR",
-            "OTMres", "OTMseeing", "OTMslitangle", "NOTE"
+            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
         # Step 2: Filter out unwanted columns and their data
