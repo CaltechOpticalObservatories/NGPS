@@ -104,6 +104,10 @@ class NgpsGUI(QMainWindow):
         if create_account_dialog.exec_() == QDialog.Accepted:
             print("Account successfully created!")
 
+    def send_command(self, command):
+        """ Load data from MySQL after successful login """
+        self.sequencer_service.send_command(command)
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = NgpsGUI()

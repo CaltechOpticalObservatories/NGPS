@@ -409,7 +409,7 @@ class LayoutService:
             command = f"seq targetsingle {observation_id}"
             print(f"Sending command to SequencerService: {command}")  # Print the command being sent
             # Call send_command method from SequencerService
-            self.parent.sequencer_service.send_command(command)
+            self.parent.send_command(command)
             print(f"Command sent: {command}")  # Print confirmation of command sent
         else:
             print("No OBSERVATION_ID to send the command.")  # Print if no observation ID is found
