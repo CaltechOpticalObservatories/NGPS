@@ -33,6 +33,7 @@ class NgpsGUI(QMainWindow):
 
         # Initialize the StatusService
         self.status_service = StatusService(self)
+        self.status_service.connect()
         
         # Start the StatusService in a separate thread
         self.status_service_thread = StatusServiceThread(self.status_service)
