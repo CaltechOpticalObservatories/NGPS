@@ -54,8 +54,12 @@ class LogicService:
     def connect_to_mysql(self, config_file):
         """
         Connect to MySQL using the configuration file and return the connection object.
+        Logs connection and error details.
         """
         db_config = self.read_config(config_file)
+        
+        # Log the connection attempt
+        print("Attempting to connect to MySQL database...")
         
         try:
             connection = mysql.connector.connect(
@@ -64,8 +68,13 @@ class LogicService:
                 password=db_config["PASSWORD"],  # Password from the config file
                 database=db_config["DBMS"]  # Database name from the config file
             )
+
+            # If connection is successful, log it
+            print(f"Successfully connected to MySQL database: {db_config['DBMS']} on {db_config['SYSTEM']}.")
             return connection
+        
         except mysql.connector.Error as err:
+            # If an error occurs, log it
             print(f"Error connecting to MySQL: {err}")
             return None
 
