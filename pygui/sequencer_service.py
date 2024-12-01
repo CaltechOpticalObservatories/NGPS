@@ -6,15 +6,15 @@ class SequencerService:
     def __init__(self, config_file):
         self.config = self.load_config(config_file)
 
-        # Initialize connection parameters
-        self.server_name = self.config.get('CONNECTION_PARAMETERS', 'SERVERNAME')
-        self.instrument_name = self.config.get('CONNECTION_PARAMETERS', 'INSTRUMENT_NAME')
-        self.command_server_port = int(self.config.get('CONNECTION_PARAMETERS', 'COMMAND_SERVERPORT'))
-        self.blocking_server_port = int(self.config.get('CONNECTION_PARAMETERS', 'BLOCKING_SERVERPORT'))
-        self.async_host = self.config.get('CONNECTION_PARAMETERS', 'ASYNC_HOST')
-        self.async_server_port = int(self.config.get('CONNECTION_PARAMETERS', 'ASYNC_SERVERPORT'))
-        self.basename = self.config.get('CONNECTION_PARAMETERS', 'BASENAME')
-        self.log_directory = self.config.get('CONNECTION_PARAMETERS', 'LOG_DIRECTORY')
+        # Directly accessing the keys (no section needed)
+        self.server_name = self.config.get('SERVERNAME')
+        self.instrument_name = self.config.get('INSTRUMENT_NAME')
+        self.command_server_port = int(self.config.get('COMMAND_SERVERPORT'))
+        self.blocking_server_port = int(self.config.get('BLOCKING_SERVERPORT'))
+        self.async_host = self.config.get('ASYNC_HOST')
+        self.async_server_port = int(self.config.get('ASYNC_SERVERPORT'))
+        self.basename = self.config.get('BASENAME')
+        self.log_directory = self.config.get('LOG_DIRECTORY')
 
         # Set up logging
         self.setup_logging()
@@ -25,9 +25,8 @@ class SequencerService:
         self.async_socket = None
 
     def load_config(self, config_file):
-        """ Load the configuration file. """
         config = configparser.ConfigParser()
-        config.read(config_file)
+        config.read(config_file)  # Read the configuration file
         return config
 
     def setup_logging(self):
