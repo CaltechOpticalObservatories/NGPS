@@ -12,12 +12,7 @@ class LoginService:
     def connect_to_db(self):
         """Establish connection to the MySQL database."""
         try:
-            self.connection = mysql.connector.connect(
-                host=self.db_config["host"],
-                user=self.db_config["user"],
-                password=self.db_config["password"],
-                database=self.db_config["database"]
-            )
+            self.parent.logic_service.connect_to_mysql("config/db_config.ini")
         except mysql.connector.Error as err:
             print(f"Error: {err}")
             return False
@@ -88,10 +83,13 @@ class LoginService:
 
 
 class LoginDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, db_config=None):
         super().__init__(parent)
         self.setWindowTitle("Login")
 
+        # Database connection information passed as parameter
+        self.db_config = db_config  # Assumes db_config is passed from NgpsGUI or other parent
+        
         self.username_field = QLineEdit(self)
         self.password_field = QLineEdit(self)
         self.password_field.setEchoMode(QLineEdit.Password)
@@ -110,25 +108,61 @@ class LoginDialog(QDialog):
         self.login_button.clicked.connect(self.on_login)
         self.cancel_button.clicked.connect(self.reject)
 
+        # Setup logger for login attempts
+        self.setup_logging()
+
     def on_login(self):
+        """Handles the login action."""
         username = self.username_field.text()
         password = self.password_field.text()
 
-        # Validate user credentials (you can expand this logic to interact with your database)
+        # Validate user credentials by checking against the database
         if self.validate_user_credentials(username, password):
+            print(f"Login successful for user: {username}")
             self.accept()  # Close the dialog on success
         else:
+            print(f"Login failed for user: {username}")
             self.show_error_message("Invalid credentials, please try again.")
 
     def validate_user_credentials(self, username, password):
-        # Here you can validate the credentials against your database.
-        # For now, we'll assume a simple validation.
-        # Ideally, you'd query the database to check credentials.
-        if username == "test_user" and password == "password123":
-            return True
-        return False
+        """Validate user credentials against the MySQL database."""
+        try:
+            # Connect to MySQL database
+            connection = mysql.connector.connect(
+                host=self.db_config["SYSTEM"],
+                user=self.db_config["USERNAME"],
+                password=self.db_config["PASSWORD"],
+                database=self.db_config["DBMS"]
+            )
+
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM owner WHERE owner_id = %s", (username,))
+            user = cursor.fetchone()
+
+            # Close the connection after query
+            cursor.close()
+            connection.close()
+
+            if user and user["password"] == password:
+                # Password matches, login successful
+                return True
+            else:
+                # Either user does not exist or password is incorrect
+                return False
+
+        except mysql.connector.Error as err:
+            # Log the error if there is a database issue
+            print(f"Database error: {err}")
+            self.show_error_message("An error occurred while connecting to the database.")
+            return False
+        except Exception as e:
+            # Catch any other unexpected errors
+            print(f"Unexpected error: {e}")
+            self.show_error_message("An unexpected error occurred.")
+            return False
 
     def show_error_message(self, message):
+        """Display error message in the dialog."""
         error_label = QLabel(message, self)
         self.layout().addWidget(error_label)
 
