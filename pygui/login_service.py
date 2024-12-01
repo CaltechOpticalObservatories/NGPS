@@ -131,7 +131,7 @@ class LoginDialog(QDialog):
             cursor = self.connection.cursor(dictionary=True)
             
             # Switch to the correct database using `USE`
-            cursor.execute(f"USE {self.db_config['DBMS']}")  # This will set the active database
+            cursor.execute(f"USE ngps")  # This will set the active database
             
             # Execute the query to check if the user exists
             cursor.execute("SELECT * FROM owner WHERE owner_id = %s", (username,))
