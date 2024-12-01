@@ -512,8 +512,8 @@ this->foo(HDUTYPE::Primary);
       std::stringstream message;
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] info.extension=" << info.extension << " this->extension=" << this->extension << " this->framen=" << this->framen;
-      logwrite( function, message.str() );
+///   message.str(""); message << "[DEBUG] info.extension=" << info.extension << " this->extension=" << this->extension << " this->framen=" << this->framen;
+///   logwrite( function, message.str() );
 #endif
 
       // This makes the thread wait while another thread is writing images. This
@@ -599,7 +599,6 @@ this->foo(HDUTYPE::Primary);
 
         // If this extension name is in the elmokeys map, then add them to this extension
         //
-        logwrite( function, "this is where I would write system elmo keys for specific channels" );
         if ( elmokeys.find(extname) != elmokeys.end() ) {
           // loop through keydb for the extension keys for this channel
           for ( const auto &_db : elmokeys.at(extname).keydb ) {
@@ -609,7 +608,6 @@ this->foo(HDUTYPE::Primary);
 
         // Add any keys designated for "all" extensions
         //
-        logwrite( function, "this is where I would write system elmo keys for ALL channels" );
         if ( elmokeys.find("all") != elmokeys.end() ) {
           // loop through keydb for the extension keys for this channel
           for ( const auto &_db : elmokeys.at("all").keydb ) {
@@ -619,7 +617,6 @@ this->foo(HDUTYPE::Primary);
 
         // If this extension name is in the elmokeys map, then add them to this extension
         //
-        logwrite( function, "this is where I would write user elmo keys for specific channels" );
         if ( info.userkeys.elmomap().find(extname) != info.userkeys.elmomap().end() ) {
           // loop through keydb for the extension keys for this channel
           for ( const auto &_db : info.userkeys.elmomap().at(extname).keydb ) {
@@ -629,7 +626,6 @@ this->foo(HDUTYPE::Primary);
 
         // Add any keys designated for "all" extensions
         //
-        logwrite( function, "this is where I would write user elmo keys for ALL channels" );
         if ( info.userkeys.elmomap().find("all") != info.userkeys.elmomap().end() ) {
           // loop through keydb for the extension keys for this channel
           for ( const auto &_db : info.userkeys.elmomap().at("all").keydb ) {
@@ -639,7 +635,6 @@ this->foo(HDUTYPE::Primary);
 
         // If this extension name is in the elmokeys map, then add them to this extension
         //
-        logwrite( function, "this is where I would write telem elmo keys for specific channels" );
         if ( info.telemkeys.elmomap().find(extname) != info.telemkeys.elmomap().end() ) {
           // loop through keydb for the extension keys for this channel
           for ( const auto &_db : info.telemkeys.elmomap().at(extname).keydb ) {
@@ -649,7 +644,6 @@ this->foo(HDUTYPE::Primary);
 
         // Add any keys designated for "all" extensions
         //
-        logwrite( function, "this is where I would write telem elmo keys for ALL channels" );
         if ( info.telemkeys.elmomap().find("all") != info.telemkeys.elmomap().end() ) {
           // loop through keydb for the extension keys for this channel
           for ( const auto &_db : info.telemkeys.elmomap().at("all").keydb ) {
@@ -718,16 +712,13 @@ this->foo(HDUTYPE::Primary);
      *
      */
     void make_camera_header(Camera::Information &info) {
-      std::string function = "FITS_file::make_camera_header";
-      std::stringstream message;
       try {
         // To put just the filename into the header (and not the path), find the last slash
         // and substring from there to the end.
         //
       }
       catch (CCfits::FitsError & err) {
-        message.str(""); message << "ERROR: " << err.message();
-        logwrite(function, message.str());
+        logwrite( "FITS_file::make_camera_header", "ERROR: "+std::string(err.message()) );
       }
       return;
     }
@@ -757,8 +748,9 @@ this->foo(HDUTYPE::Primary);
       std::stringstream message;
 
 #ifdef LOGLEVEL_DEBUG
-      message << "[DEBUG] keyword=" << keyword << " type=" << type << " value=" << value << " comment=" << comment;
-      logwrite( function, message.str() );
+///   message << "[DEBUG] keyword=" << keyword << " type=" << type << " value=" << value << " comment=" << comment
+///           << " HDUTYPE=" << (hdu == HDUTYPE::Primary?"pri":"ext");
+///   logwrite( function, message.str() );
 #endif
 
       // The file must have been opened first

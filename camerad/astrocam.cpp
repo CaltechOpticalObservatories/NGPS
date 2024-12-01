@@ -2437,9 +2437,6 @@ logwrite(function,message.str() );
     logwrite( function, message.str() );
 #endif
 
-logwrite( function, "userkeys:" );
-this->camera_info.userkeys.primary().listkeys();
-
     // Collect telemetry, which will be stored in camera_info.telemkeys
     //
     this->collect_telemetry();
@@ -2755,12 +2752,12 @@ this->camera_info.userkeys.primary().listkeys();
         //
         // telemkeys are refreshed for each exposure
         this->camera_info.telemkeys.primary().erase_db();
-        this->camera_info.telemkeys.erase_extensions();
+        this->camera_info.telemkeys.erase_extensions(channel);
 
         // userkeys are conditionally persistent
         if ( !this->camera.is_userkeys_persist ) {
           this->camera_info.userkeys.primary().erase_db();
-          this->camera_info.userkeys.erase_extensions();
+          this->camera_info.userkeys.erase_extensions(channel);
         }
 
         // **********************************************************
@@ -3906,11 +3903,6 @@ for ( const auto &dev : selectdev ) {
           total_rows += nread;
         }
 
-        // disable binning
-        //
-        if ( this->do_bin("row 1", retstring) != NO_ERROR ) return ERROR;
-        if ( this->do_bin("col 1", retstring) != NO_ERROR ) return ERROR;
-
         // Now update the image size
         //
         cmd.str("");
@@ -3919,8 +3911,8 @@ for ( const auto &dev : selectdev ) {
             << this->controller[dev].detcols    << " "  // don't change original columns
             << 0                                << " "  // force no parallel overscans
             << this->controller[dev].oscols     << " "  // don't change original serial overscans
-            << this->camera_info.binning[_ROW_] << " "  // class binning should be 1
-            << this->camera_info.binning[_COL_];        // class binning should be 1
+            << this->camera_info.binning[_ROW_] << " "  // class row binning
+            << this->camera_info.binning[_COL_];        // class col binning
         if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
       }
       catch( const std::exception &e ) {

@@ -702,6 +702,11 @@ namespace Common {
 
       void erase_extensions() { for ( auto &chan : _elmo ) chan.second.erase_db(); }
 
+      void erase_extensions(const std::string &chan) {
+        if ( _elmo.count(chan) > 0 ) _elmo.at(chan).erase_db();
+        return;
+      }
+
       FitsKeys &elmo(const std::string &chan) {
         try { return _elmo.at(chan); }
         catch ( const std::exception &e ) {
@@ -783,9 +788,9 @@ namespace Common {
         //
         FitsKeys &keydb = ( use_extension ? elmo(chan) : primary() );
 
-        message.str(""); message << "[DEBUG] will try to add " << keyword << "=" << value << " / " << comment
-                                 << " to " << ( use_extension ? chan : "primary" );
-        logwrite(function,message.str());
+///     message.str(""); message << "[DEBUG] will try to add " << keyword << "=" << value << " / " << comment
+///                              << " to " << ( use_extension ? chan : "primary" );
+///     logwrite(function,message.str());
         this->add_key( keydb, keyword, value, comment );
       }
 
