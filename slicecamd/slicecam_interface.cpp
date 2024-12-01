@@ -1986,8 +1986,9 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_GUISET;
-      retstring.append( " [ <exptime> <gain> ]\n" );
+      retstring.append( " [ <exptime> <gain> <bin>]\n" );
       retstring.append( "   Set or get settings for SAOImage GUI display.\n" );
+      retstring.append( "   Binning must be a power of two and will be square.\n" );
       retstring.append( "   When all arguments are supplied they will be set and then pushed\n" );
       retstring.append( "   back to the display. If no arguments are supplied then the current\n" );
       retstring.append( "   settings are returned and pushed to the display.\n" );
@@ -2000,9 +2001,9 @@ namespace Slicecam {
 
     // If something was supplied but not the correct number of args then that's an error
     //
-    if ( !tokens.empty() && tokens.size() != 2 ) {
+    if ( !tokens.empty() && tokens.size() != 3 ) {
       message.str(""); message << "ERROR received " << tokens.size() << " arguments "
-                               << "but expected <exptime> <gain>";
+                               << "but expected <exptime> <gain> <bin>";
       logwrite( function, message.str() );
       retstring="invalid_argument_list";
       return ERROR;
@@ -2018,19 +2019,19 @@ namespace Slicecam {
     long error = NO_ERROR;
     bool set = false;
 
-    // If two args were supplied then use them to set
-    // exposure time and gain.
+    // If all args were supplied then use them to set
+    // exposure time, gain, and binning.
     //
-    if ( tokens.size() == 2 ) {
+    if ( tokens.size() == 3 ) {
       try {
         std::string reply;
-        float fval = std::stof( tokens.at(0) );
-        int ival = std::stoi( tokens.at(1) );
+        float exptime = std::stof( tokens.at(0) );
+        int gain = std::stoi( tokens.at(1) );
+        int bin  = std::stoi( tokens.at(2) );
 
-        for ( const auto &pair : this->camera.andor ) {
-          error |= pair.second->set_exptime( fval );
-        }
-        error |= camera.set_gain( ival );
+        error |= camera.set_exptime( exptime );
+        error |= camera.set_gain( gain );
+        error |= camera.bin( bin, bin );
         set=true;
       }
       catch( const std::exception &e ) {
