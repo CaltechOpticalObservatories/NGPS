@@ -346,10 +346,40 @@ class LayoutService:
             self.parent.logic_service.update_target_information(target_data)
             
             self.go_button.setEnabled(True)  # Enable the "Go" button when a row is selected
-            self.go_button.setStyleSheet("background-color: green; color: white;")  # Make the button green
+            self.go_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green when enabled */
+                    color: white;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #388E3C;  /* Darker green when hovered */
+                }
+                QPushButton:pressed {
+                    background-color: #2C6B2F;  /* Even darker green when pressed */
+                }
+            """)
         else:
             self.go_button.setEnabled(False)  # Disable it when no row is selected
-            self.go_button.setStyleSheet("background-color: lightgray; color: black;")  # Reset the color
+            self.go_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+            """)
 
     # Getter method to access target_list_display from LogicService
     def get_target_list_display(self):
