@@ -117,6 +117,7 @@ class LoginDialog(QDialog):
         if self.validate_user_credentials(username, password):
             print(f"Login successful for user: {username}")
             self.accept()  # Close the dialog on success
+            self.fetch_and_update_target_list(username)
         else:
             print(f"Login failed for user: {username}")
             self.show_error_message("Invalid credentials, please try again.")
@@ -130,27 +131,25 @@ class LoginDialog(QDialog):
             # Reuse the already established connection
             cursor = self.connection.cursor(dictionary=True)
             
-            # Switch to the correct database using `USE`
-            cursor.execute(f"USE ngps")  # This will set the active database
-            
             # Execute the query to check if the user exists
-            cursor.execute("SELECT * FROM owner WHERE owner_id = %s", (username,))
+            cursor.execute("SELECT * FROM owner WHERE OWNER_ID = %s", (username,))
             
             # Print the query being executed
-            print(f"Executed query: SELECT * FROM owner WHERE owner_id = '{username}'")
+            print(f"Executed query: SELECT * FROM owner WHERE OWNER_ID = '{username}'")
             
             # Fetch the result
             user = cursor.fetchone()
 
             if user:
-                print(f"User found: {user['owner_id']}")
+                print(f"User found: {user['OWNER_ID']}")
+                return True
                 # Check if the password matches
-                if user["password"] == password:
-                    print(f"Password matches for user: {username}")
-                    return True
-                else:
-                    print(f"Password does not match for user: {username}")
-                    return False
+                # if user["password"] == password:
+                #     print(f"Password matches for user: {username}")
+                #     return True
+                # else:
+                #     print(f"Password does not match for user: {username}")
+                #     return False
             else:
                 print(f"No user found with username: {username}")
                 return False
@@ -170,6 +169,33 @@ class LoginDialog(QDialog):
         """Display error message in the dialog."""
         error_label = QLabel(message, self)
         self.layout().addWidget(error_label)
+        
+    def fetch_and_update_target_list(self, username):
+        """Fetch target data and update the table in the parent window."""
+        if self.connection:
+            try:
+                cursor = self.connection.cursor(dictionary=True)
+
+                # Step 1: Get the SET_IDs from target_sets for the logged-in user
+                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER_ID = %s", (username,))
+                set_ids = cursor.fetchall()
+
+                # Step 2: For each SET_ID, fetch the associated rows from the 'targets' table
+                all_targets = []
+                for set_id in set_ids:
+                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
+                    targets = cursor.fetchall()
+                    all_targets.extend(targets)
+
+                cursor.close()
+
+                # Step 3: Update the target list table in the UI
+                self.parent.logic_service.update_target_list_table(all_targets)
+
+            except mysql.connector.Error as err:
+                print(f"Database error: {err}")
+            finally:
+                self.connection.close()
 
 
 class CreateAccountDialog(QDialog):
