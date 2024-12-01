@@ -40,7 +40,7 @@ class NgpsGUI(QMainWindow):
         self.status_service_thread.start()
 
         # Subscribe to a specific topic (optional)
-        self.status_service.subscribe("sequencerd")
+        self.status_service.subscribe()
         # Connect the message_received signal from StatusService to the update_message_log slot
         self.status_service.new_message_signal.connect(self.layout_service.update_message_log)
 
