@@ -4,18 +4,19 @@ import logging
 
 class SequencerService:
     def __init__(self, config_file):
-        # Read the config without sections
         self.config = self.load_config(config_file)
 
-        # Access keys directly as if it's a dictionary
-        self.server_name = self.config.get('SERVERNAME')
-        self.instrument_name = self.config.get('INSTRUMENT_NAME')
-        self.command_server_port = int(self.config.get('COMMAND_SERVERPORT'))
-        self.blocking_server_port = int(self.config.get('BLOCKING_SERVERPORT'))
-        self.async_host = self.config.get('ASYNC_HOST')
-        self.async_server_port = int(self.config.get('ASYNC_SERVERPORT'))
-        self.basename = self.config.get('BASENAME')
-        self.log_directory = self.config.get('LOG_DIRECTORY')
+        # Use fallback values if keys are missing
+        self.server_name = self.config.get('SERVERNAME', 'localhost')  # Default to 'localhost'
+        self.instrument_name = self.config.get('INSTRUMENT_NAME', 'NGPS')  # Default to 'NGPS'
+        
+        # For ports, use a fallback default port in case they are missing or invalid
+        self.command_server_port = self.get_int('COMMAND_SERVERPORT', 8000)  # Default to 8000
+        self.blocking_server_port = self.get_int('BLOCKING_SERVERPORT', 9000)  # Default to 9000
+        self.async_host = self.config.get('ASYNC_HOST', '239.1.1.234')  # Default to '239.1.1.234'
+        self.async_server_port = self.get_int('ASYNC_SERVERPORT', 1300)  # Default to 1300
+        self.basename = self.config.get('BASENAME', 'ngps_image')  # Default to 'ngps_image'
+        self.log_directory = self.config.get('LOG_DIRECTORY', '/data/logs')  # Default to '/data/logs'
 
         # Set up logging
         self.setup_logging()
@@ -36,6 +37,14 @@ class SequencerService:
             config_dict[key] = value
         
         return config_dict
+
+    def get_int(self, key, default_value):
+        """ Helper method to safely get an integer from the config """
+        try:
+            return int(self.config.get(key, fallback=str(default_value)))
+        except ValueError:
+            logging.error(f"Invalid value for {key}, using default {default_value}")
+            return default_value
 
     def setup_logging(self):
         """ Set up logging for the sequencer service. """
