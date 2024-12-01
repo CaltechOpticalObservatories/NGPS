@@ -12,6 +12,8 @@ class SequencerService:
         self.async_server_port = 1300  # Hardcoded value
         self.basename = 'ngps_image'  # Hardcoded value
         self.log_directory = '/data/logs'  # Hardcoded value
+        
+        self.setup_logging()
 
         # Placeholder for active connections
         self.command_socket = None
