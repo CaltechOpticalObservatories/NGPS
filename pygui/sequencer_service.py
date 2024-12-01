@@ -6,7 +6,7 @@ class SequencerService:
     def __init__(self, config_file):
         self.config = self.load_config(config_file)
 
-        # Use fallback values if keys are missing
+        # Use get() with fallback for configuration values
         self.server_name = self.config.get('SERVERNAME', 'localhost')  # Default to 'localhost'
         self.instrument_name = self.config.get('INSTRUMENT_NAME', 'NGPS')  # Default to 'NGPS'
         
@@ -41,7 +41,8 @@ class SequencerService:
     def get_int(self, key, default_value):
         """ Helper method to safely get an integer from the config """
         try:
-            return int(self.config.get(key, fallback=str(default_value)))
+            value = self.config.get(key, fallback=str(default_value))
+            return int(value)
         except ValueError:
             logging.error(f"Invalid value for {key}, using default {default_value}")
             return default_value
