@@ -344,6 +344,12 @@ class LayoutService:
 
             # Pass the dictionary of target data to LogicService
             self.parent.logic_service.update_target_information(target_data)
+            
+            self.go_button.setEnabled(True)  # Enable the "Go" button when a row is selected
+            self.go_button.setStyleSheet("background-color: green; color: white;")  # Make the button green
+        else:
+            self.go_button.setEnabled(False)  # Disable it when no row is selected
+            self.go_button.setStyleSheet("background-color: lightgray; color: black;")  # Reset the color
 
     # Getter method to access target_list_display from LogicService
     def get_target_list_display(self):
@@ -668,22 +674,6 @@ class LayoutService:
         # Set the layout for the control tab
         control_tab.setLayout(control_layout)
 
-
-    def on_row_selection_change(self):
-        """
-        This method is called whenever the selection in the target list changes.
-        It updates the "Go" button's color and enables/disables it based on row selection.
-        """
-        selected_rows = self.parent.layout_service.target_list_display.selectionModel().selectedRows()
-        
-        if selected_rows:
-            # If a row is selected, change the "Go" button's color to green and enable it
-            self.go_button.setStyleSheet("background-color: green; color: white;")
-            self.go_button.setEnabled(True)
-        else:
-            # If no row is selected, reset the "Go" button's color and disable it
-            self.go_button.setStyleSheet("background-color: lightgray; color: black;")
-            self.go_button.setEnabled(False)
 
     def add_separator_line(self, layout):
         """ Helper method to add a thin light gray line (separator) between rows. """
