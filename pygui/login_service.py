@@ -177,20 +177,18 @@ class LoginDialog(QDialog):
                 cursor = self.connection.cursor(dictionary=True)
 
                 # Step 1: Get the SET_IDs from target_sets for the logged-in user
-                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER_ID = %s", (username,))
+                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER = %s", (username,))
                 set_ids = cursor.fetchall()
 
                 # Step 2: For each SET_ID, fetch the associated rows from the 'targets' table
-                all_targets = []
+                self.all_targets = []
                 for set_id in set_ids:
                     cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
                     targets = cursor.fetchall()
-                    all_targets.extend(targets)
+                    self.all_targets.extend(targets)
 
                 cursor.close()
-
-                # Step 3: Update the target list table in the UI
-                self.parent.logic_service.update_target_list_table(all_targets)
+                
 
             except mysql.connector.Error as err:
                 print(f"Database error: {err}")

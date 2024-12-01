@@ -88,17 +88,16 @@ class NgpsGUI(QMainWindow):
 
     def on_login(self):
         """ Handle the login action from the menu """
-        login_dialog = LoginDialog(self, self.connection)
+        login_dialog = LoginDialog(self,)
         
         # If the login is successful, load data from MySQL
         if login_dialog.exec_() == QDialog.Accepted:
             # Call the function to load data from MySQL
-            self.load_mysql_data()
+            self.load_mysql_data(login_dialog.all_targets)
 
-    def load_mysql_data(self):
+    def load_mysql_data(self, data):
         """ Load data from MySQL after successful login """
-        config_file = "config/ngps_config.ini"  # Your config file path
-        self.logic_service.load_mysql_and_update_target_list(config_file)
+        self.logic_service.update_target_list_table(data)
 
     def on_create_account(self):
         """ Handle the create account action from the User menu """
