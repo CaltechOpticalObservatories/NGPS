@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import QMenu, QAction
 
 class MenuService:
-    def __init__(self, menubar):
+    def __init__(self, parent, menubar):
+        self.parent = parent
         self.menubar = menubar
 
     def create_menus(self):
@@ -39,6 +40,19 @@ class MenuService:
         tools_menu = self.menubar.addMenu('Tools')
         settings_action = QAction('Settings', self.menubar)
         tools_menu.addAction(settings_action)
+        
+        # User Menu
+        user_menu = self.menubar.addMenu('User')
+
+        # Add Login Action
+        login_action = QAction('Login', self.menubar)
+        login_action.triggered.connect(self.parent.on_login)  # Connect to login handler
+        user_menu.addAction(login_action)
+
+        # Add Create Account Action
+        create_account_action = QAction('Create Account', self.menubar)
+        create_account_action.triggered.connect(self.parent.on_create_account)  # Connect to create account handler
+        user_menu.addAction(create_account_action)
 
         # Help Menu
         help_menu = self.menubar.addMenu('Help')

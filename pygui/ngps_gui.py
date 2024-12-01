@@ -1,26 +1,29 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
 from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
 from instrument_status_service import InstrumentStatusService
-from sequencer_service import SequencerService  # Import the new SequencerService class
+from sequencer_service import SequencerService
+from login_service import LoginService, LoginDialog, CreateAccountDialog
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NGPS")
         self.setGeometry(100, 100, 1200, 800)
+        
+        # Login status flag
+        self.logged_in = False
 
         # Initialize the UI
         self.init_ui()
-
+        
         # Load and apply the QSS stylesheet
         self.load_stylesheet("styles.qss")
 
-        # Initialize the InstrumentStatusService after UI setup
+        # Initialize the InstrumentStatusService
         self.instrument_status_service = InstrumentStatusService(self)
 
         # Initialize the SequencerService
@@ -29,7 +32,7 @@ class NgpsGUI(QMainWindow):
     def init_ui(self):
         # Set up Menu
         menubar = self.menuBar()
-        menu_service = MenuService(menubar)
+        menu_service = MenuService(self, menubar)
         menu_service.create_menus()
 
         # Set up Layout
@@ -37,6 +40,9 @@ class NgpsGUI(QMainWindow):
         main_layout = self.layout_service.create_layout()
 
         self.logic_service = LogicService(self)
+        
+        # Try to connect to the MySQL database
+        self.logic_service.connect_to_mysql("config/db_config.ini")
 
         # Add layout to central widget
         central_widget = QWidget()
@@ -80,6 +86,27 @@ class NgpsGUI(QMainWindow):
             # Use LogicService to load CSV and update the table
             self.logic_service.load_csv_and_update_target_list(file_path)
 
+    def on_login(self):
+        """ Handle the login action from the menu """
+        login_dialog = LoginDialog(self)
+        
+        # If the login is successful, load data from MySQL
+        if login_dialog.exec_() == QDialog.Accepted:
+            # Call the function to load data from MySQL
+            self.load_mysql_data()
+
+    def load_mysql_data(self):
+        """ Load data from MySQL after successful login """
+        config_file = "config/ngps_config.ini"  # Your config file path
+        self.logic_service.load_mysql_and_update_target_list(config_file)
+
+    def on_create_account(self):
+        """ Handle the create account action from the User menu """
+        create_account_dialog = CreateAccountDialog(self)
+        
+        # If account creation is successful, handle it (e.g., show success message)
+        if create_account_dialog.exec_() == QDialog.Accepted:
+            print("Account successfully created!")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
