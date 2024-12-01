@@ -83,12 +83,12 @@ class LoginService:
 
 
 class LoginDialog(QDialog):
-    def __init__(self, parent=None, db_config=None):
+    def __init__(self, parent=None, connection=None):
         super().__init__(parent)
         self.setWindowTitle("Login")
 
         # Database connection information passed as parameter
-        self.db_config = db_config  # Assumes db_config is passed from NgpsGUI or other parent
+        self.connection = connection  # Assumes db_config is passed from NgpsGUI or other parent
         
         self.username_field = QLineEdit(self)
         self.password_field = QLineEdit(self)
@@ -106,7 +106,7 @@ class LoginDialog(QDialog):
 
         # Connect signals
         self.login_button.clicked.connect(self.on_login)
-        self.cancel_button.clicked.connect(self.reject)
+        #self.cancel_button.clicked.connect(self.reject)
 
     def on_login(self):
         """Handles the login action."""
@@ -122,29 +122,21 @@ class LoginDialog(QDialog):
             self.show_error_message("Invalid credentials, please try again.")
 
     def validate_user_credentials(self, username, password):
-        """Validate user credentials against the MySQL database."""
+        """Validate user credentials against the MySQL database using an existing connection."""
         try:
             # Print to show method entry
             print(f"Attempting to validate credentials for username: {username}")
 
-            # Connect to MySQL database
-            print(f"Connecting to MySQL database: {self.db_config['DBMS']} at {self.db_config['SYSTEM']}")
-            connection = mysql.connector.connect(
-                host=self.db_config["SYSTEM"],
-                user=self.db_config["USERNAME"],
-                password=self.db_config["PASSWORD"],
-                database=self.db_config["DBMS"]
-            )
+            # Reuse the already established connection
+            cursor = self.connection.cursor(dictionary=True)
             
-            # Print confirmation after connection
-            print(f"Successfully connected to the MySQL database.")
-
-            cursor = connection.cursor(dictionary=True)
+            # Execute the query to check if the user exists
             cursor.execute("SELECT * FROM owner WHERE owner_id = %s", (username,))
             
             # Print the query being executed
             print(f"Executed query: SELECT * FROM owner WHERE owner_id = '{username}'")
             
+            # Fetch the result
             user = cursor.fetchone()
 
             if user:

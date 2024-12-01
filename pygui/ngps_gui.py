@@ -42,7 +42,7 @@ class NgpsGUI(QMainWindow):
         self.logic_service = LogicService(self)
         
         # Try to connect to the MySQL database
-        self.logic_service.connect_to_mysql("config/db_config.ini")
+        self.connection = self.logic_service.connect_to_mysql("config/db_config.ini")
 
         # Add layout to central widget
         central_widget = QWidget()
@@ -88,7 +88,7 @@ class NgpsGUI(QMainWindow):
 
     def on_login(self):
         """ Handle the login action from the menu """
-        login_dialog = LoginDialog(self)
+        login_dialog = LoginDialog(self, self.connection)
         
         # If the login is successful, load data from MySQL
         if login_dialog.exec_() == QDialog.Accepted:
