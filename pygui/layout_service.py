@@ -336,16 +336,34 @@ class LayoutService:
             # Create a dictionary to hold the target data from the selected row
             target_data = {}
 
+            # Variable to store the OBSERVATION_ID
+            observation_id = None
+
+            print("Selected Row:", selected_row)  # Print the selected row index
+            print("Column Headers:", column_headers)  # Print the column headers
+
             for col_index, header in enumerate(column_headers):
                 # Get the value from the selected row in each column
                 item = self.target_list_display.item(selected_row, col_index)
                 value = item.text() if item else ""  # Get text or default to an empty string
                 target_data[header] = value  # Add the data to the dictionary
 
+                # Check if the header is 'OBSERVATION_ID' and extract its value
+                if header == 'OBSERVATION_ID':
+                    observation_id = value  # Store the observation ID
+                    print(f"Found OBSERVATION_ID: {observation_id}")  # Print the found OBSERVATION_ID
+
             # Pass the dictionary of target data to LogicService
+            print("Target Data:", target_data)  # Print the full target data for the selected row
             self.parent.logic_service.update_target_information(target_data)
-            
-            self.go_button.setEnabled(True)  # Enable the "Go" button when a row is selected
+
+            if observation_id:
+                # Send the command with the OBSERVATION_ID
+                print(f"Sending command: seq targetsingle {observation_id}")  # Print the command being sent
+                self.send_target_command(observation_id)
+
+            # Enable the "Go" button when a row is selected
+            self.go_button.setEnabled(True)  # Enable the "Go" button
             self.go_button.setStyleSheet("""
                 QPushButton {
                     background-color: #4CAF50;  /* Green when enabled */
@@ -362,8 +380,11 @@ class LayoutService:
                     background-color: #2C6B2F;  /* Even darker green when pressed */
                 }
             """)
+
         else:
-            self.go_button.setEnabled(False)  # Disable it when no row is selected
+            # Disable the "Go" button when no row is selected
+            print("No row selected.")  # Print when no row is selected
+            self.go_button.setEnabled(False)
             self.go_button.setStyleSheet("""
                 QPushButton {
                     background-color: #D3D3D3;  /* Light gray when disabled */
@@ -380,6 +401,19 @@ class LayoutService:
                     background-color: #D3D3D3;  /* No pressed effect when disabled */
                 }
             """)
+
+    def send_target_command(self, observation_id):
+        """ Method to send the command to the SequencerService """
+        if observation_id:
+            # Build the command string
+            command = f"seq targetsingle {observation_id}"
+            print(f"Sending command to SequencerService: {command}")  # Print the command being sent
+            # Call send_command method from SequencerService
+            self.parent.sequencer_service.send_command(command)
+            print(f"Command sent: {command}")  # Print confirmation of command sent
+        else:
+            print("No OBSERVATION_ID to send the command.")  # Print if no observation ID is found
+
 
     # Getter method to access target_list_display from LogicService
     def get_target_list_display(self):
