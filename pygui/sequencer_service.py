@@ -2,7 +2,9 @@ import socket
 import logging
 
 class SequencerService:
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
+        
         # Hardcoded values for the server connection
         self.server_name = 'localhost'  # Hardcoded value
         self.blocking_server_port = 9000  # Hardcoded value
@@ -10,9 +12,6 @@ class SequencerService:
         self.async_server_port = 1300  # Hardcoded value
         self.basename = 'ngps_image'  # Hardcoded value
         self.log_directory = '/data/logs'  # Hardcoded value
-
-        # Set up logging
-        self.setup_logging()
 
         # Placeholder for active connections
         self.command_socket = None
