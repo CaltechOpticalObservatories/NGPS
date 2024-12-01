@@ -50,7 +50,7 @@ namespace Network {
 
   extern const long ERROR;
   extern const long NO_ERROR;
-  extern const long TIMEOUT;
+  extern const long TOUT;
 
   /***** TcpSocket ************************************************************/
   /**

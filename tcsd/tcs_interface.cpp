@@ -1466,7 +1466,7 @@ namespace TCS {
    *
    */
   long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type ) {
-    return send_command( cmd, retstring, conn_type, TIMEOUT );
+    return send_command( cmd, retstring, conn_type, POLLTIMEOUT );
   }
   long Interface::send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type, int to ) {
     std::string function = "TCS::Interface::send_command";

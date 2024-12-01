@@ -26,7 +26,7 @@ namespace Network {
 
   const long NO_ERROR = 0;
   const long ERROR = 1;
-  const long TIMEOUT = 3;
+  const long TOUT = 3;
 
   /***** Network::UdpSocket::UdpSocket ****************************************/
   /**
@@ -1284,7 +1284,7 @@ namespace Network {
       if ( ( retval=this->sock.Poll(timeout) ) <= 0 ) {
         if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd();
                            if (errno) { message << ": " << strerror(errno); }
-                           error = TIMEOUT; }
+                           error = TOUT; }
         if ( retval <0 ) { message.str(""); message << "ERROR on fd " << this->sock.getfd();
                            if (errno) { message << ": " << strerror(errno); }
                            error = ERROR; }

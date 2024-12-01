@@ -146,7 +146,6 @@ namespace TCS {
 
       std::mutex mtx_pool;
       std::condition_variable cv;
-      const int TIMEOUT=3000;
 
     public:
       TcsIO(const std::string &name, const std::string &host, int port, char term_write, char term_read)
@@ -252,7 +251,7 @@ namespace TCS {
               logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())+" inuse, trying another" );
             }
             // wait up to TIMEOUT ms for a connection if not immediately available
-            std::cv_status status = cv.wait_for(lock, std::chrono::milliseconds(TIMEOUT));
+            std::cv_status status = cv.wait_for(lock, std::chrono::milliseconds(POLLTIMEOUT));
             if ( status == std::cv_status::timeout ) {
               logwrite( function, "timed out waiting for socket connection" );
               return nullptr;
@@ -274,7 +273,7 @@ namespace TCS {
        *
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type ) {
-        return execute_command( cmd, reply, conn_type, TIMEOUT );
+        return execute_command( cmd, reply, conn_type, POLLTIMEOUT );
       }
       /***** TCS::TcsIO::execute_command **************************************/
       /**
