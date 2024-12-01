@@ -62,21 +62,36 @@ class LogicService:
         print("Attempting to connect to MySQL database...")
         
         try:
+            # Connect to MySQL without selecting a database
             connection = mysql.connector.connect(
                 host=db_config["SYSTEM"],  # Hostname from the config file
                 user=db_config["USERNAME"],  # MySQL user from the config file
                 password=db_config["PASSWORD"],  # Password from the config file
-                database=db_config["DBMS"]  # Database name from the config file
             )
 
-            # If connection is successful, log it
-            print(f"Successfully connected to MySQL database: {db_config['DBMS']} on {db_config['SYSTEM']}.")
+            # Log that the connection to the MySQL server was successful
+            print(f"Successfully connected to MySQL server: {db_config['SYSTEM']}.")
+
+            # Select the database after establishing the connection
+            cursor = connection.cursor()
+            cursor.execute(f"USE {db_config['DBMS']};")  # Ensure we are using the correct database
+            print(f"Successfully selected database: {db_config['DBMS']}.")
+
+            # Optionally, you can verify the database selection with the following:
+            cursor.execute("SELECT DATABASE();")
+            current_db = cursor.fetchone()[0]
+            print(f"Currently connected to database: {current_db}")
+
+            cursor.close()
+
+            # Return the connection object after ensuring the correct database is selected
             return connection
         
         except mysql.connector.Error as err:
-            # If an error occurs, log it
+            # If an error occurs, log the error and return None
             print(f"Error connecting to MySQL: {err}")
             return None
+
 
     def load_data_from_mysql(self, connection, target_table):
         """
