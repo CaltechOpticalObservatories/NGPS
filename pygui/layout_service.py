@@ -238,12 +238,24 @@ class LayoutService:
         
         # Set size policies to allow the widget to stretch and grow proportionally
         self.parent.message_log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.parent.message_log.setReadOnly(True) 
 
         # Optionally set a minimum height or width if desired (not fixed size)
         self.parent.message_log.setMinimumHeight(60)
         self.parent.message_log.setMinimumWidth(200)  # Set a reasonable minimum width
 
         return self.parent.message_log
+    
+    def update_message_log(self, message):
+        """ Update the message log with the new message. """
+        if hasattr(self, 'message_log'):
+            current_text = self.message_log.toPlainText()
+            updated_text = current_text + "\n" + message
+            self.message_log.setPlainText(updated_text)
+            # Optionally, scroll to the bottom of the text log
+            cursor = self.message_log.textCursor()
+            cursor.movePosition(cursor.End)
+            self.message_log.setTextCursor(cursor)
 
     def create_target_list_group(self):
         target_list_group = QGroupBox("Target List")
@@ -406,7 +418,7 @@ class LayoutService:
         """ Method to send the command to the SequencerService """
         if observation_id:
             # Build the command string
-            command = f"seq targetsingle {observation_id}"
+            command = f"seq targetsingle {observation_id} \n"
             print(f"Sending command to SequencerService: {command}")  # Print the command being sent
             # Call send_command method from SequencerService
             self.parent.send_command(command)

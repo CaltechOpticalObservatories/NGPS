@@ -6,7 +6,8 @@ from logic_service import LogicService
 from layout_service import LayoutService
 from instrument_status_service import InstrumentStatusService
 from sequencer_service import SequencerService
-from login_service import LoginService, LoginDialog, CreateAccountDialog
+from login_service import LoginDialog, CreateAccountDialog
+from status_service import StatusService, StatusServiceThread
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -26,9 +27,17 @@ class NgpsGUI(QMainWindow):
         # Initialize the InstrumentStatusService
         self.instrument_status_service = InstrumentStatusService(self)
 
-        # Initialize the SequencerService
-        self.sequencer_service = SequencerService(self)
-        self.sequencer_service.connect()
+        # Initialize the StatusService
+        self.status_service = StatusService(self)
+        
+        # Start the StatusService in a separate thread
+        self.status_service_thread = StatusServiceThread(self.status_service)
+        self.status_service_thread.start()
+
+        # Subscribe to a specific topic (optional)
+        self.status_service.subscribe("sequencerd")
+        # Connect the message_received signal from StatusService to the update_message_log slot
+        self.status_service.new_message_signal.connect(self.layout_service.update_message_log)
 
     def init_ui(self):
         # Set up Menu
@@ -52,15 +61,6 @@ class NgpsGUI(QMainWindow):
 
         # Connect the DateTimeEdit to the on_date_time_changed function
         self.start_date_time_edit.dateTimeChanged.connect(self.on_date_time_changed)
-
-    # def load_sequencer_config(self):
-    #     """ Initialize the SequencerService with the provided config file. """
-    #     try:
-    #         self.sequencer_service = SequencerService(self)
-    #         self.sequencer_service.connect()  # Connect to the sequencer
-    #         print("Connected to the sequencer successfully.")
-    #     except Exception as e:
-    #         print(f"Error initializing SequencerService: {e}")
 
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
