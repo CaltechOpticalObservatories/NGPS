@@ -88,7 +88,7 @@ class NgpsGUI(QMainWindow):
 
     def on_login(self):
         """ Handle the login action from the menu """
-        login_dialog = LoginDialog(self,)
+        login_dialog = LoginDialog(self, self.connection)
         
         # If the login is successful, load data from MySQL
         if login_dialog.exec_() == QDialog.Accepted:

@@ -280,26 +280,14 @@ class LayoutService:
         # Create the QTableWidget for the target list (but keep it hidden initially)
         self.target_list_display = QTableWidget()
         self.target_list_display.setRowCount(0)  # Set to 0 initially
-        self.target_list_display.setColumnCount(14)  # Set the required column count
+        self.target_list_display.setColumnCount(0)  # Set column count to 0 initially
 
-        # Define the column headers
-        column_headers = [
-            "Name", "RA", "Dec", "EXPTime Request", "Exposure Time (s)", 
-            "SlitWidth Request", "Slit Width (arcsec)", "Airmass", 
-            "OTMSNR", "Observer's Priority", "CCD Mode", "Bin Spectral (int)", 
-            "Bin Spatial (int)", "Slit Angle Request (deg)", "Airmass limit", 
-            "Point Mode", "Not Before", "Comment"
-        ]
-        
-        # Set the header labels
-        self.target_list_display.setHorizontalHeaderLabels(column_headers)
+        # Create a placeholder column for the target data
+        self.target_list_display.setHorizontalHeaderLabels([])  # Initially no headers
 
         # Remove the bold font from headers
         header = self.target_list_display.horizontalHeader()
         header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
-
-        # Set specific column widths (adjust as needed)
-        self.set_column_widths()
 
         # Enable horizontal scrolling if the content exceeds the available width
         self.target_list_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
@@ -326,6 +314,7 @@ class LayoutService:
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
+
     
     def on_row_selected(self):
         # Get the selected row's index
