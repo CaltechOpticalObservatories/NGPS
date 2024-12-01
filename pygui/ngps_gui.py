@@ -27,6 +27,10 @@ class NgpsGUI(QMainWindow):
         # Initialize the InstrumentStatusService
         self.instrument_status_service = InstrumentStatusService(self)
 
+        # Initialize the SequencerService
+        self.sequencer_service = SequencerService(self)
+        self.sequencer_service.connect()
+
         # Initialize the StatusService
         self.status_service = StatusService(self)
         
