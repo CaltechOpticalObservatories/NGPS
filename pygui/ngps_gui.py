@@ -6,6 +6,7 @@ from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
 from instrument_status_service import InstrumentStatusService
+from sequencer_service import SequencerService  # Import the new SequencerService class
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -16,12 +17,14 @@ class NgpsGUI(QMainWindow):
         # Initialize the UI
         self.init_ui()
 
-        # # Load and apply the QSS stylesheet
+        # Load and apply the QSS stylesheet
         self.load_stylesheet("styles.qss")
 
         # Initialize the InstrumentStatusService after UI setup
         self.instrument_status_service = InstrumentStatusService(self)
 
+        # Initialize the SequencerService
+        self.sequencer_service = None
 
     def init_ui(self):
         # Set up Menu
@@ -43,6 +46,18 @@ class NgpsGUI(QMainWindow):
         # Connect the DateTimeEdit to the on_date_time_changed function
         self.start_date_time_edit.dateTimeChanged.connect(self.on_date_time_changed)
 
+        # Load the configuration and initialize SequencerService
+        self.load_sequencer_config("config/sequencer_config.ini")  # Path to your config file
+
+    def load_sequencer_config(self, config_file):
+        """ Initialize the SequencerService with the provided config file. """
+        try:
+            self.sequencer_service = SequencerService(config_file)
+            self.sequencer_service.connect()  # Connect to the sequencer
+            print("Connected to the sequencer successfully.")
+        except Exception as e:
+            print(f"Error initializing SequencerService: {e}")
+
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
         self.utc_start_time.setText(start_time_utc.strftime('%m/%d/%Y %I:%M %p UTC'))
@@ -58,17 +73,13 @@ class NgpsGUI(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv)")
 
         if file_path:
-
             file_name_only = file_path.split("/")[-1]  # Get the file name only (without the path)
-        
             # Update the target list combo box with the file name
             self.target_list_name.addItem(file_name_only)
         
-            # You could add more logic here to process the CSV file as needed
-            print(f"CSV file {file_name_only} loaded.")
-
             # Use LogicService to load CSV and update the table
             self.logic_service.load_csv_and_update_target_list(file_path)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
