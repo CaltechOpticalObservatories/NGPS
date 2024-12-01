@@ -124,27 +124,40 @@ class LoginDialog(QDialog):
     def validate_user_credentials(self, username, password):
         """Validate user credentials against the MySQL database."""
         try:
+            # Print to show method entry
+            print(f"Attempting to validate credentials for username: {username}")
+
             # Connect to MySQL database
+            print(f"Connecting to MySQL database: {self.db_config['DBMS']} at {self.db_config['SYSTEM']}")
             connection = mysql.connector.connect(
                 host=self.db_config["SYSTEM"],
                 user=self.db_config["USERNAME"],
                 password=self.db_config["PASSWORD"],
                 database=self.db_config["DBMS"]
             )
+            
+            # Print confirmation after connection
+            print(f"Successfully connected to the MySQL database.")
 
             cursor = connection.cursor(dictionary=True)
             cursor.execute("SELECT * FROM owner WHERE owner_id = %s", (username,))
+            
+            # Print the query being executed
+            print(f"Executed query: SELECT * FROM owner WHERE owner_id = '{username}'")
+            
             user = cursor.fetchone()
 
-            # Close the connection after query
-            cursor.close()
-            connection.close()
-
-            if user and user["password"] == password:
-                # Password matches, login successful
-                return True
+            if user:
+                print(f"User found: {user['owner_id']}")
+                # Check if the password matches
+                if user["password"] == password:
+                    print(f"Password matches for user: {username}")
+                    return True
+                else:
+                    print(f"Password does not match for user: {username}")
+                    return False
             else:
-                # Either user does not exist or password is incorrect
+                print(f"No user found with username: {username}")
                 return False
 
         except mysql.connector.Error as err:
