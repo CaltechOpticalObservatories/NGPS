@@ -108,9 +108,6 @@ class LoginDialog(QDialog):
         self.login_button.clicked.connect(self.on_login)
         self.cancel_button.clicked.connect(self.reject)
 
-        # Setup logger for login attempts
-        self.setup_logging()
-
     def on_login(self):
         """Handles the login action."""
         username = self.username_field.text()
