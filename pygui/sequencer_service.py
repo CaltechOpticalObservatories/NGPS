@@ -71,7 +71,7 @@ class SequencerService:
         """ Send a command to the sequencer via the command server. """
         try:
             if self.command_socket:
-                self.command_socket.sendall(command)
+                self.command_socket.sendall(command.encode('utf-8'))
                 print(f"Sent command: {command}")
             else:
                 print("No connection to command server.")

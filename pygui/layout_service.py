@@ -594,10 +594,10 @@ class LayoutService:
         right_planning_column = self.create_right_planning_column()
 
         # Add the columns to the layout with spacing between them
-        planning_layout.addLayout(left_planning_column, stretch=2)  # Give left column more space
-        planning_layout.addLayout(right_planning_column, stretch=1)  # Right column will take less space
+        planning_layout.addLayout(left_planning_column, stretch=2)  # Left column takes more space
+        planning_layout.addLayout(right_planning_column, stretch=1)  # Right column takes less space
 
-        # Add a spacer to create a space between the two columns
+        # Optional: Add a spacer item to create space between columns (adjust as needed)
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         planning_layout.addItem(spacer)
 
@@ -607,41 +607,71 @@ class LayoutService:
         # Set maximum size and size policy for the entire planning group (optional)
         planning_group.setMaximumHeight(350)  # Max height
         planning_group.setMaximumWidth(700)  # Max width
+
         return planning_group
 
     def create_left_planning_column(self):
+        # Create the main vertical layout for the left planning column
         left_planning_column = QVBoxLayout()
-        left_planning_column.setSpacing(10)
+        left_planning_column.setSpacing(10)  # Space between widgets
+        left_planning_column.setContentsMargins(0, 0, 0, 0)  # Optional: Remove margins for better alignment
 
         # Create and add widgets to the left column
         self.parent.start_date_time_edit = QDateTimeEdit()
         self.parent.start_date_time_edit.setDateTime(QDateTime.currentDateTime())
         self.parent.start_date_time_edit.setDisplayFormat("MM/dd/yyyy h:mm AP")
-
+        self.parent.start_date_time_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
         self.parent.seeing = QLineEdit("1.0")
-        self.parent.airmass_limit = QLineEdit("2.0")
-        self.parent.target_list_name = QComboBox()
-
-        # Set size policies to ensure these widgets don't grow too large
         self.parent.seeing.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
+        self.parent.airmass_limit = QLineEdit("2.0")
         self.parent.airmass_limit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
+        self.parent.target_list_name = QComboBox()
         self.parent.target_list_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        # Add the widgets to the left column
-        left_planning_column.addWidget(QLabel("Start Date & Time (PST)"))
-        left_planning_column.addWidget(self.parent.start_date_time_edit)
-        left_planning_column.addWidget(QLabel("Seeing (arcsec)"))
-        left_planning_column.addWidget(self.parent.seeing)
-        left_planning_column.addWidget(QLabel("Airmass Limit"))
-        left_planning_column.addWidget(self.parent.airmass_limit)
-        left_planning_column.addWidget(QLabel("Target List"))
-        left_planning_column.addWidget(self.parent.target_list_name)
+        # Create horizontal layouts for each pair of label and widget (like buttons and input fields)
+        start_date_layout = QVBoxLayout()
+        label = QLabel("Start Date & Time (PST)")
+        label.setMaximumHeight(40)  # Set the maximum width for the label
+        start_date_layout.addWidget(label)
+        start_date_layout.addWidget(self.parent.start_date_time_edit)
+        start_date_layout.setAlignment(Qt.AlignLeft)
+
+        seeing_layout = QHBoxLayout()
+        seeing_layout.addWidget(QLabel("Seeing (arcsec)"))
+        seeing_layout.addWidget(self.parent.seeing)
+        seeing_layout.setAlignment(Qt.AlignLeft)
+
+        airmass_layout = QHBoxLayout()
+        airmass_layout.addWidget(QLabel("Airmass Limit"))
+        airmass_layout.addWidget(self.parent.airmass_limit)
+        airmass_layout.setAlignment(Qt.AlignLeft)
+
+        target_list_layout = QVBoxLayout()
+        target_label = QLabel("Start Date & Time (PST)")
+        target_label.setMaximumHeight(40)  # Set the maximum width for the label
+        target_list_layout.addWidget(target_label)
+        target_list_layout.addWidget(self.parent.target_list_name)
+        target_list_layout.setAlignment(Qt.AlignLeft)
+
+        # Add these layouts to the main left_planning_column
+        left_planning_column.addLayout(start_date_layout)
+        left_planning_column.addLayout(seeing_layout)
+        left_planning_column.addLayout(airmass_layout)
+        left_planning_column.addLayout(target_list_layout)
+
+        # Optionally, limit the overall width of the left column
+        left_planning_column.setContentsMargins(0, 0, 0, 0)  # Remove margins for better control
+        left_planning_column.setSpacing(10)  # Space between rows
 
         return left_planning_column
 
     def create_right_planning_column(self):
         right_planning_column = QVBoxLayout()
         right_planning_column.setSpacing(10)
+        right_planning_column.setContentsMargins(0, 0, 0, 0)  # Optional: Remove margins for better alignment
 
         # Create and add widgets to the right column
         self.parent.utc_start_time = QLineEdit("12:00:00 UTC")
@@ -677,6 +707,9 @@ class LayoutService:
         # If there's an additional layout like checkboxes, add it
         check_x_layout = self.create_check_x_layout()  # Assuming this method exists
         right_planning_column.addLayout(check_x_layout)
+
+        # Add stretch for proportional resizing (optional)
+        right_planning_column.setStretch(0, 1)
 
         return right_planning_column
 
