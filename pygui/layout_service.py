@@ -586,29 +586,30 @@ class LayoutService:
 
     def create_planning_info_group(self):
         # Create a group box for planning information
-        planning_group = QGroupBox()
+        planning_group = QGroupBox("Planning Information")
         planning_layout = QHBoxLayout()
 
         # Create the left and right planning columns
         left_planning_column = self.create_left_planning_column()
         right_planning_column = self.create_right_planning_column()
 
-        # Add the columns to the layout with spacing between them
+        # Add the columns to the layout with stretch factors to control space allocation
         planning_layout.addLayout(left_planning_column, stretch=2)  # Left column takes more space
         planning_layout.addLayout(right_planning_column, stretch=1)  # Right column takes less space
 
-        # Optional: Add a spacer item to create space between columns (adjust as needed)
-        spacer = QSpacerItem(30, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # Add a spacer to create a minimum gap between the left and right columns
+        spacer = QSpacerItem(30, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
         planning_layout.addItem(spacer)
 
         # Set the layout for the entire planning group
         planning_group.setLayout(planning_layout)
 
-        # Set maximum size and size policy for the entire planning group (optional)
+        # Optional: Set maximum size and size policy for the entire planning group (optional)
         planning_group.setMaximumHeight(350)  # Max height
         planning_group.setMaximumWidth(700)  # Max width
 
         return planning_group
+
 
     def create_left_planning_column(self):
         # Create the main vertical layout for the left planning column
@@ -675,17 +676,17 @@ class LayoutService:
 
         # Create and add widgets to the right column
         self.parent.utc_start_time = QLineEdit("12:00:00 UTC")
-        self.parent.twilight_button = QPushButton("Twilight")
-        self.parent.twilight_auto_checkbox = QCheckBox("Auto")
-        self.parent.fetch_live_button = QPushButton("Fetch Live")
-        self.parent.fetch_live_auto_checkbox = QCheckBox("Auto")
+        self.parent.utc_start_time.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Ensure this expands correctly
 
-        # Set size policies for right column widgets
-        self.parent.utc_start_time.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.parent.twilight_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.parent.twilight_auto_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.parent.fetch_live_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.parent.fetch_live_auto_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.parent.twilight_button = QPushButton("Twilight")
+        self.parent.twilight_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Same width for both buttons
+
+        self.parent.twilight_auto_checkbox = QCheckBox("Auto")
+
+        self.parent.fetch_live_button = QPushButton("Fetch Live")
+        self.parent.fetch_live_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Same width for both buttons
+
+        self.parent.fetch_live_auto_checkbox = QCheckBox("Auto")
 
         # Create horizontal layouts for Twilight and Fetch Live buttons + checkboxes
         twilight_layout = QHBoxLayout()
@@ -698,11 +699,11 @@ class LayoutService:
         fetch_live_layout.addWidget(self.parent.fetch_live_auto_checkbox)
         fetch_live_layout.setAlignment(Qt.AlignLeft)  # Align Fetch Live button and checkbox to the left
 
-        # Add widgets to the right column layout
+        # Add the widgets to the right column layout
         right_planning_column.addWidget(QLabel("UTC Start Time"))
         right_planning_column.addWidget(self.parent.utc_start_time)
-        right_planning_column.addLayout(twilight_layout)  # Add the Twilight button and checkbox side by side
-        right_planning_column.addLayout(fetch_live_layout)  # Add the Fetch Live button and checkbox side by side
+        right_planning_column.addLayout(twilight_layout)  # Twilight button and checkbox side by side
+        right_planning_column.addLayout(fetch_live_layout)  # Fetch Live button and checkbox side by side
 
         # If there's an additional layout like checkboxes, add it
         check_x_layout = self.create_check_x_layout()  # Assuming this method exists
@@ -712,6 +713,7 @@ class LayoutService:
         right_planning_column.setStretch(0, 1)
 
         return right_planning_column
+
 
     def create_check_x_layout(self):
         check_x_layout = QHBoxLayout()
