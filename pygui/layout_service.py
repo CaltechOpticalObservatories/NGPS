@@ -905,13 +905,13 @@ class LayoutService:
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
-        self.logic_service.send_update_to_db(self.observation_id, "EXPTIME", "SET {exposure_time}")
+        self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET {exposure_time}")
         self.update_target_info()
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
-        self.logic_service.send_update_to_db(self.observation_id, "SLITWIDTH", "SET {slit_width}")
+        self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET {slit_width}")
         self.update_target_info()
 
     def add_separator_line(self, layout):
