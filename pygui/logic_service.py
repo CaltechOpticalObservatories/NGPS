@@ -10,6 +10,7 @@ import pytz
 class LogicService:
     def __init__(self, parent):
         self.parent = parent  # reference to the parent window or main UI
+        self.connection = None
 
     @staticmethod
     def convert_pst_to_utc(datetime):
@@ -64,7 +65,7 @@ class LogicService:
         
         try:
             # Connect to MySQL without selecting a database
-            connection = mysql.connector.connect(
+            self.connection = mysql.connector.connect(
                 host=db_config["SYSTEM"],  # Hostname from the config file
                 user=db_config["USERNAME"],  # MySQL user from the config file
                 password=db_config["PASSWORD"],  # Password from the config file
@@ -74,7 +75,7 @@ class LogicService:
             print(f"Successfully connected to MySQL server: {db_config['SYSTEM']}.")
 
             # Select the database after establishing the connection
-            cursor = connection.cursor()
+            cursor = self.connection.cursor()
             cursor.execute(f"USE {db_config['DBMS']};")  # Ensure we are using the correct database
             print(f"Successfully selected database: {db_config['DBMS']}.")
 
@@ -85,13 +86,19 @@ class LogicService:
 
             cursor.close()
 
-            # Return the connection object after ensuring the correct database is selected
-            return connection
-        
         except mysql.connector.Error as err:
-            # If an error occurs, log the error and return None
+            # If an error occurs, log the error and set connection to None
             print(f"Error connecting to MySQL: {err}")
-            return None
+            self.connection = None
+
+    def close_connection(self):
+        """
+        Closes the current MySQL connection if it exists.
+        """
+        if self.connection:
+            self.connection.close()
+            print("MySQL connection closed.")
+        self.connection = None
 
 
     def load_data_from_mysql(self, connection, target_table):
@@ -204,12 +211,12 @@ class LogicService:
         self.parent.layout_service.no_target_label.setVisible(False)
         self.parent.layout_service.update_target_info_form(target_data)
 
-    def send_update_to_db(self, connection, observation_id, field_name, value):
+    def send_update_to_db(self, observation_id, field_name, value):
         """
         Sends an update query to the database to modify a specific field for the given observation ID.
         """
         try:
-            cursor = connection.cursor()  # Create a cursor for executing the query
+            cursor = self.connection.cursor()  # Create a cursor for executing the query
 
             # Prepare the SQL query to update the field in the database
             query = f"UPDATE observations SET {field_name} = %s WHERE {observation_id} = %s"
@@ -218,7 +225,7 @@ class LogicService:
             cursor.execute(query, (value, observation_id))
 
             # Commit the transaction to apply the changes
-            connection.commit()
+            self.connection.commit()
 
             cursor.close()
             print(f"Successfully updated {field_name} to {value} for observation ID {observation_id}")
