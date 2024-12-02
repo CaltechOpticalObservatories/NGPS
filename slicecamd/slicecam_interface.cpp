@@ -1329,6 +1329,7 @@ namespace Slicecam {
 
     if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
       error = this->framegrab( "start", retstring );       // start frame grabbing if open succeeds
+      std::thread( &Slicecam::GUIManager::push_gui_settings, &gui_manager ).detach();  // force display refresh
     }
     else error=ERROR;
 
@@ -2970,6 +2971,7 @@ namespace Slicecam {
     //
     auto hbin   = slicecam->camera_info.hbin;
     auto vbin   = slicecam->camera_info.vbin;
+    auto pixscale = ( hbin==vbin ? this->fpoffsets.sliceparams[cam].pixscale*hbin : NAN );
     auto crpix1 = this->fpoffsets.sliceparams[cam].crpix1 / hbin;
     auto crpix2 = this->fpoffsets.sliceparams[cam].crpix2 / vbin;
     auto cdelt1 = this->fpoffsets.sliceparams[cam].cdelt1 * hbin;
@@ -3046,6 +3048,16 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
     slicecam->fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
 
+    slicecam->fitskeys.addkey( "PIXSCALE",  pixscale, "arcsec per pixel" );
+    slicecam->fitskeys.addkey( "CRPIX1",    crpix1, "" );
+    slicecam->fitskeys.addkey( "CRPIX2",    crpix2, "" );
+    slicecam->fitskeys.addkey( "DATASEC",   datasec, "" );
+    slicecam->fitskeys.addkey( "HBIN",      hbin, "horizontal binning pixels" );
+    slicecam->fitskeys.addkey( "VBIN",      vbin, "vertical binning pixels" );
+    slicecam->fitskeys.addkey( "CDELT1",    cdelt1, "" );
+    slicecam->fitskeys.addkey( "CDELT2",    cdelt2, "" );
+    slicecam->fitskeys.addkey( "THETADEG",  this->fpoffsets.sliceparams[cam].thetadeg, "slice camera angle relative to slit in deg" );
+
     slicecam->fitskeys.addkey( "EXPSTART", slicecam->camera_info.timestring, "exposure start time" );
     slicecam->fitskeys.addkey( "MJD0",     slicecam->camera_info.mjd0, "exposure start time (modified Julian Date)" );
     slicecam->fitskeys.addkey( "EXPTIME",  slicecam->camera_info.exptime, "exposure time (sec)" );
@@ -3059,8 +3071,6 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "TEMPREAD", slicecam->camera_info.ccdtemp, "CCD temperature deg C" );
     slicecam->fitskeys.addkey( "TEMPSTAT", slicecam->camera_info.temp_status, "CCD temperature status" );
     slicecam->fitskeys.addkey( "FITSNAME", slicecam->camera_info.fits_name, "this filename" );
-    slicecam->fitskeys.addkey( "HBIN",     slicecam->camera_info.hbin, "horizontal binning pixels" );
-    slicecam->fitskeys.addkey( "VBIN",     slicecam->camera_info.vbin, "vertical binning pixels" );
     slicecam->fitskeys.addkey( "HSPEED",   slicecam->camera_info.hspeed, "horizontal clocking speed MHz" );
     slicecam->fitskeys.addkey( "VSPEED",   slicecam->camera_info.vspeed, "vertical clocking speed MHz" );
     slicecam->fitskeys.addkey( "AMPTYPE",  slicecam->camera_info.amptypestr, "CCD amplifier type" );
@@ -3068,7 +3078,6 @@ namespace Slicecam {
 
     slicecam->fitskeys.addkey( "GAIN",     1, "e-/ADU" );
 
-    slicecam->fitskeys.addkey( "PIXSCALE",  slicecam->camera_info.pixel_scale, "arcsec per pixel" );
     slicecam->fitskeys.addkey( "POSANG",    angle_slit, "" );
     slicecam->fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
     slicecam->fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
@@ -3080,19 +3089,10 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "CTYPE2",    "DEC--TAN", "" );
 
 
-    slicecam->fitskeys.addkey( "CRPIX1",    crpix1, "" );
-    slicecam->fitskeys.addkey( "CRPIX2",    crpix2, "" );
-    slicecam->fitskeys.addkey( "DATASEC",   datasec, "" );
-
     slicecam->fitskeys.addkey( "CRVAL1",    ra_slit, "" );
     slicecam->fitskeys.addkey( "CRVAL2",    dec_slit, "" );
     slicecam->fitskeys.addkey( "CUNIT1",    "deg", "" );
     slicecam->fitskeys.addkey( "CUNIT2",    "deg", "" );
-
-    slicecam->fitskeys.addkey( "CDELT1",    cdelt1, "" );
-    slicecam->fitskeys.addkey( "CDELT2",    cdelt2, "" );
-
-    slicecam->fitskeys.addkey( "THETADEG",  this->fpoffsets.sliceparams[cam].thetadeg, "slice camera angle relative to slit in deg" );
 
     slicecam->fitskeys.addkey( "PC1_1",     ( -1.0 * cos( angle_slit * PI / 180. ) ), "" );
     slicecam->fitskeys.addkey( "PC1_2",     (        sin( angle_slit * PI / 180. ) ), "" );

@@ -604,8 +604,8 @@ namespace SkyInfo {
     if (pPIXSCALE && PyFloat_Check(pPIXSCALE)) this->acamparams.pixscale = PyFloat_AsDouble( pPIXSCALE );
     if (pCDELT1   && PyFloat_Check(pCDELT1))   this->acamparams.cdelt1   = PyFloat_AsDouble( pCDELT1 );
     if (pCDELT2   && PyFloat_Check(pCDELT2))   this->acamparams.cdelt2   = PyFloat_AsDouble( pCDELT2 );
-    if (pCRPIX1   && PyLong_Check(pCRPIX1))    this->acamparams.crpix1   = PyLong_AsLong( pCRPIX1 );
-    if (pCRPIX2   && PyLong_Check(pCRPIX2))    this->acamparams.crpix2   = PyLong_AsLong( pCRPIX2 );
+    if (pCRPIX1   && PyFloat_Check(pCRPIX1))   this->acamparams.crpix1   = PyFloat_AsDouble( pCRPIX1 );
+    if (pCRPIX2   && PyFloat_Check(pCRPIX2))   this->acamparams.crpix2   = PyFloat_AsDouble( pCRPIX2 );
 
     Py_DECREF( pReturn );
     PyGILState_Release( gstate );
@@ -701,6 +701,7 @@ namespace SkyInfo {
       //
       if ( pDict && PyDict_Check(pDict) ) {
         // extract the values
+        PyObject* pPIXSCALE = PyDict_GetItemString( pDict, "PIXSCALE" );
         PyObject* pCDELT1   = PyDict_GetItemString( pDict, "CDELT1" );
         PyObject* pCDELT2   = PyDict_GetItemString( pDict, "CDELT2" );
         PyObject* pCRPIX1   = PyDict_GetItemString( pDict, "CRPIX1" );
@@ -709,11 +710,12 @@ namespace SkyInfo {
         PyObject* pDATASEC  = PyDict_GetItemString( pDict, "DATASEC" );
 
         // store them in sliceparams map
-        if ( pCDELT1   && PyFloat_Check(pCDELT1) )  this->sliceparams[std::string(cam)].cdelt1   = PyFloat_AsDouble( pCDELT1 );
-        if ( pCDELT2   && PyFloat_Check(pCDELT2) )  this->sliceparams[std::string(cam)].cdelt2   = PyFloat_AsDouble( pCDELT2 );
-        if ( pCRPIX1   && PyLong_Check(pCRPIX1) )   this->sliceparams[std::string(cam)].crpix1   = PyLong_AsLong( pCRPIX1 );
-        if ( pCRPIX2   && PyLong_Check(pCRPIX2) )   this->sliceparams[std::string(cam)].crpix2   = PyLong_AsLong( pCRPIX2 );
-        if ( pTHETADEG && PyLong_Check(pTHETADEG) ) this->sliceparams[std::string(cam)].thetadeg = PyLong_AsLong( pTHETADEG );
+        if ( pPIXSCALE && PyFloat_Check(pPIXSCALE))  this->sliceparams[std::string(cam)].pixscale = PyFloat_AsDouble( pPIXSCALE );
+        if ( pCDELT1   && PyFloat_Check(pCDELT1) )   this->sliceparams[std::string(cam)].cdelt1   = PyFloat_AsDouble( pCDELT1 );
+        if ( pCDELT2   && PyFloat_Check(pCDELT2) )   this->sliceparams[std::string(cam)].cdelt2   = PyFloat_AsDouble( pCDELT2 );
+        if ( pCRPIX1   && PyFloat_Check(pCRPIX1) )   this->sliceparams[std::string(cam)].crpix1   = PyFloat_AsDouble( pCRPIX1 );
+        if ( pCRPIX2   && PyFloat_Check(pCRPIX2) )   this->sliceparams[std::string(cam)].crpix2   = PyFloat_AsDouble( pCRPIX2 );
+        if ( pTHETADEG && PyFloat_Check(pTHETADEG) ) this->sliceparams[std::string(cam)].thetadeg = PyFloat_AsDouble( pTHETADEG );
         if ( pDATASEC  ) {
           const char* cDATASEC = PyUnicode_AsUTF8( pDATASEC );
           this->sliceparams[std::string(cam)].datasec.assign( cDATASEC );

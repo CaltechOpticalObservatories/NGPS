@@ -49,8 +49,8 @@ namespace SkyInfo {
         double pixscale;
         double cdelt1;
         double cdelt2;
-        long crpix1;
-        long crpix2;
+        double crpix1;
+        double crpix2;
       } acamparam_t;
 
       acamparam_t acamparams;
@@ -58,11 +58,12 @@ namespace SkyInfo {
       // slicecam parameters
       //
       typedef struct {
+        double pixscale;
         double cdelt1;
         double cdelt2;
-        long crpix1;
-        long crpix2;
-        long thetadeg;
+        double crpix1;
+        double crpix2;
+        double thetadeg;
         std::string datasec;
       } sliceparam_t;
 

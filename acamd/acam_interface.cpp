@@ -1098,7 +1098,12 @@ namespace Acam {
     // and other optional key=val pairs can be added to a space-delimited string.
     //
     PyObject* pKeywords = PyDict_New();
-    PyDict_SetItemString( pKeywords, "acquire", this->isacquire ? Py_True : Py_False );
+    //  acquire key = false calculates faster but requires the latest WCS headers
+    //  which are not being sent right now. on-sky tests indicate this is not
+    //  required to fix acquire=true always, even while guiding.
+    //
+//  PyDict_SetItemString( pKeywords, "acquire", this->isacquire ? Py_True : Py_False );
+    PyDict_SetItemString( pKeywords, "acquire", Py_True );
 
     // The class solver args set by the config file are persistent, while
     // any solver args passed in are one-time-use-only; they are not saved
@@ -3195,6 +3200,7 @@ namespace Acam {
       }
 
       attempts++;
+//    logwrite(function,"[DEBUG] incremented attempts="+std::to_string(attempts));
 
       // The acam interface is given the target coordinates (from the database)
       // which are in the <pointmode> reference frame.
@@ -3389,6 +3395,7 @@ namespace Acam {
 
         // reset retry counter if match found and offset < max and no errors
         attempts = 0;
+//      logwrite(function,"[DEBUG] reset attempts counter=0");
       }
 
       // If the offset is below ACQUIRE_OFFSET_THRESHOLD then increment the nacquired
@@ -3399,6 +3406,7 @@ namespace Acam {
         // but only in ACQUIRE mode, otherwise this could increment forever in GUIDE mode
         if ( this->acquire_mode == Acam::TARGET_ACQUIRE ) {
           this->nacquired++;
+//        logwrite(function,"[DEBUG] incremented nacquired="+std::to_string(this->nacquired));
           message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
           logwrite( function, message.str() );
         }
@@ -3406,14 +3414,17 @@ namespace Acam {
       }
       else {
         nacquired=0;     // if an acquire is not below threshold then reset the counter
+//      logwrite(function,"[DEBUG] acquire is not below threshold so reset the nacquired counter=0");
       }
 
     } while ( false );  // the do-loop is executed only once. used to allow breaks.
     }                   // end of acquisition sequence
 
     if ( this->nacquired == 0 && this->max_attempts > 0 ) {
+//    logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
       if ( ++this->sequential_failures >= this->max_attempts ) {
-        logwrite( function, "ERROR sequential failures exceeds max attempts" );
+        logwrite( function, "ERROR sequential failures "+std::to_string(this->sequential_failures)
+                          +" exceeds max attempts "+std::to_string(this->max_attempts) );
         error = ERROR;
       }
     }
@@ -4733,7 +4744,7 @@ namespace Acam {
     //
     auto hbin   = this->camera.andor.camera_info.hbin;
     auto vbin   = this->camera.andor.camera_info.vbin;
-    auto pixscale = ( hbin==vbin ? this->fpoffsets.acamparams.pixscale : NAN );
+    auto pixscale = ( hbin==vbin ? this->fpoffsets.acamparams.pixscale*hbin : NAN );
     auto crpix1 = this->fpoffsets.acamparams.crpix1 / hbin;
     auto crpix2 = this->fpoffsets.acamparams.crpix2 / vbin;
     auto cdelt1 = this->fpoffsets.acamparams.cdelt1 * hbin;
