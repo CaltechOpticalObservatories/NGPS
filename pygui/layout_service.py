@@ -595,11 +595,10 @@ class LayoutService:
 
         # Add the columns to the layout with stretch factors to control space allocation
         planning_layout.addLayout(left_planning_column, stretch=2)  # Left column takes more space
-        planning_layout.addLayout(right_planning_column, stretch=1)  # Right column takes less space
-
         # Add a spacer to create a minimum gap between the left and right columns
-        spacer = QSpacerItem(30, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
+        spacer = QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)
         planning_layout.addItem(spacer)
+        planning_layout.addLayout(right_planning_column, stretch=1)  # Right column takes less space
 
         # Set the layout for the entire planning group
         planning_group.setLayout(planning_layout)
