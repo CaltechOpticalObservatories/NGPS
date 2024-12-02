@@ -64,13 +64,17 @@ class StatusService(QObject):
                 message = self.socket.recv_string()  # Receive the message as a string
                 print(f"Received message: {message}")
                 
-                # Process the message (split the topic and payload)
-                topic, payload = message.split(' ', 1)  # Split the message assuming space-separated topic and payload
-                
-                print(f"Processed message: Topic = {topic}, Payload = {payload}")
-                
-                # Emit the message to the UI thread
-                self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+                # Check if the message contains a space to separate topic and payload
+                if ' ' in message:
+                    topic, payload = message.split(' ', 1)  # Split the message assuming space-separated topic and payload
+                    print(f"Processed message: Topic = {topic}, Payload = {payload}")
+                    # Emit the message to the UI thread
+                    self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+                else:
+                    # If there is no space, treat the whole message as the topic
+                    print(f"Processed message with no payload: Topic = {message}")
+                    self.new_message_signal.emit(f"Topic: {message}, Payload: None")
+                    
         except Exception as e:
             print(f"Error while listening for messages: {e}")
         finally:
