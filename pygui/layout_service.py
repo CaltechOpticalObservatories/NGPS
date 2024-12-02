@@ -709,6 +709,10 @@ class LayoutService:
         self.no_target_label.setAlignment(Qt.AlignCenter)  # Align the label in the center
         content_layout.addWidget(self.no_target_label)
 
+        # Create the QFormLayout for key-value pairs (this will be added below the label)
+        self.target_info_form = QFormLayout()
+        content_layout.addLayout(self.target_info_form)
+
         # Create the QScrollArea and make the content widget scrollable
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)  # Ensure resizing of the content widget
@@ -720,7 +724,7 @@ class LayoutService:
         # Set the layout for the group box
         target_info_group.setLayout(target_info_layout)
 
-        # Return the group box containing the title and scrollable content
+        # Return the group box containing the title, label, form, and scrollable content
         return target_info_group
 
 
