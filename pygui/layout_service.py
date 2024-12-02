@@ -260,10 +260,7 @@ class LayoutService:
     def create_target_list_group(self):
         target_list_group = QGroupBox("Target List")
         bottom_section_layout = QVBoxLayout()
-
-        # Create a spacer item to push the content vertically to center
-        spacer_top = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        spacer_bottom = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        bottom_section_layout.setSpacing(5)
 
         # Create the button to load the target list
         self.load_target_button = QPushButton("Please login or load your target list to start")
@@ -283,18 +280,13 @@ class LayoutService:
             }
         """)
 
-        # Create an internal layout to center the button horizontally
+        # Center the button by using a QHBoxLayout
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_target_button)
         button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
 
-        # Now, add spacer at the top and bottom to center vertically
-        bottom_section_layout.addItem(spacer_top)
-        bottom_section_layout.addLayout(button_layout)
-        bottom_section_layout.addItem(spacer_bottom)
-
-        # Connect the button click signal to the load_csv_file method
-        self.load_target_button.clicked.connect(self.parent.load_csv_file)
+        self.load_target_button.clicked.connect(self.parent.load_csv_file)  # Connect to load CSV functionality
+        bottom_section_layout.addWidget(self.load_target_button)
 
         # Create the QTableWidget for the target list
         self.target_list_display = QTableWidget()
@@ -333,7 +325,6 @@ class LayoutService:
         # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
-        # Set the layout for the group box
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
