@@ -203,3 +203,24 @@ class LogicService:
         # Pass the dictionary of target data to LayoutService to update the list
         self.parent.layout_service.no_target_label.setVisible(False)
         self.parent.layout_service.update_target_info_form(target_data)
+
+    def send_update_to_db(self, connection, observation_id, field_name, value):
+        """
+        Sends an update query to the database to modify a specific field for the given observation ID.
+        """
+        try:
+            cursor = connection.cursor()  # Create a cursor for executing the query
+
+            # Prepare the SQL query to update the field in the database
+            query = f"UPDATE observations SET {field_name} = %s WHERE {observation_id} = %s"
+
+            # Execute the query with the provided value and observation_id
+            cursor.execute(query, (value, observation_id))
+
+            # Commit the transaction to apply the changes
+            connection.commit()
+
+            cursor.close()
+            print(f"Successfully updated {field_name} to {value} for observation ID {observation_id}")
+        except mysql.connector.Error as err:
+            print(f"Error executing update query: {err}")

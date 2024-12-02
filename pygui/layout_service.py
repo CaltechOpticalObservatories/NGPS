@@ -300,6 +300,9 @@ class LayoutService:
         header = self.target_list_display.horizontalHeader()
         header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
+        # Enable sorting on column headers
+        self.target_list_display.setSortingEnabled(True)
+
         # Enable horizontal scrolling if the content exceeds the available width
         self.target_list_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.target_list_display.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -895,6 +898,21 @@ class LayoutService:
         # Set the layout for the control tab
         control_tab.setLayout(control_layout)
 
+        # --- Connect the input fields (Exposure Time and Slit Width) to a database query method ---
+        self.exposure_time_box.textChanged.connect(self.on_exposure_time_changed)
+        self.slit_width_box.textChanged.connect(self.on_slit_width_changed)
+
+    def on_exposure_time_changed(self):
+        # Retrieve the exposure time and send the query to the database
+        exposure_time = self.exposure_time_box.text()
+        self.logic_service.send_update_to_db(self.observation_id, "EXPTIME", "SET {exposure_time}")
+        self.update_target_info()
+
+    def on_slit_width_changed(self):
+        # Retrieve the slit width and send the query to the database
+        slit_width = self.slit_width_box.text()
+        self.logic_service.send_update_to_db(self.observation_id, "SLITWIDTH", "SET {slit_width}")
+        self.update_target_info()
 
     def add_separator_line(self, layout):
         """ Helper method to add a thin light gray line (separator) between rows. """
