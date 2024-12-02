@@ -276,7 +276,7 @@ class LayoutService:
     def update_message_log(self, message):
         """ Update the message log with the new message. """
         if self.parent.message_log:
-            current_text = self.message_log.toPlainText()
+            current_text = self.parent.message_log.toPlainText()
             updated_text = current_text + "\n" + message
             self.parent.message_log.setPlainText(updated_text)
             # Optionally, scroll to the bottom of the text log
