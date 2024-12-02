@@ -586,7 +586,7 @@ class LayoutService:
 
     def create_planning_info_group(self):
         # Create a group box for planning information
-        planning_group = QGroupBox("Planning Information")
+        planning_group = QGroupBox()
         planning_layout = QHBoxLayout()
 
         # Create the left and right planning columns
@@ -598,7 +598,7 @@ class LayoutService:
         planning_layout.addLayout(right_planning_column, stretch=1)  # Right column takes less space
 
         # Optional: Add a spacer item to create space between columns (adjust as needed)
-        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacer = QSpacerItem(30, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
         planning_layout.addItem(spacer)
 
         # Set the layout for the entire planning group
