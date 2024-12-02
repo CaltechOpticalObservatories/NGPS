@@ -29,7 +29,7 @@ class SequencerService:
     def connect(self):
         """ Establish connections to the sequencer backend. """
         try:
-            # Connect to the blocking server (for synchronous requests)
+            # Connect to the command server (for synchronous requests)
             self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.command_socket.connect((self.server_name, self.command_server_port))
             print(f"Connected to command server at {self.server_name}:{self.command_server_port}")
@@ -60,7 +60,7 @@ class SequencerService:
         try:
             if self.command_socket:
                 self.command_socket.close()
-                logging.info("Disconnected from blocking server.")
+                logging.info("Disconnected from command server.")
             # if self.async_socket:
             #     self.async_socket.close()
             #     logging.info("Disconnected from async server.")
@@ -69,8 +69,8 @@ class SequencerService:
 
     def send_command(self, command):
         """ Send a command to the sequencer via the command server. """
-        if self.blocking_socket:
-            self.blocking_socket.sendall(command.encode('utf-8'))
+        if self.command_socket:
+            self.command_socket.sendall(command.encode('utf-8'))
             print(f"Sent command: {command}")
         else:
             print("No connection to command server.")
