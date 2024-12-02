@@ -467,7 +467,7 @@ class LayoutService:
             self.send_target_command(observation_id)
 
             # Disable the button immediately after the user clicks it
-            self.go_button.setEnabled(False)
+            # self.go_button.setEnabled(False)
             self.go_button.setStyleSheet("""
                 QPushButton {
                     background-color: #D3D3D3;  /* Light gray when disabled */
