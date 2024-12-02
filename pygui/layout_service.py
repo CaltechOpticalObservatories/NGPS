@@ -650,7 +650,7 @@ class LayoutService:
         airmass_layout.setAlignment(Qt.AlignLeft)
 
         target_list_layout = QVBoxLayout()
-        target_label = QLabel("Start Date & Time (PST)")
+        target_label = QLabel("Target List")
         target_label.setMaximumHeight(40)  # Set the maximum width for the label
         target_list_layout.addWidget(target_label)
         target_list_layout.addWidget(self.parent.target_list_name)
