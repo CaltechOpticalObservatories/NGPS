@@ -261,11 +261,11 @@ class LayoutService:
         return image_info_layout
 
     def create_message_log(self):
-        self.parent.message_log = QTextEdit()
+        self.parent.message_log = QTextEdit(self.parent)
         
         # Set size policies to allow the widget to stretch and grow proportionally
         self.parent.message_log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.parent.message_log.setReadOnly(True) 
+        self.parent.message_log.setReadOnly(True)
 
         # Optionally set a minimum height or width if desired (not fixed size)
         self.parent.message_log.setMinimumHeight(60)
@@ -275,7 +275,7 @@ class LayoutService:
     
     def update_message_log(self, message):
         """ Update the message log with the new message. """
-        if hasattr(self, 'message_log'):
+        if self.parent.message_log:
             current_text = self.message_log.toPlainText()
             updated_text = current_text + "\n" + message
             self.parent.message_log.setPlainText(updated_text)

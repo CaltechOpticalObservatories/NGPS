@@ -50,6 +50,10 @@ class NgpsGUI(QMainWindow):
         menu_service = MenuService(self, menubar)
         menu_service.create_menus()
 
+
+        # Initialize the message log
+        self.message_log = None
+        
         # Set up Layout
         self.layout_service = LayoutService(self)
         main_layout = self.layout_service.create_layout()
