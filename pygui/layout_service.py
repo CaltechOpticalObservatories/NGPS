@@ -328,7 +328,6 @@ class LayoutService:
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
-
     
     def on_row_selected(self):
         # Get the selected row's index
@@ -565,31 +564,35 @@ class LayoutService:
         return second_column_top_half
 
     def create_planning_info_group(self):
-        planning_group = QGroupBox()
+        # Create a group box for planning information
+        planning_group = QGroupBox("Planning Information")
         planning_layout = QHBoxLayout()
 
         # Create the left and right planning columns
         left_planning_column = self.create_left_planning_column()
         right_planning_column = self.create_right_planning_column()
 
-        # Create a spacer to add space between the columns
-        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)  # 20px horizontal spacing
+        # Add the columns to the layout with spacing between them
+        planning_layout.addLayout(left_planning_column, stretch=2)  # Give left column more space
+        planning_layout.addLayout(right_planning_column, stretch=1)  # Right column will take less space
 
-        # Add the left column, spacer, and right column to the layout
-        planning_layout.addLayout(left_planning_column)
-        planning_layout.addItem(spacer)  # This will add space between the two columns
-        planning_layout.addLayout(right_planning_column)
+        # Add a spacer to create a space between the two columns
+        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        planning_layout.addItem(spacer)
 
-        # Set maximum size and size policy for the entire planning group
+        # Set the layout for the entire planning group
         planning_group.setLayout(planning_layout)
-        planning_group.setMaximumHeight(350)  # Set max height if necessary
-        planning_group.setMaximumWidth(700)  # Set max width if necessary
+
+        # Set maximum size and size policy for the entire planning group (optional)
+        planning_group.setMaximumHeight(350)  # Max height
+        planning_group.setMaximumWidth(700)  # Max width
         return planning_group
 
     def create_left_planning_column(self):
         left_planning_column = QVBoxLayout()
         left_planning_column.setSpacing(10)
 
+        # Create and add widgets to the left column
         self.parent.start_date_time_edit = QDateTimeEdit()
         self.parent.start_date_time_edit.setDateTime(QDateTime.currentDateTime())
         self.parent.start_date_time_edit.setDisplayFormat("MM/dd/yyyy h:mm AP")
@@ -603,6 +606,7 @@ class LayoutService:
         self.parent.airmass_limit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.target_list_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        # Add the widgets to the left column
         left_planning_column.addWidget(QLabel("Start Date & Time (PST)"))
         left_planning_column.addWidget(self.parent.start_date_time_edit)
         left_planning_column.addWidget(QLabel("Seeing (arcsec)"))
@@ -618,6 +622,7 @@ class LayoutService:
         right_planning_column = QVBoxLayout()
         right_planning_column.setSpacing(10)
 
+        # Create and add widgets to the right column
         self.parent.utc_start_time = QLineEdit("12:00:00 UTC")
         self.parent.twilight_button = QPushButton("Twilight")
         self.parent.twilight_auto_checkbox = QCheckBox("Auto")
@@ -626,19 +631,30 @@ class LayoutService:
 
         # Set size policies for right column widgets
         self.parent.utc_start_time.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.parent.twilight_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.parent.twilight_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.twilight_auto_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.parent.fetch_live_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.parent.fetch_live_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.fetch_live_auto_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        check_x_layout = self.create_check_x_layout()
+        # Create horizontal layouts for Twilight and Fetch Live buttons + checkboxes
+        twilight_layout = QHBoxLayout()
+        twilight_layout.addWidget(self.parent.twilight_button)
+        twilight_layout.addWidget(self.parent.twilight_auto_checkbox)
+        twilight_layout.setAlignment(Qt.AlignLeft)  # Align Twilight button and checkbox to the left
 
+        fetch_live_layout = QHBoxLayout()
+        fetch_live_layout.addWidget(self.parent.fetch_live_button)
+        fetch_live_layout.addWidget(self.parent.fetch_live_auto_checkbox)
+        fetch_live_layout.setAlignment(Qt.AlignLeft)  # Align Fetch Live button and checkbox to the left
+
+        # Add widgets to the right column layout
         right_planning_column.addWidget(QLabel("UTC Start Time"))
         right_planning_column.addWidget(self.parent.utc_start_time)
-        right_planning_column.addWidget(self.parent.twilight_button)
-        right_planning_column.addWidget(self.parent.twilight_auto_checkbox)
-        right_planning_column.addWidget(self.parent.fetch_live_button)
-        right_planning_column.addWidget(self.parent.fetch_live_auto_checkbox)
+        right_planning_column.addLayout(twilight_layout)  # Add the Twilight button and checkbox side by side
+        right_planning_column.addLayout(fetch_live_layout)  # Add the Fetch Live button and checkbox side by side
+
+        # If there's an additional layout like checkboxes, add it
+        check_x_layout = self.create_check_x_layout()  # Assuming this method exists
         right_planning_column.addLayout(check_x_layout)
 
         return right_planning_column
@@ -653,9 +669,9 @@ class LayoutService:
             QPushButton {
                 background-color: green;
                 color: white;
-                font-size: 80px;
-                width: 80px;
-                height: 80px;
+                font-size: 30px;
+                width: 30px;
+                height: 30px;
                 text-align: center;
                 border: none;
                 border-radius: 10px;
@@ -671,9 +687,9 @@ class LayoutService:
             QPushButton {
                 background-color: red;  /* Red background */
                 color: white;  /* White text color */
-                font-size: 80px;
-                width: 80px;
-                height: 80px;
+                font-size: 30px;
+                width: 30px;
+                height: 30px;
                 text-align: center;
                 border: none;
                 border-radius: 10px;
