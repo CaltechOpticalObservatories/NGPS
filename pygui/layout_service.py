@@ -285,7 +285,7 @@ class LayoutService:
         button_layout.addWidget(self.load_target_button)
         button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
 
-        self.load_target_button.clicked.connect(self.parent.load_csv_file)  # Connect to load CSV functionality
+        self.load_target_button.clicked.connect(self.parent.on_login)  # Connect to load CSV functionality
         bottom_section_layout.addWidget(self.load_target_button)
 
         # Create the QTableWidget for the target list
@@ -821,39 +821,77 @@ class LayoutService:
         # Create the main layout for the Control tab
         control_layout = QVBoxLayout()
 
-        # Row 1 and Row 2 (Image Path, Exposure Time, Slit Width) combined
-        row_widget = QWidget()
-        row_layout = QVBoxLayout(row_widget)
-        row_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
-        row_layout.setSpacing(0)  # Remove vertical spacing between widgets
+        # Row 1: Target Name Label and Refresh Button
+        row1_widget = self.create_row1()
+        control_layout.addWidget(row1_widget)
 
-        # Create a new horizontal layout for the target name and the refresh button
-        row1_layout = QHBoxLayout()  # Row 1 now uses HBoxLayout
-        row1_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+        # Add a thin gray line between rows
+        self.add_separator_line(control_layout)
+
+        # Row 2: Exposure Time, Slit Width, and Refresh Button
+        row2_widget = self.create_row2()
+        control_layout.addWidget(row2_widget)
+
+        # Add a thin gray line between rows
+        self.add_separator_line(control_layout)
+
+        # Row 3: Go Button
+        row3_widget = self.create_row3()
+        control_layout.addWidget(row3_widget)
+
+        # Add a thin gray line between rows
+        self.add_separator_line(control_layout)
+
+        # Row 4: Pause, Stop Now, and Expose Buttons
+        row4_widget = self.create_row4()
+        control_layout.addWidget(row4_widget)
+
+        # Add a thin gray line between rows
+        self.add_separator_line(control_layout)
+
+        # Row 5: Binning, Headers, Display, Temp, Lamps, and Startup Buttons
+        row5_widget = self.create_row5()
+        control_layout.addWidget(row5_widget)
+
+        # Set the layout for the control tab
+        control_tab.setLayout(control_layout)
+
+        # Connect the input fields to methods for handling changes
+        self.connect_input_fields()
+
+    def create_row1(self):
+        """Create Row 1 layout with Target Name Label and Refresh Button"""
+        row1_layout = QHBoxLayout()
+        row1_layout.setContentsMargins(0, 0, 0, 0)
 
         # Create the QLabel with default text
         self.target_name_label = QLabel("Selected Target: Not Selected")
         self.target_name_label.setAlignment(Qt.AlignCenter)
 
-        # Create the Refresh Button
-        self.refresh_button = QPushButton("Refresh Table")
-        self.refresh_button.setStyleSheet("""
-            QPushButton:hover {
-                background-color: #388E3C;
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;
-            }
-        """)
-        self.refresh_button.clicked.connect(self.logic_service.refresh_table)  # Connect the refresh button to the refresh_table method
+        # # Create the Refresh Button
+        # self.refresh_button = QPushButton("Refresh Table")
+        # self.refresh_button.setStyleSheet("""
+        #     QPushButton:hover {
+        #         background-color: #388E3C;
+        #     }
+        #     QPushButton:pressed {
+        #         background-color: #2C6B2F;
+        #     }
+        # """)
+        # self.refresh_button.clicked.connect(self.logic_service.refresh_table)
 
-        # Add the entire row_widget (Row 1 + Row 2) to the control_layout
-        row_layout.addWidget(self.target_name_label)
+        # Add widgets to row1_layout
+        row1_layout.addWidget(self.target_name_label)
 
-        # Add label and input fields (Exposure Time and Slit Width) to Row 2
+        row1_widget = QWidget()
+        row1_widget.setLayout(row1_layout)
+        return row1_widget
+
+    def create_row2(self):
+        """Create Row 2 layout with Exposure Time, Slit Width, and Refresh Button"""
         row2_layout = QHBoxLayout()
-        row2_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
-        row2_layout.setSpacing(5)  # Minimal spacing between widgets in this row
+        row2_layout.setContentsMargins(0, 0, 0, 0)
+        row2_layout.setSpacing(5)
 
         self.exposure_time_label = QLabel("Exposure Time:")
         self.exposure_time_box = QLineEdit()
@@ -863,27 +901,21 @@ class LayoutService:
         self.slit_width_box = QLineEdit()
         self.slit_width_box.setPlaceholderText("Enter Slit Width")
 
-        # Add Exposure Time and Slit Width widgets to row2_layout
+        # Add widgets to row2_layout
         row2_layout.addWidget(self.exposure_time_label)
         row2_layout.addWidget(self.exposure_time_box)
         row2_layout.addWidget(self.slit_width_label)
         row2_layout.addWidget(self.slit_width_box)
-        row2_layout.addWidget(self.refresh_button)
 
-        # Add the Exposure Time and Slit Width layout to the main layout
-        row_layout.addLayout(row2_layout)
+        row2_widget = QWidget()
+        row2_widget.setLayout(row2_layout)
+        return row2_widget
 
-        # Add the entire row_widget (Row 1 + Row 2) to the control_layout
-        control_layout.addWidget(row_widget)
-
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # --- Add Row 3 layout for "Go" button ---
-        row3_widget = QWidget()  # Row 3 - Go Button
-        row3_layout = QHBoxLayout(row3_widget)
-        row3_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for Row 3
-        row3_layout.setSpacing(10)  # Add spacing between widgets in this row
+    def create_row3(self):
+        """Create Row 3 layout with Go Button"""
+        row3_layout = QHBoxLayout()
+        row3_layout.setContentsMargins(0, 0, 0, 0)
+        row3_layout.setSpacing(10)
 
         # "Go" Button
         self.go_button = QPushButton("Go")
@@ -893,26 +925,20 @@ class LayoutService:
         # Add the "Go" button to row3_layout
         row3_layout.addWidget(self.go_button)
 
-        # Add Row 3 layout to the control layout
-        control_layout.addWidget(row3_widget)
+        row3_widget = QWidget()
+        row3_widget.setLayout(row3_layout)
+        return row3_widget
 
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # --- Add Row 4 layout for Pause, Stop After Current Image, Stop Now Buttons ---
-        row4_widget = QWidget()  # Row 4 - Control Buttons
-        row4_layout = QHBoxLayout(row4_widget)
+    def create_row4(self):
+        """Create Row 4 layout with Pause, Stop Now, and Expose Buttons"""
+        row4_layout = QHBoxLayout()
         row4_layout.setSpacing(10)
-        row4_widget.setContentsMargins(0, 0, 0, 0)  # Remove margins for Row 4
+        row4_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Expose Button
+        # Buttons
         self.expose = QPushButton("Expose")
-
-        # Pause Button
         self.pause_button = QPushButton("Pause")
         self.pause_button.setMaximumWidth(150)
-
-        # Stop Now Button
         self.stop_now_button = QPushButton("Stop Now")
         self.stop_now_button.setMaximumWidth(150)
 
@@ -921,17 +947,15 @@ class LayoutService:
         row4_layout.addWidget(self.pause_button)
         row4_layout.addWidget(self.stop_now_button)
 
-        # Add Row 4 to the main layout
-        control_layout.addWidget(row4_widget)
+        row4_widget = QWidget()
+        row4_widget.setLayout(row4_layout)
+        return row4_widget
 
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # --- Add Row 5 layout for Buttons (Including the new "Startup" button) ---
-        row5_widget = QWidget()  # Row 5 - Buttons (Binning, Headers, etc.)
-        row5_layout = QHBoxLayout(row5_widget)
+    def create_row5(self):
+        """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""
+        row5_layout = QHBoxLayout()
         row5_layout.setSpacing(10)
-        row5_widget.setContentsMargins(0, 0, 0, 0)  # Remove margins for Row 5
+        row5_layout.setContentsMargins(0, 0, 0, 0)
 
         # Binning Button
         self.binning_button = QPushButton("Binning")
@@ -953,24 +977,24 @@ class LayoutService:
 
         # Startup Button
         self.startup_button = QPushButton("Startup")
-        self.startup_button.setMaximumWidth(150)  # You can set any size you prefer
-        self.startup_button.clicked.connect(self.on_startup_button_click)  # Connect to the relevant function
+        self.startup_button.setMaximumWidth(150)
+        self.startup_button.clicked.connect(self.on_startup_button_click)
 
         # Add widgets to row5_layout
         row5_layout.addWidget(self.binning_button)
         row5_layout.addLayout(headers_display_layout)
         row5_layout.addLayout(temp_lamps_layout)
-        row5_layout.addWidget(self.startup_button)  # Add the "Startup" button here
+        row5_layout.addWidget(self.startup_button)
 
-        # Add Row 5 layout to the control layout
-        control_layout.addWidget(row5_widget)
+        row5_widget = QWidget()
+        row5_widget.setLayout(row5_layout)
+        return row5_widget
 
-        # Set the layout for the control tab
-        control_tab.setLayout(control_layout)
-
-        # --- Connect the input fields (Exposure Time and Slit Width) to a database query method ---
+    def connect_input_fields(self):
+        """Connect input fields (Exposure Time and Slit Width) to change methods"""
         self.exposure_time_box.editingFinished.connect(self.on_exposure_time_changed)
         self.slit_width_box.editingFinished.connect(self.on_slit_width_changed)
+
 
     def on_startup_button_click(self):
         # Define the behavior when the "Startup" button is clicked
