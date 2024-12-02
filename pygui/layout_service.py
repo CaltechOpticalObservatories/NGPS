@@ -403,6 +403,10 @@ class LayoutService:
                 if header == 'SLITWIDTH':
                     slit_width = value  # Store the slit width
                     print(f"Found Slit Width: {slit_width}")  # Print the found slit width
+                
+                # If the header is 'NAME', store it as the target name
+                if header == 'NAME':
+                    target_name = value
 
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
@@ -417,6 +421,10 @@ class LayoutService:
             if slit_width:
                 self.current_slit_width = slit_width
                 self.slit_width_box.setText(slit_width)  # Update the Slit Width field
+            if target_name:
+                self.target_name_label.setText(f"Selected Target: {target_name}")
+            else:
+                self.target_name_label.setText("Selected Target: Not Selected")
 
             # Enable the "Go" button when a row is selected
             self.go_button.setEnabled(True)  # Enable the "Go" button
@@ -726,18 +734,17 @@ class LayoutService:
         row_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         row_layout.setSpacing(0)  # Remove vertical spacing between widgets
 
-        # Image Path Section (Row 1) - Use QHBoxLayout for side-by-side placement
-        image_path_layout = QHBoxLayout()  # Change to HBox for side-by-side widgets
-        self.image_path_label = QLabel("Image Path:")
-        self.image_path_box = QLineEdit()
-        self.image_path_box.setPlaceholderText("Current Image Path")
+        # Create a new horizontal layout for the target name
+        # Create the QLabel with default text
+        self.target_name_label = QLabel("Selected Target: Not Selected") 
+        self.target_name_label.setAlignment(Qt.AlignCenter) 
+        row_layout.addWidget(self.target_name_label)
+        row_layout.setAlignment(Qt.AlignLeft)
 
         # Add label and input field to HBox layout
-        image_path_layout.addWidget(self.image_path_label)
-        image_path_layout.addWidget(self.image_path_box)
+        row_layout.addWidget(self.target_name_label)
 
-        # Add the Image Path layout to the row_layout
-        row_layout.addLayout(image_path_layout)
+
 
         # Exposure Time and Slit Width Section (Row 2) - Horizontal layout
         row2_layout = QHBoxLayout()
@@ -846,9 +853,6 @@ class LayoutService:
 
         # Add Row 5 layout to the control layout
         control_layout.addWidget(row5_widget)
-
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
 
         # Set the layout for the control tab
         control_tab.setLayout(control_layout)
