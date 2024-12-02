@@ -251,11 +251,11 @@ class LayoutService:
         if hasattr(self, 'message_log'):
             current_text = self.message_log.toPlainText()
             updated_text = current_text + "\n" + message
-            self.message_log.setPlainText(updated_text)
+            self.parent.message_log.setPlainText(updated_text)
             # Optionally, scroll to the bottom of the text log
             cursor = self.message_log.textCursor()
             cursor.movePosition(cursor.End)
-            self.message_log.setTextCursor(cursor)
+            self.parent.message_log.setTextCursor(cursor)
 
     def create_target_list_group(self):
         target_list_group = QGroupBox("Target List")
@@ -370,9 +370,8 @@ class LayoutService:
             self.parent.logic_service.update_target_information(target_data)
 
             if observation_id:
-                # Send the command with the OBSERVATION_ID
-                print(f"Sending command: seq targetsingle {observation_id}")  # Print the command being sent
-                self.send_target_command(observation_id)
+                # Store the observation_id in a class variable for later use when the "Go" button is clicked
+                self.current_observation_id = observation_id
 
             # Enable the "Go" button when a row is selected
             self.go_button.setEnabled(True)  # Enable the "Go" button
@@ -414,6 +413,15 @@ class LayoutService:
                 }
             """)
 
+    def on_go_button_click(self):
+        """Slot to handle 'Go' button click and send the target command."""
+        if hasattr(self, 'current_observation_id'):
+            observation_id = self.current_observation_id
+            print(f"Sending command: seq targetsingle {observation_id}")  # Print the command being sent
+            self.send_target_command(observation_id)
+        else:
+            print("No observation ID available.")
+            
     def send_target_command(self, observation_id):
         """ Method to send the command to the SequencerService """
         if observation_id:
@@ -673,6 +681,7 @@ class LayoutService:
 
         # "Go" Button
         self.go_button = QPushButton("Go")
+        self.go_button.clicked.connect(self.on_go_button_click)
         self.go_button.setEnabled(False)  # Initially disabled
 
         # Add the "Go" button to row3_layout

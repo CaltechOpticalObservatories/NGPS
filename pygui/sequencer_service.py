@@ -7,17 +7,16 @@ class SequencerService:
         
         # Hardcoded values for the server connection
         self.server_name = 'localhost'  # Hardcoded value
-        self.blocking_server_port = 9000  # Hardcoded value
+        self.command_server_port = 9000  # Hardcoded value
         self.async_host = '239.1.1.234'  # Hardcoded value
         self.async_server_port = 1300  # Hardcoded value
         self.basename = 'ngps_image'  # Hardcoded value
         self.log_directory = '/data/logs'  # Hardcoded value
         
-        self.setup_logging()
+        #self.setup_logging()
 
         # Placeholder for active connections
         self.command_socket = None
-        self.blocking_socket = None
         self.async_socket = None
 
     def setup_logging(self):
@@ -30,49 +29,60 @@ class SequencerService:
     def connect(self):
         """ Establish connections to the sequencer backend. """
         try:
-
             # Connect to the blocking server (for synchronous requests)
-            self.blocking_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.blocking_socket.connect((self.server_name, self.blocking_server_port))
-            logging.info(f"Connected to blocking server at {self.server_name}:{self.blocking_server_port}")
+            self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.command_socket.connect((self.server_name, self.command_server_port))
+            print(f"Connected to command server at {self.server_name}:{self.command_server_port}")
 
-            # # Connect to the async server (for asynchronous requests)
-            # self.async_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # self.async_socket.connect((self.async_host, self.async_server_port))
-            # logging.info(f"Connected to async server at {self.async_host}:{self.async_server_port}")
+            # Connect to the async server (for asynchronous requests)
+            self.async_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.async_socket.connect((self.async_host, self.async_server_port))
+            logging.info(f"Connected to async server at {self.async_host}:{self.async_server_port}")
+
+        except socket.error as e:
+            # Handle socket connection errors
+            logging.error(f"Failed to connect to one or more servers: {e}")
+            print(f"Failed to connect to one or more servers: {e}")
+            # Optionally, you can still continue operation if the connection isn't critical
 
         except Exception as e:
-            logging.error(f"Failed to connect to one or more servers: {e}")
-            raise e
+            # General exception handling (if there is any other error)
+            logging.error(f"Unexpected error during connection: {e}")
+            print(f"Unexpected error during connection: {e}")
+            # Optionally, handle the failure (e.g., fallback behavior, retry, etc.)
+        
+        finally:
+            # Optionally, inform that the connection attempt is done
+            print("Connection attempt complete. Continuing with application.")
 
     def disconnect(self):
         """ Close all active connections. """
         try:
-            if self.blocking_socket:
-                self.blocking_socket.close()
+            if self.command_socket:
+                self.command_socket.close()
                 logging.info("Disconnected from blocking server.")
             # if self.async_socket:
             #     self.async_socket.close()
             #     logging.info("Disconnected from async server.")
         except Exception as e:
-            logging.error(f"Error while disconnecting: {e}")
+            print(f"Error while disconnecting: {e}")
 
     def send_command(self, command):
         """ Send a command to the sequencer via the command server. """
         if self.blocking_socket:
             self.blocking_socket.sendall(command.encode('utf-8'))
-            logging.info(f"Sent command: {command}")
+            print(f"Sent command: {command}")
         else:
-            logging.error("No connection to command server.")
+            print("No connection to command server.")
 
     def receive_response(self):
         """ Receive a response from the sequencer via the command server. """
         if self.command_socket:
             response = self.command_socket.recv(1024).decode('utf-8')
-            logging.info(f"Received response: {response}")
+            print(f"Received response: {response}")
             return response
         else:
-            logging.error("No connection to command server.")
+            print("No connection to command server.")
             return None
 
     # Specific methods for each command

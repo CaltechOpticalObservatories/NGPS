@@ -15,12 +15,12 @@ class StatusService(QObject):
         self.is_connected = False
 
         # Set up logging
-        self.setup_logging()
+        # self.setup_logging()
         print("StatusService initialized.")
 
-    def setup_logging(self):
-        """ Set up logging for the status service. """
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    # def setup_logging(self):
+    #     """ Set up logging for the status service. """
+    #     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
     def connect(self):
         """ Connect to the broker using the SUB socket (not XSUB). """
