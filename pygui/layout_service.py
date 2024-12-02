@@ -50,17 +50,44 @@ class LayoutService:
         return first_column_layout
 
     def create_second_column(self):
+        """Create second column with two tabs: Planning Tab and Single Target Mode."""
         second_column_layout = QVBoxLayout()
         second_column_layout.setObjectName("column-right")
         second_column_layout.setSpacing(10)
 
-        # Planning Info
-        planning_group = self.create_planning_info_group()
-        second_column_layout.addWidget(planning_group)
+        # Create TabWidget to hold the tabs
+        tab_widget = QTabWidget()
 
-        # Target Information
+        # Create the Planning Tab
+        planning_tab = QWidget()
+        planning_tab_layout = QVBoxLayout()
+
+        # Move Planning Info and Target Info sections into the Planning Tab
+        planning_group = self.create_planning_info_group()
+        planning_tab_layout.addWidget(planning_group)
+
         target_info_group = self.create_target_info_group()
-        second_column_layout.addWidget(target_info_group)
+        planning_tab_layout.addWidget(target_info_group)
+
+        planning_tab.setLayout(planning_tab_layout)
+
+        # Create the "Single Target Mode" Tab
+        single_target_tab = QWidget()
+        single_target_layout = QVBoxLayout()
+
+        # You can add other widgets related to "Single Target Mode" here if necessary
+        # For now, I will add a placeholder label
+        single_target_label = QLabel("Single Target Mode content goes here.")
+        single_target_layout.addWidget(single_target_label)
+
+        single_target_tab.setLayout(single_target_layout)
+
+        # Add tabs to the QTabWidget
+        tab_widget.addTab(planning_tab, "Planning Tab")
+        tab_widget.addTab(single_target_tab, "Single Target Mode")
+
+        # Add the QTabWidget to the second column layout
+        second_column_layout.addWidget(tab_widget)
 
         return second_column_layout
 
