@@ -219,7 +219,13 @@ class LogicService:
         Sends an update query to the database to modify a specific field for the given observation ID.
         """
         try:
-            cursor = self.connection.cursor()  # Create a cursor for executing the query
+            # Step 1: Connect to MySQL using the config file
+            connection = self.connect_to_mysql("config/db_config.ini")
+            
+            if connection is None:
+                print("Failed to connect to MySQL. Cannot load target data.")
+                return
+            cursor = connection.cursor()  # Create a cursor for executing the query
 
             # Prepare the SQL query to update the field in the database
             query = f"UPDATE observations SET {field_name} = %s WHERE {observation_id} = %s"
@@ -228,7 +234,7 @@ class LogicService:
             cursor.execute(query, (value, observation_id))
 
             # Commit the transaction to apply the changes
-            self.connection.commit()
+            connection.commit()
 
             cursor.close()
             print(f"Successfully updated {field_name} to {value} for observation ID {observation_id}")
