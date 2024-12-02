@@ -50,44 +50,17 @@ class LayoutService:
         return first_column_layout
 
     def create_second_column(self):
-        """Create second column with two tabs: Planning Tab and Single Target Mode."""
         second_column_layout = QVBoxLayout()
         second_column_layout.setObjectName("column-right")
         second_column_layout.setSpacing(10)
 
-        # Create TabWidget to hold the tabs
-        tab_widget = QTabWidget()
+        # Create the top half of the second column with tabs
+        second_column_top_half = self.create_second_column_top_half()
+        second_column_layout.addWidget(second_column_top_half)
 
-        # Create the Planning Tab
-        planning_tab = QWidget()
-        planning_tab_layout = QVBoxLayout()
-
-        # Move Planning Info and Target Info sections into the Planning Tab
-        planning_group = self.create_planning_info_group()
-        planning_tab_layout.addWidget(planning_group)
-
+        # Create the target information group (remaining part of the second column)
         target_info_group = self.create_target_info_group()
-        planning_tab_layout.addWidget(target_info_group)
-
-        planning_tab.setLayout(planning_tab_layout)
-
-        # Create the "Single Target Mode" Tab
-        single_target_tab = QWidget()
-        single_target_layout = QVBoxLayout()
-
-        # You can add other widgets related to "Single Target Mode" here if necessary
-        # For now, I will add a placeholder label
-        single_target_label = QLabel("Single Target Mode content goes here.")
-        single_target_layout.addWidget(single_target_label)
-
-        single_target_tab.setLayout(single_target_layout)
-
-        # Add tabs to the QTabWidget
-        tab_widget.addTab(planning_tab, "Planning Tab")
-        tab_widget.addTab(single_target_tab, "Single Target Mode")
-
-        # Add the QTabWidget to the second column layout
-        second_column_layout.addWidget(tab_widget)
+        second_column_layout.addWidget(target_info_group)
 
         return second_column_layout
 
@@ -549,9 +522,50 @@ class LayoutService:
         for col, width in enumerate(column_widths):
             self.target_list_display.setColumnWidth(col, width)
             
+    def create_second_column_top_half(self):
+        """Create the top half of the second column with tabs: 'Planning' and 'Single Target Mode'"""
+
+        # Create a QVBoxLayout to hold everything in the top half
+        second_column_top_half_layout = QVBoxLayout()
+
+        # Create a QTabWidget to hold the tabs (Planning and Single Target Mode)
+        self.parent.tabs = QTabWidget()
+
+        # Create the two tabs: Planning and Single Target Mode
+        self.parent.planning_tab = QWidget()
+        self.parent.single_target_tab = QWidget()
+
+        # Add the tabs to the QTabWidget
+        self.parent.tabs.addTab(self.parent.planning_tab, "Planning")
+        self.parent.tabs.addTab(self.parent.single_target_tab, "Single Target Mode")
+
+        # Set up the layout for the "Planning" tab and add the planning info group
+        planning_layout = QVBoxLayout()
+        planning_group = self.create_planning_info_group()
+        planning_layout.addWidget(planning_group)
+        self.parent.planning_tab.setLayout(planning_layout)
+
+        # Set up the layout for the "Single Target Mode" tab
+        single_target_layout = QVBoxLayout()
+        single_target_label = QLabel("Single Target Mode content goes here.")  # Placeholder for now
+        single_target_layout.addWidget(single_target_label)
+        self.parent.single_target_tab.setLayout(single_target_layout)
+
+        # Add the QTabWidget to the second column's top half layout
+        second_column_top_half_layout.addWidget(self.parent.tabs)
+
+        # Set the layout for the second_column_top_half (containing the tabs)
+        second_column_top_half = QWidget()
+        second_column_top_half.setLayout(second_column_top_half_layout)
+
+        # Optional: Set maximum size for the group if needed
+        second_column_top_half.setMaximumHeight(350)
+        second_column_top_half.setMaximumWidth(700)
+
+        return second_column_top_half
 
     def create_planning_info_group(self):
-        planning_group = QGroupBox("Planning Info")
+        planning_group = QGroupBox()
         planning_layout = QHBoxLayout()
 
         # Create the left and right planning columns
@@ -676,34 +690,41 @@ class LayoutService:
         return check_x_layout
 
     def create_target_info_group(self):
-        # Create a group box for target information
-        target_info_group = QGroupBox("Target Information")
+        # Create the main widget to hold the layout
+        target_info_widget = QWidget()
 
-        # Create a vertical layout to hold the QFormLayout
+        # Create the vertical layout to hold the title and content
         target_info_layout = QVBoxLayout()
+
+        # Create the QLabel for the section title (e.g., "Target Information")
+        title_label = QLabel("Target Information")
+        title_label.setAlignment(Qt.AlignCenter)  # Optionally center the title
+        title_label.setStyleSheet("font-weight: bold; font-size: 14pt;")  # Style the title
+
+        # Add the title label to the layout (before the form layout)
+        target_info_layout.addWidget(title_label)
 
         # Create the QFormLayout to display key-value pairs
         self.target_info_form = QFormLayout()
 
-        # Add the form layout to the parent layout
+        # Add the form layout to the main layout
         target_info_layout.addLayout(self.target_info_form)
 
         # Create the label that will show "No target selected" in the center
         self.no_target_label = QLabel("No target selected")
         self.no_target_label.setAlignment(Qt.AlignCenter)  # Align the label to the center
 
-        # Add the label to the layout above the form
+        # Add the label to the layout below the form
         target_info_layout.addWidget(self.no_target_label)
 
-        # Create a QScrollArea to make the target info area scrollable
+        # Set the layout for the target info widget (without QGroupBox)
+        target_info_widget.setLayout(target_info_layout)
+
+        # Optionally wrap the widget in a QScrollArea if scrollability is needed
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)  # This allows the widget to resize with the scroll area
-        scroll_area.setWidget(target_info_group)  # Set the group box as the widget inside the scroll area
+        scroll_area.setWidget(target_info_widget)  # Set the target_info_widget as the widget inside the scroll area
 
-        # Set the layout for the group box (now inside the scroll area)
-        target_info_group.setLayout(target_info_layout)
-
-        # Return the scroll area (not the group box directly)
         return scroll_area
 
     def update_target_info_form(self, target_data):
