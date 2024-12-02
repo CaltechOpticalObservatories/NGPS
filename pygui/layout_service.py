@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QVBoxLayout, QFrame, QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
-from PyQt5.QtCore import QDateTime
+from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
 from logic_service import LogicService
@@ -419,8 +419,57 @@ class LayoutService:
             observation_id = self.current_observation_id
             print(f"Sending command: seq targetsingle {observation_id}")  # Print the command being sent
             self.send_target_command(observation_id)
+
+            # Disable the button immediately after the user clicks it
+            self.go_button.setEnabled(False)
+            self.go_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+            """)
+
+            # Start a QTimer to re-enable the button after 60 seconds
+            self.timer = QTimer(self)
+            self.timer.setSingleShot(True)  # Ensure the timer only runs once
+            self.timer.timeout.connect(self.enable_go_button)
+            self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
+
         else:
             print("No observation ID available.")
+        
+    def enable_go_button(self):
+        """Method to re-enable the 'Go' button after 60 seconds."""
+        print("60 seconds have passed. Re-enabling 'Go' button.")
+        
+        # Re-enable the button and reset its appearance
+        self.go_button.setEnabled(True)
+        self.go_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;  /* Optional: Round corners */
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)
             
     def send_target_command(self, observation_id):
         """ Method to send the command to the SequencerService """
