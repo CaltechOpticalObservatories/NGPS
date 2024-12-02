@@ -231,7 +231,7 @@ class LogicService:
             query = f"UPDATE targets SET {field_name} = %s WHERE observation_id = %s"
 
             # Execute the query with the provided value and observation_id
-            cursor.execute(query, (field_name, value, observation_id))
+            cursor.execute(query, (value, observation_id))
 
             # Commit the transaction to apply the changes
             connection.commit()
