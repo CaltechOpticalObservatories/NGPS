@@ -775,7 +775,7 @@ class LayoutService:
             # Create a label and a line edit for each key-value pair
             label = QLabel(key)
             line_edit = QLineEdit(value if value else "N/A")  # Show N/A for empty values
-            line_edit.setsReadOnly(True)  # Set the line edit to read-only to prevent editing
+            line_edit.setReadOnly(True)  # Set the line edit to read-only to prevent editing
 
             # Add the label and line edit to the form layout
             self.target_info_form.addRow(label, line_edit)
@@ -804,6 +804,14 @@ class LayoutService:
         # Create the Refresh Button
         self.refresh_button = QPushButton("Refresh Table")
         self.refresh_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green background */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
             QPushButton:hover {
                 background-color: #388E3C;
             }
@@ -811,13 +819,14 @@ class LayoutService:
                 background-color: #2C6B2F;
             }
         """)
-        self.refresh_button.clicked.connect(self.logic_service.refresh_table)  # Connect the refresh button to the refresh_table method
+        self.refresh_button.clicked.connect(self.refresh_table)  # Connect the refresh button to the refresh_table method
 
-        # # Add the label and refresh button to the row1_layout
-        # row1_layout.addWidget(self.refresh_button)
+        # Add the label and refresh button to the row1_layout
+        row1_layout.addWidget(self.target_name_label)
+        row1_layout.addWidget(self.refresh_button)
 
         # Add the entire row_widget (Row 1 + Row 2) to the control_layout
-        row_layout.addWidget(self.target_name_label)
+        row_layout.addLayout(row1_layout)
 
         # Add label and input fields (Exposure Time and Slit Width) to Row 2
         row2_layout = QHBoxLayout()
@@ -837,7 +846,6 @@ class LayoutService:
         row2_layout.addWidget(self.exposure_time_box)
         row2_layout.addWidget(self.slit_width_label)
         row2_layout.addWidget(self.slit_width_box)
-        row2_layout.addWidget(self.refresh_button)
 
         # Add the Exposure Time and Slit Width layout to the main layout
         row_layout.addLayout(row2_layout)
