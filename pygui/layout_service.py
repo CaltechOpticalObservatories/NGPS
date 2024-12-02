@@ -521,7 +521,7 @@ class LayoutService:
         """ Method to send the command to the SequencerService """
         if observation_id:
             # Build the command string
-            command = f"getone {observation_id} \n"
+            command = f"startone {observation_id}\n"
             print(f"Sending command to SequencerService: {command}")  # Print the command being sent
             # Call send_command method from SequencerService
             self.parent.send_command(command)
@@ -813,9 +813,6 @@ class LayoutService:
         """)
         self.refresh_button.clicked.connect(self.logic_service.refresh_table)  # Connect the refresh button to the refresh_table method
 
-        # # Add the label and refresh button to the row1_layout
-        # row1_layout.addWidget(self.refresh_button)
-
         # Add the entire row_widget (Row 1 + Row 2) to the control_layout
         row_layout.addWidget(self.target_name_label)
 
@@ -896,7 +893,7 @@ class LayoutService:
         # Add a thin gray line between rows
         self.add_separator_line(control_layout)
 
-        # --- Add Row 5 layout for Buttons ---
+        # --- Add Row 5 layout for Buttons (Including the new "Startup" button) ---
         row5_widget = QWidget()  # Row 5 - Buttons (Binning, Headers, etc.)
         row5_layout = QHBoxLayout(row5_widget)
         row5_layout.setSpacing(10)
@@ -920,10 +917,16 @@ class LayoutService:
         temp_lamps_layout.addWidget(self.temp_button)
         temp_lamps_layout.addWidget(self.lamps_button)
 
+        # Startup Button
+        self.startup_button = QPushButton("Startup")
+        self.startup_button.setMaximumWidth(150)  # You can set any size you prefer
+        self.startup_button.clicked.connect(self.on_startup_button_click)  # Connect to the relevant function
+
         # Add widgets to row5_layout
         row5_layout.addWidget(self.binning_button)
         row5_layout.addLayout(headers_display_layout)
         row5_layout.addLayout(temp_lamps_layout)
+        row5_layout.addWidget(self.startup_button)  # Add the "Startup" button here
 
         # Add Row 5 layout to the control layout
         control_layout.addWidget(row5_widget)
@@ -934,6 +937,14 @@ class LayoutService:
         # --- Connect the input fields (Exposure Time and Slit Width) to a database query method ---
         self.exposure_time_box.editingFinished.connect(self.on_exposure_time_changed)
         self.slit_width_box.editingFinished.connect(self.on_slit_width_changed)
+
+    def on_startup_button_click(self):
+        # Define the behavior when the "Startup" button is clicked
+        command = f"startup\n"
+        print(f"Sending command to SequencerService: {command}")  # Print the command being sent
+        # Call send_command method from SequencerService
+        self.parent.send_command(command)
+        print(f"Command sent: {command}")  # Print confirmation of command sent
 
 
     def on_exposure_time_changed(self):
