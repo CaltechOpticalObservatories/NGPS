@@ -391,6 +391,16 @@ class LayoutService:
                 if header == 'OBSERVATION_ID':
                     observation_id = value  # Store the observation ID
                     print(f"Found OBSERVATION_ID: {observation_id}")  # Print the found OBSERVATION_ID
+                    
+                # Check if the header is 'Exposure Time' and extract its value
+                if header == 'EXPTIME':
+                    exposure_time = value  # Store the exposure time
+                    print(f"Found Exposure Time: {exposure_time}")  # Print the found exposure time
+
+                # Check if the header is 'Slit Width' and extract its value
+                if header == 'SLITWIDTH':
+                    slit_width = value  # Store the slit width
+                    print(f"Found Slit Width: {slit_width}")  # Print the found slit width
 
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
@@ -399,6 +409,12 @@ class LayoutService:
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
                 self.current_observation_id = observation_id
+            if exposure_time:
+                self.current_exposure_time = exposure_time
+                self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
+            if slit_width:
+                self.current_slit_width = slit_width
+                self.slit_width_box.setText(slit_width)  # Update the Slit Width field
 
             # Enable the "Go" button when a row is selected
             self.go_button.setEnabled(True)  # Enable the "Go" button
