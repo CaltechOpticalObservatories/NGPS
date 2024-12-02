@@ -486,10 +486,10 @@ class LayoutService:
             """)
 
             # Start a QTimer to re-enable the button after 60 seconds
-            self.timer = QTimer(self)
-            self.timer.setSingleShot(True)  # Ensure the timer only runs once
-            self.timer.timeout.connect(self.enable_go_button)
-            self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
+            # self.timer = QTimer(self)
+            # self.timer.setSingleShot(True)  # Ensure the timer only runs once
+            # self.timer.timeout.connect(self.enable_go_button)
+            # self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
 
         else:
             print("No observation ID available.")
