@@ -280,7 +280,7 @@ class LayoutService:
             updated_text = current_text + "\n" + message
             self.parent.message_log.setPlainText(updated_text)
             # Optionally, scroll to the bottom of the text log
-            cursor = self.message_log.textCursor()
+            cursor = self.parent.message_log.textCursor()
             cursor.movePosition(cursor.End)
             self.parent.message_log.setTextCursor(cursor)
 
