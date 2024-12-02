@@ -85,6 +85,9 @@ class LogicService:
             print(f"Currently connected to database: {current_db}")
 
             cursor.close()
+            
+            # Return the connection object after ensuring the correct database is selected
+            return self.connection
 
         except mysql.connector.Error as err:
             # If an error occurs, log the error and set connection to None
