@@ -354,6 +354,9 @@ class LayoutService:
 
             # Variable to store the OBSERVATION_ID
             observation_id = None
+            exposure_time = None
+            slit_width = None
+            target_name = None
 
             print("Selected Row:", selected_row)  # Print the selected row index
             print("Column Headers:", column_headers)  # Print the column headers
@@ -390,12 +393,12 @@ class LayoutService:
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
                 self.current_observation_id = observation_id
-            if exposure_time:
-                self.current_exposure_time = exposure_time
-                self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
-            if slit_width:
-                self.current_slit_width = slit_width
-                self.slit_width_box.setText(slit_width)  # Update the Slit Width field
+            # if exposure_time:
+            #     self.current_exposure_time = exposure_time
+            #     self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
+            # if slit_width:
+            #     self.current_slit_width = slit_width
+            #     self.slit_width_box.setText(slit_width)  # Update the Slit Width field
             if target_name:
                 self.target_name_label.setText(f"Selected Target: {target_name}")
             else:
@@ -420,6 +423,20 @@ class LayoutService:
                 }
             """)
 
+            # Now, let's update the corresponding cell in the table for the Exposure Time (or any other field)
+            if exposure_time and selected_row is not None:
+                # Find the column index for 'EXPTIME'
+                exptime_column_index = column_headers.index('EXPTIME') if 'EXPTIME' in column_headers else -1
+                if exptime_column_index >= 0:
+                    # Update the table cell value for the selected row and 'EXPTIME' column
+                    self.target_list_display.item(selected_row, exptime_column_index).setText(exposure_time)
+
+            # You can add similar updates for other fields like SLITWIDTH if needed
+            if slit_width and selected_row is not None:
+                slitwidth_column_index = column_headers.index('SLITWIDTH') if 'SLITWIDTH' in column_headers else -1
+                if slitwidth_column_index >= 0:
+                    self.target_list_display.item(selected_row, slitwidth_column_index).setText(slit_width)
+
         else:
             # Disable the "Go" button when no row is selected
             print("No row selected.")  # Print when no row is selected
@@ -440,6 +457,7 @@ class LayoutService:
                     background-color: #D3D3D3;  /* No pressed effect when disabled */
                 }
             """)
+
 
     def on_go_button_click(self):
         """Slot to handle 'Go' button click and send the target command."""
@@ -899,19 +917,19 @@ class LayoutService:
         control_tab.setLayout(control_layout)
 
         # --- Connect the input fields (Exposure Time and Slit Width) to a database query method ---
-        self.exposure_time_box.textChanged.connect(self.on_exposure_time_changed)
-        self.slit_width_box.textChanged.connect(self.on_slit_width_changed)
+        self.exposure_time_box.editingFinished.connect(self.on_exposure_time_changed)
+        self.slit_width_box.editingFinished.connect(self.on_slit_width_changed)
 
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
-        self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET {exposure_time}")
+        self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET " + exposure_time)
         self.update_target_info()
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
-        self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET {slit_width}")
+        self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET " + slit_width)
         self.update_target_info()
 
     def add_separator_line(self, layout):
