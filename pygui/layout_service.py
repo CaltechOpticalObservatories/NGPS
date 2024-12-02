@@ -521,7 +521,7 @@ class LayoutService:
         """ Method to send the command to the SequencerService """
         if observation_id:
             # Build the command string
-            command = f"seq startone {observation_id} \n"
+            command = f"startone {observation_id} \n"
             print(f"Sending command to SequencerService: {command}")  # Print the command being sent
             # Call send_command method from SequencerService
             self.parent.send_command(command)

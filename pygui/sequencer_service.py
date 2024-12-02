@@ -69,11 +69,15 @@ class SequencerService:
 
     def send_command(self, command):
         """ Send a command to the sequencer via the command server. """
-        if self.command_socket:
-            self.command_socket.sendall(command.encode('utf-8'))
-            print(f"Sent command: {command}")
-        else:
-            print("No connection to command server.")
+        try:
+            if self.command_socket:
+                self.command_socket.sendall(command.encode('utf-8'))
+                print(f"Sent command: {command}")
+            else:
+                print("No connection to command server.")
+        except (AttributeError, OSError, socket.error) as e:
+            # Handle specific exceptions, like socket errors or others
+            print(f"Error while sending command: {e}")
 
     def receive_response(self):
         """ Receive a response from the sequencer via the command server. """
