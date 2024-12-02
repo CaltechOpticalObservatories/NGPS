@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QFrame, QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QFrame, QAbstractItemView,  QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
@@ -291,32 +291,31 @@ class LayoutService:
 
         # Create the button to load the target list
         self.load_target_button = QPushButton("Please login or load your target list to start")
-        # Set the button color to #FFCC40 (light yellow)
         self.load_target_button.setStyleSheet("""
             QPushButton {
-                background-color: #FFCC40;  /* Normal background color */
+                background-color: #FFCC40;
                 border: none;
                 color: black;
                 font-weight: bold;
                 padding: 10px;
             }
             QPushButton:hover {
-                background-color: #FF9900;  /* Hover background color */
+                background-color: #FF9900;
             }
             QPushButton:pressed {
-                background-color: #FF6600;  /* Pressed background color */
+                background-color: #FF6600;
             }
         """)
 
         # Center the button by using a QHBoxLayout
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_target_button)
-        button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)  # Center the button
+        button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
 
         self.load_target_button.clicked.connect(self.parent.load_csv_file)  # Connect to load CSV functionality
         bottom_section_layout.addWidget(self.load_target_button)
 
-        # Create the QTableWidget for the target list (but keep it hidden initially)
+        # Create the QTableWidget for the target list
         self.target_list_display = QTableWidget()
         self.target_list_display.setRowCount(0)  # Set to 0 initially
         self.target_list_display.setColumnCount(0)  # Set column count to 0 initially
@@ -334,6 +333,9 @@ class LayoutService:
 
         # Allow manual resizing of the columns (on the horizontal header)
         header.setSectionResizeMode(QHeaderView.Interactive)
+
+        # Disable editing of table cells
+        self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Enable horizontal scrolling by adding the table to a scroll area
         scroll_area = QScrollArea()
