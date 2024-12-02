@@ -689,43 +689,40 @@ class LayoutService:
 
         return check_x_layout
 
-    def create_target_info_group(self):
-        # Create the main widget to hold the layout
-        target_info_widget = QWidget()
 
-        # Create the vertical layout to hold the title and content
+    def create_target_info_group(self):
+        # Create a QGroupBox for the target information (with the title "Target Information")
+        target_info_group = QGroupBox("Target Information")
+
+        # Create the layout for the group box
         target_info_layout = QVBoxLayout()
 
-        # Create the QLabel for the section title (e.g., "Target Information")
-        title_label = QLabel("Target Information")
-        title_label.setAlignment(Qt.AlignCenter)  # Optionally center the title
-        title_label.setStyleSheet("font-weight: bold; font-size: 14pt;")  # Style the title
+        # Create a separate widget to hold the scrollable content (scroll area)
+        content_widget = QWidget()
 
-        # Add the title label to the layout (before the form layout)
-        target_info_layout.addWidget(title_label)
+        # Create a QVBoxLayout to hold the content inside the scrollable area
+        content_layout = QVBoxLayout()
+        content_widget.setLayout(content_layout)
 
-        # Create the QFormLayout to display key-value pairs
-        self.target_info_form = QFormLayout()
-
-        # Add the form layout to the main layout
-        target_info_layout.addLayout(self.target_info_form)
-
-        # Create the label that will show "No target selected" in the center
+        # Create the "No target selected" label and center it inside the scrollable area
         self.no_target_label = QLabel("No target selected")
-        self.no_target_label.setAlignment(Qt.AlignCenter)  # Align the label to the center
+        self.no_target_label.setAlignment(Qt.AlignCenter)  # Align the label in the center
+        content_layout.addWidget(self.no_target_label)
 
-        # Add the label to the layout below the form
-        target_info_layout.addWidget(self.no_target_label)
-
-        # Set the layout for the target info widget (without QGroupBox)
-        target_info_widget.setLayout(target_info_layout)
-
-        # Optionally wrap the widget in a QScrollArea if scrollability is needed
+        # Create the QScrollArea and make the content widget scrollable
         scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)  # This allows the widget to resize with the scroll area
-        scroll_area.setWidget(target_info_widget)  # Set the target_info_widget as the widget inside the scroll area
+        scroll_area.setWidgetResizable(True)  # Ensure resizing of the content widget
+        scroll_area.setWidget(content_widget)  # Set the content widget as the scrollable area
 
-        return scroll_area
+        # Add the scroll area to the layout of the group box
+        target_info_layout.addWidget(scroll_area)
+
+        # Set the layout for the group box
+        target_info_group.setLayout(target_info_layout)
+
+        # Return the group box containing the title and scrollable content
+        return target_info_group
+
 
     def update_target_info_form(self, target_data):
         # Clear the current form before updating
