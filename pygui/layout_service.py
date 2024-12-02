@@ -775,7 +775,7 @@ class LayoutService:
             # Create a label and a line edit for each key-value pair
             label = QLabel(key)
             line_edit = QLineEdit(value if value else "N/A")  # Show N/A for empty values
-            line_edit.setReadOnly(True)  # Set the line edit to read-only to prevent editing
+            line_edit.setsReadOnly(True)  # Set the line edit to read-only to prevent editing
 
             # Add the label and line edit to the form layout
             self.target_info_form.addRow(label, line_edit)
@@ -793,19 +793,33 @@ class LayoutService:
         row_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         row_layout.setSpacing(0)  # Remove vertical spacing between widgets
 
-        # Create a new horizontal layout for the target name
+        # Create a new horizontal layout for the target name and the refresh button
+        row1_layout = QHBoxLayout()  # Row 1 now uses HBoxLayout
+        row1_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+
         # Create the QLabel with default text
-        self.target_name_label = QLabel("Selected Target: Not Selected") 
-        self.target_name_label.setAlignment(Qt.AlignCenter) 
+        self.target_name_label = QLabel("Selected Target: Not Selected")
+        self.target_name_label.setAlignment(Qt.AlignCenter)
+
+        # Create the Refresh Button
+        self.refresh_button = QPushButton("Refresh Table")
+        self.refresh_button.setStyleSheet("""
+            QPushButton:hover {
+                background-color: #388E3C;
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;
+            }
+        """)
+        self.refresh_button.clicked.connect(self.logic_service.refresh_table)  # Connect the refresh button to the refresh_table method
+
+        # # Add the label and refresh button to the row1_layout
+        # row1_layout.addWidget(self.refresh_button)
+
+        # Add the entire row_widget (Row 1 + Row 2) to the control_layout
         row_layout.addWidget(self.target_name_label)
-        row_layout.setAlignment(Qt.AlignLeft)
 
-        # Add label and input field to HBox layout
-        row_layout.addWidget(self.target_name_label)
-
-
-
-        # Exposure Time and Slit Width Section (Row 2) - Horizontal layout
+        # Add label and input fields (Exposure Time and Slit Width) to Row 2
         row2_layout = QHBoxLayout()
         row2_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         row2_layout.setSpacing(5)  # Minimal spacing between widgets in this row
@@ -823,6 +837,7 @@ class LayoutService:
         row2_layout.addWidget(self.exposure_time_box)
         row2_layout.addWidget(self.slit_width_label)
         row2_layout.addWidget(self.slit_width_box)
+        row2_layout.addWidget(self.refresh_button)
 
         # Add the Exposure Time and Slit Width layout to the main layout
         row_layout.addLayout(row2_layout)
@@ -919,6 +934,7 @@ class LayoutService:
         # --- Connect the input fields (Exposure Time and Slit Width) to a database query method ---
         self.exposure_time_box.editingFinished.connect(self.on_exposure_time_changed)
         self.slit_width_box.editingFinished.connect(self.on_slit_width_changed)
+
 
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database

@@ -240,3 +240,39 @@ class LogicService:
             print(f"Successfully updated {field_name} to {value} for observation ID {observation_id}")
         except mysql.connector.Error as err:
             print(f"Error executing update query: {err}")
+            
+    def refresh_table(self):
+        """
+        Refreshes the table by querying the database for the latest data
+        and updating the QTableWidget with the new data.
+        """
+        try:
+            # Example query to fetch the latest target data
+            connection = self.connect_to_mysql("config/db_config.ini")  # Assuming you have a method to connect to the DB
+
+            if connection is None:
+                print("Failed to connect to MySQL. Cannot refresh table.")
+                return
+
+            cursor = connection.cursor()
+
+            # Fetch all the latest data from the database (e.g., all target data)
+            cursor.execute("SELECT observation_id, name, exptime, slitwidth FROM target")  # Adjust query as needed
+            rows = cursor.fetchall()
+            
+            target_list_display = self.parent.layout_service.target_list_display
+            # Clear existing table data
+            target_list_display.setRowCount(0)  # Reset row count
+
+            # Add new data to the table
+            for row in rows:
+                row_position = target_list_display.rowCount()
+                target_list_display.insertRow(row_position)
+                for column, value in enumerate(row):
+                    target_list_display.setItem(row_position, column, QTableWidgetItem(str(value)))
+
+            cursor.close()
+            print("Table refreshed successfully!")
+
+        except mysql.connector.Error as err:
+            print(f"Error while refreshing table: {err}")
