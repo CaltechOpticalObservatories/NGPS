@@ -63,12 +63,14 @@ namespace Acam {
   enum TargetAcquisitionModes {
     TARGET_NOP = 0,
     TARGET_ACQUIRE,
+    TARGET_ACQUIRE_HERE,
     TARGET_GUIDE,
     TARGET_MODE_COUNT
   };
 
   const std::string TargetAcquisitionModeString[] = {
     "standby",
+    "acquiring",
     "acquiring",
     "guiding"
   };
@@ -449,6 +451,12 @@ namespace Acam {
 
       double dRA, dDEC;  /// offsets from put_on_slit will be applied to goal while guiding
 
+      struct {
+        double ra;
+        double dec;
+        double angle;
+      } acam_goal;
+
       double putonslit_offset, last_putonslit_offset;
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
@@ -505,6 +513,22 @@ namespace Acam {
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
 
+      struct {
+        std::string tcsname;
+        bool is_tcs_open;
+        double angle_scope;
+        std::string ra_scope_hms;   // h:m:s
+        std::string dec_scope_dms;  // d:m:s
+        double ra_scope_h;   // decimal hours
+        double dec_scope_d;  // decimal degrees
+        double az;
+        double telfocus;
+        double airmass;
+      } telem;
+
+      std::mutex snapshot_mtx;
+      std::unordered_map<std::string, bool> snapshot_status;
+
       nlohmann::json tcs_jmessage;             ///< JSON message containing TCS telemetry
 
       Interface()
@@ -518,6 +542,10 @@ namespace Acam {
           nskip_before_acquire(0),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
+          snapshot_status {
+            {"tcsd",       false},
+            {"slitd",      false}
+          },
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false)
@@ -592,8 +620,9 @@ namespace Acam {
       void handletopic_slitd( const nlohmann::json &jmessage );
 
       long bin( std::string args, std::string &retstring );
-      void make_telemetry_message( std::string &retstring );
-      void get_external_telemetry();
+      void publish_snapshot();
+      void request_snapshot();
+      bool wait_for_snapshots();
       long handle_json_message( std::string message_in );
       long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long test_image();                       ///

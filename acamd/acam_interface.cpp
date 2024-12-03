@@ -1418,61 +1418,152 @@ namespace Acam {
   /***** Acam::Interface::bin *************************************************/
 
 
-  /***** Acam::Interface::make_telemetry_message ******************************/
+  /***** Acam::Interface::publish_snapshot ************************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket so that
-   *             outside clients can ask for my telemetry.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry.
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"] = "acaminfo";
-
+  void Interface::publish_snapshot() {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"]   = "acamd";
     // don't put data in the message if there's no camera connection
     //
     if ( this->isopen("camera") ) {
       int ccdtemp=99;
       this->camera.andor.get_temperature( ccdtemp );
-      jmessage["TANDOR_ACAM"] = static_cast<float>(ccdtemp);  // the database wants floats
+      jmessage_out["TANDOR_ACAM"] = static_cast<float>(ccdtemp);  // the database wants floats
     }
 
-    retstring = jmessage.dump();  // serialize the json message into retstring
-
-    this->publisher->publish(retstring);
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
   }
-  /***** Acam::Interface::make_telemetry_message ******************************/
+  /***** Acam::Interface::publish_snapshot ************************************/
 
 
-  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Acam::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
+  /***** Acam::Interface::request_snapshot ************************************/
+  /**
+   * @brief      sends request for snapshot
+   *
+   */
+  void Interface::request_snapshot() {
+    nlohmann::json jmessage;
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    for ( const auto &[topic,status] : snapshot_status ) {
+      jmessage[topic]=false;
+    }
+    }
+    try {
+      this->publisher->publish( jmessage, "_snapshot" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::request_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Acam::Interface::request_snapshot ************************************/
+
+
+  /***** Acam::Interface::wait_for_snapshots **********************************/
+  /**
+   * @brief      wait for everyone to publish their snaphots
+   *
+   */
+  bool Interface::wait_for_snapshots() {
+    auto start_time = std::chrono::steady_clock::now();
+    auto timeout = std::chrono::seconds(3);  // set timeout duration
+
+    while (true) {
+      bool all_received = true;
+
+      // loop through all elements of snapshot_status,
+      // if any of them is false then clear all_received
+      {
+      std::lock_guard<std::mutex> lock(snapshot_mtx);
+      for (const auto &[topic, status] : snapshot_status) {
+        if (!status) {
+          all_received = false;
+          break;
+        }
+      }
+      }
+
+      if (all_received) return true;
+
+      if (std::chrono::steady_clock::now() - start_time > timeout) {
+        std::stringstream message;
+        message << "ERROR timeout waiting for telemetry from:";
+        for ( const auto &[topic,status] : snapshot_status ) {
+          if (!status) message << " " << topic;
+        }
+        logwrite( "Acam::Interface::wait_for_snapshots", message.str() );
+        return false;
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));  // avoid busy-waiting
+    }
+  }
+  /***** Acam::Interface::wait_for_snapshots **********************************/
+
+
+  /***** Acam::Interface::handletopic_snapshot ********************************/
+  /**
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the "_snapshot"
+   *             topic and the payload contains my daemon name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
+    // If my name is in the jmessage then publish my snapshot
+    //
+    if ( jmessage_in.contains( Acam::DAEMON_NAME ) ) {
+      this->publish_snapshot();
     }
     else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Acamd::Interface::handletopic_snapshot", jmessage.dump() );
+    if ( jmessage_in.contains( "test" ) ) {
+      logwrite( "Acamd::Interface::handletopic_snapshot", jmessage_in.dump() );
     }
   }
+  /***** Acam::Interface::handletopic_snapshot ********************************/
 
 
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
-    this->database.add_from_json<double>( jmessage, "CASANGLE" );
-    this->database.add_from_json<std::string>( jmessage, "TELRA", "RAtel" );
-    this->database.add_from_json<std::string>( jmessage, "TELDEC", "DECLtel" );
-    this->database.add_from_json<double>( jmessage, "AZ" );
-    this->database.add_from_json<double>( jmessage, "TELFOCUS", "focus" );
-    this->database.add_from_json<double>( jmessage, "AIRMASS" );
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    snapshot_status["tcsd"]=true;
+    }
+    // extract and store values in the class
+    //
+    Common::extract_telemetry_value( jmessage, "TCSNAME",  telem.tcsname );
+    Common::extract_telemetry_value( jmessage, "ISOPEN",   telem.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, "CASANGLE", telem.angle_scope );
+    Common::extract_telemetry_value( jmessage, "TELRA",    telem.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, "TELDEC",   telem.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, "RA",       telem.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, "DEC",      telem.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, "AZ",       telem.az );
+    Common::extract_telemetry_value( jmessage, "TELFOCUS", telem.telfocus );
+    Common::extract_telemetry_value( jmessage, "AIRMASS",  telem.airmass );
+
+    // save them to the database
+    //
+    this->database.add_key_val<double>( "CASANGLE", telem.angle_scope );
+    this->database.add_key_val<double>( "RAtel",    telem.ra_scope_h );
+    this->database.add_key_val<double>( "DECLtel",  telem.dec_scope_d );
+    this->database.add_key_val<double>( "AZ",       telem.az );
+    this->database.add_key_val<double>( "focus",    telem.telfocus );
+    this->database.add_key_val<double>( "AIRMASS",  telem.airmass );
   }
 
 
@@ -1492,36 +1583,14 @@ namespace Acam {
    *
    */
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    snapshot_status["slitd"]=true;
+    }
     this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
     this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
   }
   /***** Acam::Interface::handletopic_slitd ***********************************/
-
-
-  /***** Acam::Interface::get_external_telemetry ******************************/
-  /**
-   * @brief      collect telemetry from another daemon
-   * @details    This is used for any telemetry that I need to collect from
-   *             another daemon. Send the command "sendtelem" to the daemon, which
-   *             will respond with a JSON message. The daemon(s) to contact
-   *             are configured with the TELEM_PROVIDER key in the config file.
-   *
-   */
-  void Interface::get_external_telemetry() {
-    // Loop through each configured telemetry provider. This requests
-    // their telemetry which is returned as a serialized json string
-    // held in retstring.
-    //
-    // handle_json_message() will parse the serialized json string.
-    //
-    std::string retstring;
-    for ( const auto &provider : this->telemetry_providers ) {
-      Common::collect_telemetry( provider, retstring );
-      handle_json_message(retstring);
-    }
-    return;
-  }
-  /***** Acam::Interface::get_external_telemetry ******************************/
 
 
   /***** Acam::Interface::handle_json_message *********************************/
@@ -1961,6 +2030,8 @@ namespace Acam {
       return HELP;
     }
     else { // ...otherwise look at the arg(s):
+
+      error |= this->tcs_init( "real", retstring );
 
       std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
 
@@ -2655,93 +2726,89 @@ namespace Acam {
     // and clears it (false) automatically when it goes out of scope.
     //
     {
-    std::unique_lock<std::mutex> lock( iface.framegrab_mutex, std::defer_lock );             // try to get the mutex
-    if ( lock.try_lock() ) {
+    BoolState loop_running( iface.is_framegrab_running );             // sets state true here, clears when it goes out of scope
 
-      BoolState loop_running( iface.is_framegrab_running );             // sets state true here, clears when it goes out of scope
+    int _skipframes = iface.nskip_before_acquire.load();              // init num of frames to skip before trying to acquire target
+    int _nsave = iface.nsave_preserve_frames.load();                  // number of frames to save in a row
+    int _nskip = iface.nskip_preserve_frames.load();                  // number of frames to skip before saving _nsave frames
 
-      int _skipframes = iface.nskip_before_acquire.load();              // init num of frames to skip before trying to acquire target
-      int _nsave = iface.nsave_preserve_frames.load();                  // number of frames to save in a row
-      int _nskip = iface.nskip_preserve_frames.load();                  // number of frames to skip before saving _nsave frames
+    do {
+      if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
 
-      do {
-        if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
+      if ( iface.collect_header_info() == ERROR ) {                   // collect header information
+        logwrite(function,"ERROR collecting header info");
+        continue;
+      }
 
-        if ( iface.collect_header_info() == ERROR ) {                   // collect header information
-          logwrite(function,"ERROR collecting header info");
-          continue;
-        }
+//logwrite(function, "[DEBUG] start acquire");
+      if ( iface.camera.andor.acquire_one() == ERROR ) {              // acquire and get single scan single frame
+        logwrite(function,"ERROR getting frame");
+        continue;
+      }
+//logwrite(function, "[DEBUG] acquire complete");
 
-        if ( iface.camera.andor.acquire_one() == ERROR ) {              // acquire and get single scan single frame
-          logwrite(function,"ERROR getting frame");
-          continue;
-        }
+      error = iface.camera.write_frame( sourcefile,
+                                        iface.imagename,
+                                        iface.tcs_online.load() );    // write to FITS file
+      if (error==ERROR) {
+        logwrite(function,"ERROR writing frame");
+        continue;
+      }
 
-        error = iface.camera.write_frame( sourcefile,
-                                          iface.imagename,
-                                          iface.tcs_online.load() );    // write to FITS file
-        if (error==ERROR) {
-          logwrite(function,"ERROR writing frame");
-          continue;
-        }
+      iface.framegrab_time = std::chrono::steady_clock::time_point::min();
 
-        iface.framegrab_time = std::chrono::steady_clock::time_point::min();
+      iface.guide_manager.push_guider_image( iface.imagename );       // send frame to Guider GUI
+//logwrite(function, "[DEBUG] pushed to GUI");
 
-        iface.guide_manager.push_guider_image( iface.imagename );       // send frame to Guider GUI
+      // Normally, framegrabs are overwritten to the same file.
+      // This optionally saves them at the requested cadence by
+      // copying to a different filename.
+      //
+      // Save a number of frames in a row
+      //
+      if ( _nsave-- > 0 ) {
+        iface.preserve_framegrab();
+      }
+      // skip the next _nskip number of frames before saving _nsave again
+      if ( _nsave<1 && _nskip--<1 ) {
+        _nsave = iface.nsave_preserve_frames.load();
+        _nskip = iface.nskip_preserve_frames.load();
+      }
 
-        // Normally, framegrabs are overwritten to the same file.
-        // This optionally saves them at the requested cadence by
-        // copying to a different filename.
+      // don't use this frame for target acquisition
+      //
+      if ( _skipframes-- > 0 ) {
+        continue;
+      }
+      else {
+        // acquire target if needed
         //
-        // Save a number of frames in a row
+        // get currently displayed guide status
+        std::string status_og = iface.guide_manager.status;
+
+        // do_acquire() is called with each frame grab and will return NO_ERROR
+        // each time, unless it reaches the max number of retries or otherwise
+        // fails.
         //
-        if ( _nsave-- > 0 ) {
-          iface.preserve_framegrab();
+        long did_acquire = iface.target.do_acquire();                 // acquire target here (if needed)
+//logwrite(function, "[DEBUG] back from do_acquire");
+        if ( did_acquire != NO_ERROR ) {
+          iface.target.acquire( Acam::TARGET_NOP );                   // disable acquire on failure
         }
-        // skip the next _nskip number of frames before saving _nsave again
-        if ( _nsave<1 && _nskip--<1 ) {
-          _nsave = iface.nsave_preserve_frames.load();
-          _nskip = iface.nskip_preserve_frames.load();
-        }
-
-        // don't use this frame for target acquisition
-        //
-        if ( _skipframes-- > 0 ) {
-          continue;
-        }
-        else {
-          // acquire target if needed
-          //
-          // get currently displayed guide status
-          std::string status_og = iface.guide_manager.status;
-
-          // do_acquire() is called with each frame grab and will return NO_ERROR
-          // each time, unless it reaches the max number of retries or otherwise
-          // fails.
-          //
-          long did_acquire = iface.target.do_acquire();                 // acquire target here (if needed)
-          if ( did_acquire != NO_ERROR ) {
-            iface.target.acquire( Acam::TARGET_NOP );                   // disable acquire on failure
-          }
-          // set guide status
-          iface.guide_manager.status = iface.target.acquire_mode_string();
-          // update display if status changed
-          if ( iface.guide_manager.status != status_og ) {
-            iface.guide_manager.set_update();
-            std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
-          }
-
-          _skipframes = iface.nskip_before_acquire.load();              // reset _skipframes
+        // set guide status
+        iface.guide_manager.status = iface.target.acquire_mode_string();
+        // update display if status changed
+        if ( iface.guide_manager.status != status_og ) {
+          iface.guide_manager.set_update();
+          std::thread( &Acam::GuideManager::push_guider_settings, &iface.guide_manager ).detach();
         }
 
-        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );  // don't use too much CPU
+        _skipframes = iface.nskip_before_acquire.load();              // reset _skipframes
+      }
 
-      } while ( /*error==NO_ERROR &&*/ iface.should_framegrab_run.load() );
-    }
-    else {                                                              // this shouldn't even happen
-      logwrite( function, "ERROR another thread is already running" );
-      return;
-    }
+      std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );  // don't use too much CPU
+
+    } while ( /*error==NO_ERROR &&*/ iface.should_framegrab_run.load() );
     }
 
     if ( error != NO_ERROR ) {
@@ -3008,6 +3075,33 @@ namespace Acam {
 
     // If not already stopped then stop (disable by setting mode to NOP)
     //
+    if ( args == "here" ) {
+      if ( this->target.acquire_mode == Acam::TARGET_ACQUIRE || this->target.acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
+        logwrite( function, "target acquisition mode already selected" );
+        return NO_ERROR;
+      }
+      double timeout = this->target.get_timeout();             // from config ACAM_ACQUIRE_TIMEOUT
+      retstring=std::to_string( timeout );                     // return the timeout in seconds
+
+      //calculate goal
+      //
+logwrite( function, "[DEBUG] acquire here" );
+      // call the solver, store the solution as the goal
+      //
+      std::string last_imagename = this->get_imagename();
+      std::string result;
+      long matches;
+      double rmsarcsec;
+      this->astrometry.solve( last_imagename, this->target.ext_solver_args );
+      this->astrometry.get_solution( result, this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle, matches, rmsarcsec );
+message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle;
+logwrite( function, message.str() );
+
+      return( this->target.acquire( Acam::TARGET_ACQUIRE_HERE ) );        // disables Target guide/acquisition
+    } else
+
+    // If not already stopped then stop (disable by setting mode to NOP)
+    //
     if ( args == "stop" ) {
       if ( this->target.acquire_mode == Acam::TARGET_NOP ) {
         logwrite( function, "target guide/acquisition already stopped" );
@@ -3047,9 +3141,29 @@ namespace Acam {
         logwrite( function, "target acquisition mode already selected" );
         return NO_ERROR;
       }
+
       std::string coords;
       long error = this->target_coords( args, coords );          // validate and set the target coords
       logwrite( function, coords );
+
+      this->fpoffsets.compute_offset( "SCOPE", this->target.get_pointmode(),
+                                      0, 0, this->target.tcs_casangle );
+message.str(""); message << "[DEBUG] tcs_casangle=" << this->target.tcs_casangle;
+logwrite( function, message.str() );
+
+      // Now convert the target coordinates (from the database) using this angle,
+      // from the <pointmode> to the ACAM reference frame.
+      //
+message.str(""); message << "[DEBUG] input coords_slit.ra="<< this->target.coords_slit.ra << " .dec=" << this->target.coords_slit.dec;
+logwrite( function, message.str() );
+
+      this->fpoffsets.compute_offset_last_angle( this->target.get_pointmode(), "ACAM",
+                                                 this->target.coords_slit.ra, this->target.coords_slit.dec,
+                                                 this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle );
+
+message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle;
+logwrite( function, message.str() );
+
       if ( error == NO_ERROR ) {
         double timeout = this->target.get_timeout();             // from config ACAM_ACQUIRE_TIMEOUT
         retstring=std::to_string( timeout );                     // return the timeout in seconds
@@ -3114,7 +3228,9 @@ namespace Acam {
       logwrite( function, "stop requested" );
     }
 
-    if ( requested_mode == Acam::TARGET_ACQUIRE || requested_mode == Acam::TARGET_GUIDE) {
+    if ( requested_mode == Acam::TARGET_ACQUIRE ||
+         requested_mode == Acam::TARGET_ACQUIRE_HERE ||
+         requested_mode == Acam::TARGET_GUIDE) {
       // initialize variables for new acquisition
       //
       this->nacquired = 0;
@@ -3188,7 +3304,9 @@ namespace Acam {
     //
     long error = NO_ERROR;
 
-    if ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_GUIDE ) {
+    if ( this->acquire_mode == Acam::TARGET_ACQUIRE ||
+         this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ||
+         this->acquire_mode == Acam::TARGET_GUIDE ) {
     do {
       // ACQUIRE mode can time out so check that here (GUIDE never times out).
       //
@@ -3200,31 +3318,48 @@ namespace Acam {
       }
 
       attempts++;
-//    logwrite(function,"[DEBUG] incremented attempts="+std::to_string(attempts));
+logwrite(function,"[DEBUG] incremented attempts="+std::to_string(attempts));
 
-      // The acam interface is given the target coordinates (from the database)
-      // which are in the <pointmode> reference frame.
-      //
-      // Here compute the "goal" for the acam (in the ACAM reference frame) using
-      // the database coordinates and the current cass angle.
-      //
-
-      // Convert the current cass rotator angle (which is in the SCOPE frame) to a
-      // position angle in the <pointmode> frame.  The RA, DEC coordinates don't matter
-      // for just computing the angle. pointmode_string() returns a string of the
-      // current pointmode.
-      //
-      if ( iface->fpoffsets.compute_offset( "SCOPE", pointmode,
-                                            0, 0, this->tcs_casangle ) == ERROR ) break;
-
-      // Now convert the target coordinates (from the database) using this angle,
-      // from the <pointmode> to the ACAM reference frame.
-      //
       double acam_ra_goal, acam_dec_goal, acam_angle_goal;
+      bool match_found = false;                    // was a match found?
+      long matches=-1;
+      double acam_ra=NAN, acam_dec=NAN, acam_angle=NAN, rmsarcsec=NAN;  // calculations from acam solver
+      std::string result;                          // acam solver result
 
-      if ( iface->fpoffsets.compute_offset_last_angle( pointmode, "ACAM",
-                                                       this->coords_slit.ra, this->coords_slit.dec,
-                                                       acam_ra_goal, acam_dec_goal, acam_angle_goal ) == ERROR ) break;
+      std::string last_imagename = iface->get_imagename();
+
+/*****
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+        // The acam interface is given the target coordinates (from the database)
+        // which are in the <pointmode> reference frame.
+        //
+        // Here compute the "goal" for the acam (in the ACAM reference frame) using
+        // the database coordinates and the current cass angle.
+        //
+
+        // Convert the current cass rotator angle (which is in the SCOPE frame) to a
+        // position angle in the <pointmode> frame.  The RA, DEC coordinates don't matter
+        // for just computing the angle. pointmode_string() returns a string of the
+        // current pointmode.
+        //
+        if ( iface->fpoffsets.compute_offset( "SCOPE", pointmode,
+                                              0, 0, this->tcs_casangle ) == ERROR ) break;
+
+        // Now convert the target coordinates (from the database) using this angle,
+        // from the <pointmode> to the ACAM reference frame.
+        //
+        if ( iface->fpoffsets.compute_offset_last_angle( pointmode, "ACAM",
+                                                         this->coords_slit.ra, this->coords_slit.dec,
+                                                         acam_ra_goal, acam_dec_goal, acam_angle_goal ) == ERROR ) break;
+      }
+      else
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
+message.str(""); message << "[DEBUG] ACQUIRE_HERE using goals: " << this->acam_goal.ra << " " << this->acam_goal.dec << " " << this->acam_goal.angle;
+logwrite( function, message.str() );
+      }
+******/
+message.str(""); message << "[DEBUG] using goals: " << this->acam_goal.ra << " " << this->acam_goal.dec << " " << this->acam_goal.angle;
+logwrite( function, message.str() );
 
       // Apply any dRA, dDEC goal offsets from the "put on slit" action to
       // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
@@ -3235,25 +3370,9 @@ namespace Acam {
       if ( iface->fpoffsets.apply_offset( acam_ra_goal,  iface->target.dRA,
                                           acam_dec_goal, iface->target.dDEC ) == ERROR ) break;
 
-//    {  // this local section is just for display purposes and its variables are not used elsewhere
-//    std::string rastr, decstr;
-//    decimal_to_sexa( acam_ra_goal * TO_HOURS, rastr );
-//    decimal_to_sexa( acam_dec_goal, decstr );
-//    message.str(""); message << "[ACQUIRE] set goals=" << rastr << "  " << decstr << "  "
-//                                                       << std::fixed << std::setprecision(6) << acam_angle_goal;
-//    logwrite( function, message.str() );
-//    }
-
       // Perform the astrometry calculations on the acquired image (and calculate image quality).
       // Optional solver args can be included here, which currently only come from the test commands.
       //
-      bool match_found = false;                    // was a match found?
-      long matches=-1;
-      double acam_ra=NAN, acam_dec=NAN, acam_angle=NAN, rmsarcsec=NAN;  // calculations from acam solver
-      std::string result;                          // acam solver result
-
-      std::string last_imagename = iface->get_imagename();
-
       // call wrapper for Astrometry::solve()
       //
       if ( iface->astrometry.solve( last_imagename, this->ext_solver_args ) == ERROR ) break;
@@ -3268,9 +3387,6 @@ namespace Acam {
         double _ra = acam_ra * TO_HOURS;
         decimal_to_sexa( _ra, rastr );
         decimal_to_sexa( acam_dec, decstr );
-//      message.str(""); message << "[ACQUIRE] solve " << result << ": match found with coords="
-//                               << rastr << "  " << decstr << "  " << acam_angle;
-//      logwrite( function, message.str() );
         iface->astrometry.image_quality();
       }
 
@@ -3309,21 +3425,32 @@ namespace Acam {
       //
       double ra_off, dec_off;  // calculated offsets will be in degrees
 
+      double offset;
+/*****
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+        if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
+                                            acam_ra_goal, acam_dec_goal,
+                                            ra_off, dec_off ) == ERROR ) break;
+
+        // Compute the angular separation between the target (acam_ra_*) and calculated slit (acam_*)
+        //
+        offset = angular_separation( acam_ra_goal, acam_dec_goal, acam_ra, acam_dec );
+      }
+      else
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
+        if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
+                                            acam_goal.ra, acam_goal.dec,
+                                            ra_off, dec_off ) == ERROR ) break;
+        offset = angular_separation( acam_goal.ra, acam_goal.dec, acam_ra, acam_dec );
+      }
+*****/
       if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
-                                          acam_ra_goal, acam_dec_goal,
+                                          acam_goal.ra, acam_goal.dec,
                                           ra_off, dec_off ) == ERROR ) break;
+      offset = angular_separation( acam_goal.ra, acam_goal.dec, acam_ra, acam_dec );
 
-//    {  // this local section is just for display purposes and its variables are not used elsewhere
-//    double __ra, __dec;
-//    iface->tcsd.get_weather_coords( __ra, __dec );  // returns RA hours, DEC degrees
-//    message.str(""); message << "[ACQUIRE] tcs coords before: " << __ra*TO_DEGREES << " " << __dec << " deg";
-//    logwrite( function, message.str() );
-//    }
-
-      // Compute the angular separation between the target (acam_ra_*) and calculated slit (acam_*)
-      //
-      double offset = angular_separation( acam_ra_goal, acam_dec_goal, acam_ra, acam_dec );
-
+message.str(""); message << "[DEBUG] calculated RAoffset=" << ra_off << " DECLoffset=" << dec_off;
+logwrite( function, message.str() );
       // Add properly-typed telemetry keys/value pairs to a database map object.
       // This does not write them to the actual database yet.
       //
@@ -3391,22 +3518,30 @@ namespace Acam {
       //
       else {
         // send offset to TCS here (returns when offset is complete)
+message.str(""); message << "[DEBUG] will send ra_off=" << ra_off*3600. << " dec_off=" << dec_off*3600.;
+logwrite( function, message.str() );
+if ( std::abs(ra_off*3600.) > 300. || std::abs(dec_off*3600.) > 300. ) {
+  logwrite( function, "ERROR not sending offsets because they exceed 300 arcsec!" );
+  break;
+}
         if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600. )==ERROR) break;
+        std::this_thread::sleep_for( std::chrono::seconds(1) );
 
         // reset retry counter if match found and offset < max and no errors
         attempts = 0;
-//      logwrite(function,"[DEBUG] reset attempts counter=0");
+logwrite(function,"[DEBUG] reset attempts counter=0");
       }
 
       // If the offset is below ACQUIRE_OFFSET_THRESHOLD then increment the nacquired
       // counter. We need ACQUIRE_MIN_REPEAT sequential, successful acquires in order
       // to call this a success, so any failure here resets the counter.
       //
+logwrite(function,"[DEBUG] offset="+std::to_string(offset)+" threshold="+std::to_string(this->offset_threshold));
       if ( offset < this->offset_threshold ) {
         // but only in ACQUIRE mode, otherwise this could increment forever in GUIDE mode
-        if ( this->acquire_mode == Acam::TARGET_ACQUIRE ) {
+        if ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
           this->nacquired++;
-//        logwrite(function,"[DEBUG] incremented nacquired="+std::to_string(this->nacquired));
+logwrite(function,"[DEBUG] incremented nacquired="+std::to_string(this->nacquired));
           message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
           logwrite( function, message.str() );
         }
@@ -3414,14 +3549,14 @@ namespace Acam {
       }
       else {
         nacquired=0;     // if an acquire is not below threshold then reset the counter
-//      logwrite(function,"[DEBUG] acquire is not below threshold so reset the nacquired counter=0");
+logwrite(function,"[DEBUG] acquire is not below threshold so reset the nacquired counter=0");
       }
 
     } while ( false );  // the do-loop is executed only once. used to allow breaks.
     }                   // end of acquisition sequence
 
     if ( this->nacquired == 0 && this->max_attempts > 0 ) {
-//    logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
+logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
       if ( ++this->sequential_failures >= this->max_attempts ) {
         logwrite( function, "ERROR sequential failures "+std::to_string(this->sequential_failures)
                           +" exceeds max attempts "+std::to_string(this->max_attempts) );
@@ -3432,13 +3567,13 @@ namespace Acam {
     // If target acquired, and if acquisition mode was to acquire,
     // then disable acquisition mode.
     //
-    if ( this->acquire_mode == Acam::TARGET_ACQUIRE &&
+    if ( ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) &&
          this->nacquired >= this->min_repeat ) {
       logwrite( function, "NOTICE: target acquired" );
       this->is_acquired.store( true, std::memory_order_seq_cst );                   // Target Acquired!
-      this->acquire_mode = Acam::TARGET_NOP;
+      this->acquire_mode = Acam::TARGET_GUIDE;
     }
-    else
+
     // In guide mode, just silently keep the is_acquired flag set
     //
     if ( this->acquire_mode == Acam::TARGET_GUIDE &&
@@ -3465,7 +3600,7 @@ namespace Acam {
     iface->database.add_key_val( "extinction_std", iface->astrometry.get_extinction_std() );
     iface->database.add_key_val( "background",     iface->astrometry.get_background() );
     iface->database.add_key_val( "background_std", iface->astrometry.get_background_std() );
-    iface->database.add_key_val( "filter",         iface->motion.get_current_filter_name() );
+    iface->database.add_key_val( "filter",         iface->motion.get_current_filtername() );
 
     iface->database.add_key_val( "datetime",       get_datetime() );
 
@@ -4668,49 +4803,24 @@ namespace Acam {
     std::string function = "Acam::Interface::collect_header_info";
     std::stringstream message;
 
-    bool _tcs = this->tcs_online.load();
-    std::string tcsname;
-
-    // Check every time for the TCS because we don't ever want to save
-    // an image with ambiguous keywords.
+    // request external telemetry, results in struct telem.
     //
-    if ( _tcs && this->tcsd.client.poll_open() ) {
-      this->tcsd.poll_name( tcsname );
-    }
-    else {
-      tcsname = "offline";
-      this->tcs_online.store( false );
-      _tcs = this->tcs_online.load();
-    }
+    this->request_snapshot();
+    this->wait_for_snapshots();
 
-    // request external telemetry
-    //
-    this->get_external_telemetry();
+    bool _tcs = telem.is_tcs_open;
+    std::string tcsname = ( _tcs ? telem.tcsname : "offline" );
 
-    double angle_scope=NAN, ra_scope=NAN, dec_scope=NAN,
-           angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;
+    double angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;  // outputs from fpoffsets
 
-    // Get the current pointing from the TCS
-    //
-    if ( _tcs ) this->tcsd.poll_cass( angle_scope );
-    if ( _tcs ) this->tcsd.poll_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
-
-    if ( _tcs ) this->target.save_casangle( angle_scope );      // store in the Target class, required for acquisition
+    if ( _tcs ) this->target.save_casangle( telem.angle_scope );      // store in the Target class, required for acquisition
 
     // Compute FP offsets from TCS coordinates (SCOPE) to ACAM coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
     // Results in degrees.
     //
-    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (ra_scope*TO_DEGREES), dec_scope, angle_scope,
-                                                                             ra_acam, dec_acam, angle_acam );
-
-    // Get the focus from the guide manager which is already monitoring it.
-    // As long as the focus monitor is running then use the focus value,
-    // otherwise set it to NaN. addkey() knows how to handle that.
-    //
-    auto isfocus = this->monitor_focus_state.load( std::memory_order_seq_cst );
-    double focus = this->guide_manager.focus.load( std::memory_order_seq_cst );
-    if ( isfocus != Acam::FOCUS_MONITOR_RUNNING ) focus = NAN;
+    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (telem.ra_scope_h*TO_DEGREES), telem.dec_scope_d, telem.angle_scope,
+                                                                 ra_acam, dec_acam, angle_acam );
 
     // Get some info from the Andor::Information class,
     // which is stored in its camera_info object.
@@ -4733,8 +4843,8 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "CREATOR",  "acamd", "file creator" );
     this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     this->camera.fitsinfo.fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
-    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS", NAN, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", telem.telfocus, "telescope focus (mm)" );
+    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",  telem.airmass, "" );
 
     // get parameters from FPOffsets, results are stored in the class
     //
@@ -4782,9 +4892,11 @@ namespace Acam {
 
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
     this->camera.fitsinfo.fitskeys.addkey( "TARGET",    this->target.get_name(), "target name" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
-    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  angle_scope, "Cassegrain ring angle" );
+    this->camera.fitsinfo.fitskeys.addkey( "RA",        telem.ra_scope_hms, "Telecscope Right Ascension" );
+    this->camera.fitsinfo.fitskeys.addkey( "DEC",       telem.dec_scope_dms, "Telescope Declination" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELRA",     telem.ra_scope_h, "Telecscope Right Ascension hours" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    telem.dec_scope_d, "Telescope Declination degrees" );
+    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  telem.angle_scope, "Cassegrain ring angle" );
     this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
@@ -4798,16 +4910,8 @@ namespace Acam {
     this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_2",     (        cos( angle_acam * PI / 180. ) ), "" );
 
-    // filter and cover keywords, always present,
-    // but not collected if the motion component isn't open
-    //
-    std::string filtername="unknown", coverpos="unknown";
-    if ( this->motion.is_open() ) {
-      this->motion.filter("", filtername);
-      this->motion.cover("", coverpos);
-    }
-    this->camera.fitsinfo.fitskeys.addkey( "FILTER", filtername, "ACAM filter name" );
-    this->camera.fitsinfo.fitskeys.addkey( "COVER", coverpos, "ACAM cover position" );
+    this->camera.fitsinfo.fitskeys.addkey( "FILTER", this->motion.get_current_filtername(), "ACAM filter name" );
+    this->camera.fitsinfo.fitskeys.addkey( "COVER", this->motion.get_current_coverpos(), "ACAM cover position" );
 
     return NO_ERROR;
   }
@@ -5252,6 +5356,7 @@ namespace Acam {
                                                                slit_ra,  slit_dec,
                                                                dRA,      dDEC );
     if (error==NO_ERROR) error = this->tcsd.pt_offset( dRA*3600., dDEC*3600. );
+    std::this_thread::sleep_for( std::chrono::seconds(1) );
 
     message.str(""); message << ( error==ERROR ? "ERROR moving " : "moved " )
                              << "target to slit";

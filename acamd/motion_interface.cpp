@@ -58,6 +58,9 @@ namespace Acam {
       logwrite( function, "motion controllers already open" );
     }
 
+    error |= get_current_filter( this->current_filtername );
+    error |= read_cover( this->current_coverpos );
+
     return( error );
   }
   /***** Acam::Interface::open ************************************************/
@@ -393,6 +396,9 @@ logwrite( "Acam::MotionInterface::home", name_in );
       }
     }
 
+    error |= get_current_filter( this->current_filtername );
+    error |= read_cover( this->current_coverpos );
+
     return error;
   }
   /***** Acam::MotionInterface::motion ****************************************/
@@ -589,7 +595,7 @@ logwrite( "Acam::MotionInterface::home", name_in );
 
     // save the name to the class
     //
-    this->current_filter_name = retstring;
+    this->current_filtername = retstring;
 
     return error;
   }
@@ -645,7 +651,7 @@ logwrite( "Acam::MotionInterface::home", name_in );
 
     // save the filter name to the class
     //
-    this->current_filter_name = posname;
+    this->current_filtername = posname;
 
     // return the posname as the currname
     //
@@ -743,16 +749,15 @@ logwrite( "Acam::MotionInterface::home", name_in );
 
     }
 
-    // get the position
+    // get the position name
     //
-    auto addr=this->motorinterface.get_motormap()[cover].addr;
-    float position=NAN;
-
-    error = this->motorinterface.get_pos( cover, axis, addr, position, posname, tolerance );
+    error = this->read_cover( posname );
 
     // form the return value
     //
-    message.str(""); message << posname << " " << std::fixed << std::setprecision(3) << position;
+    message.str(""); message << posname << " "
+                             << std::fixed << std::setprecision(3)
+                             << _motormap[cover].posmap[posname].position;
     if ( ! posname.empty() ) { message << " (" << posname << ")"; }
     logwrite( function, message.str() );
 
@@ -762,4 +767,30 @@ logwrite( "Acam::MotionInterface::home", name_in );
   }
   /***** Acam::MotionInterface::cover *****************************************/
 
+
+  /***** Acam::MotionInterface::read_cover ************************************/
+  /**
+   * @brief      read name of cover position
+   * @param[out] retstring  return string contains the current position name
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long MotionInterface::read_cover( std::string &retstring ) {
+    std::string function = "Acam::MotionInterface::read_cover";
+    std::string cover = "cover";
+
+    // get the position
+    //
+    auto addr=this->motorinterface.get_motormap()[cover].addr;
+    float position=NAN;
+    int axis = 1;
+    float tolerance = 2;
+
+    long error = this->motorinterface.get_pos( cover, axis, addr, position, retstring, tolerance );
+
+    this->current_coverpos = retstring;
+
+    return error;
+  }
+  /***** Acam::MotionInterface::read_cover ************************************/
 }

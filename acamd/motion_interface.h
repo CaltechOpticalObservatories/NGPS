@@ -43,12 +43,14 @@ namespace Acam {
     private:
       size_t numdev;                                                 ///< size of motors map (number of motor controllers)
       bool class_initialized;
-      std::string current_filter_name;                               ///< current filter name, updated whenever set or read
+      std::string current_filtername;                                ///< current filter name, updated whenever set or read
+      std::string current_coverpos;
 
     public:
       MotionInterface() : numdev(-1), 
                           class_initialized(false),
-                          current_filter_name("unknown"),
+                          current_filtername("unknown"),
+                          current_coverpos("unknown"),
                           motorinterface( ACAMD_MOVE_TIMEOUT, ACAMD_HOME_TIMEOUT, ACAM_POSNAME_TOLERANCE ) { }
                           // timeouts are defined in common/acamd_commands.h
 
@@ -65,7 +67,8 @@ namespace Acam {
       std::mutex wait_mtx;                                           ///< mutex object for waiting for threads
       std::condition_variable cv;                                    ///< condition variable for waiting for threads
 
-      inline std::string get_current_filter_name() { return this->current_filter_name; }
+      std::string get_current_filtername() const { return this->current_filtername; }
+      std::string get_current_coverpos() const { return this->current_coverpos; }
 
       long initialize_class();
       long open();                                                   ///< opens the PI socket connection
@@ -82,6 +85,7 @@ namespace Acam {
       long get_current_filter( std::string &currname );              ///< get current filter posname
       long get_current_filter( std::string &currname, int &currid, float &currpos );  ///< get current filter posname,id,pos
       long cover( std::string posname, std::string &retstring );  ///< set or get the dust cover
+      long read_cover( std::string &retstring );
 
   };
   /***** Acam::MotionInterface ************************************************/
