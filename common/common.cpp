@@ -605,12 +605,27 @@ namespace Common {
     else {
       command += this->term_write;
     }
-    this->socket.Write( command );
 
-    // Wait (poll) connected socket for incoming data...
-    //
-    int pollret;
-    if ( ( pollret = this->socket.Poll(this->timeout) ) <= 0 ) {
+    int trys=0;
+    int retry_limit=3;
+    int pollret=0;
+
+    while ( trys++ < retry_limit ) {
+
+      this->timedout=false;
+
+      // send the command
+      //
+      this->socket.Write( command );
+
+      // Wait (poll) connected socket for incoming data...
+      //
+      pollret = this->socket.Poll(this->timeout);
+
+      // got data so break out of retry loop
+      //
+      if ( pollret > 0 ) break;
+
       long error = ERROR;
       if ( pollret == 0 ) {
         message.str(""); message << "TIMEOUT polling socket " << this->socket.gethost() << "/" << this->socket.getport()
@@ -626,41 +641,37 @@ namespace Common {
       }
       else
       if ( pollret < 0 && !errno ) {               // this is probably a stale fd
-        if ( this->num_send.fetch_sub(1) <= 0 ) {  // decrement. recursuve resend limit reached when num_send counter is zero
-          message.str(""); message << "ERROR no response from " << this->socket.gethost() << "/" << this->socket.getport()
-                                   << " and exceeded retry limit: check " << this->name;
-          logwrite( function, message.str() );
-          this->disconnect();
-          return( ERROR );
-        }
         message.str(""); message << "ERROR no response from " << this->socket.gethost() << "/" << this->socket.getport()
                                  << ": will re-open connection to " << this->name << " and try again";
         logwrite( function, message.str() );
-        error = this->connect();                   // establish new connection
-        if ( error == NO_ERROR ) {
-          error = this->send( command, reply );    // recursive call to try again
-        }
       }
-      return error;
-    }
 
-    this->num_send.store(2);                       // successful send resets the num_send counter
+      // if still here then reconnect, sleep 1s, try again
+      //
+      error = this->connect();
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
 
-    // read the response, using either term_read or term_str_read as the terminator
+    } // end retry while loop
+
+    // out of retry loop, did poll succeed?
     //
-    ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
+    if ( pollret > 0 ) {
+      // read the response, using either term_read or term_str_read as the terminator
+      //
+      ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
 
-    if ( ret <= 0 ) {
-      if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
-        message.str(""); message << "ERROR reading from socket " << this->socket.gethost() << "/" << this->socket.getport()
-                                 << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
-        logwrite(function, message.str());
-      }
-      if ( ret==0 ) {
-        message.str(""); message << "TIMEOUT reading from socket " << this->socket.gethost() << "/"<< this->socket.getport()
-                                 << " on fd " << this->socket.getfd() << " for " << this->name;
-        logwrite( function, message.str() );
-        this->timedout=true;
+      if ( ret <= 0 ) {
+        if ( ret < 0 && errno != EAGAIN ) {             // could be an actual read error
+          message.str(""); message << "ERROR reading from socket " << this->socket.gethost() << "/" << this->socket.getport()
+                                   << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
+          logwrite(function, message.str());
+        }
+        if ( ret==0 ) {
+          message.str(""); message << "TIMEOUT reading from socket " << this->socket.gethost() << "/"<< this->socket.getport()
+                                   << " on fd " << this->socket.getfd() << " for " << this->name;
+          logwrite( function, message.str() );
+          this->timedout=true;
+        }
       }
     }
 
@@ -895,7 +906,7 @@ namespace Common {
    *
    */
   long Common::DaemonClient::connect() {
-    std::string function = "Common::DaemonClient::connect";
+    const std::string function = "Common::DaemonClient::connect";
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -904,8 +915,7 @@ namespace Common {
     // probably a programming error if this Common::DaemonClient object is not configured
     //
     if ( this->port == -1 ) {
-      message.str(""); message << "ERROR: port not configured for " << this->name;
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR port not configured for "+this->name );
       error = ERROR;
     }
     else {
@@ -924,8 +934,7 @@ namespace Common {
       // Create and connect to the socket
       //
       if ( this->socket.Connect() < 0 ) {
-        message.str(""); message << "ERROR connecting to " << this->name << " on port " << this->port;
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR connecting to "+this->name+" on port "+std::to_string(this->port) );
         error = ERROR;
       } else {
         message.str(""); message << "connected to " << this->name << " at " << this->socket.gethost() << "/" << this->socket.getport()
@@ -934,7 +943,7 @@ namespace Common {
       }
     }
 
-    return( error );
+    return error;
   }
   /***** Common::DaemonClient::connect ************************************************/
 

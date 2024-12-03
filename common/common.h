@@ -326,7 +326,7 @@ namespace Common {
         //
         if ( message_in.empty() ) {
           logwrite( function, "ERROR empty message" );
-          return ERROR;
+          throw;
         }
 
         try {
@@ -342,12 +342,14 @@ namespace Common {
           if ( it != iface.topic_handlers.end() ) it->second( jmessage );
         }
         catch ( const nlohmann::json::parse_error &e ) {
-          logwrite( function, "ERROR json exception parsing message: "+std::string(e.what()) );
-          return ERROR;
+          logwrite( function, "ERROR json exception parsing message topic "+topic+": "+std::string(e.what()) );
+          logwrite( function, message_in );
+          throw;
         }
         catch ( const std::exception &e ) {
-          logwrite( function, "ERROR parsing message: "+std::string(e.what()) );
-          return ERROR;
+          logwrite( function, "ERROR parsing message topic "+topic+": "+std::string(e.what()) );
+          logwrite( function, message_in );
+          throw;
         }
 
         return NO_ERROR;
@@ -369,6 +371,19 @@ namespace Common {
    */
   template <typename T>
   void extract_telemetry_value( const std::string &jstring, const std::string &jkey, T &value ) {
+    try {
+      // get a JSON message object from the serialized string
+      //
+      json jmessage = json::parse( jstring );
+      extract_telemetry_value( jmessage, jkey, value );
+    }
+    catch( const json::exception &e ) {
+      logwrite( "Common::extract_telemetry_value", "ERROR JSON exception: "+std::string(e.what()) );
+      return;
+    }
+  }
+  template <typename T>
+  void extract_telemetry_value( const nlohmann::json &jmessage, const std::string &jkey, T &value ) {
     const std::string function="Common::extract_telemetry_value";
     std::stringstream message;
 
@@ -376,15 +391,11 @@ namespace Common {
     // serialized json string
     //
     try {
-      // get a JSON message object from the serialized string
-      //
-      json jmessage = json::parse( jstring );
-
       // extract the value from the JSON message using jkey as the key
       //
       auto jvalue = jmessage.at( jkey );
 
-      if ( jvalue == nullptr ) return;
+      if ( jvalue.is_null() ) return;
 
       // Using the type of the supplied value reference T, try to extract
       // the corresponding type of data from the json key and assign it to
