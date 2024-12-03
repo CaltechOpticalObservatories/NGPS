@@ -57,4 +57,13 @@ if [[ "$camera" == "slicev" ]]; then
 	echo "image; text $xslit $YCENTER # text={     TOP SLICE-->           <--BOTTOM SLICE} \
 	  color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
 	 | xpaset $id region
+
+	# Scale graphic
+	scale_arcsec=5
+	xwidth=$(echo "scale=2; $scale_arcsec / $pixscale" | bc)
+	YCENTER=$(($YCENTER-16))
+	scalereg="image; box($xslit,$YCENTER,$xwidth,1,0) # color=${headsup_fontcolor} \
+		edit=0 move=0 rotate=0 delete=1 text={$scale_arcsec\"}"
+	echo "$scalereg" | xpaset $id region
+
 fi
