@@ -57,7 +57,7 @@ namespace Slit {
       mutable float _cached_arcsec;
 
     public:
-      explicit SlitDimension( float v=0, Unit u=Unit::MM )
+      explicit SlitDimension( float v=NAN, Unit u=Unit::MM )
         : _value(v), _unit(u) { }
 
       SlitDimension( const SlitDimension &other )
@@ -65,7 +65,7 @@ namespace Slit {
           _unit(other._unit) { }
 
       static void initialize_arcsec_per_mm( float value ) {
-        _arcsec_per_mm = ( value > 0 ? value : NAN );
+        _arcsec_per_mm = ( (!std::isnan(value) && value) > 0 ? value : NAN );
       }
 
       /**
@@ -207,7 +207,16 @@ namespace Slit {
       SlitDimension minwidth;  ///< set by config file
       SlitDimension center;    ///< position of center in actuator units
 
-      SlitDimension width,offset;  ///< holds current values
+      typedef struct {
+        SlitDimension width;
+        SlitDimension offset;
+        float posA=NAN;
+        float posB=NAN;
+        bool ishome=false;
+        bool isopen=false;
+      } snapshot_t;
+
+      snapshot_t snapshot;
 
       Common::Queue async;
 
@@ -224,6 +233,7 @@ namespace Slit {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void publish_snapshot();
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
@@ -244,7 +254,6 @@ namespace Slit {
       long move_rel( std::string args );         ///< send move-relative command to specified controllers
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( std::string args, std::string &retstring );      ///< writes the raw command as received to the master controller
-      void make_telemetry_message( std::string &retstring );
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 

@@ -19,7 +19,7 @@ const std::string SLITD_SET  = "set";       const int SLITD_SET_TIMEOUT = 20000;
 
 const std::vector<std::string> SLITD_SYNTAX = {
                                                  SLITD_CLOSE,
-                                                 SLITD_GET+" [ ? ]",
+                                                 SLITD_GET+" [ ? | mm ]",
                                                  SLITD_HOME+" [ ? ]",
                                                  SLITD_ISHOME+" [ ? ]",
                                                  SLITD_ISOPEN+" [ ? ]",

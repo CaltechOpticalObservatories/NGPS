@@ -589,22 +589,6 @@ namespace Slit {
       if ( cmd == SLITD_NATIVE ) {
                       ret = this->interface.send_command( args, retstring );
       }
-      else
-
-      // send telemetry on request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                    if ( args=="?" || args=="help" ) {
-                      retstring=TELEMREQUEST+"\n";
-                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                      ret=HELP;
-                    }
-                    else {
-                      this->interface.make_telemetry_message( retstring );
-                      ret = JSON;
-                    }
-      }
 
       // unknown commands generate an error
       //
@@ -613,11 +597,6 @@ namespace Slit {
         logwrite( function, message.str() );
         ret = ERROR;
       }
-
-      // any command forces a publish  //TODO clean this up later
-      //
-      std::string dummy;
-      this->interface.make_telemetry_message( dummy );
 
       // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
       // and log the reply along with the command number. Write the reply back to the socket.

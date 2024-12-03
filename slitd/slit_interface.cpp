@@ -101,6 +101,17 @@ namespace Slit {
     error |= this->motorinterface.clear_errors();
     error |= this->motorinterface.set_servo( true );
 
+    std::string retstring;
+
+    this->is_open( "", retstring );
+    snapshot.isopen = ( retstring=="true" ? true : false );
+    if ( snapshot.isopen ) {
+      this->is_home( "", retstring );
+      snapshot.ishome = ( retstring=="true" ? true : false );
+    }
+
+    this->get( retstring );
+
     return error;
   }
   /***** Slit::Interface::open ************************************************/
@@ -301,7 +312,7 @@ namespace Slit {
       return ERROR;
     }
 
-    SlitDimension reqwidth, reqoffset;
+    SlitDimension reqwidth, reqoffset(0);
 
     // tokens.size() is guaranteed to be either 1 OR 2 at this point
     //
@@ -435,11 +446,8 @@ namespace Slit {
    *
    */
   long Interface::get( std::string args, std::string &retstring ) {
-    std::string function = "Slit::Interface::get";
     std::stringstream message;
     long error  = NO_ERROR;
-    float posA=NAN;
-    float posB=NAN;
     float poswidth=NAN;
     float posoffset=NAN;
 
@@ -447,28 +455,36 @@ namespace Slit {
     //
     if ( args == "?" || args == "help" || args == "-h" ) {
       retstring = SLITD_GET;
-      retstring.append( " \n" );
-      retstring.append( "  returns the current slit width and offset in arcseconds\n" );
+      retstring.append( " [ mm ]\n" );
+      retstring.append( "  returns the current slit width and offset in arcsec, or add \"mm\" to return\n" );
+      retstring.append( "  in units of mm.\n" );
       return HELP;
     }
 
     // this call reads the controller and returns the numeric values
     //
-    error = this->read_positions( poswidth, posoffset, posA, posB );
+    error = this->read_positions( poswidth, posoffset, snapshot.posA, snapshot.posB );
 
     // store the current readings in the class
     //
-    this->width  = SlitDimension( poswidth, Unit::MM );
-    this->offset = SlitDimension( posoffset, Unit::MM );
+    snapshot.width  = SlitDimension( poswidth, Unit::MM );
+    snapshot.offset = SlitDimension( posoffset, Unit::MM );
 
     // form the return value
     //
     std::stringstream s;
-    s << this->width.arcsec() << " " << this->offset.arcsec();
+    if ( args=="mm" ) {
+      s << snapshot.width.mm() << " " << snapshot.offset.mm() << " mm";
+    }
+    else {
+      s << snapshot.width.arcsec() << " " << snapshot.offset.arcsec();
+    }
     retstring = s.str();
 
     message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " " << retstring;
     this->async.enqueue( message.str() );
+
+    this->publish_snapshot();
 
     return error;
   }
@@ -503,8 +519,8 @@ namespace Slit {
     // get the actuator position for each address in controller_info
     //
     int axis=1;
-    error |= this->motorinterface.get_pos( "A", axis, posA );
-    error |= this->motorinterface.get_pos( "B", axis, posB );
+    if ( this->motorinterface.is_connected("A") ) error |= this->motorinterface.get_pos( "A", axis, posA );
+    if ( this->motorinterface.is_connected("B") ) error |= this->motorinterface.get_pos( "B", axis, posB );
 
     // calculate poswidth and posoffset from actuator positions,
     // which is width and offset in actuator units (mm)
@@ -634,79 +650,55 @@ namespace Slit {
   /***** Slit::Interface::send_command ****************************************/
 
 
-  /***** Slit::Interface::make_telemetry_message ******************************/
+  /***** Slit::Interface::handletopic_snapshot ********************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the "_snapshot"
+   *             topic and the payload contains my daemon name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    const std::string function="Slit::Interface::make_telemetry_message";
-
-    // assemble my telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
+    // If my name is in the jmessage then publish my snapshot
     //
-    nlohmann::json jmessage;
-    jmessage["messagetype"]="slitinfo";
-
-    // There needs to be at least one device defined
-    //
-    if ( this->numdev > 0 ) {
-      // get the position for each address in controller_info
-      //
-      float poswidth=NAN, posoffset=NAN, posA=NAN, posB=NAN;
-      this->read_positions( poswidth, posoffset, posA, posB );
-
-      auto width  = SlitDimension( poswidth, Unit::MM );
-      auto offset = SlitDimension( posoffset, Unit::MM );
-
-      // fill the jmessage with the positions just retrieved
-      //
-      if ( !std::isnan(poswidth) )  jmessage["SLITW"]    = width.arcsec();
-      if ( !std::isnan(posoffset) ) jmessage["SLITO"]    = offset.arcsec();
-      if ( !std::isnan(posA) )      jmessage["SLITPOSA"] = posA;
-      if ( !std::isnan(posB) )      jmessage["SLITPOSB"] = posB;
+    if ( jmessage_in.contains( Slit::DAEMON_NAME ) ) {
+      this->publish_snapshot();
     }
+    else
+    if ( jmessage_in.contains( "test" ) ) {
+      logwrite( "Slit::Interface::handletopic_snapshot", jmessage_in.dump() );
+    }
+  }
+  /***** Slit::Interface::handletopic_snapshot ********************************/
+
+
+  /***** Slit::Interface::publish_snapshot ************************************/
+  /**
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry.
+   *
+   */
+  void Interface::publish_snapshot() {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"]   = "slitd";
+    jmessage_out["ISOPEN"]   = snapshot.isopen;
+    jmessage_out["ISHOME"]   = snapshot.ishome;
+    jmessage_out["SLITW"]    = snapshot.width.arcsec();
+    jmessage_out["SLITO"]    = snapshot.offset.arcsec();
+    jmessage_out["SLITPOSA"] = snapshot.posA;
+    jmessage_out["SLITPOSB"] = snapshot.posB;
 
     try {
-      this->publisher->publish( jmessage );
+      this->publisher->publish( jmessage_out );
     }
     catch ( const std::exception &e ) {
-      logwrite( "Slit::Interface::make_telemetry_message",
+      logwrite( "Slit::Interface::publish_snapshot",
                 "ERROR publishing message: "+std::string(e.what()) );
       return;
     }
-
-    retstring = jmessage.dump();  // serialize the json message into retstring
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
   }
-  /***** Slit::Interface::make_telemetry_message ******************************/
+  /***** Slit::Interface::publish_snapshot ************************************/
 
-
-  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Slit::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
-    }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Slit::Interface::handletopic_snapshot", jmessage.dump() );
-    }
-  }
-
-
-  /*
-  void Interface::send_telemetry_message() {
-    nlohmann::json jmessage;
-    jmessage["SLITW"]    = this->width.arcsec();
-    jmessage["SLITO"]    = this->offset.arcsec();
-    jmessage["SLITPOSA"] = posA;
-    jmessage["SLITPOSB"] = posB;
-  }
-  */
 }
