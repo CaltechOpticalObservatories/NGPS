@@ -14,7 +14,7 @@ buttonbar
 JOG SETTINGS
 *
 button
-$param(jogSettings) ; $dir/jogset.sh $jog_arcsec # | $text
+$param(jogSettings) ; echo "$jog_arcsec" > $dir/jog.ini | $null      #$dir/jogset.sh $jog_arcsec # | $text
 #############
 LEFT
 *
@@ -38,7 +38,7 @@ PUT ON SLIT
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh # | $text
 #############
-PUT ON ACAM
+(PUT ON ACAM)
 *
 button
 $message(yesno,Move ACAM center to crosshairs?) # $dir/putonslit.sh # | $text

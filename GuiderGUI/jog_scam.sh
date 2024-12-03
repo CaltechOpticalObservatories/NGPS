@@ -61,4 +61,4 @@ echo "(X0, Y0, X1, Y1)"
 echo $X0_deg $Y0_deg $X1_deg $Y1_deg
 
 # slice camera command handles the spherical geometry - don't just compute the difference
-timeout 5 scam putonslit $X0_deg $Y0_deg $X1_deg $Y1_deg
+# timeout 5 scam putonslit $X0_deg $Y0_deg $X1_deg $Y1_deg

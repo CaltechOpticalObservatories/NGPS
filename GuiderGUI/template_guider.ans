@@ -16,7 +16,7 @@ FOCUS
 button
 $param(focusParam) ; tcs setfocus $focus # | $text
 #############
-PUT ON SLIT
+(PUT ON SLIT)
 *
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | $text

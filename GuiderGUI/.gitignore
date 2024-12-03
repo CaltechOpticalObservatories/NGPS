@@ -1,6 +1,7 @@
 # gitignore file
 buttons_guider.ans
 buttons_slicev.ans
+jog.ini
 
 # OSX garbage
 ._*
