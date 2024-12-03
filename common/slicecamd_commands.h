@@ -68,6 +68,5 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_PUTONSLIT+" [ ? | <slitra> <slitdec> <crossra> <crossdec> ]",
                                                 SLICECAMD_SAVEFRAMES+" [ ? | <nsave> <nskip> ]",
                                                 SLICECAMD_SHUTDOWN+" [ ? ]",
-                                                TELEMREQUEST+" [ ? ]",
                                                 SLICECAMD_TEST+" ? | <testname> ..."
                                               };

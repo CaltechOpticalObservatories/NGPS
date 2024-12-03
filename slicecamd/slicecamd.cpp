@@ -151,6 +151,12 @@ int main(int argc, char **argv) {
     slicecamd.exit_cleanly();
   }
 
+  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  slicecamd.interface.publish_snapshot();
+
+  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  slicecamd.interface.request_snapshot();
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.

@@ -241,6 +241,14 @@ namespace Slicecam {
       std::atomic<int> nsave_preserve_frames;  ///< number of frames to preserve (normally overwritten)
       std::atomic<int> nskip_preserve_frames;  ///< number of frames to skip before saving nsave... frames
 
+      std::mutex snapshot_mtx;
+      std::unordered_map<std::string, bool> snapshot_status;
+
+      struct {
+        double slitoffset;
+        double slitwidth;
+      } telem;
+
       GUIManager gui_manager;
 
       Interface()
@@ -253,7 +261,9 @@ namespace Slicecam {
           should_framegrab_run(false),
           is_framegrab_running(false),
           nsave_preserve_frames(0),
-          nskip_preserve_frames(0) {
+          nskip_preserve_frames(0),
+          snapshot_status { { "slitd", false } }
+      {
         topic_handlers = {
           { "_snapshot", std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
@@ -296,9 +306,11 @@ namespace Slicecam {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
+      void publish_snapshot();
+      void request_snapshot();
+      bool wait_for_snapshots();
 
       long bin( std::string args, std::string &retstring );
-      void make_telemetry_message( std::string &retstring );
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams
       long isopen( std::string which, bool &state, std::string &help );     /// wrapper for slicecams

@@ -1079,51 +1079,11 @@ namespace Slicecam {
   /***** Slicecam::Interface::bin *********************************************/
 
 
-  /***** Slicecam::Interface::make_telemetry_message **************************/
-  /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket so that
-   *             outside clients can ask for my telemetry.
-   * @param[out] retstring  string containing the serialization of the JSON message
-   *
-   */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"] = "slicecaminfo";
-
-    // loop through all cameras, getting their temperature (if open)
-    // and adding to the jmessage. default non-reading is 9999.
-    //
-    for ( const auto &pair : this->camera.andor ) {
-      std::string which = pair.second->camera_info.camera_name;
-      // only add to the message if the camera is open
-      //
-///   if ( this->isopen(which) ) {
-///     int ccdtemp = 99;
-///     pair.second->get_temperature( ccdtemp );
-///     std::string key="TANDOR_SCAM_"+which;
-///     jmessage[key] = static_cast<float>(ccdtemp);  // the database wants floats
-///   }
-    }
-
-    retstring = jmessage.dump();  // serialize the json message into retstring
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
-  }
-  /***** Slicecam::Interface::make_telemetry_message **************************/
-
-
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    // If my name is in the jmessage then publish my snapshot
+    //
     if ( jmessage.contains( Slicecam::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
+      this->publish_snapshot();
     }
     else
     if ( jmessage.contains( "test" ) ) {
@@ -1133,9 +1093,107 @@ namespace Slicecam {
 
 
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
+    Common::extract_telemetry_value( jmessage, "SLITO",  telem.slitoffset );
+    Common::extract_telemetry_value( jmessage, "SLITW",  telem.slitwidth );
+
     this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
     this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
   }
+
+
+  /***** Slicecam::Interface::publish_snapshot ********************************/
+  /**
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry.
+   *
+   */
+  void Interface::publish_snapshot() {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"]   = "slicecamd";
+
+    for ( const auto &[name, cam] : this->camera.andor ) {
+      std::string key="TANDOR_SCAM_"+name;
+      jmessage_out[key] = static_cast<float>(cam->camera_info.ccdtemp);  // the database wants a float
+    }
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::publish_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Slicecam::Interface::publish_snapshot ********************************/
+
+
+  /***** Slicecam::Interface::request_snapshot ********************************/
+  /**
+   * @brief      sends request for snapshot
+   *
+   */
+  void Interface::request_snapshot() {
+    nlohmann::json jmessage_out;
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    for ( const auto &[topic,status] : snapshot_status ) {
+      jmessage_out[topic]=false;
+    }
+    }
+
+    try {
+      this->publisher->publish( jmessage_out, "_snapshot" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::request_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Slicecam::Interface::request_snapshot ********************************/
+
+
+  /***** Slicecam::Interface::wait_for_snapshots ******************************/
+  /**
+   * @brief      wait for everyone to publish their snaphots
+   *
+   */
+  bool Interface::wait_for_snapshots() {
+    auto start_time = std::chrono::steady_clock::now();
+    auto timeout = std::chrono::seconds(3);  // set timeout duration
+
+    while (true) {
+      bool all_received = true;
+
+      // loop through all elements of snapshot_status,
+      // if any of them is false then clear all_received
+      {
+      std::lock_guard<std::mutex> lock(snapshot_mtx);
+      for (const auto &[topic, status] : snapshot_status) {
+        if (!status) {
+          all_received = false;
+          break;
+        }
+      }
+      }
+
+      if (all_received) return true;
+
+      if (std::chrono::steady_clock::now() - start_time > timeout) {
+        std::stringstream message;
+        message << "ERROR timeout waiting for telemetry from:";
+        for ( const auto &[topic,status] : snapshot_status ) {
+          if (!status) message << " " << topic;
+        }
+        logwrite( "Slicecam::Interface::wait_for_snapshots", message.str() );
+        return false;
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));  // avoid busy-waiting
+    }
+  }
+  /***** Slicecam::Interface::wait_for_snapshots ******************************/
 
 
   /***** Slicecam::Interface::configure_interface *****************************/
@@ -1325,10 +1383,10 @@ namespace Slicecam {
       }
     }
 
-    long error;
+    long error = this->tcs_init( "real", retstring );
 
     if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
-      error = this->framegrab( "start", retstring );       // start frame grabbing if open succeeds
+      error |= this->framegrab( "start", retstring );      // start frame grabbing if open succeeds
       std::thread( &Slicecam::GUIManager::push_gui_settings, &gui_manager ).detach();  // force display refresh
     }
     else error=ERROR;
@@ -1797,64 +1855,57 @@ namespace Slicecam {
     // and clears it (false) automatically when it goes out of scope.
     //
     {
-    std::unique_lock<std::mutex> lock( this->framegrab_mutex, std::defer_lock );             // try to get the mutex
-    if ( lock.try_lock() ) {
-      BoolState loop_running( this->is_framegrab_running );    // sets state true here, clears when it goes out of scope
+    BoolState loop_running( this->is_framegrab_running );    // sets state true here, clears when it goes out of scope
 
-      int _nsave = this->nsave_preserve_frames.load();  // number of frames to save in a row
-      int _nskip = this->nskip_preserve_frames.load();  // number of frames to skip before saving _nsave frames
+    int _nsave = this->nsave_preserve_frames.load();  // number of frames to save in a row
+    int _nskip = this->nskip_preserve_frames.load();  // number of frames to skip before saving _nsave frames
 
-      do {
-        // they will both have the same exptime so just get the first one
-        //
-        double exptime=0;
-        if ( !this->camera.andor.empty() ) {
-          exptime = this->camera.andor.begin()->second->camera_info.exptime;
-        }
-        if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
+    do {
+      // they will both have the same exptime so just get the first one
+      //
+      double exptime=0;
+      if ( !this->camera.andor.empty() ) {
+        exptime = this->camera.andor.begin()->second->camera_info.exptime;
+      }
+      if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
 
-        // Trigger and wait for acquisition on each camera sequentially.
-        // Unfortunately the SDK can only do this one at a time within the same process.
-        //
-        for ( auto &[name, cam] : this->camera.andor ) {
-          cam->acquire_one();
-        }
+      // Trigger and wait for acquisition on each camera sequentially.
+      // Unfortunately the SDK can only do this one at a time within the same process.
+      //
+      for ( auto &[name, cam] : this->camera.andor ) {
+        cam->acquire_one();
+      }
 
-        if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
+      if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
 
-        for ( auto &[name, cam] : this->camera.andor ) {
-          collect_header_info( cam );
-        }
+      for ( auto &[name, cam] : this->camera.andor ) {
+        collect_header_info( cam );
+      }
 
-        if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
-                                                               this->imagename,
-                                                               this->tcs_online.load() );    // write to FITS file
+      if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
+                                                             this->imagename,
+                                                             this->tcs_online.load() );    // write to FITS file
 
-        this->framegrab_time = std::chrono::steady_clock::time_point::min();
+      this->framegrab_time = std::chrono::steady_clock::time_point::min();
 
-        this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
+      this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
 
-        // Normally, framegrabs are overwritten to the same file.
-        // This optionally saves them at the requested cadence by
-        // copying to a different filename.
-        //
-        // Save a number of frames in a row
-        //
-        if ( _nsave-- > 0 ) {
-          this->preserve_framegrab();
-        }
-        // skip the next _nskip number of frames before saving _nsave again
-        if ( _nsave<1 && _nskip--<1 ) {
-          _nsave = this->nsave_preserve_frames.load();
-          _nskip = this->nskip_preserve_frames.load();
-        }
+      // Normally, framegrabs are overwritten to the same file.
+      // This optionally saves them at the requested cadence by
+      // copying to a different filename.
+      //
+      // Save a number of frames in a row
+      //
+      if ( _nsave-- > 0 ) {
+        this->preserve_framegrab();
+      }
+      // skip the next _nskip number of frames before saving _nsave again
+      if ( _nsave<1 && _nskip--<1 ) {
+        _nsave = this->nsave_preserve_frames.load();
+        _nskip = this->nskip_preserve_frames.load();
+      }
 
-      } while ( error==NO_ERROR && this->should_framegrab_run.load() );
-    }
-    else {                                                                                   // this shouldn't even happen
-      logwrite( function, "ERROR another thread is already running" );
-      return;
-    }
+    } while ( error==NO_ERROR && this->should_framegrab_run.load() );
     }
 
     if ( error != NO_ERROR ) {
@@ -2135,6 +2186,7 @@ namespace Slicecam {
     // Not connected, try to connect
     //
     if ( retstring.find("false") != std::string::npos ) {
+      logwrite( function, "connecting to acamd" );
       error = this->acamd.connect();
       if ( error != NO_ERROR ) {
         logwrite( function, "ERROR unable to connect to acamd -- will assume guiding is inactive" );
@@ -2972,10 +3024,15 @@ namespace Slicecam {
     auto hbin   = slicecam->camera_info.hbin;
     auto vbin   = slicecam->camera_info.vbin;
     auto pixscale = ( hbin==vbin ? this->fpoffsets.sliceparams[cam].pixscale*hbin : NAN );
-    auto crpix1 = this->fpoffsets.sliceparams[cam].crpix1 / hbin;
-    auto crpix2 = this->fpoffsets.sliceparams[cam].crpix2 / vbin;
     auto cdelt1 = this->fpoffsets.sliceparams[cam].cdelt1 * hbin;
     auto cdelt2 = this->fpoffsets.sliceparams[cam].cdelt2 * vbin;
+
+    // and adjust CRPIX for slit width
+    //
+    double factor = ( cam == "L" ? 1.5 : -1.5 );
+    double corr   = factor * telem.slitwidth / pixscale;
+    auto crpix1 = (this->fpoffsets.sliceparams[cam].crpix1 / hbin) + corr;
+    auto crpix2 = (this->fpoffsets.sliceparams[cam].crpix2 / vbin) //+ corr;
 
     // adjusting DATASEC is a little convoluted
     // datasec = "[h1:h2,v1:v2]"
