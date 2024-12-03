@@ -124,12 +124,13 @@ namespace Slicecam {
       std::string push_image;    ///<! name of script to push an image to GUI
 
     public:
-      GUIManager() : update(false), exptime(NAN), gain(-1) { }
+      GUIManager() : update(false), exptime(NAN), gain(-1), bin(-1) { }
 
       // These are the GUIDER GUI settings
       //
       double exptime;
       int gain;
+      int bin;
 
       // sets the private variable push_settings, call on config
       inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
@@ -151,13 +152,15 @@ namespace Slicecam {
        * @fn         get_message_string
        * @brief      returns a formatted message of all gui settings
        * @details    This message is the return string to guideset command.
-       * @return     string in form of <exptime> <gain>
+       * @return     string in form of <exptime> <gain> <bin>
        */
       std::string get_message_string() {
         std::stringstream message;
         if ( this->exptime < 0 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->exptime; }
         message << " ";
         if ( this->gain < 1 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->gain; }
+        message << " ";
+        if ( this->bin < 1 ) message << "x"; else { message << std::fixed << std::setprecision(3) << this->bin; }
         return message.str();
       }
 
@@ -241,13 +244,25 @@ namespace Slicecam {
       std::atomic<int> nsave_preserve_frames;  ///< number of frames to preserve (normally overwritten)
       std::atomic<int> nskip_preserve_frames;  ///< number of frames to skip before saving nsave... frames
 
-      std::mutex snapshot_mtx;
-      std::unordered_map<std::string, bool> snapshot_status;
-
       struct {
+        std::string tcsname;
+        bool is_tcs_open;
+        double angle_scope;
+        std::string ra_scope_hms;   // h:m:s
+        std::string dec_scope_dms;  // d:m:s
+        double ra_scope_h;          // decimal hours
+        double dec_scope_d;         // decimal degrees
+        double offsetra;
+        double offsetdec;
+        double az;
+        double telfocus;
+        double airmass;
         double slitoffset;
         double slitwidth;
-      } telem;
+      } telem;                      ///< holds my subscribed-to telemetry
+
+      std::mutex snapshot_mtx;
+      std::unordered_map<std::string, bool> snapshot_status;
 
       GUIManager gui_manager;
 
@@ -262,11 +277,13 @@ namespace Slicecam {
           is_framegrab_running(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
-          snapshot_status { { "slitd", false } }
+          snapshot_status { { "slitd", false }, {"tcsd", false} }
       {
         topic_handlers = {
           { "_snapshot", std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+          { "tcsd", std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
           { "slitd", std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
         };
@@ -306,6 +323,7 @@ namespace Slicecam {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
+      void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void request_snapshot();
       bool wait_for_snapshots();

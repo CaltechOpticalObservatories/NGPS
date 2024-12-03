@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
   // initialize the pub/sub handler, which
   // takes a list of subscription topics
   //
-  if ( slicecamd.interface.init_pubsub({"slitd"}) == ERROR ) {
+  if ( slicecamd.interface.init_pubsub({"slitd", "tcsd"}) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     slicecamd.exit_cleanly();
   }

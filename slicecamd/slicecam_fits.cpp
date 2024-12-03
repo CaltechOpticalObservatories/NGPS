@@ -217,7 +217,14 @@ logwrite( function, file_in );
 
       std::valarray<uint16_t> array( slicecam->camera_info.section_size );
 
-      for ( unsigned long i=0; i < slicecam->camera_info.section_size; i++ ) array[i] = data[i];
+      try {
+        std::copy_n( data, slicecam->camera_info.section_size, &array[0] );
+      }
+      catch (const std::exception &e) {
+        logwrite( function, "ERROR copying buffer: "+std::string(e.what()) );
+        return ERROR;
+      }
+
 
       long fpixel(1);              // start with the first pixel always
 

@@ -1903,6 +1903,8 @@ namespace Andor {
     if ( this->image_data != nullptr ) {
       delete[] this->image_data;
       this->image_data = nullptr;
+      this->camera_info.section_size = 0;
+      this->bufsz = 0;
     }
 
     return NO_ERROR;
@@ -2524,6 +2526,7 @@ namespace Andor {
 
     this->bufsz = ( (hend-hstart+1)/hbin ) * ( (vend-vstart+1)/vbin );
     this->image_data = new uint16_t[ this->bufsz ];
+    this->camera_info.section_size = this->bufsz;
 
     message.str(""); message << "allocated " << this->bufsz << " bytes for image_data buffer";
     logwrite( function, message.str() );

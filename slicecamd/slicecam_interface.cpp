@@ -1093,11 +1093,37 @@ namespace Slicecam {
 
 
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    snapshot_status["slitd"]=true;
+    }
     Common::extract_telemetry_value( jmessage, "SLITO",  telem.slitoffset );
     Common::extract_telemetry_value( jmessage, "SLITW",  telem.slitwidth );
 
     this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
     this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
+  }
+
+
+  void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    snapshot_status["tcsd"]=true;
+    }
+    // extract and store values in the class
+    //
+    Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
+    Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, "CASANGLE",   telem.angle_scope );
+    Common::extract_telemetry_value( jmessage, "TELRA",      telem.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, "TELDEC",     telem.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
+    Common::extract_telemetry_value( jmessage, "DECLOFFSET", telem.offsetdec );
+    Common::extract_telemetry_value( jmessage, "AZ",         telem.az );
+    Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
+    Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
   }
 
 
@@ -1878,6 +1904,11 @@ namespace Slicecam {
 
       if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
 
+      // request external telemetry once for both cameras, results in struct telem.
+      //
+      this->request_snapshot();
+      this->wait_for_snapshots();
+
       for ( auto &[name, cam] : this->camera.andor ) {
         collect_header_info( cam );
       }
@@ -1972,47 +2003,6 @@ namespace Slicecam {
   /***** Slicecam::Interface::preserve_framegrab ******************************/
 
 
-  /***** Slicecam::Interface::collect_header_info_threaded ********************/
-  /**
-   * @brief      calls collect_header_info for each andor map element
-   * @details    Loops through the andor STL map and spawns a thread for each
-   *             call, then waits for all threads to complete.
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::collect_header_info_threaded() {
-
-    // create a container to hold the threads
-    //
-    std::vector<std::thread> threads;
-
-    // Loop through all elements in the andor map and create a
-    // collect_header_info thread for each, passing the function, "this"
-    // and the pointer to the andor.
-    //
-//  for ( const auto &pair : this->camera.andor ) {
-    for ( auto &[name, cam] : this->camera.andor ) {
-//    threads.emplace_back( &Slicecam::Interface::collect_header_info, this, pair.second );
-//    collect_header_info( pair.second );
-      collect_header_info( cam );
-    }
-
-//  for ( auto &[key,val] : this->camera.bob ) {}
-
-    // Wait for all threads to complete by joining them to this main thread,
-    // not to each other.
-    //
-//  for ( auto &thread : threads ) {
-//    if ( thread.joinable() ) {
-//      thread.join();
-//    }
-//  }
-
-    return( this->read_error() );
-  }
-  /***** Slicecam::Interface::collect_header_info_threaded ********************/
-
-
   /***** Slicecam::Interface::gui_settings_control ****************************/
   /**
    * @brief      set or get the GUI settings for the SAOImage GUI display
@@ -2033,6 +2023,7 @@ namespace Slicecam {
   long Interface::gui_settings_control( std::string args, std::string &retstring ) {
     std::string function = "Slicecam::Interface::gui_settings_control";
     std::stringstream message;
+    auto info = this->camera.andor.begin()->second->camera_info;
 
     // Help
     //
@@ -2065,8 +2056,9 @@ namespace Slicecam {
     // These are used to determine if the requested values are different.
     // If they are the same then the GUI display won't be updated.
     //
-    float exptime_og = this->camera.andor.begin()->second->camera_info.exptime;
-    int gain_og = this->camera.andor.begin()->second->camera_info.gain;
+    float exptime_og = info.exptime;
+    int gain_og = info.gain;
+    int bin_og = (info.hbin==info.vbin ? info.hbin : -1 );
 
     long error = NO_ERROR;
     bool set = false;
@@ -2081,10 +2073,26 @@ namespace Slicecam {
         int gain = std::stoi( tokens.at(1) );
         int bin  = std::stoi( tokens.at(2) );
 
+        // If framegrab is running then stop it. This won't return until framegrabbing
+        // has stopped (or timeout).
+        //
+        bool was_framegrab_running = this->is_framegrab_running.load();
+        if ( was_framegrab_running ) {
+          std::string dontcare;
+          error = this->framegrab( "stop", dontcare );
+        }
+
         error |= camera.set_exptime( exptime );
         error |= camera.set_gain( gain );
         error |= camera.bin( bin, bin );
         set=true;
+
+        // If framegrab was previously running then restart it
+        //
+        if ( was_framegrab_running ) {
+          std::string dontcare;
+          error = this->framegrab( "start", dontcare );
+        }
       }
       catch( const std::exception &e ) {
         message.str(""); message << "ERROR parsing args \"" << args << "\": " << e.what();
@@ -2096,12 +2104,13 @@ namespace Slicecam {
     // Set or not, now read the current values and use the gui_manager
     // to set them in the class.
     //
-    gui_manager.exptime = this->camera.andor.begin()->second->camera_info.exptime;
-    gui_manager.gain = this->camera.andor.begin()->second->camera_info.gain;
+    gui_manager.exptime = info.exptime;
+    gui_manager.gain = info.gain;
+    gui_manager.bin = (info.hbin==info.vbin ? info.hbin : -1 );
 
     // If read-only (not set) or either exptime or gain changed, then set the flag for updating the GUI.
     //
-    if ( !set || gui_manager.exptime != exptime_og || gui_manager.gain != gain_og ) {
+    if ( !set || gui_manager.exptime != exptime_og || gui_manager.gain != gain_og || gui_manager.bin != bin_og ) {
       gui_manager.set_update();
     }
 
@@ -2978,36 +2987,16 @@ namespace Slicecam {
 
     std::string cam = slicecam->camera_info.camera_name;
 
-    bool _tcs = this->tcs_online.load();
-    std::string tcsname;
+    bool _tcs = telem.is_tcs_open;
+    std::string tcsname = ( _tcs ? telem.tcsname : "offline" );
 
-    // Check every time for the TCS because we don't ever want to save
-    // an image with ambiguous keywords.
-    //
-    if ( _tcs && this->tcsd.client.poll_open() ) {
-      this->tcsd.poll_name( tcsname );
-    }
-    else {
-      tcsname = "offline";
-      this->tcs_online.store( false );
-      _tcs = this->tcs_online.load();
-    }
-
-    double angle_scope=NAN, ra_scope=NAN, dec_scope=NAN,
-           angle_slit=NAN,  ra_slit=NAN,  dec_slit=NAN,
-           focus=NAN;
-
-    // Get the current pointing from the TCS
-    //
-    if ( _tcs ) this->tcsd.poll_cass( angle_scope );
-    if ( _tcs ) this->tcsd.poll_coords( ra_scope, dec_scope );  // returns RA in decimal hours, DEC in decimal degrees
-    if ( _tcs ) this->tcsd.poll_focus( focus );
+    double angle_slit=NAN,  ra_slit=NAN,  dec_slit=NAN;
 
     // Compute FP offsets from TCS coordinates (SCOPE) to SLIT coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
     // Results in degrees. Add thetadeg to the slit angle.
     //
-    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "SLIT", (ra_scope*TO_DEGREES), dec_scope, angle_scope,
+    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "SLIT", (telem.ra_scope_h*TO_DEGREES), telem.dec_scope_d, telem.angle_scope,
                                                                              ra_slit, dec_slit, angle_slit );
 
     angle_slit += this->fpoffsets.sliceparams[cam].thetadeg;
@@ -3103,7 +3092,7 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "CREATOR",  "slicecamd", "file creator" );
     slicecam->fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     slicecam->fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
-    slicecam->fitskeys.addkey( "TELFOCUS", focus, "telescope focus (mm)" );
+    slicecam->fitskeys.addkey( "TELFOCUS", telem.telfocus, "telescope focus (mm)" );
 
     slicecam->fitskeys.addkey( "PIXSCALE",  pixscale, "arcsec per pixel" );
     slicecam->fitskeys.addkey( "CRPIX1",    crpix1, "" );
@@ -3136,10 +3125,12 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "GAIN",     1, "e-/ADU" );
 
     slicecam->fitskeys.addkey( "POSANG",    angle_slit, "" );
-    slicecam->fitskeys.addkey( "TELRA",     ra_scope, "Telecscope Right Ascension hours" );
-    slicecam->fitskeys.addkey( "TELDEC",    dec_scope, "Telescope Declination degrees" );
-    slicecam->fitskeys.addkey( "CASANGLE",  angle_scope, "Cassegrain ring angle" );
-    slicecam->fitskeys.addkey( "AIRMASS",   1, "" );
+    slicecam->fitskeys.addkey( "TELRA",     telem.ra_scope_h, "Telecscope Right Ascension hours" );
+    slicecam->fitskeys.addkey( "TELDEC",    telem.dec_scope_d, "Telescope Declination degrees" );
+    slicecam->fitskeys.addkey( "CASANGLE",  telem.angle_scope, "Cassegrain ring angle" );
+    slicecam->fitskeys.addkey( "RAOFFS",    telem.offsetra, "Telescope RA offset" );
+    slicecam->fitskeys.addkey( "DECLOFFS",  telem.offsetdec, "Telescope DEC offset" );
+    slicecam->fitskeys.addkey( "AIRMASS",   telem.airmass, "" );
     slicecam->fitskeys.addkey( "WCSAXES",   2, "" );
     slicecam->fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     slicecam->fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
