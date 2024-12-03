@@ -641,9 +641,9 @@ namespace Sequencer {
         }
       }
 
-      // CAMERA_PREAMBLE
-      if (config.param[entry].compare( 0, CAMERA_PREAMBLE.length(), CAMERA_PREAMBLE )==0) {
-        this->sequence.camera_preamble.push_back( this->config.arg[entry] );
+      // CAMERA_PROLOGUE
+      if (config.param[entry].compare( 0, CAMERA_PROLOGUE.length(), CAMERA_PROLOGUE )==0) {
+        this->sequence.camera_prologue.push_back( this->config.arg[entry] );
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
@@ -1301,10 +1301,21 @@ namespace Sequencer {
                         this->sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
                         this->sequence.broadcast_seqstate();
 
-                        std::thread( std::ref( Sequencer::Sequence::dothread_sequence_start ),
-                                     std::ref( this->sequence) ).detach();
+                        std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
                         ret = NO_ERROR;
                       }
+      }
+      else
+
+      // start a single target
+      //
+      if ( cmd.compare( SEQUENCERD_STARTONE ) == 0 ) {
+                      this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
+                      this->sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
+                      this->sequence.broadcast_seqstate();
+                      this->sequence.cowboy=args;
+                      std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
+                      ret = NO_ERROR;
       }
       else
 
@@ -1429,6 +1440,14 @@ namespace Sequencer {
       }
       else
 
+      // 
+      //
+      if ( cmd == SEQUENCERD_GETONETARGET ) {
+                      this->sequence.target.get_specified_target( args, retstring );
+                      ret = NO_ERROR;
+      }
+      else
+
       // skip slew
       //
       if ( cmd.compare( SEQUENCERD_TCSNOWAIT ) == 0) {
@@ -1529,8 +1548,9 @@ namespace Sequencer {
       // routine specified by args.
       //
       if ( cmd.compare( SEQUENCERD_TEST ) == 0 ) {
+                      std::thread( &Sequencer::Sequence::dothread_test, std::ref(this->sequence) ).detach();
                       ret = this->sequence.test( args, retstring );
-                      if ( not retstring.empty() ) retstring.append( " " );
+                      if ( ! retstring.empty() ) retstring.append( " " );
       }
       else
 

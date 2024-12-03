@@ -9,6 +9,7 @@ DAEMON=no
 
 MESSAGEPORT=@MESSAGEPORT@
 MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
+PUBLISHER_PORT="tcp://127.0.0.1:@SEQUENCERD_PUB_PORT@"  # my zeromq pub port
 
 # daemon ports
 #
@@ -24,7 +25,7 @@ SLITD_PORT=@SLITD_BLK_PORT@
 TCSD_PORT=@TCSD_BLK_PORT@
 FITERD_PORT=@FILTERD_BLK_PORT@
 
-# Camera preamble
+# Camera prologue
 #
 # These commands are sent to the camera daemon on startup.
 # There can be multiple commands, use one line for each command.
@@ -35,26 +36,27 @@ FITERD_PORT=@FILTERD_BLK_PORT@
 # then that command will be sent to all cameras that were opened with the
 # first (open . . .) command.
 #
-CAMERA_PREAMBLE=open
-CAMERA_PREAMBLE=load
-CAMERA_PREAMBLE=(native CSH)
-CAMERA_PREAMBLE=(native PON)
-CAMERA_PREAMBLE=(native ERS 1000 1000)
-CAMERA_PREAMBLE=(imsize I 1020 4114 0 10 1 1)
-CAMERA_PREAMBLE=(imsize R 1020 4114 0 10 1 1)
-CAMERA_PREAMBLE=(native WRM 0x400004 2040)
-CAMERA_PREAMBLE=(exptime 0)
-CAMERA_PREAMBLE=(readout I U2)
-CAMERA_PREAMBLE=(readout R U1)
-CAMERA_PREAMBLE=(useframes false)
-CAMERA_PREAMBLE=(mex true)
-CAMERA_PREAMBLE=(shutter enable)
-CAMERA_PREAMBLE=(native EPG 500)
-CAMERA_PREAMBLE=(fitsnaming time)
+CAMERA_PROLOGUE=open
+CAMERA_PROLOGUE=load
+CAMERA_PROLOGUE=(native CSH)
+CAMERA_PROLOGUE=(native PON)
+CAMERA_PROLOGUE=(native ERS 1000 1000)
+CAMERA_PROLOGUE=(imsize I 1220 4114 0 100 1 1)
+CAMERA_PROLOGUE=(imsize R 1220 4114 0 100 1 1)
+CAMERA_PROLOGUE=(native WRM 0x400004 2040)
+CAMERA_PROLOGUE=(exptime 0)
+CAMERA_PROLOGUE=(readout I U2)
+CAMERA_PROLOGUE=(readout R U1)
+CAMERA_PROLOGUE=(useframes false)
+CAMERA_PROLOGUE=(mex true)
+CAMERA_PROLOGUE=(shutter enable)
+CAMERA_PROLOGUE=(native EPG 500)
+CAMERA_PROLOGUE=(fitsnaming number)
+CAMERA_PROLOGUE=(basename ngps)
 
 # Camera epilogue
 #
-# Analogous to preamble, these commands are sent to the camera daemon on shutdown.
+# Analogous to prologue, these commands are sent to the camera daemon on shutdown.
 #
 CAMERA_EPILOGUE=(native POF)
 CAMERA_EPILOGUE=(close)
@@ -101,10 +103,10 @@ TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify 
 # ACAM Target acquisition
 #
 ACQUIRE_TIMEOUT=90                   # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
-ACQUIRE_RETRYS=3                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
+ACQUIRE_RETRYS=5                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
-ACQUIRE_TCS_MAX_OFFSET=30            # the maximum allowable offset sent to the TCS, in arcsec
+ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 
 # miscellaneous
 #
@@ -120,3 +122,7 @@ UPDATE_TIME_REMAINING=10             # block updates to active target with less 
 TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
 TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
 TELEM_PROVIDER=(camerad    @CAMERAD_NB_PORT@)
+#
+SUBSCRIBE_TO=(slitd      "tcp://127.0.0.1:@SLITD_PUB_PORT@")
+SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
+SUBSCRIBE_TO=(camerad    "tcp://127.0.0.1:@CAMERAD_PUB_PORT@")

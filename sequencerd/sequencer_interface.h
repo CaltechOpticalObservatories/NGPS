@@ -47,7 +47,7 @@ namespace Sequencer {
   const std::string DB_COMPLETED="DB_COMPLETED";  ///< name of the completed observations table configuration parameter
   const std::string DB_SETS="DB_SETS";            ///< name of the completed target sets table configuration parameter
 
-  const std::string CAMERA_PREAMBLE="CAMERA_PREAMBLE";  ///< parameter name which defines CAMERA_PREAMBLE commands
+  const std::string CAMERA_PROLOGUE="CAMERA_PROLOGUE";  ///< parameter name which defines CAMERA_PROLOGUE commands
   const std::string CAMERA_EPILOGUE="CAMERA_EPILOGUE";  ///< parameter name which defines CAMERA_EPILOGUE commands
 
   const std::string POWER_SLIT="POWER_SLIT";         ///< parameter name which defines NPS_PLUG names required for slit hardware
@@ -109,6 +109,35 @@ namespace Sequencer {
   /***** Sequencer::PowerSwitch ***********************************************/
 
 
+  class DatabaseManager {
+    private:
+      mysqlx::Session session;
+      mysqlx::Schema db;
+      mysqlx::Table table;
+
+    public:
+      DatabaseManager( const std::string &host, int port,
+                       const std::string &user, const std::string &password,
+                       const std::string &schema, const std::string tablename )
+        : session( mysqlx::SessionOption::HOST, host,
+                   mysqlx::SessionOption::PORT, port,
+                   mysqlx::SessionOption::USER, user,
+                   mysqlx::SessionOption::PWD, password ),
+          db( session.getSchema(schema) ),
+          table( db.getTable(tablename) ) { }
+
+      mysqlx::RowResult do_query( const std::string &condition, const std::string &order,
+                                  const std::map<std::string, std::string> &bindings,
+                                  const std::vector<std::string> &columns={"*"} ) {
+        auto query = table.select(columns).where(condition).orderBy(order);
+        for ( const auto &[key, value] : bindings ) {
+          query.bind(key, value);
+        }
+        return query.execute();
+      }
+  };
+
+
   /***** Sequencer::TargetInfo ************************************************/
   /**
    * @class  TargetInfo
@@ -157,6 +186,8 @@ namespace Sequencer {
                      targetset_cols  { "SET_ID",
                                        "SET_NAME" },
                      offset_threshold(0), max_tcs_offset(0) { init_record(); }
+
+      std::unique_ptr<DatabaseManager> dbManager;
 
       SkyInfo::FPOffsets fpoffsets;       ///< for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
@@ -365,9 +396,11 @@ namespace Sequencer {
       std::atomic<bool> acquired;         ///< true on successful acquisition and while guiding
 
       mysqlx::col_count_t  colnum( std::string field, std::vector<std::string> vec );   ///< get column number of requested field from specified vector list
+      TargetInfo::TargetState get_specified_target( std::string args, std::string &retstring );
       TargetInfo::TargetState get_next( );                     ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
+      long parse_target_from_row( const mysqlx::Row &row );  ///< fills target class using cols from DB row
       long target_qc_check( std::string &status );                   ///< target info quality control check
       long add_row( int number_in, std::string name_in, std::string ra_hms_in, std::string dec_dms_in,
                     double slita_in, double slitw_in, double exptime_in, std::string pointmode_in );   ///< add a row to the database

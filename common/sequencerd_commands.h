@@ -12,6 +12,7 @@ const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";
 const std::string SEQUENCERD_DOMENOWAIT = "domenowait";
 const std::string SEQUENCERD_EXIT       = "exit";
+const std::string SEQUENCERD_GETONETARGET = "getone";
 const std::string SEQUENCERD_GUIDE      = "guide";
 const std::string SEQUENCERD_MODEXPTIME = "modexptime";
 const std::string SEQUENCERD_ONTARGET   = "ontarget";
@@ -19,6 +20,7 @@ const std::string SEQUENCERD_PAUSE      = "pause";
 const std::string SEQUENCERD_RESUME     = "resume";
 const std::string SEQUENCERD_SHUTDOWN   = "shutdown";
 const std::string SEQUENCERD_START      = "start";
+const std::string SEQUENCERD_STARTONE   = "startone";
 const std::string SEQUENCERD_STARTUP    = "startup";
 const std::string SEQUENCERD_STATE      = "state";
 const std::string SEQUENCERD_STOP       = "stop";
@@ -48,6 +50,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_DOMENOWAIT,
                                                      SEQUENCERD_DOTYPE+" [ one | all ]",
                                                      SEQUENCERD_EXIT,
+                                                     SEQUENCERD_GETONETARGET,
                                                      SEQUENCERD_GUIDE,
                                                      SEQUENCERD_MODEXPTIME+" <exptime>",
                                                      SEQUENCERD_ONTARGET,
@@ -56,6 +59,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      TELEMREQUEST+" [?]",
                                                      SEQUENCERD_SHUTDOWN,
                                                      SEQUENCERD_START,
+                                                     SEQUENCERD_STARTONE,
                                                      SEQUENCERD_STARTUP,
                                                      SEQUENCERD_STATE,
                                                      SEQUENCERD_STOP,

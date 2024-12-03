@@ -93,6 +93,11 @@ namespace Sequencer {
     std::stringstream message;
     long error = NO_ERROR;
 
+    if ( this->db_configured ) {
+      logwrite( function, "database already configured" );
+      return NO_ERROR;
+    }
+
     if ( param == Sequencer::DB_HOST ) {
       this->db_host = value;
     }
@@ -155,6 +160,9 @@ namespace Sequencer {
          !this->db_completed.empty()  &&
          !this->db_sets.empty()       &&
          this->db_port  != -1         ) {
+      this->dbManager = std::make_unique<DatabaseManager>(this->db_host, this->db_port,
+                                                          this->db_user, this->db_pass,
+                                                          this->db_schema, this->db_active);
       this->db_configured = true;
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] host=" << this->db_host << " port=" << this->db_port
@@ -449,6 +457,76 @@ namespace Sequencer {
   /***** Sequencer::TargetInfo::add_row ***************************************/
 
 
+  TargetInfo::TargetState TargetInfo::get_specified_target( std::string args, std::string &retstring ) {
+    const std::string function="Sequencer::TargetInfo::get_specified_target";
+    std::stringstream message;
+
+    if ( !is_db_configured() ) {
+      message.str(""); message << "ERROR database not configured (check .cfg file)";
+      retstring = message.str();
+      logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
+      return TARGET_ERROR;
+    }
+
+    try {
+      int _obsid = std::stoi(args);
+
+      std::string condition = "OBSERVATION_ID like :obsid";
+      std::string order = "OBSERVATION_ID";
+      std::map<std::string, std::string> bindings = { {"obsid", args} };
+
+      mysqlx::RowResult result = dbManager->do_query(condition, order, bindings, this->targetlist_cols);
+
+      mysqlx::row_count_t rowcount = result.count();
+      mysqlx::col_count_t colcount = result.getColumnCount();
+
+      message.str(""); message << "rowcount=" << rowcount << " colcount=" << colcount;
+      logwrite( function, message.str() );
+
+      if ( result.count() < 1 ) {
+        message.str(""); message << "no matching target found for obsid " << _obsid;
+        retstring = message.str();
+        logwrite( function, message.str() );
+        init_record();    // ensures that any previous record's info is not mistaken for this one
+        return TARGET_NOT_FOUND;
+      }
+
+      // Fetch the current row,
+      //
+      mysqlx::Row row = result.fetchOne();
+
+      // which should not be empty.
+      //
+      if ( ! row ) {
+        logwrite( function, "ERROR no row read from database" );
+        return TARGET_ERROR;
+      }
+      else logwrite( function, "read target row from database" );
+
+      if ( this->parse_target_from_row( row ) != NO_ERROR ) return TARGET_ERROR;
+    }
+    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
+      message.str(""); message << "ERROR mySQL exception: " << err;
+      retstring = message.str();
+      logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
+      return TARGET_ERROR;
+    }
+    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      message.str(""); message << "ERROR exception: " << ex.what();
+      retstring = message.str();
+      logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
+      return TARGET_ERROR;
+    }
+
+    logwrite( function, "loaded target "+std::string(this->name) );
+
+    return TARGET_FOUND;
+  }
+
+
   /***** Sequencer::TargetInfo::get_next **************************************/
   /**
    * @brief      get next target from DB whose state is Sequencer::TARGET_PENDING
@@ -561,8 +639,7 @@ namespace Sequencer {
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] retrieved " << colcount << " columns from row";
-      logwrite( function, message.str() );
+      logwrite( function, "[DEBUG] retrieved "+std::to_string(colcount)+" columns" );
 #endif
 
       // Fetch the current row,
@@ -576,6 +653,53 @@ namespace Sequencer {
         return TARGET_ERROR;
       }
 
+      error = this->parse_target_from_row( row );
+    }
+    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
+      message.str(""); message << "ERROR mySQL exception ";
+      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
+      else { message << "( col = " << col << " )"; }
+      message << ": " << err;
+      status = message.str();
+      logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
+      return TARGET_ERROR;
+    }
+    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      message.str(""); message << "ERROR exception ";
+      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
+      else { message << "( col = " << col << " )"; }
+      message << ": " << ex.what();
+      status = message.str();
+      logwrite( function, message.str() );
+      init_record();    // ensures that any previous record's info is not mistaken for this one
+      return TARGET_ERROR;
+    }
+
+    message.str(""); message << "retrieved target id " << this->obsid << " " << this->name << " " << this->ra_hms << " " << this->dec_dms
+                             << " from set " << this->setid << " " << this->setname;
+    status = message.str();
+    logwrite( function, message.str() );
+
+    // If we got to here then target is found, but do one last quality-control check before returning success
+    //
+    error = target_qc_check( status );
+
+    return ( error == NO_ERROR ? TARGET_FOUND : TARGET_ERROR );
+  }
+  /***** Sequencer::TargetInfo::get_next **************************************/
+
+
+  /***** Sequencer::TargetInfo::parse_target_from_row *************************/
+  /**
+   * @brief      
+   * @param[in]  
+   * @param[out] 
+   * @return     
+   *
+   */
+  long TargetInfo::parse_target_from_row( const mysqlx::Row &row ) {
+    try {
       // To get the value of a field, call extract_column_from_row<T>( FIELD, row, [default] )
       // Call it with the explicit template instantiation type <T> to match the data type of
       // the value, pass it the name of the field and the mysqlx::Row.
@@ -619,49 +743,14 @@ namespace Sequencer {
 
 //    this->airmasslimit = extract_column_from_row<double>( "AIRMASS_MAX", row, 99.0 );
     }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR mySQL exception ";
-      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
-      else { message << "( col = " << col << " )"; }
-      message << ": " << err;
-      status = message.str();
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return( TARGET_ERROR );
-    }
-    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR exception ";
-      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
-      else { message << "( col = " << col << " )"; }
-      message << ": " << ex.what();
-      status = message.str();
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return( TARGET_ERROR );
-    }
-    catch ( const char *ex ) {            /// catch everything else
-      message.str(""); message << "ERROR exception ";
-      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
-      else { message << "( col = " << col << " )"; }
-      message << ": " << ex;
-      status = message.str();
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return( TARGET_ERROR );
+    catch ( const std::runtime_error &e ) {
+      logwrite( "Sequencer::TargetInfo::parse_target_from_row", "ERROR: "+std::string(e.what()) );
+      return ERROR;
     }
 
-    message.str(""); message << "retrieved target id " << this->obsid << " " << this->name << " " << this->ra_hms << " " << this->dec_dms
-                             << " from set " << this->setid << " " << this->setname;
-    status = message.str();
-    logwrite( function, message.str() );
-
-    // If we got to here then target is found, but do one last quality-control check before returning success
-    //
-    error = target_qc_check( status );
-
-    return ( error == NO_ERROR ? TARGET_FOUND : TARGET_ERROR );
+    return NO_ERROR;
   }
-  /***** Sequencer::TargetInfo::get_next **************************************/
+  /***** Sequencer::TargetInfo::parse_target_from_row *************************/
 
 
   /***** Sequencer::TargetInfo::target_qc_check *******************************/

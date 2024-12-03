@@ -276,6 +276,8 @@ namespace Sequencer {
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
+      std::string cowboy;
+
       std::string last_target;
 
       std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown
@@ -299,7 +301,7 @@ namespace Sequencer {
 
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
-      std::vector<std::string> camera_preamble;  ///< commands to send to camera on initialization, read from cfg file
+      std::vector<std::string> camera_prologue;  ///< commands to send to camera on initialization, read from cfg file
       std::vector<std::string> camera_epilogue;  ///< commands to send to camera on shutdown, read from cfg file
 
 ///   inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
@@ -351,19 +353,20 @@ namespace Sequencer {
 
       // These are various jobs that are done in their own threads
       //
-      static void dothread_trigger_exposure( Sequencer::Sequence &seq );       ///< trigger and wait for exposure
+      void dothread_trigger_exposure();       ///< trigger and wait for exposure
       static void dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in );  ///< modify exptime while exposure running
-      static void dothread_acquisition( Sequencer::Sequence &seq );            /// performs the acquisition sequence when signalled
+      void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
       static void dothread_wait_for_state( Sequencer::Sequence &seq );         ///< wait for seqstate to be requested state
-      static void dothread_sequence_start( Sequencer::Sequence &seq );         ///< main sequence start thread
-      static void dothread_calib_set( Sequencer::Sequence &seq );              ///< sets calib according to target entry params
-      static void dothread_camera_set( Sequencer::Sequence &seq );             ///< sets camera according to target entry params
-      static void dothread_slit_set( Sequencer::Sequence &seq );               ///< sets slit according to target entry params
-      static void dothread_move_to_target( Sequencer::Sequence &seq );         ///< sends request to TCS to move to target coords
+      void dothread_test();         ///< main sequence start thread
+      void dothread_sequence_start();         ///< main sequence start thread
+      void dothread_calib_set();              ///< sets calib according to target entry params
+      void dothread_camera_set();             ///< sets camera according to target entry params
+      void dothread_slit_set();               ///< sets slit according to target entry params
+      void dothread_move_to_target();         ///< sends request to TCS to move to target coords
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
-      static void dothread_focus_set( Sequencer::Sequence &seq );
-      static void dothread_flexure_set( Sequencer::Sequence &seq );
+      void dothread_focus_set();
+      void dothread_flexure_set();
 
       static void dothread_andor_init( Sequencer::Sequence &seq );             ///< initializes connections to acamd and slicecamd
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
