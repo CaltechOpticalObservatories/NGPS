@@ -3032,7 +3032,7 @@ namespace Slicecam {
     double factor = ( cam == "L" ? 1.5 : -1.5 );
     double corr   = factor * telem.slitwidth / pixscale;
     auto crpix1 = (this->fpoffsets.sliceparams[cam].crpix1 / hbin) + corr;
-    auto crpix2 = (this->fpoffsets.sliceparams[cam].crpix2 / vbin) //+ corr;
+    auto crpix2 = (this->fpoffsets.sliceparams[cam].crpix2 / vbin);
 
     // adjusting DATASEC is a little convoluted
     // datasec = "[h1:h2,v1:v2]"
