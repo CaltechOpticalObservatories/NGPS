@@ -46,6 +46,8 @@ echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   GAIN=${gain}   
   color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
   | xpaset $id region 2>&1
 
+xpaset -p $id region group status new
+
 echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}} \
   color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
   | xpaset $id region 2>&1

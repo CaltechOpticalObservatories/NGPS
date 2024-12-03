@@ -14,15 +14,18 @@ crosscenter=`xpaget $id crosshair wcs degrees`
 slitcenter=`xpaget $id region -format xy -system wcs -group slitcenter -skyformat degrees`
 
 # Define the slit region coordinates
-hbin=`xpaget SLICEVIEW fits header keyword HBIN`
-vbin=`xpaget SLICEVIEW fits header keyword VBIN`
-xslit=$(( 693 / $hbin ))
-yslit=$(( 512 / $vbin ))
-xwidth=$(( 24 / $hbin ))
-ywidth=$(( 200 / $vbin ))
+xslit=`xpaget SLICEVIEW fits header keyword CRPIX1`  # defaults to Left camera?
+yslit=`xpaget SLICEVIEW fits header keyword CRPIX2`
+slitw_arcsec=`xpaget SLICEVIEW fits header keyword SLITW`
+pixscale=`xpaget SLICEVIEW fits header keyword PIXSCALE`
+# cdelt1=`xpaget SLICEVIEW fits header keyword CDELT1`
+# cdelt2=`xpaget SLICEVIEW fits header keyword CDELT2`
+
+xwidth=$(echo "scale=2; $slitw_arcsec / $pixscale" | bc)
+ywidth=$(echo "scale=2; 10 / $pixscale" | bc)
 slitreg="image; box($xslit,$yslit,$xwidth,$ywidth,0) # color=cyan edit=0 move=0 rotate=0 tag={slitcenter}"
 
-# If the slit result is empty string, try loading the slit region file
+# If the slit result is empty string, try loading the slit
 if [ -z "$slitcenter" ]; then
   echo No slit! ;
   echo "$slitreg" | xpaset $id region
@@ -46,7 +49,7 @@ echo "(slitRA, slitDEC, crossRA, crossDEC)"
 echo $slitRA_deg $slitDEC_deg $crossRA_deg $crossDEC_deg
 
 # slice camera command
-scam putonslit $slitRA_deg $slitDEC_deg $crossRA_deg $crossDEC_deg
+timeout 5 scam putonslit $slitRA_deg $slitDEC_deg $crossRA_deg $crossDEC_deg
 
 # Use the result:
 # import from FPoffsets:  solve_offset_deg(slitRA, slitDEC, crossRA, crossDEC)

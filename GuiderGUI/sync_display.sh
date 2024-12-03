@@ -26,6 +26,10 @@ fi
 xpaset -p $id zoom to fit;
 xpaset -p $id mode crosshair;
 
+if [[ "$camera" == "slicev" ]]; then
+    xpaset -p $id lock scalelimits yes  # equalize sides of slicer cams; not necessary for ACAM
+fi
+
 # request acamd to print parameters to stdout
 #params=`acam guideset | awk '{$NF="";sub(/[ \t]+$/,"")}1'` # awk removes final status word ("ERROR"/"DONE")
 

@@ -1,11 +1,42 @@
 param guiderSettings
     # variable type {label} {default} {Long description}
-    exptime entry {Exposure time} {DEFexptime} {Exptime in seconds}
-    gain entry {Gain} {DEFgain} {Camera conversion gain}
-    filter menu {Filter} {DEFfilter|block|g|r|i|open|clear} {ACAM Filter}
-    focus entry {Focus} {DEFfocus} {Telescope focus position}
+    exptime entry {Exposure time (s)} {DEFexptime} { }
+    gain entry {CCD Gain} {DEFgain} { }
+    filter menu {ACAM Filter} {DEFfilter|block|g|r|i|open|clear} { }
+    focus entry {Focus} {DEFfocus} { }  ### DELETE THIS 
+endparam
+param focusParam
+    focus entry {TCS Focus (mm)} {DEFfocus} { }
 endparam
 #############
+buttonbar
+#############
+FOCUS
+*
+button
+$param(focusParam) ; tcs setfocus $focus # | $text
+#############
+PUT ON SLIT
+*
+button
+$message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | $text
+#############
+GUIDE
+*
+button
+$message(yesno,Start guiding in this position?) | acam acquire here # | $text
+#############
+STOP
+*
+button
+$message(yesno,Stop guiding?) | acam acquire stop # | $text
+#############
+#CALIBRATE
+#*
+#button
+#$message(yesno,Calibrate ACAM? This will send some offsets.) | acam offsetcal | $text
+#############
+endbuttonbar
 buttonbar
 #############    $dir macro refers to directory of this file
 SYNC DISPLAY
@@ -13,7 +44,7 @@ SYNC DISPLAY
 button
 $dir/sync_display.sh guider # | $text
 #############
-CAM SETTINGS
+CAMERA SETTINGS
 *
 button
 $param(guiderSettings) ; acam guideset $exptime $gain $filter $focus # | $text
@@ -23,27 +54,13 @@ GRAB FITS
 button
 $dir/grabfits.sh guider # | $text
 #############
-PUT ON SLIT
-*
-button
-$message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | $text
-#############
-GUIDE HERE
-*
-button
-$message(yesno,Start guiding here?) | $dir/guide_here.sh | $text
-#############
-CALIBRATE
-*
-button
-$message(yesno,Calibrate ACAM? This will send some offsets.) | acam offsetcal | $text
-#############
 GUI HELP
 *
 button
 cat $dir/help_guider.txt | $text
 #############
 endbuttonbar
+
 hmenu Stuff
   startsync
   *

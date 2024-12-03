@@ -1,11 +1,12 @@
 param scamSettings
     # variable type {label} {default} {Long description}
-    exptime entry {Exposure time} {DEFexptime} {Exptime in seconds}
-    gain entry {Gain} {DEFgain} {Camera conversion gain}
+    exptime entry {Exposure time (s)} {DEFexptime} {}
+    gain entry {CCD Gain} {DEFgain} { }
+    bin menu {Binning (px)} {DEFbin|1|2|4|8} { }
 endparam
 param jogSettings
     # variable type {label} {default} {Long description}
-    jog_arcsec entry {Offset size} {DEFjog} {Offset in arcsec}
+    jog_arcsec entry {Offset step (arcsec)} {DEFjog} { }
 endparam
 #############
 buttonbar
@@ -13,24 +14,24 @@ buttonbar
 JOG SETTINGS
 *
 button
-$param(jogSettings) ; scam jogset $jog_arcsec # | $text
+$param(jogSettings) ; $dir/jogset.sh $jog_arcsec # | $text
 #############
-UP
-*
-button
-echo scam jog N | $text
-DOWN
-*
-button
-echo scam jog S | $text 
 LEFT
 *
 button
-echo scam jog E | $text 
+$dir/jog_scam.sh LEFT | $text 
 RIGHT
 *
 button
-echo scam jog W | $text
+$dir/jog_scam.sh RIGHT | $text 
+UP
+*
+button
+$dir/jog_scam.sh UP | $text 
+DOWN
+*
+button
+$dir/jog_scam.sh DOWN | $text 
 #############
 PUT ON SLIT
 *
@@ -55,7 +56,7 @@ $dir/sync_display.sh slicev # | $text
 CAMERA SETTINGS
 *
 button
-$param(scamSettings) ; scam guiset $exptime $gain # | $text
+$param(scamSettings) ; scam guiset $exptime $gain $bin # | $text
 #############
 GRAB FITS
 *
