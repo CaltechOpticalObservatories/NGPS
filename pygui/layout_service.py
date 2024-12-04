@@ -1060,7 +1060,7 @@ class LayoutService:
     def on_offset_to_target_click(self):
         """Handle the Offset To Target button click event"""
         print("Offset To Target button clicked!")
-        command = f"tcs offset {self.current_offset_ra} {self.current_offset_dec}"
+        command = f"tcs offset {self.current_offset_ra} {self.current_offset_dec}\n"
         print(f"Sending command to SequencerService: {command}")  # Print the command being sent
         # Call send_command method from SequencerService
         self.parent.send_command(command)
