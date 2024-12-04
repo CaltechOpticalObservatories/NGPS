@@ -4,6 +4,8 @@ from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
 from logic_service import LogicService
 from PyQt5.QtCore import Qt
+from PyQt5.QtMultimedia import QSound
+import time
 
 class LayoutService:
     def __init__(self, parent):
@@ -11,6 +13,7 @@ class LayoutService:
         self.instrument_status_service = InstrumentStatusService(self.parent)
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
+        self.current_observation_id = None
 
     def create_layout(self):
         main_layout = QHBoxLayout()
@@ -218,14 +221,21 @@ class LayoutService:
 
         return progress_layout
 
-
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
         image_info_layout.setSpacing(10)
 
+        # Create the QLineEdit widgets
         self.parent.image_name = QLineEdit("NGPS_2024_11_21_Image_1.fits")
         self.parent.image_number = QLineEdit("1")
 
+        # Set the image_name widget to stretch and fill available space
+        self.parent.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # Set the image_number widget to be smaller
+        self.parent.image_number.setFixedWidth(80)  # You can adjust the width as needed
+
+        # Add the QLabel and QLineEdit widgets to the layout
         image_info_layout.addWidget(QLabel("Image Name:"))
         image_info_layout.addWidget(self.parent.image_name)
         image_info_layout.addWidget(QLabel("Image Number:"))
@@ -352,11 +362,13 @@ class LayoutService:
             # Create a dictionary to hold the target data from the selected row
             target_data = {}
 
-            # Variable to store the OBSERVATION_ID
+            # Variables to store the target values
             observation_id = None
             exposure_time = None
             slit_width = None
             target_name = None
+            ra = None
+            dec = None
 
             print("Selected Row:", selected_row)  # Print the selected row index
             print("Column Headers:", column_headers)  # Print the column headers
@@ -381,6 +393,16 @@ class LayoutService:
                 if header == 'SLITWIDTH':
                     slit_width = value  # Store the slit width
                     print(f"Found Slit Width: {slit_width}")  # Print the found slit width
+
+                # Check if the header is 'RA' and extract its value
+                if header == 'RA':
+                    ra = value  # Store the RA
+                    print(f"Found RA: {ra}")  # Print the found RA 
+
+                # Check if the header is 'DEC' and extract its value
+                if header == 'DEC':
+                    dec = value  # Store the DEC
+                    print(f"Found DEC: {dec}")  # Print the found DEC 
                 
                 # If the header is 'NAME', store it as the target name
                 if header == 'NAME':
@@ -393,6 +415,8 @@ class LayoutService:
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
                 self.current_observation_id = observation_id
+                self.current_ra = ra
+                self.current_dec = dec
             # if exposure_time:
             #     self.current_exposure_time = exposure_time
             #     self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
@@ -463,8 +487,9 @@ class LayoutService:
         """Slot to handle 'Go' button click and send the target command."""
         if hasattr(self, 'current_observation_id'):
             observation_id = self.current_observation_id
-            print(f"Sending command: seq targetsingle {observation_id}")  # Print the command being sent
+            print(f"Sending command: seq targetsingle {observation_id}")
             self.send_target_command(observation_id)
+            QSound.play("sound/go_button_clicked.wav")
 
             # Disable the button immediately after the user clicks it
             # self.go_button.setEnabled(False)
@@ -888,31 +913,55 @@ class LayoutService:
         return row1_widget
 
     def create_row2(self):
-        """Create Row 2 layout with Exposure Time, Slit Width, and Refresh Button"""
-        row2_layout = QHBoxLayout()
+        """Create Row 2 layout with Exposure Time, Slit Width, and Confirm Button"""
+        row2_layout = QVBoxLayout()  # Use a QVBoxLayout to stack widgets vertically
         row2_layout.setContentsMargins(0, 0, 0, 0)
         row2_layout.setSpacing(5)
 
+        # Create a layout for Exposure Time Label and Input Field
+        exposure_time_layout = QHBoxLayout()
         self.exposure_time_label = QLabel("Exposure Time:")
         self.exposure_time_box = QLineEdit()
         self.exposure_time_box.setPlaceholderText("Enter Exposure Time")
+        self.exposure_time_box.setFixedWidth(120)  # Make the input box smaller
+        exposure_time_layout.addWidget(self.exposure_time_label)
+        exposure_time_layout.addWidget(self.exposure_time_box)
 
+        # Create a layout for Slit Width Label and Input Field
+        slit_width_layout = QHBoxLayout()
         self.slit_width_label = QLabel("Slit Width:")
         self.slit_width_box = QLineEdit()
         self.slit_width_box.setPlaceholderText("Enter Slit Width")
+        self.slit_width_box.setFixedWidth(120)  # Make the input box smaller
+        slit_width_layout.addWidget(self.slit_width_label)
+        slit_width_layout.addWidget(self.slit_width_box)
 
-        # Add widgets to row2_layout
-        row2_layout.addWidget(self.exposure_time_label)
-        row2_layout.addWidget(self.exposure_time_box)
-        row2_layout.addWidget(self.slit_width_label)
-        row2_layout.addWidget(self.slit_width_box)
+        # Add Exposure Time and Slit Width layouts to the main row layout
+        row2_layout.addLayout(exposure_time_layout)
+        row2_layout.addLayout(slit_width_layout)
 
+        # Confirm Button for Exposure Time and Slit Width
+        self.confirm_button = QPushButton("Confirm Changes")
+        self.confirm_button.setEnabled(False)  # Initially disabled
+        self.confirm_button.clicked.connect(self.on_confirm_changes)
+
+        # Set the initial style for the button (disabled state)
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: lightgray;
+            }
+        """)
+
+        # Add Confirm button under the input fields
+        row2_layout.addWidget(self.confirm_button)
+
+        # Create the final widget for row 2
         row2_widget = QWidget()
         row2_widget.setLayout(row2_layout)
         return row2_widget
 
     def create_row3(self):
-        """Create Row 3 layout with Go Button"""
+        """Create Row 3 layout with Go Button and Offset To Target Button"""
         row3_layout = QHBoxLayout()
         row3_layout.setContentsMargins(0, 0, 0, 0)
         row3_layout.setSpacing(10)
@@ -922,8 +971,14 @@ class LayoutService:
         self.go_button.clicked.connect(self.on_go_button_click)
         self.go_button.setEnabled(False)  # Initially disabled
 
-        # Add the "Go" button to row3_layout
+        # "Offset To Target" Button
+        self.offset_to_target_button = QPushButton("Offset To Target")
+        self.offset_to_target_button.clicked.connect(self.on_offset_to_target_click)
+        self.offset_to_target_button.setEnabled(True)  # Enable the button (set to False if you want to start disabled)
+
+        # Add both buttons to the layout
         row3_layout.addWidget(self.go_button)
+        row3_layout.addWidget(self.offset_to_target_button)
 
         row3_widget = QWidget()
         row3_widget.setLayout(row3_layout)
@@ -992,9 +1047,8 @@ class LayoutService:
 
     def connect_input_fields(self):
         """Connect input fields (Exposure Time and Slit Width) to change methods"""
-        self.exposure_time_box.editingFinished.connect(self.on_exposure_time_changed)
-        self.slit_width_box.editingFinished.connect(self.on_slit_width_changed)
-
+        self.exposure_time_box.textChanged.connect(self.on_input_changed)
+        self.slit_width_box.textChanged.connect(self.on_input_changed)
 
     def on_startup_button_click(self):
         # Define the behavior when the "Startup" button is clicked
@@ -1002,20 +1056,96 @@ class LayoutService:
         print(f"Sending command to SequencerService: {command}")  # Print the command being sent
         # Call send_command method from SequencerService
         self.parent.send_command(command)
-        print(f"Command sent: {command}")  # Print confirmation of command sent
 
+    def on_offset_to_target_click(self):
+        """Handle the Offset To Target button click event"""
+        print("Offset To Target button clicked!")
+        command = f"tcs coords {self.current_ra} {self.current_dec}"
+        print(f"Sending command to SequencerService: {command}")  # Print the command being sent
+        # Call send_command method from SequencerService
+        self.parent.send_command(command)
+
+    def on_input_changed(self):
+        """Enable the Confirm button when the user modifies input fields"""
+        self.confirm_button.setEnabled(True)
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FFCC40;
+                border: none;
+                color: black;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #FF9900;
+            }
+            QPushButton:pressed {
+                background-color: #FF6600;
+            }
+        """)
+
+    def on_confirm_changes(self):
+        """Handle the confirmation of changes made to the input fields"""
+        exposure_time = self.exposure_time_box.text()
+        slit_width = self.slit_width_box.text()
+
+        # You can add validation here, if needed
+        if exposure_time and slit_width:
+            # Handle the confirmed changes, e.g., update internal state or UI
+            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}")
+            self.on_exposure_time_changed()
+            self.on_slit_width_changed()
+            QSound.play("sound/exposure_slit_width_set.wav")
+            # Disable the button again after confirmation
+            self.confirm_button.setEnabled(False)
+            self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: lightgray;
+            }
+            """)
+        elif exposure_time:
+            # Handle the confirmed changes, e.g., update internal state or UI
+            print(f"Confirmed Exposure Time: {exposure_time}")
+            self.on_exposure_time_changed()
+            QSound.play("sound/exposure_set.wav")
+            # Disable the button again after confirmation
+            self.confirm_button.setEnabled(False)
+            self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: lightgray;
+            }
+            """)
+        elif slit_width:
+            # Handle the confirmed changes, e.g., update internal state or UI
+            print(f"Confirmed Slit Width: {slit_width}")
+            self.on_slit_width_changed()
+            QSound.play("sound/slit_width_set.wav")
+            # Disable the button again after confirmation
+            self.confirm_button.setEnabled(False)       
+            self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: lightgray;
+            }
+            """) 
+        else:
+            # Handle the case where one or both fields are empty
+            print("Please enter valid values for both Exposure Time and Slit Width")
 
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
-        self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET " + exposure_time)
-        self.update_target_info()
+        if (self.current_observation_id):
+            self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET " + exposure_time)
+            self.update_target_info()
+            self.exposure_time_box.clear()
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
-        self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET " + slit_width)
-        self.update_target_info()
+        if (self.current_observation_id):
+            self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET " + slit_width)
+            self.update_target_info()
+            self.slit_width_box.clear()
 
     def add_separator_line(self, layout):
         """ Helper method to add a thin light gray line (separator) between rows. """
