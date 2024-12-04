@@ -367,8 +367,8 @@ class LayoutService:
             exposure_time = None
             slit_width = None
             target_name = None
-            ra = None
-            dec = None
+            offset_ra = None
+            offset_dec = None
 
             print("Selected Row:", selected_row)  # Print the selected row index
             print("Column Headers:", column_headers)  # Print the column headers
@@ -395,14 +395,14 @@ class LayoutService:
                     print(f"Found Slit Width: {slit_width}")  # Print the found slit width
 
                 # Check if the header is 'RA' and extract its value
-                if header == 'RA':
-                    ra = value  # Store the RA
-                    print(f"Found RA: {ra}")  # Print the found RA 
+                if header == 'OFFSET_RA':
+                    offset_ra = value  # Store the RA
+                    print(f"Found OFFSET_RA: {offset_ra}")  # Print the found RA 
 
                 # Check if the header is 'DEC' and extract its value
-                if header == 'DEC':
-                    dec = value  # Store the DEC
-                    print(f"Found DEC: {dec}")  # Print the found DEC 
+                if header == 'OFFSET_DEC':
+                    offset_dec = value  # Store the DEC
+                    print(f"Found OFFSET_DEC: {offset_dec}")  # Print the found DEC 
                 
                 # If the header is 'NAME', store it as the target name
                 if header == 'NAME':
@@ -415,8 +415,8 @@ class LayoutService:
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
                 self.current_observation_id = observation_id
-                self.current_ra = ra
-                self.current_dec = dec
+                self.current_offset_ra = offset_ra
+                self.current_offset_dec = offset_dec
             # if exposure_time:
             #     self.current_exposure_time = exposure_time
             #     self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
@@ -1060,7 +1060,7 @@ class LayoutService:
     def on_offset_to_target_click(self):
         """Handle the Offset To Target button click event"""
         print("Offset To Target button clicked!")
-        command = f"tcs coords {self.current_ra} {self.current_dec}"
+        command = f"tcs offset {self.current_offset_ra} {self.current_offset_dec}"
         print(f"Sending command to SequencerService: {command}")  # Print the command being sent
         # Call send_command method from SequencerService
         self.parent.send_command(command)
