@@ -181,16 +181,26 @@ class LoginDialog(QDialog):
             try:
                 cursor = self.connection.cursor(dictionary=True)
 
-                # Step 1: Get the SET_IDs from target_sets for the logged-in user
-                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER = %s", (username,))
-                set_ids = cursor.fetchall()
+                # Step 1: Get the SET_IDs and SET_NAME from target_sets for the logged-in user
+                cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (username,))
+                set_data = cursor.fetchall()
 
                 # Step 2: For each SET_ID, fetch the associated rows from the 'targets' table
-                self.all_targets = []
-                for set_id in set_ids:
-                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
+                self.all_targets = {}  # Reset the all_targets dictionary
+
+                for set_info in set_data:
+                    set_id = set_info["SET_ID"]
+                    set_name = set_info["SET_NAME"]
+
+                    # Fetch all targets for the SET_ID
+                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id,))
                     targets = cursor.fetchall()
-                    self.all_targets.extend(targets)
+
+                    # Store the targets in the dictionary, using SET_ID as the key
+                    self.all_targets[set_id] = {"SET_NAME": set_name, "targets": targets}
+
+                    # Add SET_NAME to the target list dropdown
+                    self.self.parent.layout_service.target_list_name.addItem(set_name)
 
                 cursor.close()
                 
@@ -198,7 +208,8 @@ class LoginDialog(QDialog):
             except mysql.connector.Error as err:
                 print(f"Database error: {err}")
             finally:
-                self.connection.close()
+                # Don't close the connection here, as it should remain open
+                pass
 
 
 class CreateAccountDialog(QDialog):
