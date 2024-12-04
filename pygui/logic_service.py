@@ -201,11 +201,14 @@ class LogicService:
             filtered_data = [row for row in self.all_target_data if str(row['SET_ID']) == selected_set_id]
             self.update_target_list_table(filtered_data)
 
-    def update_target_list_table(self, selected_set_name):
+    def update_target_list_table(self, target_sets_data, selected_set_name):
         """
-        Populates the UI table with data from the selected target set.
+        Populates the UI table with data for the selected target set.
         Dynamically updates the table based on the selected target set.
         It hides the specified columns.
+        
+        :param target_sets_data: Dictionary where keys are set names, and values are lists of target rows.
+        :param selected_set_name: The name of the target set to filter and display.
         """
         target_list_display = self.parent.layout_service.target_list_display
 
@@ -221,15 +224,15 @@ class LogicService:
             "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
-        # Step 2: Check if the selected target set exists in self.all_targets (the dictionary)
-        if selected_set_name in self.all_targets:
+        # Step 2: Check if the selected target set exists in the provided target_sets_data
+        if selected_set_name in target_sets_data:
             # Get the filtered data for the selected set
-            data = self.all_targets[selected_set_name]
+            data = target_sets_data[selected_set_name]
         else:
-            # If the set name is not found in self.all_targets, return an empty list or handle the error
-            print(f"Error: Target set {selected_set_name} not found.")
+            # If the set name is not found in target_sets_data, handle the error
+            print(f"Error: Target set {selected_set_name} not found in provided data.")
             data = []
-        
+
         # Step 3: Filter out unwanted columns and their data
         filtered_data = []
         filtered_column_names = []
@@ -271,8 +274,7 @@ class LogicService:
             target_list_display.setVisible(True)  # Show the table
         else:
             print("No data available for the selected target set.")
-            # Handle the case where no data is found for the selected target set (optional)
-
+            # Optionally, you could show a message or handle this case on the UI
 
 
     def update_target_information(self, target_data):
