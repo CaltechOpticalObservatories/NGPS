@@ -629,30 +629,32 @@ class LayoutService:
 
         return left_planning_column
     
-    def load_target_lists(self):
+    def load_target_lists(self, target_lists=None):
+        """Populate the ComboBox with target lists passed as a parameter."""
         try:
-            # Fetch target lists from the database or any other data source
-            target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
-            
-            # Ensure target_lists is iterable (like a list or tuple)
-            if not isinstance(target_lists, (list, tuple)):
-                print("Error: Fetched data is not a valid iterable (list or tuple).")
-                target_lists = []  # Set to empty list if not valid
+            # If no list is passed, attempt to load target lists from the database or another source
+            if target_lists is None:
+                target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+                
+                # Ensure target_lists is iterable (like a list or tuple)
+                if not isinstance(target_lists, (list, tuple)):
+                    print("Error: Fetched data is not a valid iterable (list or tuple).")
+                    target_lists = []  # Set to empty list if not valid
 
         except Exception as e:
             # Handle any exception that occurs during fetching
             print(f"Error fetching target lists: {e}")
             target_lists = []  # Set to empty list if an error occurs
 
-        # Ensure target_lists is empty or not an iterable, we can show a fallback message
+        # If target_lists is empty, we can show a fallback message or an empty list
         if not target_lists:
             target_lists = ["No Target Lists Available"]  # Fallback message or an empty list
 
-        # Clear the dropdown before populating it, if it's an instance of QComboBox
+        # Ensure the ComboBox is cleared before populating it
         if isinstance(self.target_list_name, QComboBox):
             self.target_list_name.clear()
 
-        # Add the fetched or fallback target lists to the dropdown (QComboBox)
+        # Add the fetched or fallback target lists to the ComboBox
         for target in target_lists:
             self.target_list_name.addItem(target)
 

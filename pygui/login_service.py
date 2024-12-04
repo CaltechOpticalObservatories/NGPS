@@ -187,6 +187,7 @@ class LoginDialog(QDialog):
 
                 # Step 2: For each SET_ID, fetch the associated rows from the 'targets' table
                 self.all_targets = {}  # Reset the all_targets dictionary
+                self.target_list_name = []
 
                 for set_info in set_data:
                     set_id = set_info["SET_ID"]
@@ -200,7 +201,7 @@ class LoginDialog(QDialog):
                     self.all_targets[set_id] = {"SET_NAME": set_name, "targets": targets}
 
                     # Add SET_NAME to the target list dropdown
-                    self.parent.layout_service.target_list_name.addItem(set_name)
+                    self.target_list_name.addItem(set_name)
 
                 cursor.close()
                 
