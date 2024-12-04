@@ -431,9 +431,9 @@ class LayoutService:
             #     self.current_slit_width = slit_width
             #     self.slit_width_box.setText(slit_width)  # Update the Slit Width field
             if target_name:
-                self.target_name_label.setText(f"Selected Target: {target_name}")
+                self.control_tab.target_name_label.setText(f"Selected Target: {target_name}")
             else:
-                self.target_name_label.setText("Selected Target: Not Selected")
+                self.control_tab.target_name_label.setText("Selected Target: Not Selected")
 
             # Enable the "Go" button when a row is selected
             self.go_button.setEnabled(True)  # Enable the "Go" button
