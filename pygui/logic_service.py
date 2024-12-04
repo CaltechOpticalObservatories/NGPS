@@ -134,14 +134,23 @@ class LogicService:
             print("Failed to connect to MySQL. Cannot load target data.")
             return
         
-        # Step 2: Load data from the MySQL database
+        # Step 2: Load data from the MySQL database (target_table)
         db_config = self.read_config(config_file)  # We need to read config again for the table name
         target_table = db_config["TARGET_TABLE"]
         rows = self.load_data_from_mysql(connection, target_table)
         
         if rows:
-            # Step 3: Update the table with the data
+            # Step 3: Update the target list table with the data
             self.update_target_list_table(rows)
+
+            # Populate the target_list_name dropdown with available target lists (e.g., based on SET_ID)
+            target_list_names = sorted(set(row['SET_ID'] for row in rows))  # Unique SET_IDs or Target List names
+            self.parent.target_list_name.clear()  # Clear existing items
+            self.parent.target_list_name.addItem("All")  # Option to select all target lists
+            self.parent.target_list_name.addItems([str(name) for name in target_list_names])  # Add each SET_ID to the dropdown
+
+            # Connect the combo box selection change to filtering function
+            self.parent.target_list_name.currentIndexChanged.connect(self.filter_target_list)
         else:
             print(f"No data found in the {target_table} table.")
         
@@ -149,10 +158,53 @@ class LogicService:
         connection.close()
 
 
-    def update_target_list_table(self, data):
+    def load_mysql_and_fetch_target_sets(self, config_file):
         """
-        Populates the UI table with data from the MySQL database.
-        The columns and rows will be dynamically created based on the data.
+        Loads target set data from the 'target_sets' table and performs actions to update the UI.
+        This method combines both connecting to MySQL and loading data from the 'target_sets' table.
+        """
+        # Step 1: Connect to MySQL using the config file
+        connection = self.connect_to_mysql(config_file)
+        
+        if connection is None:
+            print("Failed to connect to MySQL. Cannot load target set data.")
+            return
+        
+        # Step 2: Load data from the 'target_sets' table
+        db_config = self.read_config(config_file)  # We need to read config again for the table name
+        target_sets_table = db_config["TARGET_SETS_TABLE"]  # Assuming you have the 'target_sets' table name in config
+        rows = self.load_data_from_mysql(connection, target_sets_table)
+        
+        if rows:
+            # Step 3: Handle the data (update the UI, or pass it to another function)
+            print(f"Fetched {len(rows)} target sets.")
+            # You can process the rows as needed, e.g., updating a table in the UI
+            self.update_target_sets_table(rows)
+        else:
+            print(f"No data found in the {target_sets_table} table.")
+        
+        # Close the database connection after usage
+        connection.close()
+
+    def filter_target_list(self):
+        """
+        Filters the target list table based on the selected SET_ID from the target_list_name combo box.
+        If "All" is selected, it shows all targets.
+        """
+        selected_set_id = self.parent.target_list_name.currentText()
+        
+        # If the user selects "All", display all targets
+        if selected_set_id == "All":
+            self.update_target_list_table(self.all_target_data)  # Assuming all_target_data holds all rows
+        else:
+            # Filter the rows based on the selected SET_ID
+            filtered_data = [row for row in self.all_target_data if str(row['SET_ID']) == selected_set_id]
+            self.update_target_list_table(filtered_data)
+
+    def update_target_list_table(self, selected_set_name):
+        """
+        Populates the UI table with data from the selected target set.
+        Dynamically updates the table based on the selected target set.
         It hides the specified columns.
         """
         target_list_display = self.parent.layout_service.target_list_display
@@ -169,7 +221,16 @@ class LogicService:
             "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
-        # Step 2: Filter out unwanted columns and their data
+        # Step 2: Check if the selected target set exists in self.all_targets (the dictionary)
+        if selected_set_name in self.all_targets:
+            # Get the filtered data for the selected set
+            data = self.all_targets[selected_set_name]
+        else:
+            # If the set name is not found in self.all_targets, return an empty list or handle the error
+            print(f"Error: Target set {selected_set_name} not found.")
+            data = []
+        
+        # Step 3: Filter out unwanted columns and their data
         filtered_data = []
         filtered_column_names = []
 
@@ -178,7 +239,7 @@ class LogicService:
             filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
             filtered_data.append(filtered_row)
 
-        # Step 3: Set the number of columns dynamically based on the filtered data
+        # Step 4: Set the number of columns dynamically based on the filtered data
         if filtered_data:
             # Extract the column names from the first row (assuming all rows have the same structure)
             filtered_column_names = filtered_data[0].keys()
@@ -193,7 +254,7 @@ class LogicService:
             header = target_list_display.horizontalHeader()
             header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
-            # Step 4: Add new rows based on the filtered data
+            # Step 5: Add new rows based on the filtered data
             for row_data in filtered_data:
                 row_position = target_list_display.rowCount()
                 target_list_display.insertRow(row_position)
@@ -202,12 +263,16 @@ class LogicService:
                 for col_index, (col_name, value) in enumerate(row_data.items()):
                     target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
-            # Step 5: Optionally, sort the table if you want to auto-sort after loading
+            # Step 6: Optionally, sort the table if you want to auto-sort after loading
             target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
-            # Step 6: Hide the button and show the table once the data is loaded
+            # Step 7: Hide the button and show the table once the data is loaded
             self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
             target_list_display.setVisible(True)  # Show the table
+        else:
+            print("No data available for the selected target set.")
+            # Handle the case where no data is found for the selected target set (optional)
+
 
 
     def update_target_information(self, target_data):
