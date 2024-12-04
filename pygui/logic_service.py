@@ -134,19 +134,72 @@ class LogicService:
             print("Failed to connect to MySQL. Cannot load target data.")
             return
         
-        # Step 2: Load data from the MySQL database
+        # Step 2: Load data from the MySQL database (target_table)
         db_config = self.read_config(config_file)  # We need to read config again for the table name
         target_table = db_config["TARGET_TABLE"]
         rows = self.load_data_from_mysql(connection, target_table)
         
         if rows:
-            # Step 3: Update the table with the data
+            # Step 3: Update the target list table with the data
             self.update_target_list_table(rows)
+
+            # Populate the target_list_name dropdown with available target lists (e.g., based on SET_ID)
+            target_list_names = sorted(set(row['SET_ID'] for row in rows))  # Unique SET_IDs or Target List names
+            self.parent.target_list_name.clear()  # Clear existing items
+            self.parent.target_list_name.addItem("All")  # Option to select all target lists
+            self.parent.target_list_name.addItems([str(name) for name in target_list_names])  # Add each SET_ID to the dropdown
+
+            # Connect the combo box selection change to filtering function
+            self.parent.target_list_name.currentIndexChanged.connect(self.filter_target_list)
         else:
             print(f"No data found in the {target_table} table.")
         
         # Close the database connection after usage
         connection.close()
+
+
+    def load_mysql_and_fetch_target_sets(self, config_file):
+        """
+        Loads target set data from the 'target_sets' table and performs actions to update the UI.
+        This method combines both connecting to MySQL and loading data from the 'target_sets' table.
+        """
+        # Step 1: Connect to MySQL using the config file
+        connection = self.connect_to_mysql(config_file)
+        
+        if connection is None:
+            print("Failed to connect to MySQL. Cannot load target set data.")
+            return
+        
+        # Step 2: Load data from the 'target_sets' table
+        db_config = self.read_config(config_file)  # We need to read config again for the table name
+        target_sets_table = db_config["TARGET_SETS_TABLE"]  # Assuming you have the 'target_sets' table name in config
+        rows = self.load_data_from_mysql(connection, target_sets_table)
+        
+        if rows:
+            # Step 3: Handle the data (update the UI, or pass it to another function)
+            print(f"Fetched {len(rows)} target sets.")
+            # You can process the rows as needed, e.g., updating a table in the UI
+            self.update_target_sets_table(rows)
+        else:
+            print(f"No data found in the {target_sets_table} table.")
+        
+        # Close the database connection after usage
+        connection.close()
+
+    def filter_target_list(self):
+        """
+        Filters the target list table based on the selected SET_ID from the target_list_name combo box.
+        If "All" is selected, it shows all targets.
+        """
+        selected_set_id = self.parent.target_list_name.currentText()
+        
+        # If the user selects "All", display all targets
+        if selected_set_id == "All":
+            self.update_target_list_table(self.all_target_data)  # Assuming all_target_data holds all rows
+        else:
+            # Filter the rows based on the selected SET_ID
+            filtered_data = [row for row in self.all_target_data if str(row['SET_ID']) == selected_set_id]
+            self.update_target_list_table(filtered_data)
 
     def update_target_list_table(self, data):
         """

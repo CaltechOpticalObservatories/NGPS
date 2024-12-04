@@ -106,7 +106,7 @@ class LoginDialog(QDialog):
 
         # Connect signals
         self.login_button.clicked.connect(self.on_login)
-        #self.cancel_button.clicked.connect(self.reject)
+        self.cancel_button.clicked.connect(self.reject)
 
     def on_login(self):
         """Handles the login action."""
@@ -121,6 +121,11 @@ class LoginDialog(QDialog):
         else:
             print(f"Login failed for user: {username}")
             self.show_error_message("Invalid credentials, please try again.")
+
+    def on_cancel(self):
+        """Handles the cancel action."""
+        print("Login cancelled")
+        self.reject()  # Close the dialog without doing anything (cancel)
 
     def validate_user_credentials(self, username, password):
         """Validate user credentials against the MySQL database using an existing connection."""

@@ -1,11 +1,10 @@
-from PyQt5.QtWidgets import QVBoxLayout, QFrame, QAbstractItemView,  QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView,  QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
 from logic_service import LogicService
 from PyQt5.QtCore import Qt
-from PyQt5.QtMultimedia import QSound
-import time
+from control_tab import ControlTab
 
 class LayoutService:
     def __init__(self, parent):
@@ -13,7 +12,11 @@ class LayoutService:
         self.instrument_status_service = InstrumentStatusService(self.parent)
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
+        self.target_list_name = QComboBox()
         self.current_observation_id = None
+
+        # Create the control tab instance
+        self.control_tab = ControlTab(self.parent)
 
     def create_layout(self):
         main_layout = QHBoxLayout()
@@ -84,8 +87,12 @@ class LayoutService:
         # Add the QTabWidget to the third column layout
         third_column_layout.addWidget(self.parent.tabs)
 
-        # Create and set up the layout for the Control tab
-        self.create_control_tab(self.parent.control_tab)
+        # Now, create and set up the layout for the Control tab
+        # Create a layout for the Control tab using the ControlTab class
+        self.control_tab = ControlTab(self.parent)  # Create the control tab instance
+        control_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
+        control_layout.addWidget(self.control_tab)  # Add the ControlTab widget to the layout
+        self.parent.control_tab.setLayout(control_layout)  # Set the layout for the control tab widget
 
         return third_column_layout
 
@@ -483,78 +490,6 @@ class LayoutService:
             """)
 
 
-    def on_go_button_click(self):
-        """Slot to handle 'Go' button click and send the target command."""
-        if hasattr(self, 'current_observation_id'):
-            observation_id = self.current_observation_id
-            print(f"Sending command: seq targetsingle {observation_id}")
-            self.send_target_command(observation_id)
-            QSound.play("sound/go_button_clicked.wav")
-
-            # Disable the button immediately after the user clicks it
-            # self.go_button.setEnabled(False)
-            self.go_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #D3D3D3;  /* Light gray when disabled */
-                    color: black;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 5px;  /* Optional: Round corners */
-                }
-                QPushButton:hover {
-                    background-color: #D3D3D3;  /* No hover effect when disabled */
-                }
-                QPushButton:pressed {
-                    background-color: #D3D3D3;  /* No pressed effect when disabled */
-                }
-            """)
-
-            # Start a QTimer to re-enable the button after 60 seconds
-            # self.timer = QTimer(self)
-            # self.timer.setSingleShot(True)  # Ensure the timer only runs once
-            # self.timer.timeout.connect(self.enable_go_button)
-            # self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
-
-        else:
-            print("No observation ID available.")
-        
-    def enable_go_button(self):
-        """Method to re-enable the 'Go' button after 60 seconds."""
-        print("60 seconds have passed. Re-enabling 'Go' button.")
-        
-        # Re-enable the button and reset its appearance
-        self.go_button.setEnabled(True)
-        self.go_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green when enabled */
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-                border-radius: 5px;  /* Optional: Round corners */
-            }
-            QPushButton:hover {
-                background-color: #388E3C;  /* Darker green when hovered */
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;  /* Even darker green when pressed */
-            }
-        """)
-            
-    def send_target_command(self, observation_id):
-        """ Method to send the command to the SequencerService """
-        if observation_id:
-            # Build the command string
-            command = f"startone {observation_id}\n"
-            print(f"Sending command to SequencerService: {command}")  # Print the command being sent
-            # Call send_command method from SequencerService
-            self.parent.send_command(command)
-            print(f"Command sent: {command}")  # Print confirmation of command sent
-        else:
-            print("No OBSERVATION_ID to send the command.")  # Print if no observation ID is found
-
-
     # Getter method to access target_list_display from LogicService
     def get_target_list_display(self):
         return self.target_list_display 
@@ -640,6 +575,7 @@ class LayoutService:
         left_planning_column = QVBoxLayout()
         left_planning_column.setSpacing(10)  # Space between widgets
         left_planning_column.setContentsMargins(0, 0, 0, 0)  # Optional: Remove margins for better alignment
+        self.load_target_lists()  # Call the method to load target lists
 
         # Create and add widgets to the left column
         self.parent.start_date_time_edit = QDateTimeEdit()
@@ -653,8 +589,7 @@ class LayoutService:
         self.parent.airmass_limit = QLineEdit("2.0")
         self.parent.airmass_limit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         
-        self.parent.target_list_name = QComboBox()
-        self.parent.target_list_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.target_list_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # Create horizontal layouts for each pair of label and widget (like buttons and input fields)
         start_date_layout = QVBoxLayout()
@@ -678,8 +613,9 @@ class LayoutService:
         target_label = QLabel("Target List")
         target_label.setMaximumHeight(40)  # Set the maximum width for the label
         target_list_layout.addWidget(target_label)
-        target_list_layout.addWidget(self.parent.target_list_name)
+        target_list_layout.addWidget(self.target_list_name)
         target_list_layout.setAlignment(Qt.AlignLeft)
+        self.load_target_lists()  # Call the method to load target lists
 
         # Add these layouts to the main left_planning_column
         left_planning_column.addLayout(start_date_layout)
@@ -692,6 +628,34 @@ class LayoutService:
         left_planning_column.setSpacing(10)  # Space between rows
 
         return left_planning_column
+    
+    def load_target_lists(self):
+        try:
+            # Fetch target lists from the database or any other data source
+            target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+            
+            # Ensure target_lists is iterable (like a list or tuple)
+            if not isinstance(target_lists, (list, tuple)):
+                print("Error: Fetched data is not a valid iterable (list or tuple).")
+                target_lists = []  # Set to empty list if not valid
+
+        except Exception as e:
+            # Handle any exception that occurs during fetching
+            print(f"Error fetching target lists: {e}")
+            target_lists = []  # Set to empty list if an error occurs
+
+        # Ensure target_lists is empty or not an iterable, we can show a fallback message
+        if not target_lists:
+            target_lists = ["No Target Lists Available"]  # Fallback message or an empty list
+
+        # Clear the dropdown before populating it, if it's an instance of QComboBox
+        if isinstance(self.target_list_name, QComboBox):
+            self.target_list_name.clear()
+
+        # Add the fetched or fallback target lists to the dropdown (QComboBox)
+        for target in target_lists:
+            self.target_list_name.addItem(target)
+
 
     def create_right_planning_column(self):
         right_planning_column = QVBoxLayout()
@@ -841,317 +805,3 @@ class LayoutService:
 
         # Optionally, update the widget (forces a refresh)
         self.target_info_form.update()
-
-    def create_control_tab(self, control_tab):
-        # Create the main layout for the Control tab
-        control_layout = QVBoxLayout()
-
-        # Row 1: Target Name Label and Refresh Button
-        row1_widget = self.create_row1()
-        control_layout.addWidget(row1_widget)
-
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # Row 2: Exposure Time, Slit Width, and Refresh Button
-        row2_widget = self.create_row2()
-        control_layout.addWidget(row2_widget)
-
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # Row 3: Go Button
-        row3_widget = self.create_row3()
-        control_layout.addWidget(row3_widget)
-
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # Row 4: Pause, Stop Now, and Expose Buttons
-        row4_widget = self.create_row4()
-        control_layout.addWidget(row4_widget)
-
-        # Add a thin gray line between rows
-        self.add_separator_line(control_layout)
-
-        # Row 5: Binning, Headers, Display, Temp, Lamps, and Startup Buttons
-        row5_widget = self.create_row5()
-        control_layout.addWidget(row5_widget)
-
-        # Set the layout for the control tab
-        control_tab.setLayout(control_layout)
-
-        # Connect the input fields to methods for handling changes
-        self.connect_input_fields()
-
-    def create_row1(self):
-        """Create Row 1 layout with Target Name Label and Refresh Button"""
-        row1_layout = QHBoxLayout()
-        row1_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Create the QLabel with default text
-        self.target_name_label = QLabel("Selected Target: Not Selected")
-        self.target_name_label.setAlignment(Qt.AlignCenter)
-
-        # # Create the Refresh Button
-        # self.refresh_button = QPushButton("Refresh Table")
-        # self.refresh_button.setStyleSheet("""
-        #     QPushButton:hover {
-        #         background-color: #388E3C;
-        #     }
-        #     QPushButton:pressed {
-        #         background-color: #2C6B2F;
-        #     }
-        # """)
-        # self.refresh_button.clicked.connect(self.logic_service.refresh_table)
-
-        # Add widgets to row1_layout
-        row1_layout.addWidget(self.target_name_label)
-
-        row1_widget = QWidget()
-        row1_widget.setLayout(row1_layout)
-        return row1_widget
-
-    def create_row2(self):
-        """Create Row 2 layout with Exposure Time, Slit Width, and Confirm Button"""
-        row2_layout = QVBoxLayout()  # Use a QVBoxLayout to stack widgets vertically
-        row2_layout.setContentsMargins(0, 0, 0, 0)
-        row2_layout.setSpacing(5)
-
-        # Create a layout for Exposure Time Label and Input Field
-        exposure_time_layout = QHBoxLayout()
-        self.exposure_time_label = QLabel("Exposure Time:")
-        self.exposure_time_box = QLineEdit()
-        self.exposure_time_box.setPlaceholderText("Enter Exposure Time")
-        self.exposure_time_box.setFixedWidth(120)  # Make the input box smaller
-        exposure_time_layout.addWidget(self.exposure_time_label)
-        exposure_time_layout.addWidget(self.exposure_time_box)
-
-        # Create a layout for Slit Width Label and Input Field
-        slit_width_layout = QHBoxLayout()
-        self.slit_width_label = QLabel("Slit Width:")
-        self.slit_width_box = QLineEdit()
-        self.slit_width_box.setPlaceholderText("Enter Slit Width")
-        self.slit_width_box.setFixedWidth(120)  # Make the input box smaller
-        slit_width_layout.addWidget(self.slit_width_label)
-        slit_width_layout.addWidget(self.slit_width_box)
-
-        # Add Exposure Time and Slit Width layouts to the main row layout
-        row2_layout.addLayout(exposure_time_layout)
-        row2_layout.addLayout(slit_width_layout)
-
-        # Confirm Button for Exposure Time and Slit Width
-        self.confirm_button = QPushButton("Confirm Changes")
-        self.confirm_button.setEnabled(False)  # Initially disabled
-        self.confirm_button.clicked.connect(self.on_confirm_changes)
-
-        # Set the initial style for the button (disabled state)
-        self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
-        """)
-
-        # Add Confirm button under the input fields
-        row2_layout.addWidget(self.confirm_button)
-
-        # Create the final widget for row 2
-        row2_widget = QWidget()
-        row2_widget.setLayout(row2_layout)
-        return row2_widget
-
-    def create_row3(self):
-        """Create Row 3 layout with Go Button and Offset To Target Button"""
-        row3_layout = QHBoxLayout()
-        row3_layout.setContentsMargins(0, 0, 0, 0)
-        row3_layout.setSpacing(10)
-
-        # "Go" Button
-        self.go_button = QPushButton("Go")
-        self.go_button.clicked.connect(self.on_go_button_click)
-        self.go_button.setEnabled(False)  # Initially disabled
-
-        # "Offset To Target" Button
-        self.offset_to_target_button = QPushButton("Offset To Target")
-        self.offset_to_target_button.clicked.connect(self.on_offset_to_target_click)
-        self.offset_to_target_button.setEnabled(True)  # Enable the button (set to False if you want to start disabled)
-
-        # Add both buttons to the layout
-        row3_layout.addWidget(self.go_button)
-        row3_layout.addWidget(self.offset_to_target_button)
-
-        row3_widget = QWidget()
-        row3_widget.setLayout(row3_layout)
-        return row3_widget
-
-    def create_row4(self):
-        """Create Row 4 layout with Pause, Stop Now, and Expose Buttons"""
-        row4_layout = QHBoxLayout()
-        row4_layout.setSpacing(10)
-        row4_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Buttons
-        self.expose = QPushButton("Expose")
-        self.pause_button = QPushButton("Pause")
-        self.pause_button.setMaximumWidth(150)
-        self.stop_now_button = QPushButton("Stop Now")
-        self.stop_now_button.setMaximumWidth(150)
-
-        # Add buttons to row4_layout
-        row4_layout.addWidget(self.expose)
-        row4_layout.addWidget(self.pause_button)
-        row4_layout.addWidget(self.stop_now_button)
-
-        row4_widget = QWidget()
-        row4_widget.setLayout(row4_layout)
-        return row4_widget
-
-    def create_row5(self):
-        """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""
-        row5_layout = QHBoxLayout()
-        row5_layout.setSpacing(10)
-        row5_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Binning Button
-        self.binning_button = QPushButton("Binning")
-        self.binning_button.setMaximumWidth(150)
-
-        # Headers and Display Buttons stacked vertically
-        headers_display_layout = QVBoxLayout()
-        self.headers_button = QPushButton("Headers")
-        self.display_button = QPushButton("Display")
-        headers_display_layout.addWidget(self.headers_button)
-        headers_display_layout.addWidget(self.display_button)
-
-        # Temp and Lamps Buttons stacked vertically
-        temp_lamps_layout = QVBoxLayout()
-        self.temp_button = QPushButton("Temp")
-        self.lamps_button = QPushButton("Lamps")
-        temp_lamps_layout.addWidget(self.temp_button)
-        temp_lamps_layout.addWidget(self.lamps_button)
-
-        # Startup Button
-        self.startup_button = QPushButton("Startup")
-        self.startup_button.setMaximumWidth(150)
-        self.startup_button.clicked.connect(self.on_startup_button_click)
-
-        # Add widgets to row5_layout
-        row5_layout.addWidget(self.binning_button)
-        row5_layout.addLayout(headers_display_layout)
-        row5_layout.addLayout(temp_lamps_layout)
-        row5_layout.addWidget(self.startup_button)
-
-        row5_widget = QWidget()
-        row5_widget.setLayout(row5_layout)
-        return row5_widget
-
-    def connect_input_fields(self):
-        """Connect input fields (Exposure Time and Slit Width) to change methods"""
-        self.exposure_time_box.textChanged.connect(self.on_input_changed)
-        self.slit_width_box.textChanged.connect(self.on_input_changed)
-
-    def on_startup_button_click(self):
-        # Define the behavior when the "Startup" button is clicked
-        command = f"startup\n"
-        print(f"Sending command to SequencerService: {command}")  # Print the command being sent
-        # Call send_command method from SequencerService
-        self.parent.send_command(command)
-
-    def on_offset_to_target_click(self):
-        """Handle the Offset To Target button click event"""
-        print("Offset To Target button clicked!")
-        command = f"tcs offset {self.current_offset_ra} {self.current_offset_dec}\n"
-        print(f"Sending command to SequencerService: {command}")  # Print the command being sent
-        # Call send_command method from SequencerService
-        self.parent.send_command(command)
-
-    def on_input_changed(self):
-        """Enable the Confirm button when the user modifies input fields"""
-        self.confirm_button.setEnabled(True)
-        self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FFCC40;
-                border: none;
-                color: black;
-                font-weight: bold;
-                padding: 10px;
-            }
-            QPushButton:hover {
-                background-color: #FF9900;
-            }
-            QPushButton:pressed {
-                background-color: #FF6600;
-            }
-        """)
-
-    def on_confirm_changes(self):
-        """Handle the confirmation of changes made to the input fields"""
-        exposure_time = self.exposure_time_box.text()
-        slit_width = self.slit_width_box.text()
-
-        # You can add validation here, if needed
-        if exposure_time and slit_width:
-            # Handle the confirmed changes, e.g., update internal state or UI
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}")
-            self.on_exposure_time_changed()
-            self.on_slit_width_changed()
-            QSound.play("sound/exposure_slit_width_set.wav")
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
-            """)
-        elif exposure_time:
-            # Handle the confirmed changes, e.g., update internal state or UI
-            print(f"Confirmed Exposure Time: {exposure_time}")
-            self.on_exposure_time_changed()
-            QSound.play("sound/exposure_set.wav")
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
-            """)
-        elif slit_width:
-            # Handle the confirmed changes, e.g., update internal state or UI
-            print(f"Confirmed Slit Width: {slit_width}")
-            self.on_slit_width_changed()
-            QSound.play("sound/slit_width_set.wav")
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)       
-            self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
-            """) 
-        else:
-            # Handle the case where one or both fields are empty
-            print("Please enter valid values for both Exposure Time and Slit Width")
-
-    def on_exposure_time_changed(self):
-        # Retrieve the exposure time and send the query to the database
-        exposure_time = self.exposure_time_box.text()
-        if (self.current_observation_id):
-            self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET " + exposure_time)
-            self.update_target_info()
-            self.exposure_time_box.clear()
-
-    def on_slit_width_changed(self):
-        # Retrieve the slit width and send the query to the database
-        slit_width = self.slit_width_box.text()
-        if (self.current_observation_id):
-            self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET " + slit_width)
-            self.update_target_info()
-            self.slit_width_box.clear()
-
-    def add_separator_line(self, layout):
-        """ Helper method to add a thin light gray line (separator) between rows. """
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        separator.setLineWidth(1)  # Thin line
-        separator.setStyleSheet("background-color: lightgray;")  # Light gray line
-        layout.addWidget(separator)
