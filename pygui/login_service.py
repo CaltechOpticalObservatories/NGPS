@@ -201,7 +201,7 @@ class LoginDialog(QDialog):
                     self.all_targets[set_id] = {"SET_NAME": set_name, "targets": targets}
 
                     # Add SET_NAME to the target list dropdown
-                    self.target_list_name.addItem(set_name)
+                    self.target_list_name.append(set_name)
 
                 cursor.close()
                 
