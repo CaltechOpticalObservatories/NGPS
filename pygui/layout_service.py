@@ -436,8 +436,8 @@ class LayoutService:
                 self.control_tab.target_name_label.setText("Selected Target: Not Selected")
 
             # Enable the "Go" button when a row is selected
-            self.go_button.setEnabled(True)  # Enable the "Go" button
-            self.go_button.setStyleSheet("""
+            self.control_tab.go_button.setEnabled(True)  # Enable the "Go" button
+            self.control_tab.go_button.setStyleSheet("""
                 QPushButton {
                     background-color: #4CAF50;  /* Green when enabled */
                     color: white;
@@ -471,8 +471,8 @@ class LayoutService:
         else:
             # Disable the "Go" button when no row is selected
             print("No row selected.")  # Print when no row is selected
-            self.go_button.setEnabled(False)
-            self.go_button.setStyleSheet("""
+            self.control_tab.go_button.setEnabled(False)
+            self.control_tab.go_button.setStyleSheet("""
                 QPushButton {
                     background-color: #D3D3D3;  /* Light gray when disabled */
                     color: black;
