@@ -14,34 +14,34 @@ buttonbar
 JOG SETTINGS
 *
 button
-$param(jogSettings) ; echo "$jog_arcsec" > $dir/jog.ini | $null      #$dir/jogset.sh $jog_arcsec # | $text
+$param(jogSettings) ; echo "$jog_arcsec" > $dir/jog.ini | $null   # save the jog setting to file
 #############
 LEFT
 *
 button
-$dir/jog_scam.sh LEFT | $text 
+$dir/jog_scam.sh LEFT #| $text 
 RIGHT
 *
 button
-$dir/jog_scam.sh RIGHT | $text 
+$dir/jog_scam.sh RIGHT #| $text 
 UP
 *
 button
-$dir/jog_scam.sh UP | $text 
+$dir/jog_scam.sh UP #| $text 
 DOWN
 *
 button
-$dir/jog_scam.sh DOWN | $text 
+$dir/jog_scam.sh DOWN #| $text 
 #############
 PUT ON SLIT
 *
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh # | $text
 #############
-(PUT ON ACAM)
+PUT ON ACAM
 *
 button
-$message(yesno,Move ACAM center to crosshairs?) # $dir/putonslit.sh # | $text
+$message(yesno,Move this field to ACAM?) | $dir/putonslit.sh guider true #| $text  # true=reverse direction
 ############
 endbuttonbar
 #############

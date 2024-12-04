@@ -11,15 +11,20 @@ endparam
 #############
 buttonbar
 #############
+SHOW SLIT
+*
+button
+$dir/show_tcs_guider.sh # | $text
+#############
 FOCUS
 *
 button
 $param(focusParam) ; tcs setfocus $focus # | $text
 #############
-(PUT ON SLIT)
+PUT ON SLIT
 *
 button
-$message(yesno,Move slit center to crosshairs?) | $dir/get_crosshair_pos.sh # | $text
+$message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh guider #| $text # FORMERLY get_crosshair_pos.sh
 #############
 GUIDE
 *

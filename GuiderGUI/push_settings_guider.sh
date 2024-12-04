@@ -17,9 +17,9 @@ source $SCRIPT_DIR/gui.config $camera
 
 # settings from daemon or DS9 menu
 update_menu=$1
-exptime=$2
-gain=$3
-filter=$4
+exptime=${2:-1}
+gain=${3:-1}
+filter=${4:-r}
 focus=$5
 status=$6  # acquiring, guiding etc.  Not available in menu
 
@@ -34,20 +34,3 @@ sed -e "s/DEFexptime/$exptime/" \
 if ${update_menu,,}; then  # bool must be lowercase
     xpaset -p $id analysis clear load $ansfile
 fi
-
-# update headsup display
-width=`xpaget $id fits width`
-XCENTER=$(($width/2))
-YCENTER=30
-YCENTER_STATUS=1000
-
-xpaset -p $id region delete all
-echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   GAIN=${gain}   FILTER=${filter}   FOCUS=${focus}} \
-  color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
-  | xpaset $id region 2>&1
-
-xpaset -p $id region group status new
-
-echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}} \
-  color=${headsup_fontcolor} width=2 edit=0 move=0 rotate=0 delete=1 font={helvetica ${headsup_fontsize} bold}" \
-  | xpaset $id region 2>&1
