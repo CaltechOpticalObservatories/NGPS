@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [[ -z $1 ]]; then
+  echo "Usage:  exposen <n>"
+  echo "  performs <n> exposures"
+  exit
+fi
+
+n=$1
+
+for (( i=1 ; i<=$n ; i++ ));
+do
+  echo starting $i of $n
+  camera expose
+  imnum=$(camera imnum)
+  listen -w "CAMERAD:READY:true"
+  echo $imnum | awk '{print "completed imnum " $1}'
+done
+
+echo "done!"
+
+for (( i=1 ; i<=5 ; i++ ));
+do
+    printf '\e[?5h'
+    sleep 0.1
+    tput bel
+    printf '\e[?5l'
+    sleep 0.1
+    tput bel
+done

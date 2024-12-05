@@ -112,6 +112,7 @@ fi
 # create an array of cameras and later will loop through this array
 # to select slicecam, acam, or both
 #
+scicam=("")
 if [ $cam == "slicecam" ]; then
     whichcam=("scam")
     imagepath=($slicecampath)
@@ -121,6 +122,10 @@ elif [ $cam == "acam" ]; then
 elif [ $cam == "both" ]; then
     whichcam=("acam" "scam")
     imagepath=($acampath $slicecampath)
+elif [ $cam == "all" ]; then
+    whichcam=("acam" "scam")
+    scicam=("camera")
+    imagepath=($acampath $slicecampath)
 else
     echo "unrecognized camera \""$cam"\". expected slicecam|acam|both"
     exit
@@ -129,9 +134,9 @@ fi
 datetime=$(date +"%Y-%m-%dT%H%M")
 axisout="/data/logs/"$axis"out-"$datetime".txt"
 
-# optional 7th arg. If not included then nexp=1
+# optional 8th arg. If not included then nexp=1
 #
-if [ -z "$7" ]; then nexp=1; else nexp=$7; fi
+if [ -z "$8" ]; then nexp=1; else nexp=$8; fi
 
 echo "nexp="$nexp
 
@@ -227,6 +232,10 @@ while : ; do
     exposure=0
     while : ; do
         echo "exposing "$exposure"/"$nexp
+        if [ $scicam == "camera" ]; then
+            echo "exposing science camera"
+            exposed=$(camera expose)
+        fi
         for i in "${!whichcam[@]}"
         do
             # the command to acquire and save a single frame is framegrabe saveone <filename>
@@ -239,6 +248,11 @@ while : ; do
             #
             sleep "${sleeptime[$i]}"
         done
+        if [ $scicam == "camera" ]; then
+            echo "waiting for science exposure"
+            wait=$(listen --wait "CAMERAD:READY:true")
+            echo $wait" science exposure done"
+        fi
         echo $axisnow", "$filename >> $axisout
         # increment the exposure counter at this axis position
         #

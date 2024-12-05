@@ -1,0 +1,10 @@
+#!/bin/bash
+for (( i=1 ; i<=5 ; i++ ));
+do
+    printf '\e[?5h'
+    sleep 0.1
+    tput bel
+    printf '\e[?5l'
+    sleep 0.1
+    tput bel
+done
