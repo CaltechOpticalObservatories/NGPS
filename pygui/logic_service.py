@@ -11,7 +11,7 @@ class LogicService:
     def __init__(self, parent):
         self.parent = parent  # reference to the parent window or main UI
         self.connection = None
-        self.all_targets = []
+        self.all_targets = {}
 
     @staticmethod
     def convert_pst_to_utc(datetime):
