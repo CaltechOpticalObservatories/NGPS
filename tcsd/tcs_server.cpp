@@ -11,6 +11,9 @@ namespace TCS {
 
   Server* Server::instance = nullptr;
 
+  std::string IP_PALOMAR="";   ///< NGPS' IP address at Palomar
+  std::string IP_TCS="";       ///< IP address of P200 TCS
+
   /***** TCS::Server::handle_signal *******************************************/
   /**
    * @brief      handles ctrl-C and other signals
@@ -229,12 +232,29 @@ namespace TCS {
         applied++;
       }
 
+      // IP_TCS  -- IP address of P200 TCS
+      //
+      if ( config.param[entry] == "IP_TCS" ) {
+        IP_TCS = config.arg[entry];
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
+      // IP_PALOMAR -- NGPS' IP address at Palomar
+      //
+      if ( config.param[entry] == "IP_PALOMAR" ) {
+        IP_PALOMAR = config.arg[entry];
+        this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
       // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
       //
       if ( config.param[entry] == "PUB_ENDPOINT" ) {
         this->interface.publisher_address = config.arg[entry];
         this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
         this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
       }
 
       // SUB_ENDPOINT
@@ -242,6 +262,7 @@ namespace TCS {
       if ( config.param[entry] == "SUB_ENDPOINT" ) {
         this->interface.subscriber_address = config.arg[entry];
         this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
       }
 
     } // end loop through the entries in the configuration file
@@ -616,7 +637,8 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
           args="poll";
         }
         else {
-          message.str(""); message << "received command on fd " << sock.getfd() << " (" << this->cmd_num << "): " << cmd << " " << args;
+          message.str(""); message << "received command on port " << sock.getport() << " fd " << sock.getfd()
+                                   << " (" << this->cmd_num << "): " << cmd << " " << args;
           logwrite(function, message.str());
         }
       }
@@ -750,20 +772,6 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       }
       else
 
-      if ( caseCompareString( cmd, TELEMREQUEST ) ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-      else
-
       if ( caseCompareString( cmd, TCSD_PTOFFSET ) ) {
                       ret = this->interface.pt_offset( args, retstring );
       }
@@ -772,6 +780,20 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       if ( caseCompareString( cmd, TCSD_NATIVE ) ) {
                       ret = this->interface.native( args, retstring );
       }
+      else
+      if ( caseCompareString( cmd, TELEMREQUEST ) ) {
+                      if ( args=="?" || args=="help" ) {
+                        retstring=TELEMREQUEST+"\n";
+                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                        ret=HELP;
+                      }
+                      else {
+                        this->interface.publish_snapshot( retstring );
+                        ret = JSON;
+                      }
+      }
+
       // Unknown commands generate an error
       //
       else {

@@ -12,62 +12,72 @@
 
 namespace TCS {
 
-  /***** TCS::Interface::make_telemetry_message *******************************/
-  /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
-   *
-   */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    const std::string function="TCS::Interface::make_telemetry_message";
-
-    // fill the tcs_info class with current info
-    //
-    this->get_tcs_info();
-
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"] = "tcsinfo";
-
-    jmessage["CASANGLE"] = this->tcs_info.cassangle;    // double
-    jmessage["HA"]       = this->tcs_info.ha;           // string
-    jmessage["RAOFFSET"]   = this->tcs_info.offsetra;   // double
-    jmessage["DECLOFFSET"]  = this->tcs_info.offsetdec; // double
-    jmessage["TELRA"]    = this->tcs_info.ra_hms;       // string "hh:mm:ss.s"
-    jmessage["TELDEC"]   = this->tcs_info.dec_dms;      // string "dd:mm:ss.s"
-    jmessage["AZ"]       = this->tcs_info.azimuth;
-    jmessage["ALT"]      = 90. - this->tcs_info.zenithangle;
-    jmessage["ZENANGLE"] = this->tcs_info.zenithangle;
-    jmessage["DOMEAZ"]   = this->tcs_info.domeazimuth;
-    jmessage["DOMESHUT"] = this->tcs_info.domeshutters==1?"open":"closed";
-    jmessage["TELFOCUS"] = this->tcs_info.focus;
-    jmessage["AIRMASS"]  = this->tcs_info.airmass;
-
-    retstring = jmessage.dump();  // serialize the json message into retstring
-
-    this->publisher->publish( retstring );
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
-  }
-  /***** TCS::Interface::make_telemetry_message *******************************/
-
-
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    // If my name is in the jmessage then publish my snapshot
+    //
     if ( jmessage.contains( TCS::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
+      this->publish_snapshot();
     }
     else
     if ( jmessage.contains( "test" ) ) {
       logwrite( "TCS::Interface::handletopic_snapshot", jmessage.dump() );
     }
   }
+
+
+  /***** TCS::Interface::publish_snapshot *************************************/
+  /**
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry.
+   *
+   */
+  void Interface::publish_snapshot() {
+    std::string dontcare;
+    this->publish_snapshot(dontcare);
+  }
+  void Interface::publish_snapshot(std::string &retstring) {
+    // fill the tcs_info class with current info
+    //
+    this->get_tcs_info();
+
+    nlohmann::json jmessage_out;
+    jmessage_out["source"]     = "tcsd";
+
+    jmessage_out["ISOPEN"]     = this->tcs_info.isopen;
+    jmessage_out["TCSNAME"]    = this->tcs_info.tcsname;
+
+    jmessage_out["CASANGLE"]   = this->tcs_info.cassangle;  // double
+    jmessage_out["HA"]         = this->tcs_info.ha;         // string
+    jmessage_out["RAOFFSET"]   = this->tcs_info.offsetra;   // double
+    jmessage_out["DECLOFFSET"] = this->tcs_info.offsetdec;  // double
+    jmessage_out["TELRA"]      = this->tcs_info.ra_hms;     // string "hh:mm:ss.s"
+    jmessage_out["TELDEC"]     = this->tcs_info.dec_dms;    // string "dd:mm:ss.s"
+    jmessage_out["RA"]         = radec_to_decimal( this->tcs_info.ra_hms );
+    jmessage_out["DEC"]        = radec_to_decimal( this->tcs_info.dec_dms );
+    jmessage_out["AZ"]         = this->tcs_info.azimuth;
+    jmessage_out["ALT"]        = 90. - this->tcs_info.zenithangle;
+    jmessage_out["ZENANGLE"]   = this->tcs_info.zenithangle;
+    jmessage_out["DOMEAZ"]     = this->tcs_info.domeazimuth;
+    jmessage_out["DOMESHUT"]   = this->tcs_info.domeshutters==1?"open":"closed";
+    jmessage_out["TELFOCUS"]   = this->tcs_info.focus;
+    jmessage_out["AIRMASS"]    = this->tcs_info.airmass;
+
+    // for backwards compatibility
+    jmessage_out["messagetype"] = "tcsinfo";
+    retstring=jmessage_out.dump();
+    retstring.append(JEOF);
+
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "TCS::Interface::publish_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** TCS::Interface::publish_snapshot *************************************/
 
 
   /***** TCS::Interface::get_tcs_info *****************************************/
@@ -247,6 +257,14 @@ namespace TCS {
       return ERROR;
     }
 
+    // Don't allow using P200 TCS unless I'm located at Palomar
+    //
+    std::string localhost = get_localhost();
+    if ( tcsloc->second->gethost() == TCS::IP_TCS && localhost != TCS::IP_PALOMAR ) {
+      logwrite( function, "ERROR cannot connect to P200 TCS from "+localhost );
+      return ERROR;
+    }
+
     // initialize connection to the TCS
     //
     message.str(""); message << "initializing socket connections to TCS " << tcsloc->first << " on "
@@ -257,11 +275,21 @@ namespace TCS {
 
     tcs.initialize_sockets();
 
-    this->name = tcs.getname();            // save the name of the opened tcs
+    this->name = tcs.getname();             // save the name of the opened tcs
 
     error = this->isopen( retstring );      // this will broadcast the state and name
 
     return error;
+  }
+  /***** TCS::Interface::open *************************************************/
+  /**
+   * @brief      opens the TCS socket connection
+   * @param[in]  arg  contains what to open, real or sim
+   * @return     ERROR | NO_ERROR | HELP
+   */
+  long Interface::open() {
+    std::string dontcare;
+    return open("real", dontcare);
   }
   /***** TCS::Interface::open *************************************************/
 
@@ -325,11 +353,14 @@ namespace TCS {
     for ( const auto &[key,val] : this->tcsmap ) {
       if ( val->isconnected() ) {
         name = val->getname();        // Found a connected TCS
-        break;                       // so get out now.
+        break;                        // so get out now.
       }
     }
 
-    retstring = ( ! name.empty() ? "true" : "false" );  // return string is the state
+    this->tcs_info.isopen  = ( ! name.empty() ? true : false );
+    this->tcs_info.tcsname = name;
+
+    retstring = ( this->tcs_info.isopen ? "true" : "false" );  // return string is the state
 
     asyncmsg.str(""); asyncmsg << "TCSD:open:" << retstring;
     this->async.enqueue( asyncmsg.str() );              // broadcast the state
@@ -1257,7 +1288,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, 60000 );
 
     return error;
   }
@@ -1303,7 +1334,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "COORDS " << args;
 
-    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );
+    long error = this->send_command( cmd.str(), retstring, TCS::FAST_RESPONSE );
 
     asyncmsg << "TCSD:coords:" << ( error == ERROR ? "ERROR" : retstring );
     this->async.enqueue( asyncmsg.str() );
@@ -1330,12 +1361,13 @@ namespace TCS {
     //
     if ( args == "?" ) {
       retstring = TCSD_PTOFFSET;
-      retstring.append( " <raoff> <decoff> \n" );
+      retstring.append( " <raoff> <decoff> [ <rate> ]\n" );
       retstring.append( "  Send guider offsets to the TCS. These are great circle distances in\n" );
       retstring.append( "  decimal units of arcsec (degree/3600).\n" );
       retstring.append( "  There is currently no reliable way of accurately knowning when we have\n" );
       retstring.append( "  arrived so this command will wait the expected time based on the TCS\n" );
-      retstring.append( "  offset rates (MRATEs), with a minimum of 100 msec, before returning.\n" );
+      retstring.append( "  offset rate, with a minimum of 100 msec, before returning.\n" );
+      retstring.append( "  The offset rate can be optionally specified.\n" );
       return HELP;
     }
 
@@ -1344,8 +1376,8 @@ namespace TCS {
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
-    if ( tokens.size() != 2 ) {
-      logwrite( function, "ERROR invalid number of arguments: expected <ra> <dec>" );
+    if ( tokens.size() > 3 ) {
+      logwrite( function, "ERROR invalid number of arguments: expected <ra> <dec> [ <rate> ]" );
       retstring="invalid_arguments";
       return ERROR;
     }
@@ -1353,10 +1385,12 @@ namespace TCS {
     // Try to convert them to double to ensure that they are good numbers
     // before sending them to the TCS.
     //
-    double raoff, decoff;
+    double raoff, decoff, rate;
     try {
-      raoff  = std::abs( std::stod( tokens[0] ) );
-      decoff = std::abs( std::stod( tokens[1] ) );
+logwrite(function,"[DEBUG] input args= "+args );
+      raoff  = std::abs( std::stod( tokens.at(0) ) );
+      decoff = std::abs( std::stod( tokens.at(1) ) );
+      if (tokens.size()==3) rate=std::stod(tokens.at(2)); else rate=40.;
     }
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing \"" << args << "\":" << e.what();
@@ -1371,13 +1405,15 @@ namespace TCS {
       return ERROR;
     }
 
-    // Before sending PT command, check for non-zero offset rates.
-    //
-    if ( this->offsetrate_ra  < 1 || this->offsetrate_ra >  50 ||
-         this->offsetrate_dec < 1 || this->offsetrate_dec > 50 ) {
-      message.str(""); message << "ERROR offset rate(s) " << this->offsetrate_ra << "  " << this->offsetrate_dec << " outside range { 1:50}";
-      logwrite( function, message.str() );
-      return ERROR;
+    if ( rate > 0 && rate <= 50 ) {
+      this->offsetrate_ra=rate;
+      this->offsetrate_dec=rate;
+    }
+    else {
+      logwrite( function, "ERROR invalid rate "+std::to_string(rate)+" using default=40" );
+      this->offsetrate_ra=40;
+      this->offsetrate_dec=40;
+      rate=40;
     }
 
     // offsetrate_ra, offsetrate_dec are offset rates in arcsec/sec
@@ -1385,15 +1421,13 @@ namespace TCS {
     //
     int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate_ra  );  // time (ms) to offset RA
     int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate_dec );  // time (ms) to offset DEC
-    int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );         // greater of those two times + 50%
-    max_t = std::max( max_t, 100 );                                        // minimum 100 msec
+    int max_t = static_cast<int>( 1.5  * std::max( ra_t, dec_t ) );        // greater of those two times + 3s
+    max_t = std::max( max_t, 200 );                                        // minimum 3s
 
     std::stringstream cmd;
-    cmd << "PT " << args;
+    cmd << "PT " << args; // " " << raoff << " " << decoff; // << " " << rate;
 
-    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE );  // perform the offset here
-
-    std::this_thread::sleep_for( std::chrono::milliseconds( max_t ) );     // delay for offset before returning
+    long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, max_t );  // perform the offset here
 
     return error;
   }
@@ -1497,6 +1531,7 @@ namespace TCS {
     std::string reply;
 
     tcs.execute_command( cmd, reply, conn_type, to );
+logwrite(function,"[DEBUG] reply="+reply);
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.

@@ -123,6 +123,14 @@ int main(int argc, char **argv) {
 
   tcsd.interface.init_pubsub();
 
+  std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+
+  tcsd.interface.open();
+
+  std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+
+  tcsd.interface.publish_snapshot();
+
   // This will pre-thread N_THREADS threads, a little differently from other
   // daemons.  There will be N_THREADS-1 non-blocking threads as before then
   // loop forever on Accept to dynamically spawn a new thread for each blocking

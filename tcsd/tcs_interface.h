@@ -27,6 +27,9 @@
  */
 namespace TCS {
 
+  extern std::string IP_PALOMAR;                 ///< NGPS' IP address at Palomar
+  extern std::string IP_TCS;                     ///< IP address of P200 TCS
+
   const std::string DAEMON_NAME = "tcsd";        ///< when run as a daemon, this is my name
 
   constexpr bool BLOCK=true;
@@ -47,6 +50,8 @@ namespace TCS {
    */
   class TcsInfo {
     public:
+      bool isopen;          /// is connection open to TCS
+      std::string tcsname;  /// name of connected TCS { real sim }
       std::string utc;      /// ddd hh:mm:ss
       std::string lst;      /// hh:mm:ss
       std::string ha;       /// hh:mm:ss.s
@@ -69,7 +74,8 @@ namespace TCS {
 
       int domeshutters;
 
-      TcsInfo() { this->init(); }
+      TcsInfo()
+        : isopen(false) { this->init(); }
 
       /**
        * @brief  initialize all class member variables to "non-values"
@@ -295,12 +301,13 @@ namespace TCS {
           // slow command
           {
           std::lock_guard<std::mutex> lock( mtx_slow );
-//        logwrite( function, "[DEBUG] slow command socket connection acquired on fd "
-//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+          logwrite( function, "[DEBUG] slow command socket acquired on fd "
+                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port)
+                              +" timeout="+std::to_string(timeout) );
           ret = sock_slow->send_command( cmd, reply, timeout );
           }
-//        logwrite( function, "[DEBUG] releasing slow command socket connection on fd "
-//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
+          logwrite( function, "[DEBUG] releasing slow command socket connection on fd "
+                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           if (ret!=NO_ERROR) sock_slow->reconnect();
           return ret;
         }
@@ -469,7 +476,8 @@ namespace TCS {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
 
-      void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message from tcs_info
+      void publish_snapshot();
+      void publish_snapshot(std::string &retstring);
 
       /**
        * These are the functions for communicating with the TCS
@@ -477,6 +485,7 @@ namespace TCS {
       long list( const std::string &arg, std::string &retstring );
       long llist( const std::string &arg, std::string &retstring );
       long open( const std::string &arg, std::string &retstring );
+      long open();
       bool isopen();
       long isopen( std::string &retstring );
       long isopen( const std::string &arg, std::string &retstring );
