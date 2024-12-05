@@ -11,6 +11,7 @@ class LogicService:
     def __init__(self, parent):
         self.parent = parent  # reference to the parent window or main UI
         self.connection = None
+        self.all_targets = []
 
     @staticmethod
     def convert_pst_to_utc(datetime):
@@ -211,6 +212,7 @@ class LogicService:
         :param target_list_name: List of SET_NAMEs to display in the dropdown for selection.
         """
         target_list_display = self.parent.layout_service.target_list_display
+        self.all_targets = all_targets
 
         # Step 1: Clear existing rows in the target list
         target_list_display.setRowCount(0)
@@ -226,8 +228,8 @@ class LogicService:
 
         # Step 2: Check if the selected target set exists in the provided all_targets
         for selected_set_name in target_list_name:
-            if selected_set_name in all_targets:
-                set_info = all_targets[selected_set_name]
+            if selected_set_name in self.all_targets:
+                set_info = self.all_targets[selected_set_name]
                 data = set_info["targets"]
 
                 # Step 3: Filter out unwanted columns and their data

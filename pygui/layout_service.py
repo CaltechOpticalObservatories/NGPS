@@ -669,12 +669,23 @@ class LayoutService:
     def on_target_set_changed(self):
         """Handle the target set change in the ComboBox."""
         selected_set_name = self.target_list_name.currentText()
-        
-        # Now use selected_set_name to update the table or perform any other necessary action
+
+        # Get the corresponding target set data from all_targets
+        # Assuming `all_targets` is stored in a way where it can be accessed here
+        if selected_set_name in self.all_targets:
+            selected_target_set_data = self.all_targets[selected_set_name]  # Get the data for the selected set
+        else:
+            print(f"Error: Target set {selected_set_name} not found in all_targets.")
+            selected_target_set_data = None
+
+        # Now use selected_set_name and all_targets to update the table or perform any other necessary action
         print(f"Selected target set: {selected_set_name}")
 
-        # Update the table based on the selected target set
-        self.logic_service.update_target_list_table(selected_set_name)
+        # Update the table based on the selected target set (passing the selected data and the name)
+        if selected_target_set_data:
+            self.logic_service.update_target_list_table(self.logic_service.all_targets, selected_set_name)
+        else:
+            print("Error: No data found for the selected target set.")
 
 
     def create_right_planning_column(self):
