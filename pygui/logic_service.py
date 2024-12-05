@@ -212,6 +212,7 @@ class LogicService:
         target_list_display = self.parent.layout_service.target_list_display
 
         # Step 1: Clear existing rows in the target list
+        print("Clearing existing rows in the target list...")
         target_list_display.setRowCount(0)
 
         # List of columns to hide
@@ -222,6 +223,8 @@ class LogicService:
             "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew", "OTMmoon", "OTMSNR",
             "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
+        
+        print(f"Columns to hide: {columns_to_hide}")
 
         # Step 2: Filter out unwanted columns and their data, and optionally filter by set_id
         filtered_data = []
@@ -229,15 +232,20 @@ class LogicService:
         self.all_targets = data
         self.target_list_set = target_list_set
 
-        # Step 2.1: If set_id is provided, filter the data to include only rows matching the set_id
+        # Step 2.1: If set_name is provided, filter the data to include only rows matching the set_id
         if set_name:
-            set_id = self.target_list_set.get(set_name) 
+            print(f"Filtering data for set_name: {set_name}")
+            set_id = self.target_list_set.get(set_name)
+            print(f"Retrieved SET_ID: {set_id} for set_name: {set_name}")
             filtered_data = [row for row in data if row.get("SET_ID") == set_id]
+            print(f"Filtered data (after set_name filtering): {filtered_data}")
         else:
+            print("No set_name provided, using all data.")
             filtered_data = data  # No filtering by set_id if set_id is None
 
         # Step 2.2: Further filter columns
         final_filtered_data = []
+        print("Filtering out unwanted columns...")
         for row_data in filtered_data:
             # Create a new row data dictionary that excludes the unwanted columns
             filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
@@ -245,8 +253,10 @@ class LogicService:
 
         # Step 3: Set the number of columns dynamically based on the filtered data
         if final_filtered_data:
+            print("Setting column names based on filtered data...")
             # Extract the column names from the first row (assuming all rows have the same structure)
             filtered_column_names = final_filtered_data[0].keys()
+            print(f"Filtered column names: {filtered_column_names}")
 
             # Set the column count
             target_list_display.setColumnCount(len(filtered_column_names))
@@ -259,6 +269,7 @@ class LogicService:
             header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
             # Step 4: Add new rows based on the filtered data
+            print(f"Adding {len(final_filtered_data)} rows to the table...")
             for row_data in final_filtered_data:
                 row_position = target_list_display.rowCount()
                 target_list_display.insertRow(row_position)
@@ -268,11 +279,14 @@ class LogicService:
                     target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
             # Step 5: Optionally, sort the table if you want to auto-sort after loading
+            print("Sorting the table by the first column...")
             target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
             # Step 6: Optionally, hide the button and show the table once the data is loaded
+            print("Hiding load button and showing table...")
             self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
             target_list_display.setVisible(True)  # Show the table
+
 
 
     def update_target_information(self, target_data):
