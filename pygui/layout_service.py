@@ -654,9 +654,27 @@ class LayoutService:
         if isinstance(self.target_list_name, QComboBox):
             self.target_list_name.clear()
 
-        # Add the fetched or fallback target lists to the ComboBox
-        for target in target_lists:
-            self.target_list_name.addItem(target)
+            # Add the fetched or fallback target lists to the ComboBox
+            for set_name in target_lists:
+                self.target_list_name.addItem(set_name)
+
+            # Set the first item as the default selection (if available)
+            if target_lists:
+                self.target_list_name.setCurrentIndex(0)  # Set the first item as default
+
+            # Connect the signal for user selection change
+            self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
+
+
+    def on_target_set_changed(self):
+        """Handle the target set change in the ComboBox."""
+        selected_set_name = self.target_list_name.currentText()
+        
+        # Now use selected_set_name to update the table or perform any other necessary action
+        print(f"Selected target set: {selected_set_name}")
+
+        # Update the table based on the selected target set
+        self.update_target_list_table(selected_set_name)
 
 
     def create_right_planning_column(self):
