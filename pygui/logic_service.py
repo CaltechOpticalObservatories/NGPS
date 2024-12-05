@@ -225,27 +225,23 @@ class LogicService:
             "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
-        # Step 2: Check if the selected target set exists in the provided all_targets
-        # Here, we'll need the SET_ID from the ComboBox (the user selects it, not the SET_NAME)
-        selected_set_id = None
+        # Step 2: Create a reverse mapping from SET_NAME to SET_ID
+        set_name_to_id = {set_info["SET_NAME"]: set_id for set_id, set_info in all_targets.items()}
 
-        print(f"Target list names available: {target_list_name}")
+        print(f"Reverse mapping (SET_NAME -> SET_ID): {set_name_to_id}")
 
-        # Find the SET_ID corresponding to the selected SET_NAME in the target_list_name
-        for set_id, set_info in all_targets.items():
-            print(f"Checking set: {set_info['SET_NAME']} (SET_ID: {set_id})")
-            if set_info["SET_NAME"] == target_list_name:
-                selected_set_id = set_id
-                print(f"Found matching SET_NAME: {target_list_name} with SET_ID: {selected_set_id}")
-                break
+        # Step 3: Check if the selected SET_NAME exists in the reverse mapping (SET_NAME -> SET_ID)
+        selected_set_name = target_list_name  # Selected SET_NAME from ComboBox
+        if selected_set_name in set_name_to_id:
+            selected_set_id = set_name_to_id[selected_set_name]
+            print(f"Found selected SET_NAME: '{selected_set_name}' with SET_ID: {selected_set_id}")
 
-        if selected_set_id:
             set_info = all_targets[selected_set_id]
             data = set_info["targets"]
 
             print(f"Fetching data for SET_ID: {selected_set_id}, SET_NAME: {set_info['SET_NAME']}")
-            
-            # Step 3: Filter out unwanted columns and their data
+
+            # Step 4: Filter out unwanted columns and their data
             filtered_data = []
             filtered_column_names = []
 
@@ -254,7 +250,7 @@ class LogicService:
                 filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
                 filtered_data.append(filtered_row)
 
-            # Step 4: Set the number of columns dynamically based on the filtered data
+            # Step 5: Set the number of columns dynamically based on the filtered data
             if filtered_data:
                 # Extract the column names from the first row (assuming all rows have the same structure)
                 filtered_column_names = filtered_data[0].keys()
@@ -271,7 +267,7 @@ class LogicService:
                 header = target_list_display.horizontalHeader()
                 header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
-                # Step 5: Add new rows based on the filtered data
+                # Step 6: Add new rows based on the filtered data
                 for row_data in filtered_data:
                     row_position = target_list_display.rowCount()
                     target_list_display.insertRow(row_position)
@@ -282,16 +278,17 @@ class LogicService:
 
                 print(f"Data populated for {len(filtered_data)} rows.")
 
-                # Step 6: Optionally, sort the table if you want to auto-sort after loading
+                # Step 7: Optionally, sort the table if you want to auto-sort after loading
                 target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
-                # Step 7: Hide the button and show the table once the data is loaded
+                # Step 8: Hide the button and show the table once the data is loaded
                 self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
                 target_list_display.setVisible(True)  # Show the table
             else:
                 print("No filtered data found.")
         else:
-            print(f"Error: SET_ID for selected target set '{target_list_name}' not found.")
+            print(f"Error: Selected SET_NAME '{selected_set_name}' not found in all_targets.")
+
 
 
     def update_target_information(self, target_data):
