@@ -328,6 +328,7 @@ namespace Slicecam {
       void request_snapshot();
       bool wait_for_snapshots();
 
+      long avg_frames( std::string args, std::string &retstring );
       long bin( std::string args, std::string &retstring );
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all slicecams

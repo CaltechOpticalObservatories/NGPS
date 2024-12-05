@@ -207,7 +207,8 @@ logwrite( function, file_in );
     // write the primary image into the FITS file
     //
     try {
-      auto data = slicecam->get_image_data();
+//    auto data = slicecam->get_image_data();
+      auto data = slicecam->get_avg_data();
 
       if ( data == nullptr ) {
         logwrite( function, "ERROR missing data buffer for slicecam " +
@@ -215,7 +216,8 @@ logwrite( function, file_in );
         return ERROR;
       }
 
-      std::valarray<uint16_t> array( slicecam->camera_info.section_size );
+//    std::valarray<uint16_t> array( slicecam->camera_info.section_size );
+      std::valarray<float> array( slicecam->camera_info.section_size );
 
       try {
         std::copy_n( data, slicecam->camera_info.section_size, &array[0] );

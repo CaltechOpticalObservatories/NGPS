@@ -504,6 +504,10 @@ namespace Slicecam {
                       ret = this->interface.close( args, retstring );
       }
       else
+      if ( cmd == SLICECAMD_AVGFRAMES ) {
+                      ret = this->interface.avg_frames( args, retstring );
+      }
+      else
       if ( cmd == SLICECAMD_BIN ) {
                       ret = this->interface.bin( args, retstring );
       }

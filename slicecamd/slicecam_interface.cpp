@@ -12,6 +12,8 @@
 
 namespace Slicecam {
 
+  constexpr double OFFSETRATE=20.;
+
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
   /***** Slicecam::Camera::emulator *******************************************/
@@ -925,7 +927,8 @@ namespace Slicecam {
     long error = NO_ERROR;
 
     fitsinfo.fits_name = outfile;
-    fitsinfo.datatype = USHORT_IMG;
+//  fitsinfo.datatype = USHORT_IMG;
+    fitsinfo.datatype = FLOAT_IMG;
 
     fits_file.copy_info( fitsinfo );      // copy from fitsinfo to the fits_file class
 
@@ -2142,6 +2145,53 @@ namespace Slicecam {
   /***** Slicecam::Interface::gui_settings_control ****************************/
 
 
+  /***** Slicecam::Interface::avg_frames **************************************/
+  /**
+   * @brief      
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::avg_frames( const std::string args, std::string &retstring ) {
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_AVGFRAMES;
+      retstring.append( " [ reset | <num> ]\n" );
+      retstring.append( "   Set or get the number of frames in a running average. If no arg is\n" );
+      retstring.append( "   supplied then the current value is returned.\n" );
+      return HELP;
+    }
+    if ( !args.empty() ) {
+      if ( args=="reset" ) {
+        for ( const auto &pair : this->camera.andor ) {
+          pair.second->reset_avg();
+        }
+      }
+      else {
+        try {
+          float num = std::stoi( args );
+          if ( num < 1 ) {
+            logwrite( "Slicecam::Interface::avg_frames", "ERROR <num> must be greater than 0" );
+            retstring="invalid_argument";
+            return ERROR;
+          }
+          for ( const auto &pair : this->camera.andor ) {
+            pair.second->set_weight(num);
+          }
+        }
+        catch( const std::exception &e ) {
+          logwrite( "Slicecam::Interface::avg_frames", "ERROR parsing value: "+std::string(e.what()) );
+          retstring="bad_value";
+          return ERROR;
+        }
+      }
+    }
+    retstring=std::to_string(this->camera.andor.begin()->second->get_weight());
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::avg_frames **************************************/
+
+
   /***** Slicecam::Interface::dothread_fpoffset *******************************/
   /**
    * @brief      for testing, calls a Python function from a thread
@@ -2291,11 +2341,6 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // offsets are in degrees, convert to arcsec (required for PT command)
-    //
-    ra_off  *= 3600.;
-    dec_off *= 3600.;
-
     // If ACAM is guiding then slicecam must not move the telescope,
     // but must allow ACAM to perform the offset.
     //
@@ -2322,9 +2367,14 @@ namespace Slicecam {
     }
     else
     if ( !is_guiding && this->tcs_online.load() && this->tcsd.client.is_open() ) {
+      // offsets are in degrees, convert to arcsec (required for PT command)
+      //
+      ra_off  *= 3600.;
+      dec_off *= 3600.;
+
       // Send them directly to the TCS when not guiding
       //
-      if ( this->tcsd.pt_offset( ra_off, dec_off ) != NO_ERROR ) {
+      if ( this->tcsd.pt_offset( ra_off, dec_off, OFFSETRATE ) != NO_ERROR ) {
         logwrite( function, "ERROR offsetting telescope" );
         retstring="tcs_error";
         return ERROR;
