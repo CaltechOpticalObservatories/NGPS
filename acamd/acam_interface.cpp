@@ -12,6 +12,8 @@
 
 namespace Acam {
 
+  constexpr double OFFSETRATE=40.;
+
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
   /***** Acam::Camera::emulator ***********************************************/
@@ -3093,6 +3095,7 @@ logwrite( function, "[DEBUG] acquire here" );
       long matches;
       double rmsarcsec;
       this->astrometry.solve( last_imagename, this->target.ext_solver_args );
+logwrite(function, "[DEBUG] setting goals from solver" );
       this->astrometry.get_solution( result, this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle, matches, rmsarcsec );
 message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle;
 logwrite( function, message.str() );
@@ -3318,7 +3321,7 @@ logwrite( function, message.str() );
       }
 
       attempts++;
-logwrite(function,"[DEBUG] incremented attempts="+std::to_string(attempts));
+      logwrite(function,"[DEBUG] incremented attempts="+std::to_string(attempts));
 
       double acam_ra_goal, acam_dec_goal, acam_angle_goal;
       bool match_found = false;                    // was a match found?
@@ -3361,15 +3364,17 @@ logwrite( function, message.str() );
 message.str(""); message << "[DEBUG] using goals: " << this->acam_goal.ra << " " << this->acam_goal.dec << " " << this->acam_goal.angle;
 logwrite( function, message.str() );
 
-      // Apply any dRA, dDEC goal offsets from the "put on slit" action to
-      // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
-      // either the ACAM or slicecam GUIs and are stored in the Target class.
-      //
-      // The supplied acam_ra_goal,acam_dec_goal are modified by dRA,dDEC
-      //
-      if ( iface->fpoffsets.apply_offset( acam_ra_goal,  iface->target.dRA,
-                                          acam_dec_goal, iface->target.dDEC ) == ERROR ) break;
-
+message.str(""); message << "[DEBUG] dRA=" << iface->target.dRA << " dDEC=" << iface->target.dDEC;
+logwrite( function, message.str() );
+///   // Apply any dRA, dDEC goal offsets from the "put on slit" action to
+///   // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
+///   // either the ACAM or slicecam GUIs and are stored in the Target class.
+///   //
+///   // The supplied acam_ra_goal,acam_dec_goal are modified by dRA,dDEC
+///   //
+///   if ( iface->fpoffsets.apply_offset( this->acam_goal.ra,  iface->target.dRA,
+///                                       this->acam_goal.dec, iface->target.dDEC ) == ERROR ) break;
+///
       // Perform the astrometry calculations on the acquired image (and calculate image quality).
       // Optional solver args can be included here, which currently only come from the test commands.
       //
@@ -3445,12 +3450,15 @@ logwrite( function, message.str() );
       }
 *****/
       if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
-                                          acam_goal.ra, acam_goal.dec,
+                                          this->acam_goal.ra, this->acam_goal.dec,
                                           ra_off, dec_off ) == ERROR ) break;
-      offset = angular_separation( acam_goal.ra, acam_goal.dec, acam_ra, acam_dec );
+      offset = angular_separation( this->acam_goal.ra, this->acam_goal.dec, acam_ra, acam_dec );
 
-message.str(""); message << "[DEBUG] calculated RAoffset=" << ra_off << " DECLoffset=" << dec_off;
-logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] acam_ra=" << acam_ra << " acam_dec=" << acam_dec << " acam_goal.ra=" 
+                                 << acam_goal.ra << "  .dec=" << this->acam_goal.dec << " .ang=" << this->acam_goal.angle;
+        logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] calculated RAoffset=" << ra_off << " DECLoffset=" << dec_off;
+        logwrite( function, message.str() );
       // Add properly-typed telemetry keys/value pairs to a database map object.
       // This does not write them to the actual database yet.
       //
@@ -3518,30 +3526,31 @@ logwrite( function, message.str() );
       //
       else {
         // send offset to TCS here (returns when offset is complete)
-message.str(""); message << "[DEBUG] will send ra_off=" << ra_off*3600. << " dec_off=" << dec_off*3600.;
-logwrite( function, message.str() );
-if ( std::abs(ra_off*3600.) > 300. || std::abs(dec_off*3600.) > 300. ) {
-  logwrite( function, "ERROR not sending offsets because they exceed 300 arcsec!" );
-  break;
-}
-        if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600. )==ERROR) break;
+        message.str(""); message << "[DEBUG] will send ra_off=" << ra_off*3600. << " dec_off=" << dec_off*3600.;
+        logwrite( function, message.str() );
+        if ( std::abs(ra_off*3600.) > 300. || std::abs(dec_off*3600.) > 300. ) {
+          logwrite( function, "ERROR not sending offsets because they exceed 300 arcsec!" );
+          break;
+        }
+        if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
         std::this_thread::sleep_for( std::chrono::seconds(1) );
 
         // reset retry counter if match found and offset < max and no errors
         attempts = 0;
-logwrite(function,"[DEBUG] reset attempts counter=0");
+        logwrite(function,"[DEBUG] reset attempts counter=0");
       }
 
       // If the offset is below ACQUIRE_OFFSET_THRESHOLD then increment the nacquired
       // counter. We need ACQUIRE_MIN_REPEAT sequential, successful acquires in order
       // to call this a success, so any failure here resets the counter.
       //
-logwrite(function,"[DEBUG] offset="+std::to_string(offset)+" threshold="+std::to_string(this->offset_threshold));
+      logwrite(function,"[DEBUG] offset="+std::to_string(offset)+" threshold="+std::to_string(this->offset_threshold));
       if ( offset < this->offset_threshold ) {
         // but only in ACQUIRE mode, otherwise this could increment forever in GUIDE mode
         if ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
           this->nacquired++;
-logwrite(function,"[DEBUG] incremented nacquired="+std::to_string(this->nacquired));
+          this->sequential_failures=0;
+          logwrite(function,"[DEBUG] incremented nacquired="+std::to_string(this->nacquired));
           message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
           logwrite( function, message.str() );
         }
@@ -3549,14 +3558,14 @@ logwrite(function,"[DEBUG] incremented nacquired="+std::to_string(this->nacquire
       }
       else {
         nacquired=0;     // if an acquire is not below threshold then reset the counter
-logwrite(function,"[DEBUG] acquire is not below threshold so reset the nacquired counter=0");
+        logwrite(function,"[DEBUG] acquire is not below threshold so reset the nacquired counter=0");
       }
 
     } while ( false );  // the do-loop is executed only once. used to allow breaks.
     }                   // end of acquisition sequence
 
     if ( this->nacquired == 0 && this->max_attempts > 0 ) {
-logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
+      logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
       if ( ++this->sequential_failures >= this->max_attempts ) {
         logwrite( function, "ERROR sequential failures "+std::to_string(this->sequential_failures)
                           +" exceeds max attempts "+std::to_string(this->max_attempts) );
@@ -4913,6 +4922,8 @@ logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
     this->camera.fitsinfo.fitskeys.addkey( "FILTER", this->motion.get_current_filtername(), "ACAM filter name" );
     this->camera.fitsinfo.fitskeys.addkey( "COVER", this->motion.get_current_coverpos(), "ACAM cover position" );
 
+    this->camera.fitsinfo.fitskeys.addkey( "STATUS", this->target.acquire_mode_string(), "" );
+
     return NO_ERROR;
   }
   /***** Acam::Interface::collect_header_info *********************************/
@@ -5266,8 +5277,27 @@ logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
       return ERROR;
     }
 
+    // Apply any dRA, dDEC goal offsets from the "put on slit" action to
+    // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
+    // either the ACAM or slicecam GUIs and are stored in the Target class.
+    //
+    // The supplied acam_ra_goal,acam_dec_goal are modified by dRA,dDEC
+    //
+    this->fpoffsets.apply_offset( this->target.acam_goal.ra,  this->target.dRA,
+                                  this->target.acam_goal.dec, this->target.dDEC );
+
+
     message.str(""); message << this->target.dRA << " " << this->target.dDEC;
     retstring = message.str();
+
+    if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
+      this->target.acquire_mode = Acam::TARGET_ACQUIRE;
+      this->target.nacquired = 0;
+      this->target.attempts = 0;
+      this->target.sequential_failures = 0;
+      this->target.timeout_time = std::chrono::steady_clock::now()
+                                + std::chrono::duration<double>(this->target.timeout);
+    }
 
     return NO_ERROR;
   }
@@ -5355,7 +5385,7 @@ logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
     if (error==NO_ERROR) error = this->fpoffsets.solve_offset( cross_ra, cross_dec,
                                                                slit_ra,  slit_dec,
                                                                dRA,      dDEC );
-    if (error==NO_ERROR) error = this->tcsd.pt_offset( dRA*3600., dDEC*3600. );
+    if (error==NO_ERROR) error = this->tcsd.pt_offset( dRA*3600., dDEC*3600., OFFSETRATE );
     std::this_thread::sleep_for( std::chrono::seconds(1) );
 
     message.str(""); message << ( error==ERROR ? "ERROR moving " : "moved " )

@@ -705,6 +705,10 @@ namespace Acam {
       if ( cmd == ACAMD_COORDS ) {
                       ret = this->interface.target_coords( args, retstring );
       }
+//    else
+//    if ( cmd == ACAMD_OFFRATE ) {
+//                    ret = this->interface.target_coords( args, retstring );
+//    }
       else
       // commands for the Andor camera direct
       //
