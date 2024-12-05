@@ -674,7 +674,7 @@ class LayoutService:
         print(f"Selected target set: {selected_set_name}")
 
         # Update the table based on the selected target set
-        self.update_target_list_table(selected_set_name)
+        self.logic_service.update_target_list_table(selected_set_name)
 
 
     def create_right_planning_column(self):
