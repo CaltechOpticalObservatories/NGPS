@@ -1118,8 +1118,14 @@ std::mutex generate_tmpfile_mtx;
     // tokens, "+", "D", "MM", "SS.sss" so determine the sign then get rid of it.
     //
     if ( str_in.find( '-' ) != std::string::npos ) sign = -1.0;
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
-    str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
+    try {
+      str_in.erase( std::remove( str_in.begin(), str_in.end(), '-' ), str_in.end() );
+      str_in.erase( std::remove( str_in.begin(), str_in.end(), '+' ), str_in.end() );
+    }
+    catch( std::out_of_range &e ) {
+      std::cerr << "ERROR invalid string \"" << str_in << "\" (missing +/-): " << e.what();
+      return NAN;
+    }
 
     Tokenize( str_in, tokens, " :" );  // tokenize on space or colon
 
@@ -1236,3 +1242,24 @@ std::mutex generate_tmpfile_mtx;
   }
   /***** angular_separation ***************************************************/
 
+
+  std::string get_localhost() {
+    char host[1024];
+    if ( gethostname( host, sizeof(host) ) == -1) {
+      std::cerr << "ERROR getting hostname: " << strerror(errno) << std::endl;
+      return "";
+    }
+
+    struct hostent* he = gethostbyname(host);
+    if (he == nullptr) {
+      std::cerr << "ERROR getting host info: " << strerror(errno) << std::endl;
+      return "";
+    }
+
+    struct in_addr** addr_list = (struct in_addr**)he->h_addr_list;
+    if (addr_list[0] != nullptr) {
+      return std::string(inet_ntoa(*addr_list[0]));
+    }
+
+    return "";
+  }

@@ -39,6 +39,9 @@
 #include <condition_variable>
 #include <initializer_list>
 #include <bitset>
+#include <cstdlib>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #define TO_DEGREES ( 360. / 24. )
 #define TO_HOURS   ( 24. / 360. )
@@ -106,6 +109,8 @@ void precise_sleep( long microseconds );             /// precise, non-interrupta
 long timeout( int wholesec=0, std::string next="" );  /// wait until next integral second or minute
 
 double mjd_from( struct timespec &time_n );         /// modified Julian date from input timespec struct
+
+std::string get_localhost();
 
 inline double mjd_now() {                           /// modified Julian date now
   struct timespec timenow;
@@ -352,12 +357,14 @@ class BoolState {
  * @details This is a utility class to create a reasonably accurate
  *          interruptable sleep timer (precision approx 100 microseconds).
  *          This is done by making repeated calls to precise_sleep(),
- *          while checking for a cancel flag.
+ *          while checking for a cancel flag. The timer can also be
+ *          modified.
  *
  */
 class PreciseTimer {
   private:
     std::atomic<bool> cancelled;
+    std::atomic<long> delay_time;
 
     /***** PreciseTimer::precise_sleep ****************************************/
     void precise_sleep(long microseconds) {
@@ -392,7 +399,7 @@ class PreciseTimer {
     }
 
     /***** PreciseTimer::long_precise_sleep ***********************************/
-    void long_precise_sleep(long microseconds) {
+    void long_precise_sleep() {
       // max_short_sleep is the largest sleep time for precise_sleep()
       // This should be kept small, a few seconds or less.
       //
@@ -402,7 +409,7 @@ class PreciseTimer {
 
       // remaining time starts as requested time
       //
-      long remaining_time = microseconds;
+      long remaining_time = delay_time.load();
 
       // loop forever until broken
       //
@@ -420,21 +427,25 @@ class PreciseTimer {
         clock_gettime(CLOCK_MONOTONIC, &current_time);
         long elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000000 +
                             (current_time.tv_nsec - start_time.tv_nsec) / 1000;
-        remaining_time = microseconds - elapsed_time;
+
+        remaining_time = delay_time.load() - elapsed_time;
 
         if ( remaining_time <= 0 ) break;           // break when time is up
       }
     }
 
   public:
-    PreciseTimer() : cancelled(false) { }
+    PreciseTimer() : cancelled(false), delay_time(0) { }
 
     /***** PreciseTimer::delay ************************************************/
     void delay(long milliseconds) {
       cancelled=false;
-      long microseconds = milliseconds * 1000;
-      long_precise_sleep( microseconds );
+      delay_time.store(1000*milliseconds);
+      long_precise_sleep();
     }
+
+    /***** PreciseTimer::modify ***********************************************/
+    void modify(long milliseconds) { delay_time.store(milliseconds*1000); }
 
     /***** PreciseTimer::stop *************************************************/
     void stop() { cancelled=true; }
