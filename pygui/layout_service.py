@@ -670,22 +670,24 @@ class LayoutService:
         """Handle the target set change in the ComboBox."""
         selected_set_name = self.target_list_name.currentText()
 
-        # Get the corresponding target set data from all_targets
-        # Assuming `all_targets` is stored in a way where it can be accessed here
+        # Find the corresponding SET_ID using the selected SET_NAME
+        selected_set_id = None
         if selected_set_name in self.logic_service.all_targets:
-            selected_target_set_data = self.logic_service.all_targets[selected_set_name]  # Get the data for the selected set
+            selected_set_id = next(key for key, value in self.logic_service.all_targets.items() if value["SET_NAME"] == selected_set_name)
         else:
-            print(f"Error: Target set {selected_set_name} not found in all_targets.")
-            selected_target_set_data = None
+            print(f"Error: SET_NAME '{selected_set_name}' not found in all_targets.")
+            selected_set_id = None
 
-        # Now use selected_set_name and all_targets to update the table or perform any other necessary action
-        print(f"Selected target set: {selected_set_name}")
-
-        # Update the table based on the selected target set (passing the selected data and the name)
-        if selected_target_set_data:
+        if selected_set_id:
+            # Fetch the targets for the selected SET_ID
+            selected_target_set_data = self.logic_service.all_targets[selected_set_id]
+            
+            # Pass both the target set data and SET_ID to the table update function
             self.logic_service.update_target_list_table(self.logic_service.all_targets, selected_set_name)
+            print(f"Updated table for SET_NAME '{selected_set_name}' with SET_ID '{selected_set_id}'")
         else:
             print("Error: No data found for the selected target set.")
+
 
 
     def create_right_planning_column(self):
