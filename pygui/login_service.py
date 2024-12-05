@@ -185,10 +185,12 @@ class LoginDialog(QDialog):
                 cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (username,))
                 set_data = cursor.fetchall()
 
-                # Step 2: For each SET_ID, fetch the associated rows from the 'targets' table
+                # Step 2: Reset the all_targets dictionary and target_list_name list
                 self.all_targets = {}  # Reset the all_targets dictionary
-                self.target_list_name = []
+                self.set_name_to_id = {}  # A mapping of SET_NAME to SET_ID
+                self.target_list_name = []  # The list for the dropdown
 
+                # Populate the all_targets and set_name_to_id
                 for set_info in set_data:
                     set_id = set_info["SET_ID"]
                     set_name = set_info["SET_NAME"]
@@ -203,15 +205,16 @@ class LoginDialog(QDialog):
                     # Add SET_NAME to the target list dropdown
                     self.target_list_name.append(set_name)
 
+                    # Map the SET_NAME to the SET_ID
+                    self.set_name_to_id[set_name] = set_id
+
                 cursor.close()
-                
 
             except mysql.connector.Error as err:
                 print(f"Database error: {err}")
             finally:
                 # Don't close the connection here, as it should remain open
                 pass
-
 
 class CreateAccountDialog(QDialog):
     def __init__(self, parent):

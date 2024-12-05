@@ -94,18 +94,22 @@ class NgpsGUI(QMainWindow):
             self.logic_service.load_csv_and_update_target_list(file_path)
 
     def on_login(self):
-        """ Handle the login action from the menu """
+        """Handle the login action from the menu."""
         login_dialog = LoginDialog(self, self.connection)
-        
+
         # If the login is successful, load data from MySQL
         if login_dialog.exec_() == QDialog.Accepted:
             # Call the function to load data from MySQL
             self.load_mysql_data(login_dialog.all_targets, login_dialog.target_list_name)
+            
+            # After loading data, populate the target lists dropdown
             self.layout_service.load_target_lists(login_dialog.target_list_name)
 
-    def load_mysql_data(self, data, set_name):
-        """ Load data from MySQL after successful login """
-        self.logic_service.update_target_list_table(data, set_name)
+
+    def load_mysql_data(self, all_targets, target_list_name):
+        """Load data from MySQL after successful login."""
+        # Pass the data (all_targets) and the selected set_name (target_list_name) to the update function
+        self.logic_service.update_target_list_table(all_targets, target_list_name)
 
     def on_create_account(self):
         """ Handle the create account action from the User menu """

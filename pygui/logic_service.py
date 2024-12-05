@@ -201,14 +201,14 @@ class LogicService:
             filtered_data = [row for row in self.all_target_data if str(row['SET_ID']) == selected_set_id]
             self.update_target_list_table(filtered_data)
 
-    def update_target_list_table(self, target_sets_data, selected_set_name):
+    def update_target_list_table(self, all_targets, target_list_name):
         """
         Populates the UI table with data for the selected target set.
         Dynamically updates the table based on the selected target set.
         It hides the specified columns.
         
-        :param target_sets_data: Dictionary where keys are set names, and values are lists of target rows.
-        :param selected_set_name: The name of the target set to filter and display.
+        :param all_targets: Dictionary where keys are SET_ID and values are a dict with SET_NAME and targets.
+        :param target_list_name: List of SET_NAMEs to display in the dropdown for selection.
         """
         target_list_display = self.parent.layout_service.target_list_display
 
@@ -224,57 +224,54 @@ class LogicService:
             "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
-        # Step 2: Check if the selected target set exists in the provided target_sets_data
-        if selected_set_name in target_sets_data:
-            # Get the filtered data for the selected set
-            data = target_sets_data[selected_set_name]
-        else:
-            # If the set name is not found in target_sets_data, handle the error
-            print(f"Error: Target set {selected_set_name} not found in provided data.")
-            data = []
+        # Step 2: Check if the selected target set exists in the provided all_targets
+        for selected_set_name in target_list_name:
+            if selected_set_name in all_targets:
+                set_info = all_targets[selected_set_name]
+                data = set_info["targets"]
 
-        # Step 3: Filter out unwanted columns and their data
-        filtered_data = []
-        filtered_column_names = []
+                # Step 3: Filter out unwanted columns and their data
+                filtered_data = []
+                filtered_column_names = []
 
-        for row_data in data:
-            # Create a new row data dictionary that excludes the unwanted columns
-            filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
-            filtered_data.append(filtered_row)
+                for row_data in data:
+                    # Create a new row data dictionary that excludes the unwanted columns
+                    filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
+                    filtered_data.append(filtered_row)
 
-        # Step 4: Set the number of columns dynamically based on the filtered data
-        if filtered_data:
-            # Extract the column names from the first row (assuming all rows have the same structure)
-            filtered_column_names = filtered_data[0].keys()
+                # Step 4: Set the number of columns dynamically based on the filtered data
+                if filtered_data:
+                    # Extract the column names from the first row (assuming all rows have the same structure)
+                    filtered_column_names = filtered_data[0].keys()
 
-            # Set the column count
-            target_list_display.setColumnCount(len(filtered_column_names))
+                    # Set the column count
+                    target_list_display.setColumnCount(len(filtered_column_names))
 
-            # Set the header labels based on the filtered column names
-            target_list_display.setHorizontalHeaderLabels(filtered_column_names)
+                    # Set the header labels based on the filtered column names
+                    target_list_display.setHorizontalHeaderLabels(filtered_column_names)
 
-            # Remove the bold font from headers
-            header = target_list_display.horizontalHeader()
-            header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
+                    # Remove the bold font from headers
+                    header = target_list_display.horizontalHeader()
+                    header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
-            # Step 5: Add new rows based on the filtered data
-            for row_data in filtered_data:
-                row_position = target_list_display.rowCount()
-                target_list_display.insertRow(row_position)
+                    # Step 5: Add new rows based on the filtered data
+                    for row_data in filtered_data:
+                        row_position = target_list_display.rowCount()
+                        target_list_display.insertRow(row_position)
 
-                # Dynamically populate the table with the filtered data
-                for col_index, (col_name, value) in enumerate(row_data.items()):
-                    target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
+                        # Dynamically populate the table with the filtered data
+                        for col_index, (col_name, value) in enumerate(row_data.items()):
+                            target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
-            # Step 6: Optionally, sort the table if you want to auto-sort after loading
-            target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
+                    # Step 6: Optionally, sort the table if you want to auto-sort after loading
+                    target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
-            # Step 7: Hide the button and show the table once the data is loaded
-            self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
-            target_list_display.setVisible(True)  # Show the table
-        else:
-            print("No data available for the selected target set.")
-            # Optionally, you could show a message or handle this case on the UI
+                    # Step 7: Hide the button and show the table once the data is loaded
+                    self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
+                    target_list_display.setVisible(True)  # Show the table
+            else:
+                print(f"Error: Target set {selected_set_name} not found in all_targets data.")
+
 
 
     def update_target_information(self, target_data):
