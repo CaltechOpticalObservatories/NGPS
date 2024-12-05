@@ -106,10 +106,10 @@ class NgpsGUI(QMainWindow):
             self.layout_service.load_target_lists(login_dialog.set_name)
 
 
-    def load_mysql_data(self, all_targets, target_list_set):
+    def load_mysql_data(self, all_targets):
         """Load data from MySQL after successful login."""
         # Pass the data (all_targets) and the selected set_name (target_list_name) to the update function
-        self.logic_service.update_target_list_table(all_targets, target_list_set)
+        self.logic_service.update_target_list_table(all_targets)
 
     def on_create_account(self):
         """ Handle the create account action from the User menu """
