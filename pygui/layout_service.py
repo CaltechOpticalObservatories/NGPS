@@ -668,26 +668,28 @@ class LayoutService:
 
     def on_target_set_changed(self):
         """Handle the target set change in the ComboBox."""
+        # Get the selected SET_NAME (not the entire list of target sets)
         selected_set_name = self.target_list_name.currentText()
+        
+        # Check if the selected SET_NAME is in the reverse mapping (SET_NAME -> SET_ID)
+        print(f"Selected SET_NAME: {selected_set_name}")
 
-        # Find the corresponding SET_ID using the selected SET_NAME
-        selected_set_id = None
-        if selected_set_name in self.logic_service.all_targets:
-            selected_set_id = next(key for key, value in self.logic_service.all_targets.items() if value["SET_NAME"] == selected_set_name)
+        # Reverse mapping from SET_NAME to SET_ID
+        set_name_to_id = {set_info["SET_NAME"]: set_id for set_id, set_info in self.all_targets.items()}
+
+        if selected_set_name in set_name_to_id:
+            selected_set_id = set_name_to_id[selected_set_name]
+            print(f"Found selected SET_NAME: '{selected_set_name}' with SET_ID: {selected_set_id}")
+
+            # Retrieve the associated data
+            set_info = self.all_targets[selected_set_id]
+            data = set_info["targets"]
+
+            # Process and populate the table as before...
+            # (Filtered columns and data population code here)
+            
         else:
             print(f"Error: SET_NAME '{selected_set_name}' not found in all_targets.")
-            selected_set_id = None
-
-        if selected_set_id:
-            # Fetch the targets for the selected SET_ID
-            selected_target_set_data = self.logic_service.all_targets[selected_set_id]
-            
-            # Pass both the target set data and SET_ID to the table update function
-            self.logic_service.update_target_list_table(self.logic_service.all_targets, selected_set_name)
-            print(f"Updated table for SET_NAME '{selected_set_name}' with SET_ID '{selected_set_id}'")
-        else:
-            print("Error: No data found for the selected target set.")
-
 
 
     def create_right_planning_column(self):
