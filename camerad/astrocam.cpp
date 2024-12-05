@@ -324,7 +324,7 @@ logwrite(function,message.str() );
     this->controller[dev].info.systemkeys.add_key( "BINSPAT", binspat, "binning in spatial direction", EXT, chan );  // TODO
 
     this->controller[dev].info.systemkeys.add_key( "CDELT1A",
-                                                   this->controller[dev].info.dispersion*binspat,
+                                                   this->controller[dev].info.dispersion*binspec,
                                                    "Dispersion in Angstrom/pixel", EXT, chan );
     this->controller[dev].info.systemkeys.add_key( "CRVAL1A",
                                                    this->controller[dev].info.minwavel,
@@ -4189,6 +4189,7 @@ logwrite(function, message.str());
       return( ERROR );
     }
 
+/*****
     // Send command to connected devices to get remaining exposure time.
     //
     std::string reply;
@@ -4245,11 +4246,11 @@ logwrite(function, message.str());
         error = ERROR;
       }
     }
-
-    // block changes within the last 2 seconds of exposure
+*****/
+    // block changes within the last 5 seconds of exposure
     //
-    if ( (error==NO_ERROR) && ( (this->camera.exposure_time - elapsed_time) < 2000 ) ) {
-      message.str(""); message << "ERROR cannot change exposure time with less than 2000 msec exptime remaining";
+    if ( (error==NO_ERROR) && ( (this->camera.exposure_time - elapsed_time) < 5000 ) ) {
+      message.str(""); message << "ERROR cannot change exposure time with less than 5000 msec exptime remaining";
       logwrite( function, message.str() );
       retstring="too_late";
       error = ERROR;
@@ -4278,10 +4279,13 @@ logwrite(function, message.str());
 
     // then send the command.
     //
-    if ( error==NO_ERROR ) error = this->exptime( std::to_string( updated_exptime ), retstring );
+    this->camera.shutter_timer.modify( requested_exptime );
+
+    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", requested_exptime, "exposure time in sec" );
+//  if ( error==NO_ERROR ) error = this->exptime( std::to_string( updated_exptime ), retstring );
 
     if ( error != NO_ERROR ) logwrite( function, "ERROR modifying exptime" );
-
+/***
     // If there is more than one space-delimited reply in retstring then not all cameras are the same
     // and that is a problem.
     //
@@ -4292,7 +4296,7 @@ logwrite(function, message.str());
       retstring="camera_mismatch";
       error = ERROR;
     }
-
+***/
     if ( error==NO_ERROR ) {
       message.str(""); message << "successfully modified exptime to " << updated_exptime << " msec";
       logwrite( function, message.str() );
@@ -5647,11 +5651,11 @@ logwrite(function,message.str() );
       if ( tokens.size() > 1 ) {
         if ( tokens[1] == "?" ) {
           retstring = CAMERAD_TEST;
-          retstring.append( " lpsleep <ms> | stop\n" );
+          retstring.append( " lpsleep <ms> | stop | modify <ms>\n" );
           retstring.append( "  Tests the Long Precise Sleep timer by spawning a thread that sleeps\n" );
           retstring.append( "  using the shutter_timer object. Delay time <ms> is a whole number of\n" );
           retstring.append( "  milliseconds and can be any value. This can be interrupted using the\n" );
-          retstring.append( "  stop argument.\n" );
+          retstring.append( "  stop argument. The timer can be modified using the modify argument.\n" );
           error = HELP;
         }
         else
@@ -5660,6 +5664,19 @@ logwrite(function,message.str() );
           logwrite( function, "TEST: stopped timer test early" );
           retstring="stopped";
           return NO_ERROR;
+        }
+        else
+        if ( tokens[1] == "modify" && tokens.size() > 2 ) {
+          try {
+            ms = std::stol( tokens[2] );
+            this->camera.shutter_timer.modify(ms);
+            retstring="modified";
+            return NO_ERROR;
+          }
+          catch ( const std::exception &e ) {
+            logwrite( function, "ERROR parsing ms: "+std::string(e.what()) );
+            return ERROR;
+          }
         }
         else {
           try {
@@ -5670,14 +5687,13 @@ logwrite(function,message.str() );
             return NO_ERROR;
           }
           catch ( const std::exception &e ) {
-            message.str(""); message << "ERROR parsing long from \"" << ms << "\": " << e.what();
-            logwrite( function, message.str() );
+            logwrite( function, "ERROR parsing ms: "+std::string(e.what()) );
             return ERROR;
           }
         }
       }
       else {
-        logwrite( function, "ERROR expected <ms> | stop" );
+        logwrite( function, "ERROR expected <ms> | stop | modify <ms>" );
         retstring="invalid_argument";
         return ERROR;
       }
