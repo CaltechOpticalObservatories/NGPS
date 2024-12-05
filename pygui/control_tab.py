@@ -1,12 +1,14 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFrame
 from PyQt5.QtCore import Qt
 from PyQt5.QtMultimedia import QSound
+from logic_service import LogicService
 
 class ControlTab(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
         self.create_control_tab()
+        self.logic_service = LogicService(self.parent)
 
     def create_control_tab(self):
         # Create the main layout for the Control tab
@@ -341,7 +343,7 @@ class ControlTab(QWidget):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
         if (self.parent.layout_service.current_observation_id):
-            self.logic_service.send_update_to_db(self.current_observation_id, "EXPTIME", "SET " + exposure_time)
+            self.logic_service.send_update_to_db(self.current_observation_id, "OTMexpt", "SET " + exposure_time)
             self.update_target_info()
             self.exposure_time_box.clear()
 
@@ -349,6 +351,6 @@ class ControlTab(QWidget):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.layout_service.current_observation_id):
-            self.logic_service.send_update_to_db(self.current_observation_id, "SLITWIDTH", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.current_observation_id, "OTMslitwidth", "SET " + slit_width)
             self.update_target_info()
             self.slit_width_box.clear()
