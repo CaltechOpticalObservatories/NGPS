@@ -1906,6 +1906,12 @@ namespace Andor {
       this->camera_info.section_size = 0;
       this->bufsz = 0;
     }
+    if ( this->avg_data != nullptr ) {
+      delete[] this->avg_data;
+      this->avg_data = nullptr;
+      this->camera_info.section_size = 0;
+      this->bufsz = 0;
+    }
 
     return NO_ERROR;
   }
@@ -2010,6 +2016,18 @@ namespace Andor {
     return this->image_data;
   }
   /***** Andor::Interface::get_image_data *************************************/
+
+
+  /***** Andor::Interface::get_avg_data ***************************************/
+  /**
+   * @brief      returns a pointer to the image data
+   * @return     uint16_t*
+   *
+   */
+  float* Interface::get_avg_data() {
+    return this->avg_data;
+  }
+  /***** Andor::Interface::get_avg_data ***************************************/
 
 
   /***** Andor::Interface::set_shutter ****************************************/
@@ -2523,10 +2541,17 @@ namespace Andor {
       delete[] this->image_data;
       this->image_data = nullptr;
     }
+    if ( this->avg_data != nullptr ) {
+      delete[] this->avg_data;
+      this->avg_data = nullptr;
+    }
 
     this->bufsz = ( (hend-hstart+1)/hbin ) * ( (vend-vstart+1)/vbin );
     this->image_data = new uint16_t[ this->bufsz ];
     this->camera_info.section_size = this->bufsz;
+
+    this->avg_data = new float[ this->bufsz ];
+    this->num_avg_frames=1;
 
     message.str(""); message << "allocated " << this->bufsz << " bytes for image_data buffer";
     logwrite( function, message.str() );
@@ -3470,7 +3495,8 @@ namespace Andor {
     // Get the acquired image
     //
     std::lock_guard<std::mutex> lock( image_data_mutex );
-    if ( this->image_data == nullptr ) {
+
+    if ( this->image_data == nullptr || this->avg_data == nullptr ) {
       logwrite( function, "ERROR image_data buffer not initialized: no image saved" );
       return ERROR;
     }
@@ -3479,6 +3505,20 @@ namespace Andor {
     // get the data
     //
     if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->bufsz ) : ERROR );
+
+    float alpha = ( this->weight > 0 ? 1.0f/this->weight : 1.0f );
+
+    if ( this->num_avg_frames == 1 ) {
+      for ( size_t i=0; i<this->bufsz; ++i ) {
+        this->avg_data[i] = static_cast<float>(this->image_data[i]);
+      }
+      this->num_avg_frames=2;
+    }
+    else if ( this->num_avg_frames==2 ) {
+      for ( size_t i=0; i<this->bufsz; ++i ) {
+        this->avg_data[i] = ( alpha * static_cast<float>(this->image_data[i]) + (1.0f-alpha)*this->avg_data[i] );
+      }
+    }
 
     // get the temperature reading
     //

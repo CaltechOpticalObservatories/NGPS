@@ -10,6 +10,9 @@
 #include <CCfits/CCfits>           //!< needed here for types in set_axes()
 #include <type_traits>
 #include <string>
+#include <vector>
+#include <algorithm>
+#include <cmath>
 #include "common.h"
 #include "network.h"
 #include "utilities.h"
@@ -433,6 +436,9 @@ namespace Andor {
 //    std::unique_ptr<uint16_t[]> image_data;
       std::mutex image_data_mutex;
       unsigned short* image_data;
+      float* avg_data;
+      int num_avg_frames;
+      float weight;
       std::atomic<bool> err;
       at_32 _handle;  ///< handle of the camera
       size_t bufsz;
@@ -448,7 +454,7 @@ namespace Andor {
        *
        */
       Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( false ),
-                    andor( &sdk ), image_data( nullptr ), err( false ), _handle(-1), emulator( -1 ) { }
+                    andor( &sdk ), image_data( nullptr ), avg_data(nullptr), num_avg_frames(1), weight(1.0f), err( false ), _handle(-1), emulator( -1 ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /***** Andor::Interface::Interface **************************************/
@@ -457,7 +463,7 @@ namespace Andor {
        *
        */
       Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
-                            andor( &sdk ), image_data( nullptr ), err( false ), _handle(-1), emulator( sn ) { }
+                            andor( &sdk ), image_data( nullptr ), avg_data(nullptr), num_avg_frames(1), weight(1.0f), err( false ), _handle(-1), emulator( sn ) { }
       /***** Andor::Interface::Interface **************************************/
 
       /**
@@ -467,6 +473,10 @@ namespace Andor {
         if ( this->image_data != nullptr ) {
           delete[] this->image_data;
           this->image_data = nullptr;
+        }
+        if ( this->avg_data != nullptr ) {
+          delete[] this->avg_data;
+          this->avg_data = nullptr;
         }
       };
 
@@ -520,11 +530,22 @@ namespace Andor {
 
       inline long read_error() { return( this->err.exchange( false ) ? ERROR : NO_ERROR ); };
 
+      inline unsigned short median_image_data() {
+        std::vector<unsigned short> sorted_image(this->image_data, this->image_data + this->bufsz);
+        std::sort(sorted_image.begin(), sorted_image.end());
+        return sorted_image[sorted_image.size()/2];
+      }
+
 //    std::unique_ptr<uint16_t[]> get_image_data() { return std::move( this->image_data ); }
 //    std::unique_ptr<uint16_t[]>& get_image_data() { return this->image_data; }
 //    inline uint16_t* get_image_data() { return this->image_data; }
       uint16_t* get_image_data();
-      inline void erase_data_buffer() { memset (this->image_data, 0, this->bufsz); }
+      float* get_avg_data();
+      inline void erase_data_buffer() { memset (this->image_data, '\0', this->bufsz*sizeof(uint16_t)); }
+
+      inline void reset_avg() { this->num_avg_frames=1; }
+      inline void set_weight(float w) { this->weight = (w>0 ? w : 1); }
+      inline float get_weight() { return this->weight; }
 
       inline bool is_emulated() { return this->andor_emulated; }
 
