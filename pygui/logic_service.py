@@ -229,16 +229,22 @@ class LogicService:
         # Here, we'll need the SET_ID from the ComboBox (the user selects it, not the SET_NAME)
         selected_set_id = None
 
+        print(f"Target list names available: {target_list_name}")
+
         # Find the SET_ID corresponding to the selected SET_NAME in the target_list_name
         for set_id, set_info in all_targets.items():
+            print(f"Checking set: {set_info['SET_NAME']} (SET_ID: {set_id})")
             if set_info["SET_NAME"] == target_list_name:
                 selected_set_id = set_id
+                print(f"Found matching SET_NAME: {target_list_name} with SET_ID: {selected_set_id}")
                 break
 
         if selected_set_id:
             set_info = all_targets[selected_set_id]
             data = set_info["targets"]
 
+            print(f"Fetching data for SET_ID: {selected_set_id}, SET_NAME: {set_info['SET_NAME']}")
+            
             # Step 3: Filter out unwanted columns and their data
             filtered_data = []
             filtered_column_names = []
@@ -252,6 +258,8 @@ class LogicService:
             if filtered_data:
                 # Extract the column names from the first row (assuming all rows have the same structure)
                 filtered_column_names = filtered_data[0].keys()
+
+                print(f"Filtered columns: {filtered_column_names}")
 
                 # Set the column count
                 target_list_display.setColumnCount(len(filtered_column_names))
@@ -272,12 +280,16 @@ class LogicService:
                     for col_index, (col_name, value) in enumerate(row_data.items()):
                         target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
+                print(f"Data populated for {len(filtered_data)} rows.")
+
                 # Step 6: Optionally, sort the table if you want to auto-sort after loading
                 target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
                 # Step 7: Hide the button and show the table once the data is loaded
                 self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
                 target_list_display.setVisible(True)  # Show the table
+            else:
+                print("No filtered data found.")
         else:
             print(f"Error: SET_ID for selected target set '{target_list_name}' not found.")
 
