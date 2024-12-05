@@ -14,6 +14,7 @@ class NgpsGUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("NGPS")
         self.setGeometry(100, 100, 1200, 800)
+        self.current_observation_id = None
         
         # Login status flag
         self.logged_in = False

@@ -223,7 +223,7 @@ class ControlTab(QWidget):
     def on_go_button_click(self):
         """Slot to handle 'Go' button click and send the target command."""
         if hasattr(self, 'current_observation_id'):
-            observation_id = self.parent.layout_service.current_observation_id
+            observation_id = self.parent.current_observation_id
             print(f"Sending command: seq targetsingle {observation_id}")
             self.send_target_command(observation_id)
             QSound.play("sound/go_button_clicked.wav")
@@ -342,8 +342,8 @@ class ControlTab(QWidget):
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
-        if (self.parent.layout_service.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.layout_service.current_observation_id, "OTMexpt", "SET " + exposure_time)
+        if (self.parent.current_observation_id):
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", "SET " + exposure_time)
 
             self.exposure_time_box.clear()
 
@@ -351,5 +351,5 @@ class ControlTab(QWidget):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.layout_service.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.layout_service.current_observation_id, "OTMslitwidth", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
             self.slit_width_box.clear()

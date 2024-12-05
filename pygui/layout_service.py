@@ -13,7 +13,6 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
-        self.current_observation_id = None
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -421,7 +420,7 @@ class LayoutService:
 
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
-                self.current_observation_id = observation_id
+                self.parent.current_observation_id = observation_id
                 self.current_offset_ra = offset_ra
                 self.current_offset_dec = offset_dec
             # if exposure_time:
