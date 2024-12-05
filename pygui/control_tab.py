@@ -198,6 +198,12 @@ class ControlTab(QWidget):
         self.exposure_time_box.textChanged.connect(self.on_input_changed)
         self.slit_width_box.textChanged.connect(self.on_input_changed)
 
+    def on_expose_button_click(self):
+        """Handle the 'Expose' button click"""
+        print("Startup button clicked!")
+        command = f"ontarget\n"
+        self.parent.send_command(command)
+
     def on_startup_button_click(self):
         """Handle the 'Startup' button click"""
         print("Startup button clicked!")
