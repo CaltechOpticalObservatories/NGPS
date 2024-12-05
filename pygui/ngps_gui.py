@@ -100,7 +100,7 @@ class NgpsGUI(QMainWindow):
         # If the login is successful, load data from MySQL
         if login_dialog.exec_() == QDialog.Accepted:
             # Call the function to load data from MySQL
-            self.load_mysql_data(login_dialog.all_targets, login_dialog.set_data)
+            self.load_mysql_data(login_dialog.all_targets)
             
             # After loading data, populate the target lists dropdown
             self.layout_service.load_target_lists(login_dialog.set_name)
