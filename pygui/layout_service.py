@@ -672,8 +672,8 @@ class LayoutService:
 
         # Get the corresponding target set data from all_targets
         # Assuming `all_targets` is stored in a way where it can be accessed here
-        if selected_set_name in self.all_targets:
-            selected_target_set_data = self.all_targets[selected_set_name]  # Get the data for the selected set
+        if selected_set_name in self.logic_service.all_targets:
+            selected_target_set_data = self.logic_service.all_targets[selected_set_name]  # Get the data for the selected set
         else:
             print(f"Error: Target set {selected_set_name} not found in all_targets.")
             selected_target_set_data = None
