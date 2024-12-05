@@ -671,25 +671,8 @@ class LayoutService:
         # Get the selected SET_NAME (not the entire list of target sets)
         selected_set_name = self.target_list_name.currentText()
         
-        # Check if the selected SET_NAME is in the reverse mapping (SET_NAME -> SET_ID)
         print(f"Selected SET_NAME: {selected_set_name}")
-
-        # Reverse mapping from SET_NAME to SET_ID
-        set_name_to_id = {set_info["SET_NAME"]: set_id for set_id, set_info in self.logic_service.all_targets.items()}
-
-        if selected_set_name in set_name_to_id:
-            selected_set_id = set_name_to_id[selected_set_name]
-            print(f"Found selected SET_NAME: '{selected_set_name}' with SET_ID: {selected_set_id}")
-
-            # Retrieve the associated data
-            set_info = self.logic_service.all_targets[selected_set_id]
-            data = set_info["targets"]
-
-            # Process and populate the table as before...
-            # (Filtered columns and data population code here)
-            
-        else:
-            print(f"Error: SET_NAME '{selected_set_name}' not found in all_targets.")
+        self.logic_service.update_target_list_table(self.logic_service.all_targets, self.logic_service.target_list_set, selected_set_name)
 
 
     def create_right_planning_column(self):

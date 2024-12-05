@@ -106,7 +106,7 @@ class LoginDialog(QDialog):
 
         # Connect signals
         self.login_button.clicked.connect(self.on_login)
-        self.cancel_button.clicked.connect(self.reject)
+        #self.cancel_button.clicked.connect(self.reject)
 
     def on_login(self):
         """Handles the login action."""
@@ -181,40 +181,33 @@ class LoginDialog(QDialog):
             try:
                 cursor = self.connection.cursor(dictionary=True)
 
-                # Step 1: Get the SET_IDs and SET_NAME from target_sets for the logged-in user
+                # Step 1: Get the SET_IDs from target_sets for the logged-in user
+                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER = %s", (username,))
+                set_ids = cursor.fetchall()
                 cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (username,))
                 set_data = cursor.fetchall()
 
-                # Step 2: Reset the all_targets dictionary and target_list_name list
-                self.all_targets = {}  # Reset the all_targets dictionary
-                self.set_name_to_id = {}  # A mapping of SET_NAME to SET_ID
-                self.target_list_name = []  # The list for the dropdown
+                # Step 2: Convert set_data to a dictionary and store it in self.set_data
+                self.set_data = {set_item["SET_ID"]: set_item["SET_NAME"] for set_item in set_data}
 
-                # Populate the all_targets and set_name_to_id
-                for set_info in set_data:
-                    set_id = set_info["SET_ID"]
-                    set_name = set_info["SET_NAME"]
+                # Step 3: Extract all SET_NAME values and store them in self.set_name
+                self.set_name = [set_item["SET_NAME"] for set_item in set_data]
 
-                    # Fetch all targets for the SET_ID
-                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id,))
+                # Step 4: For each SET_ID, fetch the associated rows from the 'targets' table
+                self.all_targets = []
+                for set_id in set_ids:
+                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
                     targets = cursor.fetchall()
-
-                    # Store the targets in the dictionary, using SET_ID as the key
-                    self.all_targets[set_id] = {"SET_NAME": set_name, "targets": targets}
-
-                    # Add SET_NAME to the target list dropdown
-                    self.target_list_name.append(set_name)
-
-                    # Map the SET_NAME to the SET_ID
-                    self.set_name_to_id[set_name] = set_id
+                    self.all_targets.extend(targets)
 
                 cursor.close()
+                
 
             except mysql.connector.Error as err:
                 print(f"Database error: {err}")
             finally:
-                # Don't close the connection here, as it should remain open
-                pass
+                self.connection.close()
+
 
 class CreateAccountDialog(QDialog):
     def __init__(self, parent):
