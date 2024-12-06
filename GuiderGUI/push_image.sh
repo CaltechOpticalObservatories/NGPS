@@ -51,6 +51,18 @@ if [[ "$camera" == "guider" ]]; then
 	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}" \
 	  | xpaset $id region 2>&1
 
+	# Scale graphic
+	scale_arcsec=20
+
+	XCENTER=32
+	YCENTER=128
+	pixscale=`xpaget $id fits header keyword PIXSCALE`
+	ywidth=$(echo "scale=2; $scale_arcsec / $pixscale" | bc)
+
+	scalereg="image; box($XCENTER,$YCENTER,4,$ywidth,0) # color=${headsup_fontcolor} fill=1 \
+		$notouch text={$scale_arcsec\"}"
+	echo "$scalereg" | xpaset $id region
+
 	# TCS marker
 	TELRA_hr=`xpaget $id fits header keyword TELRA`
 	TELRA_deg=$(echo "scale=6; $TELRA_hr * 15 " | bc)
@@ -95,7 +107,7 @@ if [[ "$camera" == "slicev" ]]; then
 	echo "$slitreg" | xpaset $id region
 
 	# circle around slit
-	radius=$(echo "scale=2; $xwidth * 3" | bc)
+	radius=$(echo "scale=2; $xwidth * 1.5" | bc)
 	slitreg="image; circle($xslit,$yslit,$radius) # color=$graphic_color $notouch"
 	echo "$slitreg" | xpaset $id region
 
@@ -108,9 +120,14 @@ if [[ "$camera" == "slicev" ]]; then
 
 	# Scale graphic
 	scale_arcsec=5
-	xwidth=$(echo "scale=2; $scale_arcsec / $pixscale" | bc)
-	YCENTER=$(($YCENTER-16))  # slightly below slice labels
-	scalereg="image; box($xslit,$YCENTER,$xwidth,1,0) # color=${headsup_fontcolor} fill=1 \
+
+	datasec=`xpaget $id fits header 1 keyword DATASEC`
+	XCENTER=`echo $datasec | cut -f1 -d ':' | cut -f2 -d '['`
+	XCENTER=$((XCENTER+10))
+	YCENTER=32
+	ywidth=$(echo "scale=2; $scale_arcsec / $pixscale" | bc)
+
+	scalereg="image; box($XCENTER,$YCENTER,1,$ywidth,0) # color=${headsup_fontcolor} fill=1 \
 		$notouch text={$scale_arcsec\"}"
 	echo "$scalereg" | xpaset $id region
 
@@ -118,7 +135,7 @@ if [[ "$camera" == "slicev" ]]; then
 	TELRA_hr=`xpaget $id fits header 1 keyword TELRA`
 	TELRA_deg=$(echo "scale=6; $TELRA_hr * 15 " | bc)
 	TELDEC_deg=`xpaget $id fits header 1 keyword TELDEC`
-	markerreg="icrs; point($TELRA_deg, $TELDEC_deg) # point=x 20 color=$graphic_color $notouch text={TCS}"
+	markerreg="icrs; point($TELRA_deg, $TELDEC_deg) # point=x 20 color=$graphic_color $notouch text={    TCS}"
 	echo "$markerreg" | xpaset $id region
 
 fi
