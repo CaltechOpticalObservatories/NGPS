@@ -349,9 +349,9 @@ class LogicService:
         # Step 4: Dynamically create the table based on filtered data
         if filtered_data:
             # Extract the column names from the first row (assuming all rows have the same structure)
-            filtered_column_names = filtered_data[0].keys()
+            filtered_column_names = list(filtered_data[0].keys())
 
-            # Set the column count
+            # Set the column count to match the number of filtered columns
             self.target_list_display.setColumnCount(len(filtered_column_names))
 
             # Set the header labels based on the filtered column names
@@ -368,7 +368,9 @@ class LogicService:
 
                 # Dynamically populate the table with the filtered data
                 for col_index, (col_name, value) in enumerate(row_data.items()):
-                    self.target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
+                    # Ensure that each row has the correct number of cells and data
+                    item = QTableWidgetItem(str(value))
+                    self.target_list_display.setItem(row_position, col_index, item)
 
             # Step 6: Optionally, sort the table if you want to auto-sort after loading
             self.target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
