@@ -189,6 +189,7 @@ class LoginDialog(QDialog):
 
                 # Step 2: Convert set_data to a dictionary and store it in self.set_data
                 self.set_data = {set_item["SET_ID"]: set_item["SET_NAME"] for set_item in set_data}
+                print("SET DATA: ", self.set_data )
 
                 # Step 3: Extract all SET_NAME values and store them in self.set_name
                 self.set_name = [set_item["SET_NAME"] for set_item in set_data]

@@ -526,7 +526,7 @@ class LayoutService:
     def set_column_widths(self):
         # Set specific column widths (adjust as needed)
         column_widths = [
-            250, 450, 300, 450, 450, 450, 350, 300, 300, 350, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300
+            250, 350, 300, 350, 350, 350, 350, 300, 300, 350, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300, 250, 250
         ]
 
         # Get the number of columns in the table
