@@ -18,7 +18,7 @@ class LayoutService:
         self.control_tab = ControlTab(self.parent)
 
     def create_layout(self):
-        # Main horizontal layout for overall structure
+        # Main horizontal layout for overall structure``
         main_layout = QHBoxLayout()
 
         # Create a vertical layout to place Column 1 on top of Column 2
@@ -526,7 +526,7 @@ class LayoutService:
     def set_column_widths(self):
         # Set specific column widths (adjust as needed)
         column_widths = [
-            250, 450, 300, 450, 450, 450, 350, 300, 300, 350, 300, 300, 300, 300, 300, 300, 300, 300
+            250, 450, 300, 450, 450, 450, 350, 300, 300, 350, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300
         ]
 
         # Get the number of columns in the table
@@ -672,7 +672,7 @@ class LayoutService:
         try:
             # If no list is passed, attempt to load target lists from the database or another source
             if target_lists is None:
-                target_lissts = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+                target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
                 
                 # Ensure target_lists is iterable (like a list or tuple)
                 if not isinstance(target_lists, (list, tuple)):

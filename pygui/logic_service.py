@@ -293,6 +293,7 @@ class LogicService:
         # Step 6: Optionally, hide the button and show the table once the data is loaded
         self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
         target_list_display.setVisible(True)  # Show the table
+        self.parent.layout_service.set_column_widths()
 
     def update_target_table_with_list(self, target_list=None):
         """
