@@ -344,31 +344,23 @@ class LogicService:
                 filtered_data = [filtered_row]  # Treat the single row as a list for consistency
 
         # Step 3: Clear the existing content of the QTableWidget
-        self.target_list_display.clear()  # Clear all items in the table
+        self.target_list_display.setRowCount(0)  # Clear all items in the table
 
         # Step 4: Dynamically create the table based on filtered data
         if filtered_data:
-            # Extract the column names from the first row (assuming all rows have the same structure)
+            # Extract column names from the first row
             filtered_column_names = list(filtered_data[0].keys())
-
-            # Set the column count to match the number of filtered columns
+            # Set the column count first to avoid any mismatch
             self.target_list_display.setColumnCount(len(filtered_column_names))
-
-            # Set the header labels based on the filtered column names
             self.target_list_display.setHorizontalHeaderLabels(filtered_column_names)
 
-            # Remove the bold font from headers
-            header = self.target_list_display.horizontalHeader()
-            header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
-
-            # Step 5: Add new rows based on the filtered data
+            # Add rows
             for row_data in filtered_data:
                 row_position = self.target_list_display.rowCount()
                 self.target_list_display.insertRow(row_position)
 
-                # Dynamically populate the table with the filtered data
+                # Insert data into columns
                 for col_index, (col_name, value) in enumerate(row_data.items()):
-                    # Ensure that each row has the correct number of cells and data
                     item = QTableWidgetItem(str(value))
                     self.target_list_display.setItem(row_position, col_index, item)
 
