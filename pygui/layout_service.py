@@ -384,6 +384,9 @@ class LayoutService:
         # Initially, hide the table
         self.target_list_display.setVisible(False)
 
+        # Call to set the column widths (adjust them as needed)
+        self.set_column_widths()
+
         # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
@@ -541,7 +544,14 @@ class LayoutService:
         column_widths = [
             150, 350, 200, 350, 350, 350, 250, 200, 200, 250, 200, 200, 200, 200, 200, 200, 200, 200
         ]
-        for col, width in enumerate(column_widths):
+
+        # Get the number of columns in the table
+        column_count = self.target_list_display.columnCount()
+
+        # Ensure we don't exceed the number of available columns
+        for col in range(column_count):
+            # Use the width from the list, or a default width if the list is too short
+            width = column_widths[col] if col < len(column_widths) else 100
             self.target_list_display.setColumnWidth(col, width)
             
     def create_second_column_top_half(self):
