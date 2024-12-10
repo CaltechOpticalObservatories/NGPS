@@ -223,32 +223,63 @@ class LogicService:
             "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
-        # Step 2: Filter out unwanted columns and their data
-        filtered_data = []
-        filtered_column_names = []
+        # Step 2: Check if the data is a list (entire dataset) or a single row (selected row)
+        if isinstance(data, list):  # If data is a list (entire dataset)
+            # Filter out unwanted columns and their data
+            filtered_data = []
+            for row_data in data:
+                # Create a new row data dictionary that excludes the unwanted columns
+                filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
+                filtered_data.append(filtered_row)
 
-        for row_data in data:
+            # Step 3: Set the number of columns dynamically based on the filtered data
+            if filtered_data:
+                # Extract the column names from the first row (assuming all rows have the same structure)
+                filtered_column_names = filtered_data[0].keys()
+
+                # Set the column count
+                target_list_display.setColumnCount(len(filtered_column_names))
+
+                # Set the header labels based on the filtered column names
+                target_list_display.setHorizontalHeaderLabels(filtered_column_names)
+
+                # Remove the bold font from headers
+                header = target_list_display.horizontalHeader()
+                header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
+
+                # Step 4: Add new rows based on the filtered data
+                for row_data in filtered_data:
+                    row_position = target_list_display.rowCount()
+                    target_list_display.insertRow(row_position)
+
+                    # Dynamically populate the table with the filtered data
+                    for col_index, (col_name, value) in enumerate(row_data.items()):
+                        target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
+
+                # Step 5: Optionally, sort the table if you want to auto-sort after loading
+                target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
+
+        else:  # If data is a single row (selected row)
             # Create a new row data dictionary that excludes the unwanted columns
-            filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
-            filtered_data.append(filtered_row)
+            filtered_row = {key: value for key, value in data.items() if key not in columns_to_hide}
+            filtered_data = [filtered_row]  # Treat the single row as a list for consistency
 
-        # Step 3: Set the number of columns dynamically based on the filtered data
-        if filtered_data:
-            # Extract the column names from the first row (assuming all rows have the same structure)
-            filtered_column_names = filtered_data[0].keys()
+            # Step 3: Set the number of columns dynamically based on the filtered data
+            if filtered_data:
+                filtered_column_names = filtered_data[0].keys()
 
-            # Set the column count
-            target_list_display.setColumnCount(len(filtered_column_names))
+                # Set the column count
+                target_list_display.setColumnCount(len(filtered_column_names))
 
-            # Set the header labels based on the filtered column names
-            target_list_display.setHorizontalHeaderLabels(filtered_column_names)
+                # Set the header labels based on the filtered column names
+                target_list_display.setHorizontalHeaderLabels(filtered_column_names)
 
-            # Remove the bold font from headers
-            header = target_list_display.horizontalHeader()
-            header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
+                # Remove the bold font from headers
+                header = target_list_display.horizontalHeader()
+                header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
-            # Step 4: Add new rows based on the filtered data
-            for row_data in filtered_data:
+                # Step 4: Add the row based on the filtered data
+                row_data = filtered_data[0]
                 row_position = target_list_display.rowCount()
                 target_list_display.insertRow(row_position)
 
@@ -256,12 +287,11 @@ class LogicService:
                 for col_index, (col_name, value) in enumerate(row_data.items()):
                     target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
-            # Step 5: Optionally, sort the table if you want to auto-sort after loading
-            target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
+            # No need to sort the table since it's just one row
 
-            # Step 6: Hide the button and show the table once the data is loaded
-            self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
-            target_list_display.setVisible(True)  # Show the table
+        # Step 6: Optionally, hide the button and show the table once the data is loaded
+        self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
+        target_list_display.setVisible(True)  # Show the table
 
 
 
