@@ -384,9 +384,6 @@ class LayoutService:
         # Initially, hide the table
         self.target_list_display.setVisible(False)
 
-        # Call to set the column widths (adjust them as needed)
-        self.set_column_widths()
-
         # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
@@ -463,6 +460,9 @@ class LayoutService:
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
             self.parent.logic_service.update_target_information(target_data)
+
+            # Call to set the column widths (adjust them as needed)
+            self.set_column_widths()
 
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
