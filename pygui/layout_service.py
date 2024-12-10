@@ -539,7 +539,7 @@ class LayoutService:
     def set_column_widths(self):
         # Set specific column widths (adjust as needed)
         column_widths = [
-            150, 150, 150, 250, 250, 250, 250, 150, 150, 250, 150, 150, 150, 150, 150, 150, 150, 150
+            150, 350, 200, 350, 350, 350, 250, 200, 200, 250, 200, 200, 200, 200, 200, 200, 200, 200
         ]
         for col, width in enumerate(column_widths):
             self.target_list_display.setColumnWidth(col, width)
