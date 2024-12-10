@@ -304,6 +304,8 @@ class LogicService:
         The columns and rows will be dynamically created based on the data.
         It hides the specified columns.
         """
+        self.target_list_display = self.parent.layout_service.target_list_display
+
         # Step 1: Find the set_id that corresponds to the target_list
         set_id = None
         for key, val in self.parent.user_set_data.items():
@@ -341,7 +343,10 @@ class LogicService:
                 filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
                 filtered_data = [filtered_row]  # Treat the single row as a list for consistency
 
-        # Step 3: Dynamically create the table based on filtered data
+        # Step 3: Clear the existing content of the QTableWidget
+        self.target_list_display.clear()  # Clear all items in the table
+
+        # Step 4: Dynamically create the table based on filtered data
         if filtered_data:
             # Extract the column names from the first row (assuming all rows have the same structure)
             filtered_column_names = filtered_data[0].keys()
@@ -356,7 +361,7 @@ class LogicService:
             header = self.target_list_display.horizontalHeader()
             header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
-            # Step 4: Add new rows based on the filtered data
+            # Step 5: Add new rows based on the filtered data
             for row_data in filtered_data:
                 row_position = self.target_list_display.rowCount()
                 self.target_list_display.insertRow(row_position)
@@ -365,10 +370,10 @@ class LogicService:
                 for col_index, (col_name, value) in enumerate(row_data.items()):
                     self.target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
-            # Step 5: Optionally, sort the table if you want to auto-sort after loading
+            # Step 6: Optionally, sort the table if you want to auto-sort after loading
             self.target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
 
-        # Step 6: Optionally, hide the button and show the table once the data is loaded
+        # Step 7: Optionally, hide the button and show the table once the data is loaded
         self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
         self.target_list_display.setVisible(True)  # Show the table
 
