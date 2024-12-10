@@ -18,15 +18,22 @@ class LayoutService:
         self.control_tab = ControlTab(self.parent)
 
     def create_layout(self):
+        # Main horizontal layout for overall structure
         main_layout = QHBoxLayout()
 
-        # First Column (Target List) should take 3/5 of the width
-        first_column_layout = self.create_first_column()
-        main_layout.addLayout(first_column_layout, stretch=3)  # Target List section
+        # Create a vertical layout to place Column 1 on top of Column 2
+        top_layout = QVBoxLayout()
 
-        # Second Column (Top Section) should take 2/5 of the width
-        second_column_layout = self.create_second_column()
-        main_layout.addLayout(second_column_layout, stretch=2)  # Top Section
+        # First Column (Column 1) should contain top_section_layout and second_column_top_half side by side
+        first_column_layout = self.create_first_column()
+        top_layout.addLayout(first_column_layout, stretch=3)  # Column 1
+
+        # Second Column (Column 2) should only contain the target_list_group
+        second_column_layout = self.create_second_column_for_target_list()
+        top_layout.addLayout(second_column_layout, stretch=2)  # Column 2 (only target list)
+
+        # Add the vertical top_layout to the main_layout
+        main_layout.addLayout(top_layout, stretch=5)  # Top section (Columns 1 and 2 stacked)
 
         # Third Column (1/5 width, for tabs, etc.)
         third_column_layout = self.create_third_column()
@@ -40,34 +47,42 @@ class LayoutService:
         return main_layout
 
     def create_first_column(self):
-        first_column_layout = QVBoxLayout()
+        first_column_layout = QHBoxLayout()  # Use QHBoxLayout to make top_section_layout and second_column_top_half side by side
         first_column_layout.setObjectName("column-left")
         first_column_layout.setSpacing(10)
 
-        # Top Section: Instrument System Status, Sequencer Mode, Progress & Image Info
+        # Add top_section_layout (Instrument System Status, Sequencer Mode, Progress & Image Info)
         top_section_layout = self.create_top_section()
         first_column_layout.addLayout(top_section_layout)
 
-        # Bottom Section: Target List
-        target_list_group = self.create_target_list_group()
-        first_column_layout.addWidget(target_list_group)
+        # Add create_second_column_top_half (top part of the second column)
+        second_column_top_half = self.create_second_column_top_half()
+        first_column_layout.addWidget(second_column_top_half)
 
         return first_column_layout
 
-    def create_second_column(self):
+    def create_second_column_for_target_list(self):
         second_column_layout = QVBoxLayout()
         second_column_layout.setObjectName("column-right")
         second_column_layout.setSpacing(10)
 
-        # Create the top half of the second column with tabs
-        second_column_top_half = self.create_second_column_top_half()
-        second_column_layout.addWidget(second_column_top_half)
-
-        # Create the target information group (remaining part of the second column)
-        target_info_group = self.create_target_info_group()
-        second_column_layout.addWidget(target_info_group)
+        # Only add the target list group in the second column
+        target_list_group = self.create_target_list_group()
+        second_column_layout.addWidget(target_list_group)
 
         return second_column_layout
+
+    def create_third_column(self):
+        third_column_layout = QVBoxLayout()
+        third_column_layout.setObjectName("column-sidebar")
+        third_column_layout.setSpacing(10)
+
+        # Add widgets to the third column, e.g., tabs, buttons, etc.
+        # For simplicity, let's assume it's a placeholder widget:
+        sidebar_widget = QWidget()
+        third_column_layout.addWidget(sidebar_widget)
+
+        return third_column_layout
 
     def create_third_column(self):
         third_column_layout = QVBoxLayout()
@@ -256,18 +271,46 @@ class LayoutService:
         self.parent.message_log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.parent.message_log.setReadOnly(True)
 
-        # Optionally set a minimum height or width if desired (not fixed size)
+        # Optionally set a minimum height or width if desired
         self.parent.message_log.setMinimumHeight(60)
-        self.parent.message_log.setMinimumWidth(200)  # Set a reasonable minimum width
+        self.parent.message_log.setMinimumWidth(200)
+
+        # Set up a timer to clear the message log every 10 minutes (600000 milliseconds)
+        self.clear_timer = QTimer(self.parent)
+        self.clear_timer.timeout.connect(self.clear_message_log)
+        self.clear_timer.start(600000)  # 600000 ms = 10 minutes
 
         return self.parent.message_log
+
+    def clear_message_log(self):
+        """ Clears the message log after a certain timeout. """
+        self.parent.message_log.clear()
+
     
     def update_message_log(self, message):
-        """ Update the message log with the new message. """
+        MAX_LOG_SIZE = 1000  # Max number of characters in the log
+        MAX_MESSAGES = 100  # Max number of messages in the log
+        """ Update the message log with the new message, maintaining a limit on the size. """
         if self.parent.message_log:
             current_text = self.parent.message_log.toPlainText()
+
+            # Add the new message
             updated_text = current_text + "\n" + message
+            
+            # Limit the log to the most recent MAX_LOG_SIZE characters
+            if len(updated_text) > MAX_LOG_SIZE:
+                updated_text = updated_text[-MAX_LOG_SIZE:]
+
+            # Optionally, limit to the most recent MAX_MESSAGES messages
+            messages = updated_text.split("\n")
+            if len(messages) > MAX_MESSAGES:
+                messages = messages[-MAX_MESSAGES:]
+            
+            updated_text = "\n".join(messages)
+
+            # Update the message log with the new, trimmed text
             self.parent.message_log.setPlainText(updated_text)
+
             # Optionally, scroll to the bottom of the text log
             cursor = self.parent.message_log.textCursor()
             cursor.movePosition(cursor.End)
@@ -421,8 +464,8 @@ class LayoutService:
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
                 self.parent.current_observation_id = observation_id
-                self.current_offset_ra = offset_ra
-                self.current_offset_dec = offset_dec
+                self.parent.current_offset_ra = offset_ra
+                self.parent.current_offset_dec = offset_dec
             # if exposure_time:
             #     self.current_exposure_time = exposure_time
             #     self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
@@ -516,7 +559,7 @@ class LayoutService:
 
         # Add the tabs to the QTabWidget
         self.parent.tabs.addTab(self.parent.planning_tab, "Planning")
-        self.parent.tabs.addTab(self.parent.single_target_tab, "Single Target Mode")
+        self.parent.tabs.addTab(self.parent.single_target_tab, "ETC")
 
         # Set up the layout for the "Planning" tab and add the planning info group
         planning_layout = QVBoxLayout()
@@ -526,7 +569,7 @@ class LayoutService:
 
         # Set up the layout for the "Single Target Mode" tab
         single_target_layout = QVBoxLayout()
-        single_target_label = QLabel("Single Target Mode content goes here.")  # Placeholder for now
+        single_target_label = QLabel("ETC content goes here.")  # Placeholder for now
         single_target_layout.addWidget(single_target_label)
         self.parent.single_target_tab.setLayout(single_target_layout)
 
@@ -537,11 +580,13 @@ class LayoutService:
         second_column_top_half = QWidget()
         second_column_top_half.setLayout(second_column_top_half_layout)
 
-        # Optional: Set maximum size for the group if needed
-        second_column_top_half.setMaximumHeight(350)
-        second_column_top_half.setMaximumWidth(700)
+        # Optional: Set maximum size for the group if needed (can be adjusted depending on available space)
+        # We might want to make sure this is flexible enough, considering the first column is expanding.
+        second_column_top_half.setMaximumHeight(350)  # This can be adjusted based on your design requirements
+        second_column_top_half.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Allow vertical resizing if needed
 
         return second_column_top_half
+
 
     def create_planning_info_group(self):
         # Create a group box for planning information
@@ -765,60 +810,3 @@ class LayoutService:
         check_x_layout.addWidget(self.parent.giant_x_button)
 
         return check_x_layout
-
-
-    def create_target_info_group(self):
-        # Create a QGroupBox for the target information (with the title "Target Information")
-        target_info_group = QGroupBox("Target Information")
-
-        # Create the layout for the group box
-        target_info_layout = QVBoxLayout()
-
-        # Create a separate widget to hold the scrollable content (scroll area)
-        content_widget = QWidget()
-
-        # Create a QVBoxLayout to hold the content inside the scrollable area
-        content_layout = QVBoxLayout()
-        content_widget.setLayout(content_layout)
-
-        # Create the "No target selected" label and center it inside the scrollable area
-        self.no_target_label = QLabel("No target selected")
-        self.no_target_label.setAlignment(Qt.AlignCenter)  # Align the label in the center
-        content_layout.addWidget(self.no_target_label)
-
-        # Create the QFormLayout for key-value pairs (this will be added below the label)
-        self.target_info_form = QFormLayout()
-        content_layout.addLayout(self.target_info_form)
-
-        # Create the QScrollArea and make the content widget scrollable
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)  # Ensure resizing of the content widget
-        scroll_area.setWidget(content_widget)  # Set the content widget as the scrollable area
-
-        # Add the scroll area to the layout of the group box
-        target_info_layout.addWidget(scroll_area)
-
-        # Set the layout for the group box
-        target_info_group.setLayout(target_info_layout)
-
-        # Return the group box containing the title, label, form, and scrollable content
-        return target_info_group
-
-
-    def update_target_info_form(self, target_data):
-        # Clear the current form before updating
-        for i in range(self.target_info_form.rowCount()):
-            self.target_info_form.removeRow(0)
-
-        # Add each key-value pair to the form
-        for key, value in target_data.items():
-            # Create a label and a line edit for each key-value pair
-            label = QLabel(key)
-            line_edit = QLineEdit(value if value else "N/A")  # Show N/A for empty values
-            line_edit.setReadOnly(True)  # Set the line edit to read-only to prevent editing
-
-            # Add the label and line edit to the form layout
-            self.target_info_form.addRow(label, line_edit)
-
-        # Optionally, update the widget (forces a refresh)
-        self.target_info_form.update()

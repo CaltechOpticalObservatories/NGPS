@@ -99,6 +99,22 @@ class ControlTab(QWidget):
         self.confirm_button = QPushButton("Confirm Changes")
         self.confirm_button.setEnabled(False)
         self.confirm_button.clicked.connect(self.on_confirm_changes)
+        self.confirm_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+            """)
         row2_layout.addWidget(self.confirm_button)
 
         row2_widget = QWidget()
@@ -215,6 +231,10 @@ class ControlTab(QWidget):
     def on_offset_to_target_click(self):
         """Handle the Offset To Target button click event"""
         print("Offset To Target button clicked!")
+        command = f"tcs offset {self.parent.current_offset_ra} {self.parent.current_offset_dec}\n"
+        print(f"Sending command to SequencerService: {command}")  # Print the command being sent
+        # Call send_command method from SequencerService
+        self.parent.send_command(command)
 
     def on_input_changed(self):
         """Enable the Confirm button when the user modifies input fields"""
@@ -296,7 +316,7 @@ class ControlTab(QWidget):
         """Handle the confirmation of changes made to the input fields"""
         exposure_time = self.exposure_time_box.text()
         slit_width = self.slit_width_box.text()
-
+        self.confirm_button.setEnabled(True)
         # You can add validation here, if needed
         if exposure_time and slit_width:
             # Handle the confirmed changes, e.g., update internal state or UI
@@ -344,12 +364,11 @@ class ControlTab(QWidget):
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", "SET " + exposure_time)
-
             self.exposure_time_box.clear()
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
-        if (self.parent.layout_service.current_observation_id):
+        if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
             self.slit_width_box.clear()
