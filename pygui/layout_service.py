@@ -469,12 +469,7 @@ class LayoutService:
                 self.parent.current_observation_id = observation_id
                 self.parent.current_offset_ra = offset_ra
                 self.parent.current_offset_dec = offset_dec
-            # if exposure_time:
-            #     self.current_exposure_time = exposure_time
-            #     self.exposure_time_box.setText(exposure_time)  # Update the Exposure Time field
-            # if slit_width:
-            #     self.current_slit_width = slit_width
-            #     self.slit_width_box.setText(slit_width)  # Update the Slit Width field
+            
             if target_name:
                 self.control_tab.target_name_label.setText(f"Selected Target: {target_name}")
             else:
@@ -499,19 +494,8 @@ class LayoutService:
                 }
             """)
 
-            # Now, let's update the corresponding cell in the table for the Exposure Time (or any other field)
-            if exposure_time and selected_row is not None:
-                # Find the column index for 'EXPTIME'
-                exptime_column_index = column_headers.index('EXPTIME') if 'EXPTIME' in column_headers else -1
-                if exptime_column_index >= 0:
-                    # Update the table cell value for the selected row and 'EXPTIME' column
-                    self.target_list_display.item(selected_row, exptime_column_index).setText(exposure_time)
-
-            # You can add similar updates for other fields like SLITWIDTH if needed
-            if slit_width and selected_row is not None:
-                slitwidth_column_index = column_headers.index('SLITWIDTH') if 'SLITWIDTH' in column_headers else -1
-                if slitwidth_column_index >= 0:
-                    self.target_list_display.item(selected_row, slitwidth_column_index).setText(slit_width)
+            # Select the row after updating the table (to highlight it)
+            self.target_list_display.selectRow(selected_row)
 
         else:
             # Disable the "Go" button when no row is selected
