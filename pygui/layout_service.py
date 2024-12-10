@@ -257,7 +257,7 @@ class LayoutService:
         self.parent.image_number.setFixedWidth(80)  # You can adjust the width as needed
 
         # Add the QLabel and QLineEdit widgets to the layout
-        image_info_layout.addWidget(QLabel("Image Name:"))
+        image_info_layout.addWidget(QLabel("Image Dir:"))
         image_info_layout.addWidget(self.parent.image_name)
         image_info_layout.addWidget(QLabel("Image Number:"))
         image_info_layout.addWidget(self.parent.image_number)

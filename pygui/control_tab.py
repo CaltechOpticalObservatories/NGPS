@@ -92,8 +92,19 @@ class ControlTab(QWidget):
         slit_width_layout.addWidget(self.slit_width_label)
         slit_width_layout.addWidget(self.slit_width_box)
 
+        self.slit_angle_label = QLabel("Slit Angle:")
+        self.slit_angle_box = QLineEdit()
+        self.slit_angle_box.setPlaceholderText("Enter Slit Width")
+        self.slit_angle_box.setFixedWidth(120)
+
+        slit_angle_layout = QHBoxLayout()
+        slit_angle_layout.addWidget(self.slit_angle_label)
+        slit_angle_layout.addWidget(self.slit_angle_box)
+
+
         row2_layout.addLayout(exposure_time_layout)
         row2_layout.addLayout(slit_width_layout)
+        row2_layout.addLayout(slit_angle_layout)
 
         # Confirm Button
         self.confirm_button = QPushButton("Confirm Changes")
@@ -178,8 +189,8 @@ class ControlTab(QWidget):
         self.headers_button = QPushButton("Headers")
         self.display_button = QPushButton("Display")
         self.temp_button = QPushButton("Temp")
-        self.lamps_button = QPushButton("Lamps")
         self.startup_button = QPushButton("Startup")
+        self.shutdown_button = QPushButton("Shutdown")
         self.startup_button.clicked.connect(self.on_startup_button_click)
 
         # Add buttons to each vertical layout
@@ -189,8 +200,8 @@ class ControlTab(QWidget):
         display_layout.addWidget(self.display_button)
         display_layout.addWidget(self.temp_button)
 
-        lamps_layout.addWidget(self.lamps_button)
         lamps_layout.addWidget(self.startup_button)
+        lamps_layout.addWidget(self.shutdown_button)
 
         # Add the vertical layouts to the main row layout
         row5_layout.addLayout(binning_layout)
@@ -215,6 +226,7 @@ class ControlTab(QWidget):
         """Connect input fields (Exposure Time and Slit Width) to change methods"""
         self.exposure_time_box.textChanged.connect(self.on_input_changed)
         self.slit_width_box.textChanged.connect(self.on_input_changed)
+        self.slit_angle_box.textChanged.connect(self.on_input_changed)
 
     def on_expose_button_click(self):
         """Handle the 'Expose' button click"""
@@ -239,6 +251,22 @@ class ControlTab(QWidget):
     def on_input_changed(self):
         """Enable the Confirm button when the user modifies input fields"""
         self.confirm_button.setEnabled(True)
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)
 
     def on_go_button_click(self):
         """Slot to handle 'Go' button click and send the target command."""
@@ -316,48 +344,81 @@ class ControlTab(QWidget):
         """Handle the confirmation of changes made to the input fields"""
         exposure_time = self.exposure_time_box.text()
         slit_width = self.slit_width_box.text()
-        self.confirm_button.setEnabled(True)
-        # You can add validation here, if needed
-        if exposure_time and slit_width:
+        slit_angle = self.slit_angle_box.text()
+        
+        if exposure_time and slit_width and slit_angle:
             # Handle the confirmed changes, e.g., update internal state or UI
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}")
+            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
+            self.on_exposure_time_changed()
+            self.on_slit_width_changed()
+            self.on_slit_angle_changed()  # Handle slit angle change as well
+            
+            # Disable the button again after confirmation
+            self.confirm_button.setEnabled(False)
+            self.confirm_button.setStyleSheet("""
+                QPushButton {
+                    background-color: lightgray;
+                }
+            """)
+        elif exposure_time and slit_width:
+            # Handle the confirmed changes, e.g., update internal state or UI
+            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
             QSound.play("sound/exposure_slit_width_set.wav")
+            
             # Disable the button again after confirmation
             self.confirm_button.setEnabled(False)
             self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
-            """)
+                QPushButton {
+                    background-color: lightgray;
+                }
+            """)            
         elif exposure_time:
-            # Handle the confirmed changes, e.g., update internal state or UI
+            # Handle the confirmed changes for exposure time
             print(f"Confirmed Exposure Time: {exposure_time}")
             self.on_exposure_time_changed()
             QSound.play("sound/exposure_set.wav")
+            
             # Disable the button again after confirmation
             self.confirm_button.setEnabled(False)
             self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
+                QPushButton {
+                    background-color: lightgray;
+                }
             """)
+
         elif slit_width:
-            # Handle the confirmed changes, e.g., update internal state or UI
+            # Handle the confirmed changes for slit width
             print(f"Confirmed Slit Width: {slit_width}")
             self.on_slit_width_changed()
             QSound.play("sound/slit_width_set.wav")
+            
             # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)       
+            self.confirm_button.setEnabled(False)
             self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: lightgray;
-            }
-            """) 
+                QPushButton {
+                    background-color: lightgray;
+                }
+            """)
+
+        elif slit_angle:
+            # Handle the confirmed changes for slit angle
+            print(f"Confirmed Slit Angle: {slit_angle}")
+            self.on_slit_angle_changed()
+            
+            # Disable the button again after confirmation
+            self.confirm_button.setEnabled(False)
+            self.confirm_button.setStyleSheet("""
+                QPushButton {
+                    background-color: lightgray;
+                }
+            """)  
+
         else:
-            # Handle the case where one or both fields are empty
-            print("Please enter valid values for both Exposure Time and Slit Width")
+            # Handle the case where one or more fields are empty
+            print("Please enter valid values for all fields.")
+
 
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
@@ -372,3 +433,10 @@ class ControlTab(QWidget):
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
             self.slit_width_box.clear()
+
+    def on_slit_angle_changed(self):
+        # Retrieve the slit width and send the query to the database
+        slit_angle = self.slit_angle_box.text()
+        if (self.parent.current_observation_id):
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
+            self.slit_angle_box.clear()
