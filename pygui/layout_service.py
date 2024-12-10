@@ -701,7 +701,7 @@ class LayoutService:
                 self.target_list_name.setCurrentIndex(0)  # Set the first item as default
 
             # Connect the signal for user selection change
-            #sself.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
+            self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
 
 
     def on_target_set_changed(self):
