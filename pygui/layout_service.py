@@ -459,7 +459,7 @@ class LayoutService:
 
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
-            self.parent.logic_service.update_target_list_table(target_data)
+            # self.parent.logic_service.update_target_list_table(target_data)
 
             # Call to set the column widths (adjust them as needed)
             self.set_column_widths()
@@ -672,7 +672,7 @@ class LayoutService:
         try:
             # If no list is passed, attempt to load target lists from the database or another source
             if target_lists is None:
-                target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+                target_lissts = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
                 
                 # Ensure target_lists is iterable (like a list or tuple)
                 if not isinstance(target_lists, (list, tuple)):
@@ -701,7 +701,7 @@ class LayoutService:
                 self.target_list_name.setCurrentIndex(0)  # Set the first item as default
 
             # Connect the signal for user selection change
-            # self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
+            #sself.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
 
 
     def on_target_set_changed(self):
@@ -710,7 +710,7 @@ class LayoutService:
         selected_set_name = self.target_list_name.currentText()
         
         print(f"Selected SET_NAME: {selected_set_name}")
-        self.logic_service.update_target_list_table(self.logic_service.all_targets, self.logic_service.target_list_set, selected_set_name)
+        self.logic_service.update_target_table_with_list(selected_set_name)
 
 
     def create_right_planning_column(self):
