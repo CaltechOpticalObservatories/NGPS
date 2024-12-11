@@ -10,6 +10,7 @@
 #pragma once
 
 const std::string ACAMD_ACQUIRE  = "acquire";   ///< acquire target
+const std::string ACAMD_AVGFRAMES= "avgframes"; ///< average frames
 const std::string ACAMD_BIN      = "bin";       ///< set/get camera binning
 const std::string ACAMD_CLOSE    = "close";     ///< *** close connection to all devices
 const std::string ACAMD_CONFIG   = "config";    ///< reload configuration, apply what can be applied
@@ -34,6 +35,7 @@ const std::string ACAMD_INIT     = "init";      ///< ***
 const std::string ACAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?
 const std::string ACAMD_ISOPEN   = "isopen";    ///< *** close connection to all devices
+const std::string ACAMD_LOADCALIBRATION = "loadfpcal";    ///< 
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OFFSETCAL = "offsetcal";  ///< perform TCS offset calibration
 const std::string ACAMD_OFFSETGOAL = "offsetgoal";  ///< add dRA,dDEC offset to goal
@@ -70,6 +72,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_TCSISCONNECTED+" [ ? ]",
                                                 ACAMD_TCSISOPEN+" [ ? ]",
                                                 "  CAMERA COMMANDS:",
+                                                ACAMD_AVGFRAMES+" [ ? | reset | <num> ]",
                                                 ACAMD_FRAMEGRAB+" [ ? | start | stop | one [ <filename> ] | saveone <filename> | status ]",
                                                 ACAMD_FRAMEGRABFIX+" [ ? ]",
                                                 ACAMD_BIN+" [ ? | <hbin> <vbin> ]",
@@ -91,6 +94,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_ACQUIRE+" [ ? | [ <ra> <dec> <angle> | target | guide | stop ] ]",
                                                 ACAMD_COORDS+" [ ? | [ <ra> <dec> <angle> ] ]",
                                                 ACAMD_ISACQUIRED,
+                                                ACAMD_LOADCALIBRATION+"",
                                                 ACAMD_OFFSETCAL+" [ ? ]",
                                                 ACAMD_OFFSETGOAL+" [ ? | <dRA> <dDEC> ]",
                                                 ACAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> ]",

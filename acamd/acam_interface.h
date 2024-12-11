@@ -639,6 +639,7 @@ namespace Acam {
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
       long guider_settings_control();          /// get guider settings and push to Guider GUI display
       long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
+      long avg_frames( std::string args, std::string &retstring );
       long acquire( std::string args, std::string &retstring );
       long target_coords( std::string args, std::string &retstring );  /// set or get target coords for acquire
       long offset_cal( const std::string args, std::string &retstring );

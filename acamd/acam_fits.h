@@ -58,7 +58,8 @@ namespace Acam {
       long copy_header( std::string wcs_in );
       long add_key( std::string keyword, std::string type, std::string value, std::string comment );
 
-      long write_image( uint16_t* data );
+//    long write_image( uint16_t* data );
+      long write_image( float* data );
 /*** 4/3/24
       template <typename T> long write_image( std::unique_ptr<T[]> &data ) {
         std::string function = "Acam::FITS_file::write_image";

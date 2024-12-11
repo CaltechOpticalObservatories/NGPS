@@ -189,7 +189,8 @@ logwrite( function, file_in );
   }
 
 
-  long FITS_file::write_image( uint16_t* data ) {
+//long FITS_file::write_image( uint16_t* data ) {
+  long FITS_file::write_image( float* data ) {
     std::string function = "Acam::FITS_file::write_image";
     std::stringstream message;
 
@@ -219,7 +220,8 @@ logwrite( function, file_in );
     //
     try {
 //    std::valarray<uint16_t> array( data, this->info.section_size );
-          std::valarray<uint16_t> array( this->info.section_size );
+//        std::valarray<uint16_t> array( this->info.section_size );
+          std::valarray<float> array( this->info.section_size );
           for ( unsigned long i=0; i < this->info.section_size; i++ ) array[i] = data[i];
 
       long fpixel(1);        // start with the first pixel always

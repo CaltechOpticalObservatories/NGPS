@@ -693,6 +693,10 @@ namespace Acam {
                       }
       }
       else
+      if ( cmd == ACAMD_AVGFRAMES ) {
+                      ret = this->interface.avg_frames( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_ACQUIRE ) {
                       ret = this->interface.acquire( args, retstring );
       }
@@ -704,6 +708,10 @@ namespace Acam {
       else
       if ( cmd == ACAMD_COORDS ) {
                       ret = this->interface.target_coords( args, retstring );
+      }
+      else
+      if ( cmd == ACAMD_LOADCALIBRATION ) {
+                      ret = this->interface.fpoffsets.load_calibration();
       }
 //    else
 //    if ( cmd == ACAMD_OFFRATE ) {

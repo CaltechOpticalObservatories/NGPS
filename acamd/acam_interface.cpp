@@ -784,13 +784,15 @@ namespace Acam {
 
     // Nothing to do if not Andor image data
     //
-    if ( andor.get_image_data() == nullptr ) {
+//  if ( andor.get_image_data() == nullptr ) {
+    if ( andor.get_avg_data() == nullptr ) {
       logwrite( function, "ERROR no image data available" );
       return ERROR;
     }
 
     fitsinfo.fits_name = outfile;
-    fitsinfo.datatype = USHORT_IMG;
+//  fitsinfo.datatype = USHORT_IMG;
+    fitsinfo.datatype = FLOAT_IMG;
     fitsinfo.section_size = andor.camera_info.axes[0] * andor.camera_info.axes[1];
 
     fits_file.copy_info( fitsinfo );      // copy from fitsinfo to the fits_file
@@ -817,7 +819,8 @@ namespace Acam {
     fits_file.write_image( data.get() );  // write the image data
 */
 
-    if (error==NO_ERROR) fits_file.write_image( andor.get_image_data() );  // write the image data
+//  if (error==NO_ERROR) fits_file.write_image( andor.get_image_data() );  // write the image data
+    if (error==NO_ERROR) fits_file.write_image( andor.get_avg_data() );    // write the image data
 
     fits_file.close_file();                           // close the file
 
@@ -2362,7 +2365,7 @@ namespace Acam {
       bool timedout=false;
       while ( this->monitor_focus_state.load( std::memory_order_seq_cst ) != Acam::FOCUS_MONITOR_STOPPED ) {
         auto now = std::chrono::steady_clock::now();
-        if ( now - start > std::chrono::milliseconds( 1500 ) ) {
+        if ( now - start > std::chrono::milliseconds( 4000 ) ) {
           timedout=true;
           break;
         }
@@ -2985,6 +2988,49 @@ namespace Acam {
     return ( this->guider_settings_control( std::string(""), retstring ) );
   }
   /***** Acam::Interface::guider_settings_control *****************************/
+
+
+  /***** Acam::Interface::avg_frames ******************************************/
+  /**
+   * @brief      
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::avg_frames( const std::string args, std::string &retstring ) {
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_AVGFRAMES;
+      retstring.append( " [ reset | <num> ]\n" );
+      retstring.append( "   Set or get the number of frames in a running average. If no arg is\n" );
+      retstring.append( "   supplied then the current value is returned.\n" );
+      return HELP;
+    }
+    if ( !args.empty() ) {
+      if ( args=="reset" ) {
+        this->camera.andor.reset_avg();
+      }
+      else {
+        try {
+          float num = std::stoi( args );
+          if ( num < 1 ) {
+            logwrite( "Acam::Interface::avg_frames", "ERROR <num> must be greater than 0" );
+            retstring="invalid_argument";
+            return ERROR;
+          }
+          this->camera.andor.set_weight(num);
+        }
+        catch( const std::exception &e ) {
+          logwrite( "Acam::Interface::avg_frames", "ERROR parsing value: "+std::string(e.what()) );
+          retstring="bad_value";
+          return ERROR;
+        }
+      }
+    }
+    retstring=std::to_string(this->camera.andor.get_weight());
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::avg_frames ******************************************/
 
 
   /***** Acam::Interface::acquire *********************************************/
@@ -3810,6 +3856,7 @@ logwrite( function, message.str() );
 
     do {
       std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
+      if ( iface.monitor_focus_state.load(std::memory_order_seq_cst) != Acam::FOCUS_MONITOR_RUNNING ) break;
 
       error = iface.tcsd.poll_focus( focus2 );  // focus now
 
