@@ -730,4 +730,70 @@ namespace SkyInfo {
   }
   /***** SkyInfo::FPOffsets::get_slicecam_params ******************************/
 
+
+  /***** SkyInfo::FPOffsets::load_calibration *********************************/
+  /**
+   * @brief      
+   *
+   */
+  long FPOffsets::load_calibration() {
+    std::string function = "SkyInfo::FPOffsets::load_calibration";
+    std::stringstream message;
+
+    if ( !this->python_initialized ) {
+      logwrite( function, "ERROR Python is not initialized" );
+      return ERROR;
+    }
+
+    if ( this->pModule==NULL ) {
+      logwrite( function, "ERROR: Python module not imported" );
+      return ERROR;
+    }
+
+    // Acquire the GIL
+    //
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    PyObject* pFunction = PyObject_GetAttrString( this->pModule, PYTHON_LOADCALIBRATION_FUNCTION );
+
+    if ( !pFunction || !PyCallable_Check( pFunction ) ) {
+      message.str(""); message << "ERROR Python function " << PYTHON_LOADCALIBRATION_FUNCTION << " not callable";;
+      logwrite( function, message.str() );
+      Py_XDECREF( pFunction );
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Call the Python function here
+    //
+    PyObject* pReturn = PyObject_CallObject( pFunction, NULL );
+    Py_XDECREF( pFunction );
+
+    if ( !pReturn || PyErr_Occurred() ) {
+      message.str(""); message << "ERROR calling Python function: " << PYTHON_LOADCALIBRATION_FUNCTION;
+      logwrite( function, message.str() );
+      PyErr_Print();
+      PyGILState_Release( gstate );
+      return ERROR;
+    }
+
+    // Expect a bool
+    //
+    if ( !PyBool_Check( pReturn ) ) {
+      logwrite( function, "ERROR Python function did not return expected boolean" );
+      Py_DECREF( pReturn );
+      PyGILState_Release(gstate);
+      return ERROR;
+    }
+
+    // Convert Python bool to C++ bool
+    //
+    bool was_loaded = (pReturn==Py_True);
+
+    Py_DECREF( pReturn );
+    PyGILState_Release( gstate );
+
+    return ( was_loaded ? NO_ERROR : ERROR );
+  }
+
 }

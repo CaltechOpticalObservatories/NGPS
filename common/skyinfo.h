@@ -19,6 +19,7 @@
 #define PYTHON_APPLYOFFSETDEG_FUNCTION "apply_offset_deg"
 #define PYTHON_GETSLICEPARAMS_FUNCTION "getSlicevParams"
 #define PYTHON_GETACAMPARAMS_FUNCTION "getAcamParams"
+#define PYTHON_LOADCALIBRATION_FUNCTION "load_calibration"
 
 namespace SkyInfo {
 
@@ -124,6 +125,7 @@ namespace SkyInfo {
 
       long get_acam_params();
       long get_slicecam_params();
+      long load_calibration();
 
   };
   /***** SkyInfo::FPOffsets ***************************************************/
