@@ -272,7 +272,7 @@ class ControlTab(QWidget):
         """Slot to handle 'Go' button click and send the target command."""
         if hasattr(self, 'current_observation_id'):
             observation_id = self.parent.current_observation_id
-            print(f"Sending command: seq targetsingle {observation_id}")
+            print(f"Sending command: seq startone {observation_id}")
             self.send_target_command(observation_id)
             QSound.play("sound/go_button_clicked.wav")
 
