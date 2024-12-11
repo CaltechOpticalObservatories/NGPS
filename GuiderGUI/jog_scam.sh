@@ -24,7 +24,7 @@ crosscenter_orig=`xpaget $id crosshair`
 echo $crosscenter_orig
 
 pixscale=`xpaget $id fits header keyword PIXSCALE`
-JOGSIZE_PX=$(echo "scale=4; $JOGSIZE_ARCSEC / $pixscale" | bc)
+JOGSIZE_PX=`awk "BEGIN { print ($JOGSIZE_ARCSEC/$pixscale) }"`  # bash can't do float arithmetic, so use awk
 
 # Use cross to get 0 0 coords
 # Parse the returned (RA, DEC), formatted as "123.45 678.90" in decimal degrees

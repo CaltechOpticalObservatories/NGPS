@@ -2,6 +2,8 @@
 
 # Update the ds9 slice viewer gui display with a 2-extension FITS file
 
+# bash cannot do floating point arithmetic, so awk is sometimes used below for calculations
+
 camera=$1
 fname=$2
 
@@ -31,7 +33,7 @@ if [[ "$camera" == "guider" ]]; then
 	YCENTER=30
 	YCENTER_STATUS=$(($height - $YCENTER))
 
-	gain=`xpaget $id fits header keyword GAIN`
+	gain=`xpaget $id fits header keyword CCDGAIN`
 	filter=`xpaget $id fits header keyword FILTER`
 	exptime=`xpaget $id fits header keyword EXPTIME`
 	exptime=`printf "%'.3f\n" $exptime`
@@ -39,7 +41,7 @@ if [[ "$camera" == "guider" ]]; then
 	focus=`printf "%'.2f\n" $focus`
 
 	# Camera settings
-	echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   GAIN=${gain}   FILTER=${filter}   FOCUS=${focus}} \
+	echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   FILTER=${filter}   FOCUS=${focus}} \
 	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}" \
 	  | xpaset $id region 2>&1
 
@@ -57,7 +59,7 @@ if [[ "$camera" == "guider" ]]; then
 	XCENTER=32
 	YCENTER=128
 	pixscale=`xpaget $id fits header keyword PIXSCALE`
-	ywidth=$(echo "scale=2; $scale_arcsec / $pixscale" | bc)
+	ywidth=`awk "BEGIN { print ($scale_arcsec/$pixscale) }"`
 
 	scalereg="image; box($XCENTER,$YCENTER,4,$ywidth,0) # color=${headsup_fontcolor} fill=1 \
 		$notouch text={$scale_arcsec\"}"
@@ -65,7 +67,7 @@ if [[ "$camera" == "guider" ]]; then
 
 	# TCS marker
 	TELRA_hr=`xpaget $id fits header keyword TELRA`
-	TELRA_deg=$(echo "scale=6; $TELRA_hr * 15 " | bc)
+	TELRA_deg=`awk "BEGIN { print ($TELRA_hr*15) }"`
 	TELDEC_deg=`xpaget $id fits header keyword TELDEC`
 	markerreg="icrs; point $TELRA_deg $TELDEC_deg # point=x 20 $notouch text={TCS}"
 	echo "$markerreg" | xpaset $id region
@@ -79,7 +81,7 @@ if [[ "$camera" == "slicev" ]]; then
 
 	# Get info from FITS headers
 	vbin=`xpaget $id fits header 1 keyword VBIN`
-	gain=`xpaget $id fits header 1 keyword GAIN`
+	gain=`xpaget $id fits header 1 keyword CCDGAIN`
 	exptime=`xpaget $id fits header 1 keyword EXPTIME`
 	exptime=`printf "%'.3f\n" $exptime`
 	slitw=`xpaget $id fits header 1 keyword SLITW`
@@ -91,7 +93,7 @@ if [[ "$camera" == "slicev" ]]; then
 	fontsize=$((${headsup_fontsize}-$vbin))
 	font="{$headsup_font $fontsize $headsup_fontstyle}"
 
-	textreg="image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   GAIN=${gain}   BIN=${vbin}   SLIT=${slitw}\"} \
+	textreg="image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   BIN=${vbin}   SLIT=${slitw}\"} \
 	  color=${headsup_fontcolor} width=2 $notouch font=$font"
 	echo "$textreg" | xpaset $id region 2>&1
 
@@ -101,13 +103,13 @@ if [[ "$camera" == "slicev" ]]; then
 	slitw_arcsec=`xpaget $id fits header keyword SLITW`
 	pixscale=`xpaget $id fits header keyword PIXSCALE`
 
-	xwidth=$(echo "scale=2; $slitw_arcsec / $pixscale" | bc) # "scale" sets decimal places in bc
-	ywidth=$(echo "scale=2; 10 / $pixscale" | bc)
+	xwidth=`awk "BEGIN { print ($slitw_arcsec/$pixscale) }"`
+	ywidth=`awk "BEGIN { print ( 10 / $pixscale ) }"` # constant 10" high
 	slitreg="image; box($xslit,$yslit,$xwidth,$ywidth,0) # color=$graphic_color $notouch tag={slitcenter}"
 	echo "$slitreg" | xpaset $id region
 
 	# circle around slit
-	radius=$(echo "scale=2; $xwidth * 1.5" | bc)
+	radius=`awk "BEGIN { print ($xwidth*1.5) }"`
 	slitreg="image; circle($xslit,$yslit,$radius) # color=$graphic_color $notouch"
 	echo "$slitreg" | xpaset $id region
 
@@ -125,7 +127,7 @@ if [[ "$camera" == "slicev" ]]; then
 	XCENTER=`echo $datasec | cut -f1 -d ':' | cut -f2 -d '['`
 	XCENTER=$((XCENTER+10))
 	YCENTER=32
-	ywidth=$(echo "scale=2; $scale_arcsec / $pixscale" | bc)
+	ywidth=`awk "BEGIN { print ($scale_arcsec/$pixscale) }"`
 
 	scalereg="image; box($XCENTER,$YCENTER,1,$ywidth,0) # color=${headsup_fontcolor} fill=1 \
 		$notouch text={$scale_arcsec\"}"
@@ -133,7 +135,7 @@ if [[ "$camera" == "slicev" ]]; then
 
 	# TCS marker
 	TELRA_hr=`xpaget $id fits header 1 keyword TELRA`
-	TELRA_deg=$(echo "scale=6; $TELRA_hr * 15 " | bc)
+	TELRA_deg=`awk "BEGIN { print ($TELRA_hr*15) }"`
 	TELDEC_deg=`xpaget $id fits header 1 keyword TELDEC`
 	markerreg="icrs; point($TELRA_deg, $TELDEC_deg) # point=x 20 color=$graphic_color $notouch text={    TCS}"
 	echo "$markerreg" | xpaset $id region

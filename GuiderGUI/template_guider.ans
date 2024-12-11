@@ -36,11 +36,6 @@ STOP
 button
 $message(yesno,Stop guiding?) | acam acquire stop # | $text
 #############
-#CALIBRATE
-#*
-#button
-#$message(yesno,Calibrate ACAM? This will send some offsets.) | acam offsetcal | $text
-#############
 endbuttonbar
 buttonbar
 #############    $dir macro refers to directory of this file
@@ -66,23 +61,24 @@ cat $dir/help_guider.txt | $text
 #############
 endbuttonbar
 
-hmenu Stuff
+hmenu NGPS Commands
   startsync
   *
   menu
   $dir/sync_display.sh guider # | $text
 
-  world
+  CALIBRATE
   *
   menu
-  echo "World" | $text
+  $message(okcancel,STEP 1: Slew to a target.  STEP 2: Offset until it is precisely centered on the slit.  STEP 3: Ask operator to remove offsets with TX command.  STEP 4: Click OK to calibrate ACAM.) | $dir/acam_calibrate.sh | $text
 
-  hmenu More Stuff
-    hello world
-    *
-    menu
-    echo "Hello World" | $text
-  endhmenu
+  # hmenu More Stuff
+  #   hello world
+  #   *
+  #   menu
+  #   echo "Hello World" | $text
+  # endhmenu
+  
 endhmenu
 # Bind command example
 # Show Settings
