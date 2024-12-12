@@ -4150,17 +4150,10 @@ logwrite(function, message.str());
    * @param[out] retstring   reference to string contains the exposure time
    * @return     ERROR or NO_ERROR
    *
-   * This function assumes that all connected devices are using the same exposure time.
-   *
-   * Set exptime_in = -1 to end immediately.
-   *
    */
   long Interface::do_modify_exptime( std::string exptime_in, std::string &retstring ) {
-    std::string function = "AstroCam::Interface::do_modify_exptime";
+    const std::string function = "AstroCam::Interface::do_modify_exptime";
     std::stringstream message;
-    long error = NO_ERROR;
-    long elapsed_time=0;
-    long updated_exptime=0;
     long requested_exptime=0;
 
     // A requested exposure time must be specified
@@ -4168,7 +4161,7 @@ logwrite(function, message.str());
     if ( exptime_in.empty() ) {
       logwrite( function, "ERROR: requested exposure time cannot be empty" );
       retstring="missing_exptime";
-      return( ERROR );
+      return ERROR;
     }
 
     // Convert the requested exptime from string to long
@@ -4176,105 +4169,33 @@ logwrite(function, message.str());
     try {
       requested_exptime = std::stol( exptime_in );
     }
-    catch ( std::invalid_argument & ) {
-      message.str(""); message << "ERROR: exception converting exposure time: " << exptime_in << " to long";
+    catch ( const std::exception &e ) {
+      message.str(""); message << "ERROR converting exposure time " << exptime_in << ": " << e.what();
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
-    }
-    catch ( std::out_of_range & ) {
-      message.str(""); message << "ERROR: exception exposure time " << exptime_in << " outside long range";
-      logwrite( function, message.str() );
-      retstring="out_of_range";
-      return( ERROR );
+      return ERROR;
     }
 
-/*****
-    // Send command to connected devices to get remaining exposure time.
-    //
-    std::string reply;
-    error = this->do_native( "RET", reply );
-
-    // The reply can contain space-delimited responses from any number
-    // of connected cameras, in the form of:
-    //   "dev:value dev:value ... dev:value"
-    //
-    // where dev is the camera device number and value is a hex value, such as:
-    //   "0:0x#### 1:0x#### ... 3:0x####"
-    //
-    // or if all cameras have the same value (unlikely here!) then the reply will be:
-    //   "value"
-    //
-    // So first tokenize on the space character to get a single camera's response,
-    //
-    std::vector<std::string> tokens;
-    Tokenize( reply, tokens, " " );
-    if ( error==NO_ERROR && tokens.size() < 1 ) {
-      message.str(""); message << "ERROR reply \"" << reply << "\": has not enough tokens";
-      logwrite( function, message.str() );
-      retstring="invalid_argument";
-      error = ERROR;
-    }
-
-    // Must have gotten at least one token from the reply
-    //
-    if ( (error==NO_ERROR) && (tokens.size() > 0) ) {
-      reply = tokens.at(0);                            // set the reply to the first token,
-
-      std::string::size_type pos = reply.find( ":" );  // then extract the value after the colon.
-
-      // If there is only one token then the response was just "value" so convert that value from hex to uint msec
-      //
-      if ( tokens.size() == 1 ) {
-        elapsed_time = parse_val( reply );
-      }
-      else
-
-      // If there are 2 or more tokens then the response is expected to be of the form "dev:value dev:value ... dev:value"
-      // If a colon was found then convert the portion of reply after the colon from a hex string to uint msec
-      //
-      if ( tokens.size() >= 2 && pos!=std::string::npos ) {
-        elapsed_time = parse_val( reply.substr( pos + 1 ) );
-      }
-
-      // Otherwise something is wrong.
-      //
-      else {
-        message.str(""); message << "ERROR malformed reply \"" << reply << "\". expected dev:value";
-        logwrite( function, message.str() );
-        retstring="bad_reply";
-        error = ERROR;
-      }
-    }
-*****/
     // block changes within the last 5 seconds of exposure
+    // this remaining time is not guaranteed to be accurate
     //
-    if ( (error==NO_ERROR) && ( (this->camera.exposure_time - elapsed_time) < 5000 ) ) {
+    long remaining_time = this->camera.shutter_timer.get_remaining();
+
+    if ( ( remaining_time < 5000 || requested_exptime < 5000 ) ) {
       message.str(""); message << "ERROR cannot change exposure time with less than 5000 msec exptime remaining";
       logwrite( function, message.str() );
       retstring="too_late";
-      error = ERROR;
+      return ERROR;
     }
 
     // check if requested exptime has already elapsed
     //
-    if ( (error==NO_ERROR) && (requested_exptime >= 0) && (requested_exptime < elapsed_time) ) {
-      message.str(""); message << "ERROR elapsed time " << elapsed_time << " already exceeds requested exposure time " << requested_exptime;
+    if ( (requested_exptime >= 0) && (requested_exptime < (requested_exptime-remaining_time) ) ) {
+      message.str(""); message << "ERROR elapsed time " << (requested_exptime-remaining_time)
+                               << " already exceeds requested exposure time " << requested_exptime;
       logwrite( function, message.str() );
       retstring="too_late";
-      error = ERROR;
-    }
-
-    // Negative value requested exptime means to stop now (round up to the nearest whole sec plus one)
-    //
-    if ( (error==NO_ERROR) && (requested_exptime < 0 ) ) {
-      updated_exptime = (long)( 1000 * std::ceil( 1.0 + (elapsed_time/1000.) ) );
-    }
-
-    // otherwise, just use the requested exposure time
-    //
-    if ( (error==NO_ERROR) && (requested_exptime > 0) ) {
-      updated_exptime = requested_exptime;
+      return ERROR;
     }
 
     // then send the command.
@@ -4282,29 +4203,46 @@ logwrite(function, message.str());
     this->camera.shutter_timer.modify( requested_exptime );
 
     this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", requested_exptime, "exposure time in sec" );
-//  if ( error==NO_ERROR ) error = this->exptime( std::to_string( updated_exptime ), retstring );
 
-    if ( error != NO_ERROR ) logwrite( function, "ERROR modifying exptime" );
-/***
-    // If there is more than one space-delimited reply in retstring then not all cameras are the same
-    // and that is a problem.
-    //
-    Tokenize( retstring, tokens, " " );
-    if ( tokens.size() > 1 ) {
-      message.str(""); message << "ERROR not all cameras returned the same value: " << retstring;
-      logwrite( function, message.str() );
-      retstring="camera_mismatch";
-      error = ERROR;
-    }
-***/
-    if ( error==NO_ERROR ) {
-      message.str(""); message << "successfully modified exptime to " << updated_exptime << " msec";
-      logwrite( function, message.str() );
-    }
+    message.str(""); message << "modified exptime to " << requested_exptime << " msec";
+    logwrite( function, message.str() );
 
-    return( error );
+    return NO_ERROR;
   }
   /***** AstroCam::Interface::do_modify_exptime *******************************/
+
+
+  /***** AstroCam::Interface::stop_exposure ***********************************/
+  /**
+   * @brief      stop the exposure now (as soon as possible)
+   * @param[in]  args        not used
+   * @param[out] retstring   return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::stop_exposure( std::string args, std::string &retstring ) {
+    const std::string function = "AstroCam::Interface::stop_exposure";
+    std::stringstream message;
+
+    // block changes within the last 5 seconds of exposure
+    // this remaining time is not guaranteed to be accurate
+    //
+    long remaining_time = this->camera.shutter_timer.get_remaining();
+
+    if ( remaining_time < 5000 ) {
+      message.str(""); message << "ERROR cannot stop exposure time with less than 5000 msec exptime remaining";
+      logwrite( function, message.str() );
+      retstring="too_late";
+      return ERROR;
+    }
+
+    this->camera.shutter_timer.stop( remaining_time );
+
+    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", (this->camera.exposure_time-remaining_time),
+                                                                     "exposure time in sec" );
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::stop_exposure ***********************************/
 
 
   /***** AstroCam::Interface::shutter *****************************************/
@@ -5651,7 +5589,7 @@ logwrite(function,message.str() );
       if ( tokens.size() > 1 ) {
         if ( tokens[1] == "?" ) {
           retstring = CAMERAD_TEST;
-          retstring.append( " lpsleep <ms> | stop | modify <ms>\n" );
+          retstring.append( " lpsleep <ms> | stop | pause | resume | modify <ms>\n" );
           retstring.append( "  Tests the Long Precise Sleep timer by spawning a thread that sleeps\n" );
           retstring.append( "  using the shutter_timer object. Delay time <ms> is a whole number of\n" );
           retstring.append( "  milliseconds and can be any value. This can be interrupted using the\n" );
@@ -5660,9 +5598,24 @@ logwrite(function,message.str() );
         }
         else
         if ( tokens[1] == "stop" ) {
-          this->camera.shutter_timer.stop();
-          logwrite( function, "TEST: stopped timer test early" );
-          retstring="stopped";
+          long remaining;
+          this->camera.shutter_timer.stop(remaining);
+          logwrite( function, "TEST: stopped timer test with "+std::to_string(remaining)+" ms remaining" );
+          retstring=std::to_string(remaining);
+          return NO_ERROR;
+        }
+        else
+        if ( tokens[1] == "pause" ) {
+          this->camera.shutter_timer.hold();
+          logwrite( function, "TEST: test timer paused" );
+          retstring="paused";
+          return NO_ERROR;
+        }
+        else
+        if ( tokens[1] == "resume" ) {
+          this->camera.shutter_timer.resume();
+          logwrite( function, "TEST: test timer resumed" );
+          retstring="resumed";
           return NO_ERROR;
         }
         else
@@ -5678,10 +5631,17 @@ logwrite(function,message.str() );
             return ERROR;
           }
         }
+        else
+        if ( tokens[1] == "time" ) {
+          auto time=this->camera.shutter_timer.get_duration();
+          logwrite( function, "TEST: test timer duration="+std::to_string(time) );
+          retstring=std::to_string(time);
+          return NO_ERROR;
+        }
         else {
           try {
             ms = std::stol( tokens[1] );
-            logwrite( function, "TEST: spawning timer test thread" );
+            logwrite( function, "TEST: running timer in a detached thread" );
             std::thread( &AstroCam::Interface::dothread_test_shutter_timer, this, ms ).detach();
             retstring="running";
             return NO_ERROR;

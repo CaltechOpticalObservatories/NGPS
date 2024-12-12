@@ -607,6 +607,10 @@ void doit(Network::TcpSocket &sock) {
                     ret = server.modify_exptime(args, retstring);
                     }
     else
+    if ( cmd == CAMERAD_STOP ) {
+                    ret = server.native( "PEX" );
+                    }
+    else
     if ( cmd == CAMERAD_PAUSE ) {
                     ret = server.native( "PEX" );
                     }

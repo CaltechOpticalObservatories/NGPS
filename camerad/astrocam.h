@@ -983,6 +983,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long do_exptime(std::string exptime_in, std::string &retstring);
       long modify_exptime( std::string exptime_in, std::string &retstring );
       long do_modify_exptime( std::string exptime_in, std::string &retstring );
+      long stop_exposure( std::string exptime_in, std::string &retstring );
       long shutter(std::string shutter_in, std::string& shutter_out);
       long frame_transfer_mode( std::string args );
       long frame_transfer_mode( std::string args, std::string &retstring );
