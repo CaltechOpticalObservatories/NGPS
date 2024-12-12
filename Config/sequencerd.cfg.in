@@ -93,6 +93,7 @@ DB_SETS=target_sets                  # table of target sets
 
 # TCS-related configuration
 #
+TCS_WHICH=real                       # override which TCS to connect to {real sim} - defaults to real
 TCS_OFFSET_RATE_RA=45                # TCS offset rate for RA ("MRATE") in arcsec per second
 TCS_OFFSET_RATE_DEC=45               # TCS offset rate for DEC ("MRATE") in arcsec per second
 TCS_SETTLE_TIMEOUT=20                # seconds to wait for telescope to settle (for "TRACKING_STABLY")

@@ -462,10 +462,10 @@ namespace Sequencer {
  *      break;
  *    }
  */
-      if ( this->seq_state.is_set( Sequencer::SEQ_ABORTREQ ) ) {
-        logwrite( function, "aborting the start sequence" );
-        break;
-      }
+///   if ( this->seq_state.is_set( Sequencer::SEQ_ABORTREQ ) ) {
+///     logwrite( function, "aborting the start sequence" );
+///     break;
+///   }
 
       logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
@@ -475,7 +475,7 @@ namespace Sequencer {
 
       // Wait for on-target signal (or abort)
       //
-      this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"ontarget\" signal" );
+      this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"userexpose\" signal" );
 
       this->seq_state.set( Sequencer::SEQ_WAIT_USER );
 
@@ -485,7 +485,7 @@ namespace Sequencer {
       catch ( const std::exception &e ) {
         message.str(""); message << "NOTICE: aborted: " << e.what();
         this->async.enqueue_and_log( function, message.str() );
-        this->seq_state.clear( Sequencer::SEQ_WAIT_USER, Sequencer::SEQ_WAIT_USER );
+        this->seq_state.set_and_clear( {Sequencer::SEQ_READY}, { Sequencer::SEQ_WAIT_USER, Sequencer::SEQ_RUNNING } );
         this->broadcast_seqstate();
         this->thread_state.clear( THR_SEQUENCE_START );          // thread terminated
         return;
@@ -719,6 +719,9 @@ logwrite( function, "[DEBUG] starting" );  ///< TODO @todo temporary
 message.str(""); message << "[DEBUG] powerd socket isconnected=" << seq.powerd.socket.isconnected(); ///< TODO @todo temporary
 logwrite( function, message.str() ); ///< TODO @todo temporary
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.powerd, was_opened);
+/***
     // if not connected to the power daemon then connect
     //
     if ( !seq.powerd.socket.isconnected() ) {
@@ -742,7 +745,7 @@ logwrite( function, message.str() ); ///< TODO @todo temporary
       error = seq.powerd.send( POWERD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to power hardware" );
     }
-
+***/
     // atomically set thread_error so the main thread knows we had an error
     //
     if ( error != NO_ERROR ) {
@@ -833,17 +836,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false, ishomed=false;
 
-    // Turn on power to slit hardware.
+    // make sure hardware is powered on
     //
-    for ( const auto &plug : seq.power_switch[POWER_SLIT].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error |= seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to slit hardware" );
-    }
-    logwrite( function, "waiting 5 s for slit controllers to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds(5) );
+    error = seq.check_power_on(POWER_SLIT, std::chrono::seconds(5));
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.slitd, was_opened);
+
+/*****
     // if not connected to the slit daemon then connect
     //
     if ( error==NO_ERROR && !seq.slitd.socket.isconnected() ) {
@@ -867,6 +867,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.slitd.command( SLITD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to slit hardware" );
     }
+*****/
 
     // Ask slitd if the slit motors are homed,
     //
@@ -986,17 +987,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to slicecam hardware and wait for it to start before proceeding
+    // make sure hardware is powered on
     //
-    for ( const auto &plug : seq.power_switch[POWER_SLICECAM].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error |= seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR turning on power to slicecam hardware" );
-    }
-    logwrite( function, "waiting 10 s for slicecams to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds(10) );  // SLICECAM needs some time to power-on
+    error = seq.check_power_on(POWER_SLICECAM, std::chrono::seconds(10));
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.slicecamd, was_opened);
+
+/*****
     // if not connected to the slicecam daemon then connect
     //
     if ( !seq.slicecamd.socket.isconnected() ) {
@@ -1039,6 +1037,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.slicecamd.command_timeout( SLICECAMD_OPEN, reply, SLICECAMD_OPEN_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to slicecam hardware" );
     }
+*****/
 
 //  // turn on cooling
 //  //
@@ -1225,17 +1224,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to acam hardware and wait for it to start before proceeding
+    // make sure hardware is powered on
     //
-    for ( const auto &plug : seq.power_switch[POWER_ACAM].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error |= seq.powerd.command( cmd.str() );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR turning on power to acam hardware" );
-    }
-    logwrite( function, "waiting 10 s for acam to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds(10) );  // ACAM needs some time to power-on
+    error = seq.check_power_on(POWER_ACAM, std::chrono::seconds(10));
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.acamd, was_opened);
+
+/*****
     // if not connected to the acam daemon then connect
     //
     if ( !seq.acamd.socket.isconnected() ) {
@@ -1279,6 +1275,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.acamd.command_timeout( ACAMD_OPEN, ACAMD_OPEN_TIMEOUT );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to acam hardware" );
     }
+******/
 
     // turn on cooling
     //
@@ -1390,20 +1387,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false, ishomed=false;
 
-    // Turn on power to calib hardware.
+    // make sure hardware is powered on
     //
-    for ( const auto &plug : seq.power_switch[POWER_CALIB].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error = seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) {
-        seq.async.enqueue_and_log( function, "ERROR turning on power to calib hardware" );
-        break;
-      }
-    }
-    logwrite( function, "waiting 5 s for calib to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds(5) );
+    error = seq.check_power_on(POWER_CALIB, std::chrono::seconds(5));
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.acamd, was_opened);
+
+/*****
     // if not connected to the calib daemon then connect
     //
     if ( error==NO_ERROR && !seq.calibd.socket.isconnected() ) {
@@ -1427,6 +1418,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.calibd.command( CALIBD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to calib hardware" );
     }
+*****/
 
     // Ask calibd if the motors are homed,
     //
@@ -1737,22 +1729,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to flexure hardware.
+    // make sure hardware is powered on
     //
-    logwrite( function, "powering on flexure hardware" );
-    for ( const auto &plug : seq.power_switch[POWER_FLEXURE].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error |= seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to flexure hardware" );
-    }
+    error = seq.check_power_on(POWER_FLEXURE, std::chrono::seconds(21));
 
-    // It takes 20 seconds after power-on before the flexure controllers
-    // are ready to accept a connection.
-    //
-    logwrite( function, "waiting 21 s for flexure controller to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds( 21 ) );
+    bool was_opened=false;
+    error = seq.check_connected(seq.flexured, was_opened);
 
+/*****
     // if not connected to the flexure daemon then connect
     //
     if ( !seq.flexured.socket.isconnected() ) {
@@ -1776,6 +1760,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.flexured.send( FLEXURED_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to flexure hardware" );
     }
+*****/
 
     // flag daemon as ready or set thread_error so the main thread knows we had an error or not
     //
@@ -1878,18 +1863,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to focus hardware.
+    // make sure hardware is powered on
     //
-    logwrite( function, "powering on focus hardware" );
-    for ( const auto &plug : seq.power_switch[POWER_FOCUS].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error |= seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to focus hardware" );
-    }
-    logwrite( function, "waiting 5 s for focus to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds(5) );
+    error = seq.check_power_on(POWER_FOCUS, std::chrono::seconds(5));
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.focusd, was_opened);
+
+/*****
     // if not connected to the focus daemon then connect
     //
     if ( !seq.focusd.socket.isconnected() ) {
@@ -1913,6 +1894,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.focusd.send( FOCUSD_OPEN, reply );
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to focus hardware" );
     }
+*****/
 
     // flag daemon as ready or set thread_error so the main thread knows we had an error or not
     //
@@ -1981,18 +1963,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
     bool isopen=false;
 
-    // Turn on power to science cameras
+    // make sure hardware is powered on
     //
-    logwrite( function, "powering on science cameras" );
-    for ( const auto &plug : seq.power_switch[POWER_CAMERA].plugname ) {
-      std::stringstream cmd;
-      cmd << plug << " ON";
-      error |= seq.powerd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: turning on power to science cameras" );
-    }
-    logwrite( function, "waiting 5 s for Leach controllers to boot" );
-    std::this_thread::sleep_for( std::chrono::seconds(5) );
+    error = seq.check_power_on(POWER_CAMERA, std::chrono::seconds(5));
 
+    bool was_opened=false;
+    error = seq.check_connected(seq.camerad, was_opened);
+
+/*****
     // if not connected to the camera daemon then connect
     //
     if ( !seq.camerad.socket.isconnected() ) {
@@ -2013,11 +1991,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       error = seq.camerad.send( CAMERAD_OPEN, reply );   // This will open all devices configured with CONTROLLER key in config file
       if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with science camera controller(s)" );
     }
+*****/
 
     // send all of the prologue commands
     //
-    for ( const auto &cmd : seq.camera_prologue ) {
-      if (error==NO_ERROR) error = seq.camerad.send( cmd, reply );
+    if ( was_opened) {
+      for ( const auto &cmd : seq.camera_prologue ) {
+        if (error==NO_ERROR) error = seq.camerad.send( cmd, reply );
+      }
     }
 
     // atomically set thread_error so the main thread knows we had an error
@@ -2702,25 +2683,29 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       return;
     }
 
-    // Before sending the target coords to the ACAM,
-    // convert them from <pointmode> to ACAM coordinates.
-    //
-    double ra_out, dec_out, angle_out;
-    error = this->target.fpoffsets.compute_offset( this->target.pointmode, "ACAM",
-                                                 ra_in, dec_in, angle_in,
-                                                 ra_out, dec_out, angle_out );
-
-    // Send the ACQUIRE command to acamd, which requires
-    // the target coordinates (from the database).
-    //
-    message.str(""); message << "starting target acquisition " << ra_out    << " "
-                                                               << dec_out   << " "
-                                                               << angle_out << " "
+//  // Before sending the target coords to the ACAM,
+//  // convert them from <pointmode> to ACAM coordinates.
+//  //
+//  double ra_out, dec_out, angle_out;
+//  error = this->target.fpoffsets.compute_offset( this->target.pointmode, "ACAM",
+//                                               ra_in, dec_in, angle_in,
+//                                               ra_out, dec_out, angle_out );
+//
+//  // Send the ACQUIRE command to acamd, which requires
+//  // the target coordinates (from the database).
+//  //
+//  message.str(""); message << "starting target acquisition " << ra_out    << " "
+//                                                             << dec_out   << " "
+//                                                             << angle_out << " "
+//                                                             << this->target.name;
+    message.str(""); message << "starting target acquisition " << ra_in    << " "
+                                                               << dec_in   << " "
+                                                               << angle_in << " "
                                                                << this->target.name;
     logwrite( function, message.str() );
-    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << ra_out << " "
-                                             << dec_out << " "
-                                             << angle_out << " ";
+    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << ra_in << " "
+                                             << dec_in << " "
+                                             << angle_in << " ";
 
     error = this->acamd.command( cmd.str(), reply );
 
@@ -3858,6 +3843,31 @@ logwrite( function, message.str() );
   /***** Sequencer::Sequence::tcs_init ****************************************/
 
 
+  /***** Sequencer::Sequence::target_offset ***********************************/
+  /**
+   * @brief      performs target offset
+   * @param[in]  seq  reference to Sequence object
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Sequence::target_offset() {
+    std::string function = "Sequencer::Sequence::target_offset";
+    long error=NO_ERROR;
+
+    error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
+
+    std::stringstream cmd;
+    cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+
+    error |= this->tcsd.command( cmd.str() );
+
+    logwrite( function, "sent "+cmd.str() );
+
+    return error;
+  }
+  /***** Sequencer::Sequence::target_offset ***********************************/
+
+
   /***** Sequencer::Sequence::make_telemetry_message **************************/
   /**
    * @brief      assembles a telemetry message
@@ -4034,6 +4044,108 @@ logwrite( function, message.str() );
     return;
   }
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
+
+
+  long Sequence::check_power_on( const std::string which, std::chrono::seconds delay ) { 
+    const std::string function="Sequencer::Sequence::check_power_on";
+    long error;
+    bool need_delay=false;
+
+    // loop through all of the plugs for the named device
+    //
+    for ( const auto &plug : this->power_switch[which].plugname ) {
+      std::string reply;
+      std::stringstream cmd;
+      cmd << plug;
+      error = this->powerd.send( cmd.str(), reply );
+      if ( error != NO_ERROR || reply.find(" DONE") == std::string::npos ) {
+        logwrite( function, "ERROR checking plug: "+plug );
+        continue;
+      }
+
+      auto it = reply.find(" DONE");
+      int state=-1;
+      try {
+        state = std::stoi(reply.substr(0,it));
+      }
+      catch( const std::exception &e ) {
+        logwrite( function, "ERROR parsing reply \""+reply+"\" from plug: "+plug );
+        continue;
+      }
+
+      if ( state==0 ) {
+        cmd << " ON";
+        logwrite( function, "turning on plug "+plug );
+        error = this->powerd.send( cmd.str(), reply );
+        if ( error != NO_ERROR || reply.find(" DONE") != std::string::npos ) {
+          logwrite( function, "ERROR turning on plug: "+plug );
+          continue;
+        }
+        // if anything was turned on then wait for power-on delay
+        need_delay=true;
+      }
+      else
+      if ( state==1 ) {
+        logwrite( function, "plug "+plug+" already on" );
+        continue;
+      }
+      else {
+        logwrite( function, "ERROR bad reply \""+reply+"\" from plug: "+plug );
+        continue;
+      }
+    }
+
+    if ( need_delay ) {
+      logwrite( function, "waiting "+std::to_string(delay.count())+"s for "+which+" to boot" );
+      std::this_thread::sleep_for(delay);
+    }
+
+    return error;
+  }
+
+
+  long Sequence::check_connected( Common::DaemonClient &daemon, bool &was_opened ) {
+    const std::string function="Sequencer::Sequence::check_connected";
+    bool isopen=false;
+    std::string reply;
+    long error;
+
+    // if not connected to the power daemon then connect
+    //
+    if ( !daemon.socket.isconnected() ) {
+      logwrite( function, "connecting to "+daemon.name );
+      error = daemon.connect();
+      if ( error != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR connecting to "+daemon.name );
+        return ERROR;
+      }
+    }
+
+    // Ask if hardware connection is open
+    //
+    if ( error == NO_ERROR ) {
+      error  = daemon.send( "isopen", reply );
+      error |= this->parse_state( function, reply, isopen );
+      if ( error != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR opening "+daemon.name );
+        return ERROR;
+      }
+    }
+
+    // and open it if necessary.
+    //
+    if ( error==NO_ERROR && !isopen ) {
+      logwrite( function, "opening "+daemon.name );
+      error = daemon.send( "open", reply );
+      if ( error != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR opening connection to "+daemon.name );
+        return ERROR;
+      }
+      was_opened=true;
+    }
+
+    return NO_ERROR;
+  }
 
 
   /***** Sequencer::Sequence::test ********************************************/
@@ -4455,19 +4567,20 @@ logwrite( function, message.str() );
 
       std::stringstream rts;
 
-      rts << "name=" << this->target.name  << "\n"
-          << "obsid=" << this->target.obsid << "\n"
-          << "targetnum=" << this->target.targetnum << "\n"
-          << "ra=" << this->target.ra_hms << "\n"
-          << "dec=" << this->target.dec_dms << "\n"
-          << "cassangle=" << this->target.casangle << "\n"
-          << "slitangle=" << this->target.slitangle << "\n"
-          << "slitwidth=" << this->target.slitwidth << "\n"
-          << "slitwidth_req=" << this->target.slitwidth_req << "\n"
-          << "exptime_act=" << this->target.exptime_act << "\n"
-          << "exptime_req=" << this->target.exptime_req << "\n"
-          << "binspat=" << this->target.binspat << "\n"
-          << "binspect=" << this->target.binspect << "\n";
+      rts << "name      obsid  RA  DEC  casangle  slitangle  slitwidth exptime binspat binspect RAoffs DECoffs\n";
+      rts << this->target.name  << " "
+          << this->target.obsid << "   "
+          << this->target.ra_hms << "  "
+          << this->target.dec_dms << "  "
+          << this->target.casangle << "  "
+          << this->target.slitangle << "  "
+          << this->target.slitwidth << "  "
+          << this->target.exptime_req << "  "
+          << this->target.binspat << "  "
+          << this->target.binspect << " "
+          << this->target.offset_ra << " "
+          << this->target.offset_dec << " "
+          << "\n";
 
       // convert to decimal and to scope coordinates.
       // (fpoffsets.coords_* are always in degrees)

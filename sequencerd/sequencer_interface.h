@@ -171,6 +171,8 @@ namespace Sequencer {
                                        "NAME",
                                        "RA",
                                        "DECL",
+                                       "OFFSET_RA",
+                                       "OFFSET_DEC",
                                        "OTMexpt",
                                        "OTMslitwidth",
                                        "OTMslitangle",
@@ -362,6 +364,8 @@ namespace Sequencer {
       mysqlx::string dec_dms;             ///< current target declination in units dd:mm:ss
       mysqlx::string tel_ra;              ///< current target right ascension in units hh:mm:ss
       mysqlx::string tel_dec;             ///< current target declination in units dd:mm:ss
+      double         offset_ra;
+      double         offset_dec;
       double         tel_alt;             ///< telescope alt (deg) at exposure start
       double         tel_az;              ///< telescope az (deg) at exposure start
       double         airmass;             ///< airmass at exposure start

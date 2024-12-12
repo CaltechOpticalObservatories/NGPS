@@ -719,6 +719,8 @@ namespace Sequencer {
       this->name           = extract_column_from_row<mysqlx::string>( "NAME", row );
       this->ra_hms         = extract_column_from_row<mysqlx::string>( "RA", row );
       this->dec_dms        = extract_column_from_row<mysqlx::string>( "DECL", row );
+      this->offset_ra      = extract_column_from_row<double>( "OFFSET_RA", row );
+      this->offset_dec     = extract_column_from_row<double>( "OFFSET_DEC", row );
 
       this->casangle       = extract_column_from_row<double>( "OTMcass", row );
       this->slitangle      = extract_column_from_row<double>( "OTMslitangle", row );

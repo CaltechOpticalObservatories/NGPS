@@ -1468,6 +1468,14 @@ logwrite(function,"[DEBUG] returned "+retstring);
       }
       else
 
+      // apply target offsets from database
+      //
+      if ( cmd == SEQUENCERD_TARGETOFFSET ) {
+                      this->sequence.target_offset();
+                      ret = NO_ERROR;
+      }
+      else
+
       // skip slew
       //
       if ( cmd.compare( SEQUENCERD_TCSNOWAIT ) == 0) {
@@ -1568,7 +1576,6 @@ logwrite(function,"[DEBUG] returned "+retstring);
       // routine specified by args.
       //
       if ( cmd.compare( SEQUENCERD_TEST ) == 0 ) {
-                      std::thread( &Sequencer::Sequence::dothread_test, std::ref(this->sequence) ).detach();
                       ret = this->sequence.test( args, retstring );
                       if ( ! retstring.empty() ) retstring.append( " " );
       }

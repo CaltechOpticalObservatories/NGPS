@@ -16,6 +16,7 @@ const std::string SEQUENCERD_GETONETARGET = "getone";
 const std::string SEQUENCERD_GUIDE      = "guide";
 const std::string SEQUENCERD_MODEXPTIME = "modexptime";
 const std::string SEQUENCERD_ONTARGET   = "ontarget";
+const std::string SEQUENCERD_USEREXPOSE = "userexpose";
 const std::string SEQUENCERD_PAUSE      = "pause";
 const std::string SEQUENCERD_RESUME     = "resume";
 const std::string SEQUENCERD_SHUTDOWN   = "shutdown";
@@ -25,6 +26,7 @@ const std::string SEQUENCERD_STARTUP    = "startup";
 const std::string SEQUENCERD_STATE      = "state";
 const std::string SEQUENCERD_STOP       = "stop";
 const std::string SEQUENCERD_TARGETSET  = "targetset";
+const std::string SEQUENCERD_TARGETOFFSET  = "targetoffset";
 const std::string SEQUENCERD_TCSINIT    = "tcsinit";
 const std::string SEQUENCERD_TCSNOWAIT  = "tcsnowait";
 const std::string SEQUENCERD_TEST       = "test";
@@ -57,6 +59,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_PAUSE,
                                                      SEQUENCERD_RESUME,
                                                      TELEMREQUEST+" [?]",
+                                                     SEQUENCERD_USEREXPOSE,
                                                      SEQUENCERD_SHUTDOWN,
                                                      SEQUENCERD_START,
                                                      SEQUENCERD_STARTONE,
@@ -64,6 +67,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_STATE,
                                                      SEQUENCERD_STOP,
                                                      SEQUENCERD_TARGETSET+" [ <targetid> | <targetname> ]",
+                                                     SEQUENCERD_TARGETOFFSET,
                                                      SEQUENCERD_TCSINIT+" [real|sim|shutdown]",
                                                      SEQUENCERD_TCSNOWAIT,
                                                      SEQUENCERD_TEST+" ? | <testname> ..."

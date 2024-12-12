@@ -371,11 +371,14 @@ namespace Sequencer {
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
       long tcs_init( const std::string which, std::string &retstring );  ///< initialize the specified tcs device
+      long target_offset();
 
       void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
       void get_external_telemetry();                                ///< collect telemetry from another daemon
       long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
+      long check_power_on( const std::string which, std::chrono::seconds delay );
+      long check_connected( Common::DaemonClient &daemon, bool &was_opened );
       // These are various jobs that are done in their own threads
       //
       void dothread_trigger_exposure();       ///< trigger and wait for exposure
