@@ -229,7 +229,7 @@ while : ; do
 
     # take "nexp" exposures at this axis position
     #
-    exposure=0
+    exposure=1
     while : ; do
         echo "exposing "$exposure"/"$nexp
         if [ $scicam == "camera" ]; then
