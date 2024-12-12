@@ -20,14 +20,14 @@ update_menu=$1
 exptime=${2:-1}
 gain=${3:-1}
 filter=${4:-r}
-focus=$5
+navg=$5
 status=$6  # acquiring, guiding etc.  Not available in menu
 
 # create new analysis file from template and new parameters
 sed -e "s/DEFexptime/$exptime/" \
     -e "s/DEFgain/$gain/" \
     -e "s/DEFfilter/$filter/" \
-    -e "s/DEFfocus/$focus/" \
+    -e "s/DEFnavg/$navg/" \
     $anstemplate > $ansfile
 
 # load analysis file

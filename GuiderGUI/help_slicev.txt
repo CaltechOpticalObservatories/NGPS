@@ -9,14 +9,20 @@ To work with regions, frames, and so on, use the
 
 Buttons:
 
-[sync display] -- Update displayed parameters with the current camera settings
+[sync camera] -- Update camera settings menu with the current guider settings. Zoom to fit.
 
-[camera settings] -- Update the camera with new settings
+[camera settings] -- Update the camera with new settings.
 
 [grab fits] -- Copy current FITS frame to a separate DS9 window for analysis
-  (also saves in /data/sliceview/grab/)
-
-[put on slit] -- Move the spectrograph slit to the coordinates of the
-  crosshairs. User can zoom in first for more precision.
+  (also saves in /data/slicecam/grab/).  PLEASE DON'T MASH THE BUTTON.
 
 [gui help] -- This message
+
+[jog settings] -- Set the offset size (arcsec) of the jog buttons
+
+[left / right / up / down] -- Offset the image; LEFT button will result in the IMAGE moving LEFT, and so on.
+
+[put on slit] -- Offset the telescope to put the spectrograph slit at the coordinates of the
+  crosshairs. User can zoom in first for more precision.
+
+[put on guider] -- Offset the telescope so that the crosshairs coordinates are visbile on the guider camera.

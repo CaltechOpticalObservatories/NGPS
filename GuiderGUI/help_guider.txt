@@ -9,19 +9,29 @@ To work with regions, frames, and so on, use the
 
 Buttons:
 
-[sync display] -- Update displayed parameters with the current guider settings
+[sync camera] -- Update camera settings menu with the current guider settings. Zoom to fit.
 
-[camera settings] -- Update the camera with new settings
+[camera settings] -- Update the camera with new settings.
 
 [grab fits] -- Copy current FITS frame to a separate DS9 window for analysis
   (also saves in /data/acam/grab/).  PLEASE DON'T MASH THE BUTTON.
 
-[put on slit] -- NOT IMPLEMENTED.  Move the spectrograph slit to the coordinates
+[gui help] -- This message
+
+[show slit] -- Zoom to show the location of the spectrograph slit.
+
+[focus] -- Change the focus position of the P200.
+
+[put on slit] -- Move the spectrograph slit to the coordinates
  of the crosshairs. User can zoom in first for more precision.
 
-[gui help] -- This message
+[guide] -- Start guiding to hold the current telescope position.
+
+[stop] -- Stop guiding.
 
 Troubleshooting:
 
 WHERE IS THE SETTINGS DISPLAY?  The current camera settings are displayed at 
  the bottom of the image.  If they are not visible, try zooming out.
+
+SEEING WEIRD VALUES?  Try pressing [sync camera].

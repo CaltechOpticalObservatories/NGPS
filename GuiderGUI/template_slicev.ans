@@ -1,8 +1,9 @@
 param scamSettings
     # variable type {label} {default} {Long description}
     exptime entry {Exposure time (s)} {DEFexptime} {}
-    gain entry {CCD Gain} {DEFgain} { }
+    gain entry {CCD EMGain (1=off)} {DEFgain} { }
     bin menu {Binning (px)} {DEFbin|1|2|4|8} { }
+    navg entry {Rolling Average (N frames)} {DEFnavg} { }
 endparam
 param jogSettings
     # variable type {label} {default} {Long description}
@@ -38,7 +39,7 @@ PUT ON SLIT
 button
 $message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh # | $text
 #############
-PUT ON ACAM
+PUT ON GUIDER
 *
 button
 $message(yesno,Move this field to ACAM?) | $dir/putonslit.sh guider true #| $text  # true=reverse direction
@@ -48,7 +49,7 @@ endbuttonbar
 #############
 buttonbar
 #############    $dir macro refers to directory of this file
-SYNC DISPLAY
+SYNC CAMERA
 *
 button
 $dir/sync_display.sh slicev # | $text
@@ -56,7 +57,7 @@ $dir/sync_display.sh slicev # | $text
 CAMERA SETTINGS
 *
 button
-$param(scamSettings) ; scam guiset $exptime $gain $bin # | $text
+$param(scamSettings) ; scam guiset $exptime $gain $bin $navg # | $text
 #############
 GRAB FITS
 *

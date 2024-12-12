@@ -39,9 +39,10 @@ if [[ "$camera" == "guider" ]]; then
 	exptime=`printf "%'.3f\n" $exptime`
 	focus=`xpaget $id fits header keyword TELFOCUS`
 	focus=`printf "%'.2f\n" $focus`
+	navg=`xpaget $id fits header keyword NAVG`
 
 	# Camera settings
-	echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   FILTER=${filter}   FOCUS=${focus}} \
+	echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   FILTER=${filter}   N_AVG=${navg}} \
 	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}" \
 	  | xpaset $id region 2>&1
 
@@ -49,7 +50,7 @@ if [[ "$camera" == "guider" ]]; then
 	status=`xpaget $id fits header keyword STATUS`
 	# status=`acam acquire`  ### placeholder until above header exists
 	xpaset -p $id region group status new
-	echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}} \
+	echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}          FOCUS=${focus}} \
 	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}" \
 	  | xpaset $id region 2>&1
 
@@ -86,6 +87,7 @@ if [[ "$camera" == "slicev" ]]; then
 	exptime=`printf "%'.3f\n" $exptime`
 	slitw=`xpaget $id fits header 1 keyword SLITW`
 	slitw=`printf "%'.3f\n" $slitw`
+	navg=`xpaget $id fits header keyword NAVG`
 
 	# horizontally center text on slit (CRPIX1)
 	XCENTER=`xpaget $id fits header 1 keyword CRPIX1`
@@ -93,7 +95,7 @@ if [[ "$camera" == "slicev" ]]; then
 	fontsize=$((${headsup_fontsize}-$vbin))
 	font="{$headsup_font $fontsize $headsup_fontstyle}"
 
-	textreg="image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   BIN=${vbin}   SLIT=${slitw}\"} \
+	textreg="image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   BIN=${vbin}   N_AVG=${navg}} \
 	  color=${headsup_fontcolor} width=2 $notouch font=$font"
 	echo "$textreg" | xpaset $id region 2>&1
 
@@ -116,7 +118,7 @@ if [[ "$camera" == "slicev" ]]; then
 	# Slice labels
 	YCENTER=`xpaget $id fits header 1 keyword NAXIS2`
 	YCENTER=$(($YCENTER-8))
-	slicereg="image; text $xslit $YCENTER # text={     TOP SLICE                     BOTTOM SLICE} \
+	slicereg="image; text $xslit $YCENTER # text={     TOP SLICE        SLIT=${slitw}\"        BOTTOM SLICE} \
 	  color=${headsup_fontcolor} width=2 $notouch font=$font"
 	echo "$slicereg" | xpaset $id region
 

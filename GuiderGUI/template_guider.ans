@@ -1,9 +1,9 @@
 param guiderSettings
     # variable type {label} {default} {Long description}
     exptime entry {Exposure time (s)} {DEFexptime} { }
-    gain entry {CCD Gain} {DEFgain} { }
+    gain entry {CCD EMGain (1=off)} {DEFgain} { }
     filter menu {ACAM Filter} {DEFfilter|block|g|r|i|open|clear} { }
-    focus entry {Focus} {DEFfocus} { }  ### DELETE THIS 
+    navg entry {Rolling Average (N frames)} {DEFnavg} { }
 endparam
 param focusParam
     focus entry {TCS Focus (mm)} {DEFfocus} { }
@@ -39,7 +39,7 @@ $message(yesno,Stop guiding?) | acam acquire stop # | $text
 endbuttonbar
 buttonbar
 #############    $dir macro refers to directory of this file
-SYNC DISPLAY
+SYNC CAMERA
 *
 button
 $dir/sync_display.sh guider # | $text
@@ -47,7 +47,7 @@ $dir/sync_display.sh guider # | $text
 CAMERA SETTINGS
 *
 button
-$param(guiderSettings) ; acam guideset $exptime $gain $filter $focus # | $text
+$param(guiderSettings) ; acam guideset $exptime $gain $filter $navg # | $text
 #############
 GRAB FITS
 *

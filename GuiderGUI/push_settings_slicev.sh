@@ -19,6 +19,7 @@ update_menu=$1
 exptime=${2:-1}  # ${argN:-default}
 gain=${3:-1}
 bin=${4:-4}
+navg=${5:-1}
 
 # Get the jog size parameter which is just 1 number saved in a file
 # The jog settings menu writes to this file
@@ -28,6 +29,7 @@ JOGSIZE_ARCSEC=`cat $SCRIPT_DIR/jog.ini`
 sed -e "s/DEFexptime/$exptime/" \
     -e "s/DEFgain/$gain/" \
     -e "s/DEFbin/$bin/" \
+    -e "s/DEFnavg/$navg/" \
     -e "s/DEFjog/$JOGSIZE_ARCSEC/" \
     $anstemplate > $ansfile
 
