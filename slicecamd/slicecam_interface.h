@@ -124,13 +124,14 @@ namespace Slicecam {
       std::string push_image;    ///<! name of script to push an image to GUI
 
     public:
-      GUIManager() : update(false), exptime(NAN), gain(-1), bin(-1) { }
+      GUIManager() : update(false), exptime(NAN), gain(-1), bin(-1), navg(NAN) { }
 
       // These are the GUIDER GUI settings
       //
-      double exptime;
+      float exptime;
       int gain;
       int bin;
+      float navg;
 
       // sets the private variable push_settings, call on config
       inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
@@ -161,6 +162,8 @@ namespace Slicecam {
         if ( this->gain < 1 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->gain; }
         message << " ";
         if ( this->bin < 1 ) message << "x"; else { message << std::fixed << std::setprecision(3) << this->bin; }
+        message << " ";
+        if ( std::isnan(this->navg) ) message << "NaN"; else { message << std::fixed << std::setprecision(2) << this->navg; }
         return message.str();
       }
 

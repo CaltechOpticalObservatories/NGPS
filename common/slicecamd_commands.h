@@ -32,6 +32,7 @@ const std::string SLICECAMD_OPEN     = "open";      const int SLICECAMD_OPEN_TIM
 const std::string SLICECAMD_PUTONSLIT= "putonslit"; ///< put target on slit
 const std::string SLICECAMD_SAVEFRAMES= "saveframes"; ///< save images while framegrabbing
 const std::string SLICECAMD_SHUTDOWN = "shutdown";  const int SLICECAMD_SHUTDOWN_TIMEOUT = 40000;  ///< shut down slicecam
+const std::string SLICECAMD_SHUTTER = "shutter";      ///< 
 const std::string SLICECAMD_TCSGET = "tcsget";      ///< 
 const std::string SLICECAMD_TCSINIT = "tcsinit";    ///< initialize slicecamd's connection to tcsd
 const std::string SLICECAMD_TCSISCONNECTED = "tcsisconnected";  ///< 
@@ -64,6 +65,7 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_IMFLIP+" [ ? | <name> <hflip> <vflip> ]",
                                                 SLICECAMD_IMROT+" [ ? | <name> <rotdir> ]",
                                                 SLICECAMD_INIT,
+                                                SLICECAMD_SHUTTER+" [ ? | open | close | auto ]",
                                                 SLICECAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 SLICECAMD_TEMP+" [ ? | <setpoint> ]",
                                                 "  OTHER:",

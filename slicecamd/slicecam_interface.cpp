@@ -2032,9 +2032,10 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_GUISET;
-      retstring.append( " [ <exptime> <gain> <bin>]\n" );
+      retstring.append( " [ <exptime> <gain> <bin> <navg> <reset> ]\n" );
       retstring.append( "   Set or get settings for SAOImage GUI display.\n" );
       retstring.append( "   Binning must be a power of two and will be square.\n" );
+      retstring.append( "   <navg> is a value for performing a weighted average, any value > 0.\n" );
       retstring.append( "   When all arguments are supplied they will be set and then pushed\n" );
       retstring.append( "   back to the display. If no arguments are supplied then the current\n" );
       retstring.append( "   settings are returned and pushed to the display.\n" );
@@ -2047,9 +2048,9 @@ namespace Slicecam {
 
     // If something was supplied but not the correct number of args then that's an error
     //
-    if ( !tokens.empty() && tokens.size() != 3 ) {
+    if ( !tokens.empty() && tokens.size() != 5 ) {
       message.str(""); message << "ERROR received " << tokens.size() << " arguments "
-                               << "but expected <exptime> <gain> <bin>";
+                               << "but expected <exptime> <gain> <bin> <navg> <reset>";
       logwrite( function, message.str() );
       retstring="invalid_argument_list";
       return ERROR;
@@ -2062,6 +2063,7 @@ namespace Slicecam {
     float exptime_og = info.exptime;
     int gain_og = info.gain;
     int bin_og = (info.hbin==info.vbin ? info.hbin : -1 );
+    float navg_og = this->camera.andor.begin()->second->get_weight();
 
     long error = NO_ERROR;
     bool set = false;
@@ -2069,7 +2071,7 @@ namespace Slicecam {
     // If all args were supplied then use them to set
     // exposure time, gain, and binning.
     //
-    if ( tokens.size() == 3 ) {
+    if ( tokens.size() == 5 ) {
       try {
         std::string reply;
         float exptime = std::stof( tokens.at(0) );
@@ -2088,6 +2090,16 @@ namespace Slicecam {
         error |= camera.set_exptime( exptime );
         error |= camera.set_gain( gain );
         error |= camera.bin( bin, bin );
+
+        for ( const auto &pair : this->camera.andor ) {
+          pair.second->set_weight(std::stof(tokens.at(3)));
+          if ( std::stoi(tokens.at(4))==1 ) {
+            message.str(""); message << "[DEBUG] value=" << std::stoi(tokens.at(4));
+            logwrite(function,message.str());
+            pair.second->reset_avg();
+          }
+        }
+
         set=true;
 
         // If framegrab was previously running then restart it
@@ -2110,10 +2122,12 @@ namespace Slicecam {
     gui_manager.exptime = info.exptime;
     gui_manager.gain = info.gain;
     gui_manager.bin = (info.hbin==info.vbin ? info.hbin : -1 );
+    gui_manager.navg = this->camera.andor.begin()->second->get_weight();
 
     // If read-only (not set) or either exptime or gain changed, then set the flag for updating the GUI.
     //
-    if ( !set || gui_manager.exptime != exptime_og || gui_manager.gain != gain_og || gui_manager.bin != bin_og ) {
+    if ( !set || gui_manager.exptime != exptime_og || gui_manager.gain != gain_og ||
+                 gui_manager.bin != bin_og || gui_manager.navg != navg_og ) {
       gui_manager.set_update();
     }
 
@@ -3196,6 +3210,7 @@ namespace Slicecam {
     slicecam->fitskeys.addkey( "PC1_2",     (        sin( angle_slit * PI / 180. ) ), "" );
     slicecam->fitskeys.addkey( "PC2_1",     (        sin( angle_slit * PI / 180. ) ), "" );
     slicecam->fitskeys.addkey( "PC2_2",     (        cos( angle_slit * PI / 180. ) ), "" );
+    slicecam->fitskeys.addkey( "NAVG", slicecam->get_weight(), "weighting factor for frame averaging" );
 
     return NO_ERROR;
   }
