@@ -96,6 +96,7 @@ namespace Sequencer {
     SEQ_WAIT_SLIT,           ///< set when waiting for slit
     SEQ_WAIT_TCS,            ///< set when waiting for tcs
     SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
+    SEQ_WAIT_USER,           ///< set when waiting specifically for user input
     SEQ_WAIT_SETTLE,         ///< set when waiting specifically for tcs settle
     SEQ_WAIT_SLEW,           ///< set when waiting specifically for tcs slew
     NUM_SEQ_STATES
@@ -125,6 +126,7 @@ namespace Sequencer {
     {SEQ_WAIT_SLIT,     "SLIT"},
     {SEQ_WAIT_TCS,      "TCS"},
     {SEQ_WAIT_TCSOP,    "TCSOP"},
+    {SEQ_WAIT_USER,     "USER"},
     {SEQ_WAIT_SETTLE,   "SETTLE"},
     {SEQ_WAIT_SLEW,     "SLEW"}
   };
@@ -227,7 +229,29 @@ namespace Sequencer {
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
     public:
-      Sequence();
+      Sequence() :
+          ready_to_start(false),
+          notify_tcs_next_target(false),
+          arm_readout_flag(false),
+          acquisition_timeout(0),
+          acquisition_max_retrys(-1),
+          tcs_offsetrate_ra(45),
+          tcs_offsetrate_dec(45),
+          tcs_settle_timeout(10),
+          tcs_settle_stable(1),
+          tcs_domeazi_ready(1),
+          tcs_preauth_time(0),
+          waiting_for_state(false),
+          do_once(false),
+          tcs_nowait(false),
+          dome_nowait(false),
+          tcs_which("real"),
+          tcs_name("offline") {
+            seq_state.set( Sequencer::SEQ_OFFLINE );
+            req_state.set( Sequencer::SEQ_OFFLINE );
+            broadcast_seqstate();
+          }
+
       ~Sequence() { };
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
@@ -280,6 +304,7 @@ namespace Sequencer {
 
       std::string last_target;
 
+      std::string tcs_which;          ///< configured TCS
       std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown
 
       std::string test_solver_args;   ///< optional solver args that can be passed in with a test command

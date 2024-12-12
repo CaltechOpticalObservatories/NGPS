@@ -368,6 +368,17 @@ namespace Sequencer {
         applied++;
       }
 
+      // TCS_WHICH -- which TCS to connect to, defults to real if not specified
+      if ( config.param[entry] == "TCS_WHICH" ) {
+        if ( config.arg[entry] != "sim" && config.arg[entry] != "real" ) {
+          this->sequence.async.enqueue_and_log( function, "ERROR TCS_WHICH expected { sim real }" );
+          return ERROR;
+        }
+        this->sequence.tcs_which = config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry] );
+        applied++;
+      }
+
       // TCS_OFFSET_RATE_RA
       if (config.param[entry].compare(0, 18, "TCS_OFFSET_RATE_RA")==0) {
         double mrate;
@@ -1213,6 +1224,8 @@ namespace Sequencer {
       // These commands go to tcsd
       //
       if ( cmd.compare( SEQUENCERD_TCS )==0 ) {
+logwrite(function, "[DEBUG] received tcs command "+args);
+logwrite(function, "[DEBUG] async="+std::string(sock.isasync()?"true":"false"));
                       if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
                         message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
                         logwrite( function, message.str() );
@@ -1220,10 +1233,13 @@ namespace Sequencer {
                       }
                       else
                       if ( sock.isasync() ) {
+logwrite(function,"[DEBUG] spawning thread for "+args);
                         std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.tcsd ), args ).detach();
                       }
                       else {
+logwrite(function,"[DEBUG] sending command "+args);
                         ret = this->sequence.tcsd.command( args, retstring );
+logwrite(function,"[DEBUG] returned "+retstring);
                         if ( !retstring.empty() ) {
                           message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1310,8 +1326,8 @@ namespace Sequencer {
       // start a single target
       //
       if ( cmd.compare( SEQUENCERD_STARTONE ) == 0 ) {
-                      this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
-                      this->sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
+                      this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
+                      this->sequence.req_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
                       this->sequence.broadcast_seqstate();
                       this->sequence.cowboy=args;
                       std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
@@ -1435,7 +1451,11 @@ namespace Sequencer {
       //
       if ( cmd == SEQUENCERD_ONTARGET ) {
                       this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
-///                   this->sequence.is_tcs_ontarget.store( true );
+                      ret = NO_ERROR;
+      }
+      else
+      if ( cmd == SEQUENCERD_USEREXPOSE ) {
+                      this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_USER );
                       ret = NO_ERROR;
       }
       else

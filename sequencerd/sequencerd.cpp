@@ -230,6 +230,18 @@ int main(int argc, char **argv) {
   //
   std::thread( std::ref(Sequencer::Server::new_log_day), logpath ).detach();
 
+  // connect to daemons
+  //
+  if ( sequencerd.sequence.acamd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to acamd");
+  if ( sequencerd.sequence.calibd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to calibd");
+  if ( sequencerd.sequence.camerad.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to camerad");
+  if ( sequencerd.sequence.flexured.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to flexured");
+  if ( sequencerd.sequence.focusd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to focusd");
+  if ( sequencerd.sequence.powerd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to powerd");
+  if ( sequencerd.sequence.slicecamd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to slicecamd");
+  if ( sequencerd.sequence.slitd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to slitd");
+  if ( sequencerd.sequence.tcsd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to tcsd");
+
   sequencerd.sequence.async.enqueue( "SEQUENCERD:started" );  // broadcast that I have started
 
   sequencerd.sequence.broadcast_seqstate();                   // broadcast the seqstate

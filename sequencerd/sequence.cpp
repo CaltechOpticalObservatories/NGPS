@@ -20,6 +20,7 @@ namespace Sequencer {
    * @brief      Sequence class constructor
    *
    */
+/***
   Sequence::Sequence() {
     this->seq_state.set( Sequencer::SEQ_OFFLINE );   /// offline
     this->req_state.set( Sequencer::SEQ_OFFLINE );   /// offline
@@ -44,6 +45,7 @@ namespace Sequencer {
     this->test_solver_args="";
     this->tcs_name="offline";
   }
+****/
   /***** Sequencer::Sequence **************************************************/
 
 
@@ -408,10 +410,10 @@ namespace Sequencer {
         // set everything else.
         //
         this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA,
-                           Sequencer::SEQ_WAIT_SLIT,
-                           Sequencer::SEQ_WAIT_FOCUS,
-                           Sequencer::SEQ_WAIT_FLEXURE,
-                           Sequencer::SEQ_WAIT_CALIB );
+                             Sequencer::SEQ_WAIT_SLIT,
+                             Sequencer::SEQ_WAIT_FOCUS,
+                             Sequencer::SEQ_WAIT_FLEXURE,
+                             Sequencer::SEQ_WAIT_CALIB );
         this->broadcast_seqstate();
         std::thread( &Sequencer::Sequence::dothread_camera_set, this ).detach();
         std::thread( &Sequencer::Sequence::dothread_slit_set, this ).detach();
@@ -424,7 +426,6 @@ namespace Sequencer {
       // When the SEQ_RUNNING bit is the only bit set then we are ready.
       //
       this->req_state.set( Sequencer::SEQ_RUNNING );                     // set the requested state bit
-///   std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
 
       logwrite( function, "[DEBUG] (1) waiting on notification" );
 
@@ -443,20 +444,14 @@ namespace Sequencer {
 
       logwrite(function, "[DEBUG] DONE waiting on notification");
 
-/*
-      long error;
-      while ( this->cv.wait_for( wait_lock, std::chrono::seconds(1))==std::cv_status::timeout ) {
-        logwrite( function, "waiting" );
-      }
-*/
       // Now that we're done waiting, check for errors or abort
-      //
-      if ( this->thread_error.is_any_set() ) {
-        message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: "
-                                 << this->thread_error.get_set_names();
-        logwrite( function, message.str() );
-        break;
-      }
+///   //
+///   if ( this->thread_error.is_any_set() ) {
+///     message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: "
+///                              << this->thread_error.get_set_names();
+///     logwrite( function, message.str() );
+///     break;
+///   }
 
 /*** I think this can cause a race condition
  *    if ( this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
@@ -472,19 +467,31 @@ namespace Sequencer {
         break;
       }
 
-/* deferred
-      // Wait for target airmass to be below target airmass limit,
-      // or an abort.
-      //
-      if (
-      this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
+      logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
-      while ( !this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && this->tcs_ontarget.load()==false ) {
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+      this->seq_state.set( Sequencer::SEQ_WAIT_ACQUIRE );
+      this->broadcast_seqstate();
+      std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
+
+      // Wait for on-target signal (or abort)
+      //
+      this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"ontarget\" signal" );
+
+      this->seq_state.set( Sequencer::SEQ_WAIT_USER );
+
+      try {
+        this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_USER );
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "NOTICE: aborted: " << e.what();
+        this->async.enqueue_and_log( function, message.str() );
+        this->seq_state.clear( Sequencer::SEQ_WAIT_USER, Sequencer::SEQ_WAIT_USER );
+        this->broadcast_seqstate();
+        this->thread_state.clear( THR_SEQUENCE_START );          // thread terminated
+        return;
       }
 
-      this->async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
-*/
+      this->async.enqueue_and_log( function, "NOTICE: received USER ontarget signal!" );
 
       if ( this->target.pointmode == Acam::POINTMODE_SLIT ) {
         logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
@@ -641,6 +648,8 @@ logwrite( function, "[DEBUG] setting READY bit" );
     long exptime_msec = (long)( this->target.exptime_req * 1000 );
     camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime_msec;
 
+    logwrite( function, "sending "+camcmd.str() );
+
     error = this->camerad.send( camcmd.str(), reply );
 
     if ( error != NO_ERROR ) {
@@ -674,7 +683,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     //
     slitcmd << SLITD_SET << " " << this->target.slitwidth_req << " " << this->target.slitoffset_req;
 
-    logwrite( function, "will send slit command: "+slitcmd.str() );
+    logwrite( function, "sending: "+slitcmd.str() );
 
     error = this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT );
 
@@ -2133,6 +2142,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       return;
     }
 
+    {
+/*****
     message.str(""); message << "[ACQUIRE] SLIT COOORDS= " << this->target.ra_hms << " "
                                                            << this->target.dec_dms
                                                            << this->target.slitangle;
@@ -2143,7 +2154,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     // disable guiding and point the telescope here.
     //
 //  if ( this->target.name != this->last_target && ( ra_delta > 0.025 || dec_delta > 0.025 ) ) {
-    {
 
       // disable guiding (if running)
       //
@@ -2180,12 +2190,13 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 ///     }
         logwrite( function, "DONE WAITING" );
       }
-      else logwrite( function, "NOTICE: not guiding" );
-
-      // clear target acquired flag
-      //
-      this->target.acquired = false;
-
+///   else logwrite( function, "NOTICE: not guiding" );
+///
+///   // clear target acquired flag
+///   //
+///   this->target.acquired = false;
+///
+*****/
       error = NO_ERROR;
 
       // Before sending target coordinates to TCS,
@@ -2232,23 +2243,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
         this->async.enqueue_and_log( function, message.str() );
       }
 
-      // Send casangle using tcsd wrapper for RINGGO command
-      //
-      std::stringstream ringgo_cmd;
-      std::string       ringgo_reply;
-      ringgo_cmd << TCSD_RINGGO << " " << angle_out;                              // this is calculated cass angle
-      this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
-      error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
-      if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
-        message.str(""); message << "ERROR: sending RINGGO command. TCS reply: " << ringgo_reply;
-        this->async.enqueue_and_log( function, message.str() );
-        this->thread_error.set( THR_MOVE_TO_TARGET );
-        this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
-        this->broadcast_seqstate();
-        this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-        return;
-      }
-
       // Send coordinates using TCS-native COORDS command.
       // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
       // so convert that as it's being sent here.
@@ -2260,27 +2254,44 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
                               <<   dec_out << " "                                    // DEC in decimal degrees
                               <<   "2000" << " "                                     // equinox always = 2000
                               <<   "0 0"  << " "                                     // RA,DEC proper motion not used
-                              << "\"" << this->target.name << "\"";                    // target name in quotes
+                              << "\"" << this->target.name << "\"";                  // target name in quotes
 
       {
       std::string rastr, decstr;
       double _ra = ra_out * TO_HOURS;
       decimal_to_sexa( _ra, rastr );
       decimal_to_sexa( dec_out, decstr );
-      message.str(""); message << "[ACQUIRE] SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out;
+      message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
       logwrite( function, message.str() );
       }
 
-      error  = this->tcsd.send( coords_cmd.str(), coords_reply );                                                  // send to the TCS
+      error  = this->tcsd.send( coords_cmd.str(), coords_reply );                                                // send to the TCS
 
       if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
         message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << coords_reply;
         this->async.enqueue_and_log( function, message.str() );
         this->thread_error.set( THR_MOVE_TO_TARGET );
-        this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
-        this->broadcast_seqstate();
-        this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-        return;
+///     this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
+///     this->broadcast_seqstate();
+///     this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
+///     return;
+      }
+
+      // Send casangle using tcsd wrapper for RINGGO command
+      //
+      std::stringstream ringgo_cmd;
+      std::string       ringgo_reply;
+      ringgo_cmd << TCSD_RINGGO << " " << angle_out;                              // this is calculated cass angle
+      this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
+      error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
+      if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
+        message.str(""); message << "ERROR: sending RINGGO command. TCS reply: " << ringgo_reply;
+        this->async.enqueue_and_log( function, message.str() );
+        this->thread_error.set( THR_MOVE_TO_TARGET );
+///     this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
+///     this->broadcast_seqstate();
+///     this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
+///     return;
       }
 
       // Wait for on-target signal (or abort)
@@ -2303,236 +2314,13 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
       this->async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
 
-///   {
-///   std::unique_lock<std::mutex> lock( this->tcs_ontarget_mtx );
-///   while ( error==NO_ERROR && !this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && this->is_tcs_ontarget.load()==false ) {
-///     this->tcs_ontarget_cv.wait(lock);
-///   }
-///   }
-
-///   if ( this->is_seqstate_set(Sequencer::SEQ_ABORTREQ) ) {
-///     this->async.enqueue_and_log( function, "NOTICE: received abort signal!" );
-///
-///     // clear all TCS wait bits
-///     //
-///     this->seq_state.clear( Sequencer::SEQ_WAIT_TCS,
-///                          Sequencer::SEQ_WAIT_TCSOP,
-///                          Sequencer::SEQ_WAIT_SLEW,
-///                          Sequencer::SEQ_WAIT_SETTLE );
-///     this->broadcast_seqstate();
-///
-///     this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-///     this->dome_nowait.store( false );
-///     this->tcs_nowait.store( false );
-///     this->is_tcs_ontarget.store( false );
-///     return;
-///   }
-///   else {
-///     this->async.enqueue_and_log( function, "NOTICE: received ontarget signal!" );
-///   }
-
-/***
-      // Target coords have been sent to the TCS but they don't actually go to the TCS,
-      // they go to a human, which has to then command the TCS, so we are now waiting
-      // on the TCS Operator...
-      //
-      this->set_seqstate_bit( Sequencer::SEQ_WAIT_TCSOP );                          // waiting for TCS Operator
-
-      // Wait for telescope slew to start.
-      //
-      logwrite( function, "waiting for TCS slew to start" );  ///< TODO @todo log telemetry!
-
-      // This wait is forever, or until an abort, because the slew time can be unpredictable
-      // due to the fact that we are still waiting for a human (!) to initiate the slew.
-      //
-      // After sending the COORDS command, the TCS could be in STOPPED or TRACKING
-      // from the last target.
-      //
-
-      while ( error==NO_ERROR && !this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) && this->tcs_nowait.load()==false ) {
-
-        // If an abort has been requested then stop polling the TCS.
-        // This doesn't actually stop the telescope, it just means we stop paying attention to it.
-        //
-        if ( this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-          this->seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
-          this->broadcast_seqstate();
-          logwrite( function, "abort requested. no longer waiting for TCS Op" );
-          break;
-        }
-
-        std::string tcsmotion;
-        error = this->poll_tcs_motion( tcsmotion );
-
-        if ( tcsmotion == TCS_MOTION_SLEWING_STR ) {      // switch from TCSOP to SLEW
-          this->seq_state.set_and_clear( Sequencer::SEQ_WAIT_SLEW, Sequencer::SEQ_WAIT_TCSOP );
-          this->broadcast_seqstate();
-          logwrite( function, "TCS slew started" );      ///< TODO @todo log telemetry!
-          break;
-        }
-
-        if ( this->tcs_nowait.load() == true ) {
-          logwrite( function, "requested skip TCS slew" );
-          this->seq_state.set_and_clear( Sequencer::SEQ_WAIT_SLEW, Sequencer::SEQ_WAIT_TCSOP );
-          this->broadcast_seqstate();
-          break;
-        }
-
-        usleep( 100000 );  // don't poll the TCS too fast
-      }
-
-      // If not aborted then
-      // set TCS slew state bit and clear TCS Operator state now that the telescope is moving.
-      //
-//    if ( not this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-//      this->seq_state.set_and_clear( Sequencer::SEQ_WAIT_SLEW, Sequencer::SEQ_WAIT_TCSOP );
-//      this->broadcast_seqstate();
-//      logwrite( function, "TCS slew started" );               ///< TODO @todo log telemetry!
-//    }
-//    else {
-//      logwrite( function, "TCS slew aborted" );               ///< TODO @todo log telemetry!
-//      this->seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
-//      this->broadcast_seqstate();
-//    }
-
-      // Poll the TCS at 10Hz to detect when slewing has stopped.
-      // This has no timeout but can be cancelled by user command.
-      //
-      while ( this->tcs_nowait.load() != true ) { // error==NO_ERROR && not this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) 
-
-        // If an abort has been requested then stop polling the TCS.
-        // This doesn't actually stop the telescope, it just means we stop paying attention to it.
-        //
-        if ( this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-          this->seq_state.clear( Sequencer::SEQ_WAIT_SLEW );
-          this->broadcast_seqstate();
-          logwrite( function, "abort requested. no longer waiting for TCS slew" );
-          break;
-        }
-
-        std::string tcsmotion;
-        error = this->poll_tcs_motion( tcsmotion );
-
-        if ( tcsmotion == TCS_MOTION_SETTLING_STR ) break;
-
-        usleep( 100000 );  // don't poll the TCS too fast
-      }
-
-      // If the slew finished naturally (not aborted) then
-      // log that it stopped
-      //
-      if ( not this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-        logwrite( function, "TCS slew stopped" );               ///< TODO @todo log telemetry!
-      }
-
-    // If the slew finished naturally (not aborted) then
-    // set TCS settle state bit and clear TCS slew state bit now that the telescope is settling.
-    //
-    if ( error==NO_ERROR && not this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-      logwrite( function, "waiting for TCS to settle" );  ///< TODO @todo log telemetry!
-      this->seq_state.set_and_clear( Sequencer::SEQ_WAIT_SETTLE, Sequencer::SEQ_WAIT_SLEW );
-      this->broadcast_seqstate();
-    }
-
-      // Before entering loop waiting for telescope to settle
-      // get the current time (in seconds) to be used for timeout.
-      //
-      int    settlecount   = 0;                                   // number of tenths of a second that TCS has been TRACKING
-      bool   settled       = false;                               // settled gets set true only when TCS reports MOTION_TRACKING
-      double clock_now     = get_clock_time();
-      double clock_timeout = clock_now + this->tcs_settle_timeout;  // must settle by this time
-
-      // Poll the TCS at 10Hz to detect when telescope has settled (MOTION_TRACKING).
-      // The TCS must be settled for TCS_SETTLE_STABLE seconds before declaring that it has settled.
-      // This is because it can bounce between SETTLING and TRACKING.
-      // This wait can time out.
-      //
-      while ( ! settled ) {   // error==NO_ERROR && not settled && not this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) )
-
-        // If an abort has been requested then stop polling the TCS.
-        // This doesn't actually stop the telescope, it just means we stop paying attention to it.
-        //
-        if ( this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-          this->seq_state.clear( Sequencer::SEQ_WAIT_SETTLE );
-          this->broadcast_seqstate();
-          logwrite( function, "abort requested. no longer waiting for TCS settle" );
-          break;
-        }
-
-        std::string tcsmotion;
-        error = this->poll_tcs_motion( tcsmotion );
-
-        // Once the TCS reports TRACKING, then start a counter. Counter has to exceed the TCS_SETTLE_STABLE
-        // time before marking as settled. If it ever reports not tracking then the count starts over.
-        //
-        if ( tcsmotion == TCS_MOTION_TRACKING_STR ) settlecount++; else settlecount=0;
-
-#ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] TCS motion is " << tcsmotion;
-//      logwrite( function, message.str() );
-#endif
-
-        // This loop polls at 10Hz so counter must be >= 10 * TCS_SETTLE_STABLE
-        //
-        if ( settlecount >= 10*this->tcs_settle_stable ) settled = true;
-
-        // before looping, check for a timeout
-        //
-        clock_now = get_clock_time();
-
-        if ( clock_now > clock_timeout ) {
-          error = ERROR;
-          this->async.enqueue_and_log( function, "ERROR: timeout waiting for telescope to settle" );
-          this->seq_state.clear( Sequencer::SEQ_WAIT_SETTLE );
-          this->broadcast_seqstate();
-          break;
-        }
-        usleep( 100000 );  // sets the ~10Hz loop rate
-      }
-***/
-
       this->last_target = this->target.name;  // remember the last target that was tracked on
 
     }
-//  }  // end if ( ra_delta > 0.01 || dec_delta > 0.01 ) 
-//  else {
-//    this->async.enqueue_and_log( function, "NOTICE: Telescope already pointed at target, no TCS move requested" );
-//  }
-
-/***
-    // Make sure the dome is also in position by polling the TCS for the dome and telescope positions
-    // and checking that they agree within the limit defined by TCS_DOMEAZI_READY in the config file.
-    // This loops forever, until dome is in position or aborted by the user; it never times out.
-    //
-    logwrite( function, "checking dome position" );
-    bool domeok = false;
-
-    while ( !domeok && this->dome_nowait.load()==false) {
-
-      // If an abort has been requested then stop polling the TCS.
-      // This doesn't actually stop the telescope, it just means we stop paying attention to it.
-      //
-      if ( this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
-        this->seq_state.clear( Sequencer::SEQ_WAIT_SETTLE );
-        this->broadcast_seqstate();
-        logwrite( function, "abort requested. no longer waiting for dome" );
-        break;
-      }
-
-      double domeazi, telazi;
-
-      error = this->poll_dome_position( domeazi, telazi );
-
-      if ( std::abs( domeazi - telazi ) < this->tcs_domeazi_ready ) { domeok = true; break; }
-
-      if ( error != NO_ERROR ) break;
-    }
-    message.str(""); message << "dome is" << ( domeok ? " " : " not " ) << "in position";
-    logwrite( function, message.str() );
-***/
 
     // If not already acquired then start the acquisition sequence in a separate thread
     //
+/**** don't acquire right now
     if ( error==NO_ERROR && !this->target.acquired ) {
 
       logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
@@ -2565,13 +2353,12 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
       this->async.enqueue_and_log( function, "ERROR: unable to acquire target" );
       this->thread_error.set( THR_MOVE_TO_TARGET );
     }
+*****/
 
     // clear all TCS wait bits
     //
     this->seq_state.clear( Sequencer::SEQ_WAIT_TCS,
-                         Sequencer::SEQ_WAIT_TCSOP,
-                         Sequencer::SEQ_WAIT_SLEW,
-                         Sequencer::SEQ_WAIT_SETTLE );
+                           Sequencer::SEQ_WAIT_TCSOP );
     this->broadcast_seqstate();
 
     this->thread_state.clear( THR_MOVE_TO_TARGET );              // thread terminated
@@ -2672,7 +2459,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
 
     logwrite( function, "[TODO] focus not yet implemented." );
-    std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -2703,7 +2489,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
 
     logwrite( function, "[TODO] flexure not yet implemented." );
-    std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -2734,7 +2519,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     long error=NO_ERROR;
 
     logwrite( function, "[TODO] calibrator not yet implemented." );
-    std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -2892,21 +2676,55 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::string reply;
     long error = NO_ERROR;
 
+    // Before sending target coordinates to ACAM,
+    // convert them to decimal and to ACAM coordinates.
+    // (fpoffsets.coords_* are always in degrees)
+    //
+    double ra_in    = radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
+    double dec_in   = radec_to_decimal( this->target.dec_dms );
+    double angle_in = this->target.slitangle;
+
+    // can't be NaN
+    //
+    bool ra_isnan  = std::isnan( ra_in  );
+    bool dec_isnan = std::isnan( dec_in );
+
+    if ( ra_isnan || dec_isnan ) {
+      message.str(""); message << "ERROR: converting";
+      if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
+      if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
+      message << " to decimal";
+      this->async.enqueue_and_log( function, message.str() );
+      this->thread_error.set( THR_MOVE_TO_TARGET );
+      this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
+      this->broadcast_seqstate();
+      this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
+      return;
+    }
+
+    // Before sending the target coords to the ACAM,
+    // convert them from <pointmode> to ACAM coordinates.
+    //
+    double ra_out, dec_out, angle_out;
+    error = this->target.fpoffsets.compute_offset( this->target.pointmode, "ACAM",
+                                                 ra_in, dec_in, angle_in,
+                                                 ra_out, dec_out, angle_out );
+
     // Send the ACQUIRE command to acamd, which requires
     // the target coordinates (from the database).
     //
-    message.str(""); message << "starting target acquisition " << this->target.ra_hms   << " "
-                                                               << this->target.dec_dms  << " "
-                                                               << this->target.casangle << " "
+    message.str(""); message << "starting target acquisition " << ra_out    << " "
+                                                               << dec_out   << " "
+                                                               << angle_out << " "
                                                                << this->target.name;
     logwrite( function, message.str() );
-    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << this->target.ra_hms   << " "
-                                             << this->target.dec_dms  << " "
-                                             << this->target.casangle << " "
-                                             << this->target.name;
+    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << ra_out << " "
+                                             << dec_out << " "
+                                             << angle_out << " ";
 
     error = this->acamd.command( cmd.str(), reply );
 
+/***** DONT CARE ABOUT ERRORS NOW -- NO CONDITION ON ACQ SUCCESS 
     if ( error != NO_ERROR ) {
       this->thread_error.set( THR_ACQUISITION );                       // report error
       message.str(""); message << "ERROR acquiring target";
@@ -2969,6 +2787,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     }
 
     this->async.enqueue_and_log( function, message.str() );            // log message
+*****/
 
     this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );              // clear ACQUIRE bit
     this->broadcast_seqstate();
@@ -3171,7 +2990,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
                        Sequencer::SEQ_WAIT_SLICECAM,
                        Sequencer::SEQ_WAIT_SLIT );
     seq.broadcast_seqstate();
-    std::thread( dothread_tcs_init, std::ref(*this), "sim" ).detach();      // spawn the tcs_init thread here
+    std::thread( dothread_tcs_init, std::ref(*this), seq.tcs_which ).detach();      // spawn the tcs_init thread here
     std::thread( dothread_andor_init, std::ref(seq) ).detach();  // this will clear both ACAM and SLICECAM bits
     std::thread( dothread_calib_init, std::ref(seq) ).detach();
     std::thread( dothread_camera_init, std::ref(seq) ).detach();
@@ -4276,6 +4095,7 @@ logwrite( function, message.str() );
       retstring.append( "   radec [ ? ]\n" );
       retstring.append( "   resume [ ? ]\n" );
       retstring.append( "   single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>\n" );
+      retstring.append( "   setstate [ ? ]\n" );
       retstring.append( "   startup ? | <module>\n" );
       retstring.append( "   states [ ? ]\n" );
       retstring.append( "   tablenames [ ? ]\n" );
@@ -4314,6 +4134,28 @@ logwrite( function, message.str() );
     else
 
     // ----------------------------------------------------
+    // setstate -- set any state
+    // ----------------------------------------------------
+    //
+    if ( testname == "setstate" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test setstate\n";
+        retstring.append( "  set any seq_state.\n" );
+        return HELP;
+      }
+      else
+      if ( tokens.size() > 1 && tokens[1] == "READY" ) {
+        this->seq_state.set( Sequencer::SEQ_READY );
+        return NO_ERROR;
+      }
+      else {
+        logwrite( function, "ERROR excpected { READY }" );
+        return ERROR;
+      }
+    }
+    else
+
+    // ----------------------------------------------------
     // cancel -- cancel pending states
     // ----------------------------------------------------
     //
@@ -4324,12 +4166,30 @@ logwrite( function, message.str() );
         return HELP;
       }
 
-      this->seq_state.cancel_wait();
+      message.str(""); message << "seq_state bits pending before: " << this->seq_state.get_pending_names();
+      logwrite( function, message.str() );
+      message.str(""); message << "seq_state bits set before: " << this->seq_state.get_set_names();
+      logwrite( function, message.str() );
 
-      message.str(""); message << "seq_state bits pending: " << this->seq_state.get_pending_names();
+      this->seq_state.cancel_wait();                // cancels all waiting threads and resets all pending bits
+      this->seq_state.set( Sequencer::SEQ_READY );  // return to READY state
+      this->broadcast_seqstate();
+      try {
+        this->seq_state.wait_for_state_set( Sequencer::SEQ_READY );
+      }
+      catch ( std::exception & ) {
+        this->async.enqueue_and_log( function, "NOTICE: all states cancelled" );
+      }
+
+      message.str(""); message << "seq_state bits pending after:  " << this->seq_state.get_pending_names();
       logwrite( function, message.str() );
-      message.str(""); message << "seq_state bits set: " << this->seq_state.get_set_names();
+      message.str(""); message << "seq_state bits set after:  " << this->seq_state.get_set_names();
       logwrite( function, message.str() );
+
+//    logwrite( function, "force clear all states" );
+//    this->seq_state.clear_all();
+//    this->req_state.clear_all();
+//    this->broadcast_seqstate();
     }
     else
 
@@ -4407,6 +4267,7 @@ logwrite( function, message.str() );
         return HELP;
       }
       this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );                   // set the current state
+      this->broadcast_seqstate();
       std::thread( &Sequencer::Sequence::dothread_camera_set, this ).detach();        // set camera in a thread
     }
     else
@@ -4422,6 +4283,7 @@ logwrite( function, message.str() );
         return HELP;
       }
       this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );                   // set the current state
+      this->broadcast_seqstate();
       std::thread( &Sequencer::Sequence::dothread_trigger_exposure, this ).detach();  // trigger exposure in a thread
     }
     else
@@ -4593,17 +4455,19 @@ logwrite( function, message.str() );
 
       std::stringstream rts;
 
-      rts << "name      obsid  ra  dec  casangle  slitangle  slitwidth exptime binspat binspect\n";
-      rts << this->target.name  << " "
-          << this->target.obsid << "   "
-          << this->target.ra_hms << "  "
-          << this->target.dec_dms << "  "
-          << this->target.casangle << "  "
-          << this->target.slitangle << "  "
-          << this->target.slitwidth << "  "
-          << this->target.exptime_req << "  "
-          << this->target.binspat << "  "
-          << this->target.binspect << "\n";
+      rts << "name=" << this->target.name  << "\n"
+          << "obsid=" << this->target.obsid << "\n"
+          << "targetnum=" << this->target.targetnum << "\n"
+          << "ra=" << this->target.ra_hms << "\n"
+          << "dec=" << this->target.dec_dms << "\n"
+          << "cassangle=" << this->target.casangle << "\n"
+          << "slitangle=" << this->target.slitangle << "\n"
+          << "slitwidth=" << this->target.slitwidth << "\n"
+          << "slitwidth_req=" << this->target.slitwidth_req << "\n"
+          << "exptime_act=" << this->target.exptime_act << "\n"
+          << "exptime_req=" << this->target.exptime_req << "\n"
+          << "binspat=" << this->target.binspat << "\n"
+          << "binspect=" << this->target.binspect << "\n";
 
       // convert to decimal and to scope coordinates.
       // (fpoffsets.coords_* are always in degrees)
