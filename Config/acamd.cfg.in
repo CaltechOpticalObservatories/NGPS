@@ -129,12 +129,12 @@ MOTOR_AXIS="cover  1 0  504 0 neg"
 # ID here refers to the numbered positions on the filter. Do not change
 # the position for a given ID. See orientation diagram below.
 #
-MOTOR_POS="filter 1 0    0 BLOCK"
-MOTOR_POS="filter 1 1  477 G"
-MOTOR_POS="filter 1 2  954 R"
-MOTOR_POS="filter 1 3 1431 I"
-MOTOR_POS="filter 1 4 1908 OPEN"
-MOTOR_POS="filter 1 5 2385 CLEAR"
+MOTOR_POS="filter 1 0    0 block"
+MOTOR_POS="filter 1 1  477 g"
+MOTOR_POS="filter 1 2  954 r"
+MOTOR_POS="filter 1 3 1431 i"
+MOTOR_POS="filter 1 4 1908 open"
+MOTOR_POS="filter 1 5 2385 clear"
 
 # These are for the dust cover -- no need to ever change these!
 #

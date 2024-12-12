@@ -214,14 +214,14 @@ namespace Acam {
       std::string push_message;  ///<! name of script to push a message to GUI
 
     public:
-      GuideManager() : update(false), exptime(NAN), gain(-1), filter("undef"), focus(NAN) { }
+      GuideManager() : update(false), exptime(NAN), gain(-1), filter("undef"), navg(NAN) { }
 
       // These are the GUIDER GUI settings
       //
       float exptime;
       int gain;
       std::string filter;  // Python needs an arg so filter can't be empty-initialize in constructor
-      std::atomic<double> focus;
+      float navg;
       std::string status;
 
       // sets the private variable push_settings, call on config
@@ -247,7 +247,7 @@ namespace Acam {
        * @fn         get_message_string
        * @brief      returns a formatted message of all guider settings
        * @details    This message is the return string to guideset command.
-       * @return     string in form of <exptime> <gain> <filter> <focus>
+       * @return     string in form of <exptime> <gain> <filter> <navg>
        */
       std::string get_message_string() {
         std::stringstream message;
@@ -257,7 +257,7 @@ namespace Acam {
         message << " ";
         message << ( this->filter.empty() ? "undef" : this->filter );  // Python will need an arg so filter can't be empty
         message << " ";
-        if ( std::isnan( this->focus ) ) message << "ERR"; else { message << std::fixed << std::setprecision(2) << this->focus; };
+        if ( std::isnan( this->navg ) ) message << "ERR"; else { message << std::fixed << std::setprecision(2) << this->navg; };
         message << " " << status;
         return message.str();
       }

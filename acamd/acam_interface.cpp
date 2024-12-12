@@ -2853,7 +2853,7 @@ namespace Acam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = ACAMD_GUIDESET;
-      retstring.append( " [ <exptime> <gain> <filter> <focus> ]\n" );
+      retstring.append( " [ <exptime> <gain> <filter> <navg> ]\n" );
       retstring.append( "   Set or get guider settings for SAOImage GUIDER display.\n" );
       retstring.append( "   When all arguments are supplied they will be set and then pushed\n" );
       retstring.append( "   back to the display. If no arguments are supplied then the current\n" );
@@ -2867,7 +2867,7 @@ namespace Acam {
 
     // If something was supplied but not the correct number of args then that's an error
     //
-    if ( !tokens.empty() && tokens.size() != 4 ) {
+    if ( !tokens.empty() && tokens.size() != 5 ) {
       message.str(""); message << "ERROR received " << tokens.size() << " arguments "
                                << "but expected <exptime> <gain> <filter> <focus>";
       logwrite( function, message.str() );
@@ -2886,7 +2886,7 @@ namespace Acam {
 
     // If all args are supplied then set all parameters
     //
-    if ( tokens.size() == 4 ) {
+    if ( tokens.size() == 5 ) {
 
       // If framegrab is running then stop it. This won't return until framegrabbing
       // has stopped (or timeout).
@@ -2907,22 +2907,22 @@ namespace Acam {
         // set the gain here
         error |= camera.gain( tokens.at(1), reply );
 
-        // set the filter (always uppercase) via a thread
-        std::transform( tokens.at(2).begin(), tokens.at(2).end(), tokens.at(2).begin(), ::toupper );
+        // set the filter via a thread
         std::thread( dothread_set_filter, std::ref( *this ), tokens.at(2) ).detach();
 
-        // set the focus via a thread
-        std::thread( dothread_set_focus, std::ref( *this ), std::stod( tokens.at(3) ) ).detach();
+//      // set the focus via a thread
+//      std::thread( dothread_set_focus, std::ref( *this ), std::stod( tokens.at(3) ) ).detach();
+
+        // set the average weighting  here
+        camera.andor.set_weight( std::stof(tokens.at(3)) );
+
+        // should I reset the frame avg? 1=yes 0=no
+        //
+        if ( std::stoi(tokens.at(4))==1 ) this->camera.andor.reset_avg();
 
         set=true;
       }
-      catch( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
-        logwrite( function, message.str() );
-        retstring="invalid_argument";
-        error = ERROR;
-      }
-      catch( std::out_of_range &e ) {
+      catch( const std::exception &e ) {
         message.str(""); message << "ERROR parsing \"" << args << "\": " << e.what();
         logwrite( function, message.str() );
         retstring="invalid_argument";
@@ -2942,6 +2942,7 @@ namespace Acam {
     //
     guide_manager.exptime = camera.andor.camera_info.exptime;
     guide_manager.gain = camera.andor.camera_info.gain;
+    guide_manager.navg = camera.andor.get_weight();
 
     // If read-only (not set) or either exptime or gain changed, then set the flag for updating the GUI.
     //
@@ -2954,14 +2955,14 @@ namespace Acam {
       guide_manager.filter="ERR";
       error=ERROR;
     }
-
+/*****
     double _focus;
     if ( tcsd.get_focus( _focus ) != NO_ERROR ) {
       logwrite( function, "ERROR couldn't read focus" );
       guide_manager.focus.store(NAN, std::memory_order_seq_cst);
       error=ERROR;
     }
-
+*****/
     retstring = guide_manager.get_message_string();
 
     logwrite( function, retstring );
@@ -3667,7 +3668,7 @@ logwrite( function, message.str() );
     }
     catch ( ... ) {
       logwrite( function, "ERROR writing to database" );
-      error=ERROR;
+//    error=ERROR; removed 12/12/2024 -- don't let database errors stop anything
     }
 
     return error;
@@ -3737,7 +3738,7 @@ logwrite( function, message.str() );
   void Interface::dothread_set_focus( Acam::Interface &iface, double focus_req ) {
     std::string function = "Acam::Interface::dothread_set_focus";
     std::stringstream message;
-
+/*****
     // get current focus, used to determine if it changed
     //
     double focus_og;
@@ -3780,7 +3781,7 @@ logwrite( function, message.str() );
       logwrite( function, "ERROR reading TCS focus position" );
       iface.guide_manager.focus=NAN;
     }
-
+*****/
     return;
   }
   /***** Acam::Interface::dothread_set_focus **********************************/
@@ -3818,6 +3819,7 @@ logwrite( function, message.str() );
    *
    */
   void Interface::dothread_monitor_focus( Acam::Interface &iface ) {
+/*****
     std::string function = "Acam::Interface::dothread_monitor_focus";
     std::stringstream message;
 
@@ -3892,7 +3894,7 @@ logwrite( function, message.str() );
     logwrite( function, message.str() );
 
     iface.monitor_focus_state.store( Acam::FOCUS_MONITOR_STOPPED, std::memory_order_seq_cst );
-
+*****/
     return;
   }
   /***** Acam::Interface::dothread_monitor_focus ******************************/
@@ -4966,6 +4968,7 @@ logwrite( function, message.str() );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_1",     (        sin( angle_acam * PI / 180. ) ), "" );
     this->camera.fitsinfo.fitskeys.addkey( "PC2_2",     (        cos( angle_acam * PI / 180. ) ), "" );
 
+    this->camera.fitsinfo.fitskeys.addkey( "NAVG", this->camera.andor.get_weight(), "weighting factor for frame averaging" );
     this->camera.fitsinfo.fitskeys.addkey( "FILTER", this->motion.get_current_filtername(), "ACAM filter name" );
     this->camera.fitsinfo.fitskeys.addkey( "COVER", this->motion.get_current_coverpos(), "ACAM cover position" );
 
