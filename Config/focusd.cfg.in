@@ -39,8 +39,8 @@ MOTOR_CONTROLLER="R @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
 # valid <ref> types are { neg pos ref na }
 #       (use "na" if axis does not support referencing)
 #
-MOTOR_AXIS="I 1 0 7.6 0 ref"
-MOTOR_AXIS="R 1 0 6.7 0 ref"
+MOTOR_AXIS="I 1 0 7.6 0 ref 4.75"
+MOTOR_AXIS="R 1 0 6.7 0 ref 2.45"
 #MOTOR_AXIS="G 1 0 7.8 0 ref"
 
 # Specify nominal focus positions for each actuator

@@ -496,6 +496,13 @@ namespace Flexure {
       }
       else
 
+      // default positions
+      //
+      if ( cmd == FLEXURED_DEFAULTPOS ) {
+                      ret = this->interface.motorinterface.move_to_default();
+      }
+      else
+
       // compensate
       //
       if ( cmd == FLEXURED_COMPENSATE ) {

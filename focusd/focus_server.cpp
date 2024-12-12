@@ -575,6 +575,14 @@ namespace Focus {
       }
       else
 
+      // default positions
+      //
+      if ( cmd == FOCUSD_DEFAULTPOS ) {
+                      ret = this->interface.motorinterface.move_to_default();
+
+      }
+      else
+
       // native
       //
       if ( cmd == FOCUSD_NATIVE ) {

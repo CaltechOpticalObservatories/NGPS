@@ -750,6 +750,33 @@ namespace Physik_Instrumente {
   /***** Physik_Instrumente::Interface::_move_rel *****************************/
 
 
+  /***** Physik_Instrumente::Interface::move_to_default ***********************/
+  /**
+   * @brief      move to the default position
+   * @details    this is the outside-callable function
+   * @return     ERROR | NO_ERROR
+   *
+   * Move all motor axes to their defaults, if specified.
+   *
+   */
+  template <typename ControllerType>
+  long Interface<ControllerType>::move_to_default() {
+
+    for ( const auto &mot : this->motormap ) {
+      for ( const auto &axis : mot.second.axes ) {
+        if ( !std::isnan(axis.second.defpos) ) {
+          std::thread( _dothread_moveto, std::ref( *this ), mot.first, mot.second.addr, axis.second.axisnum, axis.second.defpos ).join();
+        }
+      }
+    }
+
+    // get any errors from the threads
+    //
+    return( this->thread_error.load() );
+  }
+  /***** Physik_Instrumente::Interface::move_to_default ***********************/
+
+
   /***** Physik_Instrumente::Interface::home **********************************/
   /**
    * @brief      home an axis by moving to reference switch (private)
@@ -881,15 +908,27 @@ namespace Physik_Instrumente {
       }
     }
 
-    // If successful, apply the zeropos if necessary
+//  // If successful, apply the zeropos if necessary
+//  //
+//  auto zeropos = iface.motormap[name].axes[axis].zeropos;
+//  if ( error==NO_ERROR && zeropos != 0 ) {
+//    logwrite( function, "applying zeropos offset" );
+//    error = iface._move_abs( name, addr, axis, zeropos );                 // move to zeropos position
+////  std::stringstream cmd;
+////  cmd << addr << " DFH " << axis;
+////  if ( error==NO_ERROR ) error = iface.send_command( name, cmd.str() );  // define this as the home position
+//    if ( error==NO_ERROR ) {
+//      logwrite( function, "waiting for "+name );
+//      error = iface._move_axis_wait( name, addr, axis );   // this can time out
+//    }
+//  }
+
+    // If successful, send to default position, if specified
     //
-    auto zeropos = iface.motormap[name].axes[axis].zeropos;
-    if ( error==NO_ERROR && zeropos != 0 ) {
-      logwrite( function, "applying zeropos offset" );
-      error = iface._move_abs( name, addr, axis, zeropos );                 // move to zeropos position
-//    std::stringstream cmd;
-//    cmd << addr << " DFH " << axis;
-//    if ( error==NO_ERROR ) error = iface.send_command( name, cmd.str() );  // define this as the home position
+    auto defpos = iface.motormap[name].axes[axis].defpos;
+    if ( error==NO_ERROR && !std::isnan(defpos) ) {
+      logwrite( function, "sending to default position" );
+      error = iface._move_abs( name, addr, axis, defpos );                  // move to default position
       if ( error==NO_ERROR ) {
         logwrite( function, "waiting for "+name );
         error = iface._move_axis_wait( name, addr, axis );   // this can time out

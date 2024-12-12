@@ -47,6 +47,7 @@ namespace Physik_Instrumente {
       float min;                  ///< min travel range of motor connected to this controller
       float max;                  ///< max travel range of motor connected to this controller
       float zeropos;              ///< defined zero position of motor
+      float defpos;               ///< optional default position to move after referencing (NaN if not specified)
 
       std::string reftype;        ///< reference type can be { neg, pos, ref }
 
@@ -59,13 +60,13 @@ namespace Physik_Instrumente {
 
         Tokenize( input, tokens, " \"" );
 
-        if ( tokens.size() != 6 ) {
-          logwrite( function, "ERROR: bad config input. Expected { <motorname> <axis> <min> <max> <zero> <ref> }" );
+        if ( tokens.size() < 6 || tokens.size() > 7 ) {
+          logwrite( function, "ERROR: bad config input. Expected { <motorname> <axis> <min> <max> <zero> <ref> [ <defpos> ]}" );
           return( ERROR );
         }
 
         std::string tryname, tryreftype;
-        float trymin, trymax, tryzero;
+        float trymin, trymax, tryzero, trydefpos;
         int trynum;
 
         try {
@@ -75,14 +76,10 @@ namespace Physik_Instrumente {
           trymax     = std::stod( tokens.at(3) );
           tryzero    = std::stod( tokens.at(4) );
           tryreftype = tokens.at(5);
+          trydefpos  = ( (tokens.size()==7) ? std::stod(tokens.at(6)) : NAN );
         }
-        catch( std::out_of_range &e ) {
-          message.str(""); message << "ERROR out of range parsing \"" << input << "\": " << e.what();
-          logwrite( function, message.str() );
-          return( ERROR );
-        }
-        catch( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid argument parsing \"" << input << "\": " << e.what();
+        catch( const std::out_of_range &e ) {
+          message.str(""); message << "ERROR parsing \"" << input << "\": " << e.what();
           logwrite( function, message.str() );
           return( ERROR );
         }
@@ -124,6 +121,7 @@ namespace Physik_Instrumente {
         this->min       = trymin;
         this->max       = trymax;
         this->zeropos   = tryzero;
+        this->defpos    = trydefpos;
 
         return( NO_ERROR );
       }
@@ -470,6 +468,7 @@ namespace Physik_Instrumente {
       long moveto( std::string motorname, int axisnum, std::string posname, std::string &retstring );  ///< outside-callable move-to-posname function
       long moveto( std::string motorname, int axusnum, float position, std::string &retstring );  ///< outside-callable move-to-posname function
       long moveto( std::vector<std::string> motornames, std::vector<int> axisnums, std::vector<std::string> posnames, std::string &retstring );  ///< outside-callable move-to-posname function
+      long move_to_default();                                                                 ///< move all axes to default position
       long home( std::string input, std::string &retstring );                                 ///< outside-callable home function
       long is_home( std::string input, std::string &retstring );                              ///< outside-callable is_home function
       long is_home( const std::string &name, int addr, int axis );                            ///< queries whether referencing has been done

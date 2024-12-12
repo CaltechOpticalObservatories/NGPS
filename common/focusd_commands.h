@@ -9,6 +9,7 @@
 #pragma once
 
 const std::string FOCUSD_CLOSE = "close";    const int FOCUSD_CLOSE_TIMEOUT = 3000;
+const std::string FOCUSD_DEFAULTPOS = "default";    const int FOCUSD_DEFAULTPOS_TIMEOUT = 3000;
 const std::string FOCUSD_GET = "get";        const int FOCUSD_GET_TIMEOUT = 3000;
 const std::string FOCUSD_HOME = "home";      const int FOCUSD_HOME_TIMEOUT = 15000;
 const std::string FOCUSD_ISHOME = "ishome";  const int FOCUSD_ISHOME_TIMEOUT = 3000;
@@ -20,6 +21,7 @@ const std::string FOCUSD_TEST  = "test";     const int FOCUSD_TEST_TIMEOUT = 150
 
 const std::vector<std::string> FOCUSD_SYNTAX = {
                                                  FOCUSD_CLOSE,
+                                                 FOCUSD_DEFAULTPOS,
                                                  FOCUSD_GET+" ? | <chan>",
                                                  FOCUSD_HOME+" [ ? | <chan> ]",
                                                  FOCUSD_ISHOME+" [ ? ]",

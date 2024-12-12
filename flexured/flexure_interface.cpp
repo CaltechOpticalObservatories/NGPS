@@ -32,7 +32,7 @@ namespace Flexure {
     // I don't want to prevent the system from working with a subset of controllers,
     // but the user should be warned, in case it wasn't intentional.
     //
-    if ( this->numdev != 4 ) {
+    if ( this->numdev != 2 ) {
       message.str(""); message << "WARNING: " << this->numdev << " PI motor controller"
                                << ( this->numdev == 1 ? "" : "s" ) << " defined! (expected 4)";
       logwrite( function, message.str() );
@@ -60,6 +60,7 @@ namespace Flexure {
     error |= this->motorinterface.open();
     error |= this->motorinterface.clear_errors();
     error |= this->motorinterface.set_servo( true );
+    error |= this->motorinterface.move_to_default();
 
     return( error );
   }
@@ -598,7 +599,7 @@ namespace Flexure {
     // motormap
     //
     if ( testname == "motormap" ) {
-      retstring="name host:port addr naxes \n      axisnum min max reftype";
+      retstring="name host:port addr naxes \n      axisnum min max reftype defpos";
       for ( const auto &mot : _motormap ) {
         retstring.append("\n");
         message.str(""); message << mot.first << " "
@@ -607,27 +608,10 @@ namespace Flexure {
                                  << mot.second.addr << " "
                                  << mot.second.naxes;
         for ( const auto &axis : mot.second.axes ) {
-          message << "\n      " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " " << axis.second.reftype;
+          message << "\n      " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " "
+                  << axis.second.reftype << " " << axis.second.defpos;
         }
         retstring.append( message.str() );
-      }
-      retstring.append("\n");
-    }
-    else
-
-    // posmap
-    //
-    if ( testname == "posmap" ) {
-      retstring="motorname axis posid pos posname";
-      logwrite( function, retstring );
-      for ( const auto &mot : _motormap ) {
-        retstring.append("\n");
-        message.str(""); message << mot.first << " ";
-        for ( const auto &pos : mot.second.posmap ) {
-          message << " " << pos.second.axis << " " << pos.second.posid << " " << pos.second.position << " " << pos.second.posname;
-        }
-        retstring.append( message.str() );
-        logwrite( function, message.str() );
       }
       retstring.append("\n");
     }

@@ -7,6 +7,7 @@ NBPORT=@FLEXURED_NB_PORT@         # slitd server non-blocking port
 DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+PUBLISHER_PORT="tcp://127.0.0.1:@FLEXURED_PUB_PORT@"  # my zeromq pub port
 
 # this is the port number that the emulator listens to
 #
@@ -42,13 +43,13 @@ MOTOR_CONTROLLER="I @IP_FLEXURE_I@ 50000 1 3"
 #MOTOR_AXIS="G 2 -1000 1000 0 na"
 #MOTOR_AXIS="G 3 -1000 1000 0 na"
 
-MOTOR_AXIS="R 1    25  225 0 na"
-MOTOR_AXIS="R 2 -1000 1000 0 na"
-MOTOR_AXIS="R 3 -1000 1000 0 na"
+MOTOR_AXIS="R 1    25  225 0 na 100.0"
+MOTOR_AXIS="R 2 -1000 1000 0 na   0.0"
+MOTOR_AXIS="R 3 -1000 1000 0 na   0.0"
 
-MOTOR_AXIS="I 1    25  225 0 na"
-MOTOR_AXIS="I 2 -1000 1000 0 na"
-MOTOR_AXIS="I 3 -1000 1000 0 na"
+MOTOR_AXIS="I 1    25  225 0 na  100.0"
+MOTOR_AXIS="I 2 -1000 1000 0 na -120.0"
+MOTOR_AXIS="I 3 -1000 1000 0 na  300.0"
 
 # Specify nominal focus positions for each actuator
 # MOTOR_POS="<name> <ID> <pos> <posname>"
@@ -68,3 +69,6 @@ MOTOR_AXIS="I 3 -1000 1000 0 na"
 #
 TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
 TELEM_PROVIDER=(thermald   @THERMALD_NB_PORT@)
+#
+SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
+SUBSCRIBE_TO=(thermald   "tcp://127.0.0.1:@THERMALD_PUB_PORT@")

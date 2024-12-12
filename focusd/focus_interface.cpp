@@ -57,6 +57,7 @@ namespace Focus {
     error |= this->motorinterface.open();
     error |= this->motorinterface.clear_errors();
     error |= this->motorinterface.set_servo( true );
+    error |= this->motorinterface.move_to_default();
 
     // Focus controllers interface via a terminal server, so it's possible to
     // have open a socket connection and not actually be connected to the motor
