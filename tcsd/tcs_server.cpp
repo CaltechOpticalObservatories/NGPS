@@ -777,6 +777,11 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       }
       else
 
+      if ( caseCompareString( cmd, TCSD_ZERO_OFFSETS ) ) {
+                      ret = this->interface.zero_offsets( args, retstring );
+      }
+      else
+
       if ( caseCompareString( cmd, TCSD_NATIVE ) ) {
                       ret = this->interface.native( args, retstring );
       }

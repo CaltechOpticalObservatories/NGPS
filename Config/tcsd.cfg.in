@@ -8,6 +8,9 @@ DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
+IP_PALOMAR=@IP_PALOMAR@           # my IP at Palomar
+IP_TCS=@IP_TCS@                   # IP address of P200 TCS
+
 # Message pub/sub
 # PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
 # SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
@@ -21,7 +24,7 @@ SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 # one for real and a second for the simulator, named "real" and "sim",
 # respectively.
 #
-TCS_HOST="real 10.200.99.2 @TCS_PORT@"       # real TCS: name address port
+TCS_HOST="real @IP_TCS@ @TCS_PORT@"          # real TCS: name address port
 TCS_HOST="sim localhost @TCS_PORT@"          # simulated TCS: name address port
 
 TCS_OFFSET_RATE_RA=45            # TCS offset rate for RA ("MRATE") in arcsec per second

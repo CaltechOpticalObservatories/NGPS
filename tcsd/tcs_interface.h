@@ -505,6 +505,7 @@ namespace TCS {
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
       long pt_offset( std::string args, std::string &retstring );
+      long zero_offsets( const std::string args, std::string &retstring );
       long ret_offsets( std::string args, std::string &retstring );
       long send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type );
       long send_command( std::string cmd, std::string &retstring, TCS::ConnectionType conn_type, int to );

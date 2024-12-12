@@ -1434,6 +1434,36 @@ logwrite(function,"[DEBUG] input args= "+args );
   /***** TCS::Interface::pt_offset ********************************************/
 
 
+  /***** TCS::Interface::zero_offsets *****************************************/
+  /**
+   * @brief      wrapper for the native Z command
+   * @details    wraps the Z command to provide a friendly reply
+   * @param[in]  args       help only
+   * @param[out] retstring  returns help
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::zero_offsets( const std::string args, std::string &retstring ) {
+    std::string function = "TCS::Interface::zero_offsets";
+    std::string retcode;
+    std::stringstream message, asyncmsg;
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = TCSD_ZERO_OFFSETS;
+      retstring.append( "\n" );
+      retstring.append( "  Zeros the offsets by sending the \"Z\" command.\n" );
+      return HELP;
+    }
+
+    std::string cmd("Z");
+
+    return this->send_command( cmd, retstring, TCS::FAST_RESPONSE );
+  }
+  /***** TCS::Interface::zero_offsets *****************************************/
+
+
   /***** TCS::Interface::ret_offsets ******************************************/
   /**
    * @brief      wrapper for the native RET command

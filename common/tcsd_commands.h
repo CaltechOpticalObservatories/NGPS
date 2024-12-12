@@ -29,6 +29,7 @@ const std::string TCSD_RETOFFSETS = "retoffsets";
 const std::string TCSD_RINGGO = "ringgo";
 const std::string TCSD_SET_FOCUS = "setfocus";
 const std::string TCSD_WEATHER_COORDS = "weathercoords";
+const std::string TCSD_ZERO_OFFSETS = "zero";
 
 const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_CLOSE,
@@ -52,6 +53,7 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_RINGGO+" ? | <angle>",
                                                TCSD_SET_FOCUS+" ? | <value>",
                                                TELEMREQUEST+" [ ? ]",
-                                               TCSD_WEATHER_COORDS+" [ ? ]"
+                                               TCSD_WEATHER_COORDS+" [ ? ]",
+                                               TCSD_ZERO_OFFSETS+" [ ? ]"
                                              };
 #endif
