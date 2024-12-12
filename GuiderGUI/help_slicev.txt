@@ -9,7 +9,7 @@ To work with regions, frames, and so on, use the
 
 Buttons:
 
-[sync camera] -- Update camera settings menu with the current guider settings. Zoom to fit.
+[sync GUI] -- Update camera settings menu with the current guider settings. Zoom to fit.
 
 [camera settings] -- Update the camera with new settings.
 

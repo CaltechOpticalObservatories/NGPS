@@ -20,14 +20,18 @@ update_menu=$1
 exptime=${2:-1}
 gain=${3:-1}
 filter=${4:-r}
-navg=$5
-status=$6  # acquiring, guiding etc.  Not available in menu
+navg=${5:-1}
+# status=$6  # acquiring, guiding etc.  Not available in menu
+
+# Get the focus setting from the P200 TCS
+focus=`tcs getfocus | cut -f1 -d ' '` 
 
 # create new analysis file from template and new parameters
 sed -e "s/DEFexptime/$exptime/" \
     -e "s/DEFgain/$gain/" \
     -e "s/DEFfilter/$filter/" \
     -e "s/DEFnavg/$navg/" \
+    -e "s/DEFfocus/$focus/" \
     $anstemplate > $ansfile
 
 # load analysis file

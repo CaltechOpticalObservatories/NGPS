@@ -39,7 +39,7 @@ $message(yesno,Stop guiding?) | acam acquire stop # | $text
 endbuttonbar
 buttonbar
 #############    $dir macro refers to directory of this file
-SYNC CAMERA
+SYNC GUI
 *
 button
 $dir/sync_display.sh guider # | $text

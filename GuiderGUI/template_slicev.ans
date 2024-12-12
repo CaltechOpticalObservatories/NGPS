@@ -49,7 +49,7 @@ endbuttonbar
 #############
 buttonbar
 #############    $dir macro refers to directory of this file
-SYNC CAMERA
+SYNC GUI
 *
 button
 $dir/sync_display.sh slicev # | $text
