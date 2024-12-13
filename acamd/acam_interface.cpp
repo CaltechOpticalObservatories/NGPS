@@ -13,6 +13,7 @@
 namespace Acam {
 
   constexpr double OFFSETRATE=40.;
+  constexpr float  GANI1=0.71;      ///< e-/ADU for unity CCD gain
 
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
@@ -4945,7 +4946,10 @@ logwrite( function, message.str() );
     this->camera.fitsinfo.fitskeys.addkey( "AMPTYPE",  this->camera.andor.camera_info.amptypestr, "CCD amplifier type" );
     this->camera.fitsinfo.fitskeys.addkey( "CCDGAIN",  this->camera.andor.camera_info.gain, "CCD amplifier gain" );
 
-    this->camera.fitsinfo.fitskeys.addkey( "GAIN",     1, "e-/ADU fixed" );
+    float ccdgain = this->camera.andor.camera_info.gain;
+    float gain    = ( 0.191*ccdgain+0.189 ) * GAIN1;
+
+    this->camera.fitsinfo.fitskeys.addkey( "GAIN",     ( ccdgain==1 ? GAIN1 : gain ), "e-/ADU" );
     this->camera.fitsinfo.fitskeys.addkey( "SATURATE", 65535, "saturation level fixed by 16 bit readout" );
 
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
