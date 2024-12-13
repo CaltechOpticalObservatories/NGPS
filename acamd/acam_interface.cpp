@@ -13,7 +13,7 @@
 namespace Acam {
 
   constexpr double OFFSETRATE=40.;
-  constexpr float  GANI1=0.71;      ///< e-/ADU for unity CCD gain
+  constexpr float  GAIN1=0.71;      ///< e-/ADU for unity CCD gain
 
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
@@ -2854,11 +2854,12 @@ namespace Acam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = ACAMD_GUIDESET;
-      retstring.append( " [ <exptime> <gain> <filter> <navg> ]\n" );
+      retstring.append( " [ <exptime> <gain> <filter> [ <navg> <reset> ] ]\n" );
       retstring.append( "   Set or get guider settings for SAOImage GUIDER display.\n" );
       retstring.append( "   When all arguments are supplied they will be set and then pushed\n" );
       retstring.append( "   back to the display. If no arguments are supplied then the current\n" );
-      retstring.append( "   settings are returned and pushed to the display.\n" );
+      retstring.append( "   settings are returned and pushed to the display.\n\n" );
+      retstring.append( "   When setting, supply the first 3 or all 5 arguments.\n" );
       retstring.append( "   The DONE|ERROR suffix on the return string is suppressed.\n" );
       return HELP;
     }
@@ -2868,9 +2869,9 @@ namespace Acam {
 
     // If something was supplied but not the correct number of args then that's an error
     //
-    if ( !tokens.empty() && tokens.size() != 5 ) {
+    if ( !tokens.empty() && ( tokens.size() != 3 || tokens.size() != 5 )) {
       message.str(""); message << "ERROR received " << tokens.size() << " arguments "
-                               << "but expected <exptime> <gain> <filter> <focus>";
+                               << "but expected <exptime> <gain> <filter> [ <navg> <reset> ]";
       logwrite( function, message.str() );
       retstring="invalid_argument_list";
       return ERROR;
@@ -2885,9 +2886,9 @@ namespace Acam {
     bool set = false;
     float exptime=NAN;
 
-    // If all args are supplied then set all parameters
+    // If args are supplied then set all parameters
     //
-    if ( tokens.size() == 5 ) {
+    if ( !tokens.empty() ) {
 
       // If framegrab is running then stop it. This won't return until framegrabbing
       // has stopped (or timeout).
@@ -2915,11 +2916,11 @@ namespace Acam {
 //      std::thread( dothread_set_focus, std::ref( *this ), std::stod( tokens.at(3) ) ).detach();
 
         // set the average weighting  here
-        camera.andor.set_weight( std::stof(tokens.at(3)) );
-
-        // should I reset the frame avg? 1=yes 0=no
-        //
-        if ( std::stoi(tokens.at(4))==1 ) this->camera.andor.reset_avg();
+        if ( tokens.size() == 5 ) {
+          camera.andor.set_weight( std::stof(tokens.at(3)) );
+          // should I reset the frame avg? 1=yes 0=no
+          if ( std::stoi(tokens.at(4))==1 ) this->camera.andor.reset_avg();
+        }
 
         set=true;
       }
