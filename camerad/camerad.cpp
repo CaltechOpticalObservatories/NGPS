@@ -608,15 +608,15 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if ( cmd == CAMERAD_STOP ) {
-                    ret = server.native( "PEX" );
+                    ret = server.stop_exposure( args, retstring );
                     }
     else
     if ( cmd == CAMERAD_PAUSE ) {
-                    ret = server.native( "PEX" );
+                    ret = server.pause_exposure( args, retstring );
                     }
     else
     if ( cmd == CAMERAD_RESUME ) {
-                    ret = server.native( "REX" );
+                    ret = server.resume_exposure( args, retstring );
                     }
     else
     if ( cmd == CAMERAD_ABORT ) {

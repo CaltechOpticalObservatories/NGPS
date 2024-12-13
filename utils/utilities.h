@@ -363,10 +363,12 @@ class BoolState {
  */
 class PreciseTimer {
   private:
+    static const long max_short_sleep = 3000000;         // units are microseconds
+
     std::atomic<bool> should_hold;
     std::atomic<bool> on_hold;
-    std::atomic<bool> should_cancel;
-    std::atomic<bool> cancelled;
+    std::atomic<bool> should_stop;
+    std::atomic<bool> running;
     std::atomic<long> delay_time;
     std::atomic<long> remaining_time;
     mutable std::mutex mtx;
@@ -409,43 +411,24 @@ class PreciseTimer {
       // max_short_sleep is the largest sleep time for precise_sleep()
       // This should be kept small, a few seconds or less.
       //
-      const long max_short_sleep = 3000000;         // units are microseconds
       struct timespec start_time;
       struct timespec current_time;
       struct timespec hold_start, hold_stop;
       long hold_time=0;
 
+      running.store(true, std::memory_order_release);
+
       // total remaining time starts as requested time
       //
-      remaining_time.store( delay_time.load() );
+      remaining_time.store( delay_time.load(std::memory_order_acquire), std::memory_order_release );
 
       // loop forever until broken
       //
       clock_gettime(CLOCK_MONOTONIC, &start_time);  // start time
       while ( true ) {
-        if (should_cancel.load()) break;            // break if cancelled
-
-        if (should_hold.load()) {
-          {
-          std::unique_lock<std::mutex> lock(mtx);
-          on_hold.store(true);
-          cv.notify_all();
-          }
-          clock_gettime(CLOCK_MONOTONIC, &hold_start);
-          {
-          std::unique_lock<std::mutex> lock(mtx);
-          cv.wait( lock, [this]() { return (should_cancel.load() || !should_hold.load()); } );
-          }
-          if (should_cancel.load()) break;
-          clock_gettime(CLOCK_MONOTONIC, &hold_stop);
-          hold_time = (hold_stop.tv_sec-hold_start.tv_sec)*1000000 +
-                      (hold_stop.tv_nsec-hold_stop.tv_nsec)/1000;
-          on_hold.store(false);
-        }
-
         // sleep for the shorter of max_short_sleep or remaining time
         //
-        long to_sleep = std::min( remaining_time.load(), max_short_sleep );
+        long to_sleep = std::min( remaining_time.load(std::memory_order_acquire), max_short_sleep );
         precise_sleep(to_sleep);
 
         // calculate elapsed time and time remaining
@@ -454,11 +437,30 @@ class PreciseTimer {
         long elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000000 +
                             (current_time.tv_nsec - start_time.tv_nsec) / 1000 - hold_time;
 
-        remaining_time.store( delay_time.load() - elapsed_time );
+        remaining_time.store( delay_time.load(std::memory_order_acquire) - elapsed_time, std::memory_order_release );
 
-        if ( remaining_time.load() <= 0 ) break;    // break when time is up
+        if ( remaining_time.load(std::memory_order_acquire) <= 0 ) break;    // break when time is up
+        if (should_stop.load(std::memory_order_acquire)) break;              // break if stop requested
+
+        if (should_hold.load(std::memory_order_acquire)) {
+          {
+          std::unique_lock<std::mutex> lock(mtx);
+          on_hold.store(true, std::memory_order_release);
+          cv.notify_all();
+          }
+          clock_gettime(CLOCK_MONOTONIC, &hold_start);
+          {
+          std::unique_lock<std::mutex> lock(mtx);
+          cv.wait( lock, [this]() { return (should_stop.load(std::memory_order_acquire) || !should_hold.load(std::memory_order_acquire)); } );
+          }
+          if (should_stop.load(std::memory_order_acquire)) break;
+          clock_gettime(CLOCK_MONOTONIC, &hold_stop);
+          hold_time = (hold_stop.tv_sec-hold_start.tv_sec)*1000000 +
+                      (hold_stop.tv_nsec-hold_stop.tv_nsec)/1000;
+          on_hold.store(false, std::memory_order_release);
+        }
       }
-      cancelled.store(true);
+      running.store(false, std::memory_order_release);
       cv.notify_all();
     }
 
@@ -467,38 +469,34 @@ class PreciseTimer {
 
     /***** PreciseTimer::delay ************************************************/
     long delay(long milliseconds) {
-      if (remaining_time.load()!=0 || on_hold.load()) {
-        std::cerr << get_timestamp() << " (PreciseTimer::delay) cannot start new timer while another is running\n";
+      if (running.load(std::memory_order_acquire)) {
+        std::cerr << get_timestamp() << "  (PreciseTimer::delay) cannot start new timer while another is running\n";
         return 1;
       }
       reset();
       delay_time.store(1000*milliseconds);
-      std::cout << get_timestamp() << " (PreciseTimer::delay) started\n";
       long_precise_sleep();
-      std::cout << get_timestamp() << " (PreciseTimer::delay) stopped\n";
-      reset();
       return 0;
     }
 
     /***** PreciseTimer::get_remaining ****************************************/
-    long get_remaining() { return remaining_time.load()/1000; }
+    long get_remaining() { return remaining_time.load(std::memory_order_acquire)/1000; }
 
     /***** PreciseTimer::modify ***********************************************/
-    void modify(long milliseconds) { delay_time.store(milliseconds*1000); }
+    void modify(long milliseconds) { delay_time.store(milliseconds*1000, std::memory_order_release); }
 
     /***** PreciseTimer::hold *************************************************/
     void hold() {
       std::unique_lock<std::mutex> lock(mtx);
-      should_hold.store(true);
-      if (on_hold.load()) return;
-      cv.wait( lock, [this]() { return on_hold.load(); } );
-      return;
+      should_hold.store(true, std::memory_order_release);
+      if (on_hold.load(std::memory_order_acquire)) return;
+      cv.wait( lock, [this]() { return on_hold.load(std::memory_order_acquire); } );
     }
 
     /***** PreciseTimer::resume ***********************************************/
     void resume() {
       std::unique_lock<std::mutex> lock(mtx);
-      should_hold.store(false);
+      should_hold.store(false, std::memory_order_release);
       cv.notify_all();
     }
 
@@ -506,36 +504,31 @@ class PreciseTimer {
     void stop() {
      long ms;
      stop(ms);
-     return;
     }
 
     /***** PreciseTimer::stop *************************************************/
     void stop(long &milliseconds) {
+      {
       std::unique_lock<std::mutex> lock(mtx);
-      should_cancel.store(true);
+      should_stop.store(true, std::memory_order_release);  // tells the main loop to stop
       cv.notify_all();
-      if ( cancelled.load() ) {
-        milliseconds=remaining_time.load()/1000;
-        reset();
-        return;
       }
-      if (remaining_time.load() <= 0 ) {
-        milliseconds=0;
-        reset();
-        return;
+      if ( running.load(std::memory_order_acquire) ) {
+        std::unique_lock<std::mutex> lock(mtx);
+        if (!cv.wait_for(lock, std::chrono::microseconds(2*max_short_sleep), [this]() { return !running.load(std::memory_order_acquire); })) {
+          std::cerr << get_timestamp() << "  (PreciseTimer::stop) *** timed out waiting for loop to stop ***\n";
+        }
       }
-      cv.wait( lock, [this]() { return cancelled.load(); } );
-      milliseconds=remaining_time.load()/1000;
+      milliseconds=remaining_time.load(std::memory_order_acquire)/1000;
       reset();
-      return;
     }
 
     /***** PreciseTimer::stop *************************************************/
     void reset() {
       should_hold.store(false);
       on_hold.store(false);
-      should_cancel.store(false);
-      cancelled.store(false);
+      should_stop.store(false);
+      running.store(false);
       delay_time.store(0);
       remaining_time.store(0);
     }

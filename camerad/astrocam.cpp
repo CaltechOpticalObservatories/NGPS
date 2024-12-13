@@ -2556,14 +2556,13 @@ logwrite(function,message.str() );
 
     // Spawn a thread to operate the shutter if needed.
     //
+    this->camera.shutter.zero_exposure();  // resets shutter duration to 0
     if ( this->camera.exposure_time > 0 ) {
       this->camera.shutter.arm();          // puts shutter into pending state to prevent potential race conditions
                                            // while waiting for shutter_state to transition from 1 -> 0
       std::thread( std::ref(AstroCam::Interface::dothread_shutter), this_expbuf, std::ref(*this) ).detach();
     }
     else {
-      this->camera.shutter.zero_exposure();  // sets shutter duration to 0
-
       logwrite( function, "shutter not opened" );
       message.str(""); message << "NOTICE: incremented exposure buffer to " << server.get_expbuf();
       logwrite( function, message.str() );
@@ -4238,11 +4237,75 @@ logwrite(function, message.str());
 
     this->camera.shutter_timer.stop( remaining_time );
 
-    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", (this->camera.exposure_time-remaining_time),
+    logwrite( function, "exposure stopped early" );
+
+    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", (this->camera.exposure_time-remaining_time)/100.,
                                                                      "exposure time in sec" );
     return NO_ERROR;
   }
   /***** AstroCam::Interface::stop_exposure ***********************************/
+
+
+  /***** AstroCam::Interface::pause_exposure **********************************/
+  /**
+   * @brief      pause the exposure now (as soon as possible)
+   * @param[in]  args        not used
+   * @param[out] retstring   return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::pause_exposure( std::string args, std::string &retstring ) {
+    const std::string function = "AstroCam::Interface::pause_exposure";
+    std::stringstream message;
+
+    // block changes within the last 5 seconds of exposure
+    // this remaining time is not guaranteed to be accurate
+    //
+    long remaining_time = this->camera.shutter_timer.get_remaining();
+
+    if ( remaining_time < 5000 ) {
+      message.str(""); message << "ERROR cannot pause exposure time with less than 5000 msec exptime remaining";
+      logwrite( function, message.str() );
+      retstring="too_late";
+      return ERROR;
+    }
+
+    this->camera.shutter_timer.hold();
+
+    // close the Bonn shutter
+    //
+    this->camera.shutter.set_close();
+
+    logwrite( function, "exposure paused" );
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::pause_exposure **********************************/
+
+
+  /***** AstroCam::Interface::resume_exposure *********************************/
+  /**
+   * @brief      resume the exposure now (as soon as possible)
+   * @param[in]  args        not used
+   * @param[out] retstring   return string
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::resume_exposure( std::string args, std::string &retstring ) {
+    const std::string function = "AstroCam::Interface::resume_exposure";
+    std::stringstream message;
+
+    // open the Bonn shutter
+    //
+    this->camera.shutter.set_open();
+
+    this->camera.shutter_timer.resume();
+
+    logwrite( function, "exposure resumed" );
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::resume_exposure *********************************/
 
 
   /***** AstroCam::Interface::shutter *****************************************/
@@ -5630,13 +5693,6 @@ logwrite(function,message.str() );
             logwrite( function, "ERROR parsing ms: "+std::string(e.what()) );
             return ERROR;
           }
-        }
-        else
-        if ( tokens[1] == "time" ) {
-          auto time=this->camera.shutter_timer.get_duration();
-          logwrite( function, "TEST: test timer duration="+std::to_string(time) );
-          retstring=std::to_string(time);
-          return NO_ERROR;
         }
         else {
           try {

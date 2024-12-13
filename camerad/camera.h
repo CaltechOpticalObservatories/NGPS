@@ -168,7 +168,7 @@ namespace Camera {
        */
       inline long set_open() {
         this->state=1;
-        this->duration_sec=NAN;  // reset duration, set on shutter close
+//      this->duration_sec=NAN;  // reset duration, set on shutter close
         this->open_time = std::chrono::high_resolution_clock::now();
         if ( this->is_enabled ) {  // operate the mechanism only if enabled
           return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
@@ -198,7 +198,7 @@ namespace Camera {
         }
         else ret=NO_ERROR;
         // set shutter duration now
-        this->duration_sec = std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
+        this->duration_sec += std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
                                                                                 - this->open_time).count() / 1000000000.;
         return ret;
       }
