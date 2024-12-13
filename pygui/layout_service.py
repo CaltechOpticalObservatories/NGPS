@@ -363,7 +363,6 @@ class LayoutService:
         self.target_list_display.setSortingEnabled(True)
 
         # Enable horizontal scrolling if the content exceeds the available width
-        self.target_list_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.target_list_display.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # Allow manual resizing of the columns (on the horizontal header)
@@ -372,12 +371,14 @@ class LayoutService:
         # Disable editing of table cells
         self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        # Enable horizontal scrolling by adding the table to a scroll area
+        # Create a QScrollArea to enable scrolling
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)  # Make horizontal scrollbar always visible
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Make vertical scrollbar as needed
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Vertical scrollbar as needed
+
+        # Initially hide the horizontal scrollbar
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # Set a custom style for the scroll area (e.g., larger scrollbars for easier dragging)
         scroll_area.setStyleSheet("""
@@ -421,9 +422,21 @@ class LayoutService:
         # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
+        # Connect the sizeHintChanged signal to update the scrollbar visibility dynamically
+        self.target_list_display.horizontalHeader().sectionResized.connect(self.toggle_horizontal_scrollbar)
+
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
+
+    def toggle_horizontal_scrollbar(self):
+        """Toggle horizontal scrollbar visibility based on table content width."""
+        # Check if the total width of the table exceeds the available width
+        total_table_width = self.target_list_display.horizontalHeader().length()
+        if total_table_width > self.target_list_display.viewport().width():
+            self.target_list_display.parent().setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        else:
+            self.target_list_display.parent().setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     
     def on_row_selected(self):
         # Get the selected row's index
