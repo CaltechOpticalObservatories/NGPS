@@ -377,21 +377,21 @@ class LayoutService:
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
 
-        # Customize the scroll bars to make them large when visible, with a thicker vertical scrollbar handle
+        # Customize the scroll bars to make them large when visible, and make the vertical handle larger
         scroll_area.setStyleSheet("""
             QScrollBar:vertical {
                 border: 2px solid grey;
                 background: #F0F0F0;
-                width: 30px;  # Make the vertical scrollbar wider
+                width: 30px;  # Increase the width of the vertical scrollbar
             }
             QScrollBar::handle:vertical {
                 background: #FFCC40;
-                border-radius: 15px;  # Make the handle thicker and rounder
+                border-radius: 15px;  # Make the vertical handle thicker
             }
-            QScrollBar::horizontal {
+            QScrollBar:horizontal {
                 border: 2px solid grey;
                 background: #F0F0F0;
-                height: 20px;  # Horizontal scrollbar size
+                height: 20px;  # Horizontal scrollbar size remains normal
             }
             QScrollBar::handle:horizontal {
                 background: #FFCC40;
