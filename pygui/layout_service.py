@@ -377,6 +377,24 @@ class LayoutService:
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
 
+        # Customize the scroll bars to make them large when visible
+        scroll_area.setStyleSheet("""
+            QScrollBar:vertical, QScrollBar:horizontal {
+                border: 2px solid grey;
+                background: #F0F0F0;
+                width: 20px;
+                height: 20px;
+            }
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+                background: #FFCC40;
+                border-radius: 10px;
+            }
+            QScrollBar::add-line, QScrollBar::sub-line {
+                border: none;
+                background: none;
+            }
+        """)
+
         # Add the scroll area to the layout instead of the table directly
         bottom_section_layout.addWidget(scroll_area)
 
