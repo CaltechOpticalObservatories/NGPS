@@ -114,7 +114,7 @@ namespace Calib {
    * @brief       return the connected state of the motor controllers
    * @param[in]   arg        used only for help
    * @param[out]  retstring  contains the connected state "true" | "false"
-   * @return      ERROR | NO_ERROR | HELP
+   * @return      NO_ERROR | HELP
    *
    * All motors must be connected for this to return "true".
    *
@@ -122,7 +122,6 @@ namespace Calib {
   long Motion::is_open( std::string arg, std::string &retstring ) {
     std::string function = "Calib::Motion::is_open";
     std::stringstream message;
-    long error = NO_ERROR;
 
     auto _motormap = this->motorinterface.get_motormap();
 
@@ -166,7 +165,7 @@ namespace Calib {
       logwrite( function, message.str() );
     }
 
-    return( error );
+    return NO_ERROR;
   }
   /***** Calib::Motion::is_open ***********************************************/
 
@@ -443,6 +442,251 @@ namespace Calib {
   /***** Calib::Motion::send_command ******************************************/
 
 
+  /***** Calib::Interface::open ***********************************************/
+  /**
+   * @brief      open all calib-related connections
+   * @param[in]  args       string optionally containing { ? motion lampmod }
+   * @param[out] retstring
+   * return      ERROR|NO_ERROR|HELP
+   *
+   */
+  long Interface::open( std::string args, std::string &retstring ) {
+    const std::string function="Calib::Interface::open";
+    std::string which;
+
+    // No args opens everything (motion and camera)...
+    //
+    if ( args.empty() ) {
+      which = "all";
+    }
+    else if ( args == "?" || args=="-h" || args=="help" ) {
+      retstring = CALIBD_OPEN;
+      retstring.append( " [ [motion] [lampmod] ]\n" );
+      retstring.append( "  Open connections to all calib devices (by default).\n" );
+      retstring.append( "  Optionally indicate motion | lampmod to open only the indicated component.\n" );
+      return HELP;
+    }
+    else { // ...otherwise look at the arg(s):
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // args can be [ [motion] [lampmod] ]
+      //
+      int ccount=0;
+      for ( size_t i=0; i < tokens.size(); i++ ) {
+        size_t next = i+1;
+        if ( tokens[i] == "motion" ) {
+          which = tokens[i]; ccount++;
+        }
+        if ( tokens[i] == "lampmod" ) {
+          which = tokens[i]; ccount++;
+        }
+      }
+
+      if ( ccount == 2 ) which = "all";
+
+      if ( which.empty() ) {
+        logwrite( function, "ERROR: unrecognized arg \""+args+"\". Expected { [ [motion] [lampmod] ] }" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+
+    // open motion, home if necessary
+    //
+    if ( which == "all" || which == "motion" ) {
+      // open motion
+      long error  = this->motion.open();
+      // are actuators homed?
+      error |= this->motion.is_home("", retstring);
+      // home them if needed
+      if ( retstring == "false" ) error |= this->motion.home("", retstring);
+      if (error!=NO_ERROR) {
+        logwrite( function, "ERROR initializing motion component" );
+        return ERROR;
+      }
+    }
+
+    // open lamp modulator
+    //
+    if ( which == "all" || which == "lampmod" ) {
+      long error = this->modulator.control("open", retstring);
+      if (error!=NO_ERROR) {
+        logwrite( function, "ERROR initializing lampmod component" );
+        return ERROR;
+      }
+    }
+
+    retstring.clear();
+
+    return NO_ERROR;
+  }
+  /***** Calib::Interface::open ***********************************************/
+
+
+  /***** Calib::Interface::is_open ********************************************/
+  /**
+   * @brief      check open state of all calib-related connections
+   * @param[in]  args       string optionally containing { ? motion lampmod }
+   * @param[out] retstring
+   * return      NO_ERROR|HELP
+   *
+   */
+  long Interface::is_open( std::string args, std::string &retstring ) {
+    const std::string function="Calib::Interface::is_open";
+    std::string which;
+    int ccount=0;  // component count (number of components requested)
+
+    // No args checks everything (motion and camera)...
+    //
+    if ( args.empty() ) {
+      which = "all";
+      ccount=2;
+    }
+    else if ( args == "?" || args=="-h" || args=="help" ) {
+      retstring = CALIBD_CLOSE;
+      retstring.append( " [ [motion] [lampmod] ]\n" );
+      retstring.append( "  Close connections to all calib devices (by default).\n" );
+      retstring.append( "  Optionally indicate motion | lampmod to check only the indicated component.\n" );
+      retstring.append( "  Returns true only if all requested components are open.\n" );
+      return HELP;
+    }
+    else { // ...otherwise look at the arg(s):
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // args can be [ [motion] [lampmod] ]
+      //
+      for ( size_t i=0; i < tokens.size(); i++ ) {
+        size_t next = i+1;
+        if ( tokens[i] == "motion" ) {
+          which = tokens[i]; ccount++;
+        }
+        if ( tokens[i] == "lampmod" ) {
+          which = tokens[i]; ccount++;
+        }
+      }
+
+      if ( ccount == 2 ) which = "all";
+
+      if ( which.empty() ) {
+        logwrite( function, "ERROR: unrecognized arg \""+args+"\". Expected { [ [motion] [lampmod] ] }" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+
+    int opencount=0;  // number of components open must match number requested
+
+    // check motion
+    //
+    if ( which == "all" || which == "motion" ) {
+      this->motion.is_open("", retstring);
+      if ( retstring=="true" ) opencount++;
+    }
+
+    // check lamp modulator
+    //
+    if ( which == "all" || which == "lampmod" ) {
+      this->modulator.control("isopen", retstring);
+      if ( retstring=="true" ) opencount++;
+    }
+
+    // return true only if all requested components return true (open)
+    //
+    retstring = ( opencount==ccount ? "true" : "false" );
+
+    return NO_ERROR;
+  }
+  /***** Calib::Interface::is_open ********************************************/
+
+
+  /***** Calib::Interface::close **********************************************/
+  /**
+   * @brief      close all calib-related connections
+   * @param[in]  args       string optionally containing { ? motion lampmod }
+   * @param[out] retstring
+   * return      ERROR|NO_ERROR|HELP
+   *
+   */
+  long Interface::close( std::string args, std::string &retstring ) {
+    const std::string function="Calib::Interface::close";
+    std::string which;
+
+    // No args closes everything (motion and camera)...
+    //
+    if ( args.empty() ) {
+      which = "all";
+    }
+    else if ( args == "?" || args=="-h" || args=="help" ) {
+      retstring = CALIBD_CLOSE;
+      retstring.append( " [ [motion] [lampmod] ]\n" );
+      retstring.append( "  Close connections to all calib devices (by default).\n" );
+      retstring.append( "  Optionally indicate motion | lampmod to close only the indicated component.\n" );
+      return HELP;
+    }
+    else { // ...otherwise look at the arg(s):
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
+
+      std::vector<std::string> tokens;
+      Tokenize( args, tokens, " " );
+
+      // args can be [ [motion] [lampmod] ]
+      //
+      int ccount=0;
+      for ( size_t i=0; i < tokens.size(); i++ ) {
+        size_t next = i+1;
+        if ( tokens[i] == "motion" ) {
+          which = tokens[i]; ccount++;
+        }
+        if ( tokens[i] == "lampmod" ) {
+          which = tokens[i]; ccount++;
+        }
+      }
+
+      if ( ccount == 2 ) which = "all";
+
+      if ( which.empty() ) {
+        logwrite( function, "ERROR: unrecognized arg \""+args+"\". Expected { [ [motion] [lampmod] ] }" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
+
+    long error = NO_ERROR;
+
+    // close motion
+    //
+    if ( which == "all" || which == "motion" ) {
+      // close motion
+      long ret = this->motion.close();
+      if (ret!=NO_ERROR) {
+        logwrite( function, "ERROR closing motion component" );
+        error=ERROR;
+      }
+    }
+
+    // close lamp modulator
+    //
+    if ( which == "all" || which == "lampmod" ) {
+      long ret = this->modulator.control("close", retstring);
+      if (ret!=NO_ERROR) {
+        logwrite( function, "ERROR closing lampmod component" );
+        error=ERROR;
+      }
+    }
+
+    retstring.clear();
+
+    return error;
+  }
+  /***** Calib::Interface::close **********************************************/
+
+
   /***** Calib::Interface::make_telemetry_message *****************************/
   /**
    * @brief      assembles a telemetry message
@@ -675,12 +919,13 @@ namespace Calib {
    * @return     ERROR | NO_ERROR | HELP
    * @details    Provides lamp modulator control to set and/or get settings.
    *             Input args are:
-   *             ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]
+   *             ? | open | isopen | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]
    *
    * In other words,
    *             control              : invalid (returns error)
    *             control ?            : help
    *             control open         : open connection to Arduino
+   *             control isopen       : is connection open to Arduino?
    *             control close        : close connection to Arduino
    *             control reconnect    : close, open connection to Arduino
    *             control default      : set all modulators as defined in config file
@@ -706,9 +951,10 @@ namespace Calib {
 
     if ( args == "?" ) {
       retstring = CALIBD_LAMPMOD;
-      retstring.append( " ? | open | close | reconnect | <n> [ [ on|off ] | [ <D> <T> ] ]\n" );
+      retstring.append( " ? | open | isopen | close | reconnect | <n> [ [ on|off ] | [ <D> <T> ] ]\n" );
       retstring.append( "  Lamp modulator control\n" );
       retstring.append( "  open          :  open connection to controller\n" );
+      retstring.append( "  isopen        :  is connection open to controller?\n" );
       retstring.append( "  close         :  close connection to controller\n" );
       retstring.append( "  reconnect     :  close, open connection to controller\n" );
       retstring.append( "  default       :  set all modulators as defined in config file\n" );
@@ -742,6 +988,11 @@ namespace Calib {
     // each perform their own checks of the arduino state.
     //
     if ( args == "open" ) return( this->open_arduino() );         // open connection to controller
+
+    if ( args == "isopen" ) {
+      retstring = ( this->arduino->isopen() ? "true" : "false" );
+      return NO_ERROR;
+    }
 
     if ( args == "close" ) return( this->close_arduino() );       // close connection to controller
 

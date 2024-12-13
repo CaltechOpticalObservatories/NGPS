@@ -20,15 +20,15 @@ const std::string CALIBD_OPEN = "open";      ///< open connection to calib
 const std::string CALIBD_SET = "set";        const int CALIBD_SET_TIMEOUT = 25000; ///< set state of both actuators
 
 const std::vector<std::string> CALIBD_SYNTAX = {
-                                                 CALIBD_CLOSE,
+                                                 CALIBD_OPEN+" [ ? | motion | lampmod ]",
+                                                 CALIBD_ISOPEN+" [ ? | motion | lampmod ]",
+                                                 CALIBD_CLOSE+" [ ? | motion | lampmod ]",
                                                  CALIBD_EXIT,
                                                  "  MOTION CONTROL",
                                                  CALIBD_GET+" [ <actuator> ] | [?]",
                                                  CALIBD_HOME+" [?]",
                                                  CALIBD_ISHOME,
-                                                 CALIBD_ISOPEN,
                                                  CALIBD_NATIVE+" <addr> <cmd>",
-                                                 CALIBD_OPEN,
                                                  CALIBD_SET+" [ <actuator>=open|close ... ] | [?]",
                                                  "  LAMP MODULATOR CONTROL",
                                                  CALIBD_LAMPMOD+" ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]",

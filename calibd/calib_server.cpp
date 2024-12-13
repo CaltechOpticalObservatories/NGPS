@@ -544,21 +544,21 @@ namespace Calib {
       // isopen
       //
       if ( cmd == CALIBD_ISOPEN ) {
-                      ret = this->interface.motion.is_open( args, retstring );
+                      ret = this->interface.is_open( args, retstring );
       }
       else
 
       // open
       //
       if ( cmd == CALIBD_OPEN ) {
-                      ret = this->interface.motion.open();
+                      ret = this->interface.open(args, retstring);
       }
       else
 
       // close
       //
       if ( cmd == CALIBD_CLOSE ) {
-                      ret = this->interface.motion.close();
+                      ret = this->interface.close(args, retstring);
       }
       else
 
