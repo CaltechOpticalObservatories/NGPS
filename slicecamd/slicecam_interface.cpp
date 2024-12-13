@@ -1046,7 +1046,7 @@ namespace Slicecam {
       // If framegrab is running then stop it. This won't return until framegrabbing
       // has stopped (or timeout).
       //
-      bool was_framegrab_running = this->is_framegrab_running.load();
+      bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
       if ( was_framegrab_running ) {
         std::string dontcare;
         error = this->framegrab( "stop", dontcare );
@@ -1592,10 +1592,10 @@ namespace Slicecam {
     error |= this->tcsd.init( args, retstring );   // OR'd to include possible stop-thread-timeout
 
     if ( error==NO_ERROR && args != "shutdown" ) {
-      this->tcs_online.store( true );
+      this->tcs_online.store( true, std::memory_order_release );
     }
     else {
-      this->tcs_online.store( false );
+      this->tcs_online.store( false, std::memory_order_release );
     }
 
     return error;
@@ -1745,7 +1745,7 @@ namespace Slicecam {
     // then return, no action.
     //
     if ( args.empty() || args == "status" ) {
-      retstring = ( this->is_framegrab_running.load() ? "true" : "false" );
+      retstring = ( this->is_framegrab_running.load(std::memory_order_acquire) ? "true" : "false" );
       return NO_ERROR;
     }
 
@@ -1765,6 +1765,23 @@ namespace Slicecam {
       logwrite( function, "ERROR too many arguments" );
       retstring="invalid_argument";
       return ERROR;
+    }
+
+    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes or 5s,
+    // whichever is greater
+    //
+    if ( whattodo == "stop" ) {
+      this->should_framegrab_run.store( false, std::memory_order_release );  // tells framegrab loop to stop
+      if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {    // wait for it to stop
+        std::unique_lock<std::mutex> lock(framegrab_mtx);
+        int waittime = std::max( static_cast<int>(2000*(this->camera.andor.begin()->second->camera_info.exptime+1)), 5000 );
+        if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
+              return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
+          logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
+          return ERROR;
+        }
+        else { logwrite(function, "framegrab loop has stopped"); return NO_ERROR; }
+      }
     }
 
     // For "saveone" a provided filename is used for saving the frame,
@@ -1790,24 +1807,6 @@ namespace Slicecam {
     // or not, based on whattodo
     //
     std::thread( &Slicecam::Interface::dothread_framegrab, this, whattodo, sourcefile ).detach();
-
-    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes
-    // or 5s, whichever is greater.
-    //
-    if ( whattodo == "stop" ) {
-      auto start = std::chrono::steady_clock::now();
-      bool timedout=false;
-      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*this->camera.andor.begin()->second->camera_info.exptime), 5.0 ) );
-      while ( this->is_framegrab_running.load() ) {
-        auto now = std::chrono::steady_clock::now();
-        if ( now - start > timeout_time ) {
-          timedout=true;
-          break;
-        }
-        std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
-      }
-      if ( timedout ) logwrite( function, "ERROR timeout waiting for framegrab to stop" );
-    }
 
     return NO_ERROR;
   }
@@ -1835,7 +1834,7 @@ namespace Slicecam {
     // the Andor emulator to work.
     //
     if ( (whattodo=="start" || whattodo=="one" || whattodo=="saveone") &&
-         (this->camera.andor.begin()->second->is_emulated() && !this->tcs_online.load()) ) {
+         (this->camera.andor.begin()->second->is_emulated() && !this->tcs_online.load(std::memory_order_acquire)) ) {
       logwrite( function, "ERROR Andor emulator requires a TCS connection" );
       return;
     }
@@ -1846,31 +1845,21 @@ namespace Slicecam {
       // stop. If it's not already running then drop through, and a single
       // frame will be grabbed.
       //
-      this->should_framegrab_run.store( false );
-      if ( this->is_framegrab_running.load() ) return;
+      this->should_framegrab_run.store( false, std::memory_order_release );
+      if ( this->is_framegrab_running.load(std::memory_order_acquire) ) return;
     }
     else
     if ( whattodo == "start" ) {
-      if ( this->is_framegrab_running.load() ) {
+      if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {
         logwrite( function, "thread already running, exiting" );
         return;
       }
       else {
         logwrite( function, "set thread running" );
-        this->should_framegrab_run.store( true );
+        this->should_framegrab_run.store( true, std::memory_order_release );
       }
     }
-    else
-    if ( whattodo == "stop" ) {
-      logwrite( function, "set thread to stop, exiting" );
-      this->should_framegrab_run.store( false );
-      return;
-    }
-    else {
-      message.str(""); message << "ERROR invalid argument \"" << whattodo << "\". exiting.";
-      logwrite( function, message.str() );
-      return;
-    }
+    else return;
 
     this->wcsname.clear();
     this->wcsfix_time = std::chrono::steady_clock::time_point::min();
@@ -1918,7 +1907,7 @@ namespace Slicecam {
 
       if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                              this->imagename,
-                                                             this->tcs_online.load() );    // write to FITS file
+                                                             this->tcs_online.load(std::memory_order_acquire) );    // write to FITS file
 
       this->framegrab_time = std::chrono::steady_clock::time_point::min();
 
@@ -1939,12 +1928,14 @@ namespace Slicecam {
         _nskip = this->nskip_preserve_frames.load();
       }
 
-    } while ( error==NO_ERROR && this->should_framegrab_run.load() );
+    } while ( error==NO_ERROR && this->should_framegrab_run.load(std::memory_order_acquire) );
     }
+
+    this->cv.notify_all();  // send notification that the loop has stopped
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR starting thread" );
-      this->should_framegrab_run.store( false );  // disable frame grabbing
+      this->should_framegrab_run.store( false, std::memory_order_release );  // disable frame grabbing
     }
     else logwrite( function, "leaving thread" );
 
@@ -2083,7 +2074,7 @@ namespace Slicecam {
         // If framegrab is running then stop it. This won't return until framegrabbing
         // has stopped (or timeout).
         //
-        bool was_framegrab_running = this->is_framegrab_running.load();
+        bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
         if ( was_framegrab_running ) {
           std::string dontcare;
           error = this->framegrab( "stop", dontcare );
@@ -2383,7 +2374,7 @@ namespace Slicecam {
       }
     }
     else
-    if ( !is_guiding && this->tcs_online.load() && this->tcsd.client.is_open() ) {
+    if ( !is_guiding && this->tcs_online.load(std::memory_order_acquire) && this->tcsd.client.is_open() ) {
       // offsets are in degrees, convert to arcsec (required for PT command)
       //
       ra_off  *= 3600.;
@@ -2720,7 +2711,7 @@ namespace Slicecam {
         retstring.append( "  Returns state of should_framegrab_run\n" );
         return HELP;
       }
-      retstring = ( this->should_framegrab_run.load() ? "yes" : "no" );
+      retstring = ( this->should_framegrab_run.load(std::memory_order_acquire) ? "yes" : "no" );
     }
     else
     if ( testname == "sleep" ) {
@@ -2825,7 +2816,7 @@ namespace Slicecam {
     // has stopped (or timeout).
     //
     long error = NO_ERROR;
-    bool was_framegrab_running = this->is_framegrab_running.load();
+    bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
     if ( was_framegrab_running ) {
       std::string dontcare;
       error = this->framegrab( "stop", dontcare );

@@ -225,6 +225,8 @@ namespace Slicecam {
       std::string wcsname;
       std::chrono::steady_clock::time_point wcsfix_time;
       std::chrono::steady_clock::time_point framegrab_time;
+      std::mutex framegrab_mtx;
+      std::condition_variable cv;
 
     public:
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object

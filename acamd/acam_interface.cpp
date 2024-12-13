@@ -1394,7 +1394,7 @@ namespace Acam {
       // If framegrab is running then stop it. This won't return until framegrabbing
       // has stopped (or timeout).
       //
-      bool was_framegrab_running = this->is_framegrab_running.load();
+      bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
       if ( was_framegrab_running ) {
         std::string dontcare;
         error = this->framegrab( "stop", dontcare );
@@ -2358,13 +2358,13 @@ namespace Acam {
     if ( args == "shutdown" ) {
       // Request stop
       //
-      this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ, std::memory_order_seq_cst );
+      this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ, std::memory_order_release );
 
       // Wait up to 1.5 sec for stop
       //
       auto start = std::chrono::steady_clock::now();
       bool timedout=false;
-      while ( this->monitor_focus_state.load( std::memory_order_seq_cst ) != Acam::FOCUS_MONITOR_STOPPED ) {
+      while ( this->monitor_focus_state.load( std::memory_order_acquire ) != Acam::FOCUS_MONITOR_STOPPED ) {
         auto now = std::chrono::steady_clock::now();
         if ( now - start > std::chrono::milliseconds( 4000 ) ) {
           timedout=true;
@@ -2391,14 +2391,14 @@ namespace Acam {
     // the Guider GUI updated on focus changes.
     //
     if ( error==NO_ERROR && args != "shutdown" ) {
-      this->tcs_online.store( true );
-      if ( this->monitor_focus_state.load( std::memory_order_seq_cst ) == Acam::FOCUS_MONITOR_STOPPED ) {
-        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_START_REQ, std::memory_order_seq_cst );
+      this->tcs_online.store( true, std::memory_order_release );
+      if ( this->monitor_focus_state.load( std::memory_order_acquire ) == Acam::FOCUS_MONITOR_STOPPED ) {
+        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_START_REQ, std::memory_order_release );
         std::thread( this->dothread_monitor_focus, std::ref(*this) ).detach();
       }
     }
     else {
-      this->tcs_online.store( false );
+      this->tcs_online.store( false, std::memory_order_release );
     }
     return error;
   }
@@ -2508,8 +2508,8 @@ namespace Acam {
       }
     }
 
-    retstring = std::to_string(this->nsave_preserve_frames.load())+" "
-              + std::to_string(this->nskip_preserve_frames.load());
+    retstring = std::to_string(this->nsave_preserve_frames.load(std::memory_order_acquire))+" "
+              + std::to_string(this->nskip_preserve_frames.load(std::memory_order_acquire));
 
     return NO_ERROR;
   }
@@ -2597,7 +2597,7 @@ namespace Acam {
     // then return, no action.
     //
     if ( args.empty() || args == "status" ) {
-      retstring = ( this->is_framegrab_running.load() ? "true" : "false" );
+      retstring = ( this->is_framegrab_running.load(std::memory_order_acquire) ? "true" : "false" );
       return NO_ERROR;
     }
 
@@ -2617,6 +2617,23 @@ namespace Acam {
       logwrite( function, "ERROR too many arguments. expected \"one [ <sourcefile> ] | start | stop | status\"" );
       retstring="invalid_argument";
       return ERROR;
+    }
+
+    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes or 5s,
+    // whichever is greater.
+    //
+    if ( whattodo == "stop" ) {
+      this->should_framegrab_run.store( false, std::memory_order_release );  // tells framegrab loop to stop
+      if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {    // wait for it to stop
+        std::unique_lock<std::mutex> lock(framegrab_mtx);
+        int waittime = std::max( static_cast<int>(2000*(this->camera.andor.camera_info.exptime+1)), 5000 );
+        if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
+              return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
+          logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
+          return ERROR;
+        }
+        else { logwrite(function, "framegrab loop has stopped"); return NO_ERROR; }
+      }
     }
 
     // For "saveone" a provided filename is used for saving the frame,
@@ -2642,23 +2659,6 @@ namespace Acam {
     //
     std::thread( dothread_framegrab, std::ref(*this), whattodo, sourcefile ).detach();
 
-    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes.
-    // Always wait a minimum of 1 second in case exptime is 0.
-    //
-    if ( whattodo == "stop" ) {
-      auto start = std::chrono::steady_clock::now();
-      bool timedout=false;
-      auto timeout_time = std::chrono::duration<double>( std::max( (2.0*this->camera.andor.camera_info.exptime), 2.0 ) );
-      while ( this->is_framegrab_running.load() ) {
-        auto now = std::chrono::steady_clock::now();
-        if ( now - start > timeout_time ) {
-          timedout=true;
-          break;
-        }
-        std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
-      }
-      if ( timedout ) logwrite( function, "ERROR timeout waiting for framegrab to stop" );
-    }
     return error;
   }
   /***** Acam::Interface::framegrab *******************************************/
@@ -2683,7 +2683,7 @@ namespace Acam {
     // the Andor emulator to work.
     //
     if ( (whattodo=="start" || whattodo=="one" || whattodo=="saveone") &&
-         (iface.camera.andor.is_emulated() && !iface.tcs_online.load()) ) {
+         (iface.camera.andor.is_emulated() && !iface.tcs_online.load(std::memory_order_acquire)) ) {
       logwrite( function, "ERROR Andor emulator requires a TCS connection" );
       return;
     }
@@ -2694,31 +2694,21 @@ namespace Acam {
       // stop. If it's not already running then drop through, and a single
       // frame will be grabbed.
       //
-      iface.should_framegrab_run.store( false );
-      if ( iface.is_framegrab_running.load() ) return;
+      iface.should_framegrab_run.store( false, std::memory_order_release );
+      if ( iface.is_framegrab_running.load(std::memory_order_acquire) ) return;
     }
     else
     if ( whattodo == "start" ) {
-      if ( iface.is_framegrab_running.load() ) {
+      if ( iface.is_framegrab_running.load(std::memory_order_acquire) ) {
         logwrite( function, "thread already running, exiting" );
         return;
       }
       else {
         logwrite( function, "set thread running" );
-        iface.should_framegrab_run.store( true );
+        iface.should_framegrab_run.store( true, std::memory_order_release );
       }
     }
-    else
-    if ( whattodo == "stop" ) {
-      logwrite( function, "set thread to stop, exiting" );
-      iface.should_framegrab_run.store( false );
-      return;
-    }
-    else {
-      message.str(""); message << "ERROR invalid argument \"" << whattodo << "\". exiting.";
-      logwrite( function, message.str() );
-      return;
-    }
+    else return;
 
     iface.wcsname.clear();
     iface.wcsfix_time = std::chrono::steady_clock::time_point::min();
@@ -2755,7 +2745,7 @@ namespace Acam {
 
       error = iface.camera.write_frame( sourcefile,
                                         iface.imagename,
-                                        iface.tcs_online.load() );    // write to FITS file
+                                        iface.tcs_online.load(std::memory_order_acquire) );    // write to FITS file
       if (error==ERROR) {
         logwrite(function,"ERROR writing frame");
         continue;
@@ -2814,12 +2804,14 @@ namespace Acam {
 
       std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );  // don't use too much CPU
 
-    } while ( /*error==NO_ERROR &&*/ iface.should_framegrab_run.load() );
+    } while ( /*error==NO_ERROR &&*/ iface.should_framegrab_run.load(std::memory_order_acquire) );
     }
+
+    iface.cv.notify_all();  // send notification that the loop has stopped
 
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR starting thread" );
-      iface.should_framegrab_run.store( false );      // disable frame grabbing
+      iface.should_framegrab_run.store( false, std::memory_order_release );      // disable frame grabbing
       iface.target.acquire( Acam::TARGET_NOP );       // disable acquisition
     }
     else logwrite( function, "leaving thread" );
@@ -2893,7 +2885,7 @@ namespace Acam {
       // If framegrab is running then stop it. This won't return until framegrabbing
       // has stopped (or timeout).
       //
-      bool was_framegrab_running = this->is_framegrab_running.load();
+      bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
       if ( was_framegrab_running ) {
         std::string dontcare;
         error = this->framegrab( "stop", dontcare );
@@ -3243,7 +3235,7 @@ logwrite( function, message.str() );
 
     // If the frame grab thread isn't running then try to start it
     //
-    if ( ! iface->is_framegrab_running.load() && iface->should_framegrab_run.load() ) {
+    if ( ! iface->is_framegrab_running.load(std::memory_order_acquire) && iface->should_framegrab_run.load(std::memory_order_acquire) ) {
 
       logwrite( function, "starting frame grabber" );
       std::string dontcare;
@@ -3251,13 +3243,13 @@ logwrite( function, message.str() );
 
       auto start = std::chrono::steady_clock::now();
 
-      while ( ! iface->is_framegrab_running.load()  ) {     // shouldn't take long but wait up to 100 msec
+      while ( ! iface->is_framegrab_running.load(std::memory_order_acquire)  ) {     // shouldn't take long but wait up to 100 msec
         auto now = std::chrono::steady_clock::now();
         if ( now - start > std::chrono::milliseconds( 100 ) ) break;
         std::this_thread::sleep_for( std::chrono::microseconds( 10 ) );
       }
 
-      if ( ! iface->is_framegrab_running.load() ) {
+      if ( ! iface->is_framegrab_running.load(std::memory_order_acquire) ) {
         iface->async.enqueue_and_log( function, "ERROR: failed to start frame grabber" );
         return ERROR;
       }
@@ -3276,7 +3268,7 @@ logwrite( function, message.str() );
     // acquisition loop and prevent further acquisitions from starting.
     //
     if ( requested_mode == Acam::TARGET_NOP ) {
-      this->stop_acquisition.store( true );
+      this->stop_acquisition.store( true, std::memory_order_release );
       logwrite( function, "stop requested" );
     }
 
@@ -3288,7 +3280,7 @@ logwrite( function, message.str() );
       this->nacquired = 0;
       this->attempts = 0;
       this->sequential_failures = 0;
-      this->is_acquired.store( false, std::memory_order_seq_cst );
+      this->is_acquired.store( false, std::memory_order_release );
 
       // Start the timeout clock, initialized as the time now plus the
       // configured timeout in seconds (duration defaults to seconds).
@@ -3299,7 +3291,7 @@ logwrite( function, message.str() );
       // This informs do_acquire() that everything has been initialized
       // and we're ready to start the acquisition.
       //
-      this->stop_acquisition.store( false, std::memory_order_seq_cst );
+      this->stop_acquisition.store( false, std::memory_order_release );
       logwrite( function, "acquisition initialized" );
     }
 
@@ -3336,7 +3328,7 @@ logwrite( function, message.str() );
     // Do nothing, return immediately if no acquisition mode selected
     // or if stop_acquisition is set.
     //
-    if ( this->acquire_mode == Acam::TARGET_NOP || this->stop_acquisition.load() ) {
+    if ( this->acquire_mode == Acam::TARGET_NOP || this->stop_acquisition.load(std::memory_order_acquire) ) {
       return NO_ERROR;
     }
 
@@ -3628,7 +3620,7 @@ logwrite( function, message.str() );
     if ( ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) &&
          this->nacquired >= this->min_repeat ) {
       logwrite( function, "NOTICE: target acquired" );
-      this->is_acquired.store( true, std::memory_order_seq_cst );                   // Target Acquired!
+      this->is_acquired.store( true, std::memory_order_release );                   // Target Acquired!
       this->acquire_mode = Acam::TARGET_GUIDE;
     }
 
@@ -3636,7 +3628,7 @@ logwrite( function, message.str() );
     //
     if ( this->acquire_mode == Acam::TARGET_GUIDE &&
          this->nacquired == this->min_repeat ) {
-      this->is_acquired.store( true, std::memory_order_seq_cst );
+      this->is_acquired.store( true, std::memory_order_release );
     }
 
     // Leaving this function with an error means target acquisition has failed
@@ -3650,7 +3642,7 @@ logwrite( function, message.str() );
     // any type of value (string, int, float, bool, etc.).
     // This does not write them to the actual database yet.
     //
-    iface->database.add_key_val( "acquired",       this->is_acquired.load() );
+    iface->database.add_key_val( "acquired",       this->is_acquired.load(std::memory_order_acquire) );
     iface->database.add_key_val( "seeing",         iface->astrometry.get_seeing() );
     iface->database.add_key_val( "seeing_std",     iface->astrometry.get_seeing_std() );
     iface->database.add_key_val( "seeing_zen",     iface->astrometry.get_seeing_zen() );
@@ -3943,11 +3935,7 @@ logwrite( function, message.str() );
     // request stop the focus monitor
     //
     this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ,
-                                     std::memory_order_seq_cst );
-
-    // shutdown TCS connection (this will also stop focus monitor thread)
-    //
-    error |= this->tcs_init( "shutdown", dontcare );
+                                     std::memory_order_release );
 
     // close socket connections to hardware
     //
@@ -4466,15 +4454,15 @@ logwrite( function, message.str() );
       }
       else
       if ( tokens.size() > 1 && tokens[1] == "start" ) {
-        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_START_REQ, std::memory_order_seq_cst );
+        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_START_REQ, std::memory_order_release );
         std::thread( this->dothread_monitor_focus, std::ref(*this) ).detach();
       }
       else
       if ( tokens.size() > 1 && tokens[1] == "stop" ) {
-        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ, std::memory_order_seq_cst );
+        this->monitor_focus_state.store( Acam::FOCUS_MONITOR_STOP_REQ, std::memory_order_release );
       }
       else {
-        auto state = this->monitor_focus_state.load( std::memory_order_seq_cst );
+        auto state = this->monitor_focus_state.load( std::memory_order_acquire );
         switch( state ) {
           case Acam::FOCUS_MONITOR_STOPPED:   retstring = "stopped";
                                               break;
@@ -4587,7 +4575,7 @@ logwrite( function, message.str() );
     // If framegrab is running then stop it. This won't return until framegrabbing
     // has stopped (or timeout).
     //
-    bool was_framegrab_running = this->is_framegrab_running.load();
+    bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
     if ( was_framegrab_running ) {
       std::string dontcare;
       error = this->framegrab( "stop", dontcare );
@@ -5164,7 +5152,7 @@ logwrite( function, message.str() );
 
     // Nothing to do if no TCS.
     //
-    if ( ! this->tcs_online.load() ) {
+    if ( ! this->tcs_online.load(std::memory_order_acquire) ) {
       logwrite( function, "ERROR TCS is not connected" );
       retstring="tcs_offline";
       return ERROR;
@@ -5386,7 +5374,7 @@ logwrite( function, message.str() );
 
     // Nothing to do if no TCS.
     //
-    if ( ! this->tcs_online.load() ) {
+    if ( ! this->tcs_online.load(std::memory_order_acquire) ) {
       logwrite( function, "ERROR TCS is not connected" );
       retstring="tcs_offline";
       return ERROR;
