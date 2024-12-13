@@ -2016,8 +2016,8 @@ namespace Slicecam {
    *             command which pushes the parameters to the ds9 display. If
    *             no args are supplied then the parameters will only be returned
    *             and pushed (not set).
-   * @param[in]  args       <empty> or contains all: <exptime> <gain>
-   * @param[out] retstring  return string contains <exptime> <gain>
+   * @param[in]  args       <empty> or contains all: <exptime> <gain> <bin> [ <navg> <reset> ]
+   * @param[out] retstring  return string contains <exptime> <gain> <bin> <navg>
    * @return     ERROR | NO_ERROR | HELP
    *
    * This function is overloaded
@@ -2032,13 +2032,16 @@ namespace Slicecam {
     //
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_GUISET;
-      retstring.append( " [ <exptime> <gain> <bin> <navg> <reset> ]\n" );
+      retstring.append( " [ <exptime> <gain> <bin> [ <navg> <reset> ] ]\n" );
       retstring.append( "   Set or get settings for SAOImage GUI display.\n" );
+      retstring.append( "   When setting, provide the first 3, <exptime> <gain> <bin>\n" );
+      retstring.append( "   or all 5 arguments.\n" );
       retstring.append( "   Binning must be a power of two and will be square.\n" );
       retstring.append( "   <navg> is a value for performing a weighted average, any value > 0.\n" );
+      retstring.append( "   Use <reset> = 1 to reset the average, else = 0\n" );
       retstring.append( "   When all arguments are supplied they will be set and then pushed\n" );
-      retstring.append( "   back to the display. If no arguments are supplied then the current\n" );
-      retstring.append( "   settings are returned and pushed to the display.\n" );
+      retstring.append( "   back to the display. If no arguments are supplied then all four of\n" );
+      retstring.append( "   the current settings are returned and pushed to the display.\n" );
       retstring.append( "   The DONE|ERROR suffix on the return string is suppressed.\n" );
       return HELP;
     }
@@ -2048,9 +2051,9 @@ namespace Slicecam {
 
     // If something was supplied but not the correct number of args then that's an error
     //
-    if ( !tokens.empty() && tokens.size() != 5 ) {
+    if ( !tokens.empty() && (tokens.size() != 3 && tokens.size() != 5) ) {
       message.str(""); message << "ERROR received " << tokens.size() << " arguments "
-                               << "but expected <exptime> <gain> <bin> <navg> <reset>";
+                               << "but expected <exptime> <gain> <bin> [ <navg> <reset> ]";
       logwrite( function, message.str() );
       retstring="invalid_argument_list";
       return ERROR;
@@ -2068,12 +2071,11 @@ namespace Slicecam {
     long error = NO_ERROR;
     bool set = false;
 
-    // If all args were supplied then use them to set
+    // If args were supplied then use them to minimally set
     // exposure time, gain, and binning.
     //
-    if ( tokens.size() == 5 ) {
+    if ( !tokens.empty() ) {
       try {
-        std::string reply;
         float exptime = std::stof( tokens.at(0) );
         int gain = std::stoi( tokens.at(1) );
         int bin  = std::stoi( tokens.at(2) );
@@ -2091,12 +2093,13 @@ namespace Slicecam {
         error |= camera.set_gain( gain );
         error |= camera.bin( bin, bin );
 
-        for ( const auto &pair : this->camera.andor ) {
-          pair.second->set_weight(std::stof(tokens.at(3)));
-          if ( std::stoi(tokens.at(4))==1 ) {
-            message.str(""); message << "[DEBUG] value=" << std::stoi(tokens.at(4));
-            logwrite(function,message.str());
-            pair.second->reset_avg();
+        if ( tokens.size() == 5 ) {
+          for ( const auto &pair : this->camera.andor ) {
+            pair.second->set_weight(std::stof(tokens.at(3)));
+            if ( std::stoi(tokens.at(4))==1 ) {
+              logwrite(function,message.str());
+              pair.second->reset_avg();
+            }
           }
         }
 
@@ -3084,8 +3087,8 @@ namespace Slicecam {
     //
     double factor = ( cam == "L" ? 1.5 : -1.5 );
     double corr   = factor * telem.slitwidth / pixscale;
-    auto crpix1 = (this->fpoffsets.sliceparams[cam].crpix1 / hbin) + corr;
-    auto crpix2 = (this->fpoffsets.sliceparams[cam].crpix2 / vbin);
+    auto crpix1   = (this->fpoffsets.sliceparams[cam].crpix1 / hbin) + corr;
+    auto crpix2   = (this->fpoffsets.sliceparams[cam].crpix2 / vbin);
 
     // adjusting DATASEC is a little convoluted
     // datasec = "[h1:h2,v1:v2]"
@@ -3130,6 +3133,13 @@ namespace Slicecam {
           h2 = ( h2 + hbin - 1 ) / hbin;
           v1 = ( v1 + vbin - 1 ) / vbin;
           v2 = ( v2 + vbin - 1 ) / vbin;
+
+          // adjust horiz values for slit offset
+          //
+          int offcorr = telem.slitoffset/pixscale/3;
+
+          h1 = h1 + ( cam=="L" ?  0 : -1 ) * offcorr;
+          h2 = h2 + ( cam=="L" ? -1 :  0 ) * offcorr;
 
           // put the scaled values back into a string
           //
