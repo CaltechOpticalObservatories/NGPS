@@ -1385,64 +1385,23 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
-    bool isopen=false, ishomed=false;
 
     // make sure hardware is powered on
     //
     error = seq.check_power_on(POWER_CALIB, std::chrono::seconds(5));
 
+    // open connection to calib. this will home motors if necessary.
+    //
     bool was_opened=false;
-    error = seq.check_connected(seq.acamd, was_opened);
+    error = seq.check_connected(seq.calibd, was_opened);
 
-/*****
-    // if not connected to the calib daemon then connect
+    // if calibd was just opened, close the door and open the cover
     //
-    if ( error==NO_ERROR && !seq.calibd.socket.isconnected() ) {
-      logwrite( function, "connecting to calib daemon" );
-      error = seq.calibd.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting to calib daemon" );
-    }
-
-    // Ask calibd if hardware connection is open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.calibd.command( CALIBD_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
-    }
-
-    // and open it if necessary.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to calib hardware" );
-      error = seq.calibd.command( CALIBD_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to calib hardware" );
-    }
-*****/
-
-    // Ask calibd if the motors are homed,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.calibd.command( CALIBD_ISHOME, reply );
-      error |= seq.parse_state( function, reply, ishomed );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
-    }
-
-    // and send the HOME command to calib if needed.
-    //
-    if ( error==NO_ERROR && !ishomed ) {
-      logwrite( function, "sending home command" );
-      error = seq.calibd.command_timeout( CALIBD_HOME, CALIBD_HOME_TIMEOUT );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
-    }
-
-    // ensure door and cover are closed
-    //
-    if ( error==NO_ERROR ) {
-      logwrite( function, "closing calib door and cover" );
-      message.str(""); message << CALIBD_SET << " cover=close door=close";
+    if ( error==NO_ERROR && was_opened ) {
+      logwrite( function, "closing calib door and opening slit cover" );
+      message.str(""); message << CALIBD_SET << " cover=open door=close";
       error = seq.calibd.command_timeout( message.str(), CALIBD_SET_TIMEOUT );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
+      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
     }
 
     // atomically set thread_error so the main thread knows we had an error
@@ -1457,6 +1416,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
     seq.seq_state.clear( Sequencer::SEQ_WAIT_CALIB );
     seq.broadcast_seqstate();
+
+    if ( error==NO_ERROR ) logwrite( function, "calib ready" );
 
     seq.thread_state.clear( THR_CALIB_INIT );                  // thread terminated
     return;
@@ -2873,11 +2834,11 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     //
 //  if ( not seq.is_seqstate_set( Sequencer::SEQ_OFFLINE ) && not seq.is_seqstate_set( Sequencer::SEQ_READY ) ) {
 //    message << "ERROR: runstate " << this->seq_state.get_set_names() << " must be OFFLINE or READY";
-    if ( seq.seq_state.is_clear( Sequencer::SEQ_OFFLINE ) ) {
-      message << "ERROR: runstate " << this->seq_state.get_set_names() << " must be OFFLINE";
-      seq.async.enqueue_and_log( function, message.str() );
-      return ERROR;
-    }
+//  if ( seq.seq_state.is_clear( Sequencer::SEQ_OFFLINE ) ) {
+//    message << "ERROR: runstate " << this->seq_state.get_set_names() << " must be OFFLINE";
+//    seq.async.enqueue_and_log( function, message.str() );
+//    return ERROR;
+//  }
 
 /*****
     // Disallow startup if TCS is not connected and open
@@ -4114,35 +4075,34 @@ logwrite( function, message.str() );
     //
     if ( !daemon.socket.isconnected() ) {
       logwrite( function, "connecting to "+daemon.name );
-      error = daemon.connect();
-      if ( error != NO_ERROR ) {
+      if ( daemon.connect() != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR connecting to "+daemon.name );
         return ERROR;
       }
     }
+    logwrite( function, "connected to "+daemon.name );
 
     // Ask if hardware connection is open
     //
-    if ( error == NO_ERROR ) {
-      error  = daemon.send( "isopen", reply );
-      error |= this->parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR opening "+daemon.name );
-        return ERROR;
-      }
+    error  = daemon.send( "isopen", reply );
+    error |= this->parse_state( function, reply, isopen );
+    if ( error != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR opening "+daemon.name );
+      return ERROR;
     }
 
     // and open it if necessary.
     //
-    if ( error==NO_ERROR && !isopen ) {
+    if ( !isopen ) {
       logwrite( function, "opening "+daemon.name );
-      error = daemon.send( "open", reply );
-      if ( error != NO_ERROR ) {
+      if ( daemon.send( "open", reply ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR opening connection to "+daemon.name );
         return ERROR;
       }
       was_opened=true;
+      logwrite( function, "opened "+daemon.name+" hardware" );
     }
+    else logwrite( function, daemon.name+" hardware was already open" );
 
     return NO_ERROR;
   }
