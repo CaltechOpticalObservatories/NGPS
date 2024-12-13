@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFrame
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFrame, QMessageBox
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
 from logic_service import LogicService
 
@@ -144,11 +144,18 @@ class ControlTab(QWidget):
         self.go_button.setEnabled(False)
 
         # Offset To Target Button
-        self.offset_to_target_button = QPushButton("Offset To Target")
+        self.offset_to_target_button = QPushButton("Offset")
         self.offset_to_target_button.clicked.connect(self.on_offset_to_target_click)
+        self.offset_to_target_button.setEnabled(False)
+
+        # Offset To Target Button
+        self.continue_button = QPushButton("Continue")
+        self.continue_button.clicked.connect(self.on_continue_button_click)
+        self.continue_button.setEnabled(False)
 
         row3_layout.addWidget(self.go_button)
         row3_layout.addWidget(self.offset_to_target_button)
+        row3_layout.addWidget(self.continue_button)
 
         row3_widget = QWidget()
         row3_widget.setLayout(row3_layout)
@@ -160,18 +167,38 @@ class ControlTab(QWidget):
         row4_layout.setSpacing(10)
 
         # Buttons
-        self.expose = QPushButton("Expose")
-        self.expose.clicked.connect(self.on_expose_button_click)
         self.pause_button = QPushButton("Pause")
         self.stop_now_button = QPushButton("Stop Now")
 
-        row4_layout.addWidget(self.expose)
+        # Connect the buttons to their corresponding slots
+        self.pause_button.clicked.connect(self.on_pause_button_click)
+        self.stop_now_button.clicked.connect(self.on_stop_now_button_click)
+
         row4_layout.addWidget(self.pause_button)
         row4_layout.addWidget(self.stop_now_button)
 
         row4_widget = QWidget()
         row4_widget.setLayout(row4_layout)
         return row4_widget
+
+    def on_pause_button_click(self):
+        """Toggle between Pause and Resume when the Pause button is clicked."""
+        if hasattr(self, 'is_paused') and self.is_paused:
+            # If currently paused, resume and change button text to "Pause"
+            self.is_paused = False
+            self.pause_button.setText("Pause")
+            print("Resuming action...")
+            # Add resume functionality here
+        else:
+            # If not paused, pause and change button text to "Resume"
+            self.is_paused = True
+            self.pause_button.setText("Resume")
+            print("Pausing action...")
+            # Add pause functionality here
+
+    def on_stop_now_button_click(self):
+        """Handle Stop Now button click."""
+        print("Stopping now...")
 
     def create_row5(self):
         """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""
@@ -193,6 +220,7 @@ class ControlTab(QWidget):
         self.startup_button = QPushButton("Startup")
         self.shutdown_button = QPushButton("Shutdown")
         self.startup_button.clicked.connect(self.on_startup_button_click)
+        self.startup_button.clicked.connect(self.on_shutdown_button_click)
 
         # Add buttons to each vertical layout
         binning_layout.addWidget(self.binning_button)
@@ -229,17 +257,40 @@ class ControlTab(QWidget):
         self.slit_width_box.textChanged.connect(self.on_input_changed)
         self.slit_angle_box.textChanged.connect(self.on_input_changed)
 
-    def on_expose_button_click(self):
+    def on_continue_button_click(self):
         """Handle the 'Expose' button click"""
         print("Startup button clicked!")
         command = f"userexpose\n"
         self.parent.send_command(command)
+        self.continue_button.setEnabled(False)
+        self.continue_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+        """)
 
     def on_startup_button_click(self):
         """Handle the 'Startup' button click"""
         print("Startup button clicked!")
         command = f"startup\n"
         self.parent.send_command(command)
+
+    def on_shutdown_button_click(self):
+        """Handle the 'Startup' button click"""
+        print("Startup button clicked!")
+        command = f"shutdown\n"
+        self.parent.send_command(command) 
 
     def on_offset_to_target_click(self):
         """Handle the Offset To Target button click event"""
@@ -248,6 +299,23 @@ class ControlTab(QWidget):
         print(f"Sending command to SequencerService: {command}")  # Print the command being sent
         # Call send_command method from SequencerService
         self.parent.send_command(command)
+        self.offset_to_target_button.setEnabled(False)
+        self.offset_to_target_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+        """)
 
     def on_input_changed(self):
         """Enable the Confirm button when the user modifies input fields"""
@@ -276,9 +344,8 @@ class ControlTab(QWidget):
             print(f"Sending command: seq startone {observation_id}")
             self.send_target_command(observation_id)
             QSound.play("sound/go_button_clicked.wav")
-
+            self.go_button.setEnabled(False)
             # Disable the button immediately after the user clicks it
-            # self.go_button.setEnabled(False)
             self.go_button.setStyleSheet("""
                 QPushButton {
                     background-color: #D3D3D3;  /* Light gray when disabled */
@@ -296,6 +363,43 @@ class ControlTab(QWidget):
                 }
             """)
 
+            # Show a popup message
+            self.show_waiting_popup()
+            self.offset_to_target_button.setEnabled(True)
+            self.offset_to_target_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)            
+            self.continue_button.setEnabled(True)
+            self.continue_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)
+
             # Start a QTimer to re-enable the button after 60 seconds
             # self.timer = QTimer(self)
             # self.timer.setSingleShot(True)  # Ensure the timer only runs once
@@ -304,6 +408,19 @@ class ControlTab(QWidget):
 
         else:
             print("No observation ID available.")
+
+    def show_waiting_popup(self):
+        """Show a popup message that disappears after 5 seconds."""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setText("Waiting for TCS Operator...")
+        msg_box.setWindowTitle("Information")
+        msg_box.setStandardButtons(QMessageBox.NoButton)  # No buttons, just a message
+
+        # Set a QTimer to close the message box after 5 seconds
+        QTimer.singleShot(5000, msg_box.close)
+        
+        msg_box.exec_()
         
     def enable_go_button(self):
         """Method to re-enable the 'Go' button after 60 seconds."""

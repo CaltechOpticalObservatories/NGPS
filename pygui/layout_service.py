@@ -377,6 +377,40 @@ class LayoutService:
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)  # Make horizontal scrollbar always visible
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Make vertical scrollbar as needed
+
+        # Set a custom style for the scroll area (e.g., larger scrollbars for easier dragging)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+            }
+            QScrollBar:vertical {
+                border: 1px solid #999999;
+                background: #f1f1f1;
+                width: 10px;
+                margin: 0px 0px 0px 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #888888;
+                min-height: 50px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #555555;
+            }
+            QScrollBar:horizontal {
+                border: 1px solid #999999;
+                background: #f1f1f1;
+                height: 10px;
+                margin: 0px 0px 0px 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #888888;
+                min-width: 50px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #555555;
+            }
+        """)
 
         # Add the scroll area to the layout instead of the table directly
         bottom_section_layout.addWidget(scroll_area)
