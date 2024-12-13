@@ -287,7 +287,8 @@ namespace Slit {
       retstring = SLITD_SET;
       retstring.append( " <width> [ <offset> ]\n" );
       retstring.append( "  Set <width> and optionally <offset>. If offset is omitted then\n" );
-      retstring.append( "  both motors are moved symmetrically to achieve the requested width.\n" );
+      retstring.append( "  the offset is unchanged and both motors are moved symmetrically\n" );
+      retstring.append( "  to achieve the requested width.\n" );
       retstring.append( "  Using an offset will reduce the maximum width available.\n\n" );
       retstring.append( "  Default units are arcsec. Add \"mm\" to use actuator units,\n" );
       retstring.append( "  E.G. "+SLITD_SET+" 5mm to set a slit width of 5mm\n\n" );
@@ -322,24 +323,14 @@ namespace Slit {
 
       // Get the reqwidth, reqoffset in the requested unit (default arcsecC)
       //
-      switch ( tokens.size() ) {
-
-        case 2:    // the 2nd arg is the setoffset (and if not set here then use default above)
-          if ( tokens.at(1).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
-          reqoffset = SlitDimension( std::stof( tokens.at(1) ), unit );
-
-          // do not break!
-          // let this case drop through because if there is a 2nd arg then there's a 1st
-
-        case 1:    // the 1st arg is the reqwidth
-          if ( tokens.at(0).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
-          reqwidth = SlitDimension( std::stof( tokens.at(0) ), unit );
-          break;
-
-        default:   // impossible! because I already checked that tokens.size was 1 or 2
-          logwrite( function, "ERROR args: "+args );
-          retstring="internal_error";
-          return ERROR;
+      if ( tokens.size() >= 1 ) {
+        if ( tokens.at(0).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
+        reqwidth = SlitDimension( std::stof( tokens.at(0) ), unit );
+        reqoffset = snapshot.offset;
+      }
+      if ( tokens.size() == 2 ) {
+        if ( tokens.at(1).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
+        reqoffset = SlitDimension( std::stof( tokens.at(1) ), unit );
       }
     }
     catch( const std::exception &e ) {
@@ -474,10 +465,10 @@ namespace Slit {
     //
     std::stringstream s;
     if ( args=="mm" ) {
-      s << snapshot.width.mm() << " " << snapshot.offset.mm() << " mm";
+      s << std::setprecision(3) << std::fixed << snapshot.width.mm() << " " << snapshot.offset.mm() << " mm";
     }
     else {
-      s << snapshot.width.arcsec() << " " << snapshot.offset.arcsec();
+      s << std::setprecision(3) << std::fixed << snapshot.width.arcsec() << " " << snapshot.offset.arcsec();
     }
     retstring = s.str();
 
@@ -490,6 +481,11 @@ namespace Slit {
   }
   /***** Slit::Interface::get *************************************************/
   long Interface::get( std::string &retstring ) {
+    return this->get( "", retstring );
+  }
+  /***** Slit::Interface::get *************************************************/
+  long Interface::get() {
+    std::string retstring;
     return this->get( "", retstring );
   }
   /***** Slit::Interface::get *************************************************/
@@ -640,12 +636,20 @@ namespace Slit {
     if ( addr > 0 ) cmd << addr << " ";
     cmd << cmd_in;
 
+    long error;
+
     if ( cmd.str().find( "?" ) != std::string::npos ) {
-      return( this->motorinterface.send_command( name, cmd.str(), retstring ) );
+      error = this->motorinterface.send_command( name, cmd.str(), retstring );
     }
     else {
-      return( this->motorinterface.send_command( name, cmd.str() ) );
+      error = this->motorinterface.send_command( name, cmd.str() );
     }
+
+    // read the positions now for telemetry purposes
+    //
+    if ( error == NO_ERROR ) error = this->get();
+
+    return error;
   }
   /***** Slit::Interface::send_command ****************************************/
 
@@ -681,6 +685,10 @@ namespace Slit {
    *
    */
   void Interface::publish_snapshot() {
+    std::string dontcare;
+    this->publish_snapshot(dontcare);
+  }
+  void Interface::publish_snapshot(std::string &retstring) {
     nlohmann::json jmessage_out;
     jmessage_out["source"]   = "slitd";
     jmessage_out["ISOPEN"]   = snapshot.isopen;
@@ -689,6 +697,11 @@ namespace Slit {
     jmessage_out["SLITO"]    = snapshot.offset.arcsec();
     jmessage_out["SLITPOSA"] = snapshot.posA;
     jmessage_out["SLITPOSB"] = snapshot.posB;
+
+    // for backwards compatibility
+    jmessage_out["messagetype"] = "slitinfo";
+    retstring=jmessage_out.dump();
+    retstring.append(JEOF);
 
     try {
       this->publisher->publish( jmessage_out );

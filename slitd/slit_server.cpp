@@ -589,6 +589,22 @@ namespace Slit {
       if ( cmd == SLITD_NATIVE ) {
                       ret = this->interface.send_command( args, retstring );
       }
+      else
+
+      // send telemetry on request
+      //
+      if ( cmd == TELEMREQUEST ) {
+                    if ( args=="?" || args=="help" ) {
+                      retstring=TELEMREQUEST+"\n";
+                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                      ret=HELP;
+                    }
+                    else {
+                      this->interface.publish_snapshot(retstring);
+                      ret = JSON;
+                    }
+     }
 
       // unknown commands generate an error
       //

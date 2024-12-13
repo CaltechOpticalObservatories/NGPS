@@ -234,6 +234,7 @@ namespace Slit {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void publish_snapshot();
+      void publish_snapshot(std::string &retstring);
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
@@ -245,6 +246,7 @@ namespace Slit {
       long set( Slit::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
       long get( std::string args, std::string &retstring );                         ///< get the current width and offset
       long get( std::string &retstring );                                           ///< get the current width and offset
+      long get();                                                                   ///< get the current width and offset
       long read_positions( float &width, float &offset, float &posa, float &posb );
       long read_positions( float &width, float &offset );
 
@@ -261,7 +263,6 @@ namespace Slit {
       volatile std::atomic<long> thr_error;      ///< error state of threads
       std::mutex wait_mtx;                       ///< mutex object for waiting for threads
       std::condition_variable cv;                ///< condition variable for waiting for threads
-
   };
   /***** Slit::Interface ******************************************************/
 
