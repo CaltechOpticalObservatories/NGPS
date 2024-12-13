@@ -363,6 +363,7 @@ class LayoutService:
         self.target_list_display.setSortingEnabled(True)
 
         # Enable horizontal scrolling if the content exceeds the available width
+        self.target_list_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.target_list_display.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # Allow manual resizing of the columns (on the horizontal header)
@@ -371,47 +372,10 @@ class LayoutService:
         # Disable editing of table cells
         self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        # Create a QScrollArea to enable scrolling
+        # Enable horizontal scrolling by adding the table to a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Vertical scrollbar as needed
-
-        # Initially hide the horizontal scrollbar
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        # Set a custom style for the scroll area (e.g., larger scrollbars for easier dragging)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-            }
-            QScrollBar:vertical {
-                border: 1px solid #999999;
-                background: #f1f1f1;
-                width: 10px;
-                margin: 0px 0px 0px 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #888888;
-                min-height: 50px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #555555;
-            }
-            QScrollBar:horizontal {
-                border: 1px solid #999999;
-                background: #f1f1f1;
-                height: 10px;
-                margin: 0px 0px 0px 0px;
-            }
-            QScrollBar::handle:horizontal {
-                background: #888888;
-                min-width: 50px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background: #555555;
-            }
-        """)
 
         # Add the scroll area to the layout instead of the table directly
         bottom_section_layout.addWidget(scroll_area)
@@ -422,21 +386,9 @@ class LayoutService:
         # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
-        # Connect the sizeHintChanged signal to update the scrollbar visibility dynamically
-        self.target_list_display.horizontalHeader().sectionResized.connect(self.toggle_horizontal_scrollbar)
-
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
-
-    def toggle_horizontal_scrollbar(self):
-        """Toggle horizontal scrollbar visibility based on table content width."""
-        # Check if the total width of the table exceeds the available width
-        total_table_width = self.target_list_display.horizontalHeader().length()
-        if total_table_width > self.target_list_display.viewport().width():
-            self.target_list_display.parent().setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        else:
-            self.target_list_display.parent().setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     
     def on_row_selected(self):
         # Get the selected row's index
