@@ -377,23 +377,15 @@ class LayoutService:
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
 
-        # Customize the scroll bars to make them large when visible, and make the vertical handle larger
+        # Customize the scroll bars to make them large when visible
         scroll_area.setStyleSheet("""
-            QScrollBar:vertical {
+            QScrollBar:vertical, QScrollBar:horizontal {
                 border: 2px solid grey;
                 background: #F0F0F0;
-                width: 30px;  # Increase the width of the vertical scrollbar
+                width: 20px;
+                height: 20px;
             }
-            QScrollBar::handle:vertical {
-                background: #FFCC40;
-                border-radius: 15px;  # Make the vertical handle thicker
-            }
-            QScrollBar:horizontal {
-                border: 2px solid grey;
-                background: #F0F0F0;
-                height: 20px;  # Horizontal scrollbar size remains normal
-            }
-            QScrollBar::handle:horizontal {
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
                 background: #FFCC40;
                 border-radius: 10px;
             }
@@ -416,7 +408,6 @@ class LayoutService:
 
         return target_list_group
 
-    
     def on_row_selected(self):
         # Get the selected row's index
         selected_rows = self.parent.target_list_display.selectionModel().selectedRows()
