@@ -670,7 +670,6 @@ namespace Sequencer {
     long error;
     std::stringstream slitcmd;
 
-#ifdef REMOVED_FOR_TESTING
     // send the SET command to slitd
     //
     slitcmd << SLITD_SET << " " << this->target.slitwidth_req << " " << this->target.slitoffset_req;
@@ -683,7 +682,6 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "ERROR: unable to set slit" );
       this->thread_error.set( THR_SLIT_SET );
     }
-#endif
 
     this->seq_state.clear( Sequencer::SEQ_WAIT_SLIT );
     this->broadcast_seqstate();
@@ -2206,13 +2204,12 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
         message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << coords_reply;
         this->async.enqueue_and_log( function, message.str() );
         this->thread_error.set( THR_MOVE_TO_TARGET );
-///     this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
-///     this->broadcast_seqstate();
-///     this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-///     return;
+        this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
+        this->broadcast_seqstate();
+        this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
+        return;
       }
 
-#ifdef REMOVE_FOR_TESTING
       // Send casangle using tcsd wrapper for RINGGO command
       //
       std::stringstream ringgo_cmd;
@@ -2224,12 +2221,11 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
         message.str(""); message << "ERROR: sending RINGGO command. TCS reply: " << ringgo_reply;
         this->async.enqueue_and_log( function, message.str() );
         this->thread_error.set( THR_MOVE_TO_TARGET );
-///     this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
-///     this->broadcast_seqstate();
-///     this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
-///     return;
+        this->seq_state.clear( Sequencer::SEQ_WAIT_TCS, Sequencer::SEQ_WAIT_TCSOP );
+        this->broadcast_seqstate();
+        this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
+        return;
       }
-#endif
 
       // Wait for on-target signal (or abort)
       //
@@ -2682,10 +2678,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
    *
    */
   void Sequence::dothread_acquisition() {
-// testing
-this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );              // clear ACQUIRE bit
-this->broadcast_seqstate();
-return;
     this->thread_state.set( THR_ACQUISITION );                   // thread running
     std::string function = "Sequencer::Sequence::dothread_acquisition";
     std::stringstream message;
