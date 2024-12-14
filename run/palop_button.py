@@ -6,7 +6,7 @@ import tkinter as tk
 import os
 
 def button_clicked():
-    cmd = "seq ontarget"
+    cmd = "/home/developer/Software/run/seq ontarget"
     print(cmd)
     os.system(cmd)
 

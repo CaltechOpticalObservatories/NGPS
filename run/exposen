@@ -1,12 +1,24 @@
 #!/bin/bash
 
 if [[ -z $1 ]]; then
-  echo "Usage:  exposen <n>"
-  echo "  performs <n> exposures"
+  echo "Usage:  exposen <n> <slitw>"
+  echo "  performs <n> exposures at slit width <slitw> (arcsec)"
+  echo "  Uses virtual slit method if <slitw> is provided"
   exit
 fi
 
+slit_offset_method=false
+if [[ $# -gt 1 ]]; then
+  slit_offset_method=true
+fi
+
 n=$1
+slitw=$2
+
+if [ "$slit_offset_method" = true ]; then
+  echo "Moving slit to target"
+  slit set $slitw 3
+fi
 
 for (( i=1 ; i<=$n ; i++ ));
 do
@@ -28,3 +40,8 @@ do
     sleep 0.1
     tput bel
 done
+
+if $slit_offset_method; then
+  echo "Moving slit to idle position"
+  slit set 0.5 -3
+fi
