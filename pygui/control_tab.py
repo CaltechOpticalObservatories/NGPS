@@ -411,16 +411,19 @@ class ControlTab(QWidget):
             print("No observation ID available.")
 
     def show_waiting_popup(self):
-        """Show a popup message that disappears after 5 seconds."""
+        """Show a popup message with a 'Close' button."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Information)
         msg_box.setText("Waiting for TCS Operator...")
         msg_box.setWindowTitle("Information")
-        msg_box.setStandardButtons(QMessageBox.NoButton)  # No buttons, just a message
-
-        # Set a QTimer to close the message box after 5 seconds
+        
+        # Add an "Ok" button (or "Close" if you prefer)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        
+        # Set a QTimer to close the message box after 5 seconds, but keep the "Ok" button available
         QTimer.singleShot(5000, msg_box.close)
         
+        # Execute the message box, the user can close it manually by clicking "Ok"
         msg_box.exec_()
         
     def enable_go_button(self):
