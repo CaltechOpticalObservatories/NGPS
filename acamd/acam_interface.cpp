@@ -1551,16 +1551,18 @@ namespace Acam {
     }
     // extract and store values in the class
     //
-    Common::extract_telemetry_value( jmessage, "TCSNAME",  telem.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",   telem.is_tcs_open );
-    Common::extract_telemetry_value( jmessage, "CASANGLE", telem.angle_scope );
-    Common::extract_telemetry_value( jmessage, "TELRA",    telem.ra_scope_hms );
-    Common::extract_telemetry_value( jmessage, "TELDEC",   telem.dec_scope_dms );
-    Common::extract_telemetry_value( jmessage, "RA",       telem.ra_scope_h );
-    Common::extract_telemetry_value( jmessage, "DEC",      telem.dec_scope_d );
-    Common::extract_telemetry_value( jmessage, "AZ",       telem.az );
-    Common::extract_telemetry_value( jmessage, "TELFOCUS", telem.telfocus );
-    Common::extract_telemetry_value( jmessage, "AIRMASS",  telem.airmass );
+    Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
+    Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, "CASANGLE",   telem.angle_scope );
+    Common::extract_telemetry_value( jmessage, "TELRA",      telem.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, "TELDEC",     telem.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
+    Common::extract_telemetry_value( jmessage, "DECLOFFSET", telem.offsetdec );
+    Common::extract_telemetry_value( jmessage, "AZ",         telem.az );
+    Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
+    Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
 
     // save them to the database
     //
@@ -2625,12 +2627,15 @@ namespace Acam {
     if ( whattodo == "stop" ) {
       this->should_framegrab_run.store( false, std::memory_order_release );  // tells framegrab loop to stop
       if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {    // wait for it to stop
-        std::unique_lock<std::mutex> lock(framegrab_mtx);
-        int waittime = std::max( static_cast<int>(2000*(this->camera.andor.camera_info.exptime+1)), 5000 );
-        if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
-              return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
-          logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
-          return ERROR;
+        int waittime = std::max( static_cast<int>(3000*(this->camera.andor.camera_info.exptime+1)), 5000 );
+        if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {
+          std::unique_lock<std::mutex> lock(framegrab_mtx);
+          if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
+                return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
+            logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
+            return ERROR;
+          }
+          else { logwrite(function, "framegrab loop has stopped"); return NO_ERROR; }
         }
         else { logwrite(function, "framegrab loop has stopped"); return NO_ERROR; }
       }
@@ -2861,7 +2866,7 @@ namespace Acam {
 
     // If something was supplied but not the correct number of args then that's an error
     //
-    if ( !tokens.empty() && ( tokens.size() != 3 || tokens.size() != 5 )) {
+    if ( !tokens.empty() && tokens.size() != 3 && tokens.size() != 5 ) {
       message.str(""); message << "ERROR received " << tokens.size() << " arguments "
                                << "but expected <exptime> <gain> <filter> [ <navg> <reset> ]";
       logwrite( function, message.str() );
@@ -4947,6 +4952,8 @@ logwrite( function, message.str() );
     this->camera.fitsinfo.fitskeys.addkey( "DEC",       telem.dec_scope_dms, "Telescope Declination" );
     this->camera.fitsinfo.fitskeys.addkey( "TELRA",     telem.ra_scope_h, "Telecscope Right Ascension hours" );
     this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    telem.dec_scope_d, "Telescope Declination degrees" );
+    this->camera.fitsinfo.fitskeys.addkey( "RAOFFS",    telem.offsetra, "Telescope RA offset" );
+    this->camera.fitsinfo.fitskeys.addkey( "DECLOFFS",  telem.offsetdec, "Telescope DEC offset" );
     this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  telem.angle_scope, "Cassegrain ring angle" );
     this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );

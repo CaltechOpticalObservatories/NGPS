@@ -521,8 +521,10 @@ namespace Acam {
         double angle_scope;
         std::string ra_scope_hms;   // h:m:s
         std::string dec_scope_dms;  // d:m:s
-        double ra_scope_h;   // decimal hours
-        double dec_scope_d;  // decimal degrees
+        double ra_scope_h;          // decimal hours
+        double dec_scope_d;         // decimal degrees
+        double offsetra;
+        double offsetdec;
         double az;
         double telfocus;
         double airmass;
