@@ -5,6 +5,7 @@ from instrument_status_service import InstrumentStatusService
 from logic_service import LogicService
 from PyQt5.QtCore import Qt
 from control_tab import ControlTab
+from instrument_status_tab import InstrumentStatusTab
 
 class LayoutService:
     def __init__(self, parent):
@@ -16,6 +17,9 @@ class LayoutService:
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
+        
+        # Create the instrument status tab instance
+        self.instrument_status_tab = InstrumentStatusTab(self.parent)
 
     def create_layout(self):
         # Main horizontal layout for overall structure``
@@ -108,6 +112,10 @@ class LayoutService:
         control_layout.addWidget(self.control_tab)  # Add the ControlTab widget to the layout
         self.parent.control_tab.setLayout(control_layout)  # Set the layout for the control tab widget
 
+        self.status_tab = InstrumentStatusTab(self.parent)  # Create the control tab instance
+        status_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
+        status_layout.addWidget(self.status_tab)  # Add the ControlTab widget to the layout
+        self.parent.status_tab.setLayout(status_layout)  # Set the layout for the control tab widget
         return third_column_layout
 
     def create_top_section(self):
@@ -222,16 +230,17 @@ class LayoutService:
 
         return progress_and_image_group
 
-
     def create_progress_layout(self):
         progress_layout = QHBoxLayout()
         progress_layout.setSpacing(10)
 
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
+        self.parent.exposure_progress.setValue(0)
         self.parent.exposure_progress.setMaximumWidth(200)  # Max width for progress bar
 
         self.parent.overhead_progress = QProgressBar()
+        self.parent.overhead_progress.setValue(0)
         self.parent.overhead_progress.setRange(0, 100)
         self.parent.overhead_progress.setMaximumWidth(220)  # Max width for progress bar
 
@@ -449,7 +458,17 @@ class LayoutService:
                 if header == 'OBSERVATION_ID':
                     observation_id = value  # Store the observation ID
                     print(f"Found OBSERVATION_ID: {observation_id}")  # Print the found OBSERVATION_ID
-                    
+
+                # Check if the header is 'Exposure Time' and extract its value
+                if header == 'RA':
+                    ra = value  # Store the exposure time
+                    print(f"Found RA: {exposure_time}")  # Print the found exposure time
+
+                # Check if the header is 'Exposure Time' and extract its value
+                if header == 'DECL':
+                    dec = value  # Store the exposure time
+                    print(f"Found DEC: {exposure_time}")  # Print the found exposure time
+
                 # Check if the header is 'Exposure Time' and extract its value
                 if header == 'EXPTIME':
                     exposure_time = value  # Store the exposure time
@@ -484,6 +503,8 @@ class LayoutService:
             if observation_id:
                 # Store the observation_id in a class variable for later use when the "Go" button is clicked
                 self.parent.current_observation_id = observation_id
+                self.parent.current_ra = ra
+                self.parent.current_dec = dec
                 self.parent.current_offset_ra = offset_ra
                 self.parent.current_offset_dec = offset_dec
             

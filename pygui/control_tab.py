@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLab
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
 from logic_service import LogicService
+import astropy.units as u
 
 class ControlTab(QWidget):
     def __init__(self, parent):
@@ -220,7 +221,7 @@ class ControlTab(QWidget):
         self.startup_button = QPushButton("Startup")
         self.shutdown_button = QPushButton("Shutdown")
         self.startup_button.clicked.connect(self.on_startup_button_click)
-        self.startup_button.clicked.connect(self.on_shutdown_button_click)
+        self.shutdown_button.clicked.connect(self.on_shutdown_button_click)
 
         # Add buttons to each vertical layout
         binning_layout.addWidget(self.binning_button)
@@ -555,6 +556,11 @@ class ControlTab(QWidget):
     def on_slit_angle_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_angle = self.slit_angle_box.text()
+        if(slit_angle is "PA"):
+            slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            print(f"Parallactic Angle: {slit_angle.to(u.deg):.2f}")
+            self.slit_angle_box.setText(slit_angle)
+
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
             self.slit_angle_box.clear()
