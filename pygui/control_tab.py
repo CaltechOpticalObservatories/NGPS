@@ -555,13 +555,13 @@ class ControlTab(QWidget):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", "SET " + exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
 
     def on_slit_angle_changed(self):
         # Retrieve the slit width and send the query to the database
