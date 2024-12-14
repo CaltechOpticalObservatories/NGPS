@@ -168,19 +168,28 @@ class ControlTab(QWidget):
         row4_layout.setSpacing(10)
 
         # Buttons
+        self.repeat_button = QPushButton("Repeat")
         self.pause_button = QPushButton("Pause")
         self.stop_now_button = QPushButton("Stop Now")
 
         # Connect the buttons to their corresponding slots
+        self.repeat_button.clicked.connect(self.on_repeat_button_click)
         self.pause_button.clicked.connect(self.on_pause_button_click)
         self.stop_now_button.clicked.connect(self.on_stop_now_button_click)
 
+        row4_layout.addWidget(self.repeat_button)
         row4_layout.addWidget(self.pause_button)
         row4_layout.addWidget(self.stop_now_button)
 
         row4_widget = QWidget()
         row4_widget.setLayout(row4_layout)
         return row4_widget
+
+    def on_repeat_button_click(self):
+        """Handle Stop Now button click."""
+        print("Repeating now...")
+        command = f"repeat\n"
+        self.parent.send_command(command)
 
     def on_pause_button_click(self):
         """Toggle between Pause and Resume when the Pause button is clicked."""
