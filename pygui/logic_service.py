@@ -453,25 +453,63 @@ class LogicService:
         @param time: Observation time (Astropy Time). Defaults to current UTC time.
         @return: Parallactic Angle (Astropy Quantity, angle with unit)
         """
-        # Default location: Palomar Observatory (EarthLocation in degrees and meters)
+        
+        # Check if location is None and set default location
         if location is None:
+            print("No location provided, using default Palomar Observatory location.")
             location = EarthLocation(lat=33.3563 * u.deg, lon=-116.8648 * u.deg, height=1706 * u.m)
+        else:
+            print(f"Location provided: {location}")
+        
+        # Debugging: Check if location is an instance of EarthLocation
+        print(f"Type of location: {type(location)}")
+        if not isinstance(location, EarthLocation):
+            raise TypeError(f"Expected location to be an instance of EarthLocation, but got {type(location)}")
         
         # Create an Observer instance with the location
-        observer = Observer(location=location, name="Observer", timezone="UTC")
+        try:
+            observer = Observer(location=location, name="Observer", timezone="UTC")
+            print(f"Observer created with location: {observer.location}")
+        except Exception as e:
+            print(f"Error creating observer: {e}")
+            raise
         
         # Default time: current UTC time if not provided
         if time is None:
+            print("No time provided, using current UTC time.")
             time = Time.now()
+        else:
+            print(f"Time provided: {time}")
+        
+        # Debugging: Check if time is an instance of astropy.time.Time
+        print(f"Type of time: {type(time)}")
+        if not isinstance(time, Time):
+            raise TypeError(f"Expected time to be an instance of astropy.time.Time, but got {type(time)}")
         
         # Format RA and Dec properly (e.g., "23 08 44.55" -> "23h 08m 44.55s")
+        print(f"Original RA: {ra}")
+        print(f"Original Dec: {dec}")
+        
         ra = ra.replace(" ", "h", 1).replace(" ", "m", 1) + "s"
         dec = dec.replace(" ", "d", 1).replace(" ", "m", 1) + "s"
         
+        print(f"Formatted RA: {ra}")
+        print(f"Formatted Dec: {dec}")
+        
         # Convert RA and Dec to SkyCoord
-        target_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
+        try:
+            target_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
+            print(f"SkyCoord for target: {target_coords}")
+        except Exception as e:
+            print(f"Error creating SkyCoord: {e}")
+            raise
         
         # Calculate the parallactic angle
-        parallactic_angle = observer.parallactic_angle(time, target_coords)
+        try:
+            parallactic_angle = observer.parallactic_angle(time, target_coords)
+            print(f"Parallactic angle: {parallactic_angle}")
+        except Exception as e:
+            print(f"Error calculating parallactic angle: {e}")
+            raise
         
         return parallactic_angle
