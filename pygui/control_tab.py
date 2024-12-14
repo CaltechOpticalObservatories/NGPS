@@ -340,7 +340,7 @@ class ControlTab(QWidget):
 
     def on_go_button_click(self):
         """Slot to handle 'Go' button click and send the target command."""
-        if hasattr(self, 'current_observation_id'):
+        if self.parent.current_observation_id is not None:
             observation_id = self.parent.current_observation_id
             print(f"Sending command: seq startone {observation_id}")
             self.send_target_command(observation_id)
