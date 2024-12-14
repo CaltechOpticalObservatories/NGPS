@@ -36,8 +36,11 @@ BUTTONS:
       coordinates are visbile on the guider camera.
 
 
-Troubleshooting:
+TROUBLESHOOTING:
+
+Can't seem to click on anything?
+  --> Look for a pop-up dialog or menu waiting to be closed
 
 Seeing weird values in menus?  Not seeing the camera settings on the image?
 Problems with scaling/colors/zoom?
-    ---> Try pressing [sync GUI]
+  --> Try pressing [sync GUI]
