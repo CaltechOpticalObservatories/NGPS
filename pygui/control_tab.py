@@ -445,11 +445,6 @@ class ControlTab(QWidget):
                 background-color: #2C6B2F;  /* Even darker green when pressed */
             }
         """)
-        
-        slit_angle = self.slit_angle_box.text()
-        slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
-        self.slit_angle_box.setText(slit_angle)
-        self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
             
     def send_target_command(self, observation_id):
         """ Method to send the command to the SequencerService """
