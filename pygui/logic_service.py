@@ -453,15 +453,25 @@ class LogicService:
         @param time: Observation time (Astropy Time). Defaults to current UTC time.
         @return: Parallactic Angle (Astropy Quantity, angle with unit)
         """
-        # Default location: Palomar Observatory
+        # Default location: Palomar Observatory (EarthLocation in degrees and meters)
         if location is None:
             location = EarthLocation(lat=33.3563 * u.deg, lon=-116.8648 * u.deg, height=1706 * u.m)
+        
+        # Create an Observer instance with the location
         observer = Observer(location=location, name="Observer", timezone="UTC")
-        # Current UTC time
+        
+        # Default time: current UTC time if not provided
         if time is None:
             time = Time.now()
-        ra = ra.replace(" ", "h", 1).replace(" ", "m", 1) + "s"  
-        dec = dec.replace(" ", "d", 1).replace(" ", "m", 1) + "s" 
+        
+        # Format RA and Dec properly (e.g., "23 08 44.55" -> "23h 08m 44.55s")
+        ra = ra.replace(" ", "h", 1).replace(" ", "m", 1) + "s"
+        dec = dec.replace(" ", "d", 1).replace(" ", "m", 1) + "s"
+        
+        # Convert RA and Dec to SkyCoord
         target_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
+        
+        # Calculate the parallactic angle
         parallactic_angle = observer.parallactic_angle(time, target_coords)
+        
         return parallactic_angle
