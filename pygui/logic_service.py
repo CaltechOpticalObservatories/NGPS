@@ -444,7 +444,7 @@ class LogicService:
         except mysql.connector.Error as err:
             print(f"Error while refreshing table: {err}")
             
-    def compute_parallactic_angle_astroplan(ra, dec, location=None, time=None):
+    def compute_parallactic_angle_astroplan(self, ra, dec, location=None, time=None):
         """
         Calculate the parallactic angle for a given RA and Dec using Astroplan.
         @param ra: Right Ascension as a space-separated string (e.g., "23 08 44.55").
