@@ -4,6 +4,7 @@ param guiderSettings
     gain entry {CCD EMGain (1=off)} {DEFgain} { }
     filter menu {ACAM Filter} {DEFfilter|block|g|r|i|open|clear} { }
     navg entry {Rolling Average (N frames)} {DEFnavg} { }
+    reset checkbox {Reset Average} 1 { }
 endparam
 param focusParam
     focus entry {TCS Focus (mm)} {DEFfocus} { }
@@ -24,14 +25,14 @@ $param(focusParam) ; tcs setfocus $focus # | $text
 PUT ON SLIT
 *
 button
-$message(yesno,Move slit center to crosshairs?) | $dir/putonslit.sh guider #| $text # FORMERLY get_crosshair_pos.sh
+$message(yesno,Move slit center to crosshairs?  Note: open loop TCS moves are never perfect.) | $dir/putonslit.sh guider #| $text 
 #############
 GUIDE
 *
 button
 $message(yesno,Start guiding in this position?) | acam acquire here # | $text
 #############
-STOP
+STOP GUIDING
 *
 button
 $message(yesno,Stop guiding?) | acam acquire stop # | $text
@@ -47,12 +48,17 @@ $dir/sync_display.sh guider # | $text
 CAMERA SETTINGS
 *
 button
-$param(guiderSettings) ; acam guideset $exptime $gain $filter $navg # | $text
+$param(guiderSettings) ; acam guideset $exptime $gain $filter $navg $reset # | $text
 #############
 GRAB FITS
 *
 button
 $dir/grabfits.sh guider # | $text
+#############
+GRAB HEADER
+*
+button
+xpaget $xpa fits header | $text
 #############
 GUI HELP
 *
@@ -80,6 +86,12 @@ hmenu NGPS Commands
   # endhmenu
   
 endhmenu
+
+# Bind command example
+Print coordinates
+*.fits
+bind Double-Button-1
+echo "$x $y" | $text
 # Bind command example
 # Show Settings
 # *

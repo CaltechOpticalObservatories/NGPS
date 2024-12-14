@@ -23,7 +23,7 @@ fi
 # Get the slit region and crosshair coordinates from ds9
 crosscenter=`xpaget $id crosshair wcs degrees`
 
-slitcenter=`xpaget $id_slicev region -format xy -system wcs -group slitcenter -skyformat degrees`
+slitcenter=`xpaget $id_slicev region -format xy -system wcs -group slitcenter -skyformat degrees`  ### JUST USE HEADERS
 
 # If the slit region is missing, give up
 if [ -z "$slitcenter" ]; then

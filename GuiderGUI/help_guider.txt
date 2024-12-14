@@ -5,16 +5,21 @@ Most DS9 features will work as usual, but the user is limited to the
 crosshairs tool in the Edit menu.   Creating new frames and regions in 
 this DS9 window is discouraged and may lead to weird effects.
 To work with regions, frames, and so on, use the
-[grab fits] button to copy to a new DS9 session.  
+[grab fits] button to copy to a new DS9 session.
 
-Buttons:
+Parameters overlaid on the image do not update until the next image loads.
 
-[sync GUI] -- Update camera settings menu with the current guider settings. Zoom to fit.
+BUTTONS:
 
-[camera settings] -- Update the camera with new settings.
+[sync GUI] -- Update camera settings menu with the current guider settings. 
+              Zoom to fit.
+
+[camera settings] -- Menu to update the camera with new settings.
 
 [grab fits] -- Copy current FITS frame to a separate DS9 window for analysis
-  (also saves in /data/acam/grab/).  PLEASE DON'T MASH THE BUTTON.
+      (also saves in /data/acam/grab/).  PLEASE DON'T MASH THE BUTTON.
+
+[grab header] -- Display fits header for the current frame.
 
 [gui help] -- This message
 
@@ -23,15 +28,16 @@ Buttons:
 [focus] -- Change the focus position of the P200.
 
 [put on slit] -- Move the spectrograph slit to the coordinates
- of the crosshairs. User can zoom in first for more precision.
+      of the crosshairs. User can zoom in first for more precision.
+      THIS IS AN OPEN LOOP MOVE AND SUBJECT TO P200 OFFSET ERRORS.
 
 [guide] -- Start guiding to hold the current telescope position.
 
 [stop] -- Stop guiding.
 
+
 Troubleshooting:
 
-WHERE IS THE SETTINGS DISPLAY?  The current camera settings are displayed at 
- the bottom of the image.  If they are not visible, try zooming out.
-
-SEEING WEIRD VALUES?  Try pressing [sync camera].
+Seeing weird values in menus?  Not seeing the camera settings on the image?
+Problems with scaling/colors/zoom?
+    ---> Try pressing [sync GUI]

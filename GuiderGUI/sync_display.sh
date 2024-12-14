@@ -26,10 +26,13 @@ fi
 # Reset DS9 zoom and cursor mode
 xpaset -p $id zoom to fit;
 xpaset -p $id mode crosshair;
+xpaset -p $id cmap $cmap;
+xpaset -p $id scale datasec yes
 
-if [[ "$camera" == "slicev" ]]; then
-    xpaset -p $id lock scalelimits yes  # equalize sides of slicer cams; not necessary for ACAM
-fi
+
+# if [[ "$camera" == "slicev" ]]; then
+#     xpaset -p $id lock scalelimits yes  # equalize sides of slicer cams; not necessary for ACAM
+# fi
 
 # ACAM or SCAM demon will use push_settings*.sh
 $synccommand
