@@ -657,6 +657,21 @@ namespace Slicecam {
       }
       if ( !message.str().empty() ) logwrite( function, message.str() );
 
+      // The image gets flipped when the EM gain is used.
+      // This flips it back.
+      //
+      if (error==NO_ERROR && pair.first=="L") {
+        if (gain>1) {
+          error=this->andor["L"]->set_imflip( (default_config["L"].hflip==1?0:1), default_config["L"].vflip );
+        }
+        else error=this->andor["L"]->set_imflip( default_config["L"].hflip, default_config["L"].vflip );
+      }
+      if (error==NO_ERROR && pair.first=="R") {
+        if (gain>1) {
+          error=this->andor["R"]->set_imflip( (default_config["R"].hflip==1?0:1), default_config["R"].vflip );
+        }
+        else error=this->andor["R"]->set_imflip( default_config["R"].hflip, default_config["R"].vflip );
+      }
     }
 
     // Regardless of setting the gain, always return what's in the camera
@@ -1767,18 +1782,21 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes or 5s,
+    // When stopping framegrabbing, wait for it to stop. Timeout after 3 exptimes or 5s,
     // whichever is greater
     //
     if ( whattodo == "stop" ) {
       this->should_framegrab_run.store( false, std::memory_order_release );  // tells framegrab loop to stop
       if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {    // wait for it to stop
-        std::unique_lock<std::mutex> lock(framegrab_mtx);
-        int waittime = std::max( static_cast<int>(2000*(this->camera.andor.begin()->second->camera_info.exptime+1)), 5000 );
-        if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
-              return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
-          logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
-          return ERROR;
+        int waittime = std::max( static_cast<int>(3000*(this->camera.andor.begin()->second->camera_info.exptime+1)), 5000 );
+        if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {
+          std::unique_lock<std::mutex> lock(framegrab_mtx);
+          if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
+                return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
+            logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
+            return ERROR;
+          }
+          else { logwrite(function, "framegrab loop has stopped"); return NO_ERROR; }
         }
         else { logwrite(function, "framegrab loop has stopped"); return NO_ERROR; }
       }
@@ -1928,7 +1946,7 @@ namespace Slicecam {
         _nskip = this->nskip_preserve_frames.load();
       }
 
-    } while ( error==NO_ERROR && this->should_framegrab_run.load(std::memory_order_acquire) );
+    } while ( this->should_framegrab_run.load(std::memory_order_acquire) );
     }
 
     this->cv.notify_all();  // send notification that the loop has stopped
@@ -3002,6 +3020,15 @@ namespace Slicecam {
         return ERROR;
       }
 
+      // If framegrab is running then stop it. This won't return until framegrabbing
+      // has stopped (or timeout).
+      //
+      bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error = this->framegrab( "stop", dontcare );
+      }
+
       // Parse the gain from the token
       //
       try {
@@ -3014,6 +3041,14 @@ namespace Slicecam {
         retstring="parsing_exception";
         return ERROR;
       }
+
+      // If framegrab was previously running then restart it
+      //
+      if ( was_framegrab_running ) {
+        std::string dontcare;
+        error |= this->framegrab( "start", dontcare );
+      }
+
     }
 
     // return string is the current gain
@@ -3074,11 +3109,12 @@ namespace Slicecam {
     auto cdelt1 = this->fpoffsets.sliceparams[cam].cdelt1 * hbin;
     auto cdelt2 = this->fpoffsets.sliceparams[cam].cdelt2 * vbin;
 
-    // and adjust CRPIX for slit width
+    // and adjust CRPIX1 (horizonatal) for slit width and offset
     //
     double factor = ( cam == "L" ? 1.5 : -1.5 );
     double corr   = factor * telem.slitwidth / pixscale;
-    auto crpix1   = (this->fpoffsets.sliceparams[cam].crpix1 / hbin) + corr;
+    double corr2 = (telem.slitoffset+3)/pixscale/3*1.2; // Compute offset relative to -3"
+    auto crpix1   = (this->fpoffsets.sliceparams[cam].crpix1 / hbin) + corr + corr2;
     auto crpix2   = (this->fpoffsets.sliceparams[cam].crpix2 / vbin);
 
     // adjusting DATASEC is a little convoluted
