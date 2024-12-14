@@ -337,6 +337,7 @@ namespace Sequencer {
       }
       else {
         targetstate = this->target.get_specified_target( this->cowboy, targetstatus );
+        this->lastcowboy=this->cowboy;
         this->cowboy.clear();
       }
 
@@ -398,74 +399,70 @@ namespace Sequencer {
       // the thread will clear their bit when they complete
       //
 
-      this->seq_state.set( Sequencer::SEQ_WAIT_TCS );
-      this->broadcast_seqstate();
-      std::thread( &Sequencer::Sequence::dothread_move_to_target, this ).detach();
-
       if ( this->target.pointmode == Acam::POINTMODE_ACAM ) {
         this->dotype( "ONE" );
+        this->seq_state.set( Sequencer::SEQ_WAIT_TCS );
+        this->broadcast_seqstate();
+        std::thread( &Sequencer::Sequence::dothread_move_to_target, this ).detach();
+        logwrite( function, "[DEBUG] (1) waiting on notification" );
+        try {
+          this->seq_state.wait_for_states_clear( Sequencer::SEQ_WAIT_TCS );
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "NOTICE: sequence aborted: " << e.what();
+          this->async.enqueue_and_log( function, message.str() );
+          this->seq_state.set_and_clear( {Sequencer::SEQ_READY}, { Sequencer::SEQ_RUNNING,
+                                                                   Sequencer::SEQ_WAIT_TCS } );
+          this->broadcast_seqstate();
+          this->thread_state.clear( THR_SEQUENCE_START );          // thread terminated
+          return;
+        }
       }
       else {
         // For pointmode other than ACAM ("SLIT" or empty, which assumes SLIT)
         // set everything else.
         //
-        this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA,
+        this->seq_state.set( Sequencer::SEQ_WAIT_TCS,
+                             Sequencer::SEQ_WAIT_CAMERA,
                              Sequencer::SEQ_WAIT_SLIT,
                              Sequencer::SEQ_WAIT_FOCUS,
                              Sequencer::SEQ_WAIT_FLEXURE,
                              Sequencer::SEQ_WAIT_CALIB );
         this->broadcast_seqstate();
+        std::thread( &Sequencer::Sequence::dothread_move_to_target, this ).detach();
         std::thread( &Sequencer::Sequence::dothread_camera_set, this ).detach();
         std::thread( &Sequencer::Sequence::dothread_slit_set, this ).detach();
         std::thread( &Sequencer::Sequence::dothread_focus_set, this ).detach();
         std::thread( &Sequencer::Sequence::dothread_flexure_set, this ).detach();
         std::thread( &Sequencer::Sequence::dothread_calib_set, this ).detach();
-      }
 
-      // Now that the threads are running, wait until they are all finished.
-      // When the SEQ_RUNNING bit is the only bit set then we are ready.
-      //
-      this->req_state.set( Sequencer::SEQ_RUNNING );                     // set the requested state bit
+        logwrite( function, "[DEBUG] (1) waiting on notification" );
 
-      logwrite( function, "[DEBUG] (1) waiting on notification" );
-
-      message.str(""); message << "current state: " << this->seq_state.get_set_names()
-                               << " waiting for: " << this->req_state.get_set_names();
-      logwrite( function, message.str() );
-
-      try {
-        this->seq_state.wait_for_match( this->req_state );  // waits for seq_state == req_state
-      }
-      catch ( const std::exception &e ) {
-        message.str(""); message << "NOTICE: sequence aborted: " << e.what();
-        this->async.enqueue_and_log( function, message.str() );
-        break;
+        try {
+          this->seq_state.wait_for_states_clear( Sequencer::SEQ_WAIT_TCS,
+                                                 Sequencer::SEQ_WAIT_CAMERA,
+                                                 Sequencer::SEQ_WAIT_SLIT,
+                                                 Sequencer::SEQ_WAIT_FOCUS,
+                                                 Sequencer::SEQ_WAIT_FLEXURE,
+                                                 Sequencer::SEQ_WAIT_CALIB );
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "NOTICE: sequence aborted: " << e.what();
+          this->async.enqueue_and_log( function, message.str() );
+          this->seq_state.set_and_clear( {Sequencer::SEQ_READY}, { Sequencer::SEQ_RUNNING,
+                                                                   Sequencer::SEQ_WAIT_TCS,
+                                                                   Sequencer::SEQ_WAIT_CAMERA,
+                                                                   Sequencer::SEQ_WAIT_SLIT,
+                                                                   Sequencer::SEQ_WAIT_FOCUS,
+                                                                   Sequencer::SEQ_WAIT_FLEXURE,
+                                                                   Sequencer::SEQ_WAIT_CALIB } );
+          this->broadcast_seqstate();
+          this->thread_state.clear( THR_SEQUENCE_START );          // thread terminated
+          return;
+        }
       }
 
       logwrite(function, "[DEBUG] DONE waiting on notification");
-
-      // Now that we're done waiting, check for errors or abort
-///   //
-///   if ( this->thread_error.is_any_set() ) {
-///     message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: "
-///                              << this->thread_error.get_set_names();
-///     logwrite( function, message.str() );
-///     break;
-///   }
-
-/*** I think this can cause a race condition
- *    if ( this->is_seqstate_set( Sequencer::SEQ_ABORTREQ ) ) {
- *      logwrite( function, "ABORT requested" );
- *      this->seq_state.set_and_clear( {Sequencer::SEQ_READY}, { Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_RUNNING } );  // set and clear together
- *      this->req_state.set_and_clear( {Sequencer::SEQ_READY}, { Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_RUNNING } );
-        this->broadcast_seqstate();
- *      break;
- *    }
- */
-///   if ( this->seq_state.is_set( Sequencer::SEQ_ABORTREQ ) ) {
-///     logwrite( function, "aborting the start sequence" );
-///     break;
-///   }
 
       logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
 
@@ -608,15 +605,9 @@ namespace Sequencer {
       this->broadcast_seqstate();
     }
 
-    // The STOPREQ got us out of the while loop. Now that the loop has exited,
-    // clear the STOPREQ and RUNNING bits and set the READY bits.
-    //
-    if ( this->seq_state.is_any_set( Sequencer::SEQ_STOPREQ, Sequencer::SEQ_ABORTREQ ) ) {
-logwrite( function, "[DEBUG] setting READY bit" );
-      this->seq_state.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_STOPREQ,Sequencer::SEQ_ABORTREQ,Sequencer::SEQ_RUNNING} );
-      this->req_state.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_STOPREQ,Sequencer::SEQ_ABORTREQ,Sequencer::SEQ_RUNNING} );
-      this->broadcast_seqstate();
-    }
+    this->seq_state.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_STOPREQ,Sequencer::SEQ_ABORTREQ,Sequencer::SEQ_RUNNING} );
+    this->req_state.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_STOPREQ,Sequencer::SEQ_ABORTREQ,Sequencer::SEQ_RUNNING} );
+    this->broadcast_seqstate();
 
     logwrite( function, "target list processing has stopped" );
     this->thread_state.clear( THR_SEQUENCE_START );              // thread running
@@ -679,6 +670,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
     long error;
     std::stringstream slitcmd;
 
+#ifdef REMOVED_FOR_TESTING
     // send the SET command to slitd
     //
     slitcmd << SLITD_SET << " " << this->target.slitwidth_req << " " << this->target.slitoffset_req;
@@ -691,6 +683,7 @@ logwrite( function, "[DEBUG] setting READY bit" );
       this->async.enqueue_and_log( function, "ERROR: unable to set slit" );
       this->thread_error.set( THR_SLIT_SET );
     }
+#endif
 
     this->seq_state.clear( Sequencer::SEQ_WAIT_SLIT );
     this->broadcast_seqstate();
@@ -2219,6 +2212,7 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 ///     return;
       }
 
+#ifdef REMOVE_FOR_TESTING
       // Send casangle using tcsd wrapper for RINGGO command
       //
       std::stringstream ringgo_cmd;
@@ -2235,12 +2229,14 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 ///     this->thread_state.clear( THR_MOVE_TO_TARGET );          // thread terminated
 ///     return;
       }
+#endif
 
       // Wait for on-target signal (or abort)
       //
       this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
       this->seq_state.set( Sequencer::SEQ_WAIT_TCSOP );
+      this->broadcast_seqstate();
 
       try {
         this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_TCSOP );
@@ -2478,6 +2474,81 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_calib_set ******************************/
 
 
+  /***** Sequencer::Sequence::dothread_repeat_exposure ************************/
+  /**
+   * @brief      repeat the last exposure
+   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @todo       calibrator not yet implemented
+   *
+   */
+  void Sequence::dothread_repeat_exposure() {
+    const std::string function = "Sequencer::Sequence::dothread_repeat_exposure";
+    std::stringstream message;
+
+    this->thread_state.set( THR_REPEAT_EXPOSURE );               // thread running
+
+    std::string targetstatus;
+    this->target.get_specified_target( this->lastcowboy, targetstatus );
+
+    logwrite( function, targetstatus );
+
+    this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA,
+                         Sequencer::SEQ_WAIT_SLIT );
+    this->broadcast_seqstate();
+    std::thread( &Sequencer::Sequence::dothread_camera_set, this ).detach();
+    std::thread( &Sequencer::Sequence::dothread_slit_set, this ).detach();
+
+    // Now that the threads are running, wait until they are all finished.
+    // When the SEQ_RUNNING bit is the only bit set then we are ready.
+    //
+    this->req_state.set( Sequencer::SEQ_RUNNING );                     // set the requested state bit
+
+    logwrite( function, "[DEBUG] waiting for camera and slit" );
+
+    message.str(""); message << "current state: " << this->seq_state.get_set_names()
+                             << " waiting for: " << this->req_state.get_set_names();
+    logwrite( function, message.str() );
+
+    try {
+      this->seq_state.wait_for_match( this->req_state );  // waits for seq_state == req_state
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "NOTICE: sequence aborted: " << e.what();
+      this->async.enqueue_and_log( function, message.str() );
+      this->thread_state.clear( THR_REPEAT_EXPOSURE );             // thread running
+    }
+
+    // Start the exposure in a thread...
+    //
+    this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );                   // set the current state
+    this->broadcast_seqstate();
+
+    logwrite( function, "[DEBUG] spawning dothread_trigger_exposure" );
+    std::thread( &Sequencer::Sequence::dothread_trigger_exposure, this ).detach();  // trigger exposure in a thread
+
+    this->req_state.set( Sequencer::SEQ_RUNNING );                       // set the requested state
+
+    // ...then wait for it to complete
+    //
+    logwrite( function, "[DEBUG] waiting for camera" );
+    message.str(""); message << "current state: " << this->seq_state.get_set_names()
+                             << " waiting for: " << this->req_state.get_set_names();
+    logwrite( function, message.str() );
+
+    try {
+      this->seq_state.wait_for_match( this->req_state );  // waits for seq_state == req_state
+    }
+    catch ( const std::exception &e ) {
+      message.str(""); message << "NOTICE: sequence aborted: " << e.what();
+      this->async.enqueue_and_log( function, message.str() );
+      this->thread_state.clear( THR_REPEAT_EXPOSURE );             // thread running
+    }
+    this->thread_state.clear( THR_REPEAT_EXPOSURE );             // thread running
+    return;
+  }
+  /***** Sequencer::Sequence::dothread_repeat_exposure ************************/
+
+
   /***** Sequencer::Sequence::dothread_trigger_exposure ***********************/
   /**
    * @brief      trigger and wait for exposure
@@ -2611,6 +2682,10 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
    *
    */
   void Sequence::dothread_acquisition() {
+// testing
+this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );              // clear ACQUIRE bit
+this->broadcast_seqstate();
+return;
     this->thread_state.set( THR_ACQUISITION );                   // thread running
     std::string function = "Sequencer::Sequence::dothread_acquisition";
     std::stringstream message;

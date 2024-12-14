@@ -51,3 +51,23 @@ add_executable(listener
         ${PROJECT_UTILS_DIR}/listener.cpp
         )
 target_link_libraries( listener PRIVATE utilities )
+
+# -- ZeroMQ --------------------------------------------------------------------
+#
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
+add_executable(subscriber
+        ${PROJECT_UTILS_DIR}/subscriber.cpp
+        )
+target_link_libraries(subscriber
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
+        )
+add_executable(pubtest
+        ${PROJECT_UTILS_DIR}/pubtest.cpp
+        )
+target_link_libraries(pubtest
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
+        )

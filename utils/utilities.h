@@ -344,8 +344,8 @@ class BoolState {
   private:
     std::atomic<bool> &_state;
   public:
-    BoolState( std::atomic<bool> &state_var ) : _state( state_var ) { _state.store( true, std::memory_order_seq_cst ); }
-    ~BoolState() { _state.store( false, std::memory_order_seq_cst ); }
+    BoolState( std::atomic<bool> &state_var ) : _state( state_var ) { _state.store( true, std::memory_order_release ); }
+    ~BoolState() { _state.store( false, std::memory_order_release ); }
 };
 /***** BoolState **************************************************************/
 
@@ -440,6 +440,7 @@ class PreciseTimer {
         remaining_time.store( delay_time.load(std::memory_order_acquire) - elapsed_time, std::memory_order_release );
 
         if ( remaining_time.load(std::memory_order_acquire) <= 0 ) break;    // break when time is up
+
         if (should_stop.load(std::memory_order_acquire)) break;              // break if stop requested
 
         if (should_hold.load(std::memory_order_acquire)) {
@@ -731,17 +732,19 @@ class StateManager {
      * @param[in]  state  state bit to wait for
      */
     void wait_for_state_set( size_t state ) {
-      std::unique_lock<std::mutex> lock(mtx);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_state_set cancelled by external signal");
       }
       if ( state_bits.test( state ) ) return;
       pending_bits.set(state);
-      cv.wait( lock, [this,state]() { return should_cancel.load() || state_bits.test( state ); } );
+      {
+      std::unique_lock<std::mutex> lock(mtx);
+      cv.wait( lock, [this,state]() { return should_cancel.load(std::memory_order_acquire) || state_bits.test( state ); } );
+      }
       pending_bits.reset(state);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_state_set cancelled by external signal");
       }
     }
@@ -752,17 +755,19 @@ class StateManager {
      * @param[in]  state  state bit to wait for
      */
     void wait_for_state_clear( size_t state ) {
-      std::unique_lock<std::mutex> lock(mtx);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_state_clear cancelled by external signal");
       }
       if ( !state_bits.test( state ) ) return;
       pending_bits.set(state);
-      cv.wait( lock, [this,state]() { return ( should_cancel.load() || !state_bits.test( state ) ); } );
+      {
+      std::unique_lock<std::mutex> lock(mtx);
+      cv.wait( lock, [this,state]() { return ( should_cancel.load(std::memory_order_acquire) || !state_bits.test( state ) ); } );
+      }
       pending_bits.reset(state);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_state_clear cancelled by external signal");
       }
     }
@@ -774,9 +779,8 @@ class StateManager {
      */
     template <typename... StateBits>
     void wait_for_states_clear(StateBits... states) {
-      std::unique_lock<std::mutex> lock(mtx);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_states_clear cancelled by external signal");
       }
       (pending_bits.set(states), ...);
@@ -784,10 +788,13 @@ class StateManager {
         (pending_bits.reset(states), ...);
         return;
       }
-      cv.wait(lock, [this, &states...]() { return should_cancel.load() || (... && !state_bits.test(states)); });
+      {
+      std::unique_lock<std::mutex> lock(mtx);
+      cv.wait(lock, [this, &states...]() { return should_cancel.load(std::memory_order_acquire) || (... && !state_bits.test(states)); });
+      }
       (pending_bits.reset(states), ...);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_states_clear cancelled by external signal");
       }
     }
@@ -798,17 +805,19 @@ class StateManager {
      * @param[in]  obj  reference to another StateManager object for comparison
      */
     void wait_for_match( const StateManager &obj ) {
-      std::unique_lock<std::mutex> lock(mtx);
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_match cancelled by external signal");
       }
       if ( state_bits == obj.get() ) return;
       pending_bits = obj.get();    // these are the bits being waited for
-      cv.wait( lock, [this,&obj] { return ( should_cancel.load() || state_bits == obj.get() ); } );
+      {
+      std::unique_lock<std::mutex> lock(mtx);
+      cv.wait( lock, [this,&obj] { return ( should_cancel.load(std::memory_order_acquire) || state_bits == obj.get() ); } );
+      }
       pending_bits &= ~obj.get();  // remove them from pending
-      if ( should_cancel.load() ) {
-        should_cancel.store(false);
+      if ( should_cancel.load(std::memory_order_acquire) ) {
+        should_cancel.store(false, std::memory_order_release);
         throw std::runtime_error("wait_for_match cancelled by external signal");
       }
     }
@@ -866,7 +875,7 @@ class StateManager {
         // then find the corresponding name from state_names
         if ( pending_bits.test(bit) ) {
           auto it = state_names.find(bit);
-          if ( it != state_names.end() ) names << it->second;
+          if ( it != state_names.end() ) names << it->second << " ";
         }
       }
       return names.str();

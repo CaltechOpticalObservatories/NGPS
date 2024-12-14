@@ -138,6 +138,7 @@ namespace Sequencer {
   enum ThreadStatusBits : size_t {
     THR_SEQUENCER_ASYNC_LISTENER=0,    ///< set when dothread_sequencer_async_listener running
     THR_TRIGGER_EXPOSURE,              ///< set when dothread_trigger_exposure running
+    THR_REPEAT_EXPOSURE,               ///< set when dothread_repeat_exposure running
     THR_WAIT_FOR_STATE,                ///< set when dothread_wait_for_state running
     THR_SEQUENCE_START,                ///< set when dothread_sequencer_start running
     THR_MONITOR_READY_STATE,
@@ -301,6 +302,7 @@ namespace Sequencer {
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
       std::string cowboy;
+      std::string lastcowboy;
 
       std::string last_target;
 
@@ -382,6 +384,7 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       void dothread_trigger_exposure();       ///< trigger and wait for exposure
+      void dothread_repeat_exposure();        ///< repeat the last exposure
       static void dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in );  ///< modify exptime while exposure running
       void dothread_acquisition();            /// performs the acquisition sequence when signalled
 

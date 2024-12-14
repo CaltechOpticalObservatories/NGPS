@@ -1284,6 +1284,7 @@ namespace Network {
       if ( ( retval=this->sock.Poll(timeout) ) <= 0 ) {
         if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << this->sock.getfd();
                            if (errno) { message << ": " << strerror(errno); }
+                           message << ": timeout=" << timeout;
                            error = TOUT; }
         if ( retval <0 ) { message.str(""); message << "ERROR on fd " << this->sock.getfd();
                            if (errno) { message << ": " << strerror(errno); }
@@ -1296,6 +1297,13 @@ namespace Network {
                                  << ": reading from " << this->sock.gethost() << "/" << this->sock.getport();
         logwrite( function, message.str() );
       }
+
+message.str(""); message << "[DEBUG] raw reply=0x";
+for ( size_t i=0; i<10 && i<reply.length(); i++ ) {
+  message << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)reply[i] << " ";
+}
+message << " to cmd=" << cmd;
+logwrite(function,message.str());
 
       // send back just the reply, stripped of any leading/trailing control characters
       //

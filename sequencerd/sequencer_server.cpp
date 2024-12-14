@@ -1335,6 +1335,17 @@ logwrite(function,"[DEBUG] returned "+retstring);
       }
       else
 
+      // repeat the last exposure
+      //
+      if ( cmd.compare( SEQUENCERD_REPEAT ) == 0 ) {
+                      this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
+                      this->sequence.req_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
+                      this->sequence.broadcast_seqstate();
+                      std::thread( &Sequencer::Sequence::dothread_repeat_exposure, std::ref(this->sequence) ).detach();
+                      ret = NO_ERROR;
+      }
+      else
+
       // Stop an Exposure
       //
       if ( cmd.compare( SEQUENCERD_STOP ) == 0 ) {
