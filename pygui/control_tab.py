@@ -557,9 +557,8 @@ class ControlTab(QWidget):
         # Retrieve the slit width and send the query to the database
         slit_angle = self.slit_angle_box.text()
         if(slit_angle == "PA"):
-            pa = str(self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec))
-            print(f"Parallactic Angle: {pa.to(u.deg):.2f}")
-            slit_angle = f"{pa.to(u.deg).value:.2f}"
+            slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            print(f"Parallactic Angle: {slit_angle}")
             self.slit_angle_box.setText(slit_angle)
 
         if (self.parent.current_observation_id):

@@ -512,4 +512,4 @@ class LogicService:
             print(f"Error calculating parallactic angle: {e}")
             raise
         
-        return parallactic_angle
+        return f"{parallactic_angle.to(u.deg).value:.2f}"
