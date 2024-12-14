@@ -445,6 +445,11 @@ class ControlTab(QWidget):
                 background-color: #2C6B2F;  /* Even darker green when pressed */
             }
         """)
+        
+        slit_angle = self.slit_angle_box.text()
+        slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+        self.slit_angle_box.setText(slit_angle)
+        self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
             
     def send_target_command(self, observation_id):
         """ Method to send the command to the SequencerService """
@@ -544,14 +549,12 @@ class ControlTab(QWidget):
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", "SET " + exposure_time)
-            self.exposure_time_box.clear()
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
-            self.slit_width_box.clear()
 
     def on_slit_angle_changed(self):
         # Retrieve the slit width and send the query to the database
@@ -563,4 +566,3 @@ class ControlTab(QWidget):
 
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.slit_angle_box.clear()
