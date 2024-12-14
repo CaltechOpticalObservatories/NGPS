@@ -6,6 +6,7 @@ from logic_service import LogicService
 from PyQt5.QtCore import Qt
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
+import re
 
 class LayoutService:
     def __init__(self, parent):
@@ -473,13 +474,13 @@ class LayoutService:
                 if header == 'EXPTIME':
                     exposure_time = value  # Store the exposure time
                     print(f"Found Exposure Time: {exposure_time}")  # Print the found exposure time
-                    self.control_tab.exposure_time_box.setText(exposure_time)
+                    self.control_tab.exposure_time_box.setText(re.sub(r'[a-zA-Z\s]', '', exposure_time))
 
                 # Check if the header is 'Slit Width' and extract its value
                 if header == 'SLITWIDTH':
                     slit_width = value  # Store the slit width
                     print(f"Found Slit Width: {slit_width}")  # Print the found slit width
-                    self.control_tab.slit_width_box.setText(slit_width)
+                    self.control_tab.slit_width_box.setText(re.sub(r'[a-zA-Z\s]', '', slit_width))
 
                 # Check if the header is 'RA' and extract its value
                 if header == 'OFFSET_RA':
