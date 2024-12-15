@@ -76,6 +76,7 @@ namespace Sequencer {
     SEQ_OFFLINE=0,           ///< set when when offline
     SEQ_ABORTREQ,            ///< set when an abort is requested
     SEQ_STOPREQ,             ///< set when a stop is requested
+    SEQ_NOTREADY,            ///< set when sequencer is not ready
     SEQ_READY,               ///< set when sequencer is ready to be started
     SEQ_RUNNING,             ///< set when sequencer is running
     SEQ_SHUTTING,            ///< set when sequencer is shutting down
@@ -106,6 +107,7 @@ namespace Sequencer {
     {SEQ_OFFLINE,       "OFFLINE"},
     {SEQ_ABORTREQ,      "ABORTREQ"},
     {SEQ_STOPREQ,       "STOPREQ"},
+    {SEQ_NOTREADY,      "NOTREADY"},
     {SEQ_READY,         "READY"},
     {SEQ_RUNNING,       "RUNNING"},
     {SEQ_SHUTTING,      "SHUTTING"},
@@ -229,6 +231,7 @@ namespace Sequencer {
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
+      std::atomic<bool> cancel_flag=false;
     public:
       Sequence() :
           ready_to_start(false),
@@ -248,6 +251,9 @@ namespace Sequencer {
           dome_nowait(false),
           tcs_which("real"),
           tcs_name("offline") {
+            seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { improved_broadcast_seqstate(); });
+            thread_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_threadstate(); });
+            daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
             seq_state.set( Sequencer::SEQ_OFFLINE );
             req_state.set( Sequencer::SEQ_OFFLINE );
             broadcast_seqstate();
@@ -295,6 +301,10 @@ namespace Sequencer {
       StateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error{ Sequencer::thread_names };
       StateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_ready{ Sequencer::daemon_names };
 
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)> seq_state_manager{Sequencer::seq_state_names};
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)> thread_state_manager{ Sequencer::thread_names };
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>    daemon_manager{ Sequencer::daemon_names };
+
       std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
       std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
 
@@ -335,7 +345,10 @@ namespace Sequencer {
 ///   inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
 
 ///   void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
+      void broadcast_daemonstate();             ///<
+      void broadcast_threadstate();             ///<
       void broadcast_seqstate();                ///< writes the seqstate string to the async port
+      void improved_broadcast_seqstate();       ///< writes the seqstate string to the async port
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -380,6 +393,7 @@ namespace Sequencer {
       long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
       long check_power_on( const std::string which, std::chrono::seconds delay );
+      long check_connected( Common::DaemonClient &daemon );
       long check_connected( Common::DaemonClient &daemon, bool &was_opened );
       // These are various jobs that are done in their own threads
       //
@@ -403,11 +417,13 @@ namespace Sequencer {
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
       static void dothread_calib_init( Sequencer::Sequence &seq );             ///< initializes connection to calibd
       static void dothread_camera_init( Sequencer::Sequence &seq );            ///< initializes connection to camerad
+             void improved_flexure_init();                                     ///< initializes connection to flexured
       static void dothread_flexure_init( Sequencer::Sequence &seq );           ///< initializes connection to flexured
       static void dothread_focus_init( Sequencer::Sequence &seq );             ///< initializes connection to focusd
       static void dothread_power_init( Sequencer::Sequence &seq );             ///< initializes connection to powerd
       static void dothread_slicecam_init( Sequencer::Sequence &seq );          ///< initializes connection to slicecamd
       static void dothread_slit_init( Sequencer::Sequence &seq );              ///< initializes connection to slitd
+             void improved_tcs_init();                                         ///< initializes connection to tcsd
       static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
 
       static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam

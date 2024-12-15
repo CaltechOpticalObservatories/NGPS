@@ -122,6 +122,30 @@ namespace Sequencer {
 ///***** Sequencer::Sequence::set_seqstate_bit ********************************/
 
 
+  void Sequence::broadcast_daemonstate() {
+    logwrite( "Sequencer::Sequence::broadcast_daemonstate",
+              "daemon(s) ready: "+daemon_manager.get_set_states() );
+    if ( daemon_manager.are_all_set() ) {
+      seq_state_manager.set( Sequencer::SEQ_READY );
+    }
+    else {
+      seq_state_manager.set( Sequencer::SEQ_NOTREADY );
+    }
+  }
+
+  void Sequence::broadcast_threadstate() {
+    logwrite( "Sequencer::Sequence::broadcast_threadstate",
+              "[DEBUG] thread(s) running: "+thread_state_manager.get_set_states() );
+  }
+
+  void Sequence::improved_broadcast_seqstate() {
+    std::cerr << "Sequence::improved_broadcast_seqstate enter\n";
+    std::stringstream message;
+    message << "STATES= " << seq_state_manager.get_set_states();
+    this->async.enqueue_and_log( "Sequencer::Sequence::improved_broadcast_seqstate", message.str() );
+    std::cerr << "Sequence::improved_broadcast_seqstate return\n";
+  }
+
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
   /**
    * @brief      writes the seqstate string to the async port
@@ -1493,6 +1517,23 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_calib_shutdown *************************/
 
 
+  void Sequence::improved_tcs_init() {
+    ScopedState scoped(Sequencer::THR_TCS_INIT, thread_state_manager);
+
+    long error = this->check_connected(this->tcsd);
+
+    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
+    //
+    if ( error == NO_ERROR ) {
+      this->daemon_manager.set( Sequencer::DAEMON_TCS );
+    }
+    else {
+      this->async.enqueue_and_log( "Sequencer::Sequence::improved_tcs_init", "ERROR initializing TCS" );
+      this->daemon_manager.clear( Sequencer::DAEMON_TCS );
+      this->thread_error.set( THR_TCS_INIT );
+    }
+  }
+
   /***** Sequencer::Sequence::dothread_tcs_init *******************************/
   /**
    * @brief      initializes the tcs system for control from the Sequencer
@@ -1667,6 +1708,30 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_tcs_shutdown ***************************/
 
 
+  void Sequence::improved_flexure_init() {
+    const std::string function("Sequencer::Sequence::improved_flexure_init");
+
+    ScopedState scoped(Sequencer::THR_FLEXURE_INIT, thread_state_manager);
+
+    // make sure hardware is powered on
+    //
+    long error = this->check_power_on(POWER_FLEXURE, std::chrono::seconds(21));
+
+    error |= this->check_connected(this->flexured);
+
+    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
+    //
+    if ( error == NO_ERROR ) {
+      this->daemon_manager.set( Sequencer::DAEMON_FLEXURE );
+    }
+    else {
+      this->async.enqueue_and_log( function, "ERROR initializing flexure control" );
+      this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );
+      this->thread_error.set( THR_FLEXURE_INIT );
+    }
+  }
+
+
   /***** Sequencer::Sequence::dothread_flexure_init ***************************/
   /**
    * @brief      initializes the flexure system for control from the Sequencer
@@ -1687,32 +1752,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
     bool was_opened=false;
     error = seq.check_connected(seq.flexured, was_opened);
-
-/*****
-    // if not connected to the flexure daemon then connect
-    //
-    if ( !seq.flexured.socket.isconnected() ) {
-      logwrite( function, "connecting to flexure daemon" );
-      error = seq.flexured.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to flexure daemon" );
-    }
-
-    // Ask flexured if hardware connection is open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.flexured.send( FLEXURED_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with flexure hardware" );
-    }
-
-    // and open it if necessary.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to flexure hardware" );
-      error = seq.flexured.send( FLEXURED_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to flexure hardware" );
-    }
-*****/
 
     // flag daemon as ready or set thread_error so the main thread knows we had an error or not
     //
@@ -4132,13 +4171,18 @@ logwrite( function, message.str() );
   }
 
 
+  long Sequence::check_connected( Common::DaemonClient &daemon ) {
+    bool dontcare;
+    return check_connected( daemon, dontcare );
+  }
+
   long Sequence::check_connected( Common::DaemonClient &daemon, bool &was_opened ) {
     const std::string function="Sequencer::Sequence::check_connected";
     bool isopen=false;
     std::string reply;
     long error;
 
-    // if not connected to the power daemon then connect
+    // if not connected to the daemon then connect
     //
     if ( !daemon.socket.isconnected() ) {
       logwrite( function, "connecting to "+daemon.name );
@@ -4235,6 +4279,7 @@ logwrite( function, message.str() );
       retstring.append( "   resume [ ? ]\n" );
       retstring.append( "   single <RA>,<DEC>,<slitangle>,<slitwidth>,<exptime>,<binspect>,<binspat>\n" );
       retstring.append( "   setstate [ ? ]\n" );
+      retstring.append( "   set [ ? ]\n" );
       retstring.append( "   startup ? | <module>\n" );
       retstring.append( "   states [ ? ]\n" );
       retstring.append( "   tablenames [ ? ]\n" );
@@ -4995,6 +5040,41 @@ logwrite( function, message.str() );
       }
 
 //    if (error==NO_ERROR) std::thread( dothread_runscript, std::ref(*this) ).detach();
+    }
+    else
+
+    // ---------------------------------------------------------
+    // set -- run dothread_set_<module> for given module
+    // ---------------------------------------------------------
+    //
+    if ( testname == "init" ) {
+
+      if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" ) ) {
+        retstring = "test init <module>\n";
+        return HELP;
+      }
+
+      if ( tokens.size() < 2 ) {
+        logwrite( function, "ERROR expected init <module>" );
+        retstring="invalid_argument";
+        return( ERROR );
+      }
+
+      bool ispower = false;
+      std::string reply;
+
+      if ( tokens[1] == "flexure" ) {
+        std::thread( &Sequencer::Sequence::improved_flexure_init, this ).detach();
+      }
+      else
+      if ( tokens[1] == "tcs" ) {
+        std::thread( &Sequencer::Sequence::improved_tcs_init, this ).detach();
+      }
+      else {
+        logwrite( function, "ERROR unrecognized module" );
+        return ERROR;
+      }
+      return NO_ERROR;
     }
     else
 
