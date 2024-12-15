@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <functional>
 #include <iomanip>
 #include <vector>
 #include <sstream>
@@ -535,6 +536,99 @@ class PreciseTimer {
     }
 };
 /***** PreciseTimer ***********************************************************/
+
+template <size_t N>
+class ImprovedStateManager {
+  using StateCallback = std::function<void(const std::bitset<N>&)>;
+  private:
+    std::bitset<N> state_bits;
+    const std::map<size_t, std::string> state_names;
+    StateCallback callback_function;
+    mutable std::mutex cb_mtx;
+    mutable std::mutex mtx;
+    void notify() const {
+      std::lock_guard<std::mutex> lock(cb_mtx);
+      if (callback_function) callback_function(state_bits);
+    }
+
+  public:
+    explicit ImprovedStateManager( const std::map<size_t, std::string> &names_in )
+      : state_bits(), state_names(names_in) { }
+
+    void set_callback(StateCallback cb) {
+      std::lock_guard<std::mutex> lock(cb_mtx);
+      callback_function = std::move(cb);
+    }
+    void set(size_t bit ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits.set( bit );
+      }
+      notify();
+    }
+    void clear(size_t bit) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits.reset( bit );
+      }
+      notify();
+    }
+    bool is_set(size_t bit) {
+      std::lock_guard<std::mutex> lock(mtx);
+      return state_bits.test(bit);
+    }
+    template <typename... B>
+    bool are_set( B... bits ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return ( state_bits.test(bits) && ... );
+    }
+    bool are_all_set() const {
+      std::lock_guard<std::mutex> lock(mtx);
+      for ( size_t i=0; i < state_bits.size(); ++i ) {
+        if (!state_bits.test(i)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    std::string get_set_states() const {
+      std::string result;
+      std::lock_guard<std::mutex> lock(mtx);
+      for ( size_t i=0; i < state_bits.size(); ++i ) {
+        if (state_bits.test(i)) {
+          result += state_names.at(i) + " ";
+        }
+      }
+      return result;
+    }
+    std::string get_cleared_states() const {
+      std::string result;
+      std::lock_guard<std::mutex> lock(mtx);
+      for ( size_t i=0; i < state_bits.size(); ++i ) {
+        if (!state_bits.test(i)) {
+          result += state_names.at(i) + " ";
+        }
+      }
+      return result;
+    }
+};
+
+
+template <size_t N>
+class ScopedState {
+  private:
+    size_t _statebit;
+    ImprovedStateManager<N> &_manager;
+
+  public:
+    ScopedState( size_t statebit, ImprovedStateManager<N> &manager )
+      : _statebit(statebit), _manager(manager) {
+        _manager.set(_statebit);
+      }
+    ~ScopedState() {
+      _manager.clear(_statebit);
+    }
+};
 
 
 /***** StateManager ***********************************************************/
