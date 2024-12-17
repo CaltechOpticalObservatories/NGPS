@@ -1258,10 +1258,10 @@ logwrite(function,"[DEBUG] returned "+retstring);
                       this->sequence.dome_nowait.store( true );
 //                    if ( sock.isasync() ) {
                       if ( !sock.isblocking() ) {
-                        std::thread( std::ref( Sequencer::Sequence::dothread_startup ), std::ref( this->sequence ) ).detach();
+                        std::thread( &Sequencer::Sequence::startup, std::ref(this->sequence) ).detach();
                       }
                       else {
-                        ret = this->sequence.startup( this->sequence );
+                        ret = this->sequence.startup();
                       }
       }
       else

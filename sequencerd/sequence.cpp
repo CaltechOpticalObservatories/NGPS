@@ -15,6 +15,8 @@
 
 namespace Sequencer {
 
+  constexpr long CAMERA_PROLOG_TIMEOUT = 6000;  ///< timeout msec to send camera prolog command
+
   /***** Sequencer::Sequence **************************************************/
   /**
    * @brief      Sequence class constructor
@@ -126,10 +128,10 @@ namespace Sequencer {
     logwrite( "Sequencer::Sequence::broadcast_daemonstate",
               "daemon(s) ready: "+daemon_manager.get_set_states() );
     if ( daemon_manager.are_all_set() ) {
-      seq_state_manager.set( Sequencer::SEQ_READY );
+      seq_state_manager.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_NOTREADY} );
     }
     else {
-      seq_state_manager.set( Sequencer::SEQ_NOTREADY );
+      seq_state_manager.set_and_clear( {Sequencer::SEQ_NOTREADY}, {Sequencer::SEQ_READY} );
     }
   }
 
@@ -716,72 +718,30 @@ namespace Sequencer {
   /***** Sequencer::Sequence::dothread_slit_set *******************************/
 
 
-  /***** Sequencer::Sequence::dothread_power_init *****************************/
+  /***** Sequencer::Sequence::power_init **************************************/
   /**
    * @brief      initializes the power system for control from the Sequencer
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    */
-  void Sequence::dothread_power_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_POWER_INIT );                    // thread running
-    std::string function = "Sequencer::Sequence::dothread_power_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isopen=false;
-logwrite( function, "[DEBUG] starting" );  ///< TODO @todo temporary
+  long Sequence::power_init() {
+    const std::string function("Sequencer::Sequence::power_init");
 
-message.str(""); message << "[DEBUG] powerd socket isconnected=" << seq.powerd.socket.isconnected(); ///< TODO @todo temporary
-logwrite( function, message.str() ); ///< TODO @todo temporary
+    ScopedState scoped( Sequencer::THR_POWER_INIT, thread_state_manager );
+    ScopedState seq_state( Sequencer::SEQ_WAIT_POWER, seq_state_manager );
 
-    bool was_opened=false;
-    error = seq.check_connected(seq.powerd, was_opened);
-/***
-    // if not connected to the power daemon then connect
-    //
-    if ( !seq.powerd.socket.isconnected() ) {
-      logwrite( function, "connecting to power daemon" );
-      error = seq.powerd.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to power daemon" );
+    this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
+
+    if ( this->check_connected(this->powerd) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing power control" );
+      return ERROR;
     }
 
-    // Ask powerd if hardware connection is open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.powerd.send( POWERD_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with power hardware" );
-    }
+    this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
 
-    // and open it if necessary.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to network power switch" );
-      error = seq.powerd.send( POWERD_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to power hardware" );
-    }
-***/
-    // atomically set thread_error so the main thread knows we had an error
-    //
-    if ( error != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize power control" );
-logwrite( function, "[DEBUG] I should be setting thread_error here !!!!!!!!!!!!!!!" );
-message.str(""); message << "[DEBUG] *before* thread_error=" << seq.thread_error.get_set_names(); logwrite( function, message.str() );
-      seq.thread_error.set( THR_POWER_INIT );
-message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.get_set_names(); logwrite( function, message.str() );
-    }
-    else {
-      seq.daemon_ready.set( Sequencer::DAEMON_POWER );         // this daemon is ready
-    }
-
-    logwrite( function, "ready" );
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_POWER );
-    seq.broadcast_seqstate();
-
-    seq.thread_state.clear( THR_POWER_INIT );                  // thread terminated
-    return;
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_power_init *****************************/
+  /***** Sequencer::Sequence::power_init **************************************/
 
 
   /***** Sequencer::Sequence::dothread_power_shutdown *************************/
@@ -837,86 +797,62 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_power_shutdown *************************/
 
 
-  /***** Sequencer::Sequence::dothread_slit_init ******************************/
+  /***** Sequencer::Sequence::slit_init ***************************************/
   /**
    * @brief      initializes the slit for control from the Sequencer
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    */
-  void Sequence::dothread_slit_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_SLIT_INIT );                     // thread running
-    std::string function = "Sequencer::Sequence::dothread_slit_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isopen=false, ishomed=false;
+  long Sequence::slit_init() {
+    const std::string function("Sequencer::Sequence::slit_init");
 
-    // make sure hardware is powered on
-    //
-    error = seq.check_power_on(POWER_SLIT, std::chrono::seconds(5));
+    ScopedState scoped(Sequencer::THR_SLIT_INIT, thread_state_manager);
+    ScopedState seq_state( Sequencer::SEQ_WAIT_SLIT, seq_state_manager );
 
-    bool was_opened=false;
-    error = seq.check_connected(seq.slitd, was_opened);
+    this->daemon_manager.clear( Sequencer::DAEMON_SLIT );  // slitd not ready
 
-/*****
-    // if not connected to the slit daemon then connect
-    //
-    if ( error==NO_ERROR && !seq.slitd.socket.isconnected() ) {
-      logwrite( function, "connecting to slit daemon" );
-      error = seq.slitd.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to slit daemon" );
+    if ( this->check_power_on(POWER_SLIT, std::chrono::seconds(5)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR powering slit control" );
+      return ERROR;
     }
 
-    // Ask slitd if hardware connection is open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.slitd.command( SLITD_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with slit hardware" );
+    if ( this->check_connected(this->slitd) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR connecting to slit" );
+      return ERROR;
     }
-
-    // and open it if necessary.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to slit hardware" );
-      error = seq.slitd.command( SLITD_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to slit hardware" );
-    }
-*****/
 
     // Ask slitd if the slit motors are homed,
     //
-    if ( error == NO_ERROR ) {
-      error  = seq.slitd.command( SLITD_ISHOME, reply );
-      error |= seq.parse_state( function, reply, ishomed );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with slit hardware" );
+    bool ishomed=false;
+    std::string reply;
+    if ( this->slitd.command( SLITD_ISHOME, reply ) != NO_ERROR &&
+         this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
+      return ERROR;
     }
 
     // and send the HOME command to slitd if needed.
     //
-    if ( error==NO_ERROR && !ishomed ) {
+    if ( !ishomed ) {
       logwrite( function, "sending home command" );
-      error = seq.slitd.command_timeout( SLITD_HOME, reply, SLITD_HOME_TIMEOUT );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with slit hardware" );
+      if ( this->slitd.command_timeout( SLITD_HOME, reply, SLITD_HOME_TIMEOUT ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
+        return ERROR;
+      }
     }
 
-    // atomically set thread_error so the main thread knows we had an error
+    // set to 0.5 arcsec
     //
-    if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR: initializing slit control" );
-      seq.thread_error.set( THR_SLIT_INIT );
-    }
-    else {
-      seq.daemon_ready.set( Sequencer::DAEMON_SLIT );          // this daemon is ready
+    if ( this->slitd.command_timeout( SLITD_SET+" 0.5", SLITD_SET_TIMEOUT ) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
+      return ERROR;
     }
 
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_SLIT );
-    seq.broadcast_seqstate();
+    this->daemon_manager.set( Sequencer::DAEMON_SLIT );  // slitd ready
 
-    seq.thread_state.clear( THR_SLIT_INIT );                   // thread terminated
-    return;
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_slit_init ******************************/
+  /***** Sequencer::Sequence::slit_init ***************************************/
 
 
   /***** Sequencer::Sequence::dothread_slit_shutdown **************************/
@@ -988,6 +924,62 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_slit_shutdown **************************/
 
 
+  long Sequence::improved_slicecam_init() {
+    const std::string function("Sequencer::Sequence::improved_slicecam_init");
+
+    this->daemon_manager.clear( Sequencer::DAEMON_SLICECAM );  // slicecamd not ready
+
+    ScopedState scoped( Sequencer::THR_SLICECAM_INIT, thread_state_manager );
+    ScopedState seq_state( Sequencer::SEQ_WAIT_SLICECAM, seq_state_manager );
+
+    // make sure hardware is powered on
+    //
+    if ( this->check_power_on(POWER_SLICECAM, std::chrono::seconds(11)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing slicecam control" );
+      return ERROR;
+    }
+
+    // open connection is all that is needed, slicecamd takes care of everything
+    //
+    if ( this->check_connected(this->slicecamd) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR starting slicecam" );
+      return ERROR;
+    }
+
+    this->daemon_manager.set( Sequencer::DAEMON_SLICECAM );  // slicecamd ready
+
+    return NO_ERROR;
+  }
+
+
+  long Sequence::improved_acam_init() {
+    const std::string function("Sequencer::Sequence::improved_acam_init");
+
+    this->daemon_manager.clear( Sequencer::DAEMON_ACAM );  // acamd not ready
+
+    ScopedState scoped( Sequencer::THR_ACAM_INIT, thread_state_manager );
+    ScopedState seq_state( Sequencer::SEQ_WAIT_ACAM, seq_state_manager );
+
+    // make sure hardware is powered on
+    //
+    if ( this->check_power_on(POWER_ACAM, std::chrono::seconds(10)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing acam control" );
+      return ERROR;
+    }
+
+    // open connection is all that is needed, acamd takes care of everything
+    //
+    if ( this->check_connected(this->acamd) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR starting acam" );
+      return ERROR;
+    }
+
+    this->daemon_manager.set( Sequencer::DAEMON_ACAM );  // acamd ready
+
+    return NO_ERROR;
+  }
+
+
   /***** Sequencer::Sequence::dothread_slicecam_init **************************/
   /**
    * @brief      initializes the slicecam system for control from the Sequencer
@@ -1000,7 +992,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
-    bool isopen=false;
 
     // make sure hardware is powered on
     //
@@ -1008,59 +999,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
 
     bool was_opened=false;
     error = seq.check_connected(seq.slicecamd, was_opened);
-
-/*****
-    // if not connected to the slicecam daemon then connect
-    //
-    if ( !seq.slicecamd.socket.isconnected() ) {
-      logwrite( function, "connecting to slicecamd daemon" );
-      error = seq.slicecamd.connect();                   // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting sequencerd -> slicecamd" );
-    }
-
-    // TCS must have been initialized
-    //
-    if ( seq.tcs_name == "offline" ) {
-      seq.async.enqueue_and_log( function, "ERROR sequencer has not initialized a TCS connection" );
-      error = ERROR;
-    }
-
-    // Initialize slicecamd's connection to tcsd
-    //
-    if ( error == NO_ERROR ) {
-      std::stringstream cmd;
-      cmd << SLICECAMD_TCSINIT << " " << seq.tcs_name;
-      error  = seq.slicecamd.send( cmd.str(), reply );
-      if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR initializing slicecamd <--> tcsd \"" << seq.tcs_name << "\"";
-        seq.async.enqueue_and_log( function, message.str() );
-      }
-    }
-
-    // Ask slicecamd if hardware connections are open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.slicecamd.send( SLICECAMD_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with slicecam hardware" );
-    }
-
-    // and open it if necessary.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to slicecam hardware" );
-      error = seq.slicecamd.command_timeout( SLICECAMD_OPEN, reply, SLICECAMD_OPEN_TIMEOUT );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to slicecam hardware" );
-    }
-*****/
-
-//  // turn on cooling
-//  //
-//  if ( error==NO_ERROR && !isopen ) {
-//    logwrite( function, "turning on slicecam cooling" );
-//    error = seq.slicecamd.send( SLICECAMD_TEMP+" -100", reply );
-//    if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR requesting slicecam prologue" );
-//  }
 
     // atomically set thread_error so the main thread knows we had an error
     //
@@ -1388,56 +1326,45 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_acam_shutdown **************************/
 
 
-  /***** Sequencer::Sequence::dothread_calib_init *****************************/
+  /***** Sequencer::Sequence::calib_init **************************************/
   /**
    * @brief      initializes the calibrator system for control from the Sequencer
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    */
-  void Sequence::dothread_calib_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_CALIB_INIT );                    // thread running
-    std::string function = "Sequencer::Sequence::dothread_calib_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
+  long Sequence::calib_init() {
+    const std::string function("Sequencer::Sequence::calib_init");
 
-    // make sure hardware is powered on
-    //
-    error = seq.check_power_on(POWER_CALIB, std::chrono::seconds(5));
+    this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
-    // open connection to calib. this will home motors if necessary.
-    //
+    ScopedState scoped( Sequencer::THR_CALIB_INIT, thread_state_manager );
+    ScopedState seq_state( Sequencer::SEQ_WAIT_CALIB, seq_state_manager );
+
     bool was_opened=false;
-    error = seq.check_connected(seq.calibd, was_opened);
+    if ( this->check_connected(this->calibd, was_opened) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing calib control" );
+      this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
+      this->thread_error.set( THR_CALIB_INIT );
+      return ERROR;
+    }
 
     // if calibd was just opened, close the door and open the cover
     //
-    if ( error==NO_ERROR && was_opened ) {
+    if ( was_opened ) {
       logwrite( function, "closing calib door and opening slit cover" );
-      message.str(""); message << CALIBD_SET << " cover=open door=close";
-      error = seq.calibd.command_timeout( message.str(), CALIBD_SET_TIMEOUT );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+      std::stringstream cmd;
+      cmd << CALIBD_SET << " cover=open door=close";
+      if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+        return ERROR;
+      }
     }
 
-    // atomically set thread_error so the main thread knows we had an error
-    //
-    if ( error != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR unable to initialize calibrator" );
-      seq.thread_error.set( THR_CALIB_INIT );
-    }
-    else {
-      seq.daemon_ready.set( Sequencer::DAEMON_CALIB );         // ready
-    }
+    this->daemon_manager.set( Sequencer::DAEMON_CALIB );
 
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_CALIB );
-    seq.broadcast_seqstate();
-
-    if ( error==NO_ERROR ) logwrite( function, "calib ready" );
-
-    seq.thread_state.clear( THR_CALIB_INIT );                  // thread terminated
-    return;
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_calib_init *****************************/
+  /***** Sequencer::Sequence::calib_init **************************************/
 
 
   /***** Sequencer::Sequence::dothread_calib_shutdown *************************/
@@ -1517,21 +1444,22 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_calib_shutdown *************************/
 
 
-  void Sequence::improved_tcs_init() {
+  long Sequence::improved_tcs_init() {
     ScopedState scoped(Sequencer::THR_TCS_INIT, thread_state_manager);
+    ScopedState seq_state( Sequencer::SEQ_WAIT_TCS, seq_state_manager );
 
-    long error = this->check_connected(this->tcsd);
+    this->daemon_manager.clear( Sequencer::DAEMON_TCS );
 
-    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
-    //
-    if ( error == NO_ERROR ) {
-      this->daemon_manager.set( Sequencer::DAEMON_TCS );
-    }
-    else {
+    if ( this->check_connected(this->tcsd) != NO_ERROR ) {
       this->async.enqueue_and_log( "Sequencer::Sequence::improved_tcs_init", "ERROR initializing TCS" );
       this->daemon_manager.clear( Sequencer::DAEMON_TCS );
       this->thread_error.set( THR_TCS_INIT );
+      return ERROR;
     }
+
+    this->daemon_manager.set( Sequencer::DAEMON_TCS );
+
+    return NO_ERROR;
   }
 
   /***** Sequencer::Sequence::dothread_tcs_init *******************************/
@@ -1708,68 +1636,37 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_tcs_shutdown ***************************/
 
 
-  void Sequence::improved_flexure_init() {
-    const std::string function("Sequencer::Sequence::improved_flexure_init");
-
-    ScopedState scoped(Sequencer::THR_FLEXURE_INIT, thread_state_manager);
-
-    // make sure hardware is powered on
-    //
-    long error = this->check_power_on(POWER_FLEXURE, std::chrono::seconds(21));
-
-    error |= this->check_connected(this->flexured);
-
-    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
-    //
-    if ( error == NO_ERROR ) {
-      this->daemon_manager.set( Sequencer::DAEMON_FLEXURE );
-    }
-    else {
-      this->async.enqueue_and_log( function, "ERROR initializing flexure control" );
-      this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );
-      this->thread_error.set( THR_FLEXURE_INIT );
-    }
-  }
-
-
-  /***** Sequencer::Sequence::dothread_flexure_init ***************************/
+  /***** Sequencer::Sequence::flexure_init ************************************/
   /**
    * @brief      initializes the flexure system for control from the Sequencer
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    */
-  void Sequence::dothread_flexure_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_FLEXURE_INIT );                  // thread running
-    std::string function = "Sequencer::Sequence::dothread_flexure_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isopen=false;
+  long Sequence::flexure_init() {
+    const std::string function("Sequencer::Sequence::flexure_init");
+
+    ScopedState scoped(Sequencer::THR_FLEXURE_INIT, thread_state_manager);
+    ScopedState seq_state( Sequencer::SEQ_WAIT_FLEXURE, seq_state_manager );
+
+    this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );  // flexured not ready
 
     // make sure hardware is powered on
     //
-    error = seq.check_power_on(POWER_FLEXURE, std::chrono::seconds(21));
-
-    bool was_opened=false;
-    error = seq.check_connected(seq.flexured, was_opened);
-
-    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
-    //
-    if ( error == NO_ERROR ) {
-      seq.daemon_ready.set( Sequencer::DAEMON_FLEXURE );
-    }
-    else {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize flexure control" );
-      seq.thread_error.set( THR_FLEXURE_INIT );
+    if ( this->check_power_on(POWER_FLEXURE, std::chrono::seconds(21)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR powering flexure control" );
+      return ERROR;
     }
 
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_FLEXURE );
-    seq.broadcast_seqstate();
+    if ( this->check_connected(this->flexured) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing flexure control" );
+      return ERROR;
+    }
 
-    seq.thread_state.clear( THR_FLEXURE_INIT );                // thread terminated
-    return;
+    this->daemon_manager.set( Sequencer::DAEMON_FLEXURE );  // flexured ready
+
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_flexure_init ***************************/
+  /***** Sequencer::Sequence::flexure_init ************************************/
 
 
   /***** Sequencer::Sequence::dothread_flexure_shutdown ***********************/
@@ -1840,70 +1737,35 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_flexure_shutdown ***********************/
 
 
-  /***** Sequencer::Sequence::dothread_focus_init *****************************/
+  /***** Sequencer::Sequence::focus_init **************************************/
   /**
    * @brief      initializes the focus system for control from the Sequencer
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    */
-  void Sequence::dothread_focus_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_FOCUS_SET );                     // thread running
-    std::string function = "Sequencer::Sequence::dothread_focus_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isopen=false;
+  long Sequence::focus_init() {
+    const std::string function("Sequencer::Sequence::focus_init");
 
-    // make sure hardware is powered on
-    //
-    error = seq.check_power_on(POWER_FOCUS, std::chrono::seconds(5));
+    ScopedState scoped(Sequencer::THR_FOCUS_INIT, thread_state_manager);
+    ScopedState seq_state( Sequencer::SEQ_WAIT_FOCUS, seq_state_manager );
 
-    bool was_opened=false;
-    error = seq.check_connected(seq.focusd, was_opened);
+    this->daemon_manager.clear( Sequencer::DAEMON_FOCUS );  // focusd not ready
 
-/*****
-    // if not connected to the focus daemon then connect
-    //
-    if ( !seq.focusd.socket.isconnected() ) {
-      logwrite( function, "connecting to focus daemon" );
-      error = seq.focusd.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to focus daemon" );
+    if ( this->check_power_on(POWER_FOCUS, std::chrono::seconds(5)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR powering focus control" );
+      return ERROR;
     }
 
-    // Ask focusd if hardware connection is open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.focusd.send( FOCUSD_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with focus hardware" );
+    if ( this->check_connected(this->focusd) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing focus control" );
+      return ERROR;
     }
 
-    // and open it if necessary.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to focus hardware" );
-      error = seq.focusd.send( FOCUSD_OPEN, reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: opening connection to focus hardware" );
-    }
-*****/
+    this->daemon_manager.set( Sequencer::DAEMON_FOCUS );  // focusd ready
 
-    // flag daemon as ready or set thread_error so the main thread knows we had an error or not
-    //
-    if ( error == NO_ERROR ) {
-      seq.daemon_ready.set( Sequencer::DAEMON_FOCUS );
-    }
-    else {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize focus control" );
-      seq.thread_error.set( THR_FOCUS_SET );
-    }
-
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_FOCUS );
-    seq.broadcast_seqstate();
-
-    seq.thread_state.clear( THR_FOCUS_SET );                   // thread terminated
-    return;
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_focus_init *****************************/
+  /***** Sequencer::Sequence::focus_init **************************************/
 
 
   /***** Sequencer::Sequence::dothread_focus_shutdown *************************/
@@ -1940,75 +1802,50 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_focus_shutdown *************************/
 
 
-  /***** Sequencer::Sequence::dothread_camera_init ****************************/
+  /***** Sequencer::Sequence::camera_init *************************************/
   /**
    * @brief      initializes the camera system for control from the Sequencer
    * @param[in]  seq  reference to Sequencer::Sequence object
    *
    */
-  void Sequence::dothread_camera_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_CAMERA_INIT );                   // thread running
-    std::string function = "Sequencer::Sequence::dothread_camera_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isopen=false;
+  long Sequence::camera_init() {
+    const std::string function("Sequencer::Sequence::camera_init");
+
+    ScopedState scoped(Sequencer::THR_CAMERA_INIT, thread_state_manager);
+    ScopedState seq_state( Sequencer::SEQ_WAIT_CAMERA, seq_state_manager );
+
+    this->daemon_manager.clear( Sequencer::DAEMON_CAMERA );  // camerad not ready
 
     // make sure hardware is powered on
     //
-    error = seq.check_power_on(POWER_CAMERA, std::chrono::seconds(5));
+    if ( this->check_power_on(POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR powering camera" );
+      return ERROR;
+    }
 
     bool was_opened=false;
-    error = seq.check_connected(seq.camerad, was_opened);
-
-/*****
-    // if not connected to the camera daemon then connect
-    //
-    if ( !seq.camerad.socket.isconnected() ) {
-      logwrite( function, "connecting to camera daemon" );
-      error = seq.camerad.connect();                  // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to camera daemon" );
+    if ( this->check_connected(this->camerad, was_opened) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR initializing camera" );
+      return ERROR;
     }
 
-    // Ask camerad if hardware connection is open,
-    //
-    if (error==NO_ERROR) error = seq.camerad.send( CAMERAD_ISOPEN, reply );
-
-    // and open it if necessary.
-    //
-    if (error==NO_ERROR) error = seq.parse_state( function, reply, isopen );
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to camera hardware" );
-      error = seq.camerad.send( CAMERAD_OPEN, reply );   // This will open all devices configured with CONTROLLER key in config file
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with science camera controller(s)" );
-    }
-*****/
-
-    // send all of the prologue commands
+    // send all of the prologue commands only if camera was just opened now
     //
     if ( was_opened) {
-      for ( const auto &cmd : seq.camera_prologue ) {
-        if (error==NO_ERROR) error = seq.camerad.send( cmd, reply );
+      std::string reply;
+      for ( const auto &cmd : this->camera_prologue ) {
+        if ( this->camerad.command_timeout( cmd, reply, CAMERA_PROLOG_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to camera" );
+          return ERROR;
+        }
       }
     }
 
-    // atomically set thread_error so the main thread knows we had an error
-    //
-    if ( error != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize camera" );
-      seq.thread_error.set( THR_CAMERA_INIT );
-    }
-    else {
-      seq.daemon_ready.set( Sequencer::DAEMON_CAMERA );        // ready
-    }
+    this->daemon_manager.set( Sequencer::DAEMON_CAMERA );  // camerad ready
 
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_CAMERA );
-    seq.broadcast_seqstate();
-
-    seq.thread_state.clear( THR_CAMERA_INIT );                 // thread terminated
-    return;
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_camera_init ****************************/
+  /***** Sequencer::Sequence::camera_init *************************************/
 
 
   /***** Sequencer::Sequence::dothread_camera_shutdown ************************/
@@ -2909,21 +2746,6 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
   /***** Sequencer::Sequence::dothread_wait_for_state *************************/
 
 
-  /***** Sequencer::Sequence::dothread_startup ********************************/
-  /**
-   * @brief      
-   * @param[in]  
-   *
-   */
-  void Sequence::dothread_startup( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_STARTUP );                       // thread running
-    seq.startup( seq );
-    seq.thread_state.clear( THR_STARTUP );                     // thread terminated
-    return;
-  }
-  /***** Sequencer::Sequence::dothread_startup ********************************/
-
-
   /***** Sequencer::Sequence::startup *****************************************/
   /**
    * @brief      performs nightly startup
@@ -2931,183 +2753,69 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
    * @return     ERROR or NO_ERROR
    *
    */
-  long Sequence::startup( Sequencer::Sequence &seq ) {
-    std::string function = "Sequencer::Sequence::startup";
+  long Sequence::startup() {
+    const std::string function("Sequencer::Sequence::startup");
     std::stringstream message;
-    std::string retstring;
+    long error=NO_ERROR;
 
-    // there are certain conditions when the startup sequence cannot be run
-    //
-//  if ( not seq.is_seqstate_set( Sequencer::SEQ_OFFLINE ) && not seq.is_seqstate_set( Sequencer::SEQ_READY ) ) {
-//    message << "ERROR: runstate " << this->seq_state.get_set_names() << " must be OFFLINE or READY";
-//  if ( seq.seq_state.is_clear( Sequencer::SEQ_OFFLINE ) ) {
-//    message << "ERROR: runstate " << this->seq_state.get_set_names() << " must be OFFLINE";
-//    seq.async.enqueue_and_log( function, message.str() );
-//    return ERROR;
-//  }
+    ScopedState thread_state( Sequencer::THR_STARTUP, thread_state_manager );
+    ScopedState seq_state( Sequencer::SEQ_STARTING, seq_state_manager );
 
-/*****
-    // Disallow startup if TCS is not connected and open
-    //
-    if ( !seq.tcsd.socket.isconnected() ) {
-      logwrite( function, "ERROR cannot start: not connected to tcs daemon" );
-      seq.async.enqueue( "TCSD:isopen:false" );            // added here for consistency
-      return ERROR;
-    }
-    else {
-      // Ask tcsd if hardware connection is open.
-      // The response will be "name|false|ERROR" where name is the name of the TCS device
-      // if connected to that device, so to be open, require that there is no error and
-      // that the reply is neither false nor error.
-      //
-      std::string reply;
-      if ( seq.tcsd.send( TCSD_ISOPEN, reply ) != NO_ERROR ||
-           reply.find( "false" ) != std::string::npos      ||
-           reply.find( "ERROR" ) != std::string::npos ) {
-        logwrite( function, "ERROR cannot start: tcs not initialized" );
-        seq.async.enqueue( "TCSD:isopen:false" );            // added here for consistency
-        return ERROR;
-      }
-    }
-*****/
-
-    // clear the thread error state
-    //
-    seq.thread_error.clear_all();
+    this->thread_error.clear_all();     // clear the thread error state
 
     // Everything (except TCS) needs the power control to be running 
     // so initialize the power control first.
-    // For this, set READY and WAIT_POWER bits, and clear OFFLINE bit.
     //
-    seq.seq_state.set_and_clear( {Sequencer::SEQ_STARTING, Sequencer::SEQ_WAIT_POWER}, {Sequencer::SEQ_OFFLINE} );
-    seq.req_state.set_and_clear( {Sequencer::SEQ_STARTING}, {Sequencer::SEQ_OFFLINE} );
-    seq.broadcast_seqstate();
+    auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
+    start_power.get();
 
-    std::thread( dothread_power_init, std::ref(seq) ).detach();                   // start power initialization thread
-
-/// std::thread( dothread_wait_for_state, std::ref(seq) ).detach();               // wait for requested state
-
-    logwrite( function, "[DEBUG] (3) waiting for power control to initialize" );
-    message.str(""); message << "current state: " << seq.seq_state.get_set_names()
-                             << " waiting for: " << seq.req_state.get_set_names();
-    logwrite( function, message.str() );
-
-    // wait for WAIT_POWER to be cleared
+    // threads to start, listed by their ThreadStatusBit
     //
-    try {
-      seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_POWER );
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "NOTICE: startup aborted: " << e.what();
-      seq.async.enqueue_and_log( function, message.str() );
-      this->ready_to_start = false;
-      seq.seq_state.set_and_clear( Sequencer::SEQ_OFFLINE, Sequencer::SEQ_STARTING );
-      seq.req_state.set_and_clear( Sequencer::SEQ_OFFLINE, Sequencer::SEQ_STARTING );
-      seq.broadcast_seqstate();
-      return NO_ERROR;
+    std::vector<Sequencer::ThreadStatusBits> worker_thread_names = {
+      THR_CALIB_INIT,
+      THR_CAMERA_INIT,
+      THR_FLEXURE_INIT,
+      THR_FOCUS_INIT,
+      THR_SLIT_INIT,
+      THR_TCS_INIT
+    };
+
+    std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> workers;
+
+    workers.emplace_back( THR_CALIB_INIT,   std::async(std::launch::async, 
+                                            &Sequence::calib_init, this) );
+    workers.emplace_back( THR_CAMERA_INIT,  std::async(std::launch::async, 
+                                            &Sequence::camera_init, this) );
+    workers.emplace_back( THR_FLEXURE_INIT, std::async(std::launch::async, 
+                                            &Sequence::flexure_init, this) );
+    workers.emplace_back( THR_FOCUS_INIT,   std::async(std::launch::async, 
+                                            &Sequence::focus_init, this) );
+    workers.emplace_back( THR_SLIT_INIT,    std::async(std::launch::async, 
+                                            &Sequence::slit_init, this) );
+    workers.emplace_back( THR_TCS_INIT,     std::async(std::launch::async, 
+                                            &Sequence::improved_tcs_init, this) );
+    
+    for ( auto &[name, future] : workers) {
+      try {
+        error |= future.get(); // wait for this worker to finish
+        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(name)+" completed");
+      }
+      catch (const std::exception& e) {
+        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(name)+" exception: "+std::string(e.what()) );
+        this->thread_error.set( Sequencer::THR_STARTUP );
+        return ERROR;
+      }
     }
 
-/// {
-/// std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
-/// if ( seq.seqstate.load() != seq.reqstate.load() ) {
-///   seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
-/// }
-/// }
-    logwrite( function, "[DEBUG] (3) DONE waiting for power control to initialize" );
-
-    // Don't proceed unless power control initialized successfully
+    // Now the Andor cameras must be done individually, first slicecam, then acam
     //
-    if ( seq.thread_error.is_any_set() ) {
-      seq.async.enqueue_and_log( function, "ERROR: initializing power control. startup aborted" );
-      this->ready_to_start = false;
-      seq.seq_state.set_and_clear( Sequencer::SEQ_OFFLINE, Sequencer::SEQ_STARTING );
-      seq.req_state.set_and_clear( Sequencer::SEQ_OFFLINE, Sequencer::SEQ_STARTING );
-      seq.broadcast_seqstate();
-      return ERROR;
-    }
-    else {
-      logwrite( function, "power control initialized" );
-    }
+    auto start_slicecam = std::async(std::launch::async, &Sequence::improved_slicecam_init, this);
+    start_slicecam.get();
 
-    // The following can be done in parallel.
-    // Set the state bit before starting each thread, then
-    // the thread will clear their bit when they complete.
-    //
-    seq.seq_state.set( Sequencer::SEQ_WAIT_TCS,
-                       Sequencer::SEQ_WAIT_ACAM,
-                       Sequencer::SEQ_WAIT_CALIB,
-                       Sequencer::SEQ_WAIT_CAMERA,
-                       Sequencer::SEQ_WAIT_FLEXURE,
-                       Sequencer::SEQ_WAIT_FOCUS,
-                       Sequencer::SEQ_WAIT_SLICECAM,
-                       Sequencer::SEQ_WAIT_SLIT );
-    seq.broadcast_seqstate();
-    std::thread( dothread_tcs_init, std::ref(*this), seq.tcs_which ).detach();      // spawn the tcs_init thread here
-    std::thread( dothread_andor_init, std::ref(seq) ).detach();  // this will clear both ACAM and SLICECAM bits
-    std::thread( dothread_calib_init, std::ref(seq) ).detach();
-    std::thread( dothread_camera_init, std::ref(seq) ).detach();
-    std::thread( dothread_flexure_init, std::ref(seq) ).detach();
-    std::thread( dothread_focus_init, std::ref(seq) ).detach();
-    std::thread( dothread_slit_init, std::ref(seq) ).detach();
-//  seq.set_seqstate_bit( Sequencer::SEQ_WAIT_TCS );     std::thread( dothread_tcs_init, std::ref(seq), "" ).detach();
+    auto start_acam = std::async(std::launch::async, &Sequence::improved_acam_init, this);
+    start_acam.get();
 
-    // Now that the threads are running, wait until they are all finished.
-    // When the SEQ_STARTING bit is the only bit set then we are ready.
-    //
-/// std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
-
-    logwrite( function, "[DEBUG] (4) waiting for init threads to complete" );
-    message.str(""); message << "current state: " << seq.seq_state.get_set_names()
-                             << " waiting for: " << seq.req_state.get_set_names();
-    logwrite( function, message.str() );
-
-    try {
-      seq.seq_state.wait_for_match( seq.req_state );
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "NOTICE: startup aborted: " << e.what();
-      seq.async.enqueue_and_log( function, message.str() );
-      seq.seq_state.set_and_clear( {Sequencer::SEQ_OFFLINE}, {Sequencer::SEQ_STARTING,Sequencer::SEQ_READY} );
-      seq.req_state.set_and_clear( {Sequencer::SEQ_OFFLINE}, {Sequencer::SEQ_STARTING,Sequencer::SEQ_READY} );
-      seq.broadcast_seqstate();
-      this->ready_to_start = false;
-      seq.thread_error.clear_all();  // clear the thread error state
-      return ERROR;
-    }
-
-/// {
-/// std::unique_lock<std::mutex> wait_lock(seq.seqstate_mtx);
-/// if ( seq.seqstate.load() != seq.reqstate.load() ) {
-///   seq.seqstate_cv.wait(wait_lock, [&]() { return seq.seqstate.load() == seq.reqstate.load(); });
-/// }
-/// }
-    logwrite( function, "[DEBUG] (4) DONE waiting for init threads to complete" );
-
-    // all done now so clear the STARTING bits
-    //
-    logwrite( function, "init threads completed" );
-
-    // if any thread returned an error then we are not ready
-    //
-    if ( seq.thread_error.is_any_set() ) {
-      message.str(""); message << "ERROR startup failed because the following thread(s) had an error: "
-                               << seq.thread_error.get_set_names();
-      seq.async.enqueue_and_log( function, message.str() );
-      seq.seq_state.set_and_clear( {Sequencer::SEQ_OFFLINE}, {Sequencer::SEQ_STARTING,Sequencer::SEQ_READY} );
-      seq.req_state.set_and_clear( {Sequencer::SEQ_OFFLINE}, {Sequencer::SEQ_STARTING,Sequencer::SEQ_READY} );
-      seq.broadcast_seqstate();
-      this->ready_to_start = false;
-      seq.thread_error.clear_all();  // clear the thread error state
-      return ERROR;
-    }
-    else {
-      seq.seq_state.set_and_clear( Sequencer::SEQ_READY, Sequencer::SEQ_STARTING );
-      seq.req_state.set_and_clear( Sequencer::SEQ_READY, Sequencer::SEQ_STARTING );
-      seq.broadcast_seqstate();
-      logwrite( function, "ready to start" );
-      this->ready_to_start = true;
-      return NO_ERROR;
-    }
+    return error;
   }
   /***** Sequencer::Sequence::startup *****************************************/
 
@@ -3178,7 +2886,8 @@ message.str(""); message << "[DEBUG] *after* thread_error=" << seq.thread_error.
     seq.req_state.set_and_clear( {Sequencer::SEQ_SHUTTING}, {Sequencer::SEQ_READY,Sequencer::SEQ_OFFLINE} );
     seq.broadcast_seqstate();
 
-    std::thread( dothread_power_init, std::ref(seq) ).detach();                   // start power initialization thread
+//  std::thread( dothread_power_init, std::ref(seq) ).detach();                   // start power initialization thread
+    std::thread( &Sequencer::Sequence::power_init, this ).detach();
 
 /// std::thread( dothread_wait_for_state, std::ref(seq) ).detach();               // wait for requested state
 
@@ -4150,6 +3859,7 @@ logwrite( function, message.str() );
         }
         // if anything was turned on then wait for power-on delay
         need_delay=true;
+        std::this_thread::sleep_for( std::chrono::seconds(1) );
       }
       else
       if ( state==1 ) {
@@ -5063,8 +4773,16 @@ logwrite( function, message.str() );
       bool ispower = false;
       std::string reply;
 
+      if ( tokens[1] == "startup" ) {
+        std::thread( &Sequencer::Sequence::startup, this ).detach();
+      }
+      else
       if ( tokens[1] == "flexure" ) {
-        std::thread( &Sequencer::Sequence::improved_flexure_init, this ).detach();
+        std::thread( &Sequencer::Sequence::flexure_init, this ).detach();
+      }
+      else
+      if ( tokens[1] == "power" ) {
+        std::thread( &Sequencer::Sequence::power_init, this ).detach();
       }
       else
       if ( tokens[1] == "tcs" ) {
@@ -5155,7 +4873,7 @@ logwrite( function, message.str() );
         if ( ! ispower ) {
           this->seq_state.set( Sequencer::SEQ_WAIT_POWER );
           this->broadcast_seqstate();
-          std::thread( dothread_power_init, std::ref(*this) ).detach();
+          std::thread( &Sequencer::Sequence::power_init, this ).detach();
           if ( wait ) {
             try {
               this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_POWER );
@@ -5202,7 +4920,8 @@ logwrite( function, message.str() );
       if ( tokens[1] == "calib" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_CALIB );
         this->broadcast_seqstate();
-        std::thread( isinit ? dothread_calib_init : dothread_calib_shutdown, std::ref(*this) ).detach();
+//      std::thread( isinit ? dothread_calib_init : dothread_calib_shutdown, std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::calib_init, this ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_CALIB );
@@ -5216,7 +4935,8 @@ logwrite( function, message.str() );
       if ( tokens[1] == "camera" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );
         this->broadcast_seqstate();
-        std::thread( isinit ? dothread_camera_init : dothread_camera_shutdown, std::ref(*this) ).detach();
+//      std::thread( isinit ? dothread_camera_init : dothread_camera_shutdown, std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::camera_init, this ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_CAMERA );
@@ -5230,7 +4950,8 @@ logwrite( function, message.str() );
       if ( tokens[1] == "flexure" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_FLEXURE );
         this->broadcast_seqstate();
-        std::thread( isinit ? dothread_flexure_init : dothread_flexure_shutdown, std::ref(*this) ).detach();
+//      std::thread( isinit ? dothread_flexure_init : dothread_flexure_shutdown, std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::flexure_init, this ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_FLEXURE );
@@ -5244,7 +4965,8 @@ logwrite( function, message.str() );
       if ( tokens[1] == "focus" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_FOCUS );
         this->broadcast_seqstate();
-        std::thread( isinit ? dothread_focus_init : dothread_focus_shutdown, std::ref(*this) ).detach();
+//      std::thread( isinit ? dothread_focus_init : dothread_focus_shutdown, std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::focus_init, this ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_FOCUS );
@@ -5272,7 +4994,8 @@ logwrite( function, message.str() );
       if ( tokens[1] == "slit" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_SLIT );
         this->broadcast_seqstate();
-        std::thread( isinit ? dothread_slit_init : dothread_slit_shutdown, std::ref(*this) ).detach();
+//      std::thread( isinit ? dothread_slit_init : dothread_slit_shutdown, std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::slit_init, this ).detach();
         if ( wait ) {
           try {
             this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_SLIT );

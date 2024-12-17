@@ -573,6 +573,14 @@ class ImprovedStateManager {
       }
       notify();
     }
+    void set_and_clear( std::initializer_list<size_t> setbits, std::initializer_list<size_t> clrbits ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      for ( auto set : setbits ) state_bits.set(set);
+      for ( auto clr : clrbits ) state_bits.reset(clr);
+      }
+      notify();
+    }
     bool is_set(size_t bit) {
       std::lock_guard<std::mutex> lock(mtx);
       return state_bits.test(bit);

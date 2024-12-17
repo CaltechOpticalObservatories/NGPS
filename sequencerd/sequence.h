@@ -9,6 +9,11 @@
  */
 #pragma once
 
+#include <memory>
+#include <thread>
+#include <future>
+#include <vector>
+#include <chrono>
 #include <atomic>
 #include <map>
 #include <cmath>
@@ -252,7 +257,7 @@ namespace Sequencer {
           tcs_which("real"),
           tcs_name("offline") {
             seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { improved_broadcast_seqstate(); });
-            thread_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_threadstate(); });
+            thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { broadcast_threadstate(); });
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
             seq_state.set( Sequencer::SEQ_OFFLINE );
             req_state.set( Sequencer::SEQ_OFFLINE );
@@ -302,7 +307,7 @@ namespace Sequencer {
       StateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_ready{ Sequencer::daemon_names };
 
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)> seq_state_manager{Sequencer::seq_state_names};
-      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)> thread_state_manager{ Sequencer::thread_names };
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state_manager{ Sequencer::thread_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>    daemon_manager{ Sequencer::daemon_names };
 
       std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
@@ -357,10 +362,9 @@ namespace Sequencer {
       static void dothread_sequencer_async_listener( Sequencer::Sequence &seq,
                                                      Network::UdpSocket udp ); ///< UDP ASYNC message listening thread
 
-      static void dothread_startup( Sequencer::Sequence &seq );
       static void dothread_shutdown( Sequencer::Sequence &seq );
 
-      long startup( Sequencer::Sequence &seq );         ///< nightly startup sequence
+      long startup();                                   ///< nightly startup sequence
       long shutdown( Sequencer::Sequence &seq );        ///< nightly shutdown  sequence
 
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
@@ -414,16 +418,17 @@ namespace Sequencer {
       void dothread_flexure_set();
 
       static void dothread_andor_init( Sequencer::Sequence &seq );             ///< initializes connections to acamd and slicecamd
+             long improved_acam_init();                                        ///< initializes connection to acamd
       static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
-      static void dothread_calib_init( Sequencer::Sequence &seq );             ///< initializes connection to calibd
-      static void dothread_camera_init( Sequencer::Sequence &seq );            ///< initializes connection to camerad
-             void improved_flexure_init();                                     ///< initializes connection to flexured
-      static void dothread_flexure_init( Sequencer::Sequence &seq );           ///< initializes connection to flexured
-      static void dothread_focus_init( Sequencer::Sequence &seq );             ///< initializes connection to focusd
-      static void dothread_power_init( Sequencer::Sequence &seq );             ///< initializes connection to powerd
+      long calib_init();                                       ///< initializes connection to calibd
+      long camera_init();                                      ///< initializes connection to camerad
+      long flexure_init();                                     ///< initializes connection to flexured
+      long focus_init();                                       ///< initializes connection to focusd
+      long power_init();                                       ///< initializes connection to powerd
+             long improved_slicecam_init();                                    ///< initializes connection to slicecamd
       static void dothread_slicecam_init( Sequencer::Sequence &seq );          ///< initializes connection to slicecamd
-      static void dothread_slit_init( Sequencer::Sequence &seq );              ///< initializes connection to slitd
-             void improved_tcs_init();                                         ///< initializes connection to tcsd
+      long slit_init();                                        ///< initializes connection to slitd
+             long improved_tcs_init();                                         ///< initializes connection to tcsd
       static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
 
       static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam
