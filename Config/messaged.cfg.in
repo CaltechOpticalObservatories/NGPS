@@ -1,0 +1,8 @@
+# configuration file for message daemon
+# @MESSAGED_CFG_COMMENT@
+#
+LOGPATH=/data/logs/
+STDOUT=/tmp/messaged.stdout          # where to send stdout
+STDERR=/tmp/messaged.stderr          # where to send stderr
+BROKER_PUBLISH_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
+BROKER_SUBSCRIBE_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
