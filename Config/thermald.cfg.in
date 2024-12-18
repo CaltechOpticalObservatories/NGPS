@@ -7,6 +7,7 @@ NBPORT=@THERMALD_NB_PORT@         # thermald server non-blocking port
 DAEMON=yes                        # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+PUBLISHER_PORT="tcp://127.0.0.1:@THERMALD_PUB_PORT@"  # my zeromq pub port
 
 # database configuration
 #
@@ -109,4 +110,7 @@ CAMP_CHAN="23 TACAM"
 #
 TELEM_PROVIDER=(acamd     @ACAMD_NB_PORT@)
 TELEM_PROVIDER=(slicecamd @SLICECAMD_NB_PORT@)
+#
+SUBSCRIBE_TO=(acamd     "tcp://127.0.0.1:@ACAMD_PUB_PORT@")
+SUBSCRIBE_TO=(slicecamd "tcp://127.0.0.1:@SLICECAMD_PUB_PORT@")
 

@@ -13,6 +13,7 @@ LOGPATH=/data/logs/               # fully qualified path to save log files
 ASYNCPORT=@MESSAGEPORT@
 ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
 DAEMON=no                        # run as a daemon? {yes,no}
+PUBLISHER_PORT="tcp://127.0.0.1:@CAMERAD_PUB_PORT@"  # my zeromq pub port
 
 # -----------------------------------------------------------------------------
 # The following are for simulated ARC controllers
@@ -44,8 +45,8 @@ CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
 #       BINROWS   bin factor rows
 #       BINCOLS   bin factor cols
 #
-IMAGE_SIZE=(I 1020 4114 0 20 1 1)
-IMAGE_SIZE=(R 1020 4114 0 20 1 1)
+IMAGE_SIZE=(I 1220 4114 0 100 1 1)
+IMAGE_SIZE=(R 1220 4114 0 100 1 1)
 
 # -----------------------------------------------------------------------------
 # Detector orientation of ROWS/COLS with respect to X,Y axes
@@ -135,7 +136,7 @@ CONSTKEY_EXT=(SPECTPART WHOLE)  # fixed only because we're writing single-channe
 # after each exposure?
 # USERKEYS_PERSIST=yes|no
 #
-USERKEYS_PERSIST=no
+USERKEYS_PERSIST=yes
 
 # -----------------------------------------------------------------------------
 # TELEM_PROVIDER=( <name> <port> )
@@ -152,3 +153,12 @@ TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
 TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
 TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
 TELEM_PROVIDER=(thermald   @THERMALD_NB_PORT@)
+#
+SUBSCRIBE_TO=(calibd     "tcp://127.0.0.1:@CALIBD_PUB_PORT@")
+SUBSCRIBE_TO=(flexured   "tcp://127.0.0.1:@FLEXURED_PUB_PORT@")
+SUBSCRIBE_TO=(focusd     "tcp://127.0.0.1:@FOCUSD_PUB_PORT@")
+SUBSCRIBE_TO=(powerd     "tcp://127.0.0.1:@POWERD_PUB_PORT@")
+SUBSCRIBE_TO=(sequencerd "tcp://127.0.0.1:@SEQUENCERD_PUB_PORT@")
+SUBSCRIBE_TO=(slitd      "tcp://127.0.0.1:@SLITD_PUB_PORT@")
+SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
+SUBSCRIBE_TO=(thermald   "tcp://127.0.0.1:@THERMALD_PUB_PORT@")

@@ -18,11 +18,11 @@ SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 
 # Scale factor at slit, ARCSEC_PER_MM
 #
-ARCSEC_PER_MM=2.45
+ARCSEC_PER_MM=2.56
 
 # Minimum slit width in actuator units (mm)
 #
-MIN_WIDTH_MM=0.2
+MIN_WIDTH_MM=0.194
 
 # Position of center in actuator units (mm)
 #

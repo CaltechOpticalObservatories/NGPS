@@ -7,6 +7,7 @@ NBPORT=@POWERD_NB_PORT@           # slitd server non-blocking port
 DAEMON=no                         # run as daemon? {yes|no}
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
+PUBLISHER_PORT="tcp://127.0.0.1:@POWERD_PUB_PORT@"  # my zeromq pub port
 EMULATOR_PORT=(@POWERD_EMULATOR_1@ @POWERD_EMULATOR_2@ @POWERD_EMULATOR_3@ @POWERD_EMULATOR_4@) 
 OPEN_ON_START=yes                 # open connection to hardware automatically on startup? {yes|no}
 

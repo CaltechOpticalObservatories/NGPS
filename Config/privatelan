@@ -6,6 +6,16 @@
 #          Listing is in numerical order by IP# to help avoid any conflicts
 # ----------------------------------------------------------------------------
 
+# IP address of P200 TCS
+#
+set( IP_TCS             10.200.99.2 )
+
+# NGPS' IP address at Palomar
+#
+set( IP_PALOMAR         10.200.129.161 )
+
+# IP address of second ethernet port to serve private LAN
+#
 set( IP_GATEWAY         10.0.0.1   )
 
 # terminal server
