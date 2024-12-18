@@ -10,7 +10,6 @@
 const std::string SEQUENCERD_ABORT      = "abort";
 const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";
-const std::string SEQUENCERD_DOMENOWAIT = "domenowait";
 const std::string SEQUENCERD_EXIT       = "exit";
 const std::string SEQUENCERD_GETONETARGET = "getone";
 const std::string SEQUENCERD_GUIDE      = "guide";
@@ -29,7 +28,6 @@ const std::string SEQUENCERD_STOP       = "stop";
 const std::string SEQUENCERD_TARGETSET  = "targetset";
 const std::string SEQUENCERD_TARGETOFFSET  = "targetoffset";
 const std::string SEQUENCERD_TCSINIT    = "tcsinit";
-const std::string SEQUENCERD_TCSNOWAIT  = "tcsnowait";
 const std::string SEQUENCERD_TEST       = "test";
 
 const std::string SEQUENCERD_ACAM       = "acam";
@@ -50,7 +48,6 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      "",
                                                      SEQUENCERD_ABORT,
                                                      SEQUENCERD_CONFIG,
-                                                     SEQUENCERD_DOMENOWAIT,
                                                      SEQUENCERD_DOTYPE+" [ one | all ]",
                                                      SEQUENCERD_EXIT,
                                                      SEQUENCERD_GETONETARGET,
@@ -71,7 +68,6 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_TARGETSET+" [ <targetid> | <targetname> ]",
                                                      SEQUENCERD_TARGETOFFSET,
                                                      SEQUENCERD_TCSINIT+" [real|sim|shutdown]",
-                                                     SEQUENCERD_TCSNOWAIT,
                                                      SEQUENCERD_TEST+" ? | <testname> ..."
                                                    };
 #endif

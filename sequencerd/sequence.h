@@ -252,8 +252,6 @@ namespace Sequencer {
           tcs_preauth_time(0),
           waiting_for_state(false),
           do_once(false),
-          tcs_nowait(false),
-          dome_nowait(false),
           tcs_which("real"),
           tcs_name("offline") {
             seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { improved_broadcast_seqstate(); });
@@ -261,7 +259,7 @@ namespace Sequencer {
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
             seq_state.set( Sequencer::SEQ_OFFLINE );
             req_state.set( Sequencer::SEQ_OFFLINE );
-            broadcast_seqstate();
+            seq_state_manager.set(Sequencer::SEQ_NOTREADY);
           }
 
       ~Sequence() { };
@@ -294,8 +292,6 @@ namespace Sequencer {
 
       std::atomic<bool> waiting_for_state;  ///< set if dothread_wait_for_state is running
       std::atomic<bool> do_once;            ///< set if "do one" selected, clear if "do all" selected
-      std::atomic<bool> tcs_nowait;         ///< set to skip waiting for TCS
-      std::atomic<bool> dome_nowait;        ///< set to skip waiting for dome
 
       std::mutex seqstate_mtx;
       std::condition_variable seqstate_cv;
@@ -399,6 +395,8 @@ namespace Sequencer {
       long check_power_on( const std::string which, std::chrono::seconds delay );
       long check_connected( Common::DaemonClient &daemon );
       long check_connected( Common::DaemonClient &daemon, bool &was_opened );
+      long check_connected( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout );
+      long check_connected( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout, bool &was_opened );
       // These are various jobs that are done in their own threads
       //
       void dothread_trigger_exposure();       ///< trigger and wait for exposure
@@ -417,16 +415,13 @@ namespace Sequencer {
       void dothread_focus_set();
       void dothread_flexure_set();
 
-      static void dothread_andor_init( Sequencer::Sequence &seq );             ///< initializes connections to acamd and slicecamd
-             long improved_acam_init();                                        ///< initializes connection to acamd
-      static void dothread_acam_init( Sequencer::Sequence &seq );              ///< initializes connection to acamd
+      long acam_init();                                        ///< initializes connection to acamd
       long calib_init();                                       ///< initializes connection to calibd
       long camera_init();                                      ///< initializes connection to camerad
       long flexure_init();                                     ///< initializes connection to flexured
       long focus_init();                                       ///< initializes connection to focusd
       long power_init();                                       ///< initializes connection to powerd
-             long improved_slicecam_init();                                    ///< initializes connection to slicecamd
-      static void dothread_slicecam_init( Sequencer::Sequence &seq );          ///< initializes connection to slicecamd
+      long slicecam_init();                                    ///< initializes connection to slicecamd
       long slit_init();                                        ///< initializes connection to slitd
              long improved_tcs_init();                                         ///< initializes connection to tcsd
       static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd

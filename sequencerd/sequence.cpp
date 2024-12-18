@@ -17,120 +17,10 @@ namespace Sequencer {
 
   constexpr long CAMERA_PROLOG_TIMEOUT = 6000;  ///< timeout msec to send camera prolog command
 
-  /***** Sequencer::Sequence **************************************************/
-  /**
-   * @brief      Sequence class constructor
-   *
-   */
-/***
-  Sequence::Sequence() {
-    this->seq_state.set( Sequencer::SEQ_OFFLINE );   /// offline
-    this->req_state.set( Sequencer::SEQ_OFFLINE );   /// offline
-    this->broadcast_seqstate();
-    this->do_once.store( false );                    /// default to "do all"
-/// this->is_tcs_ontarget.store( false );            /// default TCS target not ready to observe
-    this->tcs_nowait.store( false );                 /// default to wait
-    this->dome_nowait.store( false );                /// default to wait
-    this->waiting_for_state.store( false );          /// not currently waiting for a state
-    this->ready_to_start = false;                    /// the sequencer is not ready by default (needs nightly startup)
-    this->notify_tcs_next_target = false;            /// default do not notify TCS of next target before end of exposure
-    this->tcs_preauth_time = 0;                      /// default disable notifing TCS of next target's coords before exposure end
-    this->tcs_settle_timeout = 10;                   /// telescope settling timeout (set by config file)
-    this->tcs_settle_stable = 1;                     /// telescope stable time (set by config file)
-    this->tcs_domeazi_ready = 1;                     /// max degrees azimuth that dome and telescope can differ before ready to observe
-    this->tcs_offsetrate_ra = 45;                    /// TCS offset rate RA in arcsec per second
-    this->tcs_offsetrate_dec = 45;                   /// TCS offset rate DEC in arcsec per second
-    this->acquisition_timeout = 0;                   /// acquisition timeout (set by config file)
-    this->acquisition_max_retrys = -1;               /// no retry limit by default (-1 disables) but can override in config file
-    this->arm_readout_flag = false;                  /// disarm the readout flag to ignore async messages
-    this->last_target="";
-    this->test_solver_args="";
-    this->tcs_name="offline";
-  }
-****/
-  /***** Sequencer::Sequence **************************************************/
-
-
-  /***** Sequencer::Sequence::dothread_monitor_ready_state ********************/
-  /**
-   * @brief      ensures that seqstate is changed (READY/OFFLINE) based on system_not_ready word
-   * @details    spawned at startup by main() in sequencerd.cpp
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   *
-   * @todo       !! this was an experiment and is not currently in use !!
-   *             system_not_ready has been replaced with daemon_ready so consider
-   *             that if this function gets revived.
-   *
-   */
-  void Sequence::dothread_monitor_ready_state( Sequencer::Sequence &seq ) {
-/*****
-    // allow only one of these threads to run
-    //
-    if ( seq.thread_state.is_set( THR_MONITOR_READY_STATE ) ) {
-      return;
-    }
-
-    seq.thread_state.set( THR_MONITOR_READY_STATE );            // thread running now
-
-    std::string function = "Sequencer::Sequence::dothread_monitor_ready_state";
-    std::unique_lock<std::mutex> wait_lock( seq.wait_mtx );     // create a mutex object for waiting
-    logwrite( function, "started thread" );
-
-    while( true ) {
-      seq.cv.wait( wait_lock );
-      if ( seq.system_not_ready ) {
-        if ( seq.is_seqstate_set( Sequencer::SEQ_READY ) ) {    // If seqstate is READY then
-          seq.seqstate.fetch_or( Sequencer::SEQ_OFFLINE );      // set OFFLINE and
-          seq.seqstate.fetch_and( ~Sequencer::SEQ_READY );      // clear READY.
-        }
-        if ( seq.is_reqstate_set( Sequencer::SEQ_READY ) ) {    // If reqstate is READY then
-          seq.reqstate.fetch_or( Sequencer::SEQ_OFFLINE );      // set OFFLINE and
-          seq.reqstate.fetch_and( ~Sequencer::SEQ_READY );      // clear READY.
-        }
-      }
-      else {
-        if ( seq.is_seqstate_set( Sequencer::SEQ_OFFLINE ) ) {  // If seqstate is OFFLINE then
-          seq.seqstate.fetch_or( Sequencer::SEQ_READY );        // set READY and
-          seq.seqstate.fetch_and( ~Sequencer::SEQ_OFFLINE );    // clear OFFLINE.
-        }
-        if ( seq.is_reqstate_set( Sequencer::SEQ_OFFLINE ) ) {  // If reqstate is OFFLINE then
-          seq.reqstate.fetch_or( Sequencer::SEQ_READY );        // set READY and
-          seq.reqstate.fetch_and( ~Sequencer::SEQ_OFFLINE );    // clear OFFLINE.
-        }
-      }
-      seq.broadcast_seqstate();                                 // broadcast current state
-    }
-
-    seq.thread_state.clear( THR_MONITOR_READY_STATE );    // thread terminated
-    return;
-*****/
-  }
-  /***** Sequencer::Sequence::dothread_monitor_ready_state ********************/
-
-
-///***** Sequencer::Sequence::set_seqstate_bit ********************************/
-///**
-///* @brief      atomically sets the requested bit in the seqstate word
-///* @param[in]  mb  masked bit is uint32 word containing the bit to set
-///*
-///* The new state will be broadcast
-///*
-///*/
-///oid Sequence::set_seqstate_bit( const uint32_t mb ) {
-/// this->seqstate.fetch_or( mb );    // set
-/// this->seqstate_cv.notify_all();   // notify waiting threads of the change
-/// this->broadcast_seqstate();       // broadcast current state
-///
-///***** Sequencer::Sequence::set_seqstate_bit ********************************/
-
-
   void Sequence::broadcast_daemonstate() {
     logwrite( "Sequencer::Sequence::broadcast_daemonstate",
               "daemon(s) ready: "+daemon_manager.get_set_states() );
-    if ( daemon_manager.are_all_set() ) {
-      seq_state_manager.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_NOTREADY} );
-    }
-    else {
+    if ( ! daemon_manager.are_all_set() ) {
       seq_state_manager.set_and_clear( {Sequencer::SEQ_NOTREADY}, {Sequencer::SEQ_READY} );
     }
   }
@@ -143,7 +33,7 @@ namespace Sequencer {
   void Sequence::improved_broadcast_seqstate() {
     std::cerr << "Sequence::improved_broadcast_seqstate enter\n";
     std::stringstream message;
-    message << "STATES= " << seq_state_manager.get_set_states();
+    message << "RUNSTATE: " << seq_state_manager.get_set_states();
     this->async.enqueue_and_log( "Sequencer::Sequence::improved_broadcast_seqstate", message.str() );
     std::cerr << "Sequence::improved_broadcast_seqstate return\n";
   }
@@ -157,7 +47,7 @@ namespace Sequencer {
    */
   void Sequence::broadcast_seqstate() {
     std::stringstream message;
-    message << "RUNSTATE: " << this->seq_state.get_set_names();
+    message << "oldRUNSTATE: " << this->seq_state.get_set_names();
     this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate", message.str() );
     return;
   }
@@ -721,7 +611,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::power_init **************************************/
   /**
    * @brief      initializes the power system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::power_init() {
@@ -800,7 +690,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::slit_init ***************************************/
   /**
    * @brief      initializes the slit for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::slit_init() {
@@ -924,8 +814,14 @@ namespace Sequencer {
   /***** Sequencer::Sequence::dothread_slit_shutdown **************************/
 
 
-  long Sequence::improved_slicecam_init() {
-    const std::string function("Sequencer::Sequence::improved_slicecam_init");
+  /***** Sequencer::Sequence::slicecam_init ***********************************/
+  /**
+   * @brief      initializes the slicecam system for control from the Sequencer
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Sequence::slicecam_init() {
+    const std::string function("Sequencer::Sequence::slicecam_init");
 
     this->daemon_manager.clear( Sequencer::DAEMON_SLICECAM );  // slicecamd not ready
 
@@ -934,14 +830,14 @@ namespace Sequencer {
 
     // make sure hardware is powered on
     //
-    if ( this->check_power_on(POWER_SLICECAM, std::chrono::seconds(11)) != NO_ERROR ) {
+    if ( this->check_power_on(POWER_SLICECAM, std::chrono::seconds(10)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing slicecam control" );
       return ERROR;
     }
 
     // open connection is all that is needed, slicecamd takes care of everything
     //
-    if ( this->check_connected(this->slicecamd) != NO_ERROR ) {
+    if ( this->check_connected(this->slicecamd, SLICECAMD_OPEN, SLICECAMD_OPEN_TIMEOUT) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR starting slicecam" );
       return ERROR;
     }
@@ -950,10 +846,17 @@ namespace Sequencer {
 
     return NO_ERROR;
   }
+  /***** Sequencer::Sequence::slicecam_init ***********************************/
 
 
-  long Sequence::improved_acam_init() {
-    const std::string function("Sequencer::Sequence::improved_acam_init");
+  /***** Sequencer::Sequence::acam_init ***************************************/
+  /**
+   * @brief      initializes the slicecam system for control from the Sequencer
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Sequence::acam_init() {
+    const std::string function("Sequencer::Sequence::acam_init");
 
     this->daemon_manager.clear( Sequencer::DAEMON_ACAM );  // acamd not ready
 
@@ -969,7 +872,7 @@ namespace Sequencer {
 
     // open connection is all that is needed, acamd takes care of everything
     //
-    if ( this->check_connected(this->acamd) != NO_ERROR ) {
+    if ( this->check_connected(this->acamd, ACAMD_OPEN, ACAMD_OPEN_TIMEOUT) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR starting acam" );
       return ERROR;
     }
@@ -978,45 +881,7 @@ namespace Sequencer {
 
     return NO_ERROR;
   }
-
-
-  /***** Sequencer::Sequence::dothread_slicecam_init **************************/
-  /**
-   * @brief      initializes the slicecam system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   *
-   */
-  void Sequence::dothread_slicecam_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_SLICECAM_INIT );                       // thread running
-    std::string function = "Sequencer::Sequence::dothread_slicecam_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-
-    // make sure hardware is powered on
-    //
-    error = seq.check_power_on(POWER_SLICECAM, std::chrono::seconds(10));
-
-    bool was_opened=false;
-    error = seq.check_connected(seq.slicecamd, was_opened);
-
-    // atomically set thread_error so the main thread knows we had an error
-    //
-    if ( error != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize slicecam" );
-      seq.thread_error.set( THR_SLICECAM_INIT );
-    }
-    else {
-      seq.daemon_ready.set( Sequencer::DAEMON_SLICECAM );          // this daemon is ready
-    }
-
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_SLICECAM );
-    seq.broadcast_seqstate();
-
-    seq.thread_state.clear( THR_SLICECAM_INIT );                   // thread terminated
-    return;
-  }
-  /***** Sequencer::Sequence::dothread_slicecam_init **************************/
+  /***** Sequencer::Sequence::acam_init ***************************************/
 
 
   /***** Sequencer::Sequence::dothread_slicecam_shutdown **********************/
@@ -1086,175 +951,6 @@ namespace Sequencer {
     return;
   }
   /***** Sequencer::Sequence::dothread_slicecam_shutdown **********************/
-
-
-  /***** Sequencer::Sequence::dothread_andor_init *****************************/
-  /**
-   * @brief      initializes the acam and slicecam systems in series
-   * @details    This initializes the two systems in series to avoid contention
-   *             with the USB drivers.
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   *
-   */
-  void Sequence::dothread_andor_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_ANDOR_INIT );                          // thread running
-    std::string function = "Sequencer::Sequence::dothread_andor_init";
-    std::stringstream message;
-    std::string reply;
-
-    // First the slicecam. It initializes quicker than acam, and the instrument
-    // can operate without it.
-    //
-    seq.seq_state.set( Sequencer::SEQ_WAIT_SLICECAM );
-    seq.broadcast_seqstate();
-    std::thread( dothread_slicecam_init, std::ref(seq) ).detach();
-
-    // Wait for slicecam to initialize
-    //
-    try {
-      seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_SLICECAM );
-    }
-    catch ( const std::exception &e ) {
-      seq.async.enqueue_and_log( function, "NOTICE: andor startup aborted" );
-      seq.seq_state.clear( Sequencer::SEQ_WAIT_SLICECAM );
-      seq.seq_state.clear( Sequencer::SEQ_WAIT_ACAM );
-      seq.broadcast_seqstate();
-      seq.thread_state.clear( THR_ANDOR_INIT );                      // thread terminated
-      return;
-    }
-
-    // Continue even if slicecam failed to initialize
-    //
-    if ( seq.thread_error.is_set( THR_SLICECAM_INIT ) ) {
-      seq.thread_error.clear( THR_SLICECAM_INIT );
-      seq.async.enqueue_and_log( function, "ERROR initializing slicecam" );
-      seq.async.enqueue_and_log( function, "NOTICE: procdeding without slicecam" );
-    }
-    else logwrite( function, "slicecam started" );
-
-    // acam takes longer because it has to home the filter wheel.
-    //
-    seq.seq_state.set( Sequencer::SEQ_WAIT_ACAM );
-    seq.broadcast_seqstate();
-    std::thread( dothread_acam_init, std::ref(seq) ).detach();
-
-    // Wait for acam to initialize
-    //
-    try {
-      seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_ACAM );
-    }
-    catch ( const std::exception &e ) {
-      seq.async.enqueue_and_log( function, "NOTICE: acam startup aborted" );
-      seq.seq_state.clear( Sequencer::SEQ_WAIT_ACAM );
-      seq.broadcast_seqstate();
-      seq.thread_state.clear( THR_ANDOR_INIT );                      // thread terminated
-      return;
-    }
-
-    // Can't continue without acam
-    //
-    if ( seq.thread_error.is_set( THR_ACAM_INIT ) ) {
-      seq.async.enqueue_and_log( function, "ERROR initializing acam" );
-    }
-    else logwrite( function, "acam started" );
-
-    seq.thread_state.clear( THR_ANDOR_INIT );                        // thread terminated
-  }
-  /***** Sequencer::Sequence::dothread_andor_init *****************************/
-
-
-  /***** Sequencer::Sequence::dothread_acam_init ******************************/
-  /**
-   * @brief      initializes the acam system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
-   *
-   */
-  void Sequence::dothread_acam_init( Sequencer::Sequence &seq ) {
-    seq.thread_state.set( THR_ACAM_INIT );                       // thread running
-    std::string function = "Sequencer::Sequence::dothread_acam_init";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isopen=false;
-
-    // make sure hardware is powered on
-    //
-    error = seq.check_power_on(POWER_ACAM, std::chrono::seconds(10));
-
-    bool was_opened=false;
-    error = seq.check_connected(seq.acamd, was_opened);
-
-/*****
-    // if not connected to the acam daemon then connect
-    //
-    if ( !seq.acamd.socket.isconnected() ) {
-      logwrite( function, "connecting to acamd daemon" );
-      error = seq.acamd.connect();                   // connect to the daemon
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR connecting sequencerd -> acamd" );
-    }
-
-    // TCS must have been initialized
-    //
-    if ( seq.tcs_name == "offline" ) {
-      seq.async.enqueue_and_log( function, "ERROR sequencer has not initialized a TCS connection" );
-      error = ERROR;
-    }
-
-    // Initialize acamd's connection to tcsd
-    //
-    if ( error == NO_ERROR ) {
-      std::stringstream cmd;
-      cmd << ACAMD_TCSINIT << " " << seq.tcs_name;
-      error  = seq.acamd.command( cmd.str(), reply );
-      if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR initializing acamd <--> tcsd \"" << seq.tcs_name << "\"";
-        seq.async.enqueue_and_log( function, message.str() );
-      }
-    }
-
-    // Ask acamd if hardware connections are open,
-    //
-    if ( error == NO_ERROR ) {
-      error  = seq.acamd.command( ACAMD_ISOPEN, reply );
-      error |= seq.parse_state( function, reply, isopen );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR communicating with acam hardware" );
-    }
-
-    // and open it if necessary, overriding the timeout because this can
-    // take a long time if the filter wheel needs to be homed.
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "connecting to acam hardware" );
-      error = seq.acamd.command_timeout( ACAMD_OPEN, ACAMD_OPEN_TIMEOUT );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR opening connection to acam hardware" );
-    }
-******/
-
-    // turn on cooling
-    //
-    if ( error==NO_ERROR && !isopen ) {
-      logwrite( function, "turning on acam cooling" );
-      error = seq.acamd.command( ACAMD_TEMP+" -100", reply );
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR requesting acam prologue" );
-    }
-
-    // atomically set thread_error so the main thread knows we had an error
-    //
-    if ( error != NO_ERROR ) {
-      seq.async.enqueue_and_log( function, "ERROR: unable to initialize acam" );
-      seq.thread_error.set( THR_ACAM_INIT );
-    }
-    else {
-      seq.daemon_ready.set( Sequencer::DAEMON_ACAM );          // this daemon is ready
-    }
-
-    seq.seq_state.clear( Sequencer::SEQ_WAIT_ACAM );
-    seq.broadcast_seqstate();
-
-    seq.thread_state.clear( THR_ACAM_INIT );                   // thread terminated
-    return;
-  }
-  /***** Sequencer::Sequence::dothread_acam_init ******************************/
 
 
   /***** Sequencer::Sequence::dothread_acam_shutdown **************************/
@@ -1329,7 +1025,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::calib_init **************************************/
   /**
    * @brief      initializes the calibrator system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::calib_init() {
@@ -1340,6 +1036,13 @@ namespace Sequencer {
     ScopedState scoped( Sequencer::THR_CALIB_INIT, thread_state_manager );
     ScopedState seq_state( Sequencer::SEQ_WAIT_CALIB, seq_state_manager );
 
+    // make sure calib hardware is powered
+    if ( this->check_power_on(POWER_CALIB, std::chrono::seconds(5)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR powering focus control" );
+      return ERROR;
+    }
+
+    // connect to calibd
     bool was_opened=false;
     if ( this->check_connected(this->calibd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing calib control" );
@@ -1349,7 +1052,6 @@ namespace Sequencer {
     }
 
     // if calibd was just opened, close the door and open the cover
-    //
     if ( was_opened ) {
       logwrite( function, "closing calib door and opening slit cover" );
       std::stringstream cmd;
@@ -1360,6 +1062,7 @@ namespace Sequencer {
       }
     }
 
+    // calibd is ready
     this->daemon_manager.set( Sequencer::DAEMON_CALIB );
 
     return NO_ERROR;
@@ -1639,7 +1342,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::flexure_init ************************************/
   /**
    * @brief      initializes the flexure system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::flexure_init() {
@@ -1740,7 +1443,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::focus_init **************************************/
   /**
    * @brief      initializes the focus system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::focus_init() {
@@ -1805,7 +1508,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::camera_init *************************************/
   /**
    * @brief      initializes the camera system for control from the Sequencer
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::camera_init() {
@@ -2172,8 +1875,6 @@ namespace Sequencer {
     this->broadcast_seqstate();
 
     this->thread_state.clear( THR_MOVE_TO_TARGET );              // thread terminated
-    this->dome_nowait.store( false );
-    this->tcs_nowait.store( false );
 /// this->is_tcs_ontarget.store( false );
     return;
   }
@@ -2802,18 +2503,34 @@ namespace Sequencer {
       }
       catch (const std::exception& e) {
         logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(name)+" exception: "+std::string(e.what()) );
-        this->thread_error.set( Sequencer::THR_STARTUP );
         return ERROR;
       }
     }
 
-    // Now the Andor cameras must be done individually, first slicecam, then acam
-    //
-    auto start_slicecam = std::async(std::launch::async, &Sequence::improved_slicecam_init, this);
-    start_slicecam.get();
+    // Now the Andor cameras must be done individually, first slicecam,
+    auto start_slicecam = std::async(std::launch::async, &Sequence::slicecam_init, this);
+    try {
+      error |= start_slicecam.get();
+    }
+    catch (const std::exception& e) {
+      logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
+      return ERROR;
+    }
 
-    auto start_acam = std::async(std::launch::async, &Sequence::improved_acam_init, this);
-    start_acam.get();
+    // then the acam
+    auto start_acam = std::async(std::launch::async, &Sequence::acam_init, this);
+    try {
+      error |= start_acam.get();
+    }
+    catch (const std::exception& e) {
+      logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
+      return ERROR;
+    }
+
+    // change state to READY if all daemons ready w/o error
+    if ( error==NO_ERROR && daemon_manager.are_all_set() ) {
+      seq_state_manager.set_and_clear( {Sequencer::SEQ_NOTREADY}, {Sequencer::SEQ_READY} );
+    }
 
     return error;
   }
@@ -2980,47 +2697,6 @@ namespace Sequencer {
 ///   logwrite( function, message.str() );
 ///   seq.cv.wait( wait_lock );
 /// }
-
-
-/*****
-   why shut down powerd?
-
-    logwrite( function, "[DEBUG] (5) DONE waiting for shutdown threads to complete" );
-
-    // Everything has undergone their shutdown procedure so safe to shut down the power daemon now
-    //
-    seq.seq_state.set( Sequencer::SEQ_WAIT_POWER );
-    seq.broadcast_seqstate();
-    std::thread( dothread_power_shutdown, std::ref(seq) ).detach();
-
-    // Wait for the power shutdown thread.
-    // When the SEQ_SHUTTING bit is the only bit set then we are ready.
-    //
-/// std::thread( dothread_wait_for_state, std::ref(seq) ).detach();  // wait for requested state
-
-    logwrite( function, "[DEBUG] (6) waiting for power daemon to shut down" );
-
-    try {
-      seq.seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_POWER );
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "NOTICE: power shutdown aborted: " << e.what();
-      seq.async.enqueue_and_log( function, message.str() );
-      seq.seq_state.clear( Sequencer::SEQ_SHUTTING,
-                           Sequencer::SEQ_WAIT_POWER );
-      seq.broadcast_seqstate();
-      seq.thread_error.clear_all();  // clear the thread error state
-      return ERROR;
-    }
-
-/// while ( seq.seqstate.load() != seq.reqstate.load() ) {
-///   message.str(""); message << "wait for state " << seq.req_state.get_set_names();
-///   logwrite( function, message.str() );
-///   seq.cv.wait( wait_lock );
-/// }
-    logwrite( function, "[DEBUG] (6) DONE waiting for power daemon to shut down" );
-
-*****/
 
     // Note the error(s) but shutdown will always close the daemon connections
     // so return success.
@@ -3824,7 +3500,7 @@ logwrite( function, message.str() );
 
   long Sequence::check_power_on( const std::string which, std::chrono::seconds delay ) { 
     const std::string function="Sequencer::Sequence::check_power_on";
-    long error;
+    long error=NO_ERROR;
     bool need_delay=false;
 
     // loop through all of the plugs for the named device
@@ -3857,8 +3533,10 @@ logwrite( function, message.str() );
           logwrite( function, "ERROR turning on plug: "+plug );
           continue;
         }
-        // if anything was turned on then wait for power-on delay
+        // if anything was turned on then this will add a power-on delay
+        // at the end of the group
         need_delay=true;
+        // turn on all plugs with a 1s delay, for niceness
         std::this_thread::sleep_for( std::chrono::seconds(1) );
       }
       else
@@ -3872,6 +3550,7 @@ logwrite( function, message.str() );
       }
     }
 
+    // some hardware groups should be powered on for a period of time before use
     if ( need_delay ) {
       logwrite( function, "waiting "+std::to_string(delay.count())+"s for "+which+" to boot" );
       std::this_thread::sleep_for(delay);
@@ -3883,10 +3562,22 @@ logwrite( function, message.str() );
 
   long Sequence::check_connected( Common::DaemonClient &daemon ) {
     bool dontcare;
-    return check_connected( daemon, dontcare );
+    return check_connected( daemon, "open", 6000, dontcare );
   }
 
   long Sequence::check_connected( Common::DaemonClient &daemon, bool &was_opened ) {
+    return check_connected( daemon, "open", 6000, was_opened );
+  }
+
+  long Sequence::check_connected( Common::DaemonClient &daemon,
+                                  const std::string opencmd, const int opentimeout ) {
+    bool dontcare;
+    return check_connected( daemon, opencmd, opentimeout, dontcare );
+  }
+
+  long Sequence::check_connected( Common::DaemonClient &daemon,
+                                  const std::string opencmd, const int opentimeout,
+                                  bool &was_opened ) {
     const std::string function="Sequencer::Sequence::check_connected";
     bool isopen=false;
     std::string reply;
@@ -3895,7 +3586,7 @@ logwrite( function, message.str() );
     // if not connected to the daemon then connect
     //
     if ( !daemon.socket.isconnected() ) {
-      logwrite( function, "connecting to "+daemon.name );
+      logwrite( function, "connecting to "+daemon.name+" daemon" );
       if ( daemon.connect() != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR connecting to "+daemon.name );
         return ERROR;
@@ -3908,16 +3599,17 @@ logwrite( function, message.str() );
     error  = daemon.send( "isopen", reply );
     error |= this->parse_state( function, reply, isopen );
     if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR opening "+daemon.name );
+      this->async.enqueue_and_log( function, "ERROR opening "+daemon.name+" hardware" );
       return ERROR;
     }
 
     // and open it if necessary.
     //
     if ( !isopen ) {
-      logwrite( function, "opening "+daemon.name );
-      if ( daemon.send( "open", reply ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR opening connection to "+daemon.name );
+      logwrite( function, "opening "+daemon.name+" hardware connections with "
+                          +std::to_string(opentimeout)+" ms timeout" );
+      if ( daemon.command_timeout( opencmd, reply, opentimeout ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR opening connection to "+daemon.name+" hardware" );
         return ERROR;
       }
       was_opened=true;
@@ -4202,19 +3894,19 @@ logwrite( function, message.str() );
 
       // but now I'm going to write to the log (textually) which bits are set
       //
-      message.str(""); message << "RUNSTATE: " << this->seq_state.get_set_names();
+      message.str(""); message << "oldRUNSTATE: " << this->seq_state.get_set_names();
       this->async.enqueue( message.str() );
       logwrite( function, message.str() );
 
       // same for the requested state
       //
-      message.str(""); message << "REQSTATE: " << this->req_state.get_set_names();
+      message.str(""); message << "oldREQSTATE: " << this->req_state.get_set_names();
       this->async.enqueue( message.str() );
       logwrite( function, message.str() );
 
       // and for the thread state
       //
-      message.str(""); message << "THREADS: " << this->thread_state.get_set_names();
+      message.str(""); message << "oldTHREADS: " << this->thread_state.get_set_names();
       logwrite( function, message.str() );
 
       error = NO_ERROR;
@@ -4615,7 +4307,6 @@ logwrite( function, message.str() );
       this->async.enqueue_and_log( function, message.str() );
 
 ///   this->is_tcs_ontarget.store( false );
-      this->tcs_nowait.store( false );
       logwrite( function, "spawning dothread_move_to_target..." );
       std::thread( &Sequencer::Sequence::dothread_move_to_target, this ).detach();
     }
@@ -4754,49 +4445,6 @@ logwrite( function, message.str() );
     else
 
     // ---------------------------------------------------------
-    // set -- run dothread_set_<module> for given module
-    // ---------------------------------------------------------
-    //
-    if ( testname == "init" ) {
-
-      if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" ) ) {
-        retstring = "test init <module>\n";
-        return HELP;
-      }
-
-      if ( tokens.size() < 2 ) {
-        logwrite( function, "ERROR expected init <module>" );
-        retstring="invalid_argument";
-        return( ERROR );
-      }
-
-      bool ispower = false;
-      std::string reply;
-
-      if ( tokens[1] == "startup" ) {
-        std::thread( &Sequencer::Sequence::startup, this ).detach();
-      }
-      else
-      if ( tokens[1] == "flexure" ) {
-        std::thread( &Sequencer::Sequence::flexure_init, this ).detach();
-      }
-      else
-      if ( tokens[1] == "power" ) {
-        std::thread( &Sequencer::Sequence::power_init, this ).detach();
-      }
-      else
-      if ( tokens[1] == "tcs" ) {
-        std::thread( &Sequencer::Sequence::improved_tcs_init, this ).detach();
-      }
-      else {
-        logwrite( function, "ERROR unrecognized module" );
-        return ERROR;
-      }
-      return NO_ERROR;
-    }
-    else
-
-    // ---------------------------------------------------------
     // startup -- startup a single specified module
     // ---------------------------------------------------------
     //
@@ -4832,32 +4480,6 @@ logwrite( function, message.str() );
         retstring = "power_not_initialized";
         return( ERROR );
       }
-      else
-      if ( tokens[1] != "power" && this->powerd.socket.isconnected() ) {
-
-        // Connected, so ask if it's open to the hardware
-        //
-        error  = this->powerd.send( POWERD_ISOPEN, reply );
-        error |= this->parse_state( function, reply, ispower );
-
-        if ( error != NO_ERROR ) {
-          logwrite( function, "ERROR communicating with power module" );
-          retstring = "power_not_initialized";
-          return( ERROR );
-        }
-
-        if ( ! ispower ) {
-          logwrite( function, "ERROR power module must be initialized first" );
-          retstring = "power_not_initialized";
-          return( ERROR );
-        }
-      }
-
-      // optionally wait for startup to complete before returning,
-      // otherwise return immediately
-      //
-      bool wait=false;
-      if ( tokens.size() == 3 && tokens[2]=="wait" ) wait=true;
 
       // startup or shutdown?
       //
@@ -4874,47 +4496,14 @@ logwrite( function, message.str() );
           this->seq_state.set( Sequencer::SEQ_WAIT_POWER );
           this->broadcast_seqstate();
           std::thread( &Sequencer::Sequence::power_init, this ).detach();
-          if ( wait ) {
-            try {
-              this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_POWER );
-            }
-            catch ( std::exception & ) {
-              this->async.enqueue_and_log( function, "NOTICE: power startup aborted" );
-            }
-          }
         }
       }
       else
       if ( tokens[1] == "acam" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_ACAM );
         this->broadcast_seqstate();
-        std::thread( (isinit ? dothread_acam_init : dothread_acam_shutdown), std::ref(*this) ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_ACAM );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: acam aborted" );
-          }
-        }
-      }
-      else
-      if ( tokens[1] == "andor" ) {
-        if ( !isinit ) {
-          logwrite( function, "ERROR there is no andor shutdown. use acam and slicecam" );
-          return ERROR;
-        }
-        this->seq_state.set( Sequencer::SEQ_WAIT_ACAM, Sequencer::SEQ_WAIT_SLICECAM );
-        this->broadcast_seqstate();
-        std::thread( dothread_andor_init, std::ref(*this) ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_states_clear( Sequencer::SEQ_WAIT_ACAM, Sequencer::SEQ_WAIT_SLICECAM );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: andor aborted" );
-          }
-        }
+//      std::thread( (isinit ? dothread_acam_init : dothread_acam_shutdown), std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::acam_init, this ).detach();
       }
       else
       if ( tokens[1] == "calib" ) {
@@ -4922,14 +4511,6 @@ logwrite( function, message.str() );
         this->broadcast_seqstate();
 //      std::thread( isinit ? dothread_calib_init : dothread_calib_shutdown, std::ref(*this) ).detach();
         std::thread( &Sequencer::Sequence::calib_init, this ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_CALIB );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: calib aborted" );
-          }
-        }
       }
       else
       if ( tokens[1] == "camera" ) {
@@ -4937,14 +4518,6 @@ logwrite( function, message.str() );
         this->broadcast_seqstate();
 //      std::thread( isinit ? dothread_camera_init : dothread_camera_shutdown, std::ref(*this) ).detach();
         std::thread( &Sequencer::Sequence::camera_init, this ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_CAMERA );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: camera aborted" );
-          }
-        }
       }
       else
       if ( tokens[1] == "flexure" ) {
@@ -4952,14 +4525,6 @@ logwrite( function, message.str() );
         this->broadcast_seqstate();
 //      std::thread( isinit ? dothread_flexure_init : dothread_flexure_shutdown, std::ref(*this) ).detach();
         std::thread( &Sequencer::Sequence::flexure_init, this ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_FLEXURE );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: flexure aborted" );
-          }
-        }
       }
       else
       if ( tokens[1] == "focus" ) {
@@ -4967,28 +4532,13 @@ logwrite( function, message.str() );
         this->broadcast_seqstate();
 //      std::thread( isinit ? dothread_focus_init : dothread_focus_shutdown, std::ref(*this) ).detach();
         std::thread( &Sequencer::Sequence::focus_init, this ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_FOCUS );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: focus aborted" );
-          }
-        }
       }
       else
       if ( tokens[1] == "slicecam" ) {
         this->seq_state.set( Sequencer::SEQ_WAIT_SLICECAM );
         this->broadcast_seqstate();
-        std::thread( isinit ? dothread_slicecam_init : dothread_slicecam_shutdown, std::ref(*this) ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_SLICECAM );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: slicecam aborted" );
-          }
-        }
+//      std::thread( isinit ? dothread_slicecam_init : dothread_slicecam_shutdown, std::ref(*this) ).detach();
+        std::thread( &Sequencer::Sequence::slicecam_init, this ).detach();
       }
       else
       if ( tokens[1] == "slit" ) {
@@ -4996,14 +4546,6 @@ logwrite( function, message.str() );
         this->broadcast_seqstate();
 //      std::thread( isinit ? dothread_slit_init : dothread_slit_shutdown, std::ref(*this) ).detach();
         std::thread( &Sequencer::Sequence::slit_init, this ).detach();
-        if ( wait ) {
-          try {
-            this->seq_state.wait_for_state_clear( Sequencer::SEQ_WAIT_SLIT );
-          }
-          catch ( std::exception & ) {
-            this->async.enqueue_and_log( function, "NOTICE: slit aborted" );
-          }
-        }
       }
       else
       if ( tokens[1] == "tcs" && tokens.size()==3 ) {

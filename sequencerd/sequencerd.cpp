@@ -244,8 +244,6 @@ int main(int argc, char **argv) {
 
   sequencerd.sequence.async.enqueue( "SEQUENCERD:started" );  // broadcast that I have started
 
-  sequencerd.sequence.broadcast_seqstate();                   // broadcast the seqstate
-
   // Dynamically create a new listening socket and thread to handle
   // each connection request on the blocking port.
   //

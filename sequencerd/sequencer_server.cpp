@@ -1224,8 +1224,6 @@ namespace Sequencer {
       // These commands go to tcsd
       //
       if ( cmd.compare( SEQUENCERD_TCS )==0 ) {
-logwrite(function, "[DEBUG] received tcs command "+args);
-logwrite(function, "[DEBUG] async="+std::string(sock.isasync()?"true":"false"));
                       if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
                         message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
                         logwrite( function, message.str() );
@@ -1233,13 +1231,10 @@ logwrite(function, "[DEBUG] async="+std::string(sock.isasync()?"true":"false"));
                       }
                       else
                       if ( sock.isasync() ) {
-logwrite(function,"[DEBUG] spawning thread for "+args);
                         std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.tcsd ), args ).detach();
                       }
                       else {
-logwrite(function,"[DEBUG] sending command "+args);
                         ret = this->sequence.tcsd.command( args, retstring );
-logwrite(function,"[DEBUG] returned "+retstring);
                         if ( !retstring.empty() ) {
                           message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
                           logwrite( function, message.str() );
@@ -1253,10 +1248,6 @@ logwrite(function,"[DEBUG] returned "+retstring);
       // This is needed before any sequences can be run.
       //
       if ( cmd == SEQUENCERD_STARTUP ) {
-///                   this->sequence.is_tcs_ontarget.store( false );
-                      this->sequence.tcs_nowait.store( false );
-                      this->sequence.dome_nowait.store( true );
-//                    if ( sock.isasync() ) {
                       if ( !sock.isblocking() ) {
                         std::thread( &Sequencer::Sequence::startup, std::ref(this->sequence) ).detach();
                       }
@@ -1282,9 +1273,6 @@ logwrite(function,"[DEBUG] returned "+retstring);
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
-///                   this->sequence.is_tcs_ontarget.store( false );
-                      this->sequence.tcs_nowait.store( false );
-                      this->sequence.dome_nowait.store( true );
                       // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
                       //
                       if ( ! this->sequence.seq_state.is_set( Sequencer::SEQ_READY ) ) {
@@ -1483,22 +1471,6 @@ logwrite(function,"[DEBUG] returned "+retstring);
       //
       if ( cmd == SEQUENCERD_TARGETOFFSET ) {
                       this->sequence.target_offset();
-                      ret = NO_ERROR;
-      }
-      else
-
-      // skip slew
-      //
-      if ( cmd.compare( SEQUENCERD_TCSNOWAIT ) == 0) {
-                      this->sequence.tcs_nowait.store( true );
-                      ret = NO_ERROR;
-      }
-      else
-
-      // skip dome
-      //
-      if ( cmd.compare( SEQUENCERD_DOMENOWAIT ) == 0) {
-                      this->sequence.dome_nowait.store( true );
                       ret = NO_ERROR;
       }
       else
