@@ -236,6 +236,8 @@ namespace Slicecam {
       }
     }
 
+    this->handlemap.clear();
+
     return error;
   }
   /***** Slicecam::Camera::close **********************************************/
@@ -1429,6 +1431,8 @@ namespace Slicecam {
 
     long error = this->tcs_init( "real", retstring );
 
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
     if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
       error |= this->framegrab( "start", retstring );      // start frame grabbing if open succeeds
       std::thread( &Slicecam::GUIManager::push_gui_settings, &gui_manager ).detach();  // force display refresh
@@ -1525,6 +1529,10 @@ namespace Slicecam {
    * @return     ERROR | NO_ERROR | HELP
    *
    */
+  void Interface::close() {
+    std::string dontcare;
+    this->close("",dontcare);
+  }
   long Interface::close( std::string args, std::string &retstring ) {
     std::string function = "Slicecam::Interface::close";
     std::stringstream message;

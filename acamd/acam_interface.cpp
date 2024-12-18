@@ -139,6 +139,7 @@ namespace Acam {
    * 
    */
   long Camera::close() {
+    this->handlemap.clear();
     return this->andor.close();
   }
   /***** Acam::Camera::close **************************************************/
@@ -2041,6 +2042,8 @@ namespace Acam {
 
       error |= this->tcs_init( "real", retstring );
 
+      std::this_thread::sleep_for(std::chrono::seconds(3));
+
       std::transform( args.begin(), args.end(), args.begin(), ::tolower );  // convert to lowercase
 
       Tokenize( args, arglist, " " );
@@ -2235,6 +2238,10 @@ namespace Acam {
    * @return     ERROR | NO_ERROR | HELP
    *
    */
+  void Interface::close() {
+    std::string dontcare;
+    this->close("",dontcare);
+  }
   long Interface::close( std::string component, std::string &help ) {
     std::string function = "Acam::Interface::close";
     std::stringstream message;
@@ -2621,7 +2628,7 @@ namespace Acam {
       return ERROR;
     }
 
-    // When stopping framegrabbing, wait for it to stop. Timeout after 2 exptimes or 5s,
+    // When stopping framegrabbing, wait for it to stop. Timeout after 3 exptimes or 5s,
     // whichever is greater.
     //
     if ( whattodo == "stop" ) {

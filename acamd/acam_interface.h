@@ -633,7 +633,8 @@ namespace Acam {
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
       long isopen( std::string component, bool &state, std::string &help );     /// wrapper for acam-related hardware components
       bool isopen( std::string component );     /// wrapper for acam-related hardware components
-      long close( std::string component, std::string &help );      /// wrapper to open all acam-related hardware components
+      void close();
+      long close( std::string component, std::string &help );      ///
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing

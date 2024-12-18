@@ -58,6 +58,7 @@ namespace Slicecam {
    *
    */
   void Server::exit_cleanly(void) {
+    Server::instance->interface.close();
     Server::instance->interface.stop_subscriber_thread();
     logwrite( "Slicecam::Server::exit_cleanly", "exiting" );
     _exit(EXIT_SUCCESS);
