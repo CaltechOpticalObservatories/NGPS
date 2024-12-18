@@ -1273,38 +1273,13 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd.compare( SEQUENCERD_START )==0 ) {
-                      // The Sequencer can only be started if it is SEQ_READY (and no other bits set)
+                      // The Sequencer can only be started once
                       //
-                      if ( ! this->sequence.seq_state.is_set( Sequencer::SEQ_READY ) ) {
-                        // log applicable causes
-                        //
-                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_RUNNING ) ) {
-                          this->sequence.async.enqueue_and_log( function, "ERROR: sequencer already running" );
-                        }
-                        else
-                        if ( this->sequence.seq_state.is_any_set( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_STOPREQ ) ) {
-                          this->sequence.async.enqueue_and_log( function, "ERROR: sequencer waiting for stop" );
-                        }
-                        else
-                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_OFFLINE ) ) {
-                          this->sequence.async.enqueue_and_log( function, "ERROR: sequencer is offline. run startup" );
-                        }
-                        else {
-                          message.str("");
-                          message << "ERROR cannot start sequencer with state: " << this->sequence.seq_state.get_set_names();
-                          this->sequence.async.enqueue_and_log( function, message.str() );
-                        }
+                      if ( this->sequence.thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+                        this->sequence.async.enqueue_and_log( function, "ERROR sequencer already running" );
                         ret = ERROR;
                       }
-
-                      // seqstate is SEQ_READY so change both it and reqstate to SEQ_RUNNING,
-                      // then spawn a thread to start
-                      //
                       else {
-                        this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );  // set RUNNING, clear READY
-                        this->sequence.req_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_READY );
-                        this->sequence.broadcast_seqstate();
-
                         std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
                         ret = NO_ERROR;
                       }
@@ -1312,12 +1287,13 @@ namespace Sequencer {
       else
 
       // start a single target
+      // args is expected to contain an OBSID to get from the database
       //
       if ( cmd.compare( SEQUENCERD_STARTONE ) == 0 ) {
                       this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
                       this->sequence.req_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
                       this->sequence.broadcast_seqstate();
-                      this->sequence.cowboy=args;
+                      this->sequence.single_obsid=args;
                       std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
                       ret = NO_ERROR;
       }
@@ -1329,7 +1305,7 @@ namespace Sequencer {
                       this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
                       this->sequence.req_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
                       this->sequence.broadcast_seqstate();
-                      std::thread( &Sequencer::Sequence::dothread_repeat_exposure, std::ref(this->sequence) ).detach();
+                      std::thread( &Sequencer::Sequence::repeat_exposure, std::ref(this->sequence) ).detach();
                       ret = NO_ERROR;
       }
       else
@@ -1383,6 +1359,8 @@ namespace Sequencer {
       // To abort, set the ABORTREQ bit in both seqstate and reqstate.
       //
       if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
+                      this->sequence.cancel_task();
+
                       // don't allow an abort unless SEQ_RUNNING or SEQ_PAUSED bit is set
                       //
                       if ( this->sequence.seq_state.is_any_set( Sequencer::SEQ_RUNNING,
