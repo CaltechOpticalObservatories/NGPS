@@ -566,11 +566,19 @@ namespace Common {
                                    const std::string &term_str_write_override,
                                    const std::string &term_str_read_override,
                                    bool term_with_string_override ) {
+    return send( command, reply, this->timeout, term_str_write_override, term_str_read_override, term_with_string_override );
+  }
+  long Common::DaemonClient::send( std::string command,
+                                   std::string &reply,
+                                   int timeout_in,
+                                   const std::string &term_str_write_override,
+                                   const std::string &term_str_read_override,
+                                   bool term_with_string_override ) {
     std::string function = "Common::DaemonClient::send";
     std::stringstream message;
     long ret;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    std::unique_lock<std::mutex> lock( this->client_access );
 
     if ( ! this->socket.isconnected() ) {
       message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name
@@ -620,7 +628,7 @@ namespace Common {
 
       // Wait (poll) connected socket for incoming data...
       //
-      pollret = this->socket.Poll(this->timeout);
+      pollret = this->socket.Poll(timeout_in);
 
       // got data so break out of retry loop
       //
@@ -648,7 +656,9 @@ namespace Common {
 
       // if still here then reconnect, sleep 1s, try again
       //
+      lock.unlock();
       error = this->connect();
+      lock.lock();
       std::this_thread::sleep_for( std::chrono::seconds(1) );
 
     } // end retry while loop

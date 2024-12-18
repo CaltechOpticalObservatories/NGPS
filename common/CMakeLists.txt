@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.12)
 set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/common)
 
 set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 include_directories( ${PROJECT_BASE_DIR}/common )
 include_directories( ${PROJECT_BASE_DIR}/utils )    # needed for logentry

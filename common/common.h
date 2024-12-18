@@ -1056,6 +1056,12 @@ namespace Common {
                  const std::string &term_str_write_override="",
                  const std::string &term_str_read_override="",
                  bool term_with_string_override=false );
+      long send( std::string command,
+                 std::string &reply,
+                 int timeout_in,
+                 const std::string &term_str_write_override="",
+                 const std::string &term_str_read_override="",
+                 bool term_with_string_override=false );
       long connect();                                              ///< initialize socket connection to daemon
       void disconnect();                                           ///< close socket connection to daemon
       inline void set_name( const std::string &name_in ) { this->name=name_in; } ///< name this daemon
