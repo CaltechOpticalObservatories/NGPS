@@ -121,14 +121,15 @@ int main(int argc, char **argv) {
     tcsd.exit_cleanly();
   }
 
+  // initialize the PubSubHandler and give it time to start
   tcsd.interface.init_pubsub();
-
   std::this_thread::sleep_for( std::chrono::milliseconds(500) );
 
+  // open the default TCS (specified in .cfg) and give it time to open
   tcsd.interface.open();
-
   std::this_thread::sleep_for( std::chrono::milliseconds(500) );
 
+  // publish my snapshot so the world knows I'm online
   tcsd.interface.publish_snapshot();
 
   // This will pre-thread N_THREADS threads, a little differently from other
@@ -186,6 +187,8 @@ int main(int argc, char **argv) {
     logwrite( function, "ERROR could not create listening socket" );
     tcsd.exit_cleanly();
   }
+
+  logwrite(function, "tcsd online");
 
   while (true) {
     auto newid = tcsd.id_pool.get_next_number();  // get the next available number from the pool

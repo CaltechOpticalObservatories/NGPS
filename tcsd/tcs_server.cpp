@@ -160,6 +160,15 @@ namespace TCS {
         applied++;
       }
 
+      // DEFAULT_TCS -- which of "TCS_HOST" to open by default
+      //
+      if ( config.param[entry] == "DEFAULT_TCS" ) {
+        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        this->interface.set_default_tcs( config.arg[entry] );
+        applied++;
+      }
+
       // NBPORT -- nonblocking listening port for the tcs daemon
       //
       if (config.param[entry].compare(0, 6, "NBPORT")==0) {
@@ -299,59 +308,26 @@ namespace TCS {
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
 
-      // TCS_OFFSET_RATE_RA -- offset rate for RA ("MRATE") in arcsec per second
+      // TCS_OFFSET_RATE -- offset rate in arcsec per second
       //
-      if ( config.param[entry] == "TCS_OFFSET_RATE_RA" ) {
+      if ( config.param[entry] == "TCS_OFFSET_RATE" ) {
         int rate;
         try {
           rate = std::stoi( config.arg[entry] );
           if ( rate < 1 || rate > 50 ) {
-            message.str(""); message << "ERROR TCS_OFFSET_RATE_RA " << rate << " outside range { 1 : 50 }";
+            message.str(""); message << "ERROR TCS_OFFSET_RATE " << rate << " outside range { 1 : 50 }";
             logwrite( function, message.str() );
             return ERROR;
           }
         }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_RA: " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        catch ( std::out_of_range &e ) {
+        catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_RA: " << e.what();
           logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
-        this->interface.offsetrate_ra = rate;
-        applied++;
-      }
-
-      // TCS_OFFSET_RATE_DEC -- offset rate for RA ("MRATE") in arcsec per second
-      //
-      if ( config.param[entry] == "TCS_OFFSET_RATE_DEC" ) {
-        int rate;
-        try {
-          rate = std::stoi( config.arg[entry] );
-          if ( rate < 1 || rate > 50 ) {
-            message.str(""); message << "ERROR TCS_OFFSET_RATE_DEC " << rate << " outside range { 1 : 50 }";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch ( std::invalid_argument &e ) {
-          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_DEC: " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        catch ( std::out_of_range &e ) {
-          message.str(""); message << "ERROR invalid TCS_OFFSET_RATE_DEC: " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "TCSD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        this->interface.offsetrate_dec = rate;
+        this->interface.offsetrate = rate;
         applied++;
       }
 
@@ -743,7 +719,7 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       else
 
       if ( cmd.compare( TCSD_OFFSETRATE ) == 0 ) {
-                      ret = this->interface.offsetrate( args, retstring );
+                      ret = this->interface.pt_offsetrate( args, retstring );
       }
       else
 

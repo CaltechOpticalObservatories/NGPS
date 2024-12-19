@@ -68,8 +68,7 @@ namespace TCS {
       double focus;
       double offsetra;
       double offsetdec;
-      double offsetrate_ra;
-      double offsetrate_dec;
+      double offsetrate;
       double cassangle;
 
       int domeshutters;
@@ -93,8 +92,7 @@ namespace TCS {
         domeazimuth=NAN;
         airmass=NAN;
         focus=NAN;
-        offsetrate_ra=NAN;
-        offsetrate_dec=NAN;
+        offsetrate=NAN;
         cassangle=NAN;
         domeshutters=-1;
       }
@@ -418,10 +416,12 @@ namespace TCS {
   class Interface {
     private:
       zmqpp::context context;
+      std::string default_tcs;                     ///< default TCS to use specified in .cfg
 
     public:
-      int offsetrate_ra;                           ///< offset rate (arcsec/hr) for RA
-      int offsetrate_dec;                          ///< offset rate (arcsec/hr) for DEC
+      inline void set_default_tcs(const std::string &which) { this->default_tcs=which; }
+
+      int offsetrate;                              ///< offset rate (arcsec/hr)
 
       std::string name;                            ///< the name of the currently open tcs device
 
@@ -440,8 +440,7 @@ namespace TCS {
 
       Interface()
         : context(),
-          offsetrate_ra(-1),
-          offsetrate_dec(-1),
+          offsetrate(-1),
           publish_enable(false),
           collect_enable(false),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
@@ -500,7 +499,7 @@ namespace TCS {
       long get_focus( const std::string &arg, std::string &retstring );
       long get_offsets( const std::string &arg, std::string &retstring );
       long get_offsets( double &raoff, double &decoff );
-      long offsetrate( const std::string &arg, std::string &retstring );
+      long pt_offsetrate( const std::string &arg, std::string &retstring );
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );

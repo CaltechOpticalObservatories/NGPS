@@ -4,11 +4,10 @@
 LOGPATH=/data/logs/               # where to write logs
 BLKPORT=@TCSD_BLK_PORT@           # tcsd server blocking port
 NBPORT=@TCSD_NB_PORT@             # tcsd server non-blocking port
-DAEMON=no                         # run as daemon?
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
 
-IP_PALOMAR=@IP_PALOMAR@           # my IP at Palomar
+IP_PALOMAR=@IP_PALOMAR@           # my (localhost) IP at Palomar
 IP_TCS=@IP_TCS@                   # IP address of P200 TCS
 
 # Message pub/sub
@@ -27,8 +26,11 @@ SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 TCS_HOST="real @IP_TCS@ @TCS_PORT@"          # real TCS: name address port
 TCS_HOST="sim localhost @TCS_PORT@"          # simulated TCS: name address port
 
-TCS_OFFSET_RATE_RA=45            # TCS offset rate for RA ("MRATE") in arcsec per second
-TCS_OFFSET_RATE_DEC=45           # TCS offset rate for DEC ("MRATE") in arcsec per second
+# Which of the above TCS_HOSTs to use by default
+#
+DEFAULT_TCS=real
+
+TCS_OFFSET_RATE=45               # TCS offset rate in arcsec per second
 
 # emulator-only configuration
 #

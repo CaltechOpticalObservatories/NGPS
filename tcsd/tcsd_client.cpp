@@ -121,44 +121,33 @@
       }
     }
 
-    // If no arg supplied then just return connection status.
-    //
-    if ( which.empty() ) {
-      retstring=reply;
-      return NO_ERROR;
-    }
-
-    // Send CLOSE then disconnect
+    // disconnect from tcsd
     //
     if ( which == "shutdown" ) {
-      error = this->client.send( TCSD_CLOSE, reply );
       this->client.disconnect();
       return error;
     }
 
-    // If the currently opened device is not the requested device then close it
+    // if a device is specified and the currently opened device is not the
+    // requested device then close it
     //
-    if ( tcsname != which ) {
+    if ( !which.empty() && tcsname != which ) {
       error = this->client.send( TCSD_CLOSE, reply );
       connected_to_tcs = false;
       message.str(""); message << "closed connection to TCS " << tcsname;
       logwrite( function, message.str() );
     }
-    else {
+    else if ( !which.empty() && tcsname == which ) {
       connected_to_tcs = true;
       message.str(""); message << "connection open to TCS " << which;
       logwrite( function, message.str() );
+      return error;
     }
 
-    // and open it if necessary.
-    //
-    // This will only be attempted if the "which" param is supplied.
-    // Note that the contents of "which" are not checked here, that is left
-    // for tcsd to check -- he knows best.
+    // otherwise attempt to connect
     //
     if ( error==NO_ERROR && !connected_to_tcs ) {
-      message.str(""); message << "connecting to " << which << " TCS hardware";
-      logwrite( function, message.str() );
+      logwrite( function, "connecting to TCS "+std::string(which) );
       std::stringstream opencmd;
       opencmd << TCSD_OPEN << " " << which;
       error = this->client.send( opencmd.str(), reply );
@@ -167,14 +156,6 @@
         logwrite( function, message.str() );
       }
       else connected_to_tcs = true;  // don't need to ask again because if TCSD_OPEN returned no error then it's open
-    }
-
-    // set the offset rates
-    //
-    if ( error==NO_ERROR && connected_to_tcs && !which.empty() ) {
-//    message.str(""); message << TCSD_OFFSETRATE << " " << seq.tcs_offsetrate_ra << " " << seq.tcs_offsetrate_dec;
-      message.str(""); message << TCSD_OFFSETRATE << " " << 45 << " " << 45;  // TODO read from config file
-      error  = this->client.send( message.str(), reply );
     }
 
     // atomically set thr_error so the main thread knows we had an error

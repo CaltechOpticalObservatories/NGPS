@@ -283,13 +283,13 @@ namespace TCS {
   }
   /***** TCS::Interface::open *************************************************/
   /**
-   * @brief      opens the TCS socket connection
-   * @param[in]  arg  contains what to open, real or sim
-   * @return     ERROR | NO_ERROR | HELP
+   * @brief      overloaded version opens socket connection to default TCS
+   * @details    The default_tcs is specified in the config file
+   * @return     ERROR | NO_ERROR
    */
   long Interface::open() {
     std::string dontcare;
-    return open("real", dontcare);
+    return open(this->default_tcs, dontcare);
   }
   /***** TCS::Interface::open *************************************************/
 
@@ -1086,7 +1086,7 @@ namespace TCS {
   /***** TCS::Interface::get_offsets ******************************************/
 
 
-  /***** TCS::Interface::offsetrate *******************************************/
+  /***** TCS::Interface::pt_offsetrate ****************************************/
   /**
    * @brief      set the offset tracking rates
    * @details    uses the MRATES command
@@ -1095,8 +1095,8 @@ namespace TCS {
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::offsetrate( const std::string &arg, std::string &retstring ) {
-    std::string function = "TCS::Interface::offsetrate";
+  long Interface::pt_offsetrate( const std::string &arg, std::string &retstring ) {
+    std::string function = "TCS::Interface::pt_offsetrate";
     std::stringstream message, asyncmsg;
     long error = NO_ERROR;
 
@@ -1104,75 +1104,52 @@ namespace TCS {
     //
     if ( arg == "?" || arg == "help" ) {
       retstring = TCSD_OFFSETRATE;
-      retstring.append( " [ <raoff> <decoff> ]\n" );
+      retstring.append( " [ <rate> ]\n" );
       retstring.append( "  Set or get the telescope offset tracking rates in integer arcsec/second.\n" );
       retstring.append( "  If no args supplied then current values are returned.  Default offset rates\n" );
-      retstring.append( "  are set by TCS_OFFSET_RATE_RA, TCS_OFFSET_RATE_DEC in the config file.\n" );
+      retstring.append( "  are set by TCS_OFFSET_RATE in the config file.\n" );
       return HELP;
     }
 
     // No args is read-only
     //
     if ( arg.empty() ) {
-      message.str(""); message << this->offsetrate_ra << " " << this->offsetrate_dec;
+      message.str(""); message << this->offsetrate;
       retstring = message.str();
       logwrite( function, retstring );
       return error;
     }
 
-    int raoff=-1, decoff=-1;
+    int offsetrate=-1;
 
     std::vector<std::string> tokens;
     Tokenize( arg, tokens, " " );
 
-    if ( tokens.size() != 2 ) {
-      logwrite( function, "ERROR expected 2 args: <raoff> <decoff>" );
+    if ( tokens.size() != 1 ) {
+      logwrite( function, "ERROR expected 1 args: <offsetrate>" );
       retstring="invalid_argument";
       return ERROR;
     }
 
     try {
-      raoff  = std::stoi( tokens.at(0) );
-      decoff = std::stoi( tokens.at(1) );
+      offsetrate  = std::stoi( tokens.at(0) );
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing \"" << arg << "\" expected integer {1:50} : " << e.what();
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-    catch( std::invalid_argument &e ) {
+    catch( const std::exception &e ) {
       message.str(""); message << "ERROR parsing \"" << arg << "\" expected integer {1:50} : " << e.what();
       logwrite( function, message.str() );
       error = ERROR;
     }
 
-    if ( raoff  < 1 || raoff  > 50 ||
-         decoff < 1 || decoff > 50 ) {
-      message.str(""); message << "ERROR offsets " << raoff << " " << decoff << " must be integer in range { 1:50 }";
+    if ( offsetrate  < 1 || offsetrate  > 50 ) {
+      message.str(""); message << "ERROR offset rate " << offsetrate << " must be integer in range { 1:50 }";
       logwrite( function, message.str() );
       retstring="invalid_argument";
       return ERROR;
     }
 
-    std::stringstream cmd;
-    cmd << "MRATES " << raoff << " " << decoff;
-
-    if ( error==NO_ERROR ) error = this->send_command( cmd.str(), retstring, TCS::FAST_RESPONSE );  // set them
-
-    // If no error on set then assume all OK and save in the class.
-    // Unfortunately there is no way to read them back from the TCS.
-    //
-    if ( error==NO_ERROR ) {
-      this->offsetrate_ra  = raoff;
-      this->offsetrate_dec = decoff;
-      message.str(""); message << this->offsetrate_ra << " " << this->offsetrate_dec;
-      retstring = message.str();
-      logwrite( function, retstring );
-    }
-
     return error;
   }
-  /***** TCS::Interface::offsetrate *******************************************/
+  /***** TCS::Interface::pt_offsetrate ****************************************/
 
 
   /***** TCS::Interface::get_motion *******************************************/
@@ -1406,23 +1383,21 @@ logwrite(function,"[DEBUG] input args= "+args );
     }
 
     if ( rate > 0 && rate <= 50 ) {
-      this->offsetrate_ra=rate;
-      this->offsetrate_dec=rate;
+      this->offsetrate=rate;
     }
     else {
       logwrite( function, "ERROR invalid rate "+std::to_string(rate)+" using default=40" );
-      this->offsetrate_ra=40;
-      this->offsetrate_dec=40;
+      this->offsetrate=40;
       rate=40;
     }
 
-    // offsetrate_ra, offsetrate_dec are offset rates in arcsec/sec
-    // so ra_t/offsetrate_ra and dec_t/offsetrate_dec are arcsec / arcsec / sec = sec
+    // offsetrate is offset rates in arcsec/sec
+    // so ra_t/offsetrate and dec_t/offsetrate are arcsec / arcsec / sec = sec
     //
-    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate_ra  );  // time (ms) to offset RA
-    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate_dec );  // time (ms) to offset DEC
-    int max_t = static_cast<int>( 1.5  * std::max( ra_t, dec_t ) );        // greater of those two times + 3s
-    max_t = std::max( max_t, 200 );                                        // minimum 3s
+    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate  );  // time (ms) to offset RA
+    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate );   // time (ms) to offset DEC
+    int max_t = static_cast<int>( 1.5  * std::max( ra_t, dec_t ) );     // greater of those two times + 3s
+    max_t = std::max( max_t, 200 );                                     // minimum 3s
 
     std::stringstream cmd;
     cmd << "PT " << args; // " " << raoff << " " << decoff; // << " " << rate;
@@ -1488,10 +1463,8 @@ logwrite(function,"[DEBUG] input args= "+args );
 
     // Before sending PT command, check for non-zero offset rates.
     //
-    if ( this->offsetrate_ra  < 1 || this->offsetrate_ra >  50 ||
-         this->offsetrate_dec < 1 || this->offsetrate_dec > 50 ) {
-      message.str(""); message << "ERROR offset rate(s) " << this->offsetrate_ra
-                               << "  " << this->offsetrate_dec << " outside range {1:50}";
+    if ( this->offsetrate  < 1 || this->offsetrate >  50 ) {
+      message.str(""); message << "ERROR offset rate " << this->offsetrate << " outside range {1:50}";
       logwrite( function, message.str() );
       return ERROR;
     }
@@ -1504,13 +1477,13 @@ logwrite(function,"[DEBUG] input args= "+args );
       return ERROR;
     }
 
-    // offsetrate_ra, offsetrate_dec are offset rates in arcsec/sec
-    // so ra_t/offsetrate_ra and dec_t/offsetrate_dec are arcsec / arcsec / sec = sec
+    // offsetrate is offset rates in arcsec/sec
+    // so ra_t/offsetrate and dec_t/offsetrate are arcsec / arcsec / sec = sec
     //
-    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate_ra  );  // time (ms) to offset RA
-    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate_dec );  // time (ms) to offset DEC
-    int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );         // greater of those two times + 50%
-    max_t = std::max( max_t, 100 );                                        // minimum 100 msec
+    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate  );  // time (ms) to offset RA
+    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate );   // time (ms) to offset DEC
+    int max_t = static_cast<int>( 1.2 * std::max( ra_t, dec_t ) );      // greater of those two times + 50%
+    max_t = std::max( max_t, 100 );                                     // minimum 100 msec
 
     long error = this->send_command( "RET", retstring, TCS::FAST_RESPONSE );  // perform the offset here
 
@@ -1804,8 +1777,8 @@ logwrite(function,"[DEBUG] reply="+reply);
       pos = tokens.at(2).find("="); this->focus          = std::stod(tokens.at(2).substr(pos+1));
       pos = tokens.at(4).find("="); this->offsetra       = std::stod(tokens.at(4).substr(pos+1));
       pos = tokens.at(5).find("="); this->offsetdec      = std::stod(tokens.at(5).substr(pos+1));
-      pos = tokens.at(6).find("="); this->offsetrate_ra  = std::stod(tokens.at(6).substr(pos+1));
-      pos = tokens.at(7).find("="); this->offsetrate_dec = std::stod(tokens.at(7).substr(pos+1));
+      pos = tokens.at(6).find("="); this->offsetrate     = std::stod(tokens.at(6).substr(pos+1));
+      pos = tokens.at(7).find("="); this->offsetrate     = std::stod(tokens.at(7).substr(pos+1));
       pos = tokens.at(8).find("="); this->cassangle      = std::stod(tokens.at(8).substr(pos+1));
     }
     catch ( const std::exception &e ) {
