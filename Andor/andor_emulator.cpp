@@ -1204,6 +1204,10 @@ namespace Andor {
       return ERROR;
     }
 
+#ifdef LOGLEVEL_DEBUG
+    log_python_arguments(pFunction, pArgs, pKwArgs);
+#endif
+
     // Call the Python function here
     //
     PyObject* pReturn = PyObject_Call( pFunction, pArgs, pKwArgs );
@@ -1245,5 +1249,67 @@ namespace Andor {
     return error;
   }
   /***** Andor::SkySim::generate_image ****************************************/
+
+
+  /***** Andor::SkySim::log_python_arguments **********************************/
+  /**
+   * @brief      logs the function name and args before calling a Python function
+   * @param[in]  pFunction  pointer to Python object containing function name
+   * @param[in]  pArgs      pointer to Python object containing positional arguments
+   * @param[in]  pKwArgs    pointer to Python object containing keyword arguments
+   *
+   */
+  void SkySim::log_python_arguments(PyObject* pFunction, PyObject* pArgs, PyObject* pKwArgs) {
+    const std::string function("Andor::SkySim::log_python_arguments");
+    std::stringstream message;
+
+    std::string func("UNKNOWN");
+
+    if (pFunction) {
+      PyObject* nameAttr = PyObject_GetAttrString(pFunction, "__name__");
+      if (nameAttr) {
+        const char* name = PyUnicode_AsUTF8(nameAttr);
+        if (name) func = name;
+        Py_DECREF(nameAttr);
+      }
+    }
+    message << "[DEBUG] func=" << func;
+
+    message << " positional args=";
+    if (pArgs) {
+      for (Py_ssize_t i = 0; i < PyTuple_Size(pArgs); ++i) {
+        PyObject* item = PyTuple_GetItem(pArgs, i); // borrowed reference
+        PyObject* repr = PyObject_Repr(item);       // temporary obj to get string representation
+        if (repr) {
+          message << " " << PyUnicode_AsUTF8(repr);
+          Py_DECREF(repr);                          // decref for temporary obj
+        }
+        else {
+          logwrite(function, "ERROR getting string representation of positional arguments");
+        }
+      }
+    }
+
+    message << " keyword args=";
+    if (pKwArgs) {
+      PyObject* key;
+      PyObject* value;
+      Py_ssize_t pos = 0;
+      while (PyDict_Next(pKwArgs, &pos, &key, &value)) {
+        PyObject* key_repr = PyObject_Repr(key);   // Create temporary repr for key
+        PyObject* value_repr = PyObject_Repr(value); // Create temporary repr for value
+        if (key_repr && value_repr) {
+          message << "  " << PyUnicode_AsUTF8(key_repr) << ": " << PyUnicode_AsUTF8(value_repr);
+          Py_DECREF(key_repr);   // Decrement refcount for key_repr
+          Py_DECREF(value_repr); // Decrement refcount for value_repr
+        }
+        else {
+          logwrite(function, "ERROR getting string representation of keyword argument");
+        }
+      }
+    }
+    logwrite(function, message.str());
+  }
+  /***** Andor::SkySim::log_python_arguments **********************************/
 
 }

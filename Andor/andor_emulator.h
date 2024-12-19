@@ -44,6 +44,8 @@ namespace Andor {
       long generate_image( const std::string_view &headerfile, const std::string_view &outputfile,
                            const float exptime, const bool ismex, const int simsize );
 
+      void log_python_arguments(PyObject* pFunction, PyObject* pArgs, PyObject* pKwArgs);
+
       inline bool is_initialized() { return this->python_initialized; }
   };
   /***** Andor::SkySim ********************************************************/
