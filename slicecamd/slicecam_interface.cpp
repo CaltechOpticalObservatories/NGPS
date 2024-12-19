@@ -1429,9 +1429,11 @@ namespace Slicecam {
       }
     }
 
-    long error = this->tcs_init( "real", retstring );
-
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+    // before connecting to camera, get a connection to tcsd and give it some
+    // time to establish
+    //
+    long error = this->tcs_init( "", retstring );
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
       error |= this->framegrab( "start", retstring );      // start frame grabbing if open succeeds
@@ -1569,56 +1571,42 @@ namespace Slicecam {
   long Interface::tcs_init( std::string args, std::string &retstring ) {
     std::string function = "Slicecam::Interface::tcs_init";
     std::stringstream message;
-    long error = NO_ERROR;
-
-    // No arg is a query
-    //
-    if ( args.empty() ) {
-
-      if ( ! this->tcsd.client.is_open() ) {
-        retstring="offline";
-        return NO_ERROR;
-      }
-
-      // Ask tcsd client for the name of the TCS.
-      // Response is expected to be "<name> DONE"
-      //
-      error = this->tcsd.client.command( TCSD_GET_NAME, retstring );
-
-      // Remove the " DONE" from the reply, which becomes the return string
-      //
-      if ( error == NO_ERROR ) {
-        try {
-          auto pos = retstring.find( " DONE" );
-          if ( pos != std::string::npos ) {
-            retstring.erase( pos );
-          }
-          else {
-            message.str(""); message << "ERROR reading TCS name: \"" << retstring << "\"";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch( const std::exception &e ) {
-          message.str(""); message << "ERROR invalid reply \"" << retstring << "\" from tcsd: " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-      }
-
-      return error;
-    }
 
     // Send command to tcs daemon client. If help was requested then that
     // request is passed on here to tcsd.init() so this could return HELP.
     //
-    error |= this->tcsd.init( args, retstring );   // OR'd to include possible stop-thread-timeout
+    long error = this->tcsd.init( args, retstring );
 
     if ( error==NO_ERROR && args != "shutdown" ) {
       this->tcs_online.store( true, std::memory_order_release );
     }
     else {
       this->tcs_online.store( false, std::memory_order_release );
+    }
+
+    // Ask tcsd client for the name of the TCS.
+    // Response is expected to be "<name> DONE"
+    //
+    if ( this->tcsd.client.command( TCSD_GET_NAME, retstring ) == NO_ERROR ) {
+      try {
+        // Remove the " DONE" from the reply, which becomes the return string
+        auto pos = retstring.find( " DONE" );
+        if ( pos != std::string::npos ) {
+          retstring.erase( pos );
+        }
+        else {
+          logwrite( function, "ERROR reading TCS name: \""+retstring+"\"" );
+          return ERROR;
+        }
+      }
+      catch( const std::exception &e ) {
+        logwrite( function, "ERROR invalid reply  \""+retstring+"\" from tcsd: "+std::string(e.what()) );
+        return ERROR;
+      }
+    }
+    else {
+      logwrite( function, "ERROR getting TCS name" );
+      return ERROR;
     }
 
     return error;
