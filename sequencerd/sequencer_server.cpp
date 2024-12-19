@@ -1248,176 +1248,76 @@ namespace Sequencer {
       // This is needed before any sequences can be run.
       //
       if ( cmd == SEQUENCERD_STARTUP ) {
-                      if ( !sock.isblocking() ) {
-                        std::thread( &Sequencer::Sequence::startup, std::ref(this->sequence) ).detach();
-                      }
-                      else {
-                        ret = this->sequence.startup();
-                      }
+                  if ( !sock.isblocking() ) {
+                    std::thread( &Sequencer::Sequence::startup, std::ref(this->sequence) ).detach();
+                  }
+                  else {
+                    ret = this->sequence.startup();
+                  }
       }
       else
 
       // system shutdown
       // This shuts down the instrument.
       //
-      if ( cmd.compare( SEQUENCERD_SHUTDOWN ) == 0 ) {
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Sequencer::Sequence::dothread_shutdown ), std::ref( this->sequence ) ).detach();
-                      }
-                      else {
-                        ret = this->sequence.shutdown( this->sequence );
-                      }
+      if ( cmd == SEQUENCERD_SHUTDOWN ) {
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Sequencer::Sequence::dothread_shutdown ), std::ref( this->sequence ) ).detach();
+                  }
+                  else {
+                    ret = this->sequence.shutdown( this->sequence );
+                  }
       }
       else
 
       // Sequence "start"
       //
-      if ( cmd.compare( SEQUENCERD_START )==0 ) {
-                      // The Sequencer can only be started once
-                      //
-                      if ( this->sequence.thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
-                        this->sequence.async.enqueue_and_log( function, "ERROR sequencer already running" );
-                        ret = ERROR;
-                      }
-                      else {
-                        std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
-                        ret = NO_ERROR;
-                      }
+      if ( cmd == SEQUENCERD_START ) {
+                  // The Sequencer can only be started once
+                  //
+                  if ( this->sequence.thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+                    this->sequence.async.enqueue_and_log( function, "ERROR sequencer already running" );
+                    ret = ERROR;
+                  }
+                  else {
+                    std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence) ).detach();
+                    ret = NO_ERROR;
+                  }
       }
       else
 
       // start a single target
       // args is expected to contain an OBSID to get from the database
       //
-      if ( cmd.compare( SEQUENCERD_STARTONE ) == 0 ) {
-                      this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
-                      this->sequence.req_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
-                      this->sequence.broadcast_seqstate();
-                      this->sequence.single_obsid=args;
-                      std::thread( &Sequencer::Sequence::dothread_sequence_start, std::ref(this->sequence) ).detach();
-                      ret = NO_ERROR;
+      if ( cmd == SEQUENCERD_STARTONE ) {
+                  this->sequence.single_obsid=args;
+                  std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence) ).detach();
+                  ret = NO_ERROR;
       }
       else
 
       // repeat the last exposure
       //
-      if ( cmd.compare( SEQUENCERD_REPEAT ) == 0 ) {
-                      this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
-                      this->sequence.req_state.set_and_clear( {Sequencer::SEQ_RUNNING}, {Sequencer::SEQ_OFFLINE, Sequencer::SEQ_READY} );
-                      this->sequence.broadcast_seqstate();
-                      std::thread( &Sequencer::Sequence::repeat_exposure, std::ref(this->sequence) ).detach();
-                      ret = NO_ERROR;
+      if ( cmd == SEQUENCERD_REPEAT ) {
+                  std::thread( &Sequencer::Sequence::repeat_exposure, std::ref(this->sequence) ).detach();
+                  ret = NO_ERROR;
       }
       else
 
       // Stop an Exposure
       //
-      if ( cmd.compare( SEQUENCERD_STOP ) == 0 ) {
-                      // Can only stop during an active or paused exposure
-                      //
-                      if ( ! this->sequence.seq_state.is_any_set( Sequencer::SEQ_PAUSE, Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                        this->sequence.async.enqueue_and_log( function, "ERROR: can only stop during an active or paused exposure" );
-                        ret = ERROR;
-                      }
-
-                      // To request a stop, set the STOPREQ bit in both seqstate and reqstate.
-                      //
-                      else {
-                        logwrite( function, "stop requested" );
-
-                        this->sequence.req_state.set_and_clear( Sequencer::SEQ_STOPREQ, Sequencer::SEQ_RUNNING );
-                        this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_STOPREQ}, {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // set STOPREQ, clear RUNNING|EXPOSE
-                        this->sequence.broadcast_seqstate();
-
-                        // If exposing then modify the exposure time to end immediately (-1)
-                        //
-                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                          this->sequence.dothread_modify_exptime( std::ref( this->sequence ), -1 );
-                        }
-
-                        // If paused then send the RESUME command to the camera daemon.
-                        //
-                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
-                          this->sequence.camerad.async( CAMERAD_RESUME );                // tell the camera to resume exposure
-                          this->sequence.seq_state.clear( Sequencer::SEQ_PAUSE );        // clear the PAUSE bit
-                          this->sequence.broadcast_seqstate();
-                        }
-
-///                     // If not already running then spawn a thread to wait for this state,
-///                     // which will send out any needed notifications.
-///                     //
-///                     if ( not this->sequence.waiting_for_state.load() ) {
-///                       std::thread( this->sequence.dothread_wait_for_state, std::ref(this->sequence) ).detach();
-///                     }
-                        ret = NO_ERROR;
-                      }
+      if ( cmd == SEQUENCERD_STOP ) {
+                  logwrite( function, "requesting stop" );
+                  std::thread( &Sequencer::Sequence::stop_exposure, std::ref(this->sequence) ).detach();
+                  ret=NO_ERROR;
       }
       else
 
-      // Abort can abort nearly every operation (exposure, slew, etc.).
-      // Only "stopping", "starting", and "aborting" cannot be aborted.
-      // To abort, set the ABORTREQ bit in both seqstate and reqstate.
+      // Abort everything possible
       //
-      if ( cmd.compare( SEQUENCERD_ABORT ) == 0 ) {
-                      this->sequence.cancel_task();
-
-                      // don't allow an abort unless SEQ_RUNNING or SEQ_PAUSED bit is set
-                      //
-                      if ( this->sequence.seq_state.is_any_set( Sequencer::SEQ_RUNNING,
-                                                              Sequencer::SEQ_PAUSE ) ) {
-                        logwrite( function, "abort requested" );
-
-                        // If exposing then asynchronously send the ABORT command to the camera daemon
-                        //
-                        if ( this->sequence.seq_state.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                          this->sequence.camerad.async( CAMERAD_ABORT );                       // tell camera to abort exposure
-                          this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_EXPOSE );        // clear the EXPOSE bit
-                          this->sequence.broadcast_seqstate();
-                        }
-
-//                      {
-//                        I was here
-//                      std::lock_guard<std::mutex> lock(this->tcs_ontarget_mtx); // Lock the mutex
-                        this->sequence.req_state.set_and_clear( Sequencer::SEQ_ABORTREQ, Sequencer::SEQ_RUNNING );
-                        this->sequence.seq_state.set_and_clear( {Sequencer::SEQ_ABORTREQ},
-                                                              {Sequencer::SEQ_RUNNING,Sequencer::SEQ_WAIT_EXPOSE} );  // clear RUNNING|EXPOSE
-                        this->sequence.broadcast_seqstate();
-
-                        // Set the do-type to single-step
-                        //
-                        this->sequence.dotype( "ONE" );
-
-                        // Update the target state to unassigned
-                        //
-                        ret = this->sequence.target.update_state( Sequencer::TARGET_UNASSIGNED );
-                        message.str(""); message << ( ret==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->sequence.target.name
-                                                 << " id " << this->sequence.target.obsid << " order " << this->sequence.target.obsorder
-                                                 << " as " << Sequencer::TARGET_UNASSIGNED;
-                        logwrite( function, message.str() );
-
-///                     // If this thread is not already running then spawn a thread to wait for this state,
-///                     // which will send out any needed notifications.
-///                     //
-///                     if ( ! this->sequence.waiting_for_state.load() ) {
-#ifdef LOGLEVEL_DEBUG
-///                       logwrite( function, "[DEBUG] spawning waiting_for_state thread" );
-#endif
-///                       std::thread( this->sequence.dothread_wait_for_state, std::ref(this->sequence) ).detach();
-///                     }
-
-//                      {
-//                      std::lock_guard<std::mutex> lock(this->tcs_ontarget_mtx); // Lock the mutex
-//                      this->set_seqstate(Sequencer::SEQ_ABORTREQ); // Update the state
-//                      }
-//                      this->tcs_ontarget_cv.notify_all(); // Notify waiting threads
-
-///                     this->sequence.tcs_ontarget_cv.notify_all();
-                        ret |= NO_ERROR;
-                      }
-                      else {
-                        this->sequence.async.enqueue_and_log( function, "ERROR: cannot abort unless sequencer is running or paused" );
-                        ret = ERROR;
-                      }
+      if ( cmd == SEQUENCERD_ABORT ) {
+                  logwrite( function, "requesting abort" );
+                  std::thread( &Sequencer::Sequence::abort_process, std::ref(this->sequence) ).detach();
       }
       else
 
@@ -1427,83 +1327,83 @@ namespace Sequencer {
       // This will notify the waiting thread which will proceed with the observation.
       //
       if ( cmd == SEQUENCERD_ONTARGET ) {
-                      this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_TCSOP );
-                      ret = NO_ERROR;
+                  this->sequence.ontarget();
+                  ret = NO_ERROR;
       }
       else
-      if ( cmd == SEQUENCERD_USEREXPOSE ) {
-                      this->sequence.seq_state.clear( Sequencer::SEQ_WAIT_USER );
-                      ret = NO_ERROR;
+      if ( cmd == SEQUENCERD_USERCONTINUE ) {
+                  this->sequence.usercontinue();
+                  ret = NO_ERROR;
       }
       else
 
       // 
       //
       if ( cmd == SEQUENCERD_GETONETARGET ) {
-                      this->sequence.target.get_specified_target( args, retstring );
-                      ret = NO_ERROR;
+                  this->sequence.target.get_specified_target( args, retstring );
+                  ret = NO_ERROR;
       }
       else
 
       // apply target offsets from database
       //
       if ( cmd == SEQUENCERD_TARGETOFFSET ) {
-                      this->sequence.target_offset();
-                      ret = NO_ERROR;
+                  this->sequence.target_offset();
+                  ret = NO_ERROR;
       }
       else
 
       // Set the "Do-Type"
       // which can be single-step (do one) or continuous (do all).
       //
-      if ( cmd.compare( SEQUENCERD_DOTYPE ) == 0) {
-                      ret = this->sequence.dotype( args, retstring );
-                      retstring.append( " " );
+      if ( cmd == SEQUENCERD_DOTYPE ) {
+                  ret = this->sequence.dotype( args, retstring );
+                  retstring.append( " " );
       }
       else
 
       // Report the Sequencer State,
       // which will be returned, logged, and written to the async message port.
       //
-      if ( cmd.compare( SEQUENCERD_STATE ) == 0) {
-                      this->sequence.broadcast_seqstate();
-                      retstring = this->sequence.seqstate_string( this->sequence.seqstate.load() );
-                      ret = NO_ERROR;
+      if ( cmd == SEQUENCERD_STATE ) {
+                  this->sequence.broadcast_seqstate();
+                  retstring = this->sequence.seqstate_string( this->sequence.seqstate.load() );
+                  ret = NO_ERROR;
       }
       else
 
       // Set/Get the Target Set ID
       //
-      if ( cmd.compare( SEQUENCERD_TARGETSET ) == 0) {
-                      ret= this->sequence.target.targetset( args, retstring );
-                      message.str(""); message << "TARGETSET: " << retstring;
-                      this->sequence.async.enqueue( message.str() );
-                      retstring.append( " " );
+      if ( cmd == SEQUENCERD_TARGETSET ) {
+                  ret= this->sequence.target.targetset( args, retstring );
+                  message.str(""); message << "TARGETSET: " << retstring;
+                  this->sequence.async.enqueue( message.str() );
+                  retstring.append( " " );
       }
       else
 
       // Pause an Exposure
       //
-      if ( cmd.compare( SEQUENCERD_PAUSE ) == 0) {
-                      // Can only pause during an exposure
-                      //
-                      if ( this->sequence.seq_state.is_clear( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                        this->sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
-                        ret = ERROR;
-                      }
-                      else
-                      // Can't already be paused
-                      //
-                      if ( this->sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
-                        this->sequence.async.enqueue_and_log( function, "ERROR: already paused" );
-                        ret = ERROR;
-                      }
-                      else {
-                        this->sequence.camerad.async( CAMERAD_PAUSE );
-                        this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
-                        this->sequence.broadcast_seqstate();
-                        ret = NO_ERROR;
-                      }
+      if ( cmd == SEQUENCERD_PAUSE ) {
+                  // Can only pause during an exposure
+                  //
+                  if ( this->sequence.seq_state.is_clear( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                    this->sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
+                    ret = ERROR;
+                  }
+                  else
+                  // Can't already be paused
+                  //
+                  if ( this->sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
+                    this->sequence.async.enqueue_and_log( function, "ERROR: already paused" );
+                    ret = ERROR;
+                  }
+                  else {
+                    this->sequence.camerad.async( CAMERAD_PAUSE );
+                    this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+                    this->sequence.broadcast_seqstate();
+                    ret = NO_ERROR;
+                  }
       }
       else
 

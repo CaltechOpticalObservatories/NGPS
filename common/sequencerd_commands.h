@@ -15,7 +15,7 @@ const std::string SEQUENCERD_GETONETARGET = "getone";
 const std::string SEQUENCERD_GUIDE      = "guide";
 const std::string SEQUENCERD_MODEXPTIME = "modexptime";
 const std::string SEQUENCERD_ONTARGET   = "ontarget";
-const std::string SEQUENCERD_USEREXPOSE = "userexpose";
+const std::string SEQUENCERD_USERCONTINUE = "usercontinue";
 const std::string SEQUENCERD_PAUSE      = "pause";
 const std::string SEQUENCERD_REPEAT     = "repeat";
 const std::string SEQUENCERD_RESUME     = "resume";
@@ -58,7 +58,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_REPEAT,
                                                      SEQUENCERD_RESUME,
                                                      TELEMREQUEST+" [?]",
-                                                     SEQUENCERD_USEREXPOSE,
+                                                     SEQUENCERD_USERCONTINUE,
                                                      SEQUENCERD_SHUTDOWN,
                                                      SEQUENCERD_START,
                                                      SEQUENCERD_STARTONE,

@@ -4147,7 +4147,7 @@ logwrite(function, message.str());
    * @brief      modify the exposure time while an exposure is running
    * @param[in]  exptime_in  requested exposure time in msec
    * @param[out] retstring   reference to string contains the exposure time
-   * @return     ERROR or NO_ERROR
+   * @return     ERROR | NO_ERROR | BUSY
    *
    */
   long Interface::do_modify_exptime( std::string exptime_in, std::string &retstring ) {
@@ -4184,7 +4184,7 @@ logwrite(function, message.str());
       message.str(""); message << "ERROR cannot change exposure time with less than 5000 msec exptime remaining";
       logwrite( function, message.str() );
       retstring="too_late";
-      return ERROR;
+      return BUSY;
     }
 
     // check if requested exptime has already elapsed
@@ -4194,7 +4194,7 @@ logwrite(function, message.str());
                                << " already exceeds requested exposure time " << requested_exptime;
       logwrite( function, message.str() );
       retstring="too_late";
-      return ERROR;
+      return BUSY;
     }
 
     // then send the command.
@@ -4220,7 +4220,7 @@ logwrite(function, message.str());
    *
    */
   long Interface::stop_exposure( std::string args, std::string &retstring ) {
-    const std::string function = "AstroCam::Interface::stop_exposure";
+    const std::string function("AstroCam::Interface::stop_exposure");
     std::stringstream message;
 
     // block changes within the last 5 seconds of exposure
@@ -4229,7 +4229,8 @@ logwrite(function, message.str());
     long remaining_time = this->camera.shutter_timer.get_remaining();
 
     if ( remaining_time < 5000 ) {
-      message.str(""); message << "ERROR cannot stop exposure time with less than 5000 msec exptime remaining";
+      message << "ERROR cannot stop exposure time with less than 5000 msec exptime remaining"
+              << " (" << remaining_time << ")";
       logwrite( function, message.str() );
       retstring="too_late";
       return ERROR;

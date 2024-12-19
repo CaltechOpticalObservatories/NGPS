@@ -139,14 +139,17 @@ namespace Sequencer {
   };
 
   /**
-   * @enum  ThreadStatusBits
-   * @brief assigns each thread a bit in a threadstate word
+   * @enum     ThreadStatusBits
+   * @brief    assigns each thread a bit in a threadstate word
+   * @details  bit is set while thread is running
    */
   enum ThreadStatusBits : size_t {
-    THR_SEQUENCER_ASYNC_LISTENER=0,    ///< set when dothread_sequencer_async_listener running
-    THR_TRIGGER_EXPOSURE,              ///< set when dothread_trigger_exposure running
-    THR_REPEAT_EXPOSURE,               ///< set when dothread_repeat_exposure running
-    THR_SEQUENCE_START,                ///< set when dothread_sequencer_start running
+    THR_SEQUENCER_ASYNC_LISTENER=0,
+    THR_TRIGGER_EXPOSURE,
+    THR_REPEAT_EXPOSURE,
+    THR_STOP_EXPOSURE,
+    THR_ABORT_PROCESS,
+    THR_SEQUENCE_START,
     THR_MONITOR_READY_STATE,
     THR_CALIB_SET,
     THR_CAMERA_SET,
@@ -187,6 +190,9 @@ namespace Sequencer {
   const std::map<size_t, std::string> thread_names = {
     {THR_SEQUENCER_ASYNC_LISTENER, "async_listener"},
     {THR_TRIGGER_EXPOSURE,         "trigger_exposure"},
+    {THR_REPEAT_EXPOSURE,          "repeat_exposure"},
+    {THR_STOP_EXPOSURE,            "stop_exposure"},
+    {THR_ABORT_PROCESS,            "abort_process"},
     {THR_SEQUENCE_START,           "sequence_start"},
     {THR_MONITOR_READY_STATE,      "monitor_ready_state"},
     {THR_CALIB_SET,                "calib_set"},
@@ -236,7 +242,7 @@ namespace Sequencer {
       std::atomic<bool> arm_readout_flag;        ///< 
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
-      std::atomic<bool> is_userexpose{false};    ///< remotely set by the user to continue
+      std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
     public:
       Sequence() :
           ready_to_start(false),
@@ -263,10 +269,17 @@ namespace Sequencer {
 
       ~Sequence() { };
 
-      void cancel_task() {
-        cancel_flag.store(true);
-        cv.notify_all();
+      inline void ontarget() {
+        this->cancel_flag.store(false);
+        this->is_ontarget.store(true);
+        this->cv.notify_all();
       }
+      inline void usercontinue() {
+        this->cancel_flag.store(false);
+        this->is_usercontinue.store(true);
+        this->cv.notify_all();
+      }
+      inline void reset_cancel_flag() { this->cancel_flag.store(false); }
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
 
@@ -398,24 +411,21 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
+      void abort_process();          ///< tries to abort everything
+      void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
       static void dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in );  ///< modify exptime while exposure running
       void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
-      void dothread_test();         ///< main sequence start thread
-      void dothread_sequence_start();         ///< main sequence start thread
+      void dothread_test();
+      void sequence_start();         ///< main sequence start thread
       long calib_set();              ///< sets calib according to target entry params
-      void dothread_calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
       long slit_set();               ///< sets slit according to target entry params
-      void dothread_slit_set();               ///< sets slit according to target entry params
       long move_to_target();         ///< sends request to TCS to move to target coords
-      long dothread_move_to_target();         ///< sends request to TCS to move to target coords
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
-      void dothread_focus_set();
       long flexure_set();
-      void dothread_flexure_set();
 
       long acam_init();                                        ///< initializes connection to acamd
       long calib_init();                                       ///< initializes connection to calibd
@@ -425,7 +435,7 @@ namespace Sequencer {
       long power_init();                                       ///< initializes connection to powerd
       long slicecam_init();                                    ///< initializes connection to slicecamd
       long slit_init();                                        ///< initializes connection to slitd
-             long improved_tcs_init();                                         ///< initializes connection to tcsd
+      long improved_tcs_init();                                         ///< initializes connection to tcsd
       static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
 
       static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam
