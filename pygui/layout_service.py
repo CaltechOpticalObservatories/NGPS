@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView,  QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFileDialog, QInputDialog, QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
@@ -718,11 +718,11 @@ class LayoutService:
             # If no list is passed, attempt to load target lists from the database or another source
             if target_lists is None:
                 target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
-                
+
                 # Ensure target_lists is iterable (like a list or tuple)
                 if not isinstance(target_lists, (list, tuple)):
                     print("Error: Fetched data is not a valid iterable (list or tuple).")
-                    target_lists = []  # Set to empty list if not valid
+                    target_lists = []  # Set to empty list if not valids
 
         except Exception as e:
             # Handle any exception that occurs during fetching
@@ -741,6 +741,9 @@ class LayoutService:
             for set_name in target_lists:
                 self.target_list_name.addItem(set_name)
 
+            # Add an option for creating a new target list
+            self.target_list_name.addItem("Create a new target list")
+
             # Set the first item as the default selection (if available)
             if target_lists:
                 self.target_list_name.setCurrentIndex(0)  # Set the first item as default
@@ -748,14 +751,37 @@ class LayoutService:
             # Connect the signal for user selection change
             self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
 
+    def create_new_target_list(self):
+        """Handle creating a new target list, uploading CSV, and creating a new target set."""
+        # Step 1: Open the file dialog to allow the user to select a CSV file
+        file_dialog = QFileDialog(self.parent)  # Assuming `self.parent` is the parent widget
+        file_dialog.setFileMode(QFileDialog.ExistingFiles)
+        file_dialog.setNameFilter("CSV Files (*.csv)")
+
+        if file_dialog.exec_() == QFileDialog.Accepted:
+            file_path = file_dialog.selectedFiles()[0]  # Get the selected file path
+
+            # Step 2: Let the user provide a new target set name
+            target_set_name, ok = QInputDialog.getText(self.parent, "Enter Target Set Name", "Target Set Name:")
+            if ok and target_set_name:
+                # Step 3: Call the logic service to upload the CSV and associate it with a new target set
+                self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
+
+                # Step 4: Optionally, refresh the target lists after uploading
+                self.load_target_lists()  # Reload the target lists to include the new one
+
 
     def on_target_set_changed(self):
         """Handle the target set change in the ComboBox."""
         # Get the selected SET_NAME (not the entire list of target sets)
         selected_set_name = self.target_list_name.currentText()
-        
-        print(f"Selected SET_NAME: {selected_set_name}")
-        self.logic_service.update_target_table_with_list(selected_set_name)
+
+        if selected_set_name == "Create a new target list":
+            # Trigger the CSV upload process
+            self.logic_service.upload_csv_to_mysql()
+        else:
+            print(f"Selected SET_NAME: {selected_set_name}")
+            self.logic_service.update_target_table_with_list(selected_set_name)
 
 
     def create_right_planning_column(self):

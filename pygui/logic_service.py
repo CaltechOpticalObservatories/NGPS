@@ -42,6 +42,140 @@ class LogicService:
         except Exception as e:
             print(f"Error loading CSV file: {e}")
 
+    def upload_csv_to_mysql(self, file_path, target_set_name):
+        """Upload the CSV to MySQL and associate it with a new target set."""
+        # Step 1: Read the CSV
+        try:
+            with open(file_path, 'r') as file:
+                reader = csv.DictReader(file)
+                data = list(reader)  # Convert CSV to list of dictionaries
+        except Exception as e:
+            print(f"Error reading CSV file: {e}")
+            return
+
+        # Step 2: Insert a new entry into the `target_sets` table
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
+                        (target_set_name, self.parent.current_owner))  # Use the current owner's info
+            self.connection.commit()
+
+            # Step 3: Fetch the new SET_ID (for the newly inserted target set)
+            cursor.execute("SELECT LAST_INSERT_ID()")
+            set_id = cursor.fetchone()[0]
+            cursor.close()
+
+            # Step 4: Insert the targets into the `targets` table, associating them with the new SET_ID
+            cursor = self.connection.cursor()
+            insert_query = """
+                INSERT INTO targets (SET_ID, STATE, OBS_ORDER, TARGET_NUMBER, SEQUENCE_NUMBER, NAME, EXPTIME, SLITWIDTH)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            for row in data:
+                cursor.execute(insert_query, (
+                    set_id, row['STATE'], row['OBS_ORDER'], row['TARGET_NUMBER'], row['SEQUENCE_NUMBER'],
+                    row['NAME'], row['EXPTIME'], row['SLITWIDTH']
+                ))
+            
+            self.connection.commit()
+            cursor.close()
+
+            print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
+        except mysql.connector.Error as err:
+            print(f"Error inserting data into MySQL: {err}")
+
+    def get_or_create_target_set(self, connection, target_set_name):
+        """
+        Checks if a target set with the given name exists. If it exists, returns the existing `SET_ID`.
+        If it doesn't exist, creates a new target set and returns the new `SET_ID`.
+        """
+        try:
+            cursor = connection.cursor()
+
+            # Check if the target set already exists by name
+            query = "SELECT SET_ID FROM target_sets WHERE SET_NAME = %s"
+            cursor.execute(query, (target_set_name,))
+            result = cursor.fetchone()
+
+            if result:
+                # If the target set exists, return the existing SET_ID
+                set_id = result[0]
+                print(f"Found existing target set with SET_ID: {set_id}")
+            else:
+                # If not, create a new target set and get the new SET_ID
+                set_id = self.create_target_set(connection, target_set_name)
+            
+            cursor.close()
+            return set_id
+        
+        except mysql.connector.Error as err:
+            print(f"Error checking or creating target set: {err}")
+            return None
+
+    def create_target_set(self, connection, target_set_name):
+        """
+        Creates a new entry in the `target_sets` table and returns the new `SET_ID`.
+        """
+        try:
+            cursor = connection.cursor()
+
+            # Get the current timestamp for the new target set creation
+            current_timestamp = pytz.utc.localize(datetime.datetime.utcnow()).strftime('%Y-%m-%d %H:%M:%S')
+
+            # Insert the new target set into the `target_sets` table
+            query = """
+                INSERT INTO target_sets (SET_NAME, SET_CREATION_TIMESTAMP)
+                VALUES (%s, %s)
+            """
+            cursor.execute(query, (target_set_name, current_timestamp))
+
+            # Commit the transaction to make sure the SET_ID is generated
+            connection.commit()
+
+            # Get the newly created SET_ID
+            cursor.execute("SELECT LAST_INSERT_ID();")
+            set_id = cursor.fetchone()[0]
+
+            cursor.close()
+
+            print(f"Created new target set with SET_ID: {set_id}")
+            return set_id
+        
+        except mysql.connector.Error as err:
+            print(f"Error creating target set: {err}")
+            return None
+
+    def insert_targets_into_mysql(self, connection, data, set_id):
+        """
+        Inserts the data into the `targets` table, linking each target to the given `SET_ID`.
+        """
+        try:
+            cursor = connection.cursor()
+            
+            # Insert each target in the CSV into the `targets` table, linking it to the `SET_ID`
+            for row in data:
+                # Add the SET_ID to the row data before inserting
+                row['SET_ID'] = set_id
+                
+                # Prepare the SQL query for insertion: matching columns
+                columns = ', '.join(row.keys())  # Column names from CSV (and SET_ID)
+                values = ', '.join(['%s'] * len(row))  # Placeholder for values
+                query = f"INSERT INTO targets ({columns}) VALUES ({values})"
+                
+                # Execute the insert query
+                cursor.execute(query, tuple(row.values()))
+            
+            # Commit the transaction
+            connection.commit()
+            print(f"Successfully uploaded {len(data)} rows to the 'targets' table.")
+        
+        except mysql.connector.Error as err:
+            print(f"Error inserting data into MySQL: {err}")
+        
+        finally:
+            cursor.close()
+
     def read_config(self, config_file):
         """
         Reads configuration from the provided file.
