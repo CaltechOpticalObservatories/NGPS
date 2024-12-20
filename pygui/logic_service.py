@@ -75,6 +75,17 @@ class LogicService:
             csv_columns = reader.fieldnames  # List of column names from the CSV
             print(f"CSV Columns: {csv_columns}")
 
+            # Define all columns from your table `targets` (based on your schema)
+            all_columns = [
+                'OBSERVATION_ID', 'SET_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 
+                'RA', 'DECL', 'OFFSET_RA', 'OFFSET_DEC', 'EXPTIME', 'SLITWIDTH', 'SLITOFFSET', 'OBSMODE', 
+                'BINSPECT', 'BINSPAT', 'SLITANGLE', 'AIRMASS_MAX', 'WRANGE_LOW', 'WRANGE_HIGH', 'CHANNEL', 
+                'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
+                'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start', 
+                'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR', 
+                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE'
+            ]
+
             # Step 5: Loop through each row and dynamically generate the insert query
             for idx, row in enumerate(data):
                 row_data = [set_id]  # Start with the SET_ID as the first element in row_data
@@ -84,46 +95,32 @@ class LogicService:
                 print(f"Inserting row {idx + 1}: {row}")
 
                 # Step 6: Add only non-empty fields to the insert query
-                for column in csv_columns:
-                    value = row[column] if row[column] else None  # Default to None for empty cells
+                for column in all_columns:
+                    value = row.get(column)  # Get the value from the CSV, default to None if not present
 
-                    # Special case for OBS_ORDER, ensure it's set to a default if missing
-                    if column == 'OBS_ORDER' and value is None:
-                        value = 0  # Default value for OBS_ORDER
+                    # Handle missing columns (apply defaults based on column type)
+                    if value is None:
+                        # Numeric columns (defaults to 0)
+                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'BINSPECT', 'BINSPAT', 'WRANGE_LOW', 
+                                    'WRANGE_HIGH', 'MAGNITUDE', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 'OTMairmass_start', 
+                                    'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMpa', 'OTMwait', 'OTMslew', 
+                                    'OTMres', 'OTMseeing', 'OTMslitangle']:
+                            value = 0
+                        # Text columns (defaults to empty string "")
+                        elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH', 'OBSMODE', 'CHANNEL', 'MAGSYSTEM', 
+                                        'MAGFILTER', 'SRCMODEL', 'OTMflag', 'OTMlast', 'OTMmoon', 'OTMSNR', 'NOTE', 'COMMENT', 
+                                        'OWNER', 'POINTMODE']:
+                            value = ""  # Empty string as default for text fields
+                        # Timestamp columns (defaults to NULL)
+                        elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
+                            value = None  # Default to NULL for timestamps
+                        else:
+                            value = None  # Default to NULL for other columns without a defined default
 
-                    # Special case for TARGET_NUMBER, ensure it's set to a default if missing
-                    if column == 'TARGET_NUMBER' and value is None:
-                        value = 0  # Default value for TARGET_NUMBER
-
-                    # Special case for SEQUENCE_NUMBER, ensure it's set to a default if missing
-                    if column == 'SEQUENCE_NUMBER' and value is None:
-                        value = 0  # Default value for SEQUENCE_NUMBER
-
-                    # Add the column and value to the query if it's not None
+                    # Add the column and value to the query
                     insert_columns.append(column)
                     insert_placeholders.append('%s')
                     row_data.append(value)
-
-                # Step 7: Check if OBS_ORDER exists in the CSV columns
-                if 'OBS_ORDER' not in csv_columns:
-                    # If OBS_ORDER doesn't exist in the CSV, add it with a default value of 0
-                    insert_columns.append('OBS_ORDER')
-                    insert_placeholders.append('%s')
-                    row_data.append(0)  # Default value for OBS_ORDER is 0
-
-                # Step 8: Check if TARGET_NUMBER exists in the CSV columns
-                if 'TARGET_NUMBER' not in csv_columns:
-                    # If TARGET_NUMBER doesn't exist in the CSV, add it with a default value of 0
-                    insert_columns.append('TARGET_NUMBER')
-                    insert_placeholders.append('%s')
-                    row_data.append(0)  # Default value for TARGET_NUMBER is 0
-
-                # Step 9: Check if SEQUENCE_NUMBER exists in the CSV columns
-                if 'SEQUENCE_NUMBER' not in csv_columns:
-                    # If SEQUENCE_NUMBER doesn't exist in the CSV, add it with a default value of 0
-                    insert_columns.append('SEQUENCE_NUMBER')
-                    insert_placeholders.append('%s')
-                    row_data.append(0)  # Default value for SEQUENCE_NUMBER is 0
 
                 # Build the dynamic insert query
                 insert_columns_str = ", ".join(insert_columns)
