@@ -71,7 +71,6 @@ class LogicService:
 
             # Get the columns in the CSV file (i.e., DictReader's fieldnames)
             csv_columns = reader.fieldnames  # List of column names from the CSV
-            required_columns = ['STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 'EXPTIME', 'SLITWIDTH']
 
             # Step 5: Loop through each row and dynamically generate the insert query
             for row in data:
