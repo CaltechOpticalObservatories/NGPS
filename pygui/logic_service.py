@@ -416,6 +416,7 @@ class LogicService:
                     self.all_targets.extend(targets)
 
                 self.parent.layout_service.load_target_lists(self.set_name)
+                self.parent.user_set_data = set_data
                 cursor.close()
                 
             except mysql.connector.Error as err:
