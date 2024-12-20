@@ -101,21 +101,16 @@ class LogicService:
                     # Handle missing columns (apply defaults based on column type)
                     if value is None:
                         # Numeric columns (defaults to 0)
-                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'BINSPECT', 'BINSPAT', 'WRANGE_LOW', 
-                                    'WRANGE_HIGH', 'MAGNITUDE', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 'OTMairmass_start', 
-                                    'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMpa', 'OTMwait', 'OTMslew', 
-                                    'OTMres', 'OTMseeing', 'OTMslitangle']:
+                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'BINSPECT', 'BINSPAT']:
                             value = 0
                         # Text columns (defaults to empty string "")
-                        elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH', 'OBSMODE', 'CHANNEL', 'MAGSYSTEM', 
-                                        'MAGFILTER', 'SRCMODEL', 'OTMflag', 'OTMlast', 'OTMmoon', 'OTMSNR', 'NOTE', 'COMMENT', 
-                                        'OWNER', 'POINTMODE']:
+                        elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
                             value = ""  # Empty string as default for text fields
-                        # Timestamp columns (defaults to NULL)
-                        elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
-                            value = None  # Default to NULL for timestamps
-                        else:
-                            value = None  # Default to NULL for other columns without a defined default
+                        # # Timestamp columns (defaults to NULL)
+                        # elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
+                        #     value = None  # Default to NULL for timestamps
+                        # else:
+                        #     value = None  # Default to NULL for other columns without a defined default
 
                     # Special case: if `OFFSET_RA` or `OFFSET_DEC` are empty, set them to 0.0
                     if column in ['OFFSET_RA', 'OFFSET_DEC'] and (value == '' or value is None):
