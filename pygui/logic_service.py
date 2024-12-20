@@ -89,7 +89,11 @@ class LogicService:
 
                     # Special case for OBS_ORDER, ensure it's set to a default if missing
                     if column == 'OBS_ORDER' and value is None:
-                        value = 0  # Or another default value like -1 or a calculated value
+                        value = 0  # Default value for OBS_ORDER
+
+                    # Special case for TARGET_NUMBER, ensure it's set to a default if missing
+                    if column == 'TARGET_NUMBER' and value is None:
+                        value = 0  # Default value for TARGET_NUMBER
 
                     # Add the column and value to the query if it's not None
                     insert_columns.append(column)
@@ -102,6 +106,13 @@ class LogicService:
                     insert_columns.append('OBS_ORDER')
                     insert_placeholders.append('%s')
                     row_data.append(0)  # Default value for OBS_ORDER is 0
+
+                # Step 8: Check if TARGET_NUMBER exists in the CSV columns
+                if 'TARGET_NUMBER' not in csv_columns:
+                    # If TARGET_NUMBER doesn't exist in the CSV, add it with a default value of 0
+                    insert_columns.append('TARGET_NUMBER')
+                    insert_placeholders.append('%s')
+                    row_data.append(0)  # Default value for TARGET_NUMBER is 0
 
                 # Build the dynamic insert query
                 insert_columns_str = ", ".join(insert_columns)
@@ -123,11 +134,10 @@ class LogicService:
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
-            self.update_target_table_with_list()
+            self.update_target_table_with_list(target_list=target_set_name)
 
         except mysql.connector.Error as err:
             print(f"Error inserting data into MySQL: {err}")
-
 
 
     def get_or_create_target_set(self, connection, target_set_name):
