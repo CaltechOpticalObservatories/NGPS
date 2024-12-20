@@ -71,28 +71,36 @@ class LogicService:
 
             # Get the columns in the CSV file (i.e., DictReader's fieldnames)
             csv_columns = reader.fieldnames  # List of column names from the CSV
+            required_columns = ['STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 'EXPTIME', 'SLITWIDTH']
 
-            # Construct the insert query dynamically based on CSV columns
-            insert_columns = ['SET_ID'] + csv_columns  # 'SET_ID' is the first column
-            insert_placeholders = ['%s'] + ['%s'] * len(csv_columns)  # Each column in the CSV gets a placeholder
-
-            # Create the SQL query dynamically
-            insert_columns_str = ", ".join(insert_columns)
-            insert_placeholders_str = ", ".join(insert_placeholders)
-
-            insert_query = f"""
-                INSERT INTO targets ( {insert_columns_str} )
-                VALUES ( {insert_placeholders_str} )
-            """
-
-            print(f"Generated Insert Query: {insert_query}")  # Debugging: Check the query
-
-            # Step 5: Insert the targets into the `targets` table, associating them with the new SET_ID
+            # Step 5: Loop through each row and dynamically generate the insert query
             for row in data:
-                # Prepare the data to insert, starting with the SET_ID
-                row_data = [set_id] + [row[column] for column in csv_columns]
+                row_data = [set_id]  # Start with the SET_ID as the first element in row_data
+                insert_columns = ['SET_ID']  # Always include SET_ID
+                insert_placeholders = ['%s']  # Placeholder for SET_ID
 
-                # Execute the insert query for each row
+                # Step 6: Add only non-empty fields to the insert query
+                for column in csv_columns:
+                    # If the field is not empty, include it in the insert query
+                    if row[column]:  # If the column has data (not empty)
+                        insert_columns.append(column)
+                        insert_placeholders.append('%s')
+                        row_data.append(row[column])  # Add the value to row_data
+                    else:
+                        # For empty values, add None for nullable fields
+                        insert_columns.append(column)
+                        insert_placeholders.append('%s')
+                        row_data.append(None)  # This will insert a NULL value for empty columns
+
+                # Build the dynamic insert query
+                insert_columns_str = ", ".join(insert_columns)
+                insert_placeholders_str = ", ".join(insert_placeholders)
+                insert_query = f"""
+                    INSERT INTO targets ({insert_columns_str})
+                    VALUES ({insert_placeholders_str})
+                """
+
+                # Execute the insert query with dynamically generated values
                 cursor.execute(insert_query, row_data)
 
             # Commit the transaction
@@ -102,7 +110,7 @@ class LogicService:
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
 
         except mysql.connector.Error as err:
-            print(f"Error inserting data into MySQL: {err}")
+        print(f"Error inserting data into MySQL: {err}")
 
 
     def get_or_create_target_set(self, connection, target_set_name):
