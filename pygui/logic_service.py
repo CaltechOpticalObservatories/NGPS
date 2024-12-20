@@ -326,43 +326,6 @@ class LogicService:
             print(f"Error executing query: {err}")
             return []
 
-    def load_mysql_and_update_target_list(self, config_file):
-        """
-        Loads target data from MySQL and updates the target list table.
-        This method is now a high-level function that combines both connecting to MySQL and loading data.
-        """
-        # Step 1: Connect to MySQL using the config file
-        connection = self.connect_to_mysql(config_file)
-        
-        if connection is None:
-            print("Failed to connect to MySQL. Cannot load target data.")
-            return
-        
-        # Step 2: Load data from the MySQL database (target_table)
-        db_config = self.read_config(config_file)  # We need to read config again for the table name
-        target_table = db_config["TARGET_TABLE"]
-        rows = self.load_data_from_mysql(connection, target_table)
-        
-        if rows:
-            # Step 3: Update the target list table with the data
-            self.update_target_list_table(rows)
-
-            # Populate the target_list_name dropdown with available target lists (e.g., based on SET_ID)
-            target_list_names = sorted(set(row['SET_ID'] for row in rows))  # Unique SET_IDs or Target List names
-            print("SET IDSSSS: ", target_list_names)
-            self.parent.target_list_name.clear()  # Clear existing items
-            self.parent.target_list_name.addItem("All")  # Option to select all target lists
-            self.parent.target_list_name.addItems([str(name) for name in target_list_names])  # Add each SET_ID to the dropdown
-
-            # Connect the combo box selection change to filtering function
-            self.parent.target_list_name.currentIndexChanged.connect(self.filter_target_list)
-        else:
-            print(f"No data found in the {target_table} table.")
-        
-        # Close the database connection after usage
-        connection.close()
-
-
     def load_mysql_and_fetch_target_sets(self, config_file):
         """
         Loads target set data from the 'target_sets' table and performs actions to update the UI.
@@ -417,6 +380,7 @@ class LogicService:
                     targets = cursor.fetchall()
                     self.all_targets.extend(targets)
 
+                self.parent.layout_service.load_target_lists(self.set_name)
                 cursor.close()
                 
             except mysql.connector.Error as err:
