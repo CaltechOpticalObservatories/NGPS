@@ -712,11 +712,11 @@ class LayoutService:
 
         return left_planning_column
     
-    def load_target_lists(self, target_lists=None, reload=False):
+    def load_target_lists(self, target_lists=None):
         """Populate the ComboBox with target lists passed as a parameter or reload from the database."""
         try:
             # If reload is True or no target_lists are provided, reload from the database
-            if reload or target_lists is None:
+            if target_lists is None:
                 # Reload target lists from the database
                 target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
                 print({target_lists})
@@ -769,7 +769,7 @@ class LayoutService:
                 # Step 3: Call the logic service to upload the CSV and associate it with a new target set
                 self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
 
-                self.load_target_lists(reload=True)  # Reload the combo box with the new list and select it
+                self.load_target_lists(target_lists=self.logic_service.set_name)  # Reload the combo box with the new list and select it
                 self.target_list_name.setCurrentText(target_set_name)  # Set the newly created target list as selected
 
     def on_target_set_changed(self):

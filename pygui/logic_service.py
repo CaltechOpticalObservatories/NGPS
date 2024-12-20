@@ -142,8 +142,7 @@ class LogicService:
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
-            # self.load_mysql_and_fetch_target_sets(config_file="config/db_config.ini")
-            # self.update_target_table_with_list(target_list=target_set_name)
+            self.fetch_and_update_target_list()
 
         except mysql.connector.Error as err:
             print(f"Error inserting data into MySQL: {err}")
@@ -391,6 +390,39 @@ class LogicService:
         # Close the database connection after usage
         connection.close()
         return 
+    
+    def fetch_and_update_target_list(self):
+        """Fetch target data and update the table in the parent window."""
+        if self.connection:
+            try:
+                cursor = self.connection.cursor(dictionary=True)
+
+                # Step 1: Get the SET_IDs from target_sets for the logged-in user
+                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER = %s", (self.parent.current_owner,))
+                set_ids = cursor.fetchall()
+                cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (self.parent.current_owner,))
+                set_data = cursor.fetchall()
+
+                # Step 2: Convert set_data to a dictionary and store it in self.set_data
+                self.set_data = {set_item["SET_ID"]: set_item["SET_NAME"] for set_item in set_data}
+
+                # Step 3: Extract all SET_NAME values and store them in self.set_name
+                self.set_name = [set_item["SET_NAME"] for set_item in set_data]
+
+                # Step 4: For each SET_ID, fetch the associated rows from the 'targets' table
+                self.all_targets = []
+                for set_id in set_ids:
+                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
+                    targets = cursor.fetchall()
+                    self.all_targets.extend(targets)
+
+                cursor.close()
+                
+            except mysql.connector.Error as err:
+                print(f"Database error: {err}")
+            finally:
+                self.connection.close()
+
 
     def filter_target_list(self):
         """
