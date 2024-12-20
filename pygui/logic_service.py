@@ -42,48 +42,55 @@ class LogicService:
         except Exception as e:
             print(f"Error loading CSV file: {e}")
 
-    def upload_csv_to_mysql(self, file_path, target_set_name):
-        """Upload the CSV to MySQL and associate it with a new target set."""
-        # Step 1: Read the CSV
+    def upload_csv_to_mysql(self, csv_file_path, target_set_name):
+        """Uploads CSV data to MySQL and associates with a target set."""
         try:
-            with open(file_path, 'r') as file:
-                reader = csv.DictReader(file)
-                data = list(reader)  # Convert CSV to list of dictionaries
+            # 1. Read the CSV file and get the header (columns)
+            with open(csv_file_path, 'r') as file:
+                csv_reader = csv.DictReader(file)  # Reads each row as a dictionary
+
+                # 2. Extract the column names from the CSV header
+                csv_columns = csv_reader.fieldnames  # This gives you the list of column names from the CSV
+
+                # 3. Get the SET_ID for the target set (this assumes you've already inserted the target set into the `target_sets` table)
+                cursor = self.connection.cursor()
+                cursor.execute("SELECT SET_ID FROM target_sets WHERE SET_NAME = %s", (target_set_name,))
+                set_id_row = cursor.fetchone()
+                if not set_id_row:
+                    print(f"Error: No target set found with the name {target_set_name}.")
+                    return
+                set_id = set_id_row[0]
+
+                # 4. Construct the dynamic SQL based on CSV columns
+                insert_columns = []
+                insert_placeholders = []
+                for column in csv_columns:
+                    insert_columns.append(column)
+                    insert_placeholders.append("%s")  # Placeholder for each value
+
+                insert_columns_str = ", ".join(insert_columns)
+                insert_placeholders_str = ", ".join(insert_placeholders)
+
+                insert_query = f"""
+                    INSERT INTO targets_dev2 (SET_ID, {insert_columns_str})
+                    VALUES (%s, {insert_placeholders_str})
+                """
+                # Print the dynamically generated query for debugging
+                print(f"Generated insert query: {insert_query}")
+
+                # 5. Insert each row from the CSV
+                for row in csv_reader:
+                    # Prepare the data to insert, starting with the SET_ID
+                    data_to_insert = [set_id] + [row[column] for column in csv_columns]
+
+                    cursor.execute(insert_query, data_to_insert)
+
+                # Commit the transaction
+                self.connection.commit()
+                print("CSV data successfully inserted into targets.")
+
         except Exception as e:
-            print(f"Error reading CSV file: {e}")
-            return
-
-        # Step 2: Insert a new entry into the `target_sets` table
-        try:
-            cursor = self.connection.cursor()
-            cursor.execute("INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
-                        (target_set_name, self.parent.current_owner))  # Use the current owner's info
-            self.connection.commit()
-
-            # Step 3: Fetch the new SET_ID (for the newly inserted target set)
-            cursor.execute("SELECT LAST_INSERT_ID()")
-            set_id = cursor.fetchone()[0]
-            cursor.close()
-
-            # Step 4: Insert the targets into the `targets` table, associating them with the new SET_ID
-            cursor = self.connection.cursor()
-            insert_query = """
-                INSERT INTO targets (SET_ID, STATE, OBS_ORDER, TARGET_NUMBER, SEQUENCE_NUMBER, NAME, EXPTIME, SLITWIDTH)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            
-            for row in data:
-                cursor.execute(insert_query, (
-                    set_id, row['STATE'], row['OBS_ORDER'], row['TARGET_NUMBER'], row['SEQUENCE_NUMBER'],
-                    row['NAME'], row['EXPTIME'], row['SLITWIDTH']
-                ))
-            
-            self.connection.commit()
-            cursor.close()
-
-            print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
-        except mysql.connector.Error as err:
-            print(f"Error inserting data into MySQL: {err}")
+            print(f"Error uploading CSV data: {e}")
 
     def get_or_create_target_set(self, connection, target_set_name):
         """
