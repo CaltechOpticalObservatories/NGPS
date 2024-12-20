@@ -10,6 +10,7 @@ from astropy.coordinates import SkyCoord, EarthLocation
 from astropy.time import Time
 from astroplan import Observer
 import astropy.units as u
+import datetime
 
 class LogicService:
     def __init__(self, parent):
@@ -141,6 +142,7 @@ class LogicService:
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
+            self.load_mysql_and_fetch_target_sets()
             self.update_target_table_with_list(target_list=target_set_name)
 
         except mysql.connector.Error as err:
