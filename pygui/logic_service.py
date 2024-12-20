@@ -377,7 +377,7 @@ class LogicService:
         
         # Step 2: Load data from the 'target_sets' table
         db_config = self.read_config(config_file)  # We need to read config again for the table name
-        target_sets_table = db_config["TARGET_SETS_TABLE"]  # Assuming you have the 'target_sets' table name in config
+        target_sets_table = db_config["TARGETSET_TABLE"]  # Assuming you have the 'target_sets' table name in config
         rows = self.load_data_from_mysql(connection, target_sets_table)
         
         if rows:
