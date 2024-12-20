@@ -21,6 +21,7 @@ class NgpsGUI(QMainWindow):
         self.current_offset_dec = None
         self.user_set_data = {}
         self.all_targets = None
+        self.current_owner = None
         
         # Login status flag
         self.logged_in = False
@@ -109,6 +110,7 @@ class NgpsGUI(QMainWindow):
             # Call the function to load data from MySQL
             self.load_mysql_data(login_dialog.all_targets)
             self.user_set_data = login_dialog.set_data
+            self.current_owner = login_dialog.owner
             # After loading data, populate the target lists dropdown
             self.layout_service.load_target_lists(login_dialog.set_name)
 

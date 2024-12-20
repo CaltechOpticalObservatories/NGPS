@@ -108,6 +108,8 @@ class LoginDialog(QDialog):
         self.login_button.clicked.connect(self.on_login)
         #self.cancel_button.clicked.connect(self.reject)
 
+        self.owner = None
+
     def on_login(self):
         """Handles the login action."""
         username = self.username_field.text()
@@ -117,6 +119,7 @@ class LoginDialog(QDialog):
         if self.validate_user_credentials(username, password):
             print(f"Login successful for user: {username}")
             self.accept()  # Close the dialog on success
+            self.owner = username
             self.fetch_and_update_target_list(username)
         else:
             print(f"Login failed for user: {username}")
