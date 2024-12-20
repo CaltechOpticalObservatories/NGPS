@@ -719,6 +719,7 @@ class LayoutService:
             if reload or target_lists is None:
                 # Reload target lists from the database
                 target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+                print({target_lists})
 
                 # Ensure target_lists is iterable (list or tuple)
                 if not isinstance(target_lists, (list, tuple)):
