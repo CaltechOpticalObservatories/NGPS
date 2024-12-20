@@ -768,7 +768,8 @@ class LayoutService:
                 self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
 
                 # Step 4: Optionally, refresh the target lists after uploading
-                self.load_target_lists()  # Reload the target lists to include the new one
+                # Connect the upload complete signal to reload target lists
+                self.logic_service.upload_complete_signal.connect(self.load_target_lists)
 
 
     def on_target_set_changed(self):

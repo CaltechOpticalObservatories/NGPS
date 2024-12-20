@@ -1,7 +1,7 @@
 import mysql.connector
 import configparser
 from PyQt5.QtWidgets import QTableWidgetItem
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 import os
 import csv
@@ -18,6 +18,7 @@ class LogicService:
         self.all_targets = []
         self.target_list_set = {}
         self.target_list_display = None
+        self.upload_complete_signal = pyqtSignal()
 
     @staticmethod
     def convert_pst_to_utc(datetime):
@@ -85,16 +86,16 @@ class LogicService:
 
                 # Step 6: Add only non-empty fields to the insert query
                 for column in csv_columns:
-                    # If the field is not empty, include it in the insert query
-                    if row[column]:  # If the column has data (not empty)
-                        insert_columns.append(column)
-                        insert_placeholders.append('%s')
-                        row_data.append(row[column])  # Add the value to row_data
-                    else:
-                        # For empty values, add None for nullable fields
-                        insert_columns.append(column)
-                        insert_placeholders.append('%s')
-                        row_data.append(None)  # This will insert a NULL value for empty columns
+                    value = row[column] if row[column] else None  # Default to None for empty cells
+
+                    # Special case for OBS_ORDER, ensure it's set to a default if missing
+                    if column == 'OBS_ORDER' and value is None:
+                        value = 0  # Or another default value like -1 or a calculated value
+
+                    # Add the column and value to the query if it's not None
+                    insert_columns.append(column)
+                    insert_placeholders.append('%s')
+                    row_data.append(value)
 
                 # Build the dynamic insert query
                 insert_columns_str = ", ".join(insert_columns)
@@ -115,6 +116,8 @@ class LogicService:
             cursor.close()
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
+            # Emit the signal after the upload is complete
+            self.upload_complete_signal.emit()
 
         except mysql.connector.Error as err:
             print(f"Error inserting data into MySQL: {err}")
