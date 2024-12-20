@@ -50,6 +50,7 @@ class LogicService:
             with open(file_path, 'r') as file:
                 reader = csv.DictReader(file)
                 data = list(reader)  # Convert CSV to list of dictionaries
+                print(f"CSV file loaded. Total rows: {len(data)}")
         except Exception as e:
             print(f"Error reading CSV file: {e}")
             return
@@ -64,6 +65,7 @@ class LogicService:
             # Step 3: Fetch the new SET_ID (for the newly inserted target set)
             cursor.execute("SELECT LAST_INSERT_ID()")
             set_id = cursor.fetchone()[0]
+            print(f"New target set created with SET_ID: {set_id}")
             cursor.close()
 
             # Step 4: Dynamically construct the insert query
@@ -71,12 +73,15 @@ class LogicService:
 
             # Get the columns in the CSV file (i.e., DictReader's fieldnames)
             csv_columns = reader.fieldnames  # List of column names from the CSV
+            print(f"CSV Columns: {csv_columns}")
 
             # Step 5: Loop through each row and dynamically generate the insert query
-            for row in data:
+            for idx, row in enumerate(data):
                 row_data = [set_id]  # Start with the SET_ID as the first element in row_data
                 insert_columns = ['SET_ID']  # Always include SET_ID
                 insert_placeholders = ['%s']  # Placeholder for SET_ID
+
+                print(f"Inserting row {idx + 1}: {row}")
 
                 # Step 6: Add only non-empty fields to the insert query
                 for column in csv_columns:
@@ -98,6 +103,9 @@ class LogicService:
                     INSERT INTO targets ({insert_columns_str})
                     VALUES ({insert_placeholders_str})
                 """
+                
+                print(f"Executing query: {insert_query}")
+                print(f"With data: {row_data}")
 
                 # Execute the insert query with dynamically generated values
                 cursor.execute(insert_query, row_data)
