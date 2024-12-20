@@ -110,7 +110,7 @@ class LogicService:
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
 
         except mysql.connector.Error as err:
-        print(f"Error inserting data into MySQL: {err}")
+            print(f"Error inserting data into MySQL: {err}")
 
 
     def get_or_create_target_set(self, connection, target_set_name):
