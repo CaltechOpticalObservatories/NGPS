@@ -776,8 +776,12 @@ class LayoutService:
         # Get the selected SET_NAME (not the entire list of target sets)
         selected_set_name = self.target_list_name.currentText()
 
-        print(f"Selected SET_NAME: {selected_set_name}")
-        self.logic_service.update_target_table_with_list(selected_set_name)
+        if selected_set_name == "Create a new target list":
+            # Trigger the CSV upload process
+            self.create_new_target_list()
+        else:
+            print(f"Selected SET_NAME: {selected_set_name}")
+            self.logic_service.update_target_table_with_list(selected_set_name)
 
 
     def create_right_planning_column(self):
