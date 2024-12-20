@@ -18,7 +18,6 @@ class LogicService:
         self.all_targets = []
         self.target_list_set = {}
         self.target_list_display = None
-        self.upload_complete_signal = pyqtSignal()
 
     @staticmethod
     def convert_pst_to_utc(datetime):
@@ -97,6 +96,13 @@ class LogicService:
                     insert_placeholders.append('%s')
                     row_data.append(value)
 
+                # Step 7: Check if OBS_ORDER exists in the CSV columns
+                if 'OBS_ORDER' not in csv_columns:
+                    # If OBS_ORDER doesn't exist in the CSV, add it with a default value of 0
+                    insert_columns.append('OBS_ORDER')
+                    insert_placeholders.append('%s')
+                    row_data.append(0)  # Default value for OBS_ORDER is 0
+
                 # Build the dynamic insert query
                 insert_columns_str = ", ".join(insert_columns)
                 insert_placeholders_str = ", ".join(insert_placeholders)
@@ -117,10 +123,11 @@ class LogicService:
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
-            self.upload_complete_signal.emit()
+            self.update_target_table_with_list()
 
         except mysql.connector.Error as err:
             print(f"Error inserting data into MySQL: {err}")
+
 
 
     def get_or_create_target_set(self, connection, target_set_name):
