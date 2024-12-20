@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef CAMERAD_COMMANDS_H
-#define CAMERAD_COMMANDS_H
+#pragma once
+
 const std::string CAMERAD_ABORT = "abort";
 const std::string CAMERAD_AUTODIR = "autodir";
 const std::string CAMERAD_BASENAME = "basename";
@@ -35,7 +35,7 @@ const std::string CAMERAD_MEX = "mex";
 const std::string CAMERAD_MEXAMPS = "mexamps";
 const std::string CAMERAD_MODEXPTIME = "modexptime";
 const std::string CAMERAD_NATIVE = "native";
-const std::string CAMERAD_OPEN = "open";
+const std::string CAMERAD_OPEN = "open";  const int CAMERAD_OPEN_TIMEOUT = 10000;
 const std::string CAMERAD_PAUSE = "pause";
 const std::string CAMERAD_PREEXPOSURES = "preexposures";
 const std::string CAMERAD_READOUT = "readout";
@@ -84,5 +84,3 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_USEFRAMES,
                                                   CAMERAD_WRITEKEYS
                                                 };
-
-#endif

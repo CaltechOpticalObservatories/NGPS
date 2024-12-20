@@ -1262,10 +1262,10 @@ namespace Sequencer {
       //
       if ( cmd == SEQUENCERD_SHUTDOWN ) {
                   if ( sock.isasync() ) {
-                    std::thread( std::ref( Sequencer::Sequence::dothread_shutdown ), std::ref( this->sequence ) ).detach();
+                    std::thread( &Sequencer::Sequence::shutdown, std::ref( this->sequence ) ).detach();
                   }
                   else {
-                    ret = this->sequence.shutdown( this->sequence );
+                    ret = this->sequence.shutdown();
                   }
       }
       else

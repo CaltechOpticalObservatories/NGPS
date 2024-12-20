@@ -45,6 +45,15 @@
 namespace Sequencer {
 
   /**
+   * @enum  PowerState
+   * @brief state for controlling network power switch
+   */
+  enum PowerState : size_t {
+    OFF=0,
+    ON=1
+  };
+
+  /**
    * @enum  DaemonBits
    * @brief assigns each subsystem a bit to indicate its state
    */
@@ -369,10 +378,8 @@ namespace Sequencer {
       static void dothread_sequencer_async_listener( Sequencer::Sequence &seq,
                                                      Network::UdpSocket udp ); ///< UDP ASYNC message listening thread
 
-      static void dothread_shutdown( Sequencer::Sequence &seq );
-
       long startup();                                   ///< nightly startup sequence
-      long shutdown( Sequencer::Sequence &seq );        ///< nightly shutdown  sequence
+      long shutdown();                                  ///< nightly shutdown  sequence
 
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
 
@@ -403,11 +410,13 @@ namespace Sequencer {
       void get_external_telemetry();                                ///< collect telemetry from another daemon
       long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
-      long check_power_on( const std::string which, std::chrono::seconds delay );
-      long check_connected( Common::DaemonClient &daemon );
-      long check_connected( Common::DaemonClient &daemon, bool &was_opened );
-      long check_connected( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout );
-      long check_connected( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout, bool &was_opened );
+      long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
+      long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );
+      long open_hardware( Common::DaemonClient &daemon );
+      long open_hardware( Common::DaemonClient &daemon, bool &was_opened );
+      long open_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout );
+      long open_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout, bool &was_opened );
+      long connect_to_daemon( Common::DaemonClient &daemon );
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
@@ -438,15 +447,15 @@ namespace Sequencer {
       long improved_tcs_init();                                         ///< initializes connection to tcsd
       static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
 
-      static void dothread_acam_shutdown( Sequencer::Sequence &seq );          ///< shutdown the acam
-      static void dothread_calib_shutdown( Sequencer::Sequence &seq );         ///< shutdown the calibrator
-      static void dothread_camera_shutdown( Sequencer::Sequence &seq );        ///< shutdown the camera
-      static void dothread_flexure_shutdown( Sequencer::Sequence &seq );       ///< shutdown flexure system
-      static void dothread_focus_shutdown( Sequencer::Sequence &seq );         ///< shutdown focusd
-      static void dothread_power_shutdown( Sequencer::Sequence &seq );         ///< shutdown the power system
-      static void dothread_slicecam_shutdown( Sequencer::Sequence &seq );      ///< shutdown the slicecam
-      static void dothread_slit_shutdown( Sequencer::Sequence &seq );          ///< shutdown slitd
-      static void dothread_tcs_shutdown( Sequencer::Sequence &seq );           ///< shutdown the TCS
+      long acam_shutdown();          ///< shutdown the acam
+      long calib_shutdown();         ///< shutdown the calibrator
+      long camera_shutdown();        ///< shutdown the camera
+      long flexure_shutdown();       ///< shutdown flexure system
+      long focus_shutdown();         ///< shutdown focusd
+      long power_shutdown();
+      long slicecam_shutdown();      ///< shutdown the slicecam
+      long slit_shutdown();          ///< shutdown slitd
+      long tcs_shutdown();           ///< shutdown the TCS
   };
   /***** Sequencer::Sequence **************************************************/
 
