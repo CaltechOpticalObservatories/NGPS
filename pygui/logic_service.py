@@ -77,7 +77,7 @@ class LogicService:
 
             # Define all columns from your table `targets` (based on your schema)
             all_columns = [
-                'OBSERVATION_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 
+                'OBSERVATION_ID', 'SET_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 
                 'RA', 'DECL', 'OFFSET_RA', 'OFFSET_DEC', 'EXPTIME', 'SLITWIDTH', 'SLITOFFSET', 'OBSMODE', 
                 'BINSPECT', 'BINSPAT', 'SLITANGLE', 'AIRMASS_MAX', 'WRANGE_LOW', 'WRANGE_HIGH', 'CHANNEL', 
                 'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
@@ -117,6 +117,10 @@ class LogicService:
                         else:
                             value = None  # Default to NULL for other columns without a defined default
 
+                    # Special case: if `OFFSET_RA` or `OFFSET_DEC` are empty, set them to 0.0
+                    if column in ['OFFSET_RA', 'OFFSET_DEC'] and (value == '' or value is None):
+                        value = 0.0  # Default to 0.0 if empty or None
+
                     # Add the column and value to the query
                     insert_columns.append(column)
                     insert_placeholders.append('%s')
@@ -141,7 +145,7 @@ class LogicService:
             cursor.close()
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
-
+            # Emit the signal after the upload is complete
             self.update_target_table_with_list(target_list=target_set_name)
 
         except mysql.connector.Error as err:
