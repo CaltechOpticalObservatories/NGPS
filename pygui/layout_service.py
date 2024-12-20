@@ -773,6 +773,7 @@ class LayoutService:
         selected_set_name = self.target_list_name.currentText()
 
         if selected_set_name == "Create a new target list":
+            self.target_list_name.clear()
             # Trigger the CSV upload process
             self.create_new_target_list()
         else:
