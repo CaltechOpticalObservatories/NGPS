@@ -384,16 +384,13 @@ class LogicService:
             # Step 3: Handle the data (update the UI, or pass it to another function)
             print(f"Fetched {len(rows)} target sets.")
             # You can process the rows as needed, e.g., updating a table in the UI
-            # self.update_target_table_with_list(rows)
-            
-            # Close the database connection after usage
-            connection.close()
-            return rows
+            self.filter_target_list()
         else:
             print(f"No data found in the {target_sets_table} table.")
         
         # Close the database connection after usage
         connection.close()
+        return 
 
     def filter_target_list(self):
         """
