@@ -15,7 +15,6 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
-        self.set_name = None
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)

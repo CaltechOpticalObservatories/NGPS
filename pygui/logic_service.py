@@ -19,6 +19,7 @@ class LogicService:
         self.all_targets = []
         self.target_list_set = {}
         self.target_list_display = None
+        self.set_name = None
 
     @staticmethod
     def convert_pst_to_utc(datetime):
