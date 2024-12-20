@@ -143,7 +143,7 @@ class LogicService:
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
             # self.load_mysql_and_fetch_target_sets(config_file="config/db_config.ini")
-            self.update_target_table_with_list(target_list=target_set_name)
+            # self.update_target_table_with_list(target_list=target_set_name)
 
         except mysql.connector.Error as err:
             print(f"Error inserting data into MySQL: {err}")

@@ -767,7 +767,7 @@ class LayoutService:
                 # Step 3: Call the logic service to upload the CSV and associate it with a new target set
                 self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
 
-                self.load_target_lists(target_lists=[target_set_name])  # Reload the combo box with the new list and select it
+                self.load_target_lists()  # Reload the combo box with the new list and select it
                 self.target_list_name.setCurrentText(target_set_name)  # Set the newly created target list as selected
 
     def on_target_set_changed(self):
