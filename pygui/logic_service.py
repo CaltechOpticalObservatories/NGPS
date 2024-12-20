@@ -409,15 +409,15 @@ class LogicService:
                 self.set_name = [set_item["SET_NAME"] for set_item in set_data]
 
                 # Step 4: For each SET_ID, fetch the associated rows from the 'targets' table
-                self.all_targets = []
+                all_targets = []
                 for set_id in set_ids:
                     cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
                     targets = cursor.fetchall()
-                    self.all_targets.extend(targets)
+                    all_targets.extend(targets)
 
                 self.parent.layout_service.load_target_lists(self.set_name)
                 self.parent.user_set_data = self.set_data
-                self.update_target_list_table(self.all_targets)
+                self.update_target_list_table(all_targets)
                 cursor.close()
                 
             except mysql.connector.Error as err:
