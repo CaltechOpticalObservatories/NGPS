@@ -1367,7 +1367,7 @@ namespace Sequencer {
       //
       if ( cmd == SEQUENCERD_STATE ) {
                   this->sequence.broadcast_seqstate();
-                  retstring = this->sequence.seqstate_string( this->sequence.seqstate.load() );
+                  retstring = this->sequence.seq_state_manager.get_set_states();
                   ret = NO_ERROR;
       }
       else
@@ -1387,20 +1387,21 @@ namespace Sequencer {
       if ( cmd == SEQUENCERD_PAUSE ) {
                   // Can only pause during an exposure
                   //
-                  if ( this->sequence.seq_state.is_clear( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                  if ( ! this->sequence.seq_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
                     this->sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
                     ret = ERROR;
                   }
                   else
                   // Can't already be paused
                   //
-                  if ( this->sequence.seq_state.is_set( Sequencer::SEQ_PAUSE ) ) {
+                  if ( this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSE ) ) {
                     this->sequence.async.enqueue_and_log( function, "ERROR: already paused" );
                     ret = ERROR;
                   }
                   else {
                     this->sequence.camerad.async( CAMERAD_PAUSE );
-                    this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+//                  probably set these states automatically:
+//                  this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
                     this->sequence.broadcast_seqstate();
                     ret = NO_ERROR;
                   }
@@ -1412,24 +1413,17 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_RESUME ) == 0) {
                       // Can only resume when paused
                       //
-                      if ( this->sequence.seq_state.is_clear( Sequencer::SEQ_PAUSE ) ) {
+                      if ( ! this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSE ) ) {
                         this->sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
                         ret = ERROR;
                       }
                       else {
                         this->sequence.camerad.async( CAMERAD_RESUME );
-                        this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
+//                      probably set these states automatically:
+//                      this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
                         this->sequence.broadcast_seqstate();
                         ret = NO_ERROR;
                       }
-      }
-      else
-
-      // Call TCS Initialization
-      //
-      if ( cmd.compare( SEQUENCERD_TCSINIT ) == 0 ) {
-                      ret = this->sequence.tcs_init( args, retstring );
-                      if ( ! retstring.empty() ) retstring.append( " " );
       }
       else
 
@@ -1468,7 +1462,7 @@ namespace Sequencer {
 
                         // spawn a thread to modify the exposure time
                         //
-                        std::thread( std::ref( Sequencer::Sequence::dothread_modify_exptime ),
+                        std::thread( &Sequencer::Sequence::modify_exptime,
                                      std::ref( this->sequence), exptime_req ).detach();
                         ret = NO_ERROR;
                       }

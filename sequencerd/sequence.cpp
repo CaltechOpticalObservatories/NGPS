@@ -27,49 +27,22 @@ namespace Sequencer {
 
   void Sequence::broadcast_threadstate() {
     logwrite( "Sequencer::Sequence::broadcast_threadstate",
-              "[DEBUG] thread(s) running: "+thread_state_manager.get_set_states() );
+              "thread(s) running: "+thread_state_manager.get_set_states() );
   }
 
-  void Sequence::improved_broadcast_seqstate() {
-    std::cerr << "Sequence::improved_broadcast_seqstate enter\n";
-    std::stringstream message;
-    message << "RUNSTATE: " << seq_state_manager.get_set_states();
-    this->async.enqueue_and_log( "Sequencer::Sequence::improved_broadcast_seqstate", message.str() );
-    std::cerr << "Sequence::improved_broadcast_seqstate return\n";
-  }
 
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
   /**
-   * @brief      writes the seqstate string to the async port
+   * @brief      writes string rep of all set seq state bits to the async port
    * @details    This broadcasts the seqstate as a string with the "RUNSTATE:"
    *             message tag.
    *
    */
   void Sequence::broadcast_seqstate() {
-    std::stringstream message;
-    message << "oldRUNSTATE: " << this->seq_state.get_set_names();
-    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate", message.str() );
-    return;
+    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate",
+                                 "RUNSTATE: "+seq_state_manager.get_set_states() );
   }
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
-
-
-  /***** Sequencer::Sequence::get_reqstate ************************************/
-  /**
-   * @brief      atomically returns the reqstate word
-   * @return     reqstate
-   *
-   */
-  uint32_t Sequence::get_reqstate( ) {
-#ifdef LOGLEVEL_DEBUG
-    const std::string function("Sequencer::Sequence::get_reqstate");
-    std::stringstream message;
-    message.str(""); message << "[DEBUG] reqstate is " << this->reqstate.load();
-    logwrite( function, message.str() );
-#endif
-    return( this->reqstate.load() );
-  }
-  /***** Sequencer::Sequence::get_reqstate ************************************/
 
 
   /***** Sequencer::Sequence::dothread_sequencer_async_listener ***************/
@@ -227,7 +200,7 @@ namespace Sequencer {
 
     // clear the thread error state
     //
-    this->thread_error.clear_all();
+    this->thread_error_manager.clear_all();
 
     this->cancel_flag.store(false);
 
@@ -254,24 +227,24 @@ namespace Sequencer {
       message.str(""); message << "NOTICE: " << targetstatus;
       this->async.enqueue( message.str() );                                 // broadcast target status
 
-      if ( targetstate == TargetInfo::TARGET_FOUND ) {                    // target found, get the threads going
+      if ( targetstate == TargetInfo::TARGET_FOUND ) {                      // target found, get the threads going
 
         // If the TCS is not ready and the target contains TCS coordinates,
         // then we cannot proceed.
         //
-        if ( ! this->daemon_ready.is_set( Sequencer::DAEMON_TCS ) ) {
+        if ( ! this->daemon_manager.is_set( Sequencer::DAEMON_TCS ) ) {
           if ( ! this->target.ra_hms.empty() || ! this->target.dec_dms.empty() ) {
             message.str(""); message << "ERROR cannot move to target " << this->target.name
                                      << " because TCS is not connected";
             this->async.enqueue_and_log( function, message.str() );
-            this->thread_error.set( THR_SEQUENCE_START );                   // report error
+            this->thread_error_manager.set( THR_SEQUENCE_START );           // report error
             break;
           }
         }
 
         error = this->target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
         if (error!=NO_ERROR) {
-          this->thread_error.set( THR_SEQUENCE_START );                     // report any error
+          this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
           break;
         }
 
@@ -401,6 +374,8 @@ namespace Sequencer {
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
       // Start the exposure in a thread...
+      // set the EXPOSE bit here, outside of the trigger_exposure function, because that
+      // function only triggers the exposure -- it doesn't block waiting for the exposure.
       //
       this->seq_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );  // set EXPOSE bit
       auto start_exposure = std::async(std::launch::async, &Sequence::trigger_exposure, this);
@@ -440,9 +415,9 @@ namespace Sequencer {
 
       // Now that we're done waiting, check for errors or abort
       //
-      if ( this->thread_error.is_any_set() ) {
+      if ( this->thread_error_manager.are_any_set() ) {
         message.str(""); message << "ERROR stopping sequencer because the following thread(s) had an error: "
-                                 << this->thread_error.get_set_names();
+                                 << this->thread_error_manager.get_set_states();
         logwrite( function, message.str() );
         break;
       }
@@ -456,7 +431,7 @@ namespace Sequencer {
       //
       error = this->target.update_state( Sequencer::TARGET_COMPLETE );       // update the active target table
       if (error==NO_ERROR) error = this->target.insert_completed();          // insert into the completed table
-      if (error!=NO_ERROR) this->thread_error.set( THR_SEQUENCE_START );     // report any error
+      if (error!=NO_ERROR) this->thread_error_manager.set( THR_SEQUENCE_START );     // report any error
 
       // let the world know of the state change
       //
@@ -473,12 +448,12 @@ namespace Sequencer {
 
     } // end while true
 
-    if ( this->thread_error.is_any_set() ) {
+    if ( this->thread_error_manager.are_any_set() ) {
       logwrite( function, "requesting stop because an error was detected" );
       if ( this->target.get_next( Sequencer::TARGET_ACTIVE, targetstatus ) == TargetInfo::TARGET_FOUND ) {  // If this target was flagged as active,
         this->target.update_state( Sequencer::TARGET_UNASSIGNED );                                          // then change it to unassigned on error.
       }
-      this->thread_error.clear_all();     // clear the thread error state
+      this->thread_error_manager.clear_all();     // clear the thread error state
       this->do_once.store(true);
     }
 
@@ -502,6 +477,7 @@ namespace Sequencer {
     std::stringstream camcmd;
 
     ScopedState thr_state( Sequencer::THR_CAMERA_SET, thread_state_manager );
+    ScopedState seq_state( Sequencer::SEQ_WAIT_CAMERA, seq_state_manager );
 
     // send the EXPTIME command to camerad
     //
@@ -515,7 +491,7 @@ namespace Sequencer {
 
     if ( this->camerad.send( camcmd.str(), reply ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR setting exptime" );
-      this->thread_error.set( THR_CAMERA_SET );
+      this->thread_error_manager.set( THR_CAMERA_SET );
       return ERROR;
     }
 
@@ -545,7 +521,7 @@ namespace Sequencer {
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR setting slit" );
-      this->thread_error.set( THR_SLIT_SET );
+      this->thread_error_manager.set( THR_SLIT_SET );
       return ERROR;
     }
 
@@ -597,7 +573,7 @@ namespace Sequencer {
     this->powerd.disconnect();
 
     // set this as not ready
-    this->daemon_ready.clear( Sequencer::DAEMON_POWER );
+    this->daemon_manager.clear( Sequencer::DAEMON_POWER );
 
     return NO_ERROR;
   }
@@ -872,7 +848,7 @@ namespace Sequencer {
     this->acamd.disconnect();
 
     // Turn off power to acam hardware.
-    // Any error here is added to thread_error.
+    // Any error here is added to thread_error_manager.
     //
     if ( this->set_power_switch(OFF, POWER_ACAM, std::chrono::seconds(0)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR switching off acam" );
@@ -885,7 +861,7 @@ namespace Sequencer {
 
     // set this thread's error status
     //
-    if (error!=NO_ERROR) this->thread_error.set( THR_ACAM_SHUTDOWN );
+    if (error!=NO_ERROR) this->thread_error_manager.set( THR_ACAM_SHUTDOWN );
 
     return error;
   }
@@ -917,7 +893,7 @@ namespace Sequencer {
     if ( this->open_hardware(this->calibd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing calib control" );
       this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
-      this->thread_error.set( THR_CALIB_INIT );
+      this->thread_error_manager.set( THR_CALIB_INIT );
       return ERROR;
     }
 
@@ -992,23 +968,32 @@ namespace Sequencer {
 
     // set this thread's error status
     //
-    if (error!=NO_ERROR) this->thread_error.set( THR_CALIB_SHUTDOWN );
+    if (error!=NO_ERROR) this->thread_error_manager.set( THR_CALIB_SHUTDOWN );
 
     return error;
   }
   /***** Sequencer::Sequence::calib_shutdown **********************************/
 
 
-  long Sequence::improved_tcs_init() {
+  /***** Sequencer::Sequence::tcs_init ****************************************/
+  /**
+   * @brief      initializes the tcs system for control from the Sequencer
+   * @details    This opens a connection to tcsd, then instructs tcsd to open
+   *             a connection to the TCS. The default TCS is opened, as specified
+   *             in the tcsd config file.
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Sequence::tcs_init() {
     ScopedState thr_state(Sequencer::THR_TCS_INIT, thread_state_manager);
     ScopedState seq_state( Sequencer::SEQ_WAIT_TCS, seq_state_manager );
 
     this->daemon_manager.clear( Sequencer::DAEMON_TCS );
 
     if ( this->open_hardware(this->tcsd) != NO_ERROR ) {
-      this->async.enqueue_and_log( "Sequencer::Sequence::improved_tcs_init", "ERROR initializing TCS" );
+      this->async.enqueue_and_log( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
       this->daemon_manager.clear( Sequencer::DAEMON_TCS );
-      this->thread_error.set( THR_TCS_INIT );
+      this->thread_error_manager.set( THR_TCS_INIT );
       return ERROR;
     }
 
@@ -1016,131 +1001,7 @@ namespace Sequencer {
 
     return NO_ERROR;
   }
-
-  /***** Sequencer::Sequence::dothread_tcs_init *******************************/
-  /**
-   * @brief      initializes the tcs system for control from the Sequencer
-   * @param[in]  seq    reference to Sequencer::Sequence object
-   * @param[in]  which  which TCS to initialize, real|sim. Check-only if empty.
-   *
-   * @details    If the "which" parameter is empty then this thread cannot
-   *             actually initialize the TCS but will only check if it has
-   *             already been initialized. Successful initialization requires
-   *             that the which param has been specified {real|sim} to indicate
-   *             which TCS device to initialize.
-   *
-   *             The named devices {real,sim} must have been defined in the
-   *             configuration file.
-   *
-   */
-  void Sequence::dothread_tcs_init( Sequencer::Sequence &seq, std::string which ) {
-    const std::string function("Sequencer::Sequence::dothread_tcs_init");
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    bool isconnected=false;  // are we connected to tcsd?
-    bool isopen=false;       // has tcsd opened a connection to the TCS?
-
-    ScopedState thr_state(Sequencer::THR_TCS_INIT, seq.thread_state_manager);
-
-    // Check if connected to the tcs daemon
-    //
-    if ( !seq.tcsd.socket.isconnected() ) {
-      logwrite( function, "not connected to tcs daemon" );
-      seq.async.enqueue( "TCSD:isopen:false" );            // added here for consistency
-
-      if ( ! which.empty() ) {
-        logwrite( function, "connecting to tcs daemon" );
-        error = seq.tcsd.connect();                        // connect to the daemon
-        if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: connecting to tcs daemon" );
-        else isconnected = true;
-      }
-    }
-    else {
-      isconnected = true;
-      logwrite( function, "connected to tcsd" );
-    }
-
-    // Ask tcsd if hardware connection is open.
-    // The response will be "name|false|ERROR" where name is the name of the TCS device
-    // if connected to that device.
-    //
-    if ( error == NO_ERROR && isconnected ) {
-      error = seq.tcsd.send( TCSD_ISOPEN, reply );
-      if ( error != ERROR && reply.find( "false" ) != std::string::npos ) isopen = false;
-      else
-      if ( error != ERROR && reply.find( "ERROR" ) != std::string::npos ) {
-        isopen = false;
-        error = ERROR;
-        logwrite( function, "no connection open to TCS" );
-      }
-      else if ( error != ERROR ) {
-        // if the currently opened device is not the requested device then close it
-        //
-        if ( reply != which ) {
-          error = seq.tcsd.send( TCSD_CLOSE, reply );
-          isopen = false;
-          message.str(""); message << "closed connection to TCS " << reply;
-          logwrite( function, message.str() );
-        }
-        else {
-          isopen = true;
-          message.str(""); message << "connection open to TCS " << which;
-          logwrite( function, message.str() );
-        }
-      }
-      if ( error != NO_ERROR ) seq.async.enqueue_and_log( function, "ERROR: communicating with TCS" );
-    }
-
-    // and open it if necessary.
-    //
-    // This will only be attempted if the "which" param is supplied.
-    // Note that the contents of "which" are not checked here, that is left
-    // for tcsd to check -- he knows best.
-    //
-    if ( error==NO_ERROR && !which.empty() && !isopen ) {
-      message.str(""); message << "connecting to " << which << " TCS hardware";
-      logwrite( function, message.str() );
-      std::stringstream opencmd;
-      opencmd << TCSD_OPEN << " " << which;
-      error = seq.tcsd.send( opencmd.str(), reply );
-      if ( error != NO_ERROR ) {
-        message.str(""); message << "ERROR:connecting to " << which << " TCS hardware";
-        seq.async.enqueue_and_log( function, message.str() );
-      }
-      else isopen = true;  // don't need to ask again because if TCSD_OPEN returned no error then it's open
-    }
-
-    // set the offset rates
-    //
-    if ( error==NO_ERROR && isconnected && isopen && !which.empty() ) {
-      message.str(""); message << TCSD_OFFSETRATE << " " << seq.tcs_offsetrate_ra << " " << seq.tcs_offsetrate_dec;
-      error  = seq.tcsd.send( message.str(), reply );
-    }
-
-    // atomically set thread_error so the main thread knows we had an error
-    //
-    if ( error != NO_ERROR ) {
-      if ( which.empty() ) seq.async.enqueue_and_log( function, "ERROR:reading TCS initialization state" );
-      else                 seq.async.enqueue_and_log( function, "ERROR:unable to initialize TCS control" );
-      seq.thread_error.set( THR_TCS_INIT );
-    }
-
-    // Allowing clearing the SEQ_WAIT_TCS bit when connected and open.
-    //
-    if ( isconnected && isopen ) {
-      seq.tcs_name = which;
-      seq.seq_state.clear( Sequencer::SEQ_WAIT_TCS );
-      seq.broadcast_seqstate();
-      message.str(""); message << which << " TCS is initialized";
-      logwrite( function, message.str() );
-      seq.daemon_ready.set( Sequencer::DAEMON_TCS );           // ready
-      seq.cv.notify_all();
-    }
-
-    return;
-  }
-  /***** Sequencer::Sequence::dothread_tcs_init *******************************/
+  /***** Sequencer::Sequence::tcs_init ****************************************/
 
 
   /***** Sequencer::Sequence::tcs_shutdown ************************************/
@@ -1266,7 +1127,7 @@ namespace Sequencer {
 
     // set this system as not ready
     //
-    this->daemon_ready.clear( Sequencer::DAEMON_FLEXURE );
+    this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );
 
     return NO_ERROR;
   }
@@ -1500,7 +1361,7 @@ namespace Sequencer {
       if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
       message << " to decimal";
       this->async.enqueue_and_log( function, message.str() );
-      this->thread_error.set( THR_MOVE_TO_TARGET );
+      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
       return ERROR;
     }
 
@@ -1549,7 +1410,7 @@ namespace Sequencer {
     if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
       message.str(""); message << "ERROR: sending COORDS command. TCS reply: " << coords_reply;
       this->async.enqueue_and_log( function, message.str() );
-      this->thread_error.set( THR_MOVE_TO_TARGET );
+      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
       return ERROR;
     }
 
@@ -1563,7 +1424,7 @@ namespace Sequencer {
     if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {     // if not success then report error
       message.str(""); message << "ERROR: sending RINGGO command. TCS reply: " << ringgo_reply;
       this->async.enqueue_and_log( function, message.str() );
-      this->thread_error.set( THR_MOVE_TO_TARGET );
+      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
       return ERROR;
     }
 
@@ -1643,7 +1504,7 @@ namespace Sequencer {
         if ( std::isnan( radec_to_decimal( seq.target.ra_hms,  ra_hms  ) ) ||
              std::isnan( radec_to_decimal( seq.target.dec_dms, dec_dms ) ) ) {
           seq.async.enqueue_and_log( function, "ERROR: can't handle NaN value for RA, DEC" );
-          seq.thread_error.set( THR_NOTIFY_TCS );
+          seq.thread_error_manager.set( THR_NOTIFY_TCS );
           return;
         }
 
@@ -1908,7 +1769,7 @@ namespace Sequencer {
     // Send the EXPOSE command to camera daemon on the non-blocking port and don't wait for reply
     if ( this->camerad.async( CAMERAD_EXPOSE ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR sending command: CAMERAD_EXPOSE" );
-      this->thread_error.set( THR_TRIGGER_EXPOSURE );                    // tell the world this thread had an error
+      this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
       this->seq_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );       // clear EXPOSE bit
       this->arm_readout_flag = false;                                    // disarm async_listener from looking for readout
@@ -1922,29 +1783,29 @@ namespace Sequencer {
   /***** Sequencer::Sequence::trigger_exposure ********************************/
 
 
-  /***** Sequencer::Sequence::dothread_modify_exptime *************************/
+  /***** Sequencer::Sequence::modify_exptime **********************************/
   /**
    * @brief      modify the exposure time while an exposure is running
-   * @param[in]  seq  reference to Sequencer::Sequence object
+   * @param[in]  exptime_in  requested exposure time in seconds
    *
    * Since there is no process that will need to wait on the success or failure of this
    * thread, but the success or failure might need to be known by a GUI, the results
    * will be broadcast to the asynchronous message port.
    *
    */
-  void Sequence::dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in ) {
-    const std::string function("Sequencer::Sequence::dothread_modify_exptime");
+  void Sequence::modify_exptime( double exptime_in ) {
+    const std::string function("Sequencer::Sequence::modify_exptime");
     std::stringstream message;
     std::string reply="";
     long error = NO_ERROR;
     double updated_exptime=0;
 
-    ScopedState thr_state(Sequencer::THR_MODIFY_EXPTIME, seq.thread_state_manager);
+    ScopedState thr_state(Sequencer::THR_MODIFY_EXPTIME, this->thread_state_manager);
 
     // This function is only used while exposing
     //
-    if ( ! seq.seq_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-      seq.async.enqueue_and_log( function, "ERROR cannot update exposure time when not currently exposing" );
+    if ( ! this->seq_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+      this->async.enqueue_and_log( function, "ERROR cannot update exposure time when not currently exposing" );
       error = ERROR;
     }
 
@@ -1953,7 +1814,7 @@ namespace Sequencer {
     //
     std::stringstream cmd;
     cmd << CAMERAD_MODEXPTIME << " " << (long)(1000*exptime_in);
-    if ( error==NO_ERROR ) error = seq.camerad.async( cmd.str(), reply );
+    if ( error==NO_ERROR ) error = this->camerad.async( cmd.str(), reply );
 
     // Reply from camera will contain DONE or ERROR
     //
@@ -1964,19 +1825,19 @@ namespace Sequencer {
     else error = ERROR;
 
     if ( error==NO_ERROR ) {
-      seq.target.exptime_req = updated_exptime;
+      this->target.exptime_req = updated_exptime;
       message.str(""); message << "successfully updated exptime to " << updated_exptime << " sec";
       logwrite( function, message.str() );
     }
 
     // announce the success or failure in an asynchronous broadcast message
     //
-    message.str(""); message << "MODIFY_EXPTIME: " << seq.target.exptime_req << ( error==NO_ERROR ? " DONE" : " ERROR" );
-    seq.async.enqueue( message.str() );
+    message.str(""); message << "MODIFY_EXPTIME: " << this->target.exptime_req << ( error==NO_ERROR ? " DONE" : " ERROR" );
+    this->async.enqueue( message.str() );
 
     return;
   }
-  /***** Sequencer::Sequence::dothread_modify_exptime *************************/
+  /***** Sequencer::Sequence::modify_exptime **********************************/
 
 
   /***** Sequencer::Sequence::dothread_acquisition ****************************/
@@ -2017,7 +1878,7 @@ namespace Sequencer {
       if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
       message << " to decimal";
       this->async.enqueue_and_log( function, message.str() );
-      this->thread_error.set( THR_MOVE_TO_TARGET );
+      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
       return;
     }
 
@@ -2049,7 +1910,7 @@ namespace Sequencer {
 
 /***** DONT CARE ABOUT ERRORS NOW -- NO CONDITION ON ACQ SUCCESS 
     if ( error != NO_ERROR ) {
-      this->thread_error.set( THR_ACQUISITION );                       // report error
+      this->thread_error_manager.set( THR_ACQUISITION );               // report error
       message.str(""); message << "ERROR acquiring target";
       this->async.enqueue_and_log( function, message.str() );
       this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );            // clear ACQUIRE bit
@@ -2068,7 +1929,7 @@ namespace Sequencer {
     } catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing timeout \"" << reply << "\" from acam: " << e.what();
       logwrite( function, message.str() );
-      this->thread_error.set( THR_ACQUISITION );                       // report any error
+      this->thread_error_manager.set( THR_ACQUISITION );               // report any error
       return;
     }
 
@@ -2096,12 +1957,12 @@ namespace Sequencer {
     // set message
     //
     if ( std::chrono::steady_clock::now() >= timeout_time ) {        // Timeout
-      this->thread_error.set( THR_ACQUISITION );
+      this->thread_error_manager.set( THR_ACQUISITION );
       message.str(""); message << "ERROR failed to acquire within timeout";
     }
     else
     if ( error!=NO_ERROR ) {                                         // Error polling
-      this->thread_error.set( THR_ACQUISITION );
+      this->thread_error_manager.set( THR_ACQUISITION );
       message.str(""); message << "ERROR acquiring target";
     }
     else {                                                           // Success
@@ -2130,7 +1991,7 @@ namespace Sequencer {
     ScopedState thread_state( Sequencer::THR_STARTUP, thread_state_manager );
     ScopedState seq_state( Sequencer::SEQ_STARTING, seq_state_manager );
 
-    this->thread_error.clear_all();     // clear the thread error state
+    this->thread_error_manager.clear_all();     // clear the thread error state
 
     this->cancel_flag.store(false);
 
@@ -2148,7 +2009,7 @@ namespace Sequencer {
       { THR_FLEXURE_INIT, std::bind(&Sequence::flexure_init, this) },
       { THR_FOCUS_INIT,   std::bind(&Sequence::focus_init, this)   },
       { THR_SLIT_INIT,    std::bind(&Sequence::slit_init, this)    },
-      { THR_TCS_INIT,     std::bind(&Sequence::improved_tcs_init, this)     }
+      { THR_TCS_INIT,     std::bind(&Sequence::tcs_init, this)     }
     };
 
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
@@ -2224,7 +2085,7 @@ namespace Sequencer {
 
     // clear the thread error state
     //
-    this->thread_error.clear_all();
+    this->thread_error_manager.clear_all();
 
     this->cancel_flag.store(false);
 
@@ -2466,30 +2327,6 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::parse_tcs_generic *******************************/
-
-
-  /***** Sequencer::Sequence::seqstate_string *********************************/
-  /**
-   * @brief      returns the string form of the states set in state word
-   * @param[in]  state  word to check
-   * @return     string
-   *
-   * This function serves only to make human-readable strings of the bits set
-   * in the seqstate word.
-   *
-   */
-  std::string Sequence::seqstate_string( uint32_t state ) {
-    if ( state == 0 ) return "(none)";                     // no bits set
-    std::stringstream message;
-    for ( auto bit : this->sequence_state_bits ) {         // loop through all of the bits in the vector of bits
-      if ( (1<<bit) & state ) {                            // if that bit is set in state then
-        if ( not message.str().empty() ) message << " ";
-        message << this->sequence_states[ bit ];           // get the string associated with that bit
-      }
-    }
-    return( message.str() );
-  }
-  /***** Sequencer::Sequence::seqstate_string *********************************/
 
 
   /***** Sequencer::Sequence::dotype ******************************************/
@@ -2776,82 +2613,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::get_tcs_cass ************************************/
 
 
-  /***** Sequencer::Sequence::tcs_init ****************************************/
-  /**
-   * @brief      initialize the specified tcs device
-   * @param[in]  which      optional string indicates what to do {real|sim|shutdown}
-   * @param[out] retstring  return string
-   * @return     ERROR | NO_ERROR | HELP
-   *
-   * @details    This function spawns the dothread_tcs_init thread with a
-   *             parameter to specify which TCS device to use {real|sim}, in
-   *             order to initialize the named TCS.
-   *
-   *             Error checking the contents of that parameter are left to tcsd.
-   *
-   *             Supplying the parameter "shutdown" will invoke the tcs_shutdown thread.
-   *
-   */
-  long Sequence::tcs_init( const std::string which, std::string &retstring ) {
-    const std::string function("Sequencer::Sequence::tcs_init");
-    std::stringstream message;
-
-    if ( which=="?" || which=="help" ) {
-      retstring = SEQUENCERD_TCSINIT;
-      retstring.append( " [ real | sim | shutdown ]\n" );
-      retstring.append( "   Initialize the specified TCS, which takes place in a separate thread.\n" );
-      retstring.append( "   real      Connect to and initialize the real P200 TCS.\n" );
-      retstring.append( "   sim       Connect to and initialize the TCS emulator.\n" );
-      retstring.append( "   shutdown  Begin the TCS shutdown sequence.\n" );
-      retstring.append( "   If no argument is supplied then the name of the currently connected TCS\n" );
-      retstring.append( "   is returned, if connected.\n" );
-      return HELP;
-    }
-
-    bool is_initing  = this->thread_state_manager.is_set( THR_TCS_INIT );               // tcs_init thread already running
-    bool is_shutting = this->thread_state_manager.is_set( THR_TCS_SHUTDOWN );           // tcs_shutdown thread already running
-
-message.str(""); message << "[DEBUG]"
-                         << " THR_TCS_INIT=" << THR_TCS_INIT
-                         << " is_initing=" << is_initing
-                         << " THR_TCS_SHUTDOWN=" << THR_TCS_SHUTDOWN
-                         << " is_shutting=" << is_shutting;
-logwrite( function, message.str() );
-
-    if ( which.empty() ) {
-      if ( ! this->tcsd.socket.isconnected() ) {
-        logwrite( function, "not connected to tcs daemon" );
-        retstring="not_connected";
-        return NO_ERROR;
-      }
-      return( this->tcsd.send( TCSD_GET_NAME, retstring ) );
-    }
-
-    if ( is_initing || is_shutting ) {                                          // only allow one init|shutdown thread at a time
-      message.str("");
-      message << "ERROR:TCS " << ( is_initing ? "initialization" : "shutdown" ) << " is already in progress";
-      logwrite( function, message.str() );
-      retstring = ( is_initing ? "init" : "shutdown" );
-      retstring.append( "_in_progress" );
-      return ERROR;
-    }
-    else {
-      if ( which.compare( 0, strlen( "shutdown" ), "shutdown" ) == 0 ) {
-        std::thread( &Sequencer::Sequence::tcs_shutdown, this ).detach();         // spawn the shutdown thread here
-      }
-      else {
-        if ( !which.empty() ) {
-          this->seq_state.set( Sequencer::SEQ_WAIT_TCS );                       // only set the WAIT bit if a device was specified
-          logwrite( function, "TCS initialization started" );
-        }
-        std::thread( dothread_tcs_init, std::ref(*this), which ).detach();      // spawn the tcs_init thread here
-      }
-      return NO_ERROR;
-    }
-  }
-  /***** Sequencer::Sequence::tcs_init ****************************************/
-
-
   /***** Sequencer::Sequence::target_offset ***********************************/
   /**
    * @brief      performs target offset
@@ -2894,7 +2655,7 @@ logwrite( function, message.str() );
 
     // fill telemetry message only when READY or RUNNING
     //
-    if ( this->seq_state.is_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
+    if ( this->seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
       // Store unconfigured values as NAN.
       // NAN values are not logged to the database.
       //
@@ -3150,6 +2911,19 @@ logwrite( function, message.str() );
     return open_hardware( daemon, opencmd, opentimeout, dontcare );
   }
 
+
+  /***** Sequencer::Sequence::open_hardware ***********************************/
+  /**
+   * @brief      open connection to hardware managed by named daemon
+   * @details    If neccessary, a connection to the daemon is first established.
+   *             No actions are taken if already open.
+   * @param[in]  daemon       daemon client object
+   * @param[in]  opencmd      open command to send to daemon
+   * @param[in]  opentimeout  timeout in msec for opencmd
+   * @param[out] was_opened   reference to return if this function had to open
+   * @return     ERROR | NO_ERROR
+   *
+   */
   long Sequence::open_hardware( Common::DaemonClient &daemon,
                                 const std::string opencmd, const int opentimeout,
                                 bool &was_opened ) {
@@ -3187,8 +2961,17 @@ logwrite( function, message.str() );
 
     return NO_ERROR;
   }
+  /***** Sequencer::Sequence::open_hardware ***********************************/
 
 
+  /***** Sequencer::Sequence::connect_to_daemon *******************************/
+  /**
+   * @brief      open connection named daemon if not already open
+   * @details    This allows the sequencer to communicate with the daemon.
+   * @param[in]  daemon  daemon client object
+   * @return     ERROR | NO_ERROR
+   *
+   */
   long Sequence::connect_to_daemon( Common::DaemonClient &daemon ) {
     const std::string function("Sequencer::Sequence::connect_to_daemon");
 
@@ -3205,6 +2988,7 @@ logwrite( function, message.str() );
 
     return NO_ERROR;
   }
+  /***** Sequencer::Sequence::connect_to_daemon *******************************/
 
 
   /***** Sequencer::Sequence::test ********************************************/
@@ -3306,84 +3090,6 @@ logwrite( function, message.str() );
     else
 
     // ----------------------------------------------------
-    // setstate -- set any state
-    // ----------------------------------------------------
-    //
-    if ( testname == "setstate" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test setstate\n";
-        retstring.append( "  set any seq_state.\n" );
-        return HELP;
-      }
-      else
-      if ( tokens.size() > 1 && tokens[1] == "READY" ) {
-        this->seq_state.set( Sequencer::SEQ_READY );
-        return NO_ERROR;
-      }
-      else {
-        logwrite( function, "ERROR excpected { READY }" );
-        return ERROR;
-      }
-    }
-    else
-
-    // ----------------------------------------------------
-    // cancel -- cancel pending states
-    // ----------------------------------------------------
-    //
-    if ( testname == "cancel" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test cancel\n";
-        retstring.append( "  Cancel pending wait seq_states.\n" );
-        return HELP;
-      }
-
-      message.str(""); message << "seq_state bits pending before: " << this->seq_state.get_pending_names();
-      logwrite( function, message.str() );
-      message.str(""); message << "seq_state bits set before: " << this->seq_state.get_set_names();
-      logwrite( function, message.str() );
-
-      this->seq_state.cancel_wait();                // cancels all waiting threads and resets all pending bits
-      this->seq_state.set( Sequencer::SEQ_READY );  // return to READY state
-      this->broadcast_seqstate();
-      try {
-        this->seq_state.wait_for_state_set( Sequencer::SEQ_READY );
-      }
-      catch ( std::exception & ) {
-        this->async.enqueue_and_log( function, "NOTICE: all states cancelled" );
-      }
-
-      message.str(""); message << "seq_state bits pending after:  " << this->seq_state.get_pending_names();
-      logwrite( function, message.str() );
-      message.str(""); message << "seq_state bits set after:  " << this->seq_state.get_set_names();
-      logwrite( function, message.str() );
-
-//    logwrite( function, "force clear all states" );
-//    this->seq_state.clear_all();
-//    this->req_state.clear_all();
-//    this->broadcast_seqstate();
-    }
-    else
-
-    // ----------------------------------------------------
-    // pending -- show state bits pending
-    // ----------------------------------------------------
-    //
-    if ( testname == "pending" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test pending\n";
-        retstring.append( "  Show state bits pending\n" );
-        return HELP;
-      }
-
-      message.str(""); message << "seq_state bits pending: " << this->seq_state.get_pending_names();
-      logwrite( function, message.str() );
-
-      retstring = message.str();
-    }
-    else
-
-    // ----------------------------------------------------
     // prologue -- show the camera prologue commands
     // ----------------------------------------------------
     //
@@ -3403,7 +3109,7 @@ logwrite( function, message.str() );
     else
 
     // ----------------------------------------------------
-    // isready -- show the daemon_ready word
+    // isready -- show the daemon_manager word
     // ----------------------------------------------------
     //
     if ( testname == "isready" ) {
@@ -3416,11 +3122,11 @@ logwrite( function, message.str() );
       // write to the log (textually) which bits are set
       //
       retstring.clear();
-      message.str(""); message << "NOTICE: daemons ready: " << this->daemon_ready.get_set_names();
+      message.str(""); message << "NOTICE: daemons ready: " << this->daemon_manager.get_set_states();
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_ready.get_clear_names();
+      message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 
@@ -3438,9 +3144,16 @@ logwrite( function, message.str() );
         retstring.append( "  Set only the camera according to the parameters in the target row.\n" );
         return HELP;
       }
-      this->seq_state.set( Sequencer::SEQ_WAIT_CAMERA );                   // set the current state
-      this->broadcast_seqstate();
-      std::thread( &Sequencer::Sequence::camera_set, this ).detach();        // set camera in a thread
+      // launch thread and wait for it to return
+      auto cameraset = std::async(std::launch::async, &Sequence::camera_set, this);
+      try {
+        error = cameraset.get();
+      }
+      catch (const std::exception& e) {
+        logwrite( function, "ERROR camera_set exception: "+std::string(e.what()) );
+        return ERROR;
+      }
+      return error;
     }
     else
 
@@ -4093,26 +3806,14 @@ logwrite( function, message.str() );
         std::thread( isinit ? &Sequencer::Sequence::slit_init : &Sequencer::Sequence::slit_shutdown, this ).detach();
       }
       else
-      if ( tokens[1] == "tcs" && tokens.size()==3 ) {
-        if ( tokens.size() == 3 ) this->tcs_init( tokens[2], retstring );
-        else {
-          logwrite( function, "ERROR missing tcs type { real sim }" );
-          return ERROR;
-        }
-      }
-      else
       if ( tokens[1] == "tcs" ) {
-//      std::thread( isinit ? dothread_slit_init : dothread_slit_shutdown, std::ref(*this) ).detach();
-        std::thread( &Sequencer::Sequence::improved_tcs_init, this ).detach();
+        std::thread( isinit ? &Sequencer::Sequence::tcs_init : &Sequencer::Sequence::tcs_shutdown, this ).detach();
       }
-/*
       else {
-        message.str(""); message << "ERROR invalid module \"" << tokens[1] << "\". expected power|acam|calib|camera|flexure|focus|slicecam|slit|tcs <which>";
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR invalid module \""+tokens[1]+"\"" );
         retstring="invalid_argument";
-        return( ERROR );
+        return ERROR;
       }
-      */
 
       message.str(""); message << "started " << tokens[1] << " module";
       logwrite( function, message.str() );

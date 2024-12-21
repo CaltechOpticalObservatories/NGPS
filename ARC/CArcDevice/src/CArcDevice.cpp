@@ -1525,6 +1525,11 @@ namespace arc
 				THROW( "(arc::gen3::CArcDevice::expose) Start exposure command failed. Reply: 0x%X", uiRetVal );
 			}
 
+      // reduce the number of PixelCount callbacks by this factor
+      //
+      const int throttle_pixelcount_callbacks=100;
+      int callback_count = throttle_pixelcount_callbacks;
+
 			while ( uiPixelCount < ( uiRows * uiCols ) )
 			{
 				if ( isReadout() )
@@ -1612,9 +1617,10 @@ namespace arc
 					THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 				}
 
-				if ( bInReadout && pCooExpIFace != nullptr )
+				if ( bInReadout && pCooExpIFace != nullptr && --callback_count==0 )
 				{
 					pCooExpIFace->readCallback( 0, devnum, uiPixelCount, uiRows*uiCols );
+          callback_count = throttle_pixelcount_callbacks;
 				}
 
 				if ( bAbort )

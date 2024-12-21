@@ -27,7 +27,6 @@ const std::string SEQUENCERD_STATE      = "state";
 const std::string SEQUENCERD_STOP       = "stop";
 const std::string SEQUENCERD_TARGETSET  = "targetset";
 const std::string SEQUENCERD_TARGETOFFSET  = "targetoffset";
-const std::string SEQUENCERD_TCSINIT    = "tcsinit";
 const std::string SEQUENCERD_TEST       = "test";
 
 const std::string SEQUENCERD_ACAM       = "acam";
@@ -67,7 +66,6 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_STOP,
                                                      SEQUENCERD_TARGETSET+" [ <targetid> | <targetname> ]",
                                                      SEQUENCERD_TARGETOFFSET,
-                                                     SEQUENCERD_TCSINIT+" [real|sim|shutdown]",
                                                      SEQUENCERD_TEST+" ? | <testname> ..."
                                                    };
 #endif

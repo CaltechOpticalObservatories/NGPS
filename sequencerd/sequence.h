@@ -48,7 +48,7 @@ namespace Sequencer {
    * @enum  PowerState
    * @brief state for controlling network power switch
    */
-  enum PowerState : size_t {
+  enum PowerState : int {
     OFF=0,
     ON=1
   };
@@ -268,11 +268,9 @@ namespace Sequencer {
           do_once(false),
           tcs_which("real"),
           tcs_name("offline") {
-            seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { improved_broadcast_seqstate(); });
+            seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_seqstate(); });
             thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { broadcast_threadstate(); });
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
-            seq_state.set( Sequencer::SEQ_OFFLINE );
-            req_state.set( Sequencer::SEQ_OFFLINE );
             seq_state_manager.set(Sequencer::SEQ_NOTREADY);
           }
 
@@ -317,17 +315,10 @@ namespace Sequencer {
       std::mutex seqstate_mtx;
       std::condition_variable seqstate_cv;
 
-      StateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state{ Sequencer::seq_state_names };
-      StateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    req_state{ Sequencer::seq_state_names };
-      StateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error{ Sequencer::thread_names };
-      StateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_ready{ Sequencer::daemon_names };
-
-      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)> seq_state_manager{Sequencer::seq_state_names};
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error_manager{ Sequencer::thread_names };
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state_manager{Sequencer::seq_state_names};
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state_manager{ Sequencer::thread_names };
-      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>    daemon_manager{ Sequencer::daemon_names };
-
-      std::atomic<std::uint32_t> seqstate;           ///< word to define the current state of a sequence
-      std::atomic<std::uint32_t> reqstate;           ///< the currently requested state (not necc. current)
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_manager{ Sequencer::daemon_names };
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
@@ -369,7 +360,6 @@ namespace Sequencer {
       void broadcast_daemonstate();             ///<
       void broadcast_threadstate();             ///<
       void broadcast_seqstate();                ///< writes the seqstate string to the async port
-      void improved_broadcast_seqstate();       ///< writes the seqstate string to the async port
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -403,7 +393,6 @@ namespace Sequencer {
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
-      long tcs_init( const std::string which, std::string &retstring );  ///< initialize the specified tcs device
       long target_offset();
 
       void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
@@ -423,7 +412,7 @@ namespace Sequencer {
       void abort_process();          ///< tries to abort everything
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
-      static void dothread_modify_exptime( Sequencer::Sequence &seq, double exptime_in );  ///< modify exptime while exposure running
+      void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
       void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
       void dothread_test();
@@ -444,8 +433,7 @@ namespace Sequencer {
       long power_init();                                       ///< initializes connection to powerd
       long slicecam_init();                                    ///< initializes connection to slicecamd
       long slit_init();                                        ///< initializes connection to slitd
-      long improved_tcs_init();                                         ///< initializes connection to tcsd
-      static void dothread_tcs_init( Sequencer::Sequence &seq, std::string which ); ///< initializes connection to tcsd
+      long tcs_init();                                         ///< initializes connection to tcsd
 
       long acam_shutdown();          ///< shutdown the acam
       long calib_shutdown();         ///< shutdown the calibrator

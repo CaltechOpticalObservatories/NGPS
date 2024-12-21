@@ -573,6 +573,13 @@ class ImprovedStateManager {
       }
       notify();
     }
+    void clear_all() {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits.reset();
+      }
+      notify();
+    }
     void set_and_clear( std::initializer_list<size_t> setbits, std::initializer_list<size_t> clrbits ) {
       {
       std::lock_guard<std::mutex> lock(mtx);
@@ -589,6 +596,15 @@ class ImprovedStateManager {
     bool are_set( B... bits ) const {
       std::lock_guard<std::mutex> lock(mtx);
       return ( state_bits.test(bits) && ... );
+    }
+    template <typename... B>
+    bool are_any_set( B... bits ) const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return ( state_bits.test(bits) || ... );
+    }
+    bool are_any_set() const {
+      std::lock_guard<std::mutex> lock(mtx);
+      return state_bits.any();
     }
     bool are_all_set() const {
       std::lock_guard<std::mutex> lock(mtx);
