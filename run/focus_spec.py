@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
-rcParams.update({'font.size': 14})
+rcParams.update({'font.size': 12})
 
 import argparse, sys
 import numpy as np
@@ -31,6 +31,9 @@ parser = argparse.ArgumentParser(  # Make printed help text wider
 
 help = 'List of filenames or regexes (multi-extension FITS)'
 parser.add_argument('flist', type=str ,nargs='*' ,help=help)
+
+help = 'Measure focus from sharpness in X or Y; project out other direction'
+parser.add_argument('-fa', '--focus-axis', type=str, choices=['x','X','y','Y'], required=True ,help=help)
 
 help = 'Focus keyword in FITS header that we are optimizing (FOCUS, TELFOCUS, IMNUM, IMNUM_HACK)'
 parser.add_argument('-fk','--focuskey', type=str, default='IMNUM' ,help=help)
@@ -95,26 +98,31 @@ if args.range:
     df = df[myFilter]
 
 # Analysis functions
-def med_reduce(img, project=True):
+def med_reduce(img, axis=None):
     # divide out median to account for flux changes, then project out columns to get 1D spectrum
     ans = img/np.median(img)
-    if project: ans = np.median(ans,axis=0)
+    ans = np.median(ans,axis=axis)
+
     return ans 
 
-def get_stds_from_row(row, project=True):
+def get_stds_from_row(row, focus_axis=None):
     '''Normalize ROI, then get STDDEV of 2D area or projected 1D spectrum'''
     # Uses global roi_dict
+
+    # axis = 0 ? focus_axis.upper() == 'X' : 1  # Project out axis not used for focus (X=1, Y=0)
+    axis = None
+    if focus_axis:
+        axis = {'X':0, 'Y':1}[focus_axis.upper()]  # Project out axis not used for focus (X=1, Y=0)
         
     img = pf.getdata(row['FILENAME'],row['EXTN'])
     ch = row['SPEC_ID']
         
-    stds = {f: med_reduce(img[roi], project=True).std() for f,roi in regdict[ch].items() }
+    stds = {f: med_reduce(img[roi], axis=axis).std() for f,roi in regdict[ch].items() }
     
     return stds    # stds[feature] = float
 
 # Compute STDs for all rows
-df['std_dict'] = df.apply(lambda row: get_stds_from_row(row), axis=1)
-
+df['std_dict'] = df.apply(lambda row: get_stds_from_row(row, focus_axis=args.focus_axis), axis=1)
 
 # PLOTTING -- 1 file per channel, 1 axis per group
 
@@ -134,7 +142,7 @@ for ch in regdict:
         groupTags, curveTags, curve_i = (featureTags, sliceTags, 0)
         plotTag, legendTitle = ('Feature','Slice')
 
-    fig, axes_g = plt.subplots(len(groupTags), sharex=True, sharey=False, figsize=(6, 8))  # sharey=True makes limits the same
+    fig, axes_g = plt.subplots(len(groupTags), sharex=True, sharey=False, figsize=(6, 3*len(groupTags)))  # sharey=True makes limits the same
 
     if len(groupTags)==1: axes_g = [axes_g]  # subplots doesn't return a list if it's just 1
 
