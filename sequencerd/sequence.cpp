@@ -218,6 +218,7 @@ namespace Sequencer {
         targetstate = this->target.get_specified_target( this->single_obsid, targetstatus );
         this->prev_single_obsid = this->single_obsid;  // remember it, in case REPEAT is requested
         this->single_obsid.clear();                    // but clear this so that single-target is a one-off
+        this->dotype( "ONE" );                         // single-target mode must set dotype=ONE
       }
 
       message.str(""); message << "NOTICE: " << targetstatus;
@@ -607,11 +608,11 @@ namespace Sequencer {
     //
     bool ishomed=false;
     std::string reply;
-    if ( this->slitd.command( SLITD_ISHOME, reply ) != NO_ERROR &&
-         this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
+    if ( this->slitd.command( SLITD_ISHOME, reply ) ) {
       this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
       return ERROR;
     }
+    this->parse_state( function, reply, ishomed );
 
     // and send the HOME command to slitd if needed.
     //
@@ -2027,11 +2028,14 @@ namespace Sequencer {
     //
     for ( auto &[thr, future] : worker_futures) {
       try {
-        error |= future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+        // wait for this worker to finish
+        if ( future.get() != NO_ERROR ) {
+          logwrite( function, "ERROR from "+Sequencer::thread_names.at(thr));
+          error = ERROR;
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        logwrite( function, "ERROR worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         return ERROR;
       }
     }
@@ -2039,7 +2043,10 @@ namespace Sequencer {
     // Now the Andor cameras must be done individually, first slicecam,
     auto start_slicecam = std::async(std::launch::async, &Sequence::slicecam_init, this);
     try {
-      error |= start_slicecam.get();
+      if ( start_slicecam.get() != NO_ERROR ) {
+        logwrite( function, "ERROR from slicecam_init" );
+        error = ERROR;
+      }
     }
     catch (const std::exception& e) {
       logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
@@ -2049,16 +2056,19 @@ namespace Sequencer {
     // then the acam
     auto start_acam = std::async(std::launch::async, &Sequence::acam_init, this);
     try {
-      error |= start_acam.get();
+      if ( start_acam.get() != NO_ERROR ) {
+        logwrite( function, "ERROR from acam_init" );
+        error = ERROR;
+      }
     }
     catch (const std::exception& e) {
-      logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
+      logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
       return ERROR;
     }
 
     // change state to READY if all daemons ready w/o error
     if ( error==NO_ERROR && daemon_manager.are_all_set() ) {
-      seq_state_manager.set_and_clear( {Sequencer::SEQ_NOTREADY}, {Sequencer::SEQ_READY} );
+      seq_state_manager.set_and_clear( {Sequencer::SEQ_READY}, {Sequencer::SEQ_NOTREADY} );
     }
 
     return error;
@@ -2096,9 +2106,7 @@ namespace Sequencer {
     // so make sure power control is initialized before continuing.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    error = start_power.get();
-
-    if ( error != NO_ERROR ) {
+    if ( start_power.get() != NO_ERROR ) {
       logwrite( function, "ERROR from power control. Will try to continue (but don't hold your breath)" );
     }
 

@@ -4248,7 +4248,7 @@ logwrite(function, message.str());
     //
     this->camera.shutter_timer.stop( remaining_time );
 
-    double actual_exptime = (this->camera.exosure_time - remaining_time)/1000.;
+    double actual_exptime = (this->camera.exposure_time - remaining_time)/1000.;
 
     logwrite( function, "exposure stopped early" );
 
@@ -4284,11 +4284,19 @@ logwrite(function, message.str());
       return ERROR;
     }
 
+    // pause the shutter delay timer
+    //
     this->camera.shutter_timer.hold();
 
-    // close the Bonn shutter
+    // close the Bonn shutter and
+    // log shutter close time if applicable
     //
-    this->camera.shutter.set_close();
+    if ( this->camera.shutter.is_enabled ) {
+      this->camera.shutter.set_close();                    // close shutter
+      timespec timenow = Time::getTimeNow();               // get the time NOW
+      std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+      this->camera.async.enqueue_and_log( function, "NOTICE:shutter closed at "+timestring );
+    }
 
     logwrite( function, "exposure paused" );
 
@@ -4311,9 +4319,19 @@ logwrite(function, message.str());
 
     // open the Bonn shutter
     //
-    this->camera.shutter.set_open();
+    if ( this->camera.shutter.is_enabled ) this->camera.shutter.set_open();
 
+    // resume the shutter delay timer
+    //
     this->camera.shutter_timer.resume();
+
+    // log shutter open time if applicable
+    //
+    if ( this->camera.shutter.is_enabled ) {
+      timespec timenow = Time::getTimeNow();               // get the time NOW
+      std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
+      this->camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
+    }
 
     logwrite( function, "exposure resumed" );
 

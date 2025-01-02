@@ -1525,11 +1525,6 @@ namespace arc
 				THROW( "(arc::gen3::CArcDevice::expose) Start exposure command failed. Reply: 0x%X", uiRetVal );
 			}
 
-      // reduce the number of PixelCount callbacks by this factor
-      //
-      const int throttle_pixelcount_callbacks=100;
-      int callback_count = throttle_pixelcount_callbacks;
-
 			while ( uiPixelCount < ( uiRows * uiCols ) )
 			{
 				if ( isReadout() )
@@ -1617,10 +1612,9 @@ namespace arc
 					THROW( "(arc::gen3::CArcDevice::expose) aborted" );
 				}
 
-				if ( bInReadout && pCooExpIFace != nullptr && --callback_count==0 )
+				if ( bInReadout && pCooExpIFace != nullptr )
 				{
 					pCooExpIFace->readCallback( 0, devnum, uiPixelCount, uiRows*uiCols );
-          callback_count = throttle_pixelcount_callbacks;
 				}
 
 				if ( bAbort )
@@ -1728,6 +1722,11 @@ namespace arc
 
 			uiPixelCount     = getPixelCount();
 
+      // reduce the number of PixelCount callbacks by this factor
+      //
+      const int throttle_pixelcount_callbacks=10;
+      int callback_count = throttle_pixelcount_callbacks;
+
 			while ( uiPixelCount < ( uiRows * uiCols ) )
 			{
 				if ( isReadout() )
@@ -1757,9 +1756,10 @@ namespace arc
 					THROW( "(arc::gen3::CArcDevice::readout) aborted" );
 				}
 
-				if ( bInReadout && pCooExpIFace != nullptr )
+				if ( bInReadout && pCooExpIFace != nullptr && --callback_count==0 )
 				{
 					pCooExpIFace->readCallback( expbuf, devnum, uiPixelCount, uiRows*uiCols );
+          callback_count = throttle_pixelcount_callbacks;
 				}
 
 				// If the controller's in READOUT, then increment the timeout
@@ -1783,6 +1783,8 @@ namespace arc
 
 				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
 			}
+
+			pCooExpIFace->readCallback( expbuf, devnum, uiPixelCount, uiRows*uiCols );
 
 			uiPCIFrameCount = getFrameCount();
 
