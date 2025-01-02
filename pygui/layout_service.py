@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFileDialog, QInputDialog, QHBoxLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFileDialog, QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
@@ -871,115 +871,140 @@ class LayoutService:
         return check_x_layout
 
     def create_etc_tab(self):
-        """Create the layout and components for the 'ETC' tab with reduced spacing between labels and input boxes."""
+        """Create the layout and components for the 'ETC' tab with aligned labels and input boxes."""
 
         # Main horizontal layout for two columns
         etc_layout = QHBoxLayout()
         etc_layout.setSpacing(10)  # Slight spacing between columns
         etc_layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the layout
 
-        # Left column layout
-        left_column_layout = QVBoxLayout()
+        # Left column layout using QGridLayout for alignment and independence of rows
+        left_column_layout = QGridLayout()
         left_column_layout.setContentsMargins(0, 0, 0, 0)
-        left_column_layout.setSpacing(10)
+        left_column_layout.setHorizontalSpacing(15)
+        left_column_layout.setVerticalSpacing(10)
 
         # Common dimensions
         label_width = 120  # Ensure all labels have the same width
         widget_height = 40
-        input_width = 165
+        short_input_width = 60  # Shorter width for most input boxes
+        dropdown_width = 75
+        range_input_width = 75  # Wider width for range inputs
 
         # Helper function to create aligned labels
         def create_aligned_label(text):
             label = QLabel(text)
             label.setFixedWidth(label_width)
-            label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Align text to the left and center vertically
+            label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Align text to the right and center vertically
             return label
 
-        # First row: Magnitude, Filter, and System
-        first_row_layout = QHBoxLayout()
-        first_row_layout.setSpacing(3)  # Reduced spacing between widgets
-
+        # Row 0: Magnitude, Filter (dropdown), and System (evenly spaced)
         magnitude_label = create_aligned_label("Magnitude:")
+        self.magnitude_input = QLineEdit()
+        self.magnitude_input.setFixedSize(short_input_width, widget_height)
+
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.addItems(["U", "G", "R", "I"])
-        self.filter_dropdown.setFixedSize(75, widget_height)
-
-        self.magnitude_input = QLineEdit()
-        self.magnitude_input.setFixedSize(75, widget_height)
+        self.filter_dropdown.setFixedSize(dropdown_width, widget_height)
 
         self.system_field = QLineEdit("AB")
         self.system_field.setReadOnly(True)
-        self.system_field.setFixedSize(75, widget_height)
+        self.system_field.setFixedSize(short_input_width, widget_height)
+
+        first_row_layout = QHBoxLayout()
+        first_row_layout.setContentsMargins(0, 0, 0, 0)  # Remove any margins
+        first_row_layout.setSpacing(15)  # Ensure there is space of 15 pixels between widgets
 
         first_row_layout.addWidget(magnitude_label)
-        first_row_layout.addWidget(self.filter_dropdown)
         first_row_layout.addWidget(self.magnitude_input)
+        first_row_layout.addWidget(self.filter_dropdown)
         first_row_layout.addWidget(self.system_field)
 
-        left_column_layout.addLayout(first_row_layout)
+        # Add stretch to make sure widgets are evenly spaced
+        first_row_layout.addStretch()
 
-        # Second row: SNR and EXPTime
-        second_row_layout = QHBoxLayout()
-        second_row_layout.setSpacing(3)  # Reduced spacing between widgets
+        left_column_layout.addLayout(first_row_layout, 0, 0, 1, 4)  # Span across all four columns
 
+        # Row 1: Sky Mag and Mag Filter
+        sky_mag_label = create_aligned_label("Sky Mag:")
+        self.sky_mag_input = QLineEdit()
+        self.sky_mag_input.setFixedSize(short_input_width, widget_height)
+
+        mag_filter_label = create_aligned_label("Mag Filter:")
+        self.mag_filter_dropdown = QComboBox()
+        self.mag_filter_dropdown.addItems(["match"])
+        self.mag_filter_dropdown.setFixedSize(dropdown_width, widget_height)
+
+        # Adjust the spacing between Sky Mag and Mag Filter (reduce the spacing for this row)
+        left_column_layout.addWidget(sky_mag_label, 1, 0)
+        left_column_layout.addWidget(self.sky_mag_input, 1, 1)
+        left_column_layout.addWidget(mag_filter_label, 1, 2)
+        left_column_layout.addWidget(self.mag_filter_dropdown, 1, 3)
+
+        # Row 2: SNR and EXPTime
         snr_label = create_aligned_label("SNR:")
         self.snr_input = QLineEdit()
-        self.snr_input.setFixedSize(75, widget_height)
+        self.snr_input.setFixedSize(short_input_width, widget_height)
 
         exptime_label = create_aligned_label("EXPTime:")
         self.exptime_input = QLineEdit()
-        self.exptime_input.setFixedSize(75, widget_height)
+        self.exptime_input.setFixedSize(short_input_width, widget_height)
 
-        second_row_layout.addWidget(snr_label)
-        second_row_layout.addWidget(self.snr_input)
-        second_row_layout.addWidget(exptime_label)
-        second_row_layout.addWidget(self.exptime_input)
+        # Adjust the spacing between SNR and EXPTime
+        left_column_layout.addWidget(snr_label, 2, 0)
+        left_column_layout.addWidget(self.snr_input, 2, 1)
+        left_column_layout.addWidget(exptime_label, 2, 2)
+        left_column_layout.addWidget(self.exptime_input, 2, 3)
 
-        left_column_layout.addLayout(second_row_layout)
-
-        # Third row: Resolution and Slit Width
-        third_row_layout = QHBoxLayout()
-        third_row_layout.setSpacing(3)  # Reduced spacing between widgets
-
+        # Row 3: Resolution and Slit Width
         resolution_label = create_aligned_label("Resolution:")
         self.resolution_input = QLineEdit()
-        self.resolution_input.setFixedSize(75, widget_height)
+        self.resolution_input.setFixedSize(short_input_width, widget_height)
 
         slit_width_label = create_aligned_label("Slit Width:")
         self.slit_width_input = QLineEdit()
-        self.slit_width_input.setFixedSize(75, widget_height)
+        self.slit_width_input.setFixedSize(short_input_width, widget_height)
 
-        third_row_layout.addWidget(resolution_label)
-        third_row_layout.addWidget(self.resolution_input)
-        third_row_layout.addWidget(slit_width_label)
-        third_row_layout.addWidget(self.slit_width_input)
+        # Adjust the spacing between Resolution and Slit Width
+        left_column_layout.addWidget(resolution_label, 3, 0)
+        left_column_layout.addWidget(self.resolution_input, 3, 1)
+        left_column_layout.addWidget(slit_width_label, 3, 2)
+        left_column_layout.addWidget(self.slit_width_input, 3, 3)
 
-        left_column_layout.addLayout(third_row_layout)
-
-        # Fourth row: Range and No Slicer
-        fourth_row_layout = QHBoxLayout()
-        fourth_row_layout.setSpacing(3)  # Reduced spacing between widgets
-
+        # Row 4: Range and No Slicer
         range_label = create_aligned_label("Range:")
         self.range_input_start = QLineEdit()
-        self.range_input_start.setFixedSize(75, widget_height)
+        self.range_input_start.setFixedSize(range_input_width, widget_height)
 
         range_dash = QLabel("-")
         range_dash.setFixedWidth(10)
 
         self.range_input_end = QLineEdit()
-        self.range_input_end.setFixedSize(75, widget_height)
+        self.range_input_end.setFixedSize(range_input_width, widget_height)
 
-        no_slicer_checkbox = QCheckBox("No Slicer")
-        no_slicer_checkbox.setFixedHeight(widget_height)
+        # Create a horizontal layout for range inputs and No Slicer checkbox
+        range_layout = QHBoxLayout()
+        range_layout.setSpacing(15)  # Set spacing to 15 between range inputs
+        range_layout.addWidget(self.range_input_start)
+        range_layout.addWidget(range_dash)
+        range_layout.addWidget(self.range_input_end)
 
-        fourth_row_layout.addWidget(range_label)
-        fourth_row_layout.addWidget(self.range_input_start)
-        fourth_row_layout.addWidget(range_dash)
-        fourth_row_layout.addWidget(self.range_input_end)
-        fourth_row_layout.addWidget(no_slicer_checkbox)
+        self.no_slicer_checkbox = QCheckBox("No Slicer")
+        self.no_slicer_checkbox.setFixedHeight(widget_height)
 
-        left_column_layout.addLayout(fourth_row_layout)
+        range_layout.addWidget(self.no_slicer_checkbox)
+
+        left_column_layout.addWidget(range_label, 4, 0)
+        left_column_layout.addLayout(range_layout, 4, 1, 1, 3)
+
+        # Row 5: Slit dropdown
+        slit_label = create_aligned_label("Slit:")
+        self.slit_dropdown = QComboBox()
+        self.slit_dropdown.addItems(["SET X", "LOSS X", "SNR X", "RES X", "AUTO"])
+        self.slit_dropdown.setFixedSize(dropdown_width, widget_height)
+
+        # left_column_layout.addWidget(slit_label, 5, 2)
+        # left_column_layout.addWidget(self.slit_dropdown, 5, 3)
 
         # Right column layout
         right_column_layout = QVBoxLayout()
@@ -997,11 +1022,11 @@ class LayoutService:
         button_row_layout.setSpacing(10)
 
         run_button = QPushButton("Run ETC")
-        run_button.setFixedSize(input_width, widget_height)
+        run_button.setFixedSize(short_input_width * 2, widget_height)
         run_button.clicked.connect(self.run_etc)
 
         save_button = QPushButton("Save")
-        save_button.setFixedSize(input_width, widget_height)
+        save_button.setFixedSize(short_input_width * 2, widget_height)
 
         button_row_layout.addWidget(run_button)
         button_row_layout.addWidget(save_button)
@@ -1009,13 +1034,11 @@ class LayoutService:
         right_column_layout.addLayout(button_row_layout)
 
         # Add the two columns to the ETC layout
-        etc_layout.addLayout(left_column_layout, stretch=1)
+        etc_layout.addLayout(left_column_layout, stretch=2)
         etc_layout.addLayout(right_column_layout, stretch=1)
 
         # Set layout for the ETC tab
         self.parent.etc.setLayout(etc_layout)
-
-
 
 
     def run_etc(self):
