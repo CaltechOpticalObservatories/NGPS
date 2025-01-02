@@ -361,6 +361,9 @@ class BoolState {
  *          while checking for a cancel flag. The timer can also be
  *          modified.
  *
+ *          Units are in microseconds except for the inputs, delay(ms) and
+ *          modify(ms), and outputs, get_remaining() and stop(&ms), which
+ *          are in milliseconds.
  */
 class PreciseTimer {
   private:
@@ -376,6 +379,8 @@ class PreciseTimer {
     std::condition_variable cv;
 
     /***** PreciseTimer::precise_sleep ****************************************/
+    /** @brief  This is the inner loop which sleeps for a short time,         */
+    /**         specified in microseconds. It cannot be interrupted.          */
     void precise_sleep(long microseconds) {
       struct timespec start_time;
       struct timespec current_time;
@@ -408,6 +413,7 @@ class PreciseTimer {
     }
 
     /***** PreciseTimer::long_precise_sleep ***********************************/
+    /** @brief  This is the main delay loop which can be interrupted.         */
     void long_precise_sleep() {
       // max_short_sleep is the largest sleep time for precise_sleep()
       // This should be kept small, a few seconds or less.
@@ -432,18 +438,26 @@ class PreciseTimer {
         long to_sleep = std::min( remaining_time.load(std::memory_order_acquire), max_short_sleep );
         precise_sleep(to_sleep);
 
-        // calculate elapsed time and time remaining
+        // Calculate elapsed time and time remaining.
+        // Elapsed time is difference between time now and start time,
+        // less any time that the timer was on hold.
         //
         clock_gettime(CLOCK_MONOTONIC, &current_time);
         long elapsed_time = (current_time.tv_sec - start_time.tv_sec) * 1000000 +
-                            (current_time.tv_nsec - start_time.tv_nsec) / 1000 - hold_time;
+                            (current_time.tv_nsec - start_time.tv_nsec) / 1000  -
+                            hold_time;
 
-        remaining_time.store( delay_time.load(std::memory_order_acquire) - elapsed_time, std::memory_order_release );
+        remaining_time.store( (delay_time.load(std::memory_order_acquire) - elapsed_time),
+                              std::memory_order_release );
 
         if ( remaining_time.load(std::memory_order_acquire) <= 0 ) break;    // break when time is up
 
         if (should_stop.load(std::memory_order_acquire)) break;              // break if stop requested
 
+        // When hold is requested, store the hold start time, send
+        // notification that loop is on hold, and wait for request
+        // to either release hold or stop.
+        //
         if (should_hold.load(std::memory_order_acquire)) {
           {
           std::unique_lock<std::mutex> lock(mtx);
@@ -453,9 +467,13 @@ class PreciseTimer {
           clock_gettime(CLOCK_MONOTONIC, &hold_start);
           {
           std::unique_lock<std::mutex> lock(mtx);
-          cv.wait( lock, [this]() { return (should_stop.load(std::memory_order_acquire) || !should_hold.load(std::memory_order_acquire)); } );
+          cv.wait( lock, [this]() { return ( should_stop.load(std::memory_order_acquire) ||
+                                            !should_hold.load(std::memory_order_acquire) ); } );
           }
-          if (should_stop.load(std::memory_order_acquire)) break;
+
+          if (should_stop.load(std::memory_order_acquire)) break;            // break if stop requested
+
+          // how long was loop on hold, in microseconds
           clock_gettime(CLOCK_MONOTONIC, &hold_stop);
           hold_time = (hold_stop.tv_sec-hold_start.tv_sec)*1000000 +
                       (hold_stop.tv_nsec-hold_stop.tv_nsec)/1000;
@@ -470,6 +488,9 @@ class PreciseTimer {
     PreciseTimer() { reset(); }
 
     /***** PreciseTimer::delay ************************************************/
+    /** @brief  This is the entry point to create a blocking delay, which     */
+    /**         won't return until milliseconds have elapsed unless stopped   */
+    /**         or modified.                                                  */
     long delay(long milliseconds) {
       if (running.load(std::memory_order_acquire)) {
         std::cerr << get_timestamp() << "  (PreciseTimer::delay) cannot start new timer while another is running\n";
@@ -482,20 +503,26 @@ class PreciseTimer {
     }
 
     /***** PreciseTimer::get_remaining ****************************************/
+    /** @brief  Returns the time remaining in milliseconds                    */
     long get_remaining() { return remaining_time.load(std::memory_order_acquire)/1000; }
 
     /***** PreciseTimer::modify ***********************************************/
+    /** @brief  Modifies the delay time to new value in milliseconds          */
     void modify(long milliseconds) { delay_time.store(milliseconds*1000, std::memory_order_release); }
 
     /***** PreciseTimer::hold *************************************************/
+    /** @brief  Hold/pause the delay timer at the next short-sleep boundary   */
     void hold() {
       std::unique_lock<std::mutex> lock(mtx);
+      // request hold
       should_hold.store(true, std::memory_order_release);
+      // wait until the delay loop says it is on hold
       if (on_hold.load(std::memory_order_acquire)) return;
       cv.wait( lock, [this]() { return on_hold.load(std::memory_order_acquire); } );
     }
 
     /***** PreciseTimer::resume ***********************************************/
+    /** @brief  Removes the hold and resumes the delay after a hold           */
     void resume() {
       std::unique_lock<std::mutex> lock(mtx);
       should_hold.store(false, std::memory_order_release);
@@ -503,12 +530,15 @@ class PreciseTimer {
     }
 
     /***** PreciseTimer::stop *************************************************/
+    /** @brief  Stops the delay at the next short-sleep boundary              */
     void stop() {
      long ms;
      stop(ms);
     }
 
     /***** PreciseTimer::stop *************************************************/
+    /** @brief  Stops the delay at the next short-sleep boundary, returns     */
+    /**         remaining time in milliseconds by reference.                  */
     void stop(long &milliseconds) {
       {
       std::unique_lock<std::mutex> lock(mtx);
@@ -517,7 +547,8 @@ class PreciseTimer {
       }
       if ( running.load(std::memory_order_acquire) ) {
         std::unique_lock<std::mutex> lock(mtx);
-        if (!cv.wait_for(lock, std::chrono::microseconds(2*max_short_sleep), [this]() { return !running.load(std::memory_order_acquire); })) {
+        if (!cv.wait_for(lock, std::chrono::microseconds(2*max_short_sleep),
+            [this]() { return !running.load(std::memory_order_acquire); })) {
           std::cerr << get_timestamp() << "  (PreciseTimer::stop) *** timed out waiting for loop to stop ***\n";
         }
       }
@@ -525,7 +556,8 @@ class PreciseTimer {
       reset();
     }
 
-    /***** PreciseTimer::stop *************************************************/
+    /***** PreciseTimer::reset ************************************************/
+    /** @brief  For internal use only, resets class variables                 */
     void reset() {
       should_hold.store(false);
       on_hold.store(false);

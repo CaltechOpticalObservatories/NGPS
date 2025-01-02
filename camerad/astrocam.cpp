@@ -1781,7 +1781,7 @@ logwrite(function,message.str() );
       interface.camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
     }
 
-    // Here is the shutter timer
+    // Here is the shutter timer. This is a PreciseTimer object.
     //
     interface.camera.shutter_timer.delay( interface.camera.exposure_time );
 
@@ -2554,9 +2554,15 @@ logwrite(function,message.str() );
     }
     }
 
+    // The shutter duration MUST be manually reset to 0 before each exposure.
+    // Allowing the shutter to open and close without automatically resetting
+    // the exposure timer provides for pause/resume to increment the exposure
+    // duration.
+    //
+    this->camera.shutter.zero_exposure();  // the shutter duration MUST be reset to 0
+
     // Spawn a thread to operate the shutter if needed.
     //
-    this->camera.shutter.zero_exposure();  // resets shutter duration to 0
     if ( this->camera.exposure_time > 0 ) {
       this->camera.shutter.arm();          // puts shutter into pending state to prevent potential race conditions
                                            // while waiting for shutter_state to transition from 1 -> 0
@@ -4175,13 +4181,13 @@ logwrite(function, message.str());
       return ERROR;
     }
 
-    // block changes within the last 5 seconds of exposure
-    // this remaining time is not guaranteed to be accurate
+    // Block changes within the last 5 seconds of exposure.
+    // The remaining time is returned by the PreciseTimer object.
     //
     long remaining_time = this->camera.shutter_timer.get_remaining();
 
     if ( ( remaining_time < 5000 || requested_exptime < 5000 ) ) {
-      message.str(""); message << "ERROR cannot change exposure time with less than 5000 msec exptime remaining";
+      message.str(""); message << "ERROR cannot change exposure time with less than 5 s exptime remaining";
       logwrite( function, message.str() );
       retstring="too_late";
       return BUSY;
@@ -4197,7 +4203,7 @@ logwrite(function, message.str());
       return BUSY;
     }
 
-    // then send the command.
+    // then send the command, input units are whole number milliseconds.
     //
     this->camera.shutter_timer.modify( requested_exptime );
 
@@ -4223,25 +4229,31 @@ logwrite(function, message.str());
     const std::string function("AstroCam::Interface::stop_exposure");
     std::stringstream message;
 
-    // block changes within the last 5 seconds of exposure
-    // this remaining time is not guaranteed to be accurate
+    // Block changes within the last 5 seconds of exposure.
+    // The remaining time is returned by the PreciseTimer object
+    // in units of milliseconds.
     //
     long remaining_time = this->camera.shutter_timer.get_remaining();
 
     if ( remaining_time < 5000 ) {
-      message << "ERROR cannot stop exposure time with less than 5000 msec exptime remaining"
+      message << "ERROR cannot stop exposure time with less than 5 s exptime remaining"
               << " (" << remaining_time << ")";
       logwrite( function, message.str() );
       retstring="too_late";
       return ERROR;
     }
 
+    // The PreciseTimer object .stop(&ms) function modifies remaining_time
+    // to reflect the remaining time of the timer.
+    //
     this->camera.shutter_timer.stop( remaining_time );
+
+    double actual_exptime = (this->camera.exosure_time - remaining_time)/1000.;
 
     logwrite( function, "exposure stopped early" );
 
-    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", (this->camera.exposure_time-remaining_time)/100.,
-                                                                     "exposure time in sec" );
+    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", actual_exptime, "exposure time in sec" );
+
     return NO_ERROR;
   }
   /***** AstroCam::Interface::stop_exposure ***********************************/
@@ -4259,13 +4271,14 @@ logwrite(function, message.str());
     const std::string function = "AstroCam::Interface::pause_exposure";
     std::stringstream message;
 
-    // block changes within the last 5 seconds of exposure
-    // this remaining time is not guaranteed to be accurate
+    // Block changes within the last 5 seconds of exposure.
+    // The remaining time is returned by the PreciseTimer object
+    // in units of milliseconds.
     //
     long remaining_time = this->camera.shutter_timer.get_remaining();
 
     if ( remaining_time < 5000 ) {
-      message.str(""); message << "ERROR cannot pause exposure time with less than 5000 msec exptime remaining";
+      message.str(""); message << "ERROR cannot pause exposure time with less than 5 s exptime remaining";
       logwrite( function, message.str() );
       retstring="too_late";
       return ERROR;

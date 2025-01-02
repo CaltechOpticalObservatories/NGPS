@@ -64,7 +64,6 @@ namespace Sequencer {
    */
   void Sequence::dothread_sequencer_async_listener( Sequencer::Sequence &seq, Network::UdpSocket udp ) {
     const std::string function("Sequencer::Sequence::dothread_sequencer_async_listener");
-    std::stringstream message;
 
     ScopedState thr_state( Sequencer::THR_SEQUENCER_ASYNC_LISTENER, seq.thread_state_manager );
 
@@ -80,8 +79,6 @@ namespace Sequencer {
     // forever receive and process UDP async status messages
     //
     while ( true ) {
-
-//    if ( not seq.is_seqstate_set( Sequencer::SEQ_RUNNING | Sequencer::SEQ_STOPREQ | Sequencer::SEQ_ABORTREQ ) ) continue;  // don't check anything if system is idle
 
       // Receive the UDP message
       //
@@ -144,18 +141,12 @@ namespace Sequencer {
         // ---------------------
         //
         if ( starts_with( statstr, "TEST:" ) ) {                                    // async message tag TEST
-          message.str(""); message << "got test message \"" << statstr << "\"";
-          logwrite( function, message.str() );
+          logwrite( function, "got test message \""+statstr+"\"" );
         }
 
       }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "out of range parsing status string " << statstr << ": " << e.what();
-        logwrite( function, message.str() );
-      }
-      catch( std::invalid_argument &e ) {
-        message.str(""); message << "invalid argument parsing status string " << statstr << ": " << e.what();
-        logwrite( function, message.str() );
+      catch( std::exception &e ) {
+        logwrite( function, "ERROR parsing status string "+statstr+": "+std::string(e.what()) );
       }
 
     }  // while true
@@ -195,8 +186,8 @@ namespace Sequencer {
     TargetInfo::TargetState targetstate;
     long error=NO_ERROR;
 
-    ScopedState thr_state( Sequencer::THR_SEQUENCE_START, thread_state_manager );
-    ScopedState seq_state( Sequencer::SEQ_RUNNING, seq_state_manager );
+    ScopedState thr_state( Sequencer::THR_SEQUENCE_START, thread_state_manager );  // this thread is running
+    ScopedState seq_state( Sequencer::SEQ_RUNNING, seq_state_manager );            // state = RUNNING
 
     // clear the thread error state
     //
@@ -204,8 +195,9 @@ namespace Sequencer {
 
     this->cancel_flag.store(false);
 
-    // This is the main loop which runs as long as there are targets,
-    // or until cancelled.
+    // This is the main loop which runs as long as there are targets in the database,
+    // or until cancelled. Or, this will run once in the case of single-target-mode,
+    // which is invoked by storing an OBSID in the class variable single_obsid.
     //
     while ( true ) {
 
@@ -216,7 +208,11 @@ namespace Sequencer {
       if ( this->single_obsid.empty() ) {
         targetstate = this->target.get_next( targetstatus );
       }
-      // otherwise get the specified target by OBSID
+      // otherwise get the specified target by OBSID, using the value in single_obsid.
+      // This class variable is remembered by copying it to prev_single_obsid but is
+      // then cleared after reading it here, so that it doesn't automatically run the
+      // single target again. But since it's remembered, it can be re-used if a repeat
+      // exposure is explicitly requested.
       //
       else {
         targetstate = this->target.get_specified_target( this->single_obsid, targetstatus );
@@ -256,7 +252,7 @@ namespace Sequencer {
         logwrite( function, "[DEBUG] target found, starting threads" );
 #endif
       }
-      else
+      else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
         logwrite( function, "NOTICE: no targets found. stopping" );
         break;
@@ -270,8 +266,6 @@ namespace Sequencer {
       // get the threads going --
       //
       // These things can all be done in parallel, just have to sync up at the end.
-      // Set the state bit before starting each thread, then
-      // the thread will clear their bit when they complete
       //
 
       // threads to start, pair their ThreadStatusBit with the function to call
@@ -286,7 +280,7 @@ namespace Sequencer {
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) } };
 
       }
-      // For any other pointmode (SLIT, or empty which assumes SLIT), all
+      // For any other pointmode (SLIT, or empty, which assumes SLIT), all
       // subsystems are readied.
       //
       else {
@@ -348,6 +342,11 @@ namespace Sequencer {
  ***/
 
       // waiting for user signal (or cancel)
+      //
+      // The sequencer is effectively paused waiting for user input. This
+      // gives the user a chance to ensure the correct target is on the slit,
+      // select offset stars, etc.
+      //
       {
       ScopedState seq_state( Sequencer::SEQ_WAIT_USER, seq_state_manager );
 
@@ -1988,10 +1987,10 @@ namespace Sequencer {
     std::stringstream message;
     long error=NO_ERROR;
 
-    ScopedState thread_state( Sequencer::THR_STARTUP, thread_state_manager );
-    ScopedState seq_state( Sequencer::SEQ_STARTING, seq_state_manager );
+    ScopedState thread_state( Sequencer::THR_STARTUP, thread_state_manager );  // this thread is running
+    ScopedState seq_state( Sequencer::SEQ_STARTING, seq_state_manager );       // state = STARTING
 
-    this->thread_error_manager.clear_all();     // clear the thread error state
+    this->thread_error_manager.clear_all();                                    // clear the thread error state
 
     this->cancel_flag.store(false);
 
@@ -1999,7 +1998,11 @@ namespace Sequencer {
     // so initialize the power control first.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    start_power.get();
+    error = start_power.get();
+
+    if ( error != NO_ERROR ) {
+      logwrite( function, "ERROR starting power control. Will try to continue (but don't hold your breath)" );
+    }
 
     // threads to start, pair their ThreadStatusBit with the function to call
     //
@@ -2014,13 +2017,13 @@ namespace Sequencer {
 
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
 
-    // start all of the threads
+    // launch all of the worker threads listed in the vector
     //
     for ( const auto &[thr, func] : worker_threads ) {
       worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
     }
 
-    // wait for the threads to complete
+    // get() will block, waiting for the threads to complete
     //
     for ( auto &[thr, future] : worker_futures) {
       try {
@@ -2081,7 +2084,7 @@ namespace Sequencer {
     std::stringstream message;
     std::string retstring;
 
-    ScopedState thr_state(Sequencer::THR_SHUTDOWN, this->thread_state_manager);
+    ScopedState thr_state(Sequencer::THR_SHUTDOWN, this->thread_state_manager);  // this thread is running
 
     // clear the thread error state
     //
@@ -2093,7 +2096,11 @@ namespace Sequencer {
     // so make sure power control is initialized before continuing.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    start_power.get();
+    error = start_power.get();
+
+    if ( error != NO_ERROR ) {
+      logwrite( function, "ERROR from power control. Will try to continue (but don't hold your breath)" );
+    }
 
     // container of shutdown threads to launch,
     // pair their ThreadStatusBit with the function to call

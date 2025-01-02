@@ -1068,179 +1068,179 @@ namespace Sequencer {
       std::string retstring;
 
       if ( cmd == "-h" || cmd == "--help" || cmd == "help" || cmd == "?" ) {
-                      retstring="seq { <CMD> } [<ARG>...]\n";
-                      retstring.append( "  where <CMD> is one of:\n" );
-                      for ( const auto &s : SEQUENCERD_SYNTAX ) {
-                        retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
-                      }
-                      ret = HELP;
+                  retstring="seq { <CMD> } [<ARG>...]\n";
+                  retstring.append( "  where <CMD> is one of:\n" );
+                  for ( const auto &s : SEQUENCERD_SYNTAX ) {
+                    retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
+                  }
+                  ret = HELP;
       }
       else
-      if ( cmd.compare( SEQUENCERD_EXIT )==0 ) {
-                      this->exit_cleanly();                        // shutdown the sequencer
+      if ( cmd == SEQUENCERD_EXIT ) {
+                  this->exit_cleanly();                        // shutdown the sequencer
       }
       else
 
       // These commands go to acamd
       //
-      if ( cmd.compare( SEQUENCERD_ACAM )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.acamd ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.acamd.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "acamd reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_ACAM ) {
+                  if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.acamd ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.acamd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "acamd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 
       // These commands go to calibd
       //
-      if ( cmd.compare( SEQUENCERD_CALIB )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.calibd ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.calibd.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "calibd reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_CALIB ) {
+                  if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.calibd ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.calibd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "calibd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 
       // These commands go to camerad
       //
-      if ( cmd.compare( SEQUENCERD_CAMERA )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.camerad ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.camerad.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "camerad reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_CAMERA ) {
+                  if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.camerad ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.camerad.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "camerad reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 
       // These commands go to filterd
       //
-      if ( cmd.compare( SEQUENCERD_FILTER )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.filterd ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.filterd.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "filterd reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_FILTER ) {
+                  if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.filterd ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.filterd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "filterd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 
       // These commands go to powerd
       //
-      if ( cmd.compare( SEQUENCERD_POWER )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), POWERD_LIST.c_str(), POWERD_LIST.size() ) == 0 ) ||
-                           ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ),
-                                     std::ref( this->sequence.powerd ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.powerd.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "powerd reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_POWER ) {
+                  if ( ( strncasecmp( args.c_str(), POWERD_LIST.c_str(), POWERD_LIST.size() ) == 0 ) ||
+                       ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ),
+                                 std::ref( this->sequence.powerd ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.powerd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "powerd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 
       // These commands go to slitd
       //
-      if ( cmd.compare( SEQUENCERD_SLIT )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.slitd ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.slitd.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "slitd reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_SLIT ) {
+                  if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.slitd ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.slitd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "slitd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 
       // These commands go to tcsd
       //
-      if ( cmd.compare( SEQUENCERD_TCS )==0 ) {
-                      if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
-                        message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
-                        logwrite( function, message.str() );
-                        ret = ERROR;
-                      }
-                      else
-                      if ( sock.isasync() ) {
-                        std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.tcsd ), args ).detach();
-                      }
-                      else {
-                        ret = this->sequence.tcsd.command( args, retstring );
-                        if ( !retstring.empty() ) {
-                          message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
-                          logwrite( function, message.str() );
-                          retstring.append( " " );
-                        }
-                      }
+      if ( cmd == SEQUENCERD_TCS ) {
+                  if ( ( strncasecmp( args.c_str(), "help", 4 ) == 0 ) || ( args.find("?") != std::string::npos ) ) {
+                    message.str(""); message << "ERROR command \"" << cmd << " " << args << "\" not allowed from sequencer";
+                    logwrite( function, message.str() );
+                    ret = ERROR;
+                  }
+                  else
+                  if ( sock.isasync() ) {
+                    std::thread( std::ref( Common::DaemonClient::dothread_command ), std::ref( this->sequence.tcsd ), args ).detach();
+                  }
+                  else {
+                    ret = this->sequence.tcsd.command( args, retstring );
+                    if ( !retstring.empty() ) {
+                      message.str(""); message << "tcsd reply (" << sock.id << "): " << retstring;
+                      logwrite( function, message.str() );
+                      retstring.append( " " );
+                    }
+                  }
       }
       else
 

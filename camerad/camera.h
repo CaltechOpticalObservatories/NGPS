@@ -168,7 +168,8 @@ namespace Camera {
        */
       inline long set_open() {
         this->state=1;
-//      this->duration_sec=NAN;  // reset duration, set on shutter close
+        // The time the shutter was opened here will be subtracted from the time
+        // the shutter is closed, to get the exposure time.
         this->open_time = std::chrono::high_resolution_clock::now();
         if ( this->is_enabled ) {  // operate the mechanism only if enabled
           return( ioctl( this->fd, TIOCMBIS, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
@@ -190,6 +191,8 @@ namespace Camera {
        */
       inline long set_close() {
         this->state=0;
+        // The time the shutter is closed here will use the time it was opened
+        // to get the exposure time.
         this->close_time = std::chrono::high_resolution_clock::now();
         // close shutter here
         long ret;
@@ -197,7 +200,8 @@ namespace Camera {
           ret=( ioctl( this->fd, TIOCMBIC, &this->RTS_bit ) < 0 ? ERROR : NO_ERROR );
         }
         else ret=NO_ERROR;
-        // set shutter duration now
+        // Add this exposure time to the shutter duration.
+        // This is incrementally added to allow for pause/resume.
         this->duration_sec += std::chrono::duration_cast<std::chrono::nanoseconds>(this->close_time
                                                                                 - this->open_time).count() / 1000000000.;
         return ret;
