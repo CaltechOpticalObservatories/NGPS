@@ -15,6 +15,7 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
+        self.add_row_button = QPushButton()
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -160,12 +161,13 @@ class LayoutService:
     def create_system_status_group(self):
         system_status_group = QGroupBox("Instrument System Status")
         system_status_layout = QVBoxLayout()
-        system_status_layout.setSpacing(5)
+        system_status_layout.setSpacing(3)  # Reduced space between items in the layout
+        system_status_layout.setContentsMargins(5, 5, 5, 5)  # Reduced margins around the layout
 
         self.parent.instrument_status_label = QLabel("System Status:")
         system_status_layout.addWidget(self.parent.instrument_status_label)
 
-        status_list_layout = QVBoxLayout()
+        # Create a mapping for status colors
         status_map = {
             "stopped": QColor(169, 169, 169),  # Grey
             "idle": QColor(255, 255, 0),       # Yellow
@@ -173,23 +175,142 @@ class LayoutService:
             "exposing": QColor(0, 255, 0),     # Green
         }
 
+        # Create a dictionary to hold the status widgets, which we will enable/disable
+        self.status_widgets = {}
+
+        # Create status widgets and add them to the layout
         for status, color in status_map.items():
+            # Create a QWidget to contain the status layout
+            status_widget = QWidget()
+
+            # Create a layout for the status (color + label)
             status_layout = QHBoxLayout()
+            status_layout.setSpacing(10)  # Reduced space between color and label
+            status_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for the status layout
+
+            # Color indicator
             status_color_rect = QWidget()
-            status_color_rect.setFixedSize(20, 20)
+            status_color_rect.setFixedSize(16, 16)  # Smaller color indicator
             status_color_rect.setStyleSheet(f"background-color: {color.name()};")
+
+            # Label showing the status
             status_label = QLabel(status.capitalize())
+            status_label.setMargin(0)  # Remove extra margin around the label
+
+            # Layout for each status (color + label)
             status_layout.addWidget(status_color_rect)
             status_layout.addWidget(status_label)
-            status_list_layout.addLayout(status_layout)
 
-        system_status_group.setLayout(status_list_layout)
+            # Set the layout for the status widget
+            status_widget.setLayout(status_layout)
+
+            # Add the status widget to the main layout
+            system_status_layout.addWidget(status_widget)
+
+            # Store status widgets in a dictionary for later use
+            self.status_widgets[status] = {
+                'widget': status_widget,
+                'color_rect': status_color_rect,
+                'label': status_label,
+                'color': color
+            }
+
+        # Create the Startup/Shutdown button
+        self.startup_shutdown_button = QPushButton("Startup")
+        self.startup_shutdown_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green for startup */
+                border: none;
+                color: white;
+                font-weight: bold;
+                padding: 5px 10px;  /* Reduced padding */
+            }
+            QPushButton:hover {
+                background-color: #388E3C;
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;
+            }
+        """)
+
+        # Button click handler: toggle between Startup and Shutdown
+        self.startup_shutdown_button.clicked.connect(self.toggle_startup_shutdown)
+
+        # Add the button to the layout
+        system_status_layout.addWidget(self.startup_shutdown_button)
+
+        system_status_group.setLayout(system_status_layout)
 
         # Set maximum width and height for the system status group
         system_status_group.setMaximumWidth(300)  # Maximum width
         system_status_group.setMaximumHeight(250)  # Maximum height
 
+        # Ensure only the 'stopped' status is fully active by default
+        self.update_system_status("stopped")
+
         return system_status_group
+
+    def toggle_startup_shutdown(self):
+        # Get the current button text and toggle
+        current_text = self.startup_shutdown_button.text()
+
+        if current_text == "Startup":
+            # Change the button to Shutdown (black)
+            self.startup_shutdown_button.setText("Shutdown")
+            self.startup_shutdown_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #000000;  /* Black for shutdown */
+                    border: none;
+                    color: white;
+                    font-weight: bold;
+                    padding: 5px 10px;  /* Reduced padding */
+                }
+                QPushButton:hover {
+                    background-color: #333333;
+                }
+                QPushButton:pressed {
+                    background-color: #555555;
+                }
+            """)
+
+            self.update_system_status("idle")  # Set to 'idle' when starting up
+        else:
+            # Change the button back to Startup (green)
+            self.startup_shutdown_button.setText("Startup")
+            self.startup_shutdown_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green for startup */
+                    border: none;
+                    color: white;
+                    font-weight: bold;
+                    padding: 5px 10px;  /* Reduced padding */
+                }
+                QPushButton:hover {
+                    background-color: #388E3C;
+                }
+                QPushButton:pressed {
+                    background-color: #2C6B2F;
+                }
+            """)
+
+            self.update_system_status("stopped")  # Set to 'stopped' when shutting down
+
+    def update_system_status(self, status):
+        # Iterate through all status widgets and "disable" them
+        for status_key, status_data in self.status_widgets.items():
+            widget = status_data['widget']
+            color_rect = status_data['color_rect']
+            label = status_data['label']
+            original_color = status_data['color']
+
+            if status_key != status:
+                # Disable the status widget (make it gray)
+                color_rect.setStyleSheet(f"background-color: {QColor(169, 169, 169).name()};")  # Grey color
+                label.setStyleSheet("color: #A9A9A9;")  # Gray text for disabled status
+            else:
+                # Enable the current status (show its original color)
+                color_rect.setStyleSheet(f"background-color: {original_color.name()};")
+                label.setStyleSheet("color: white;")  # Black text for active status
 
 
     def create_sequencer_mode_group(self):
@@ -245,7 +366,7 @@ class LayoutService:
         self.parent.overhead_progress.setRange(0, 100)
         self.parent.overhead_progress.setMaximumWidth(220)  # Max width for progress bar
 
-        progress_layout.addWidget(QLabel("Overhead Progress"))
+        progress_layout.addWidget(QLabel("Readout Progress"))
         progress_layout.addWidget(self.parent.overhead_progress)
         progress_layout.addWidget(QLabel("Exposure Progress"))
         progress_layout.addWidget(self.parent.exposure_progress)
@@ -327,9 +448,49 @@ class LayoutService:
             self.parent.message_log.setTextCursor(cursor)
 
     def create_target_list_group(self):
-        target_list_group = QGroupBox("Target List")
+        target_list_group = QGroupBox()
         bottom_section_layout = QVBoxLayout()
         bottom_section_layout.setSpacing(5)
+
+        # Create a horizontal layout for the label and the (+) button
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)  # Set the space between the label and the button
+
+        # Create the label with the "Target List" text
+        target_list_label = QLabel("Target List")
+        header_layout.addWidget(target_list_label)
+
+        # Create the (+) button to add a new row (small button)
+        self.add_row_button = QPushButton("+")
+        self.add_row_button.setToolTip("Add a new row")
+        self.add_row_button.setFixedSize(25, 25)  # Make the button small
+        self.add_row_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                border: none;
+                color: white;
+                font-weight: bold;
+                font-size: 18px;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;
+            }
+            QPushButton:disabled {
+                background-color: #D3D3D3;  /* Grey background when disabled */
+                color: #A9A9A9;  /* Grey text color when disabled */
+            }
+        """)
+        # self.add_row_button.clicked.connect(self.add_new_row)  # Connect to function to add a new row
+        self.add_row_button.setEnabled(False)
+        # Add the (+) button next to the label
+        header_layout.addWidget(self.add_row_button)
+
+        # Add the header layout to the main layout
+        bottom_section_layout.addLayout(header_layout)
 
         # Create the button to load the target list
         self.load_target_button = QPushButton("Please login or load your target list to start")
@@ -354,7 +515,7 @@ class LayoutService:
         button_layout.addWidget(self.load_target_button)
         button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
 
-        self.load_target_button.clicked.connect(self.parent.on_login)  # Connect to load CSV functionality
+        self.load_target_button.clicked.connect(self.parent.load_csv_file)  # Connect to load CSV functionality
         bottom_section_layout.addWidget(self.load_target_button)
 
         # Create the QTableWidget for the target list
@@ -538,7 +699,8 @@ class LayoutService:
             # Select the row after updating the table (to highlight it)
             self.target_list_display.selectRow(selected_row)
             
-            slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            # slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            slit_angle = "0"
             self.control_tab.slit_angle_box.setText(slit_angle)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
 
@@ -728,6 +890,7 @@ class LayoutService:
         # If target_lists is empty, we can show a fallback message or an empty list
         if not target_lists:
             target_lists = ["No Target Lists Available"]  # Fallback message or an empty list
+            self.add_row_button.setEnabled(False)
 
         # Ensure the ComboBox is cleared before populating it
         if isinstance(self.target_list_name, QComboBox):
@@ -768,6 +931,7 @@ class LayoutService:
         """Handle the target set change in the ComboBox."""
         # Get the selected SET_NAME (not the entire list of target sets)
         selected_set_name = self.target_list_name.currentText()
+        self.add_row_button.setEnabled(True)
 
         if selected_set_name == "Create a new target list":
             self.target_list_name.clear()

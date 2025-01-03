@@ -54,6 +54,9 @@ class MenuService:
         create_account_action.triggered.connect(self.parent.on_create_account)  # Connect to create account handler
         user_menu.addAction(create_account_action)
 
+        # Targets Menu
+        targets_menu = self.menubar.addMenu('Target List')
+
         # Help Menu
         help_menu = self.menubar.addMenu('Help')
         help_action = QAction('Help Contents', self.menubar)

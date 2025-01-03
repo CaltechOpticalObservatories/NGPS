@@ -444,7 +444,7 @@ class LogicService:
         """
         Populates the UI table with data from the MySQL database.
         The columns and rows will be dynamically created based on the data.
-        It hides the specified columns.s
+        It hides the specified columns.s 
         """
 
         self.target_list_display = self.parent.layout_service.target_list_display
@@ -532,6 +532,7 @@ class LogicService:
         self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
         self.target_list_display.setVisible(True)  # Show the table
         self.parent.layout_service.set_column_widths()
+        self.parent.layout_service.add_row_button.setEnabled(True)
 
     def update_target_table_with_list(self, target_list=None):
         """

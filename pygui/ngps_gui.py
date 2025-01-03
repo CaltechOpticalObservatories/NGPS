@@ -96,7 +96,7 @@ class NgpsGUI(QMainWindow):
         if file_path:
             file_name_only = file_path.split("/")[-1]  # Get the file name only (without the path)
             # Update the target list combo box with the file name
-            self.target_list_name.addItem(file_name_only)
+            #self.target_list_name.addItem(file_name_only)
         
             # Use LogicService to load CSV and update the table
             self.logic_service.load_csv_and_update_target_list(file_path)
