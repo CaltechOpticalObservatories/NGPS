@@ -39,6 +39,7 @@ const std::string ACAMD_LOADCALIBRATION = "loadfpcal";    ///<
 const std::string ACAMD_MOTION   = "motion";    ///< motion commands primarily for CLI testing
 const std::string ACAMD_OFFSETCAL = "offsetcal";  ///< perform TCS offset calibration
 const std::string ACAMD_OFFSETGOAL = "offsetgoal";  ///< add dRA,dDEC offset to goal
+const std::string ACAMD_OFFSETPERIOD = "offsetperiod";  ///< period to send guide offsets to TCS
 const std::string ACAMD_OPEN     = "open";      const int ACAMD_OPEN_TIMEOUT = 180000; ///< *** open connection to all devices, camera and motion
 const std::string ACAMD_PUTONSLIT= "putonslit"; ///< put target on slit
 const std::string ACAMD_QUALITY  = "quality";   ///< *** call the Python telemetry function
@@ -97,6 +98,7 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_LOADCALIBRATION+"",
                                                 ACAMD_OFFSETCAL+" [ ? ]",
                                                 ACAMD_OFFSETGOAL+" [ ? | <dRA> <dDEC> ]",
+                                                ACAMD_OFFSETPERIOD+" [ ? | <sec> ]",
                                                 ACAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> ]",
                                                 TELEMREQUEST+" [ ? ]",
                                                 ACAMD_SHUTDOWN+" [ ? ]",

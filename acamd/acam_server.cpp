@@ -848,6 +848,10 @@ namespace Acam {
                       ret = this->interface.offset_goal( args, retstring );
       }
       else
+      if ( cmd == ACAMD_OFFSETPERIOD ) {
+                      ret = this->interface.offset_period( args, retstring );
+      }
+      else
       if ( cmd == ACAMD_PUTONSLIT ) {
                       ret = this->interface.put_on_slit( args, retstring );
       }

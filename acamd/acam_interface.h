@@ -354,7 +354,10 @@ namespace Acam {
       double offset_cal_offset, offset_cal_raoff, offset_cal_decoff;
 
       std::chrono::time_point<std::chrono::steady_clock,
-                              std::chrono::duration<double>> timeout_time;
+                              std::chrono::duration<double>> timeout_time, time_last_offset;
+
+      std::vector<double> ra_off_list, dec_off_list;  ///< lists of offsets for median filtering
+      std::chrono::seconds::rep tcs_offset_period;    ///< period at which to send offsets while guiding
 
       struct coords_t {
         double ra;
@@ -370,6 +373,9 @@ namespace Acam {
       std::string pointmode;
 
     public:
+
+      inline std::chrono::seconds::rep get_tcs_offset_period() { return this->tcs_offset_period; }
+      inline void set_tcs_offset_period(std::chrono::seconds::rep val) { this->tcs_offset_period=val; }
 
       inline double get_timeout() { return this->timeout; }
 
@@ -419,6 +425,7 @@ namespace Acam {
 
       long acquire( Acam::TargetAcquisitionModes requested_mode );
       long do_acquire();
+      bool median_filter( double &ra_off, double &dec_off );
 
       inline void save_casangle( const double _angle ) { this->tcs_casangle = _angle; }
 
@@ -463,6 +470,9 @@ namespace Acam {
                  is_acquired(false),
                  stop_acquisition(false),
                  offset_cal_offset(0),
+                 timeout_time(std::chrono::steady_clock::now()),
+                 time_last_offset(std::chrono::steady_clock::now()),
+                 tcs_offset_period(1),
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
                  dRA(0), dDEC(0),
@@ -645,6 +655,7 @@ namespace Acam {
       long guider_settings_control();          /// get guider settings and push to Guider GUI display
       long guider_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long avg_frames( std::string args, std::string &retstring );
+      long offset_period( std::string args, std::string &retstring );
       long acquire( std::string args, std::string &retstring );
       long target_coords( std::string args, std::string &retstring );  /// set or get target coords for acquire
       long offset_cal( const std::string args, std::string &retstring );

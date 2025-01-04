@@ -3028,6 +3028,46 @@ namespace Acam {
   /***** Acam::Interface::avg_frames ******************************************/
 
 
+  /***** Acam::Interface::offset_period ***************************************/
+  /**
+   * @brief      set or get the period at which guiding offsets are sent to the TCS
+   * @param[in]  args       input args
+   * @param[out] retstring  return string
+   * @return     HELP | ERROR | NO_ERROR
+   *
+   */
+  long Interface::offset_period( const std::string args, std::string &retstring ) {
+    // Help
+    //
+    if ( args == "?" || args == "help" ) {
+      retstring = ACAMD_OFFSETPERIOD;
+      retstring.append( " [ <sec> ]\n" );
+      retstring.append( "   Set or get the period (in whole seconds) at which median-filtered\n" );
+      retstring.append( "   guiding offsets are sent to the TCS. Minimum value is 1.\n" );
+      return HELP;
+    }
+    if ( !args.empty() ) {
+      try {
+        auto val = std::stoll( args );
+        if ( val < 1 ) {
+          logwrite( "Acam::Interface::offset_period", "ERROR minimum <sec> is 1" );
+          retstring="invalid_argument";
+          return ERROR;
+        }
+        this->target.set_tcs_offset_period(val);
+      }
+      catch( const std::exception &e ) {
+        logwrite( "Acam::Interface::offset_period", "ERROR parsing value: "+std::string(e.what()) );
+        retstring="bad_value";
+        return ERROR;
+      }
+    }
+    retstring=std::to_string(this->target.get_tcs_offset_period());
+    return NO_ERROR;
+  }
+  /***** Acam::Interface::offset_period ***************************************/
+
+
   /***** Acam::Interface::acquire *********************************************/
   /**
    * @brief      outside interface to set or get the target acquisition
@@ -3566,14 +3606,27 @@ logwrite( function, message.str() );
       // otherwise send the offsets to the TCS and keep looping.
       //
       else {
-        // send offset to TCS here (returns when offset is complete)
-        message.str(""); message << "[DEBUG] will send ra_off=" << ra_off*3600. << " dec_off=" << dec_off*3600.;
+        message.str(""); message << "[DEBUG] ra_off=" << ra_off*3600. << " dec_off=" << dec_off*3600.;
         logwrite( function, message.str() );
         if ( std::abs(ra_off*3600.) > 300. || std::abs(dec_off*3600.) > 300. ) {
           logwrite( function, "ERROR not sending offsets because they exceed 300 arcsec!" );
           break;
         }
-        if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
+
+        bool should_offset=false;
+
+        // While guiding, run the offsets through a median filter over a
+        // specified time period, and send the offsets only at the rate
+        // determined by that period. This returns true and modifies the
+        // values ra_off,dec_off when it's time to offset.
+        //
+        if ( this->acquire_mode == Acam::TARGET_GUIDE ) {
+          should_offset = this->median_filter(ra_off, dec_off);
+        }
+        else should_offset = true;  // always send the offsets when not guiding
+
+        // send offset to TCS here (returns when offset is complete)
+        if ( should_offset && iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
         std::this_thread::sleep_for( std::chrono::seconds(1) );
 
         // reset retry counter if match found and offset < max and no errors
@@ -3668,6 +3721,72 @@ logwrite( function, message.str() );
     return error;
   }
   /***** Acam::Target::do_acquire *********************************************/
+
+
+  /***** Acam::Target::median_filter ******************************************/
+  /**
+   * @brief      median-filters the ra and dec offsets
+   * @details    This accepts a reference to the current ra and dec offsets,
+   *             which are appended to a class list so that a median filter
+   *             can be performed.
+   * @param[in]  ra_off   reference to ra offset
+   * @param[in]  dec_off  reference to dec offset
+   * @return     true|false
+   *
+   */
+  bool Target::median_filter( double &ra_off, double &dec_off ) {
+    // place these offsets into the end of a list of offsets
+    //
+    this->ra_off_list.push_back(ra_off);
+    this->dec_off_list.push_back(dec_off);
+
+    auto time_since_offset =
+      std::chrono::duration_cast<std::chrono::seconds>( std::chrono::steady_clock::now() -
+                                                        this->time_last_offset ).count();
+
+    // If it's not time to offset then return false now,
+    // having added the offsets to the list.
+    //
+    if ( time_since_offset < this->tcs_offset_period ) return false;
+
+    // Beyond here will return true which allows an offset,
+    // so record this time.
+    //
+    this->time_last_offset = std::chrono::steady_clock::now();
+
+    // Otherwise, perform a median filter on the lists. Use a copy so that
+    // the first value in the list can later be removed.
+    //
+    auto  _ra_list = this->ra_off_list;
+    auto _dec_list = this->dec_off_list;
+
+    std::sort( _ra_list.begin(),  _ra_list.end());
+    std::sort(_dec_list.begin(), _dec_list.end());
+
+    auto n = _ra_list.size();
+
+    // need at least 2 values to do anything
+    if ( n < 2 ) return true;
+
+    // even number of values returns the average of the 2 center-most values
+    if ( n % 2 == 0 ) {
+      ra_off  = ( _ra_list[n/2 + 1] +  _ra_list[n])/2.;
+      dec_off = (_dec_list[n/2 + 1] + _dec_list[n])/2.;
+    }
+    // odd number of values returns the center value
+    else {
+      ra_off  =  _ra_list[n/2];
+      dec_off = _dec_list[n/2];
+    }
+
+    // remove the oldest value from the lists
+    //
+    this->ra_off_list.erase(this->ra_off_list.begin());
+    this->dec_off_list.erase(this->dec_off_list.begin());
+
+    return true;
+  }
+  /***** Acam::Target::median_filter ******************************************/
 
 
   /***** Acam::Interface::dothread_set_filter *********************************/
