@@ -103,16 +103,16 @@ class NgpsGUI(QMainWindow):
 
     def on_login(self):
         """Handle the login action from the menu."""
-        login_dialog = LoginDialog(self, self.connection)
+        self.login_dialog = LoginDialog(self, self.connection)
 
         # If the login is successful, load data from MySQL
-        if login_dialog.exec_() == QDialog.Accepted:
+        if self.login_dialog.exec_() == QDialog.Accepted:
             # Call the function to load data from MySQL
-            self.load_mysql_data(login_dialog.all_targets)
-            self.user_set_data = login_dialog.set_data
-            self.current_owner = login_dialog.owner
+            self.load_mysql_data(self.login_dialog.all_targets)
+            self.user_set_data = self.login_dialog.set_data
+            self.current_owner = self.login_dialog.owner
             # After loading data, populate the target lists dropdown
-            self.layout_service.load_target_lists(login_dialog.set_name)
+            self.layout_service.load_target_lists(self.login_dialog.set_name)
 
 
     def load_mysql_data(self, all_targets):
@@ -132,6 +132,10 @@ class NgpsGUI(QMainWindow):
     def send_command(self, command):
         """ Load data from MySQL after successful login """
         self.sequencer_service.send_command(command)
+
+    def reload_table(self):
+        self.login_dialog.fetch_and_update_target_list(self.current_owner)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
