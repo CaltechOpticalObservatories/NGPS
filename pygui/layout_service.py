@@ -959,7 +959,7 @@ class LayoutService:
                 self.target_list_name.setCurrentIndex(0)  # Set the first item as default
 
             # Connect the signal for user selection change
-            self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
+            # self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
 
     def create_new_target_list(self):
         """Handle creating a new target list, uploading CSV, and creating a new target set."""
