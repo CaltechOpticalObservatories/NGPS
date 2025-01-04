@@ -111,6 +111,7 @@ class NgpsGUI(QMainWindow):
             #self.load_mysql_data(login_dialog.all_targets)
             self.user_set_data = login_dialog.set_data
             self.current_owner = login_dialog.owner
+            self.layout_service.target_list_display.setVisible(True)
             # # After loading data, populate the target lists dropdown
             # self.layout_service.load_target_lists(login_dialog.set_name)
 
