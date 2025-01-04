@@ -96,7 +96,7 @@ class NgpsGUI(QMainWindow):
         if file_path:
             file_name_only = file_path.split("/")[-1]  # Get the file name only (without the path)
             # Update the target list combo box with the file name
-            #self.target_list_name.addItem(file_name_only)
+            self.target_list_name.addItem(file_name_only)
         
             # Use LogicService to load CSV and update the table
             self.logic_service.load_csv_and_update_target_list(file_path)
@@ -108,13 +108,11 @@ class NgpsGUI(QMainWindow):
         # If the login is successful, load data from MySQL
         if login_dialog.exec_() == QDialog.Accepted:
             # Call the function to load data from MySQL
-            #self.load_mysql_data(login_dialog.all_targets)
+            self.load_mysql_data(login_dialog.all_targets)
             self.user_set_data = login_dialog.set_data
             self.current_owner = login_dialog.owner
-            self.layout_service.load_target_button.setVisible(False) 
-            self.layout_service.target_list_display.setVisible(True)
-            # # After loading data, populate the target lists dropdown
-            # self.layout_service.load_target_lists(login_dialog.set_name)
+            # After loading data, populate the target lists dropdown
+            self.layout_service.load_target_lists(login_dialog.set_name)
 
 
     def load_mysql_data(self, all_targets):
