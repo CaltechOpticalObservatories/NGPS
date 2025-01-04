@@ -106,7 +106,7 @@ class LoginDialog(QDialog):
 
         # Connect signals
         self.login_button.clicked.connect(self.on_login)
-        #self.cancel_button.clicked.connect(self.reject)
+        self.cancel_button.clicked.connect(self.reject)
 
         self.owner = None
 

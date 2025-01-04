@@ -392,6 +392,7 @@ class LogicService:
 
     def fetch_and_update_target_list(self):
         """Fetch target data and update the table in the parent window."""
+
         if self.connection:
             try:
                 cursor = self.connection.cursor(dictionary=True)

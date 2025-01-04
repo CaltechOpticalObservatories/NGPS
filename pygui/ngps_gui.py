@@ -134,7 +134,7 @@ class NgpsGUI(QMainWindow):
         self.sequencer_service.send_command(command)
 
     def reload_table(self):
-        self.login_dialog.fetch_and_update_target_list(self.current_owner)
+        self.logic_service.fetch_and_update_target_list()
 
 
 if __name__ == '__main__':
