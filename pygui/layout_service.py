@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFileDialog, QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QTableWidgetItem,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
 from instrument_status_service import InstrumentStatusService
@@ -164,9 +164,6 @@ class LayoutService:
         system_status_layout.setSpacing(3)  # Reduced space between items in the layout
         system_status_layout.setContentsMargins(5, 5, 5, 5)  # Reduced margins around the layout
 
-        self.parent.instrument_status_label = QLabel("System Status:")
-        system_status_layout.addWidget(self.parent.instrument_status_label)
-
         # Create a mapping for status colors
         status_map = {
             "stopped": QColor(169, 169, 169),  # Grey
@@ -272,7 +269,9 @@ class LayoutService:
                     background-color: #555555;
                 }
             """)
-
+            print("Startup button clicked!")
+            command = f"startup\n"
+            self.parent.send_command(command)
             self.update_system_status("idle")  # Set to 'idle' when starting up
         else:
             # Change the button back to Startup (green)
@@ -292,7 +291,9 @@ class LayoutService:
                     background-color: #2C6B2F;
                 }
             """)
-
+            print("Shutdown button clicked!")
+            command = f"shutdown\n"
+            self.parent.send_command(command) 
             self.update_system_status("stopped")  # Set to 'stopped' when shutting down
 
     def update_system_status(self, status):
@@ -484,7 +485,7 @@ class LayoutService:
                 color: #A9A9A9;  /* Grey text color when disabled */
             }
         """)
-        # self.add_row_button.clicked.connect(self.add_new_row)  # Connect to function to add a new row
+        self.add_row_button.clicked.connect(self.add_new_row)  # Connect to function to add a new row
         self.add_row_button.setEnabled(False)
         # Add the (+) button next to the label
         header_layout.addWidget(self.add_row_button)
@@ -515,7 +516,7 @@ class LayoutService:
         button_layout.addWidget(self.load_target_button)
         button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
 
-        self.load_target_button.clicked.connect(self.parent.load_csv_file)  # Connect to load CSV functionality
+        self.load_target_button.clicked.connect(self.parent.on_login)  # Connect to load CSV functionality
         bottom_section_layout.addWidget(self.load_target_button)
 
         # Create the QTableWidget for the target list
@@ -586,6 +587,56 @@ class LayoutService:
             selected_row = selected_rows[0].row()  # Get the first selected row (you can handle multi-row selection here)
             # Pass the selected row to LogicService
             self.parent.logic_service.update_target_information(selected_row)
+
+    def add_new_row(self):
+        # Create the dialog for input
+        dialog = QDialog(self.parent)
+        dialog.setWindowTitle("Add New Target")
+
+        # Create a layout for the dialog
+        dialog_layout = QVBoxLayout()
+
+        # Create fields for the dialog (Name, RA, Decl, and optional fields)
+        fields = {
+            "Name": QLineEdit(),
+            "RA": QLineEdit(),
+            "Decl": QLineEdit(),
+            "Offset RA": QLineEdit(),
+            "Offset Dec": QLineEdit(),
+            "EXPTime": QLineEdit(),
+            "Slitwidth": QLineEdit(),
+            "Magnitude": QLineEdit(),
+        }
+
+        for field_name, field_widget in fields.items():
+            label = QLabel(field_name)
+            dialog_layout.addWidget(label)
+            dialog_layout.addWidget(field_widget)
+
+        # Create the OK and Cancel buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        dialog_layout.addWidget(button_box)
+
+        # Handle the OK and Cancel actions
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+
+        dialog.setLayout(dialog_layout)
+
+        # Show the dialog and wait for the result
+        if dialog.exec_() == QDialog.Accepted:
+            # Get the values from the dialog fields
+            row_data = []
+            for field_name, field_widget in fields.items():
+                row_data.append(field_widget.text())
+
+            # Add a new row to the table with the input data
+            current_row_count = self.target_list_display.rowCount()
+            self.target_list_display.insertRow(current_row_count)
+
+            # Add data to the new row
+            for column, value in enumerate(row_data):
+                self.target_list_display.setItem(current_row_count, column, QTableWidgetItem(value))
 
     def update_target_info(self):
         # Get the selected row's index
@@ -926,6 +977,7 @@ class LayoutService:
                 # Step 3: Call the logic service to upload the CSV and associate it with a new target set
                 self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
                 self.target_list_name.setCurrentText(target_set_name)  # Set the newly created target list as selected
+                self.logic_service.update_target_table_with_list(target_set_name)
 
     def on_target_set_changed(self):
         """Handle the target set change in the ComboBox."""
@@ -1039,30 +1091,36 @@ class LayoutService:
 
         # Main horizontal layout for two columns
         etc_layout = QHBoxLayout()
-        etc_layout.setSpacing(10)  # Slight spacing between columns
-        etc_layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the layout
+        etc_layout.setSpacing(12)
+        etc_layout.setContentsMargins(5, 15, 15, 15)
 
-        # Left column layout using QGridLayout for alignment and independence of rows
+        # Left column layout using QGridLayout for alignment
         left_column_layout = QGridLayout()
-        left_column_layout.setContentsMargins(0, 0, 0, 0)
-        left_column_layout.setHorizontalSpacing(15)
+        left_column_layout.setContentsMargins(5, 10, 10, 10)
+        left_column_layout.setHorizontalSpacing(10)
         left_column_layout.setVerticalSpacing(10)
 
+        # Right column layout using QGridLayout for alignment
+        right_column_layout = QGridLayout()
+        right_column_layout.setContentsMargins(10, 10, 10, 10)
+        right_column_layout.setHorizontalSpacing(10)
+        right_column_layout.setVerticalSpacing(10)
+
         # Common dimensions
-        label_width = 120  # Ensure all labels have the same width
+        label_width = 120
         widget_height = 40
-        short_input_width = 60  # Shorter width for most input boxes
+        short_input_width = 60
         dropdown_width = 75
-        range_input_width = 75  # Wider width for range inputs
+        range_input_width = 75
 
         # Helper function to create aligned labels
         def create_aligned_label(text):
             label = QLabel(text)
             label.setFixedWidth(label_width)
-            label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)  # Align text to the right and center vertically
+            label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             return label
 
-        # Row 0: Magnitude, Filter (dropdown), and System (evenly spaced)
+        # Row 0: Magnitude, Filter, and System
         magnitude_label = create_aligned_label("Magnitude:")
         self.magnitude_input = QLineEdit()
         self.magnitude_input.setFixedSize(short_input_width, widget_height)
@@ -1075,19 +1133,16 @@ class LayoutService:
         self.system_field.setReadOnly(True)
         self.system_field.setFixedSize(short_input_width, widget_height)
 
-        first_row_layout = QHBoxLayout()
-        first_row_layout.setContentsMargins(0, 0, 0, 0)  # Remove any margins
-        first_row_layout.setSpacing(15)  # Ensure there is space of 15 pixels between widgets
+        # Create a QHBoxLayout for the three widgets (magnitude_input, filter_dropdown, system_field)
+        input_group_layout = QHBoxLayout()
+        input_group_layout.addWidget(self.magnitude_input)
+        input_group_layout.addWidget(self.filter_dropdown)
+        input_group_layout.addWidget(self.system_field)
 
-        first_row_layout.addWidget(magnitude_label)
-        first_row_layout.addWidget(self.magnitude_input)
-        first_row_layout.addWidget(self.filter_dropdown)
-        first_row_layout.addWidget(self.system_field)
+        # Add the magnitude label and the input group layout to the grid
+        left_column_layout.addWidget(magnitude_label, 0, 0)
+        left_column_layout.addLayout(input_group_layout, 0, 1, 1, 3)  # Spans 3 columns, keeping the 5px spacing
 
-        # Add stretch to make sure widgets are evenly spaced
-        first_row_layout.addStretch()
-
-        left_column_layout.addLayout(first_row_layout, 0, 0, 1, 4)  # Span across all four columns
 
         # Row 1: Sky Mag and Mag Filter
         sky_mag_label = create_aligned_label("Sky Mag:")
@@ -1099,43 +1154,35 @@ class LayoutService:
         self.mag_filter_dropdown.addItems(["match"])
         self.mag_filter_dropdown.setFixedSize(dropdown_width, widget_height)
 
-        # Adjust the spacing between Sky Mag and Mag Filter (reduce the spacing for this row)
         left_column_layout.addWidget(sky_mag_label, 1, 0)
         left_column_layout.addWidget(self.sky_mag_input, 1, 1)
         left_column_layout.addWidget(mag_filter_label, 1, 2)
         left_column_layout.addWidget(self.mag_filter_dropdown, 1, 3)
 
-        # Row 2: SNR and EXPTime
+        # Row 2: SNR and Slit Width
         snr_label = create_aligned_label("SNR:")
         self.snr_input = QLineEdit()
         self.snr_input.setFixedSize(short_input_width, widget_height)
-
-        exptime_label = create_aligned_label("EXPTime:")
-        self.exptime_input = QLineEdit()
-        self.exptime_input.setFixedSize(short_input_width, widget_height)
-
-        # Adjust the spacing between SNR and EXPTime
-        left_column_layout.addWidget(snr_label, 2, 0)
-        left_column_layout.addWidget(self.snr_input, 2, 1)
-        left_column_layout.addWidget(exptime_label, 2, 2)
-        left_column_layout.addWidget(self.exptime_input, 2, 3)
-
-        # Row 3: Resolution and Slit Width
-        resolution_label = create_aligned_label("Resolution:")
-        self.resolution_input = QLineEdit()
-        self.resolution_input.setFixedSize(short_input_width, widget_height)
 
         slit_width_label = create_aligned_label("Slit Width:")
         self.slit_width_input = QLineEdit()
         self.slit_width_input.setFixedSize(short_input_width, widget_height)
 
-        # Adjust the spacing between Resolution and Slit Width
-        left_column_layout.addWidget(resolution_label, 3, 0)
-        left_column_layout.addWidget(self.resolution_input, 3, 1)
-        left_column_layout.addWidget(slit_width_label, 3, 2)
-        left_column_layout.addWidget(self.slit_width_input, 3, 3)
+        self.slit_dropdown = QComboBox()
+        self.slit_dropdown.addItems(["SET X", "LOSS X", "SNR X", "RES X", "AUTO"])
+        self.slit_dropdown.setFixedSize(dropdown_width, widget_height)
 
-        # Row 4: Range and No Slicer
+        slit_width_layout = QHBoxLayout()
+        slit_width_layout.setSpacing(10)
+        slit_width_layout.addWidget(self.slit_width_input)
+        slit_width_layout.addWidget(self.slit_dropdown)
+
+        left_column_layout.addWidget(snr_label, 2, 0)
+        left_column_layout.addWidget(self.snr_input, 2, 1)
+        left_column_layout.addWidget(slit_width_label, 2, 2)
+        left_column_layout.addLayout(slit_width_layout, 2, 3)
+
+        # Row 3: Range and No Slicer
         range_label = create_aligned_label("Range:")
         self.range_input_start = QLineEdit()
         self.range_input_start.setFixedSize(range_input_width, widget_height)
@@ -1146,9 +1193,8 @@ class LayoutService:
         self.range_input_end = QLineEdit()
         self.range_input_end.setFixedSize(range_input_width, widget_height)
 
-        # Create a horizontal layout for range inputs and No Slicer checkbox
         range_layout = QHBoxLayout()
-        range_layout.setSpacing(15)  # Set spacing to 15 between range inputs
+        range_layout.setSpacing(10)
         range_layout.addWidget(self.range_input_start)
         range_layout.addWidget(range_dash)
         range_layout.addWidget(self.range_input_end)
@@ -1158,30 +1204,29 @@ class LayoutService:
 
         range_layout.addWidget(self.no_slicer_checkbox)
 
-        left_column_layout.addWidget(range_label, 4, 0)
-        left_column_layout.addLayout(range_layout, 4, 1, 1, 3)
+        left_column_layout.addWidget(range_label, 3, 0)
+        left_column_layout.addLayout(range_layout, 3, 1, 1, 3)
 
-        # Row 5: Slit dropdown
-        slit_label = create_aligned_label("Slit:")
-        self.slit_dropdown = QComboBox()
-        self.slit_dropdown.addItems(["SET X", "LOSS X", "SNR X", "RES X", "AUTO"])
-        self.slit_dropdown.setFixedSize(dropdown_width, widget_height)
+        # Add EXP Time and Resolution to the right column
+        exptime_label = create_aligned_label("EXPTime:")
+        self.exptime_input = QLineEdit()
+        self.exptime_input.setFixedSize(short_input_width, widget_height)
 
-        # left_column_layout.addWidget(slit_label, 5, 2)
-        # left_column_layout.addWidget(self.slit_dropdown, 5, 3)
+        resolution_label = create_aligned_label("Resolution:")
+        self.resolution_input = QLineEdit()
+        self.resolution_input.setFixedSize(short_input_width, widget_height)
 
-        # Right column layout
-        right_column_layout = QVBoxLayout()
-        right_column_layout.setContentsMargins(0, 0, 0, 0)
-        right_column_layout.setSpacing(10)
+        right_column_layout.addWidget(exptime_label, 0, 0)
+        right_column_layout.addWidget(self.exptime_input, 0, 1)
+        right_column_layout.addWidget(resolution_label, 1, 0)
+        right_column_layout.addWidget(self.resolution_input, 1, 1)
 
-        # Results display
-        self.results_display = QTextEdit()
-        self.results_display.setReadOnly(True)
-        self.results_display.setFixedSize(250, 165)
-        right_column_layout.addWidget(self.results_display)
+        # Divider line between the two columns
+        divider_line = QFrame()
+        divider_line.setFrameShape(QFrame.VLine)
+        divider_line.setFrameShadow(QFrame.Sunken)
 
-        # Buttons
+        # Buttons in the right column
         button_row_layout = QHBoxLayout()
         button_row_layout.setSpacing(10)
 
@@ -1195,15 +1240,15 @@ class LayoutService:
         button_row_layout.addWidget(run_button)
         button_row_layout.addWidget(save_button)
 
-        right_column_layout.addLayout(button_row_layout)
+        right_column_layout.addLayout(button_row_layout, 2, 0, 1, 2)
 
-        # Add the two columns to the ETC layout
+        # Add everything to the main ETC layout
         etc_layout.addLayout(left_column_layout, stretch=2)
+        etc_layout.addWidget(divider_line)
         etc_layout.addLayout(right_column_layout, stretch=1)
 
         # Set layout for the ETC tab
         self.parent.etc.setLayout(etc_layout)
-
 
     def run_etc(self):
         """Handles the logic for the 'Run ETC' button."""
@@ -1212,8 +1257,4 @@ class LayoutService:
             result_text += "No Slicer Selected\n"
         result_text += f"Range: {self.range_input_start.text()} - {self.range_input_end.text()}"
         self.results_display.setText(result_text)
-
-
-
-
 
