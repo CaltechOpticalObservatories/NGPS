@@ -1,0 +1,84 @@
+Information on the various models in this directory is given below.
+
+kilonova_transient.fits
+-----------------------
+The wavelength range for this model is 0.11 to 3.0 microns, though the units in the file are in Angstroms. The original flux units were erg/s/Hz. These were converted to flux density by dividing by 4*pi*D^2, where D is 40 Mpc converted to cm. This is the approximate distance to 2017gfo, a kilonova associated with the gravitational wave event GW 170817 detected on August 17, 2017 in the elliptical galaxy NGC 4993. The flux density was then converted to erg/s/cm^2/A using pysynphot. The original model used to create this template was retrieved from https://github.com/dnkasen/Kasen_Kilonova_Models_2017, and contained time series spectra, each covering 0.11 - 3 microns, spaced 0.1 days apart. There was no kilonova spectrum provided at T+0 days at the peak of the supernova. Instead, the closest in time was T+0.05 days, and is the spectrum provided in this file. The original spectrum had negative flux values. To eliminate these values, the entire spectrum was shifted upward by the minimum value, which resulted in a new minimum value of 0.
+
+The model parameters for this spectrum are:
+Inner density profile exponent: 1
+Outer density profile exponent: 10
+Ejecta mass:  0.0025 solar masses
+Ejecta kinetic velocity:  0.10c
+Lanthanide mass fraction:  1e-5
+
+References
+----------
+Kasen et al. (2017), Nature 551, 80-84
+
+
+sne91bg_plasticc_transient.fits
+-------------------------------
+The wavelength range for this model is 0.11 to 1.2 microns, with the units in the file in Angstroms. The flux units are arbitrary, however, they are correct relative to each other, and therefore one can assume the units are erg/s/cm^2/A. The original model used in creating this spectrum was retrieved from the Photometric LSST Astronomical Time Series Classification Challenge (PLAsTiCC) library, located at https://zenodo.org/record/2612896#.Xw04G5NKiL5, and contained time series spectra, each covering 0.11 - 1.2 microns, spaced 1 day apart. This spectrum represents the peak of the supernova at T+0 days.
+
+References
+----------
+Kessler et al. (2019), PASP 131, 094501
+
+
+sneia_salt2_transient.fits
+--------------------------
+This model is a template of a type Ia supernova at T+0 days, where the wavelength range is from 0.17 to 2.5 microns. Within the spectrum, the wavelength values are in Angstroms, while the flux has been tabulated in erg/s/cm^2/A. The basis of spectrum was the SALT2 parametric model for supernova light-curve fitting, presented in Guy et al. (2007). The original model covered 0.2-0.92 microns. Pierel et al. expanded the wavelength range deeper into the UV and IR. Finally, the original file contained time series spectra, each covering 0.17 - 2.5 microns, spaced 1 day apart. This spectrum represents the peak of the supernova at T+0 days.
+
+References
+----------
+Betoule et al. (2014), A&A 568, A22
+Guy et al. (2007), A&A 466, 11
+Pierel et al. (2018), PASP 130, 114504
+
+
+sneiax_plasticc_transient.fits
+------------------------------
+This spectrum is a template of a type Iax supernova at T+0 days, with a wavelength range from 0.10 to 2.5 microns. Within the file, the wavelengths are in Angstroms. The flux units are arbitrary, however, they are correct relative to each other, and therefore one can assume the units are erg/s/cm^2/A. The original model used in creating this spectrum was retrieved from the Photometric LSST Astronomical Time Series Classification Challenge (PLAsTiCC) library, located at https://zenodo.org/record/2612896#.Xw04G5NKiL5, and contained time series spectra, each covering 0.10 - 2.5 microns, spaced 1 day apart. This spectrum represents the peak of the supernova at T+0 days.
+
+References
+----------
+Kessler et al. (2019), PASP 131, 094501
+
+
+sneib_transient.fits
+--------------------
+This file is a template of a type Ib supernova at T+0 days, with a wavelength range of 0.16 to 1.1 microns. The original file was retrieved from: https://github.com/maria-vincenzi/PyCoCo_templates, and was called PTF13bvn.SED. It contained time series spectra, each covering 0.16 - 1.1 microns, with variable spacing in time. This spectrum represents the peak of the supernova at T+0 days, and was corrected for a distance of 10 parsecs; there was no host galaxy extinction. Within the file, the wavelength is in Angstroms, while the fluxes have been tabulated in units of erg/s/cm^2/A.
+
+References
+----------
+Vincenzi et al. (2019), MNRAS 489, 5802-5821
+
+
+sneii_fast_transient.fits
+-------------------------
+This model is a type II supernova (fast decline) at T+0 days, with a wavelength range of 0.16 to 1.1 microns. The original file was obtained from: https://github.com/maria-vincenzi/PyCoCo_templates, and was called SN2013by.SED. It contained time series spectra, each covering 0.16 - 1.1 microns, with variable spacing in time. This spectrum represents the peak of the supernova at T+0 days, and was corrected for a distance of 10 parsecs; there was no host galaxy extinction. Within the file, the wavelength is in Angstroms, while the fluxes have been tabulated in units of erg/s/cm^2/A.
+
+References
+----------
+Vincenzi et al. (2019), MNRAS 489, 5802-5821
+
+
+sneii_slow_transient.fits
+-------------------------
+This model is a type II supernova (slow decline) at T+0 days, with a wavelength range of 0.16 to 1.1 microns. The original file was obtained from: https://github.com/maria-vincenzi/PyCoCo_templates, and was called SN2013am.SED.
+It contained time series spectra, each covering 0.16 - 1.1 microns, with variable spacing in time. This spectrum represents the peak of the supernova at T+0 days, and was corrected for a distance of 10 parsecs; there was no host galaxy extinction. Within the file, the wavelength is in Angstroms, while the fluxes have been tabulated in units of erg/s/cm^2/A.
+
+References
+----------
+Vincenzi et al. (2019), MNRAS 489, 5802-5821
+
+
+Filename                        |         Type        |
+--------------------------------+---------------------|
+kilonova_transient.fits         |       kilonova      |
+sne91bg_plasticc_transient.fits |         91bg        |
+sneia_salt2_transient.fits      |          Ia         |
+sneiax_plasticc_transient.fits  |          Iax        |
+sneib_transient.fits            |          Ib         |
+sneii_fast_transient.fits       |  II (fast decline)  |
+sneii_slow_transient.fits       |  II (slow decline)  |

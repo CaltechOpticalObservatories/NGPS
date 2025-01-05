@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
 import re
+import subprocess
 
 class LayoutService:
     def __init__(self, parent):
@@ -1143,7 +1144,6 @@ class LayoutService:
         left_column_layout.addWidget(magnitude_label, 0, 0)
         left_column_layout.addLayout(input_group_layout, 0, 1, 1, 3)  # Spans 3 columns, keeping the 5px spacing
 
-
         # Row 1: Sky Mag and Mag Filter
         sky_mag_label = create_aligned_label("Sky Mag:")
         self.sky_mag_input = QLineEdit()
@@ -1250,11 +1250,136 @@ class LayoutService:
         # Set layout for the ETC tab
         self.parent.etc.setLayout(etc_layout)
 
+    def validate_inputs(self):
+        """Validates user inputs in the ETC tab and highlights invalid fields."""
+        
+        # Helper function to check if the input is a valid float and not empty
+        def is_valid_float(text):
+            if text.strip() == '':  # Check if the text is empty
+                return False
+            try:
+                float(text)  # Try to convert to float
+                return True
+            except ValueError:
+                return False  # Return False if the conversion fails
+
+        # Reset all fields to default state (clear previous error highlighting)
+        self.magnitude_input.setStyleSheet("")
+        self.sky_mag_input.setStyleSheet("")
+        self.snr_input.setStyleSheet("")
+        self.slit_width_input.setStyleSheet("")
+        self.range_input_start.setStyleSheet("")
+        self.range_input_end.setStyleSheet("")
+        
+        try:
+            # Check if all numeric inputs are valid
+            if not is_valid_float(self.magnitude_input.text()):
+                self.magnitude_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("Magnitude must be a valid number.")
+            magnitude = float(self.magnitude_input.text())
+
+            if not is_valid_float(self.sky_mag_input.text()):
+                self.sky_mag_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("Sky Mag must be a valid number.")
+            sky_mag = float(self.sky_mag_input.text())
+
+            if not is_valid_float(self.snr_input.text()):
+                self.snr_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("SNR must be a valid number.")
+            snr = float(self.snr_input.text())
+
+            if not is_valid_float(self.slit_width_input.text()):
+                self.slit_width_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("Slit Width must be a valid number.")
+            slit_width = float(self.slit_width_input.text())
+
+            if not is_valid_float(self.range_input_start.text()):
+                self.range_input_start.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("Range Start must be a valid number.")
+            range_start = float(self.range_input_start.text())
+
+            if not is_valid_float(self.range_input_end.text()):
+                self.range_input_end.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("Range End must be a valid number.")
+            range_end = float(self.range_input_end.text())
+            
+            # Ensure range_start is less than range_end
+            if range_start >= range_end:
+                self.range_input_start.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                self.range_input_end.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
+                raise ValueError("Range start must be less than range end.")
+
+            # Check for valid values (you can adjust this for your specific needs)
+            if magnitude <= 0 or sky_mag <= 0 or snr <= 0 or slit_width <= 0:
+                raise ValueError("Magnitude, Sky Mag, SNR, and Slit Width must be positive values.")
+            
+            return True  # All inputs are valid
+
+        except ValueError as e:
+            # Show error message
+            error_msg = f"Invalid input: {str(e)}"
+            print(error_msg)
+            return False  # Input is invalid
+
+
     def run_etc(self):
         """Handles the logic for the 'Run ETC' button."""
-        result_text = f"Results:\nSNR: {self.snr_input.text()}\nEXPTime: {self.exptime_input.text()}\n"
-        if self.no_slicer_checkbox.isChecked():
-            result_text += "No Slicer Selected\n"
-        result_text += f"Range: {self.range_input_start.text()} - {self.range_input_end.text()}"
-        self.results_display.setText(result_text)
+        
+        # Validate inputs before running the command
+        if not self.validate_inputs():
+            return  # If inputs are invalid, do not proceed
+        
+        # Collecting all necessary data from input fields
+        filter_value = self.filter_dropdown.currentText()  # e.g., "G"
+        magnitude_value = self.magnitude_input.text()  # e.g., "18.0"
+        sky_mag_value = self.sky_mag_input.text()  # e.g., "21.4"
+        snr_value = self.snr_input.text()  # e.g., "10"
+        slit_width_value = self.slit_width_input.text()  # e.g., "0.5"
+        slit_option = self.slit_dropdown.currentText()  # e.g., "SET X"
+        seeing_value = "1"  # Assuming a fixed value for seeing, update as needed
+        airmass_value = "1"  # Assuming a fixed value for airmass, update as needed
+        mag_system_value = self.system_field.text()  # e.g., "AB"
+        mag_filter_value = self.mag_filter_dropdown.currentText()  # e.g., "match"
+        
+        # Handling the range inputs
+        range_start_value = self.range_input_start.text()
+        range_end_value = self.range_input_end.text()
+
+        # Construct the command string
+        command = f"python3 ETC/ETC_main.py {filter_value} {range_start_value} {range_end_value} SNR {snr_value} " \
+                f"-slit {slit_option} {slit_width_value} -seeing {seeing_value} 500 -airmass {airmass_value} " \
+                f"-skymag {sky_mag_value} -mag {magnitude_value} -magsystem {mag_system_value} -magfilter {mag_filter_value}"
+
+        # Print the command for debugging
+        print(f"Running command: {command}")
+        
+        # Run the command and capture the output
+        try:
+            result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            output = result.stdout.strip()  # Get the output from the command
+            print(f"Command output: {output}")
+
+            # Extract EXPTIME and RESOLUTION from the output using regex
+            exptime_match = re.search(r"EXPTIME=([0-9.]+) s", output)
+            resolution_match = re.search(r"RESOLUTION=([0-9.]+)", output)
+
+            if exptime_match:
+                exptime = float(exptime_match.group(1))
+                exptime_rounded = round(exptime)  # Round EXPTIME to the nearest integer
+                self.exptime_input.setText(str(exptime_rounded))  # Update GUI field with rounded EXPTIME
+
+            if resolution_match:
+                resolution = float(resolution_match.group(1))
+                resolution_rounded = round(resolution)  # Round RESOLUTION to the nearest integer
+                self.resolution_input.setText(str(resolution_rounded))  # Update GUI field with rounded RESOLUTION
+
+        except subprocess.CalledProcessError as e:
+            # Handle errors if the command fails
+            print(f"Error running ETC: {e}")
+        
+        # Display the result in the results display (GUI)
+        result_text = f"Running ETC with the following parameters:\n{command}\n\n" \
+                    f"EXPTIME: {self.exptime_input.text()}\n" \
+                    f"RESOLUTION: {self.resolution_input.text()}"
+        print(result_text)
 
