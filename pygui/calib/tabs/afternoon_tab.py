@@ -128,7 +128,7 @@ class AfternoonTab(QWidget):
 
         # Ensure the log file path is provided
         if log_file:
-            command = f"./thrufocus | tee {log_file}"
+            command = f"bash thrufocus | tee {log_file}"
             self.execute_command(command)
         else:
             print("Please provide a valid log file path.")
@@ -147,10 +147,10 @@ class AfternoonTab(QWidget):
 
     def run_getcalib(self):
         """Runs the getcalib command"""
-        command = "./getcalib"
+        command = "bash getcalib"
         self.execute_command(command)
 
     def run_getcalib_flat(self):
         """Runs the getcalib_flat command"""
-        command = "./getcalib_flat"
+        command = "bash getcalib_flat"
         self.execute_command(command)
