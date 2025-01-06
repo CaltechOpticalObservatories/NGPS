@@ -17,20 +17,23 @@ if [ ! -d $slicecampath ]; then $(mkdir $slicecampath); fi
 #
 function usage {
         echo "usage:"
-        echo "  camstep focus|cass slicecam|acam|both <name> <num> <start> <stop> <step> [nexp]"
+        echo "  camstep <what> <camera> <imname> <imnum> <start> <stop> <step> [nexp]"
         echo "  "
-        echo "  Steps through focus or cass angle which acquiring acam and/or slicecam"
-        echo "  images at each step."
+        echo "  Steps through focus or cass angle while acquiring acam and/or slicecam"
+        echo "  and/or science images at each step."
         echo "  "
-        echo "  First arg selects what to step, focus or cassangle, then"
-        echo "  second arg selects which camera to grab frames, slicecam, acam, or both."
-        echo "  "
+        echo "     <what>    focus | cass"
+        echo "     <camera>  slicecam | acam | both | all"
         echo "     <imname>  base image name"
         echo "     <imnum>   starting image number"
         echo "     <start>   starting focus position"
         echo "     <stop>    ending focus position"
         echo "     <step>    focus step size"
         echo "     [<nexp>]  is an optional number of exposures at each step"
+        echo "  "
+        echo "  First arg selects what to step, focus or cassangle, then"
+        echo "  second arg selects which camera to grab frames, slicecam, acam, or both,"
+        echo "  to use acam and slicecam, or all to use acam, slicecam, and science."
         echo "  "
         echo "  Start/stop can be in any order, i.e. it can step up or down."
         echo "  Sign of the step is not needed, it's inferred."
@@ -40,7 +43,7 @@ function usage {
         echo "  A logfile is written to /data/logs/____out-YYYY-MM-DDTHHMM.txt"
         echo "  where ____ is either focus or cass, e.g. focusout-2025-01-01T0800.txt"
         echo "  "
-        echo "  All daemons (acamd, slicecamd, tcsd) must already be running and"
+        echo "  All daemons (acamd, slicecamd, camerad, tcsd) must already be running and"
         echo "  open, configured with exposure time, etc."
         echo "  "
 }
@@ -112,7 +115,7 @@ fi
 # create an array of cameras and later will loop through this array
 # to select slicecam, acam, or both
 #
-scicam=("")
+scicam=""
 if [ $cam == "slicecam" ]; then
     whichcam=("scam")
     imagepath=($slicecampath)
@@ -124,7 +127,7 @@ elif [ $cam == "both" ]; then
     imagepath=($acampath $slicecampath)
 elif [ $cam == "all" ]; then
     whichcam=("acam" "scam")
-    scicam=("camera")
+    scicam="camera"
     imagepath=($acampath $slicecampath)
 else
     echo "unrecognized camera \""$cam"\". expected slicecam|acam|both"
@@ -232,7 +235,7 @@ while : ; do
     exposure=1
     while : ; do
         echo "exposing "$exposure"/"$nexp
-        if [ $scicam == "camera" ]; then
+        if [ ! -z $scicam ]; then
             echo "exposing science camera"
             exposed=$(camera expose)
         fi
@@ -248,7 +251,7 @@ while : ; do
             #
             sleep "${sleeptime[$i]}"
         done
-        if [ $scicam == "camera" ]; then
+        if [ ! -z $scicam ]; then
             echo "waiting for science exposure"
             wait=$(listen --wait "CAMERAD:READY:true")
             echo $wait" science exposure done"
@@ -294,3 +297,13 @@ do
 done
 
 echo "done!"
+
+for (( i=1 ; i<=5 ; i++ ));
+do
+    printf '\e[?5h'
+    sleep 0.1
+    tput bel
+    printf '\e[?5l'
+    sleep 0.1
+    tput bel
+done
