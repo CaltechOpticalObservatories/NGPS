@@ -1117,169 +1117,203 @@ class LayoutService:
 
         return check_x_layout
 
+
     def create_etc_tab(self):
         """Create the layout and components for the 'ETC' tab with aligned labels and input boxes."""
 
-        # Main horizontal layout for two columns
-        etc_layout = QHBoxLayout()
+        # Main vertical layout for stacking all the components
+        etc_layout = QVBoxLayout()
         etc_layout.setSpacing(12)
         etc_layout.setContentsMargins(5, 15, 15, 15)
-
-        # Left column layout using QGridLayout for alignment
-        left_column_layout = QGridLayout()
-        left_column_layout.setContentsMargins(5, 10, 10, 10)
-        left_column_layout.setHorizontalSpacing(10)
-        left_column_layout.setVerticalSpacing(10)
-
-        # Right column layout using QGridLayout for alignment
-        right_column_layout = QGridLayout()
-        right_column_layout.setContentsMargins(10, 10, 10, 10)
-        right_column_layout.setHorizontalSpacing(10)
-        right_column_layout.setVerticalSpacing(10)
 
         # Common dimensions
         label_width = 120
         widget_height = 40
-        short_input_width = 60
-        dropdown_width = 75
-        range_input_width = 75
+        short_input_width = 80
+        dropdown_width = 120
+        range_input_width = 90
 
         # Helper function to create aligned labels
         def create_aligned_label(text):
             label = QLabel(text)
-            label.setFixedWidth(label_width)
+            label.setFixedWidth(label_width)  # Fixed width to align with the input fields
             label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             return label
 
+        # Function to create a row with label and input field(s)
+        def create_input_row(label_text, widgets):
+            row_layout = QHBoxLayout()
+            label = create_aligned_label(label_text)
+            row_layout.addWidget(label)
+            for widget in widgets:
+                row_layout.addWidget(widget)
+            return row_layout
+
         # Row 0: Magnitude, Filter, and System
-        magnitude_label = create_aligned_label("Magnitude:")
         self.magnitude_input = QLineEdit()
-        self.magnitude_input.setFixedSize(short_input_width, widget_height)
+        self.magnitude_input.setMinimumWidth(short_input_width)
+        self.magnitude_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.addItems(["U", "G", "R", "I"])
-        self.filter_dropdown.setFixedSize(dropdown_width, widget_height)
+        self.filter_dropdown.setMinimumWidth(dropdown_width)
+        self.filter_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.system_field = QLineEdit("AB")
         self.system_field.setReadOnly(True)
-        self.system_field.setFixedSize(short_input_width, widget_height)
+        self.system_field.setMinimumWidth(short_input_width)
+        self.system_field.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        # Create a QHBoxLayout for the three widgets (magnitude_input, filter_dropdown, system_field)
-        input_group_layout = QHBoxLayout()
-        input_group_layout.addWidget(self.magnitude_input)
-        input_group_layout.addWidget(self.filter_dropdown)
-        input_group_layout.addWidget(self.system_field)
+        input_row_0 = create_input_row("Magnitude:", [self.magnitude_input, self.filter_dropdown, self.system_field])
+        etc_layout.addLayout(input_row_0)
 
-        # Add the magnitude label and the input group layout to the grid
-        left_column_layout.addWidget(magnitude_label, 0, 0)
-        left_column_layout.addLayout(input_group_layout, 0, 1, 1, 3)  # Spans 3 columns, keeping the 5px spacing
-
-        # Row 1: Sky Mag and Mag Filter
+        # Row 1: Sky Mag and SNR (labels in one line with input fields)
         sky_mag_label = create_aligned_label("Sky Mag:")
         self.sky_mag_input = QLineEdit()
-        self.sky_mag_input.setFixedSize(short_input_width, widget_height)
+        self.sky_mag_input.setMinimumWidth(short_input_width)
+        self.sky_mag_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        mag_filter_label = create_aligned_label("Mag Filter:")
-        self.mag_filter_dropdown = QComboBox()
-        self.mag_filter_dropdown.addItems(["match"])
-        self.mag_filter_dropdown.setFixedSize(dropdown_width, widget_height)
-
-        left_column_layout.addWidget(sky_mag_label, 1, 0)
-        left_column_layout.addWidget(self.sky_mag_input, 1, 1)
-        left_column_layout.addWidget(mag_filter_label, 1, 2)
-        left_column_layout.addWidget(self.mag_filter_dropdown, 1, 3)
-
-        # Row 2: SNR and Slit Width
         snr_label = create_aligned_label("SNR:")
         self.snr_input = QLineEdit()
-        self.snr_input.setFixedSize(short_input_width, widget_height)
+        self.snr_input.setMinimumWidth(short_input_width)
+        self.snr_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        # Combine Sky Mag and SNR in a horizontal layout
+        sky_mag_snr_layout = QHBoxLayout()
+        sky_mag_snr_layout.setSpacing(10)
+        sky_mag_snr_layout.addWidget(sky_mag_label)
+        sky_mag_snr_layout.addWidget(self.sky_mag_input)
+        sky_mag_snr_layout.addWidget(snr_label)
+        sky_mag_snr_layout.addWidget(self.snr_input)
+
+        # Add the combined layout to the main layout
+        etc_layout.addLayout(sky_mag_snr_layout)
+
+        # Row 2: Slit Width and Slit Width Dropdown (on the next row)
         slit_width_label = create_aligned_label("Slit Width:")
         self.slit_width_input = QLineEdit()
-        self.slit_width_input.setFixedSize(short_input_width, widget_height)
+        self.slit_width_input.setMinimumWidth(short_input_width)
+        self.slit_width_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.slit_dropdown = QComboBox()
         self.slit_dropdown.addItems(["SET", "LOSS", "SNR", "RES", "AUTO"])
-        self.slit_dropdown.setFixedSize(dropdown_width, widget_height)
+        self.slit_dropdown.setMinimumWidth(dropdown_width)
+        self.slit_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         slit_width_layout = QHBoxLayout()
         slit_width_layout.setSpacing(10)
+        slit_width_layout.addWidget(slit_width_label)
         slit_width_layout.addWidget(self.slit_width_input)
         slit_width_layout.addWidget(self.slit_dropdown)
 
-        left_column_layout.addWidget(snr_label, 2, 0)
-        left_column_layout.addWidget(self.snr_input, 2, 1)
-        left_column_layout.addWidget(slit_width_label, 2, 2)
-        left_column_layout.addLayout(slit_width_layout, 2, 3)
+        # Add the slit width row to the layout
+        etc_layout.addLayout(slit_width_layout)
 
-        # Row 3: Range and No Slicer
+        # Row 3: Range and No Slicer (Range label next to input boxes)
         range_label = create_aligned_label("Range:")
+        
         self.range_input_start = QLineEdit()
-        self.range_input_start.setFixedSize(range_input_width, widget_height)
+        self.range_input_start.setMinimumWidth(range_input_width)
+        self.range_input_start.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         range_dash = QLabel("-")
         range_dash.setFixedWidth(10)
 
         self.range_input_end = QLineEdit()
-        self.range_input_end.setFixedSize(range_input_width, widget_height)
-
-        range_layout = QHBoxLayout()
-        range_layout.setSpacing(10)
-        range_layout.addWidget(self.range_input_start)
-        range_layout.addWidget(range_dash)
-        range_layout.addWidget(self.range_input_end)
+        self.range_input_end.setMinimumWidth(range_input_width)
+        self.range_input_end.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.no_slicer_checkbox = QCheckBox("No Slicer")
         self.no_slicer_checkbox.setFixedHeight(widget_height)
 
+        range_layout = QHBoxLayout()
+        range_layout.setSpacing(10)
+        range_layout.addWidget(range_label)  # Add the Range label to the same line
+        range_layout.addWidget(self.range_input_start)
+        range_layout.addWidget(range_dash)
+        range_layout.addWidget(self.range_input_end)
         range_layout.addWidget(self.no_slicer_checkbox)
 
-        left_column_layout.addWidget(range_label, 3, 0)
-        left_column_layout.addLayout(range_layout, 3, 1, 1, 3)
+        etc_layout.addLayout(range_layout)
 
-        # Add EXP Time and Resolution to the right column
-        exptime_label = create_aligned_label("EXPTime:")
+        # Row 4: Seeing (arcsec) and Airmass in one line
+        seeing_label = create_aligned_label("Seeing (arcsec):")
+        self.seeing_input = QLineEdit()
+        self.seeing_input.setMinimumWidth(short_input_width)
+        self.seeing_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        airmass_label = create_aligned_label("Airmass:")
+        self.airmass_input = QLineEdit()
+        self.airmass_input.setMinimumWidth(short_input_width)
+        self.airmass_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # Create Seeing and Airmass layout
+        seeing_airmass_layout = QHBoxLayout()
+        seeing_airmass_layout.setSpacing(10)  # Add spacing between widgets
+
+        seeing_airmass_layout.addWidget(seeing_label)
+        seeing_airmass_layout.addWidget(self.seeing_input)
+        seeing_airmass_layout.addWidget(airmass_label)
+        seeing_airmass_layout.addWidget(self.airmass_input)
+
+        # Add the Seeing and Airmass input fields to the main layout
+        etc_layout.addLayout(seeing_airmass_layout)
+
+        # Row 5: EXPTIME and Resolution (same row with labels)
+        exptime_label = create_aligned_label("EXPTIME:")
         self.exptime_input = QLineEdit()
-        self.exptime_input.setFixedSize(short_input_width, widget_height)
+        self.exptime_input.setMinimumWidth(short_input_width)
+        self.exptime_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         resolution_label = create_aligned_label("Resolution:")
         self.resolution_input = QLineEdit()
-        self.resolution_input.setFixedSize(short_input_width, widget_height)
+        self.resolution_input.setMinimumWidth(short_input_width)
+        self.resolution_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        right_column_layout.addWidget(exptime_label, 0, 0)
-        right_column_layout.addWidget(self.exptime_input, 0, 1)
-        right_column_layout.addWidget(resolution_label, 1, 0)
-        right_column_layout.addWidget(self.resolution_input, 1, 1)
+        # Create EXPTIME and Resolution layout
+        exptime_resolution_layout = QHBoxLayout()
+        exptime_resolution_layout.setSpacing(10)  # Add spacing between widgets
+
+        exptime_resolution_layout.addWidget(exptime_label)
+        exptime_resolution_layout.addWidget(self.exptime_input)
+        exptime_resolution_layout.addWidget(resolution_label)
+        exptime_resolution_layout.addWidget(self.resolution_input)
+
+        # Add the EXPTIME and Resolution input fields to the main layout
+        etc_layout.addLayout(exptime_resolution_layout)
 
         # Divider line between the two columns
         divider_line = QFrame()
-        divider_line.setFrameShape(QFrame.VLine)
+        divider_line.setFrameShape(QFrame.HLine)  # Horizontal divider line
         divider_line.setFrameShadow(QFrame.Sunken)
 
-        # Buttons in the right column
+        # Add the divider line to the layout
+        etc_layout.addWidget(divider_line)
+
+        # Buttons in the layout
         button_row_layout = QHBoxLayout()
         button_row_layout.setSpacing(10)
 
         run_button = QPushButton("Run ETC")
-        run_button.setFixedSize(short_input_width * 2, widget_height)
+        run_button.setFixedSize(100, widget_height)
         run_button.clicked.connect(self.run_etc)
 
         save_button = QPushButton("Save")
-        save_button.setFixedSize(short_input_width * 2, widget_height)
+        save_button.setFixedSize(100, widget_height)
         save_button.clicked.connect(self.save_etc)
 
         button_row_layout.addWidget(run_button)
         button_row_layout.addWidget(save_button)
 
-        right_column_layout.addLayout(button_row_layout, 2, 0, 1, 2)
+        etc_layout.addLayout(button_row_layout)
 
-        # Add everything to the main ETC layout
-        etc_layout.addLayout(left_column_layout, stretch=2)
-        etc_layout.addWidget(divider_line)
-        etc_layout.addLayout(right_column_layout, stretch=1)
-
-        # Set layout for the ETC tab
+        # Set the layout for the ETC tab
         self.parent.etc.setLayout(etc_layout)
+
+        # Add a spacer to make sure widgets aren't squished
+        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        etc_layout.addItem(spacer)
+
 
     def validate_inputs(self):
         """Validates user inputs in the ETC tab and highlights invalid fields."""
@@ -1415,7 +1449,7 @@ class LayoutService:
         print(result_text)
 
     def save_etc(self):
-        exptime = self.exposure_time_box.text()
+        exptime = self.exptime_input.text()
         resolution = self.resolution_input.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exptime)
