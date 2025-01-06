@@ -229,8 +229,8 @@ class ControlTab(QWidget):
         self.temp_button = QPushButton("Temp")
         self.startup_button = QPushButton("Lamps")
         self.shutdown_button = QPushButton("Reset")
-        self.startup_button.clicked.connect(self.on_startup_button_click)
-        self.shutdown_button.clicked.connect(self.on_shutdown_button_click)
+        self.startup_button.clicked.connect(self.on_lamps_button_click)
+        self.shutdown_button.clicked.connect(self.on_reset_button_click)
 
         # Add buttons to each vertical layout
         binning_layout.addWidget(self.binning_button)
@@ -269,7 +269,7 @@ class ControlTab(QWidget):
 
     def on_continue_button_click(self):
         """Handle the 'Expose' button click"""
-        print("Startup button clicked!")
+        print("On Continue button clicked!")
         command = f"userexpose\n"
         self.parent.send_command(command)
         self.continue_button.setEnabled(False)
@@ -290,17 +290,16 @@ class ControlTab(QWidget):
                 }
         """)
 
-    def on_startup_button_click(self):
+    def on_lamps_button_click(self):
         """Handle the 'Startup' button click"""
         print("Startup button clicked!")
-        command = f"startup\n"
-        self.parent.send_command(command)
+        # command = f"startup\n"
+        # self.parent.send_command(command)
 
-    def on_shutdown_button_click(self):
+    def on_reset_button_click(self):
         """Handle the 'Startup' button click"""
-        print("Startup button clicked!")
-        command = f"shutdown\n"
-        self.parent.send_command(command) 
+        print("Reset button clicked!")
+        self.logic_service.refresh_table()
 
     def on_offset_to_target_click(self):
         """Handle the Offset To Target button click event"""
@@ -550,18 +549,19 @@ class ControlTab(QWidget):
             # Handle the case where one or more fields are empty
             print("Please enter valid values for all fields.")
 
-
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exposure_time)
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
 
     def on_slit_angle_changed(self):
         # Retrieve the slit width and send the query to the database
@@ -573,3 +573,4 @@ class ControlTab(QWidget):
 
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)

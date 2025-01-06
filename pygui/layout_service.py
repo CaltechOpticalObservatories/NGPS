@@ -1196,7 +1196,7 @@ class LayoutService:
         self.slit_width_input.setFixedSize(short_input_width, widget_height)
 
         self.slit_dropdown = QComboBox()
-        self.slit_dropdown.addItems(["SET X", "LOSS X", "SNR X", "RES X", "AUTO"])
+        self.slit_dropdown.addItems(["SET", "LOSS", "SNR", "RES", "AUTO"])
         self.slit_dropdown.setFixedSize(dropdown_width, widget_height)
 
         slit_width_layout = QHBoxLayout()
@@ -1416,4 +1416,5 @@ class LayoutService:
         resolution = self.resolution_input.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exptime)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exptime)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMres", resolution)

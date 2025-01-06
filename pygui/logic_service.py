@@ -392,7 +392,7 @@ class LogicService:
 
     def fetch_and_update_target_list(self):
         """Fetch target data and update the table in the parent window."""
-
+        self.connection = self.connect_to_mysql("config/db_config.ini")
         if self.connection:
             try:
                 cursor = self.connection.cursor(dictionary=True)
