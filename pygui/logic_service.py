@@ -84,7 +84,7 @@ class LogicService:
                 'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
                 'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start', 
                 'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR', 
-                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE'
+                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE', 'PRIORITY'
             ]
 
             # Step 5: Loop through each row and dynamically generate the insert query
@@ -116,6 +116,8 @@ class LogicService:
                     # Special case: if `OFFSET_RA` or `OFFSET_DEC` are empty, set them to 0.0
                     if column in ['OFFSET_RA', 'OFFSET_DEC'] and (value == '' or value is None):
                         value = 0.0  # Default to 0.0 if empty or None
+                    if column in ['PRIORITY']:
+                        value = int(value)
 
                     # Add the column and value to the query
                     insert_columns.append(column)
