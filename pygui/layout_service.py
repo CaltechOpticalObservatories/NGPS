@@ -573,7 +573,7 @@ class LayoutService:
         self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Set selection mode to select entire rows when a cell is clicked
-        self.target_list_display.setSelectionMode(QAbstractItemView.SelectRows)
+        self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
 
         # Enable horizontal scrolling by adding the table to a scroll area
         scroll_area = QScrollArea()
