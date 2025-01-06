@@ -23,9 +23,35 @@ class LayoutService:
         
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
+        
+    def get_screen_size_ratio(self):
+        # Get the user's screen size
+        screen = self.parent.screen()
+        screen_size = screen.geometry()
+        
+        # Use the screen width and height to calculate dynamic ratio (you can adjust these ratios)
+        screen_width = screen_size.width()
+        screen_height = screen_size.height()
+
+        # Define dynamic ratio logic based on the screen size
+        # For example, adjust the layout ratio based on screen size
+        if screen_width > 2000:
+            # For large screens, give more space to the main layout
+            ratio = (5, 2, 1)
+        elif screen_width > 1500:
+            # For medium-sized screens, keep the ratio balanced
+            ratio = (4, 3, 1)
+        else:
+            # For smaller screens, prioritize the left column
+            ratio = (3, 2, 1)
+        
+        return ratio
 
     def create_layout(self):
-        # Main horizontal layout for overall structure``
+        # Get the layout ratio based on the screen size
+        layout_ratio = self.get_screen_size_ratio()
+
+        # Main horizontal layout for overall structure
         main_layout = QHBoxLayout()
 
         # Create a vertical layout to place Column 1 on top of Column 2
@@ -33,18 +59,18 @@ class LayoutService:
 
         # First Column (Column 1) should contain top_section_layout and second_column_top_half side by side
         first_column_layout = self.create_first_column()
-        top_layout.addLayout(first_column_layout, stretch=3)  # Column 1
+        top_layout.addLayout(first_column_layout, stretch=layout_ratio[0])  # Column 1
 
         # Second Column (Column 2) should only contain the target_list_group
         second_column_layout = self.create_second_column_for_target_list()
-        top_layout.addLayout(second_column_layout, stretch=2)  # Column 2 (only target list)
+        top_layout.addLayout(second_column_layout, stretch=layout_ratio[1])  # Column 2 (only target list)
 
         # Add the vertical top_layout to the main_layout
-        main_layout.addLayout(top_layout, stretch=5)  # Top section (Columns 1 and 2 stacked)
+        main_layout.addLayout(top_layout, stretch=layout_ratio[0] + layout_ratio[1])  # Top section (Columns 1 and 2 stacked)
 
         # Third Column (1/5 width, for tabs, etc.)
         third_column_layout = self.create_third_column()
-        main_layout.addLayout(third_column_layout, stretch=1)
+        main_layout.addLayout(third_column_layout, stretch=layout_ratio[2])
 
         # Set the main layout
         central_widget = QWidget()

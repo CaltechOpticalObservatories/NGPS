@@ -227,8 +227,8 @@ class ControlTab(QWidget):
         self.headers_button = QPushButton("Headers")
         self.display_button = QPushButton("Display")
         self.temp_button = QPushButton("Temp")
-        self.startup_button = QPushButton("Startup")
-        self.shutdown_button = QPushButton("Shutdown")
+        self.startup_button = QPushButton("Lamps")
+        self.shutdown_button = QPushButton("Reset")
         self.startup_button.clicked.connect(self.on_startup_button_click)
         self.shutdown_button.clicked.connect(self.on_shutdown_button_click)
 

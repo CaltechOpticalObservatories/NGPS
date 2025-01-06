@@ -1,5 +1,6 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog
+import subprocess
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget
 from PyQt5.QtCore import Qt
 from menu_service import MenuService
 from logic_service import LogicService
@@ -8,6 +9,7 @@ from instrument_status_service import InstrumentStatusService
 from sequencer_service import SequencerService
 from login_service import LoginDialog, CreateAccountDialog
 from status_service import StatusService, StatusServiceThread
+
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -28,6 +30,23 @@ class NgpsGUI(QMainWindow):
 
         # Initialize the UI
         self.init_ui()
+        
+        # Check sequencer state on startup
+        if self.is_sequencer_ready():
+            print("Sequencer is READY.")
+        else:
+            print("Sequencer is NOT READY.")
+
+        # Get screen resolution using QDesktopWidget
+        screen_geometry = QDesktopWidget().availableGeometry()  # Get screen size (excluding taskbar)
+        screen_width, screen_height = screen_geometry.width(), screen_geometry.height()
+
+        # Set window size relative to screen size (e.g., 80% of screen size)
+        window_width = int(screen_width * 0.2)
+        window_height = int(screen_height * 0.2)
+
+        # Set the geometry (position + size)
+        self.setGeometry(int(screen_width * 0.1), int(screen_height * 0.1), window_width, window_height)
         
         # Load and apply the QSS stylesheet
         self.load_stylesheet("styles.qss")
@@ -135,6 +154,18 @@ class NgpsGUI(QMainWindow):
 
     def reload_table(self):
         self.logic_service.fetch_and_update_target_list()
+
+    def is_sequencer_ready(self):
+        """Check if the sequencer state is READY."""
+        try:
+            # Run the seq state command and capture output
+            result = subprocess.run(['seq', 'state'], capture_output=True, text=True, check=True)
+            # Check if "READY" is in the output
+            if 'READY' in result.stdout:
+                self.layout_service.toggle_startup_shutdown()
+        except subprocess.CalledProcessError as e:
+            print(f"Error checking sequencer state: {e}")
+        return False
 
 
 if __name__ == '__main__':
