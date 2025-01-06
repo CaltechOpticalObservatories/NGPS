@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
 from logic_service import LogicService
 import astropy.units as u
+import subprocess
 
 class ControlTab(QWidget):
     def __init__(self, parent):
@@ -273,19 +274,69 @@ class ControlTab(QWidget):
         self.slit_angle_box.textChanged.connect(self.on_input_changed)
 
     def on_continue_button_click(self):
-        """Handle the 'Expose' button click"""
+        """Handle the 'Expose' button click and check for 'USER' in command output"""
         print("On Continue button clicked!")
+        
+        # Send the usercontinue command
         command = f"usercontinue\n"
         self.parent.send_command(command)
-        self.continue_button.setEnabled(False)
-        self.continue_button.setStyleSheet("""
+        
+        try:
+            # Running the 'seq state' command and capturing its output
+            result = subprocess.check_output(['seq', 'state'], text=True)
+            print(result)  # Optional: print the output for debugging
+            
+            # Check if 'USER' is in the output
+            if 'USER' in result:
+                # Enable button if 'USER' is found
+                self.continue_button.setEnabled(True)
+                self.continue_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4CAF50;  /* Green when enabled */
+                        color: white;
+                        font-weight: bold;
+                        padding: 10px;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #45a049;
+                    }
+                    QPushButton:pressed {
+                        background-color: #3e8e41;
+                    }
+                """)
+            else:
+                # Disable button if 'USER' is not found
+                self.continue_button.setEnabled(False)
+                self.continue_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #D3D3D3;  /* Light gray when disabled */
+                        color: black;
+                        font-weight: bold;
+                        padding: 10px;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #D3D3D3;  /* No hover effect when disabled */
+                    }
+                    QPushButton:pressed {
+                        background-color: #D3D3D3;  /* No pressed effect when disabled */
+                    }
+                """)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running command: {e}")
+            # Disable button in case of an error
+            self.continue_button.setEnabled(False)
+            self.continue_button.setStyleSheet("""
                 QPushButton {
                     background-color: #D3D3D3;  /* Light gray when disabled */
                     color: black;
                     font-weight: bold;
                     padding: 10px;
                     border: none;
-                    border-radius: 5px;  /* Optional: Round corners */
+                    border-radius: 5px;
                 }
                 QPushButton:hover {
                     background-color: #D3D3D3;  /* No hover effect when disabled */
@@ -293,7 +344,7 @@ class ControlTab(QWidget):
                 QPushButton:pressed {
                     background-color: #D3D3D3;  /* No pressed effect when disabled */
                 }
-        """)
+            """)
         
     def on_abort_button_click(self):
         """Handle the 'Expose' button click"""
