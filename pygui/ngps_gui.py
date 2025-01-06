@@ -162,8 +162,11 @@ class NgpsGUI(QMainWindow):
         try:
             # Run the seq state command and capture output
             result = subprocess.run(['seq', 'state'], capture_output=True, text=True, check=True)
-            # Check if "READY" is in the output
-            if 'READY' in result.stdout:
+            # Strip any extra spaces or newlines
+            state = result.stdout.strip()  # Remove surrounding whitespace or newlines
+            
+            # Check if the output starts with "READY"
+            if state.startswith('READY'):
                 self.layout_service.startup_shutdown_button.setText("Shutdown")
                 self.layout_service.startup_shutdown_button.setStyleSheet("""
                     QPushButton {
@@ -180,10 +183,10 @@ class NgpsGUI(QMainWindow):
                         background-color: #555555;
                     }
                 """)
+                return True  # Indicate that the sequencer is ready
         except subprocess.CalledProcessError as e:
             print(f"Error checking sequencer state: {e}")
-        return False
-
+        return False  # If not READY or an error occurs, return False
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

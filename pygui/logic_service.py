@@ -410,15 +410,15 @@ class LogicService:
                 self.set_name = [set_item["SET_NAME"] for set_item in set_data]
 
                 # Step 4: For each SET_ID, fetch the associated rows from the 'targets' table
-                self.all_targets = []
+                self.parent.all_targets = []
                 for set_id in set_ids:
                     cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
                     targets = cursor.fetchall()
-                    self.all_targets.extend(targets)
+                    self.parent.all_targets.extend(targets)
 
                 self.parent.layout_service.load_target_lists(self.set_name)
                 self.parent.user_set_data = self.set_data
-                self.update_target_list_table(self.all_targets)
+                self.update_target_list_table(self.parent.all_targets)
                 cursor.close()
                 
             except mysql.connector.Error as err:
@@ -449,7 +449,7 @@ class LogicService:
         """
 
         self.target_list_display = self.parent.layout_service.target_list_display
-        self.all_targets = data
+        self.parent.all_targets = data
 
         # Step 1: Clear existing rows in the target list
         self.target_list_display.setRowCount(0)
