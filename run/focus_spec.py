@@ -71,9 +71,9 @@ if args.U: regfiles['U'] = args.U
 if args.G: regfiles['G'] = args.G
 if args.R: regfiles['R'] = args.R 
 if args.I: regfiles['I'] = args.I
-if len(regfiles.keys())==0: sys.exit('No region files specified')
-
-regdict = {k:make_region_dict(v, DY=args.dy) for k,v in regfiles.items()}
+# if len(regfiles.keys())==0: sys.exit('No region files specified')
+# regdict = {k:make_region_dict(v, DY=args.dy) for k,v in regfiles.items()}
+regdict_default = {'?_ALL':(slice(None,None,None),slice(None,None,None))}  # slice_feature
 
 GROUPBY_SLICE = not args.groupby_feature  # Group plots by slice (true) or spectrum feature (false)
 
@@ -81,6 +81,15 @@ GROUPBY_SLICE = not args.groupby_feature  # Group plots by slice (true) or spect
 df = all_headers_to_df(args.flist)
 focuskey = args.focuskey
 imnumkey = 'IMNUM'
+
+# Check which channels are used and whether they have region files
+channels_detected = [s for s in df['SPEC_ID'].unique() if isinstance(s, str)]
+regdict = {}
+for k in channels_detected:
+    if k in regfiles: regdict[k] = make_region_dict(regfiles[k], DY=args.dy)
+    else:             regdict[k] = regdict_default
+
+breakpoint()
 
 # Make the hacky image number column just in case needed
 # image number is before the dot, after the last '_': basename_00000.fits
