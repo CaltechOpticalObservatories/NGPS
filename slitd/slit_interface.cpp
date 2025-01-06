@@ -288,13 +288,15 @@ namespace Slit {
       retstring.append( " <width> [ <offset> ]\n" );
       retstring.append( "  Set <width> and optionally <offset>. If offset is omitted then\n" );
       retstring.append( "  the offset is unchanged and both motors are moved symmetrically\n" );
-      retstring.append( "  to achieve the requested width.\n" );
+      retstring.append( "  to achieve the requested width. If width is less than 0.4 then width\n" );
+      retstring.append( "  is set to 0.36, otherwise width is rounded to the nearest tenth.\n" );
       retstring.append( "  Using an offset will reduce the maximum width available.\n\n" );
       retstring.append( "  Default units are arcsec. Add \"mm\" to use actuator units,\n" );
       retstring.append( "  E.G. "+SLITD_SET+" 5mm to set a slit width of 5mm\n\n" );
       message.str(""); message << "  For 0 offset, range of allowable slit widths is { "
                                << minwidth.arcsec() <<" : " << maxwidth.arcsec() << " } arcsec\n";
       retstring.append( message.str() );
+      retstring.append( "  No rounding takes place with actuator units.\n" );
       return HELP;
     }
 
@@ -321,11 +323,18 @@ namespace Slit {
       // default unit is arcsec, can override if "mm" is present with the value
       auto unit = Unit::ARCSEC;
 
-      // Get the reqwidth, reqoffset in the requested unit (default arcsecC)
+      // Get the reqwidth, reqoffset in the requested unit (default arcsec)
+      // and round to nearest tenth if unit is arcsec.
       //
       if ( tokens.size() >= 1 ) {
-        if ( tokens.at(0).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
-        reqwidth = SlitDimension( std::stof( tokens.at(0) ), unit );
+        float fval = std::stof( tokens.at(0) );
+        if ( tokens.at(0).find("mm") != std::string::npos ) unit=Unit::MM;
+        else {
+          unit=Unit::ARCSEC;
+          if ( fval < 0.4 ) fval=0.36;                   // kludge smallest value
+          else fval = std::round( fval * 10.0 ) / 10.0;  // round to nearest tenth
+        }
+        reqwidth = SlitDimension( fval, unit );
         reqoffset = snapshot.offset;
       }
       if ( tokens.size() == 2 ) {
@@ -465,10 +474,12 @@ namespace Slit {
     //
     std::stringstream s;
     if ( args=="mm" ) {
-      s << std::setprecision(3) << std::fixed << snapshot.width.mm() << " " << snapshot.offset.mm() << " mm";
+      s << std::setprecision(2) << std::fixed << snapshot.width.mm() << " "
+        << std::setprecision(3) << snapshot.offset.mm() << " mm";
     }
     else {
-      s << std::setprecision(3) << std::fixed << snapshot.width.arcsec() << " " << snapshot.offset.arcsec();
+      s << std::setprecision(2) << std::fixed << snapshot.width.arcsec() << " "
+        << std::setprecision(3) << snapshot.offset.arcsec();
     }
     retstring = s.str();
 
