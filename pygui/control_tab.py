@@ -155,14 +155,9 @@ class ControlTab(QWidget):
         self.continue_button.clicked.connect(self.on_continue_button_click)
         self.continue_button.setEnabled(False)
         
-        self.abort_button = QPushButton("Abort")
-        self.abort_button.clicked.connect(self.on_abort_button_click)
-        self.abort_button.setEnabled(False)
-
         row3_layout.addWidget(self.go_button)
         row3_layout.addWidget(self.offset_to_target_button)
         row3_layout.addWidget(self.continue_button)
-        row3_layout.addWidget(self.abort_button)
 
         row3_widget = QWidget()
         row3_widget.setLayout(row3_layout)
@@ -176,16 +171,19 @@ class ControlTab(QWidget):
         # Buttons
         self.repeat_button = QPushButton("Repeat")
         self.pause_button = QPushButton("Pause")
+        self.abort_button = QPushButton("Abort")
         self.stop_now_button = QPushButton("Stop Now")
 
         # Connect the buttons to their corresponding slots
         self.repeat_button.clicked.connect(self.on_repeat_button_click)
         self.pause_button.clicked.connect(self.on_pause_button_click)
+        self.abort_button.clicked.connect(self.on_abort_button_click)
         self.stop_now_button.clicked.connect(self.on_stop_now_button_click)
 
         row4_layout.addWidget(self.repeat_button)
         row4_layout.addWidget(self.pause_button)
         row4_layout.addWidget(self.stop_now_button)
+        row4_layout.addWidget(self.abort_button)
 
         row4_widget = QWidget()
         row4_widget.setLayout(row4_layout)
