@@ -285,6 +285,9 @@ namespace Sequencer {
       // subsystems are readied.
       //
       else {
+        // set pointmode explicitly, in case it's empty
+        this->target.pointmode = Acam::POINTMODE_SLIT;
+
         // threads to start, pair their ThreadStatusBit with the function to call
         //
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
@@ -368,6 +371,8 @@ namespace Sequencer {
         this->cancel_flag.store(false);
         return;
       }
+
+      this->is_usercontinue.store(false);
 
       this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
 
@@ -897,8 +902,26 @@ namespace Sequencer {
       return ERROR;
     }
 
-    // if calibd was just opened, close the door and open the cover
+    // if calibd was just opened, home if needed,
+    // then close the door and open the cover
     if ( was_opened ) {
+      // check if homed
+      bool ishomed=false;
+      std::string reply;
+      long error = this->calibd.command( CALIBD_ISHOME, reply );
+      if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
+        return ERROR;
+      }
+      // home calib actuators if not already homed
+      if ( !ishomed ) {
+        logwrite( function, "sending home command" );
+        if ( this->calibd.command_timeout( CALIBD_HOME, reply, CALIBD_HOME_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
+          return ERROR;
+        }
+      }
+      // set actuators won't move if already in position
       logwrite( function, "closing calib door and opening slit cover" );
       std::stringstream cmd;
       cmd << CALIBD_SET << " cover=open door=close";
@@ -1153,12 +1176,47 @@ namespace Sequencer {
       return ERROR;
     }
 
-    if ( this->open_hardware(this->focusd) != NO_ERROR ) {
+    // connect to focusd
+    bool was_opened=false;
+    if ( this->open_hardware(this->focusd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing focus control" );
+      this->daemon_manager.clear( Sequencer::DAEMON_FOCUS );
+      this->thread_error_manager.set( THR_FOCUS_INIT );
       return ERROR;
     }
 
-    this->daemon_manager.set( Sequencer::DAEMON_FOCUS );  // focusd ready
+    // if focusd was just opened, home if needed,
+    // then set nominal positions
+    if ( was_opened ) {
+      // check if homed
+      bool ishomed=false;
+      std::string reply;
+      long error = this->focusd.command( FOCUSD_ISHOME, reply );
+      if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR communicating with focus hardware" );
+        return ERROR;
+      }
+      // home focus actuators if not already homed
+      if ( !ishomed ) {
+        logwrite( function, "sending home command" );
+        if ( this->focusd.command_timeout( FOCUSD_HOME, reply, FOCUSD_HOME_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR communicating with focus hardware" );
+          return ERROR;
+        }
+      }
+      // send actuators to nominal positions
+      logwrite( function, "setting nominal positions" );
+      std::vector<std::string> chans = {"I", "R"};
+      for ( const auto &chan : chans ) {
+        std::string command = "set " + chan + " nominal";
+        if ( this->focusd.command_timeout( command, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR setting focus "+chan );
+          return ERROR;
+        }
+      }
+    }
+
+    this->daemon_manager.set( Sequencer::DAEMON_FOCUS );    // focusd is ready
 
     return NO_ERROR;
   }
@@ -1442,6 +1500,10 @@ namespace Sequencer {
     this->async.enqueue_and_log( function, "NOTICE: received "
                                            +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
                                            +" signal!" );
+
+    // if ontarget (not cancelled) then acquire target
+    //
+    if ( !this->cancel_flag.load() ) this->acamd.command( ACAMD_ACQUIRE );
     }
 
     this->is_ontarget.store(false);
@@ -3349,7 +3411,7 @@ namespace Sequencer {
           << this->target.dec_dms << "  "
           << this->target.casangle << "  "
           << this->target.slitangle << "  "
-          << this->target.slitwidth << "  "
+          << this->target.slitwidth_req << "  "
           << this->target.exptime_req << "  "
           << this->target.binspat << "  "
           << this->target.binspect << " "

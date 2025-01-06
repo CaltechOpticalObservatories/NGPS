@@ -276,16 +276,28 @@ namespace Sequencer {
 
       ~Sequence() { };
 
+      /** @brief  sends ontarget signal, clears after 3 seconds */
       inline void ontarget() {
         this->cancel_flag.store(false);
         this->is_ontarget.store(true);
         this->cv.notify_all();
       }
+      void reset_ontarget() {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        this->is_ontarget.store(false);
+      }
+
+      /** @brief  sends usercontinue signal, clears after 3 seconds */
       inline void usercontinue() {
         this->cancel_flag.store(false);
         this->is_usercontinue.store(true);
         this->cv.notify_all();
       }
+      void reset_usercontinue() {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        this->is_usercontinue.store(false);
+      }
+
       inline void reset_cancel_flag() { this->cancel_flag.store(false); }
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers

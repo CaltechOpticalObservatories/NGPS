@@ -1328,11 +1328,13 @@ namespace Sequencer {
       //
       if ( cmd == SEQUENCERD_ONTARGET ) {
                   this->sequence.ontarget();
+                  std::thread( &Sequencer::Sequence::reset_ontarget, std::ref(this->sequence) ).detach();
                   ret = NO_ERROR;
       }
       else
       if ( cmd == SEQUENCERD_USERCONTINUE ) {
                   this->sequence.usercontinue();
+                  std::thread( &Sequencer::Sequence::reset_usercontinue, std::ref(this->sequence) ).detach();
                   ret = NO_ERROR;
       }
       else
