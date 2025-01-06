@@ -18,17 +18,17 @@ class FocusTab(QWidget):
         boi_label = QLabel("Turn on Band of Interest", self)
         scroll_area_layout.addWidget(boi_label)
 
-        # Form Layout for Parameterized BOI (camera boi {channel} {skip_worms} {rows})
+        # Form Layout for Parameterized BOI (camera boi {channel} {skip_row} {rows})
         boi_form_layout = QFormLayout()
         self.channel_input = QLineEdit(self)
         self.channel_input.setPlaceholderText("Enter channel (for parameterized BOI)")
         self.channel_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         boi_form_layout.addRow("Channel:", self.channel_input)
 
-        self.skip_worms_input = QLineEdit(self)
-        self.skip_worms_input.setPlaceholderText("Worms to skip")
-        self.skip_worms_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        boi_form_layout.addRow("Skip Worms:", self.skip_worms_input)
+        self.skip_rows_input = QLineEdit(self)
+        self.skip_rows_input.setPlaceholderText("Rows to skip")
+        self.skip_rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        boi_form_layout.addRow("Skip Rows:", self.skip_rows_input)
 
         self.rows_input = QLineEdit(self)
         self.rows_input.setPlaceholderText("Rows to read")
@@ -228,14 +228,14 @@ class FocusTab(QWidget):
     
     def activate_boi(self):
         channel = self.channel_input.text()
-        skip_worms = self.skip_worms_input.text()
+        skip_rows = self.skip_worms_input.text()
         rows = self.rows_input.text()
 
-        if channel and skip_worms and rows:
-            command = f"camera boi {channel} {skip_worms} {rows}"
+        if channel and skip_rows and rows:
+            command = f"camera boi {channel} {skip_rows} {rows}"
             self.run_command(command.split())
         else:
-            print("Please provide valid input for channel, worms to skip, and rows to read.")
+            print("Please provide valid input for channel, rows to skip, and rows to read.")
 
     def activate_boi_full(self):
         full_channel = self.full_channel_input.text()
