@@ -21,7 +21,7 @@ class AfternoonTab(QWidget):
 
         layout.addLayout(label_layout)  # Add label layout to the main layout
 
-        # Create a single QFormLayout to combine all sections (Slit Set, Thrufocus Script, Focus Set)
+        # Create a single QFormLayout to combine all sections (Slit Set, Camera Bin, Thrufocus Script, Focus Set)
         form_layout = QFormLayout()
         form_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
         form_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
@@ -36,6 +36,27 @@ class AfternoonTab(QWidget):
         slit_button.clicked.connect(self.set_slit)
         slit_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
         form_layout.addRow("", slit_button)  # Place button below the input
+
+        # Camera Bin Section (spatial binning and spectral binning)
+        self.spatial_binning_input = QLineEdit(self)
+        self.spatial_binning_input.setPlaceholderText("Enter spatial binning value")
+        self.spatial_binning_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Spatial Binning:", self.spatial_binning_input)
+
+        spatial_binning_button = QPushButton("Set Spatial Binning", self)
+        spatial_binning_button.clicked.connect(self.set_spatial_binning)
+        spatial_binning_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", spatial_binning_button)  # Place button below spatial binning input
+
+        self.spectral_binning_input = QLineEdit(self)
+        self.spectral_binning_input.setPlaceholderText("Enter spectral binning value")
+        self.spectral_binning_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Spectral Binning:", self.spectral_binning_input)
+
+        spectral_binning_button = QPushButton("Set Spectral Binning", self)
+        spectral_binning_button.clicked.connect(self.set_spectral_binning)
+        spectral_binning_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", spectral_binning_button)  # Place button below spectral binning input
 
         # Add vertical spacing between sections
         form_layout.addRow("", QLabel())  # Empty row for spacing
@@ -121,6 +142,28 @@ class AfternoonTab(QWidget):
             self.execute_command(command)
         else:
             print("Please provide a valid slit value.")
+
+    def set_spatial_binning(self):
+        # Get input value for spatial binning
+        spatial_binning = self.spatial_binning_input.text()
+
+        # Ensure the spatial binning value is provided
+        if spatial_binning:
+            command_row = f"camera bin row {spatial_binning}"
+            self.execute_command(command_row)
+        else:
+            print("Please provide a spatial binning value.")
+
+    def set_spectral_binning(self):
+        # Get input value for spectral binning
+        spectral_binning = self.spectral_binning_input.text()
+
+        # Ensure the spectral binning value is provided
+        if spectral_binning:
+            command_col = f"camera bin col {spectral_binning}"
+            self.execute_command(command_col)
+        else:
+            print("Please provide a spectral binning value.")
 
     def run_thrufocus_script(self):
         # Get the output log file path
