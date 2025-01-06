@@ -877,6 +877,11 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           int skiprows;
           int skipcols;
 
+          int defcols;                     //!< number of detector columns (unchanged by binning)
+          int defrows;                     //!< number of detector rows (unchanged by binning)
+          int defoscols;                   //!< requested number of overscan rows
+          int defosrows;                   //!< requested number of overscan columns
+
           std::string imsize_args;         ///< IMAGE_SIZE arguments read from config file, used to restore default
 
           arc::gen3::CArcDevice* pArcDev;  //!< arc::CController object pointer -- things pointed to by this are in the ARC API
@@ -949,6 +954,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       // Functions
       //
+      void exposure_progress();
       void make_image_keywords( int dev );
       long handle_json_message( std::string message_in );
       long parse_spect_config( std::string args );
@@ -1026,6 +1032,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       static void dothread_native( Controller &con, std::vector<uint32_t> cmd );
       static void handle_frame( int expbuf, int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer );
       static void handle_queue( std::string message );
+      void handle_queue2( std::string message );
       static void FITS_handler( int expbuf, Interface &interface );
 
       // Functions fully defined here (no code in astrocam.c)

@@ -510,6 +510,14 @@ class PreciseTimer {
     /** @brief  Modifies the delay time to new value in milliseconds          */
     void modify(long milliseconds) { delay_time.store(milliseconds*1000, std::memory_order_release); }
 
+    /***** PreciseTimer::progress *********************************************/
+    /** @brief  Returns by reference remaining and delay times in msec        */
+    void progress(long &remaintime, long &delaytime) {
+      remaintime = ( !running.load(std::memory_order_acquire) ? 0 :
+                     remaining_time.load(std::memory_order_acquire)/1000 );
+      delaytime  = delay_time.load(std::memory_order_acquire)/1000;
+    }
+
     /***** PreciseTimer::hold *************************************************/
     /** @brief  Hold/pause the delay timer at the next short-sleep boundary   */
     void hold() {

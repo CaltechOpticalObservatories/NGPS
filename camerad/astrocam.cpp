@@ -21,6 +21,33 @@ namespace AstroCam {
     return( NO_ERROR );
   }
 
+
+  /**** AstroCam::Interface::exposure_progress ********************************/
+  /**
+   * @brief      polls and broadcasts shutter timer progress
+   *
+   */
+  void Interface::exposure_progress() {
+    long remaintime=0, delaytime=0;
+    std::string message;
+    message.reserve(32);
+    do {
+      // poll and report once per second
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
+      // poll
+      this->camera.shutter_timer.progress(remaintime, delaytime);
+      if ( delaytime==0 ) return;
+      message = "EXPTIME:" + std::to_string(remaintime) + " "
+                           + std::to_string(delaytime) + " "
+                           + std::to_string(static_cast<long>(100*(1-remaintime/delaytime)));
+      // broadcast
+      std::thread( &AstroCam::Interface::handle_queue2, this, std::move(message) ).detach();
+    }
+    while ( remaintime > 0 );
+  }
+  /**** AstroCam::Interface::exposure_progress ********************************/
+
+
   /***** AstroCam::Callback::exposeCallback ***********************************/
   /**
    * @brief      called by CArcDevice::expose() during the exposure
@@ -56,9 +83,12 @@ namespace AstroCam {
    *
    */
   void Callback::readCallback( int expbuf, int devnum, std::uint32_t uiPixelCount, std::uint32_t uiImageSize ) {
-    std::stringstream message;
-    message << "PIXELCOUNT_" << devnum << ":" << uiPixelCount << " IMAGESIZE:" << uiImageSize;
-    std::thread( std::ref(AstroCam::Interface::handle_queue), message.str() ).detach();
+    std::string message;
+    message.reserve(36);
+    message = "PIXELCOUNT_" + std::to_string(devnum) + ":"
+                            + std::to_string(uiPixelCount) + " "
+                            + std::to_string(static_cast<long>(100*uiPixelCount/uiImageSize));
+    std::thread( std::ref(AstroCam::Interface::handle_queue), message ).detach();
     return;
   }
   /***** AstroCam::Callback::readCallback *************************************/
@@ -1780,6 +1810,10 @@ logwrite(function,message.str() );
     if ( interface.camera.shutter.is_enabled ) {
       interface.camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
     }
+
+    // spawn a thread to report exposure progress
+    //
+    std::thread( &AstroCam::Interface::exposure_progress, std::ref(interface) ).detach();
 
     // Here is the shutter timer. This is a PreciseTimer object.
     //
@@ -3832,7 +3866,14 @@ for ( const auto &dev : selectdev ) {
       // restore the image size from the config file, which was stored in the class
       // when the config file was read
       //
-      cmd.str(""); cmd << chan << " " << this->controller[dev].imsize_args;
+      cmd.str("");
+      cmd << chan << " "
+          << this->controller[dev].defrows << " "
+          << this->controller[dev].defcols << " "
+          << this->controller[dev].defosrows << " "
+          << this->controller[dev].defoscols << " "
+          << this->camera_info.binning[_ROW_] << " "
+          << this->camera_info.binning[_COL_];
       if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
     }
     // if the only thing passed-in is the chan, then extract_dev_chan will
@@ -3932,11 +3973,12 @@ for ( const auto &dev : selectdev ) {
     // interest bands.
     //
     retstring.clear();
-    int boinum=1;
+    int boinum=0;
     for ( const auto &[nskip,nread] : this->controller[dev].info.interest_bands ) {
-      message.str(""); message << boinum++ << ": " << nskip << " " << nread << "\n";
+      message.str(""); message << ++boinum << ": " << nskip << " " << nread << "\n";
       retstring.append( message.str() );
     }
+    if ( boinum==0 ) retstring="full";
 
     return NO_ERROR;
   }
@@ -4678,6 +4720,8 @@ logwrite(function, message.str());
       this->controller[dev].info.bitpix = 16;
       this->controller[dev].info.frame_type = Camera::FRAME_RAW;
 
+      // *** This is where the binned-image dimensions are re-calculated ***
+      //
       // A call to set_axes() will store the binned image dimensions
       // in controller[dev].info.axes[*]. Those dimensions will
       // be used to set the image geometry with do_geometry() and
@@ -4694,6 +4738,10 @@ logwrite(function, message.str());
       if ( save_as_default ) {
         message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
         this->controller[dev].imsize_args = message.str();
+        this->controller[dev].defrows = rows;
+        this->controller[dev].defcols = cols;
+        this->controller[dev].defosrows = osrows;
+        this->controller[dev].defoscols = oscols;
         logwrite( function, "saved as default for chan "+chan+": "+message.str() );
       }
 
@@ -5001,6 +5049,10 @@ logwrite(function,message.str() );
    *
    */
   void Interface::handle_queue(std::string message) {
+    server.camera.async.enqueue( message );
+    return;
+  }
+  void Interface::handle_queue2(std::string message) {
     server.camera.async.enqueue( message );
     return;
   }
