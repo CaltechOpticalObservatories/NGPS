@@ -2678,6 +2678,12 @@ namespace Acam {
     std::stringstream message;
     long error = NO_ERROR;
 
+    if ( iface.is_framegrab_running.load(std::memory_order_acquire) ) {
+      logwrite( function, "thread already running, exiting" );
+      return;
+    }
+
+
     // For any whattodo that will take an image, when running the Andor emulator,
     // there must be a TCS (real or emulated) because TCS info is required for
     // the Andor emulator to work.
@@ -2787,7 +2793,6 @@ namespace Acam {
         // fails.
         //
         long did_acquire = iface.target.do_acquire();                 // acquire target here (if needed)
-//logwrite(function, "[DEBUG] back from do_acquire");
         if ( did_acquire != NO_ERROR ) {
           iface.target.acquire( Acam::TARGET_NOP );                   // disable acquire on failure
         }
@@ -3054,7 +3059,8 @@ namespace Acam {
           retstring="invalid_argument";
           return ERROR;
         }
-        this->target.set_tcs_offset_period(val);
+        // reset guide offset filtering parameters
+        this->target.reset_offset_params(val);
       }
       catch( const std::exception &e ) {
         logwrite( "Acam::Interface::offset_period", "ERROR parsing value: "+std::string(e.what()) );
@@ -3273,9 +3279,14 @@ logwrite( function, message.str() );
     std::string function = "Acam::Target::acquire";
     std::stringstream message;
 
+    // reset guide offset filtering parameters
+    //
+    this->reset_offset_params();
+
     // If the frame grab thread isn't running then try to start it
     //
-    if ( ! iface->is_framegrab_running.load(std::memory_order_acquire) && iface->should_framegrab_run.load(std::memory_order_acquire) ) {
+    if ( ! iface->is_framegrab_running.load(std::memory_order_acquire) &&
+           iface->should_framegrab_run.load(std::memory_order_acquire) ) {
 
       logwrite( function, "starting frame grabber" );
       std::string dontcare;
@@ -3625,9 +3636,11 @@ logwrite( function, message.str() );
         }
         else should_offset = true;  // always send the offsets when not guiding
 
-        // send offset to TCS here (returns when offset is complete)
-        if ( should_offset && iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
-        std::this_thread::sleep_for( std::chrono::seconds(1) );
+        if ( should_offset ) {
+          // send offset to TCS here (returns when offset is complete)
+          if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
+          std::this_thread::sleep_for( std::chrono::seconds(1) );
+        }
 
         // reset retry counter if match found and offset < max and no errors
         attempts = 0;
@@ -3648,7 +3661,10 @@ logwrite( function, message.str() );
           message.str(""); message << "acquired " << this->nacquired << " of " << this->min_repeat;
           logwrite( function, message.str() );
         }
-        else if ( this->acquire_mode == Acam::TARGET_GUIDE ) this->nacquired=this->min_repeat;
+        else if ( this->acquire_mode == Acam::TARGET_GUIDE ) {
+          this->nacquired=this->min_repeat;
+          this->sequential_failures=0;
+        }
       }
       else {
         nacquired=0;     // if an acquire is not below threshold then reset the counter
@@ -3735,54 +3751,42 @@ logwrite( function, message.str() );
    *
    */
   bool Target::median_filter( double &ra_off, double &dec_off ) {
-    // place these offsets into the end of a list of offsets
-    //
-    this->ra_off_list.push_back(ra_off);
-    this->dec_off_list.push_back(dec_off);
 
-    auto time_since_offset =
-      std::chrono::duration_cast<std::chrono::seconds>( std::chrono::steady_clock::now() -
-                                                        this->time_last_offset ).count();
+    if ( this->tcs_offset_period == 1 ) return true;
 
-    // If it's not time to offset then return false now,
-    // having added the offsets to the list.
-    //
-    if ( time_since_offset < this->tcs_offset_period ) return false;
+    // push these offsets into a vector along with a time stamp
+    auto now = std::chrono::steady_clock::now();
 
-    // Beyond here will return true which allows an offset,
-    // so record this time.
-    //
-    this->time_last_offset = std::chrono::steady_clock::now();
+    this->time_offs.push_back( now );
+    this->ra_offs.push_back( ra_off );
+    this->dec_offs.push_back( dec_off );
 
-    // Otherwise, perform a median filter on the lists. Use a copy so that
-    // the first value in the list can later be removed.
-    //
-    auto  _ra_list = this->ra_off_list;
-    auto _dec_list = this->dec_off_list;
+    // cutoff time for data is up to tcs_offset_period seconds
+    auto cutoff = now - std::chrono::seconds(this->tcs_offset_period);
 
-    std::sort( _ra_list.begin(),  _ra_list.end());
-    std::sort(_dec_list.begin(), _dec_list.end());
+    // if oldest element not older than cutoff then return
+    if ( !this->time_offs.empty() && this->time_offs.front() > cutoff ) return false;
 
-    auto n = _ra_list.size();
+    std::sort(this->ra_offs.begin(),  this->ra_offs.end());
+    std::sort(this->dec_offs.begin(), this->dec_offs.end());
+
+    auto n = this->time_offs.size();
 
     // need at least 2 values to do anything
     if ( n < 2 ) return true;
 
     // even number of values returns the average of the 2 center-most values
     if ( n % 2 == 0 ) {
-      ra_off  = ( _ra_list[n/2 + 1] +  _ra_list[n])/2.;
-      dec_off = (_dec_list[n/2 + 1] + _dec_list[n])/2.;
+      ra_off  = ( this->ra_offs[n/2 - 1] + this->ra_offs[n/2])/2.;
+      dec_off = (this->dec_offs[n/2 - 1] + this->dec_offs[n/2])/2.;
     }
     // odd number of values returns the center value
     else {
-      ra_off  =  _ra_list[n/2];
-      dec_off = _dec_list[n/2];
+      ra_off  = this->ra_offs[n/2];
+      dec_off = this->dec_offs[n/2];
     }
 
-    // remove the oldest value from the lists
-    //
-    this->ra_off_list.erase(this->ra_off_list.begin());
-    this->dec_off_list.erase(this->dec_off_list.begin());
+    this->reset_offset_params();
 
     return true;
   }

@@ -354,9 +354,10 @@ namespace Acam {
       double offset_cal_offset, offset_cal_raoff, offset_cal_decoff;
 
       std::chrono::time_point<std::chrono::steady_clock,
-                              std::chrono::duration<double>> timeout_time, time_last_offset;
+                              std::chrono::duration<double>> timeout_time;
 
-      std::vector<double> ra_off_list, dec_off_list;  ///< lists of offsets for median filtering
+      std::vector<double> ra_offs, dec_offs;          ///< lists of offsets for median filtering
+      std::vector<std::chrono::steady_clock::time_point> time_offs;
       std::chrono::seconds::rep tcs_offset_period;    ///< period at which to send offsets while guiding
 
       struct coords_t {
@@ -375,7 +376,13 @@ namespace Acam {
     public:
 
       inline std::chrono::seconds::rep get_tcs_offset_period() { return this->tcs_offset_period; }
-      inline void set_tcs_offset_period(std::chrono::seconds::rep val) { this->tcs_offset_period=val; }
+      inline void reset_offset_params(std::chrono::seconds::rep val) {
+        this->ra_offs.clear();
+        this->dec_offs.clear();
+        this->time_offs.clear();
+        this->tcs_offset_period = val;
+      }
+      inline void reset_offset_params() { this->reset_offset_params(this->tcs_offset_period); }
 
       inline double get_timeout() { return this->timeout; }
 
@@ -471,7 +478,6 @@ namespace Acam {
                  stop_acquisition(false),
                  offset_cal_offset(0),
                  timeout_time(std::chrono::steady_clock::now()),
-                 time_last_offset(std::chrono::steady_clock::now()),
                  tcs_offset_period(1),
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
