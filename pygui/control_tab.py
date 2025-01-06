@@ -149,14 +149,19 @@ class ControlTab(QWidget):
         self.offset_to_target_button.clicked.connect(self.on_offset_to_target_click)
         self.offset_to_target_button.setEnabled(False)
 
-        # Offset To Target Button
+        # Continue Target Button
         self.continue_button = QPushButton("Continue")
         self.continue_button.clicked.connect(self.on_continue_button_click)
         self.continue_button.setEnabled(False)
+        
+        self.abort_button = QPushButton("Abort")
+        self.abort_button.clicked.connect(self.on_abort_button_click)
+        self.abort_button.setEnabled(False)
 
         row3_layout.addWidget(self.go_button)
         row3_layout.addWidget(self.offset_to_target_button)
         row3_layout.addWidget(self.continue_button)
+        row3_layout.addWidget(self.abort_button)
 
         row3_widget = QWidget()
         row3_widget.setLayout(row3_layout)
@@ -270,7 +275,30 @@ class ControlTab(QWidget):
     def on_continue_button_click(self):
         """Handle the 'Expose' button click"""
         print("On Continue button clicked!")
-        command = f"userexpose\n"
+        command = f"usercontinue\n"
+        self.parent.send_command(command)
+        self.continue_button.setEnabled(False)
+        self.continue_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+        """)
+        
+    def on_abort_button_click(self):
+        """Handle the 'Expose' button click"""
+        print("Abort button clicked!")
+        command = f"abort\n"
         self.parent.send_command(command)
         self.continue_button.setEnabled(False)
         self.continue_button.setStyleSheet("""
