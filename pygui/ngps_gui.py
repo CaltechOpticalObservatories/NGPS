@@ -162,7 +162,22 @@ class NgpsGUI(QMainWindow):
             result = subprocess.run(['seq', 'state'], capture_output=True, text=True, check=True)
             # Check if "READY" is in the output
             if 'READY' in result.stdout:
-                self.layout_service.toggle_startup_shutdown()
+                self.startup_shutdown_button.setText("Shutdown")
+                self.layout_service.startup_shutdown_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #000000;  /* Black for shutdown */
+                        border: none;
+                        color: white;
+                        font-weight: bold;
+                        padding: 5px 10px;  /* Reduced padding */
+                    }
+                    QPushButton:hover {
+                        background-color: #333333;
+                    }
+                    QPushButton:pressed {
+                        background-color: #555555;
+                    }
+                """)
         except subprocess.CalledProcessError as e:
             print(f"Error checking sequencer state: {e}")
         return False
