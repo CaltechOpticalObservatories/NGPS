@@ -17,6 +17,7 @@ class LayoutService:
         self.target_list_display = None 
         self.target_list_name = QComboBox()
         self.add_row_button = QPushButton()
+        self.startup_shutdown_button = QPushButton()
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -1262,6 +1263,7 @@ class LayoutService:
 
         save_button = QPushButton("Save")
         save_button.setFixedSize(short_input_width * 2, widget_height)
+        save_button.clicked.connect(self.save_etc)
 
         button_row_layout.addWidget(run_button)
         button_row_layout.addWidget(save_button)
@@ -1409,3 +1411,9 @@ class LayoutService:
                     f"RESOLUTION: {self.resolution_input.text()}"
         print(result_text)
 
+    def save_etc(self):
+        exptime = self.exposure_time_box.text()
+        resolution = self.resolution_input.text()
+        if (self.parent.current_observation_id):
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exptime)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMres", resolution)

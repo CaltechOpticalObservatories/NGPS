@@ -628,7 +628,8 @@ class LogicService:
             cursor = connection.cursor()  # Create a cursor for executing the query
 
             # Prepare the SQL query to update the field in the database
-            query = f"UPDATE targets SET {field_name} = %s WHERE observation_id = %s"
+            query = f"UPDATE ngps.targets SET {field_name} = %s WHERE observation_id = %s"
+            print(query)
 
             # Execute the query with the provided value and observation_id
             cursor.execute(query, (value, observation_id))
@@ -657,7 +658,7 @@ class LogicService:
             cursor = connection.cursor()
 
             # Fetch all the latest data from the database (e.g., all target data)
-            cursor.execute("SELECT observation_id, name, exptime, slitwidth FROM target")  # Adjust query as needed
+            cursor.execute("SELECT observation_id, name, exptime, slitwidth FROM ngps.targets")  # Adjust query as needed
             rows = cursor.fetchall()
             
             target_list_display = self.parent.layout_service.target_list_display
