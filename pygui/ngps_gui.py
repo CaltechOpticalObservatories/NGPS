@@ -162,7 +162,7 @@ class NgpsGUI(QMainWindow):
             result = subprocess.run(['seq', 'state'], capture_output=True, text=True, check=True)
             # Check if "READY" is in the output
             if 'READY' in result.stdout:
-                self.startup_shutdown_button.setText("Shutdown")
+                self.layout_service.startup_shutdown_button.setText("Shutdown")
                 self.layout_service.startup_shutdown_button.setStyleSheet("""
                     QPushButton {
                         background-color: #000000;  /* Black for shutdown */
