@@ -600,7 +600,7 @@ namespace Sequencer {
     this->daemon_manager.clear( Sequencer::DAEMON_SLIT );  // slitd not ready
 
     if ( this->set_power_switch(ON, POWER_SLIT, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering slit control" );
+      this->async.enqueue_and_log( function, "ERROR powering slit hardware" );
       return ERROR;
     }
 
@@ -745,7 +745,7 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_ACAM, std::chrono::seconds(10)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing acam control" );
+      this->async.enqueue_and_log( function, "ERROR powering acam hardware" );
       return ERROR;
     }
 
@@ -1398,6 +1398,14 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
+    // No telescope move if target coordinates didn't change
+    //
+    if ( this->target.ra_hms == this->last_ra_hms &&
+         this->target.dec_dms == this->last_dec_dms ) {
+      this->async.enqueue_and_log( function, "NOTICE: no move required for repeat target" );
+      return NO_ERROR;
+    }
+
     error = NO_ERROR;
 
     // Before sending target coordinates to TCS,
@@ -1508,7 +1516,11 @@ namespace Sequencer {
 
     this->is_ontarget.store(false);
 
-    this->last_target = this->target.name;  // remember the last target that was tracked on
+    // remember the last target that was tracked on
+    //
+    this->last_target  = this->target.name;
+    this->last_ra_hms  = this->target.ra_hms;
+    this->last_dec_dms = this->target.dec_dms;
 
     return NO_ERROR;
   }
@@ -1678,7 +1690,7 @@ namespace Sequencer {
     //
     this->do_once.store(true);
 
-    logwrite( function, "cancel signal sent" );
+    this->async.enqueue_and_log( function, "NOTICE: cancel signal sent" );
   }
 
   /***** Sequencer::Sequence::stop_exposure *********************************/
@@ -1695,7 +1707,7 @@ namespace Sequencer {
     // This function is only used while exposing
     //
     if ( ! this->seq_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-      logwrite( function, "not currently exposing" );
+      this->async.enqueue_and_log( function, "NOTICE: not currently exposing" );
       return;
     }
 
@@ -1710,7 +1722,7 @@ namespace Sequencer {
     }
     else
     if ( error == BUSY ) {
-      logwrite( function, "too late to stop exposure" );
+      this->async.enqueue_and_log( function, "NOTICE: too late to stop exposure" );
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
     else {
@@ -1746,7 +1758,7 @@ namespace Sequencer {
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
 
     worker_threads = { { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)  },
-                       { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this) }
+//                     { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this) }
                      };
 
     // pair their ThreadStatusBit with their future
@@ -1770,7 +1782,7 @@ namespace Sequencer {
     }
 
     if ( this->cancel_flag.load() ) {
-      logwrite( function, "NOTICE: cancelled repeat exposure" );
+      this->async.enqueue_and_log( function, "NOTICE: cancelled repeat exposure" );
       return NO_ERROR;
     }
 
@@ -1888,8 +1900,8 @@ namespace Sequencer {
 
     if ( error==NO_ERROR ) {
       this->target.exptime_req = updated_exptime;
-      message.str(""); message << "successfully updated exptime to " << updated_exptime << " sec";
-      logwrite( function, message.str() );
+      message.str(""); message << "NOTICE: updated exptime to " << updated_exptime << " sec";
+      this->async.enqueue_and_log( function, message.str() );
     }
 
     // announce the success or failure in an asynchronous broadcast message
@@ -2064,7 +2076,7 @@ namespace Sequencer {
     error = start_power.get();
 
     if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR starting power control. Will try to continue (but don't hold your breath)" );
+      this->async.enqueue_and_log( function, "ERROR starting power control. Will try to continue (but don't hold your breath)" );
     }
 
     // threads to start, pair their ThreadStatusBit with the function to call
@@ -2169,7 +2181,7 @@ namespace Sequencer {
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
     if ( start_power.get() != NO_ERROR ) {
-      logwrite( function, "ERROR from power control. Will try to continue (but don't hold your breath)" );
+      this->async.enqueue_and_log( function, "ERROR from power control. Will try to continue (but don't hold your breath)" );
     }
 
     // container of shutdown threads to launch,
@@ -2207,7 +2219,7 @@ namespace Sequencer {
       }
     }
 
-    logwrite( function, "NGPS is shut down" );
+    this->async.enqueue_and_log( function, "NOTICE: instrument is shut down" );
 
     return( NO_ERROR );
   }

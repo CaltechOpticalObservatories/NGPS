@@ -338,7 +338,10 @@ namespace Sequencer {
       std::string single_obsid;       ///< obsid for single-target GETONE command
       std::string prev_single_obsid;  ///< the previous single_obsid, used for REPEAT
 
+      /// Sequence::move_to_target remembers the last target name and coordinates
       std::string last_target;
+      mysqlx::string last_ra_hms;
+      mysqlx::string last_dec_dms;
 
       std::string tcs_which;          ///< configured TCS
       std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown
