@@ -38,8 +38,8 @@ namespace AstroCam {
       this->camera.shutter_timer.progress(remaintime, delaytime);
       if ( delaytime==0 ) return;
       message = "EXPTIME:" + std::to_string(remaintime) + " "
-                           + std::to_string(delaytime) + " "
-                           + std::to_string(static_cast<long>(100*(1-remaintime/delaytime)));
+                           + std::to_string(delaytime)  + " "
+                           + std::to_string(static_cast<long>(100*(1-static_cast<double>(remaintime)/delaytime)));
       // broadcast
       std::thread( &AstroCam::Interface::handle_queue2, this, std::move(message) ).detach();
     }
@@ -85,8 +85,9 @@ namespace AstroCam {
   void Callback::readCallback( int expbuf, int devnum, std::uint32_t uiPixelCount, std::uint32_t uiImageSize ) {
     std::string message;
     message.reserve(36);
-    message = "PIXELCOUNT_" + std::to_string(devnum) + ":"
+    message = "PIXELCOUNT_" + std::to_string(devnum)       + ":"
                             + std::to_string(uiPixelCount) + " "
+                            + std::to_string(uiImageSize)  + " "
                             + std::to_string(static_cast<long>(100*uiPixelCount/uiImageSize));
     std::thread( std::ref(AstroCam::Interface::handle_queue), message ).detach();
     return;
