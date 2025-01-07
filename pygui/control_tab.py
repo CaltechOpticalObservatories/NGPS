@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
 from logic_service import LogicService
 import astropy.units as u
+import subprocess
 
 class ControlTab(QWidget):
     def __init__(self, parent):
@@ -149,11 +150,11 @@ class ControlTab(QWidget):
         self.offset_to_target_button.clicked.connect(self.on_offset_to_target_click)
         self.offset_to_target_button.setEnabled(False)
 
-        # Offset To Target Button
+        # Continue Target Button
         self.continue_button = QPushButton("Continue")
         self.continue_button.clicked.connect(self.on_continue_button_click)
         self.continue_button.setEnabled(False)
-
+        
         row3_layout.addWidget(self.go_button)
         row3_layout.addWidget(self.offset_to_target_button)
         row3_layout.addWidget(self.continue_button)
@@ -170,16 +171,19 @@ class ControlTab(QWidget):
         # Buttons
         self.repeat_button = QPushButton("Repeat")
         self.pause_button = QPushButton("Pause")
+        self.abort_button = QPushButton("Abort")
         self.stop_now_button = QPushButton("Stop Now")
 
         # Connect the buttons to their corresponding slots
         self.repeat_button.clicked.connect(self.on_repeat_button_click)
         self.pause_button.clicked.connect(self.on_pause_button_click)
+        self.abort_button.clicked.connect(self.on_abort_button_click)
         self.stop_now_button.clicked.connect(self.on_stop_now_button_click)
 
         row4_layout.addWidget(self.repeat_button)
         row4_layout.addWidget(self.pause_button)
         row4_layout.addWidget(self.stop_now_button)
+        row4_layout.addWidget(self.abort_button)
 
         row4_widget = QWidget()
         row4_widget.setLayout(row4_layout)
@@ -198,17 +202,21 @@ class ControlTab(QWidget):
             self.is_paused = False
             self.pause_button.setText("Pause")
             print("Resuming action...")
-            # Add resume functionality here
+            command = f"resume\n"
+            self.parent.send_command(command)
         else:
             # If not paused, pause and change button text to "Resume"
             self.is_paused = True
             self.pause_button.setText("Resume")
             print("Pausing action...")
-            # Add pause functionality here
+            command = f"pause\n"
+            self.parent.send_command(command)
 
     def on_stop_now_button_click(self):
         """Handle Stop Now button click."""
         print("Stopping now...")
+        command = f"stop\n"
+        self.parent.send_command(command)
 
     def create_row5(self):
         """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""
@@ -227,10 +235,10 @@ class ControlTab(QWidget):
         self.headers_button = QPushButton("Headers")
         self.display_button = QPushButton("Display")
         self.temp_button = QPushButton("Temp")
-        self.startup_button = QPushButton("Startup")
-        self.shutdown_button = QPushButton("Shutdown")
-        self.startup_button.clicked.connect(self.on_startup_button_click)
-        self.shutdown_button.clicked.connect(self.on_shutdown_button_click)
+        self.startup_button = QPushButton("Lamps")
+        self.shutdown_button = QPushButton("Reset")
+        self.startup_button.clicked.connect(self.on_lamps_button_click)
+        self.shutdown_button.clicked.connect(self.on_reset_button_click)
 
         # Add buttons to each vertical layout
         binning_layout.addWidget(self.binning_button)
@@ -268,9 +276,82 @@ class ControlTab(QWidget):
         self.slit_angle_box.textChanged.connect(self.on_input_changed)
 
     def on_continue_button_click(self):
+        """Handle the 'Expose' button click and check for 'USER' in command output"""
+        print("On Continue button clicked!")
+        
+        # Send the usercontinue command
+        command = f"usercontinue\n"
+        self.parent.send_command(command)
+        
+        try:
+            # Running the 'seq state' command and capturing its output
+            result = subprocess.check_output(['seq', 'state'], text=True)
+            print(result)  # Optional: print the output for debugging
+            
+            # Check if 'USER' is in the output
+            if 'USER' in result:
+                # Enable button if 'USER' is found
+                self.continue_button.setEnabled(True)
+                self.continue_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4CAF50;  /* Green when enabled */
+                        color: white;
+                        font-weight: bold;
+                        padding: 10px;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #45a049;
+                    }
+                    QPushButton:pressed {
+                        background-color: #3e8e41;
+                    }
+                """)
+            else:
+                # Disable button if 'USER' is not found
+                self.continue_button.setEnabled(False)
+                self.continue_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #D3D3D3;  /* Light gray when disabled */
+                        color: black;
+                        font-weight: bold;
+                        padding: 10px;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #D3D3D3;  /* No hover effect when disabled */
+                    }
+                    QPushButton:pressed {
+                        background-color: #D3D3D3;  /* No pressed effect when disabled */
+                    }
+                """)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running command: {e}")
+            # Disable button in case of an error
+            self.continue_button.setEnabled(False)
+            self.continue_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+            """)
+        
+    def on_abort_button_click(self):
         """Handle the 'Expose' button click"""
-        print("Startup button clicked!")
-        command = f"userexpose\n"
+        print("Abort button clicked!")
+        command = f"abort\n"
         self.parent.send_command(command)
         self.continue_button.setEnabled(False)
         self.continue_button.setStyleSheet("""
@@ -290,17 +371,16 @@ class ControlTab(QWidget):
                 }
         """)
 
-    def on_startup_button_click(self):
+    def on_lamps_button_click(self):
         """Handle the 'Startup' button click"""
         print("Startup button clicked!")
-        command = f"startup\n"
-        self.parent.send_command(command)
+        # command = f"startup\n"
+        # self.parent.send_command(command)
 
-    def on_shutdown_button_click(self):
+    def on_reset_button_click(self):
         """Handle the 'Startup' button click"""
-        print("Startup button clicked!")
-        command = f"shutdown\n"
-        self.parent.send_command(command) 
+        print("Reset button clicked!")
+        self.logic_service.refresh_table()
 
     def on_offset_to_target_click(self):
         """Handle the Offset To Target button click event"""
@@ -550,18 +630,19 @@ class ControlTab(QWidget):
             # Handle the case where one or more fields are empty
             print("Please enter valid values for all fields.")
 
-
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exposure_time)
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
 
     def on_slit_angle_changed(self):
         # Retrieve the slit width and send the query to the database
@@ -573,3 +654,4 @@ class ControlTab(QWidget):
 
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)

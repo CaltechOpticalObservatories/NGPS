@@ -1,0 +1,7 @@
+kilonova_transient.fits
+sne91bg_plasticc_transient.fits
+sneia_salt2_transient.fits
+sneiax_plasticc_transient.fits
+sneib_transient.fits
+sneii_fast_transient.fits
+sneii_slow_transient.fits
