@@ -1,0 +1,294 @@
+ 
+### Matuszewski 24/11/16
+### First stab at a CAL acquisition
+### Nothing fancy, no error checking, assumes instrument is OK to command
+### and take data.
+
+echo "Starting calibration sequence"
+
+#if "dolamps" flag is raiised then have the script power lamps on and
+# off, if it is not raised, the assume we are taking a lot more cals
+# and it is better for the lamos to remain on 
+
+dolamps=0
+
+### Nominal exposure times for lamps and narrowest slit in ms
+### These should be command line or parameter file inputs, etc. 
+T_thar_nom=20000
+T_fear_nom=21000
+T_cont_nom=20000
+T_etalon_nom=3000
+T_dome_nom=90000
+T_bias=0
+T_dark=10000
+
+### Nominal exposure counts. These should be command line or parameter
+## file inputs, etc.
+N_thar=0
+N_fear=0
+N_cont=0
+N_etalon=0
+N_dome=5
+N_bias=0
+N_dark=0
+
+
+tharmod=6
+fearmod=1
+redccont=4
+redcetalon=3
+
+### First get some parameters that affect exposure times
+origexptime=(`camera exptime`[1])
+
+### Slit width
+slitwidth=(`slit get`[1])
+echo "Current slit width =  $slitwidth arcsec"
+# slitwidth=1.0
+# based on information coming from some reanalysis on 141201, the math may need work here
+
+
+### This binning stuff below should be replaced 
+
+### Get spectral binning
+xbin=(`camera bin col`[1])
+
+
+
+### Get spatial binning
+ybin=(`camera bin row`[1])
+
+
+arcmultiplier=`echo "scale=3; 1.00/($xbin*$ybin)" | bc`
+
+contmultiplier=`echo "scale=3; 1.0/($xbin*$ybin)*(0.5 / $slitwidth)" | bc`
+echo "Cont exposure multiplier = $contmultiplier"
+
+
+
+
+#-----------------------
+
+#T_thar=`echo "scale=0; $T_thar_nom * $arcmultiplier" | bc`
+#T_fear=`echo "$T_fear_nom * $arcmultiplier" | bc`
+#T_cont=`echo "$T_cont_nom * $contmultiplier" | bc`
+#T_dome=`echo "$T_dome_nom * $contmultiplier" | bc`
+#T_etalon=`echo "$T_etalon_nom * $contmultiplier" | bc`
+
+T_thar=`/usr/bin/python3.9 -c "print(int($T_thar_nom * $arcmultiplier))"`
+T_fear=`/usr/bin/python3.9 -c "print(int($T_fear_nom * $arcmultiplier))"`
+T_cont=`/usr/bin/python3.9 -c "print(int($T_cont_nom * $contmultiplier))"`
+T_dome=`/usr/bin/python3.9 -c "print(int($T_dome_nom * $contmultiplier))"`
+T_etalon=`/usr/bin/python3.9 -c "print(int($T_etalon_nom * $contmultiplier))"`
+
+
+
+
+
+
+#---------------------------
+# Now command some stuff
+#
+#
+
+# close the cover, open the door
+./fake calib set cover=close door=open
+
+# close the lollipops
+
+for i in $(/usr/bin/seq 1 6);
+  
+  # calib lampmod $i 0 1000 
+  sleep 0.5
+done
+
+if [ $dolamps -ne 0 ]; then
+# turn on the lamps
+./fake power LAMPTHAR on
+./fake power LAMPFEAR on
+./fake power LAMPREDC on
+./fake turn on dome hilamp here
+fi
+
+####### THAR
+if [ $N_thar -gt 0 ]; then
+# let's do thars!
+echo
+echo "---THAR---"
+echo "Taking $N_thar ThAr $T_thar (ms)"
+firstex=(`camera imnum`[1])
+basename=(`camera basename`[1])
+
+
+echo "First exposure: $firstex. Basename: $basename"
+
+
+
+./fake camera key IMGTYPE=THAR//Calibration. ThAr lamp
+./fake calib lampmod $tharmod 1 1000
+
+
+# turn off the ThAr lamp 
+./fake calib lampmod $tharmod 0 1000
+
+if [ $dolamps -ne 0 ]; then
+./fake power LAMPTHAR off
+fi
+fi
+
+
+####### FEAR
+if [ $N_fear -gt 0 ]; then
+# let's do fears!
+echo
+echo "--- FEAR ---"
+echo "Taking $N_fear FeAr $T_fear (ms)"
+firstex=(`camera imnum`[1])
+basename=(`camera basename`[1])
+echo "First exposure: $fistex. Basename: $basename"
+
+./fake camera key IMGTYPE=FEAR//Calibration. FeAr lamp
+./fake calib lampmod $fearmod 1 1000
+
+./fake camera exptime $T_fear
+./fake exposen $N_fear
+
+# turn off the FeAr lamp 
+./fake calib lampmod $fearmod 0 1000
+
+if [ $dolamps -ne 0 ]; then
+./fake power LAMPFEAR off
+fi
+fi
+
+
+####### Internal continuum
+if [ $N_cont -gt 0 ]; then
+# let's do internal continuum!!
+echo
+echo "--- CONT ---"
+echo "Taking $N_cont continuum $T_cont (ms)"
+
+firstex=(`camera imnum`[1])
+basename=(`camera basename`[1])
+echo "First exposure: $firstex. Basename: $basename"
+
+./fake camera key IMGTYPE=CONT//Calibration. Internal Continuum
+./fake calib lampmod $redccont 1 1000
+
+./fake camera exptime $T_cont
+./fake exposen $N_cont
+
+# close the cont lollipop
+./fake calib lampmod $redccont 0 1000
+fi
+
+
+####### Internal etalon
+if [ $N_etalon -gt 0 ]; then
+# let's do internal continuum!!
+echo
+echo "--- ETALON ---"
+echo "Taking $N_etalon continuum $T_etalon (ms)"
+
+firstex=(`camera imnum`[1])
+basename=(`camera basename`[1])
+echo "First exposure: $firstex. Basename: $basename"
+
+./fake camera key IMGTYPE=ETALON//Calibration. Internal Etalon
+./fake calib lampmod $redcetalon 1 1000
+
+
+
+# close the cont lollipop
+./fake calib lampmod $redcetalon 0 1000
+fi
+
+### shut down the internal continuum lamp after etalons
+if [ $dolamps -ne 0 ]; then
+./fake power LAMPREDC off
+fi
+
+
+####### Dome flats!!!!
+
+echo $N_dome
+if [ $N_dome -gt 0 ]; then
+# let's do internal continuum!!
+echo
+echo "--- DOME FLATS ---"
+echo "Taking $N_dome continuum $T_dome (ms)"
+
+firstex=(`camera imnum`[1])
+basename=(`camera basename`[1])
+
+./fake camera key IMGTYPE=DOMEFLAT//Calibration. Dome Flat
+./fake calib set door=close cover=open
+
+./fake camera exptime $T_dome
+./fake exposen $N_dome
+
+
+# close cover after domes here, for safety.
+./fake calib cover=close
+fi
+
+### shut down the dome lamp, if required.
+if [ $dolamps -ne 0 ]; then
+./fake Turn off dome hilamp here.
+fi
+
+#### Done with illuminated testing
+
+
+### Biases
+if [ $N_bias -gt 0 ]; then
+echo
+echo "--- BIASES ---"
+echo "Taking $N_bias 0s biases"
+
+
+echo "First exposure: $fistex. Basename: $basename"
+
+./fake camera key IMGTYPE=BIAS//Calibration. Dome Flat
+./fake calib set cover=close door=close
+./fake camera shutter disable
+
+
+./fake camera exptime 0
+./fake exposen $N_bias
+fi
+
+
+### Darks
+if [ $N_dark -gt 0 ]; then
+echo
+echo "--- DARK ---"
+echo "Taking $N_dark  darks $T_dark (ms)"
+
+firstex=(`camera imnum`[1])
+basename=(`camera basename`[1])
+echo "First exposure: $firstex. Basename: $basename"
+
+
+./fake camera key IMGTYPE=DARK//Calibration. Dome Flat
+./fake calib set cover=close door=close
+./fake camera shutter disable
+./fake camera exptime $T_dark
+./fake exposen $N_dark
+fi
+
+
+echo
+echo "--- WRAP UP ---"
+
+./fake camera shutter enable
+./fake camera key IMGTYPE=SCI//Science
+./fake camera exptime $origexptime
+
+
+echo "Done with cal set at `date`"
+
+
+exit
+

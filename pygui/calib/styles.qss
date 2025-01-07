@@ -1,0 +1,102 @@
+/* Custom Dark Mode Styles with More Gray Tones */
+
+/* Global Styles for Dark Mode */
+QMainWindow {
+    background-color: #474848;  /* Dark gray background */
+    color: #e0ddcf;  /* Soft light beige for text */
+    font-family: "Segoe UI", sans-serif;
+    font-size: 12px;
+}
+
+QTabWidget {
+    background-color: #2e2e2e;  /* Deeper gray for tabs container */
+    border: 1px solid #6b6b6b;  /* Muted gray border around tabs */
+    padding: 8px;
+}
+
+QTabBar::tab {
+    background-color: #6b6b6b;  /* Muted gray for tab background */
+    padding: 10px;
+    border-radius: 5px;
+    color: #e0ddcf;  /* Soft light beige for tab labels */
+}
+
+QTabBar::tab:selected {
+    background-color: #e0ddcf;  /* Soft light beige for selected tab */
+    color: #2e2e2e;  /* Dark text for selected tab */
+}
+
+QTabWidget::pane {
+    border: none;  /* Remove the border around the tab container */
+}
+
+QLabel {
+    color: #e0ddcf;  /* Light beige for labels */
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QLineEdit {
+    background-color: #2e2e2e;  /* Dark gray for input fields */
+    color: #e0ddcf;  /* Soft light beige text */
+    border: 1px solid #6b6b6b;  /* Muted gray border */
+    border-radius: 5px;
+    padding: 6px;
+    font-size: 12px;
+}
+
+QPushButton {
+    background-color: #6b6b6b;  /* Muted gray for button background */
+    color: #f1f0ea;  /* Very light cream-colored text */
+    border: none;
+    border-radius: 5px;
+    padding: 8px;
+    font-size: 12px;
+}
+
+/* Hover State */
+QPushButton:hover {
+    background-color: #5a5a5a;  /* Darker gray on hover for better contrast */
+    color: #2e2e2e;  /* Darker text color for hover */
+}
+
+QPushButton:pressed {
+    background-color: #2e2e2e;  /* Deeper gray on press */
+}
+
+QScrollBar {
+    background-color: #474848;  /* Dark gray for scrollbar */
+    border: 1px solid #2e2e2e;  /* Deeper gray border */
+    width: 12px;
+}
+
+QScrollBar::handle {
+    background-color: #6b6b6b;  /* Muted gray for the scrollbar handle */
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    background-color: #474848;  /* Dark gray for scroll buttons */
+}
+
+/* Focused Input Fields */
+QLineEdit:focus {
+    border: 1px solid #e0ddcf;  /* Light beige border for focused input fields */
+}
+
+/* Disabled State for Buttons and Inputs */
+QPushButton:disabled, QLineEdit:disabled {
+    background-color: #2e2e2e;  /* Dimmed background for disabled elements */
+    color: #6b6b6b;  /* Muted gray text for disabled state */
+}
+
+/* Tooltips */
+QToolTip {
+    background-color: #2e2e2e;  /* Dark gray for tooltips */
+    color: #e0ddcf;  /* Light beige text for tooltips */
+    border: 1px solid #6b6b6b;  /* Muted gray border */
+}
+
+/* Adding a shadow effect to labels */
+QLabel {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
