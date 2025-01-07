@@ -2304,6 +2304,10 @@ namespace Acam {
       }
     }
 
+    // close connection to tcsd
+    //
+    this->tcsd.client.disconnect();
+
     return error;
   }
   /***** Acam::Interface::close ***********************************************/

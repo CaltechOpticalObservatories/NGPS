@@ -1551,6 +1551,7 @@ namespace Slicecam {
 
     error |= this->framegrab( "stop", retstring );
     error |= this->camera.close();
+    this->tcsd.client.disconnect();
 
     return error;
   }
@@ -2444,10 +2445,6 @@ namespace Slicecam {
     // this stops framegrabbing and closes socket connections to hardware
     //
     error |= this->close( "", dontcare );
-
-    // shutdown TCS connection
-    //
-    error |= this->tcs_init( "shutdown", dontcare );
 
     if ( error == NO_ERROR ) logwrite( function, "slicecam interfaces shut down" );
     else logwrite( function, "ERROR shutting down slicecam interfaces" );
