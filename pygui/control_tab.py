@@ -202,17 +202,21 @@ class ControlTab(QWidget):
             self.is_paused = False
             self.pause_button.setText("Pause")
             print("Resuming action...")
-            # Add resume functionality here
+            command = f"resume\n"
+            self.parent.send_command(command)
         else:
             # If not paused, pause and change button text to "Resume"
             self.is_paused = True
             self.pause_button.setText("Resume")
             print("Pausing action...")
-            # Add pause functionality here
+            command = f"pause\n"
+            self.parent.send_command(command)
 
     def on_stop_now_button_click(self):
         """Handle Stop Now button click."""
         print("Stopping now...")
+        command = f"stop\n"
+        self.parent.send_command(command)
 
     def create_row5(self):
         """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""

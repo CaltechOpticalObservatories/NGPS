@@ -211,3 +211,4 @@ QScrollBar::add-line, QScrollBar::sub-line {
 .column-third QWidget {
     background-color: #3a3a3a;  /* Darker gray */
 }
+
