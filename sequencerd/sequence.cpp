@@ -2115,11 +2115,25 @@ namespace Sequencer {
     }
 
     // Now the Andor cameras must be done individually, first slicecam,
-    auto start_slicecam = std::async(std::launch::async, &Sequence::slicecam_init, this);
     try {
-      if ( start_slicecam.get() != NO_ERROR ) {
-        logwrite( function, "ERROR from slicecam_init" );
-        error = ERROR;
+
+      // if slicecam_init returns error, it's worth power cycling and trying again
+      if ( std::async(std::launch::async, &Sequence::slicecam_init, this).get() != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR from slicecam_init, will try power cycle, standby" );
+
+        // power off slicecams
+        if ( std::async(std::launch::async, &Sequence::slicecam_shutdown, this).get() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR shutting down slicecam, giving up" );
+          error = ERROR;
+        }
+        else
+        // try again to initialize slicecams
+        if ( std::async(std::launch::async, &Sequence::slicecam_init, this).get() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR starting slicecam, giving up" );
+          error = ERROR;
+        }
+        else
+        this->async.enqueue_and_log( function, "NOTICE: slicecam power cycle success" );
       }
     }
     catch (const std::exception& e) {
@@ -2128,11 +2142,24 @@ namespace Sequencer {
     }
 
     // then the acam
-    auto start_acam = std::async(std::launch::async, &Sequence::acam_init, this);
     try {
-      if ( start_acam.get() != NO_ERROR ) {
-        logwrite( function, "ERROR from acam_init" );
-        error = ERROR;
+      // if acam_init returns error, it's worth power cycling and trying again
+      if ( std::async(std::launch::async, &Sequence::acam_init, this).get() != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR from acam_init, will try power cycle, standby" );
+
+        // power off acam
+        if ( std::async(std::launch::async, &Sequence::acam_shutdown, this).get() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR shutting down acam, giving up" );
+          error = ERROR;
+        }
+        else
+        // try again to initialize acams
+        if ( std::async(std::launch::async, &Sequence::acam_init, this).get() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR starting acam, giving up" );
+          error = ERROR;
+        }
+        else
+        this->async.enqueue_and_log( function, "NOTICE: acam power cycle success" );
       }
     }
     catch (const std::exception& e) {
