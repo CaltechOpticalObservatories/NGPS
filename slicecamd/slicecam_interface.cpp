@@ -1982,7 +1982,7 @@ namespace Slicecam {
 
       // build the filename
       std::string basename = filename.substr(0, loc);
-      std::string path = "/data/slicecam/" + get_system_date();
+      std::string path = "/data/" + get_latest_datedir("/data") + "/slicecam/";
 
       // make sure the path exists and is writable
       if ( !validate_path( path ) ) {

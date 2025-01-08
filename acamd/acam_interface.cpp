@@ -5592,7 +5592,7 @@ logwrite( function, message.str() );
 
       // build the filename
       std::string basename = filename.substr(0, loc);
-      std::string path = "/data/acam/" + get_system_date();
+      std::string path = "/data/" + get_latest_datedir("/data") + "/acam/";
 
       // make sure the path exists and is writable
       if ( !validate_path( path ) ) {

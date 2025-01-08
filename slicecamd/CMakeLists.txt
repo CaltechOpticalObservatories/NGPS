@@ -61,7 +61,7 @@ target_link_libraries(slicecamd
 target_compile_options(slicecamd PRIVATE -g -Wall -O1 -Wno-variadic-macros -ggdb)
 
 # Set the setgid bit on the resulting executable
-add_custom_command( TARGET slicecamd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:slicecamd> )
+add_custom_command( TARGET slicecamd POST_BUILD COMMAND chmod u+s $<TARGET_FILE:slicecamd> )
 
 # -- External Definitions ------------------------------------------------------
 #
