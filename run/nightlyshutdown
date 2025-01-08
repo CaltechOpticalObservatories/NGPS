@@ -1,0 +1,45 @@
+#!/bin/bash
+shutdown_group() {
+  local group="$1"
+  shift
+  local commands=("$@")
+
+  echo -n "shutting down $group..."
+
+  for cmd in "${commands[@]}"; do
+    local out
+    out=$(eval "$cmd" 2>&1)
+    if echo "$out" | grep -q "ERROR"; then
+      echo "ERROR running \"$cmd\""
+    fi
+  done
+  echo "DONE"
+}
+
+shutdown_group "calibration" \
+  "calib set cover=close door=close" \
+  "calib lampmod 0 off" \
+  "power LAMPTHAR off" \
+  "power LAMPFEAR off" \
+  "power LAMPBLUC off" \
+  "power LAMPREDC off"
+
+shutdown_group "detectors" \
+  "camera native pof" \
+  "camera close" \
+  "power leach_i off" \
+  "power leach_r off"
+
+shutdown_group "acam" \
+  "acam shutdown" \
+  "sleep 10" \
+  "power acam off"
+
+shutdown_group "slicecams" \
+  "scam shutdown" \
+  "sleep 10" \
+  "power slicecaml off" \
+  "power slicecamr off"
+
+echo ""
+echo "all done, goodnight!"
