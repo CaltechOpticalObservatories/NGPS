@@ -1,7 +1,7 @@
 import mysql.connector
 import configparser
 from PyQt5.QtWidgets import QTableWidgetItem
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 import os
 import csv
@@ -10,6 +10,7 @@ from astropy.coordinates import SkyCoord, EarthLocation
 from astropy.time import Time
 from astroplan import Observer
 import astropy.units as u
+import datetime
 
 class LogicService:
     def __init__(self, parent):
@@ -41,6 +42,201 @@ class LogicService:
         
         except Exception as e:
             print(f"Error loading CSV file: {e}")
+
+    def upload_csv_to_mysql(self, file_path, target_set_name):
+        """Upload the CSV to MySQL and associate it with a new target set."""
+        
+        # Step 1: Read the CSV
+        try:
+            with open(file_path, 'r') as file:
+                reader = csv.DictReader(file)
+                data = list(reader)  # Convert CSV to list of dictionaries
+                print(f"CSV file loaded. Total rows: {len(data)}")
+        except Exception as e:
+            print(f"Error reading CSV file: {e}")
+            return
+
+        # Step 2: Insert a new entry into the `target_sets` table
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
+                        (target_set_name, self.parent.current_owner))  # Use the current owner's info
+            self.connection.commit()
+
+            # Step 3: Fetch the new SET_ID (for the newly inserted target set)
+            cursor.execute("SELECT LAST_INSERT_ID()")
+            set_id = cursor.fetchone()[0]
+            print(f"New target set created with SET_ID: {set_id}")
+            cursor.close()
+
+            # Step 4: Dynamically construct the insert query
+            cursor = self.connection.cursor()
+
+            # Get the columns in the CSV file (i.e., DictReader's fieldnames)
+            csv_columns = reader.fieldnames  # List of column names from the CSV
+            print(f"CSV Columns: {csv_columns}")
+
+            # Define all columns from your table `targets` (based on your schema)
+            all_columns = [
+                'OBSERVATION_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 
+                'RA', 'DECL', 'OFFSET_RA', 'OFFSET_DEC', 'EXPTIME', 'SLITWIDTH', 'SLITOFFSET', 'OBSMODE', 
+                'BINSPECT', 'BINSPAT', 'SLITANGLE', 'AIRMASS_MAX', 'WRANGE_LOW', 'WRANGE_HIGH', 'CHANNEL', 
+                'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
+                'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start', 
+                'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR', 
+                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE'
+            ]
+
+            # Step 5: Loop through each row and dynamically generate the insert query
+            for idx, row in enumerate(data):
+                row_data = [set_id]  # Start with the SET_ID as the first element in row_data
+                insert_columns = ['SET_ID']  # Always include SET_ID
+                insert_placeholders = ['%s']  # Placeholder for SET_ID
+
+                print(f"Inserting row {idx + 1}: {row}")
+
+                # Step 6: Add only non-empty fields to the insert query
+                for column in all_columns:
+                    value = row.get(column)  # Get the value from the CSV, default to None if not present
+
+                    # Handle missing columns (apply defaults based on column type)
+                    if value is None:
+                        # Numeric columns (defaults to 0)
+                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'BINSPECT', 'BINSPAT']:
+                            value = 0
+                        # Text columns (defaults to empty string "")
+                        elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
+                            value = ""  # Empty string as default for text fields
+                        # # Timestamp columns (defaults to NULL)
+                        # elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
+                        #     value = None  # Default to NULL for timestamps
+                        # else:
+                        #     value = None  # Default to NULL for other columns without a defined default
+
+                    # Special case: if `OFFSET_RA` or `OFFSET_DEC` are empty, set them to 0.0
+                    if column in ['OFFSET_RA', 'OFFSET_DEC'] and (value == '' or value is None):
+                        value = 0.0  # Default to 0.0 if empty or None
+
+                    # Add the column and value to the query
+                    insert_columns.append(column)
+                    insert_placeholders.append('%s')
+                    row_data.append(value)
+
+                # Build the dynamic insert query
+                insert_columns_str = ", ".join(insert_columns)
+                insert_placeholders_str = ", ".join(insert_placeholders)
+                insert_query = f"""
+                    INSERT INTO targets ({insert_columns_str})
+                    VALUES ({insert_placeholders_str})
+                """
+                
+                print(f"Executing query: {insert_query}")
+                print(f"With data: {row_data}")
+
+                # Execute the insert query with dynamically generated values
+                cursor.execute(insert_query, row_data)
+
+            # Commit the transaction
+            self.connection.commit()
+
+            print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
+            # Emit the signal after the upload is complete
+            # self.load_mysql_and_fetch_target_sets(config_file="config/db_config.ini")
+            self.fetch_and_update_target_list()
+
+        except mysql.connector.Error as err:
+            print(f"Error inserting data into MySQL: {err}")
+
+    def get_or_create_target_set(self, connection, target_set_name):
+        """
+        Checks if a target set with the given name exists. If it exists, returns the existing `SET_ID`.
+        If it doesn't exist, creates a new target set and returns the new `SET_ID`.
+        """
+        try:
+            cursor = connection.cursor()
+
+            # Check if the target set already exists by name
+            query = "SELECT SET_ID FROM target_sets WHERE SET_NAME = %s"
+            cursor.execute(query, (target_set_name,))
+            result = cursor.fetchone()
+
+            if result:
+                # If the target set exists, return the existing SET_ID
+                set_id = result[0]
+                print(f"Found existing target set with SET_ID: {set_id}")
+            else:
+                # If not, create a new target set and get the new SET_ID
+                set_id = self.create_target_set(connection, target_set_name)
+            
+            cursor.close()
+            return set_id
+        
+        except mysql.connector.Error as err:
+            print(f"Error checking or creating target set: {err}")
+            return None
+
+    def create_target_set(self, connection, target_set_name):
+        """
+        Creates a new entry in the `target_sets` table and returns the new `SET_ID`.
+        """
+        try:
+            cursor = connection.cursor()
+
+            # Get the current timestamp for the new target set creation
+            current_timestamp = pytz.utc.localize(datetime.datetime.utcnow()).strftime('%Y-%m-%d %H:%M:%S')
+
+            # Insert the new target set into the `target_sets` table
+            query = """
+                INSERT INTO target_sets (SET_NAME, SET_CREATION_TIMESTAMP)
+                VALUES (%s, %s)
+            """
+            cursor.execute(query, (target_set_name, current_timestamp))
+
+            # Commit the transaction to make sure the SET_ID is generated
+            connection.commit()
+
+            # Get the newly created SET_ID
+            cursor.execute("SELECT LAST_INSERT_ID();")
+            set_id = cursor.fetchone()[0]
+
+            cursor.close()
+
+            print(f"Created new target set with SET_ID: {set_id}")
+            return set_id
+        
+        except mysql.connector.Error as err:
+            print(f"Error creating target set: {err}")
+            return None
+
+    def insert_targets_into_mysql(self, connection, data, set_id):
+        """
+        Inserts the data into the `targets` table, linking each target to the given `SET_ID`.
+        """
+        try:
+            cursor = connection.cursor()
+            
+            # Insert each target in the CSV into the `targets` table, linking it to the `SET_ID`
+            for row in data:
+                # Add the SET_ID to the row data before inserting
+                row['SET_ID'] = set_id
+                
+                # Prepare the SQL query for insertion: matching columns
+                columns = ', '.join(row.keys())  # Column names from CSV (and SET_ID)
+                values = ', '.join(['%s'] * len(row))  # Placeholder for values
+                query = f"INSERT INTO targets ({columns}) VALUES ({values})"
+                
+                # Execute the insert query
+                cursor.execute(query, tuple(row.values()))
+            
+            # Commit the transaction
+            connection.commit()
+            print(f"Successfully uploaded {len(data)} rows to the 'targets' table.")
+        
+        except mysql.connector.Error as err:
+            print(f"Error inserting data into MySQL: {err}")
+        
+        finally:
+            cursor.close()
 
     def read_config(self, config_file):
         """
@@ -180,7 +376,7 @@ class LogicService:
         
         # Step 2: Load data from the 'target_sets' table
         db_config = self.read_config(config_file)  # We need to read config again for the table name
-        target_sets_table = db_config["TARGET_SETS_TABLE"]  # Assuming you have the 'target_sets' table name in config
+        target_sets_table = db_config["TARGETSET_TABLE"]  # Assuming you have the 'target_sets' table name in config
         rows = self.load_data_from_mysql(connection, target_sets_table)
         
         if rows:
@@ -193,6 +389,42 @@ class LogicService:
         
         # Close the database connection after usage
         connection.close()
+
+    def fetch_and_update_target_list(self):
+        """Fetch target data and update the table in the parent window."""
+        self.connection = self.connect_to_mysql("config/db_config.ini")
+        if self.connection:
+            try:
+                cursor = self.connection.cursor(dictionary=True)
+
+                # Step 1: Get the SET_IDs from target_sets for the logged-in user
+                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER = %s", (self.parent.current_owner,))
+                set_ids = cursor.fetchall()
+                cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (self.parent.current_owner,))
+                set_data = cursor.fetchall()
+
+                # Step 2: Convert set_data to a dictionary and store it in self.set_data
+                self.set_data = {set_item["SET_ID"]: set_item["SET_NAME"] for set_item in set_data}
+
+                # Step 3: Extract all SET_NAME values and store them in self.set_name
+                self.set_name = [set_item["SET_NAME"] for set_item in set_data]
+
+                # Step 4: For each SET_ID, fetch the associated rows from the 'targets' table
+                self.parent.all_targets = []
+                for set_id in set_ids:
+                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
+                    targets = cursor.fetchall()
+                    self.parent.all_targets.extend(targets)
+
+                self.parent.layout_service.load_target_lists(self.set_name)
+                self.parent.user_set_data = self.set_data
+                self.update_target_list_table(self.parent.all_targets)
+                cursor.close()
+                
+            except mysql.connector.Error as err:
+                print(f"Database error: {err}")
+            finally:
+                self.connection.close()
 
     def filter_target_list(self):
         """
@@ -213,11 +445,11 @@ class LogicService:
         """
         Populates the UI table with data from the MySQL database.
         The columns and rows will be dynamically created based on the data.
-        It hides the specified columns.s
+        It hides the specified columns.s 
         """
 
         self.target_list_display = self.parent.layout_service.target_list_display
-        self.all_targets = data
+        self.parent.all_targets = data
 
         # Step 1: Clear existing rows in the target list
         self.target_list_display.setRowCount(0)
@@ -301,6 +533,7 @@ class LogicService:
         self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
         self.target_list_display.setVisible(True)  # Show the table
         self.parent.layout_service.set_column_widths()
+        self.parent.layout_service.add_row_button.setEnabled(True)
 
     def update_target_table_with_list(self, target_list=None):
         """
@@ -395,7 +628,8 @@ class LogicService:
             cursor = connection.cursor()  # Create a cursor for executing the query
 
             # Prepare the SQL query to update the field in the database
-            query = f"UPDATE targets SET {field_name} = %s WHERE observation_id = %s"
+            query = f"UPDATE ngps.targets SET {field_name} = %s WHERE observation_id = %s"
+            print(query)
 
             # Execute the query with the provided value and observation_id
             cursor.execute(query, (value, observation_id))
@@ -424,7 +658,7 @@ class LogicService:
             cursor = connection.cursor()
 
             # Fetch all the latest data from the database (e.g., all target data)
-            cursor.execute("SELECT observation_id, name, exptime, slitwidth FROM target")  # Adjust query as needed
+            cursor.execute("SELECT observation_id, name, exptime, slitwidth FROM ngps.targets")  # Adjust query as needed
             rows = cursor.fetchall()
             
             target_list_display = self.parent.layout_service.target_list_display

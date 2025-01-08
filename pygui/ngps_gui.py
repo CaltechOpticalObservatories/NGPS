@@ -1,5 +1,6 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog
+import subprocess
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget
 from PyQt5.QtCore import Qt
 from menu_service import MenuService
 from logic_service import LogicService
@@ -8,6 +9,7 @@ from instrument_status_service import InstrumentStatusService
 from sequencer_service import SequencerService
 from login_service import LoginDialog, CreateAccountDialog
 from status_service import StatusService, StatusServiceThread
+
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -21,12 +23,30 @@ class NgpsGUI(QMainWindow):
         self.current_offset_dec = None
         self.user_set_data = {}
         self.all_targets = None
+        self.current_owner = None
         
         # Login status flag
         self.logged_in = False
 
         # Initialize the UI
         self.init_ui()
+        
+        # Check sequencer state on startup
+        if self.is_sequencer_ready():
+            print("Sequencer is READY.")
+        else:
+            print("Sequencer is NOT READY.")
+
+        # Get screen resolution using QDesktopWidget
+        screen_geometry = QDesktopWidget().availableGeometry()  # Get screen size (excluding taskbar)
+        screen_width, screen_height = screen_geometry.width(), screen_geometry.height()
+
+        # Set window size relative to screen size (e.g., 80% of screen size)
+        window_width = int(screen_width * 0.2)
+        window_height = int(screen_height * 0.2)
+
+        # Set the geometry (position + size)
+        self.setGeometry(int(screen_width * 0.1), int(screen_height * 0.1), window_width, window_height)
         
         # Load and apply the QSS stylesheet
         self.load_stylesheet("styles.qss")
@@ -50,6 +70,8 @@ class NgpsGUI(QMainWindow):
         self.status_service.subscribe()
         # Connect the message_received signal from StatusService to the update_message_log slot
         self.status_service.new_message_signal.connect(self.layout_service.update_message_log)
+        
+        self.setWindowState(Qt.WindowMaximized)
 
     def init_ui(self):
         # Set up Menu
@@ -102,15 +124,16 @@ class NgpsGUI(QMainWindow):
 
     def on_login(self):
         """Handle the login action from the menu."""
-        login_dialog = LoginDialog(self, self.connection)
+        self.login_dialog = LoginDialog(self, self.connection)
 
         # If the login is successful, load data from MySQL
-        if login_dialog.exec_() == QDialog.Accepted:
+        if self.login_dialog.exec_() == QDialog.Accepted:
             # Call the function to load data from MySQL
-            self.load_mysql_data(login_dialog.all_targets)
-            self.user_set_data = login_dialog.set_data
+            self.load_mysql_data(self.login_dialog.all_targets)
+            self.user_set_data = self.login_dialog.set_data
+            self.current_owner = self.login_dialog.owner
             # After loading data, populate the target lists dropdown
-            self.layout_service.load_target_lists(login_dialog.set_name)
+            self.layout_service.load_target_lists(self.login_dialog.set_name)
 
 
     def load_mysql_data(self, all_targets):
@@ -130,6 +153,40 @@ class NgpsGUI(QMainWindow):
     def send_command(self, command):
         """ Load data from MySQL after successful login """
         self.sequencer_service.send_command(command)
+
+    def reload_table(self):
+        self.logic_service.fetch_and_update_target_list()
+
+    def is_sequencer_ready(self):
+        """Check if the sequencer state is READY."""
+        try:
+            # Run the seq state command and capture output
+            result = subprocess.run(['seq', 'state'], capture_output=True, text=True, check=True)
+            # Strip any extra spaces or newlines
+            state = result.stdout.strip()  # Remove surrounding whitespace or newlines
+            
+            # Check if the output starts with "READY"
+            if state.startswith('READY'):
+                self.layout_service.startup_shutdown_button.setText("Shutdown")
+                self.layout_service.startup_shutdown_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #000000;  /* Black for shutdown */
+                        border: none;
+                        color: white;
+                        font-weight: bold;
+                        padding: 5px 10px;  /* Reduced padding */
+                    }
+                    QPushButton:hover {
+                        background-color: #333333;
+                    }
+                    QPushButton:pressed {
+                        background-color: #555555;
+                    }
+                """)
+                return True  # Indicate that the sequencer is ready
+        except subprocess.CalledProcessError as e:
+            print(f"Error checking sequencer state: {e}")
+        return False  # If not READY or an error occurs, return False
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
