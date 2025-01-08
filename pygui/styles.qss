@@ -23,7 +23,7 @@ QMenuBar::item {
 }
 
 QMenuBar::item:selected {
-    background-color: #4CAF50;  /* Highlight menu item with green */
+    background-color:rgb(54, 122, 56);  /* Highlight menu item with green */
     color: white;  /* White text on selected item */
 }
 
@@ -62,8 +62,8 @@ QCheckBox::indicator {
 }
 
 QCheckBox::indicator:checked {
-    background-color: #4CAF50;  /* Green background when checked */
-    border-color: #4CAF50;  /* Green border when checked */
+    background-color:rgb(58, 136, 60);  /* Green background when checked */
+    border-color:rgb(46, 107, 48);  /* Green border when checked */
 }
 
 QCheckBox::indicator:unchecked {
@@ -131,7 +131,7 @@ QProgressBar {
 }
 
 QProgressBar::chunk {
-    background-color: #7e7e7e;  /* Lighter gray for the progress chunk */
+    background-color:rgb(42, 101, 44);  /* Lighter green for the progress chunk */
     width: 10px;
     margin: 0.5px;
 }
@@ -139,10 +139,6 @@ QProgressBar::chunk {
 /* Style for QTabWidget */
 QTabWidget::pane {
     border: 1px solid #888888;  /* Light border around tabs */
-}
-
-QTabWidget::tab-bar {
-    alignment: center;
 }
 
 QTabWidget::tab {
@@ -212,3 +208,42 @@ QScrollBar::add-line, QScrollBar::sub-line {
     background-color: #3a3a3a;  /* Darker gray */
 }
 
+/* PyQt Table Styling */
+QTableWidget, QTableView {
+    background-color: #444444;  /* Dark gray background for the table */
+    color: #e0e0e0;  /* Light gray text */
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+/* Table Header */
+QHeaderView {
+    background-color: #555555;  /* Slightly lighter gray for the header */
+    color: #e0e0e0;
+    border: 1px solid #888888;  /* Border around the header */
+    font-weight: bold;
+}
+
+QHeaderView::section {
+    padding: 8px;
+    border: 1px solid #888888;
+    background-color: #555555;
+}
+
+#DaemonStatusBar {
+  border-top: 1px solid #3a3a3a;
+  background: #1e1f22;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #555555;
+    color: #e0e0e0;
+    border: 1px solid #777777;
+    selection-background-color: rgb(54, 122, 56);
+    selection-color: white;
+    min-height: 384px; 
+}
+
+QComboBox {
+    combobox-popup: 0;   /* force non-native Qt popup so QSS + maxVisibleItems apply */
+}
