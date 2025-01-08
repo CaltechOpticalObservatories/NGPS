@@ -60,16 +60,19 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
 
   if ( ( error = get_time( year, mon, mday, hour, min, sec, usec ) ) ) return error;
 
+  // get the latest date directory under /data
+  //
+  std::string datedir = get_latest_datedir( "/data" );
+
   // assemble log file name from the passed-in arguments and current date
   //
-  filename << logpath << "/" << name << "_" << std::setfill('0')
-                      << std::setw(4) << year
-                      << std::setw(2) << mon
-                      << std::setw(2) << mday << ".log";
+  filename << "/data/" << datedir << "/logs/" << name << "_" << datedir << ".log";
 
-  // number of seconds until a new day
+  // number of seconds until noon tomorrow
   //
-  nextday = (unsigned int)(86410 - hour*3600 - min*60 - sec);
+  nextday = (unsigned int)(86410 - hour*3600 - min*60 - sec)  // seconds until next day
+            + 12*3600                                         // plus seconds until noon
+            + 10;                                             // plus 10s for directories to be made
 
   // open the log file stream for append
   //
@@ -112,7 +115,6 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
                                     std::filesystem::perms::owner_read  |
                                     std::filesystem::perms::owner_write |
                                     std::filesystem::perms::group_read  |
-                                    std::filesystem::perms::group_write |
                                     std::filesystem::perms::others_read,
                                     std::filesystem::perm_options::add
                                   );

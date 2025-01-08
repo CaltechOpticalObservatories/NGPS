@@ -654,6 +654,39 @@ std::mutex generate_tmpfile_mtx;
   /***** datetime_from_double *************************************************/
 
 
+  /***** get_latest_datedir ***************************************************/
+  /**
+   * @brief  get a datetime string "YYYY-MM-DD HH:MM:SS.sss" from a double
+   * @param[in]  time  time represented as seconds since Unix epoch
+   * @return     "YYYY-MM-DD HH:MM:SS.sss"
+   *
+   */
+  std::string get_latest_datedir( const std::string &basedir, bool shortform ) {
+    std::string latest_date;
+
+    try {
+      // loop through all entries in basedir
+      for ( const auto &entry : std::filesystem::directory_iterator(basedir) ) {
+        // if that entry is a directory then keep checking for the largest one
+        if ( entry.is_directory() ) {
+          std::string dirname = entry.path().filename().string();
+          if ( std::all_of(dirname.begin(), dirname.end(), ::isdigit) && dirname.size()==8 ) {
+            if ( dirname > latest_date ) {
+              latest_date = dirname;
+            }
+          }
+        }
+      }
+    }
+    catch ( const std::filesystem::filesystem_error &e ) {
+      std::cerr << "ERROR accessing directory " << e.what() << std::endl;
+    }
+    if ( shortform && latest_date.length() > 2 ) latest_date=latest_date.substr(2);
+    return ( latest_date );
+  }
+  /***** get_latest_datedir ***************************************************/
+
+
   /***** timeout **************************************************************/
   /**
    * @brief      sleeps integral number of minutes or seconds

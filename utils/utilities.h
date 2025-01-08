@@ -105,6 +105,8 @@ double get_clock_time();
 double get_time_as_double();
 std::string datetime_from_double( double &time );
 
+std::string get_latest_datedir( const std::string &basedir, bool shortform=false );
+
 void precise_sleep( long microseconds );             /// precise, non-interruptable sleep timer for short durrations
 
 long timeout( int wholesec=0, std::string next="" );  /// wait until next integral second or minute

@@ -16,6 +16,7 @@ add_library(utilities STATIC
         ${PROJECT_UTILS_DIR}/utilities.cpp
         md5
         )
+target_link_libraries(utilities PRIVATE stdc++fs)
 
 add_library(logentry STATIC
         ${PROJECT_UTILS_DIR}/logentry.cpp
@@ -28,6 +29,14 @@ add_library(network STATIC
 
 add_library( md5 STATIC
         ${PROJECT_UTILS_DIR}/md5.c
+        )
+
+add_executable(make_directories
+        ${PROJECT_UTILS_DIR}/make_directories.cpp
+        )
+target_link_libraries(make_directories PRIVATE
+        stdc++fs
+        utilities
         )
 
 # -- MySQL database ------------------------------------------------------------
