@@ -127,7 +127,7 @@ target_link_libraries(camerad
         )
 
 # Set the setgid bit on the resulting executable
-add_custom_command( TARGET camerad POST_BUILD COMMAND chmod g+s $<TARGET_FILE:camerad> )
+add_custom_command( TARGET camerad POST_BUILD COMMAND chmod u+s $<TARGET_FILE:camerad> )
 
 # ----------------------------------------------------------------------------
 # cURL is not used here, so it's not strictly required, but cfitsio can

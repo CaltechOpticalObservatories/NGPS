@@ -6,7 +6,7 @@ GIT_HASH=@GIT_COMMIT_HASH@            # git commit hash
 PROJ_BUILD_DATE=@PROJECT_BUILD_DATE@  # the last time make was run
 # -----------------------------------------------------------------------------
 IMDIR=/data                       # default root directory for images
-BASENAME=swift                    # default basename for images
+BASENAME=ngps                     # default basename for images
 BLKPORT=@CAMERAD_BLK_PORT@        # server blocking port
 NBPORT=@CAMERAD_NB_PORT@          # server non-blocking port
 LOGPATH=/data/logs/               # fully qualified path to save log files

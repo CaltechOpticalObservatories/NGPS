@@ -69,6 +69,10 @@ int main(int argc, char **argv) {
   std::string daemon_in;     // daemon setting read from config file
   bool start_daemon = false; // don't start as daemon unless specifically requested
 
+  // ensure umask is always set correctly
+  //
+  umask(0022);
+
   // capture these signals
   //
   signal(SIGINT, signal_handler);
@@ -541,6 +545,10 @@ void doit(Network::TcpSocket &sock) {
                     ret = server.camera.mexamps(args, retstring);
                     sock.Write(retstring);
                     sock.Write(" ");
+                    }
+    else
+    if ( cmd == CAMERAD_FITSNAME ) {
+                    ret = server.camera.get_fitsname("", retstring);
                     }
     else
     if ( cmd == CAMERAD_FITSNAMING ) {

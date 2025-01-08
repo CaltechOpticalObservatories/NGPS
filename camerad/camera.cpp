@@ -617,10 +617,14 @@ namespace Camera {
    *
    */
   long Camera::get_fitsname(std::string controllerid, std::string &name_out) {
-    std::string function = "Camera::Camera::get_fitsname";
+    const std::string function("Camera::Camera::get_fitsname");
     std::stringstream message;
-    std::stringstream fn, fitsname;
+    std::stringstream fitsname;
 
+    std::stringstream basedir;
+    basedir << this->image_dir << "/" << get_latest_datedir(this->image_dir);
+
+/***
     // image_dir is the requested base directory and now optionaly add on the date directory
     //
     std::stringstream basedir;
@@ -656,6 +660,7 @@ namespace Camera {
     else {
       closedir(dirp);                                      // directory already existed so close it
     }
+***/
 
     // start building the filename with directory/basename_
     // where "basedir" was just assembled above
@@ -672,42 +677,61 @@ namespace Camera {
     // add the time or number suffix
     //
     if (this->fits_naming.compare("time")==0) {
-      fitsname << this->fitstime;
+      fitsname << this->fitstime << ".fits";
     }
     else
     if (this->fits_naming.compare("number")==0) {
+      std::string expected_base = this->base_name+"_"+get_latest_datedir(this->image_dir,true);
+
+      // find largest imnum in this directory for this imname
+      //
+      int maxnum=0;
+      for ( const auto &entry : std::filesystem::directory_iterator(basedir.str()) ) {
+        std::string fn = entry.path().filename().string();
+        if ( expected_base == fn.substr(0, expected_base.length()) && fn.find(".fits")!=std::string::npos ) {
+          std::string numstr = fn.substr(expected_base.length()+1, fn.find(".fits"));
+          try {
+            int num=std::stoi(numstr);
+            maxnum = std::max(maxnum,num);
+          }
+          catch( const std::exception &) {}
+        }
+      }
+
+      this->image_num = maxnum+1;
+
+      message.str(""); message << "IMNUM:" << this->image_num;
+      this->async.enqueue_and_log( "CAMERAD", function, message.str() );
+
       // width of image_num portion of the filename is at least 4 digits, and grows as needed
       //
-      int width = (this->image_num < 10000 ? 4 :   
-                  (this->image_num < 100000 ? 5 :   
-                  (this->image_num < 1000000 ? 6 :   
-                  (this->image_num < 10000000 ? 7 :  
-                  (this->image_num < 100000000 ? 8 :  
-                  (this->image_num < 1000000000 ? 9 : 10)))))); 
-      fitsname << std::setfill('0') << std::setw(width) << this->image_num;
-    }
+      int width = ( this->image_num < 10000 ? 4 : 5 );
+      fitsname.str("");
+      fitsname << basedir.str() << "/" << this->base_name << "_" << get_latest_datedir(this->image_dir, true) << "_"
+               << std::setfill('0') << std::setw(width) << this->image_num << ".fits";
 
-    // Check if file exists and include a -# to set apart duplicates.
-    //
-    struct stat st;
-    int dupnumber=1;
-    fn.str(""); fn << fitsname.str();
-    fn << ".fits";
-    while (stat(fn.str().c_str(), &st) == 0) {
-      fn.str(""); fn << fitsname.str();
-      fn << "-" << dupnumber << ".fits";
-      dupnumber++;  // keep incrementing until we have a unique filename
+      // increment until a unique file is found so that it never overwrites
+      struct stat st;
+      while ( (stat(fitsname.str().c_str(), &st) == 0) && this->image_num < 100000 ) {
+        width = ( ++this->image_num < 10000 ? 4 : 5 );
+        fitsname.str("");
+        fitsname << basedir.str() << "/" << this->base_name << "_" << get_latest_datedir(this->image_dir, true) << "_"
+                 << std::setfill('0') << std::setw(width) << this->image_num << ".fits";
+      }
     }
 
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] fits_naming=" << this->fits_naming 
                              << " controllerid=" << controllerid
-                             << " will write to file: " << fn.str();
+                             << " will write to file: " << fitsname.str();
     logwrite(function, message.str());
 #endif
 
-    name_out = fn.str();
-    return(NO_ERROR);
+    message.str(""); message << "IMNAME:" << fitsname.str();
+    this->async.enqueue_and_log( "CAMERAD", function, message.str() );
+
+    name_out = fitsname.str();
+    return NO_ERROR;
   }
   /***** Camera::Camera:get_fitsname ******************************************/
 

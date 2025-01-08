@@ -20,6 +20,7 @@ const std::string CAMERAD_CONFIG = "config";
 const std::string CAMERAD_ECHO = "echo";
 const std::string CAMERAD_EXPOSE = "expose";
 const std::string CAMERAD_EXPTIME = "exptime";
+const std::string CAMERAD_FITSNAME = "fitsname";
 const std::string CAMERAD_FITSNAMING = "fitsnaming";
 const std::string CAMERAD_FRAMETRANSFER = "frametransfer";
 const std::string CAMERAD_GEOMETRY = "geometry";
@@ -58,6 +59,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_ECHO,
                                                   CAMERAD_EXPOSE,
                                                   CAMERAD_EXPTIME+" [ <exptime in msec> ]",
+                                                  CAMERAD_FITSNAME,
                                                   CAMERAD_FITSNAMING+" [ time | number ]",
                                                   CAMERAD_FRAMETRANSFER+" ? | <dev#> | <chan> [ yes | no ]",
                                                   CAMERAD_GEOMETRY+" ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]",
