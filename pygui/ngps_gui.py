@@ -63,6 +63,10 @@ class NgpsGUI(QMainWindow):
         self.status_service = StatusService()
         self.status_service.status_updated_signal.connect(self.layout_service.update_message_log)
         self.status_service.start()
+        
+        self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
+        self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
+
 
         # Subscribe to a specific topic (optional)
         # TODO: Future with ZMQ

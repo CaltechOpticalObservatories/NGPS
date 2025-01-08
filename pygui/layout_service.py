@@ -28,12 +28,12 @@ class LayoutService:
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
-        screen = self.parent.screen()
-        screen_size = screen.geometry()
+        # screen = self.parent.screen()
+        # screen_size = screen.geometry()
         
         # Use the screen width and height to calculate dynamic ratio (you can adjust these ratios)
-        screen_width = screen_size.width()
-        screen_height = screen_size.height()
+        screen_width = 800
+        screen_height = 600
 
         # Define dynamic ratio logic based on the screen size
         # For example, adjust the layout ratio based on screen size
@@ -402,6 +402,14 @@ class LayoutService:
         progress_layout.addWidget(self.parent.exposure_progress)
 
         return progress_layout
+
+    def update_exposure_progress(self, progress_percentage):
+        """Update the exposure progress bar based on the received percentage."""
+        self.parent.exposure_progress.setValue(progress_percentage)
+
+    def update_readout_progress(self, progress_percentage):
+        """Update the readout progress bar based on the received percentage."""
+        self.parent.overhead_progress.setValue(progress_percentage)
 
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
