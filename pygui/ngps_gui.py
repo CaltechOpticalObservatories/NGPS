@@ -8,7 +8,8 @@ from layout_service import LayoutService
 from instrument_status_service import InstrumentStatusService
 from sequencer_service import SequencerService
 from login_service import LoginDialog, CreateAccountDialog
-from status_service import StatusService, StatusServiceThread
+from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
+from status_service import StatusService
 
 
 class NgpsGUI(QMainWindow):
@@ -57,19 +58,25 @@ class NgpsGUI(QMainWindow):
         # Initialize the SequencerService
         self.sequencer_service = SequencerService(self)
         self.sequencer_service.connect()
-
-        # Initialize the StatusService
-        self.status_service = StatusService(self)
-        self.status_service.connect()
         
-        # Start the StatusService in a separate thread
-        self.status_service_thread = StatusServiceThread(self.status_service)
-        self.status_service_thread.start()
+        # Start the StatusService in a separate thread with heartbeat
+        self.status_service = StatusService()
+        self.status_service.status_updated_signal.connect(self.layout_service.update_message_log)
+        self.status_service.start()
 
         # Subscribe to a specific topic (optional)
-        self.status_service.subscribe()
-        # Connect the message_received signal from StatusService to the update_message_log slot
-        self.status_service.new_message_signal.connect(self.layout_service.update_message_log)
+        # TODO: Future with ZMQ
+        
+        # Initialize the ZMQStatusService
+        # self.zmq_status_service = ZmqStatusService(self)
+        # self.zmq_status_service.connect()
+        
+        # # Start the ZMQStatusService in a separate thread
+        # self.zmq_status_service_thread = ZmqStatusServiceThread(self.status_service)
+        # self.zmq_status_service_thread.start()
+        # self.zmq_status_service.subscribe()
+        # Connect the message_received signal from ZMQStatusService to the update_message_log slot
+        # self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
         
         self.setWindowState(Qt.WindowMaximized)
 

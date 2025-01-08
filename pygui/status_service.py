@@ -1,115 +1,71 @@
-import zmq
-import os
-import logging
-from PyQt5.QtCore import pyqtSignal, QObject, QThread
+import socket
+import threading
+import time
+from PyQt5.QtCore import pyqtSignal, QObject
 
-class StatusService(QObject):
-    # Signal to send a new message
-    new_message_signal = pyqtSignal(str)
+class StatusService(QObject, threading.Thread):
+    # Signal to communicate with the main GUI thread
+    status_updated_signal = pyqtSignal(str)
 
-    def __init__(self, parent, broker_publish_endpoint="tcp://127.0.0.1:5556"):
-        super().__init__()
-        self.parent = parent  # Reference to the parent window or main UI
-        self.broker_publish_endpoint = broker_publish_endpoint
-        self.context = zmq.Context()  # Create the ZeroMQ context
-        self.socket = None
-        self.is_connected = False
-
-        # Set up logging
-        self.setup_logging()
-        self.logger.info("StatusService initialized.")
-
-    def setup_logging(self):
-        """ Set up logging for the status service in a 'logs' folder. """
-        
-        # Ensure the 'logs' directory exists
-        log_dir = 'logs'
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)  # Create the logs directory if it doesn't exist
-
-        # Set up logging to a file inside the 'logs' folder
-        log_file = os.path.join(log_dir, 'status_service.log')
-        
-        logging.basicConfig(
-            level=logging.INFO, 
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            filename=log_file,  # Log file inside 'logs' folder
-            filemode='a'  # 'a' to append, 'w' to overwrite
-        )
-        
-        self.logger = logging.getLogger(__name__)
-
-    def connect(self):
-        """ Connect to the broker using the SUB socket (not XSUB). """
-        try:
-            self.logger.info(f"Connecting to broker at {self.broker_publish_endpoint}...")
-            # Create the SUB socket type to receive messages
-            self.socket = self.context.socket(zmq.SUB)
-            self.socket.connect(self.broker_publish_endpoint)  # Connect to the broker (publisher's address and port)
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, "")  # Subscribe to all messages (default behavior)
-            self.is_connected = True
-            self.logger.info(f"Connected to broker at {self.broker_publish_endpoint}")
-        except Exception as e:
-            self.logger.error(f"Failed to connect to broker: {e}")
-            self.is_connected = False
-            raise e
-
-    def subscribe(self, topic=None):
-        """ Subscribe to a specific topic. If no topic is provided, subscribe to all topics. """
-        if not self.is_connected:
-            self.logger.warning("Not connected to broker. Call 'connect()' first.")
-            return
-        
-        # If topic is provided, subscribe to that topic
-        if topic:
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-            self.logger.info(f"Subscribed to topic: {topic}")
-        else:
-            # If no topic is specified, subscribe to all messages
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, "")
-            self.logger.info("Subscribed to all topics.")
-
-    def listen(self):
-        """ Listen for incoming messages from the broker. """
-        if not self.is_connected:
-            self.logger.warning("Not connected to broker. Call 'connect()' first.")
-            return
-
-        try:
-            self.logger.info("Starting to listen for messages from the broker...")
-            while True:
-                message = self.socket.recv_string()  # Receive the message as a string
-                self.logger.info(f"Received message: {message}")
-                
-                # Check if the message contains a space to separate topic and payload
-                if ' ' in message:
-                    topic, payload = message.split(' ', 1)  # Split the message assuming space-separated topic and payload
-                    self.logger.info(f"Processed message: Topic = {topic}, Payload = {payload}")
-                    # Emit the message to the UI thread
-                    self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
-                else:
-                    # If there is no space, treat the whole message as the topic
-                    self.logger.info(f"Processed message with no payload: Topic = {message}")
-                    self.new_message_signal.emit(f"Topic: {message}, Payload: None")
-                    
-        except Exception as e:
-            self.logger.error(f"Error while listening for messages: {e}")
-        finally:
-            self.disconnect()
-
-    def disconnect(self):
-        """ Disconnect from the broker and close the socket. """
-        if self.socket:
-            self.socket.close()
-            self.is_connected = False
-            self.logger.info("Disconnected from broker.")
-
-class StatusServiceThread(QThread):
-    def __init__(self, status_service):
-        super().__init__()
-        self.status_service = status_service
+    def __init__(self, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3):
+        threading.Thread.__init__(self)
+        QObject.__init__(self)
+        self.ip = ip
+        self.port = port
+        self.update_interval = update_interval
+        self.heartbeat_timeout = heartbeat_timeout  # Timeout threshold in seconds
+        self.max_heartbeat_misses = max_heartbeat_misses  # Maximum number of missed heartbeats
+        self.sock = None
+        self.status = "Waiting for status"
+        self.heartbeat_misses = 0  # Counts missed heartbeats
+        self.running = True
+        self.daemon = True  # Allow thread to exit when the program ends
+    
+    def _create_socket(self):
+        """Creates a UDP socket."""
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.settimeout(self.heartbeat_timeout)  # Timeout for receiving responses (heartbeat timeout)
+    
+    def get_status(self):
+        """Return the most recent status."""
+        return self.status
+    
+    def stop(self):
+        """Stop the status service thread."""
+        self.running = False
 
     def run(self):
-        # Start listening for messages in the StatusService
-        self.status_service.logger.info("Starting StatusService thread...")
-        self.status_service.listen()
+        """Run the status service in a separate thread."""
+        self._create_socket()
+        
+        while self.running:
+            try:
+                # Send the status request (you can customize the message here)
+                message = b"GET_STATUS"
+                self.sock.sendto(message, (self.ip, self.port))
+                
+                # Wait for a response from the server
+                data, addr = self.sock.recvfrom(1024)  # Buffer size of 1024 bytes
+                self.status = data.decode("utf-8")
+                self.heartbeat_misses = 0  # Reset heartbeat misses on successful response
+                
+            except socket.timeout:
+                # If we time out, increment the heartbeat misses counter
+                self.heartbeat_misses += 1
+                self.status = "No response (Timeout)"
+                
+                # If we exceed the max misses, mark the service as disconnected
+                if self.heartbeat_misses >= self.max_heartbeat_misses:
+                    self.status = "Heartbeat lost - Service Disconnected"
+                    self.heartbeat_misses = 0  # Reset the counter after handling the issue
+            
+            except Exception as e:
+                self.status = f"Error: {str(e)}"
+            
+            # Emit the updated status to the GUI
+            self.status_updated_signal.emit(self.status)
+
+            time.sleep(self.update_interval)  # Wait before sending the next request
+
+        # Close the socket when the thread stops
+        self.sock.close()
