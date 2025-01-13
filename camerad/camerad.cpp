@@ -230,20 +230,22 @@ int main(int argc, char **argv) {
 /***** new_log_day ************************************************************/
 /**
  * @brief      creates a new logbook each day
+ * @param[in]  logpath  path for the log file, read from config file
  *
  * This thread is started by main and never terminates.
- * It sleeps for the number of seconds that logentry determines
- * are remaining in the day, then closes and re-inits a new log file.
- *
- * The number of seconds until the next day "nextday" is a global which
- * is set by init_log.
+ * It sleeps until the next occurrence of 12:01:00, at which time it
+ * closes the current log and initializes a new log file.
  *
  */
-void new_log_day( ) { 
-  while (1) {
-    std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
+void new_log_day() {
+  while (true) {
+    // sleep until 12:01:00
+    auto newlogtime = next_occurrence( 12, 01, 00 );
+    std::this_thread::sleep_until( newlogtime );
     close_log();
     init_log( logpath, Camera::DAEMON_NAME );
+    // ensure it doesn't immediately re-open
+    std::this_thread::sleep_for( std::chrono::seconds(1) );
   }
 }
 /***** new_log_day ************************************************************/

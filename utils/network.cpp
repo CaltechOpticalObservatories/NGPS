@@ -1298,12 +1298,13 @@ namespace Network {
         logwrite( function, message.str() );
       }
 
-message.str(""); message << "[DEBUG] raw reply=0x";
-for ( size_t i=0; i<10 && i<reply.length(); i++ ) {
-  message << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)reply[i] << " ";
-}
-message << " to cmd=" << cmd;
-logwrite(function,message.str());
+//    command-response debugging aid to look for non-printing characters in reply
+//    message.str(""); message << "[DEBUG] raw reply=0x";
+//    for ( size_t i=0; i<10 && i<reply.length(); i++ ) {
+//      message << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)reply[i] << " ";
+//    }
+//    message << " to cmd=" << cmd;
+//    logwrite(function,message.str());
 
       // send back just the reply, stripped of any leading/trailing control characters
       //

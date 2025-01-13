@@ -104,10 +104,12 @@ namespace Thermal {
     // handle_json_message() will parse the serialized json string.
     //
     std::string retstring;
+/***
     for ( const auto &provider : this->telemetry_providers ) {
       Common::collect_telemetry( provider, retstring );
       if ( !retstring.empty() ) handle_json_message(retstring);
     }
+***/
 
     return;
   }
