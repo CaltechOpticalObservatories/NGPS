@@ -687,26 +687,31 @@ namespace Calib {
   /***** Calib::Interface::close **********************************************/
 
 
-  /***** Calib::Interface::make_telemetry_message *****************************/
+  /***** Calib::Interface::publish_snapshot ***********************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publishes a snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry.
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    const std::string function="Calib::Interface::make_telemetry_message";
+  void Interface::publish_snapshot() {
+    std::string dontcare;
+    this->publish_snapshot(dontcare);
+  }
+  void Interface::publish_snapshot( std::string &retstring ) {
+    const std::string function("Calib::Interface::publish_snapshot");
+    std::string ret_isopen;
 
     // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
     //
-    nlohmann::json jmessage;
-    jmessage["messagetype"]="calibinfo";
+    nlohmann::json jmessage_out;
+
+    jmessage_out["source"] = "calibd";        // source of this telemetry
 
     // get the status for each modulator in the map
     // assemble message string of "pow dut per" indexed by name
     //
+    this->is_open("lampmod",ret_isopen);
     for ( const auto &[num,name] : this->modulator.modmap_num ) {
       // initialize these on each pass
       double dut=NAN;
@@ -714,7 +719,7 @@ namespace Calib {
       int pow=-1;
       std::stringstream retstream;
 
-      this->modulator.status( num, dut, per, pow );
+      if (ret_isopen=="true") this->modulator.status( num, dut, per, pow );
 
       switch(pow) {
         case 0 : retstream << "off "; break;
@@ -725,33 +730,46 @@ namespace Calib {
       if ( std::isnan(dut) ) retstream << "nan "; else retstream << dut << " ";
       if ( std::isnan(per) ) retstream << "nan "; else retstream << per;
 
-      jmessage[name] = retstream.str();
+      jmessage_out[name] = retstream.str();
     }
 
     // get a copy of the motormap and
     // loop through all motors, getting their actuator position
     //
     auto _motormap = this->motion.motorinterface.get_motormap();  // local copy of motormap
+
+    std::string retmotion;
+    this->is_open("motion",retmotion);
+    bool ismotion = (retmotion=="true" ? true : false);
+
     for ( const auto &mot : _motormap ) {
-      this->motion.get( mot.first, retstring );                   // get position of actuator
+      if (ismotion) this->motion.get( mot.first, retstring );     // get position of actuator
       std::string key="CAL"+mot.first;                            // key = CALxxxx
       make_uppercase(key);                                        // make key uppercase
-      jmessage[ key ] = retstring;                                // store in JSON message
+      jmessage_out[ key ] = (ismotion?retstring:"not_connected"); // store in JSON message
     }
 
-    retstring = jmessage.dump();  // serialize the json message into retstring
+    // for backwards compatibility
+    jmessage_out["messagetype"]="calibinfo";
+    retstring = jmessage_out.dump();  // serialize the json message into retstring
+    retstring.append(JEOF);           // append the JSON message terminator
 
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch( const std::exception &e ) {
+      logwrite( "Calib::Interface::publish_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
   }
-  /***** Calib::Interface::make_telemetry_message *****************************/
+  /***** Calib::Interface::publish_snapshot ***********************************/
 
 
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    // If my name is in the jmessage then publish my snapshot
+    //
     if ( jmessage.contains( Calib::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
+      this->publish_snapshot();
     }
     else
     if ( jmessage.contains( "test" ) ) {

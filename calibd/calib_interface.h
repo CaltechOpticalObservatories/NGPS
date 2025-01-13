@@ -188,7 +188,9 @@ namespace Calib {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
 
-      void make_telemetry_message( std::string &retstring );  ///< assembles telemetry message
+      void publish_snapshot();
+      void publish_snapshot(std::string &retstring);
+
       long open(std::string args, std::string &retstring);
       long is_open(std::string args, std::string &retstring);
       long close(std::string args, std::string &retstring);

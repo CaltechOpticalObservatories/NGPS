@@ -118,13 +118,16 @@ int main(int argc, char **argv) {
     calibd.exit_cleanly();
   }
 
-  // initialize the pub/sub handler, which
-  // takes a list of subscription topics
+  // initialize the pub/sub handler and give it time to start
   //
   if ( calibd.interface.init_pubsub() == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     calibd.exit_cleanly();
   }
+  std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+
+  // publish snapshot of my telemetry so the world knows I'm online
+  calibd.interface.publish_snapshot();
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

@@ -286,27 +286,28 @@ namespace Calib {
   /***** Calib::Server::configure_calibd **************************************/
 
 
-  /***** Server::new_log_day **************************************************/
+  /***** new_log_day **********************************************************/
   /**
    * @brief      creates a new logbook each day
    * @param[in]  logpath  path for the log file, read from config file
    *
    * This thread is started by main and never terminates.
-   * It sleeps for the number of seconds that logentry determines
-   * are remaining in the day, then closes and re-inits a new log file.
-   *
-   * The number of seconds until the next day "nextday" is a global which
-   * is set by init_log.
+   * It sleeps until the next occurrence of 12:01:00, at which time it
+   * closes the current log and initializes a new log file.
    *
    */
   void Server::new_log_day( std::string logpath ) {
-    while (1) {
-      std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
+    while (true) {
+      // sleep until 12:01:00
+      auto newlogtime = next_occurrence( 12, 01, 00 );
+      std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, Calib::DAEMON_NAME );
+      init_log( logpath, DAEMON_NAME );
+      // ensure it doesn't immediately re-open
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
   }
-  /***** Server::new_log_day **************************************************/
+  /***** new_log_day **********************************************************/
 
 
   /***** Server::block_main ***************************************************/
@@ -607,7 +608,7 @@ namespace Calib {
 
       // telemetry request
       //
-      if ( cmd == TELEMREQUEST ) {
+      if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
                       if ( args=="?" || args=="help" ) {
                         retstring=TELEMREQUEST+"\n";
                         retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
@@ -615,7 +616,7 @@ namespace Calib {
                         ret=HELP;
                       }
                       else {
-                        this->interface.make_telemetry_message( retstring );
+                        this->interface.publish_snapshot( retstring );
                         ret = JSON;
                       }
       }
@@ -650,6 +651,8 @@ namespace Calib {
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
+
+      if ( ret==NO_ERROR ) this->interface.publish_snapshot();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.
