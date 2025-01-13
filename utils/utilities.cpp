@@ -275,6 +275,36 @@ std::mutex generate_tmpfile_mtx;
   /***** string_replace_char **************************************************/
 
 
+  /***** next_occurrence ******************************************************/
+  /**
+   * @brief      returns a time point for the next occurrence of the specified time
+   * @details    call with integer hour, minute, second. If that time has passed
+   *             then return a time_point for that hh:mm:ss tomorrow
+   * @param[in]  hour    hh in time hh:mm:ss
+   * @param[in]  minute  mm in time hh:mm:ss
+   * @param[in]  second  ss in time hh:mm:ss
+   *
+   */
+  std::chrono::system_clock::time_point next_occurrence( int hour, int minute, int second ) {
+    // get the time now
+    auto now = std::chrono::system_clock::now();
+    std::time_t nowc = std::chrono::system_clock::to_time_t(now);
+    std::tm local_tm = *std::localtime(&nowc);
+
+    // convert hh:mm:ss to a time point
+    local_tm.tm_hour = hour;
+    local_tm.tm_min  = minute;
+    local_tm.tm_sec  = second;
+    auto target_time = std::chrono::system_clock::from_time_t( std::mktime(&local_tm) );
+
+    // if target time has passed then move it to the next day
+    if ( target_time <= now ) target_time += std::chrono::hours(24);
+
+    return target_time;
+  }
+  /***** next_occurrence ******************************************************/
+
+
   /***** get_time *************************************************************/
   /**
    * @brief      gets the current time and returns values by reference

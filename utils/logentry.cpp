@@ -51,7 +51,7 @@ long init_log( std::string logpath, std::string name ) {
  *
  */
 long init_log( std::string logpath, std::string name, bool stderr_in ) {
-  const std::string function = "init_log";
+  const std::string function("init_log");
   std::stringstream filename;
   std::stringstream message;
   int year, mon, mday, hour, min, sec, usec;

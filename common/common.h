@@ -34,6 +34,7 @@ const long EXIT = 999;
 
 const std::string JEOF = "EOF\n";              ///< used to terminate JSON messages
 const std::string TELEMREQUEST = "sendtelem";  ///< common daemon command used to request telemetry
+const std::string SNAPSHOT = "snapshot";       ///< common daemon command forces publish of telemetry
 
 constexpr bool EXT = true;   ///< constant for use_extension arg of Common::Header::add_key()
 constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Header::add_key()
@@ -198,7 +199,13 @@ namespace Common {
        */
       static long init_pubsub( zmqpp::context &context, Interface &iface,
                                const std::initializer_list<std::string> &topics={} ) {
-        const std::string function="Common::PubSubHandler::init_pubsub";
+        const std::string function("Common::PubSubHandler::init_pubsub");
+
+        // might not be right but you need something here
+        if ( iface.subscriber_address.empty() ) {
+          logwrite( function, "ERROR subscriber address not defined" );
+          return ERROR;
+        }
 
         // Initialize the message subscriber. All daemons minimally subscribe to "_snapshot"
         // which causes them to publish their current status.

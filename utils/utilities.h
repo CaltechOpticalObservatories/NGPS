@@ -72,6 +72,8 @@ void Tokenize(const std::string &str,
 void chrrep(char *str, char oldchr, char newchr);   /// replace one character within a string with a new character
 void string_replace_char(std::string &str, const char *oldchar, const char *newchar);
 
+std::chrono::system_clock::time_point next_occurrence( int hour, int minute, int second );
+
 long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
 long get_time( const std::string &tmzone_in, int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
 

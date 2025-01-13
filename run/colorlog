@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# log files are located in this directory
-#
-DIR="/data/logs"
-
 # if supplied with an argument then that argument is the date
 #
 if [ "$#" == "1" ]; then
@@ -11,8 +7,12 @@ if [ "$#" == "1" ]; then
 # otherwise use the current UTC date
 #
 else
-  DATE=`date --utc +"%Y%m%d"`
+  DATE=$(ls -1 /data | grep -E '^[0-9]{8}$' | sort -r | head -n 1)
 fi
+
+# log files are located in this directory
+#
+DIR="/data/$DATE/logs"
 
 # these are all of the log files
 #
