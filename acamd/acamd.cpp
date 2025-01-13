@@ -151,13 +151,16 @@ int main(int argc, char **argv) {
     acamd.exit_cleanly();
   }
 
-  // initialize the pub/sub handler, which
-  // takes a list of subscription topics
+  // initialize the pub/sub handler and give it time to start
   //
   if ( acamd.interface.init_pubsub( {"tcsd", "targetinfo", "slitd"} ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     acamd.exit_cleanly();
   }
+  std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+
+  // publish snapshot of my telemetry so the world knows I'm online
+  acamd.interface.publish_snapshot();
 
   // This will pre-thread N_THREADS threads.
   // There will be N_THREADS-1 non-blocking threads, then

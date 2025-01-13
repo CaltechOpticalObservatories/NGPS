@@ -1433,15 +1433,25 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
-    nlohmann::json jmessage_out;
-    jmessage_out["source"]   = "acamd";
-    // don't put data in the message if there's no camera connection
+
+    // assemble the telemetry into a json message
     //
-    if ( this->isopen("camera") ) {
-      int ccdtemp=99;
-      this->camera.andor.get_temperature( ccdtemp );
-      jmessage_out["TANDOR_ACAM"] = static_cast<float>(ccdtemp);  // the database wants floats
-    }
+    nlohmann::json jmessage_out;
+
+    jmessage_out["source"]   = "acamd";                            // source of this telemetry
+
+    int ccdtemp=99;
+    this->camera.andor.get_temperature( ccdtemp );                 // temp is int
+    jmessage_out["TANDOR_ACAM"] = ( this->isopen("camera") ?
+                                    static_cast<float>(ccdtemp) :  // but the database wants floats
+                                    NAN );
+
+    jmessage_out["ACAM_FILTER"] = ( this->isopen("motion" ) ?
+                                    this->motion.get_current_filtername() :
+                                    "not_connected" );
+    jmessage_out["ACAM_COVER"] = ( this->isopen("motion" ) ?
+                                    this->motion.get_current_coverpos() :
+                                    "not_connected" );
 
     try {
       this->publisher->publish( jmessage_out );
