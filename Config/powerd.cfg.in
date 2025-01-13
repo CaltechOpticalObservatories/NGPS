@@ -11,6 +11,13 @@ PUBLISHER_PORT="tcp://127.0.0.1:@POWERD_PUB_PORT@"  # my zeromq pub port
 EMULATOR_PORT=(@POWERD_EMULATOR_1@ @POWERD_EMULATOR_2@ @POWERD_EMULATOR_3@ @POWERD_EMULATOR_4@) 
 OPEN_ON_START=yes                 # open connection to hardware automatically on startup? {yes|no}
 
+# Message pub/sub
+# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
+
 # each unit is assigned a number, host, and port
 # set as follows: NPS_UNIT="NPS# MAXOUTLETS HOST PORT"
 #

@@ -18,6 +18,7 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 
 add_executable(powerd 
         ${POWERD_DIR}/powerd.cpp 
+        ${POWERD_DIR}/power_server.cpp
         ${POWERD_DIR}/power_interface.cpp 
         )
 
@@ -28,7 +29,14 @@ target_link_libraries(powerd
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         )
+
+# ZeroMQ
+#
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
 # Set the setgid bit on the resulting executable
 add_custom_command( TARGET powerd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:powerd> )

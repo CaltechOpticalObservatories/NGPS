@@ -40,33 +40,6 @@ namespace Power {
   /**************** Power::NpsInfo::~NpsInfo *******8**************************/
 
 
-  /**************** Power::Interface::Interface *******************************/
-  /**
-   * @fn         Interface
-   * @brief      class constructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::Interface() {
-    this->class_initialized = false;   /// set true by the initialize_class() function
-  }
-  /**************** Power::Interface::Interface *******************************/
-
-
-  /**************** Power::Interface::~Interface ******************************/
-  /**
-   * @fn         ~Interface
-   * @brief      class deconstructor
-   * @param[in]  none
-   * @return     none
-   *
-   */
-  Interface::~Interface() {
-  }
-  /**************** Power::Interface::~Interface ******************************/
-
-
   /**************** Power::Interface::configure_interface *********************/
   /**
    * @fn         configure_interface
@@ -618,7 +591,7 @@ namespace Power {
   /***** Power::Interface::command ********************************************/
 
 
-  /***** Power::Interface::make_telemetry_message *****************************/
+  /***** Power::Interface::publish_snapshot ***********************************/
   /**
    * @brief      assembles a telemetry message
    * @details    This creates a JSON message for my telemetry info, then serializes
@@ -628,32 +601,52 @@ namespace Power {
    * powerd telemetry is reported as true|false if the plug is on
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    const std::string function="Power::Interface::make_telemetry_message";
+  void Interface::publish_snapshot() {
+    std::string dontcare;
+    this->publish_snapshot(dontcare);
+  }
+  void Interface::publish_snapshot( std::string &retstring ) {
 
     // assemble the telemetry into a json message
     // Set a messagetype keyword to indicate what kind of message this is.
     //
-    nlohmann::json jmessage;
-    jmessage["messagetype"]="powerinfo";
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = "powerd";        // source of this telemetry
 
     // get power status
     //
     this->status("", retstring);
 
-    // fill the jmessage with boolean values for the key/val pairs just retrieved
+    // fill the jmessage_out with boolean values for the key/val pairs just retrieved
     // to represent the powered state of the plug ("on" is true)
     //
     for ( const auto &[key,val] : this->telemetry_map ) {
-      jmessage[key]=(val==1?true:false);
+      jmessage_out[key]=(val==1?true:false);
     }
 
-    retstring = jmessage.dump();  // serialize the json message into retstring
+    // for backwards compatibility
+    jmessage_out["messagetype"]="powerinfo";
+    retstring = jmessage_out.dump();  // serialize the json message into retstring
+    retstring.append(JEOF);           // append the JSON message terminator
 
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
+    // publish the jmessage
+    //
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch( const std::exception &e ) {
+      logwrite( "Power::Interface::publish_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
   }
-  /***** Power::Interface::make_telemetry_message *****************************/
+  /***** Power::Interface::publish_snapshot ***********************************/
 
+
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    // If my name is in the jmessage then publish my snapshot
+    //
+    if ( jmessage.contains( Power::DAEMON_NAME ) ) {
+      this->publish_snapshot();
+    }
+  }
 }

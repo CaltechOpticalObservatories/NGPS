@@ -181,13 +181,36 @@ namespace Power {
    */
   class Interface {
     private:
+      zmqpp::context context;
       bool   class_initialized;
       size_t numdev;                                       ///< number of NPS devices, or "units"
       std::map<std::string, int> telemetry_map;            ///< map of plug status 0|1 indexed by plug nam
 
     public:
-      Interface();
-      ~Interface();
+      Interface()
+        : context(),
+          class_initialized(false),                        ///< set by initialize_class()
+          subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false)
+      {
+        topic_handlers = {
+          { "_snapshot", std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+        };
+      }
+
+      std::unique_ptr<Common::PubSub> publisher;           ///< publisher object
+      std::string publisher_address;                       ///< publish socket endpoint
+      std::string publisher_topic;                         ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;          ///< subscriber object
+      std::string subscriber_address;                      ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;          ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;      ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;      ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                           ///< maps a handler function to each topic
 
       Common::Queue async;                                 ///< asynchronous message queue object
 
@@ -210,6 +233,15 @@ namespace Power {
 
       std::map< std::string, std::string > plugname;       ///< STL map of plug names indexed by a string made of "unit# plug#", e.g. "1 1" or "2 8" etc.
 
+      // publish/subscribe functions
+      //
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
+      void handletopic_snapshot( const nlohmann::json &jmessage );
+
       void configure_interface( Power::NpsInfo npsinfo );  ///< configure the NPS interface vector with info from configuration file
       long initialize_class();                             ///< initialize class variables
       long open();                                         ///< open the NPS socket connection
@@ -218,7 +250,8 @@ namespace Power {
       long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
       void list( std::string args, std::string &retstring );   ///< list plug devices
       long status( std::string args, std::string &retstring ); ///< status of all plug devices
-      void make_telemetry_message( std::string &retstring );   ///< make serialized JSON telemetry message
+      void publish_snapshot();                           ///< make serialized JSON telemetry message
+      void publish_snapshot( std::string &retstring );   ///< make serialized JSON telemetry message
 
   };
   /***** Power::Interface *****************************************************/
