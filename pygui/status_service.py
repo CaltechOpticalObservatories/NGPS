@@ -31,7 +31,7 @@ class StatusService(QObject):
         # Worker thread for communication
         self.thread = threading.Thread(target=self.run)
         self.thread.daemon = True
-        self.timer = QTimer(self)  # Timer for periodic updates
+        self.timer = QTimer(self)  # Timer for periodic timeout checks
         self.timer.setInterval(self.update_interval * 1000)  # Set interval in milliseconds
         self.timer.timeout.connect(self.check_timeout)  # Connect to timeout check function
 
@@ -80,8 +80,10 @@ class StatusService(QObject):
 
             except Exception as e:
                 self.status = f"Error: {str(e)}"
+                self.heartbeat_misses += 1
 
-            time.sleep(self.update_interval)  # Sleep to avoid overloading CPU
+            # No sleep here to avoid delays, just check for timeouts
+            self.check_timeout()
 
     def check_timeout(self):
         """Check for timeouts and update status accordingly."""

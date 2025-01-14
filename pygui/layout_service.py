@@ -1014,9 +1014,16 @@ class LayoutService:
             target_set_name, ok = QInputDialog.getText(self.parent, "Enter Target Set Name", "Target Set Name:")
             if ok and target_set_name:
                 # Step 3: Call the logic service to upload the CSV and associate it with a new target set
+                self.target_list_name.clear()
                 self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
                 self.target_list_name.setCurrentText(target_set_name)  # Set the newly created target list as selected
                 self.parent.reload_table()
+            else:
+                # If the user cancels the input dialog or doesn't provide a name, handle cancellation
+                print("Target set creation cancelled or no name provided.")
+        else:
+            # If the user cancels the file selection, handle cancellation
+            print("File selection cancelled.")
 
     def on_target_set_changed(self):
         """Handle the target set change in the ComboBox."""
@@ -1025,7 +1032,6 @@ class LayoutService:
         self.add_row_button.setEnabled(True)
 
         if selected_set_name == "Create a new target list":
-            self.target_list_name.clear()
             # Trigger the CSV upload process
             self.create_new_target_list()
         else:
@@ -1420,6 +1426,7 @@ class LayoutService:
                     f"EXPTIME: {self.exptime_input.text()}\n" \
                     f"RESOLUTION: {self.resolution_input.text()}"
         print(result_text)
+        self.save_button.setEnabled(True)
 
     def save_etc(self):
         exptime = self.exptime_input.text()
