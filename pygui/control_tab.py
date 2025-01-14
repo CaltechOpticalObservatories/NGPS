@@ -217,6 +217,9 @@ class ControlTab(QWidget):
         print("Stopping now...")
         command = f"stop\n"
         self.parent.send_command(command)
+        self.go_button.setEnabled(False)
+        self.offset_to_target_button.setEnabled(False)
+        self.continue_button.setEnabled(False)
 
     def create_row5(self):
         """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""
@@ -225,30 +228,19 @@ class ControlTab(QWidget):
 
         # Create vertical layouts for each pair of buttons
         binning_layout = QVBoxLayout()
-        headers_layout = QVBoxLayout()
         display_layout = QVBoxLayout()
-        temp_layout = QVBoxLayout()
         lamps_layout = QVBoxLayout()
 
         # Create the buttons
         self.binning_button = QPushButton("Binning")
         self.headers_button = QPushButton("Headers")
-        self.display_button = QPushButton("Display")
-        self.temp_button = QPushButton("Temp")
-        self.startup_button = QPushButton("Lamps")
-        self.shutdown_button = QPushButton("Reset")
-        self.startup_button.clicked.connect(self.on_lamps_button_click)
-        self.shutdown_button.clicked.connect(self.on_reset_button_click)
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.clicked.connect(self.on_reset_button_click)
 
         # Add buttons to each vertical layout
         binning_layout.addWidget(self.binning_button)
-        binning_layout.addWidget(self.headers_button)
-
-        display_layout.addWidget(self.display_button)
-        display_layout.addWidget(self.temp_button)
-
-        lamps_layout.addWidget(self.startup_button)
-        lamps_layout.addWidget(self.shutdown_button)
+        display_layout.addWidget(self.headers_button)
+        lamps_layout.addWidget(self.reset_button)
 
         # Add the vertical layouts to the main row layout
         row5_layout.addLayout(binning_layout)
@@ -258,7 +250,6 @@ class ControlTab(QWidget):
         row5_widget = QWidget()
         row5_widget.setLayout(row5_layout)
         return row5_widget
-
 
     def add_separator_line(self, layout):
         """ Helper method to add a thin light gray line (separator) between rows. """
@@ -353,6 +344,8 @@ class ControlTab(QWidget):
         print("Abort button clicked!")
         command = f"abort\n"
         self.parent.send_command(command)
+        self.go_button.setEnabled(False)
+        self.offset_to_target_button.setEnabled(False)
         self.continue_button.setEnabled(False)
         self.continue_button.setStyleSheet("""
                 QPushButton {
@@ -371,14 +364,8 @@ class ControlTab(QWidget):
                 }
         """)
 
-    def on_lamps_button_click(self):
-        """Handle the 'Startup' button click"""
-        print("Startup button clicked!")
-        # command = f"startup\n"
-        # self.parent.send_command(command)
-
     def on_reset_button_click(self):
-        """Handle the 'Startup' button click"""
+        """Handle the 'Reset' button click"""
         print("Reset button clicked!")
         self.logic_service.refresh_table()
 

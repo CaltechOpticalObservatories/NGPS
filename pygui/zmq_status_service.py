@@ -14,6 +14,7 @@ class ZmqStatusService(QObject):
         self.context = zmq.Context()  # Create the ZeroMQ context
         self.socket = None
         self.is_connected = False
+        self.subscribed_topics = set()  # Set of subscribed topics
 
         # Set up logging
         self.setup_logging()
@@ -28,7 +29,7 @@ class ZmqStatusService(QObject):
             os.makedirs(log_dir)  # Create the logs directory if it doesn't exist
 
         # Set up logging to a file inside the 'logs' folder
-        log_file = os.path.join(log_dir, 'status_service.log')
+        log_file = os.path.join(log_dir, 'zmq_status_service.log')
         
         logging.basicConfig(
             level=logging.INFO, 
@@ -46,7 +47,6 @@ class ZmqStatusService(QObject):
             # Create the SUB socket type to receive messages
             self.socket = self.context.socket(zmq.SUB)
             self.socket.connect(self.broker_publish_endpoint)  # Connect to the broker (publisher's address and port)
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, "")  # Subscribe to all messages (default behavior)
             self.is_connected = True
             self.logger.info(f"Connected to broker at {self.broker_publish_endpoint}")
         except Exception as e:
@@ -54,20 +54,41 @@ class ZmqStatusService(QObject):
             self.is_connected = False
             raise e
 
-    def subscribe(self, topic=None):
-        """ Subscribe to a specific topic. If no topic is provided, subscribe to all topics. """
+    def subscribe_to_topic(self, topic):
+        """ Subscribe to a specific topic. """
         if not self.is_connected:
             self.logger.warning("Not connected to broker. Call 'connect()' first.")
             return
         
-        # If topic is provided, subscribe to that topic
-        if topic:
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+        if topic not in self.subscribed_topics:
+            self.socket.setsockopt_string(zmq.SUBSCRIBE, topic)  # Subscribe to the given topic
+            self.subscribed_topics.add(topic)
             self.logger.info(f"Subscribed to topic: {topic}")
         else:
-            # If no topic is specified, subscribe to all messages
-            self.socket.setsockopt_string(zmq.SUBSCRIBE, "")
-            self.logger.info("Subscribed to all topics.")
+            self.logger.info(f"Already subscribed to topic: {topic}")
+
+    def unsubscribe_from_topic(self, topic):
+        """ Unsubscribe from a specific topic. """
+        if not self.is_connected:
+            self.logger.warning("Not connected to broker. Call 'connect()' first.")
+            return
+        
+        if topic in self.subscribed_topics:
+            self.socket.setsockopt_string(zmq.UNSUBSCRIBE, topic)  # Unsubscribe from the given topic
+            self.subscribed_topics.remove(topic)
+            self.logger.info(f"Unsubscribed from topic: {topic}")
+        else:
+            self.logger.info(f"Not subscribed to topic: {topic}")
+
+    def subscribe_to_all(self):
+        """ Subscribe to all topics. """
+        if not self.is_connected:
+            self.logger.warning("Not connected to broker. Call 'connect()' first.")
+            return
+        
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "")  # Subscribe to all messages
+        self.subscribed_topics.clear()  # Clear the current subscriptions
+        self.logger.info("Subscribed to all topics.")
 
     def listen(self):
         """ Listen for incoming messages from the broker. """
@@ -105,11 +126,11 @@ class ZmqStatusService(QObject):
             self.logger.info("Disconnected from broker.")
 
 class ZmqStatusServiceThread(QThread):
-    def __init__(self, status_service):
+    def __init__(self, zmq_status_service):
         super().__init__()
-        self.status_service = status_service
+        self.zmq_status_service = zmq_status_service
 
     def run(self):
         # Start listening for messages in the StatusService
-        self.status_service.logger.info("Starting StatusService thread...")
-        self.status_service.listen()
+        self.zmq_status_service.logger.info("Starting ZMQStatusService thread...")
+        self.zmq_status_service.listen()

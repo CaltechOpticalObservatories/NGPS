@@ -67,20 +67,18 @@ class NgpsGUI(QMainWindow):
         self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
         self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
 
-
-        # Subscribe to a specific topic (optional)
-        # TODO: Future with ZMQ
+        # Subscribe to a specific topic
         
         # Initialize the ZMQStatusService
-        # self.zmq_status_service = ZmqStatusService(self)
-        # self.zmq_status_service.connect()
+        self.zmq_status_service = ZmqStatusService(self)
+        self.zmq_status_service.connect()
         
         # # Start the ZMQStatusService in a separate thread
-        # self.zmq_status_service_thread = ZmqStatusServiceThread(self.status_service)
-        # self.zmq_status_service_thread.start()
-        # self.zmq_status_service.subscribe()
+        self.zmq_status_service_thread = ZmqStatusServiceThread(self.zmq_status_service)
+        self.zmq_status_service_thread.start()
+        self.zmq_status_service.subscribe_to_topic("calibd")
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
-        # self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
+        self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
         
         self.setWindowState(Qt.WindowMaximized)
 
