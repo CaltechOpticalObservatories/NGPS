@@ -668,6 +668,26 @@ namespace Sequencer {
         this->sequence.async.enqueue_and_log( function, message.str() );
       }
 
+      // VIRTUAL_SLIT_ACQUIRE
+      if ( config.param[entry] == "VIRTUAL_SLIT_ACQUIRE" ) {
+        try { this->sequence.slitoffsetacquire = std::stof(this->config.arg[entry]); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing VIRTUAL_SLIT_ACQUIRE from " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+      }
+
+      // VIRTUAL_SLIT_EXPOSE
+      if ( config.param[entry] == "VIRTUAL_SLIT_EXPOSE" ) {
+        try { this->sequence.slitoffsetexpose = std::stof(this->config.arg[entry]); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR parsing VIRTUAL_SLIT_EXPOSE from " << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+      }
+
       //
       // configure the power switch parameters
       //

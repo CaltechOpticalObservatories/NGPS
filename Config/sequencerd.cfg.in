@@ -62,6 +62,12 @@ CAMERA_PROLOGUE=(basename ngps)
 CAMERA_EPILOGUE=(native POF)
 CAMERA_EPILOGUE=(close)
 
+# Virtual Slit Mode slit offset positions
+# units are arcseconds
+#
+VIRTUAL_SLIT_ACQUIRE=-3.0  # slit offset for acquiring target
+VIRTUAL_SLIT_EXPOSE=3.0    # slit offset for science exposure
+
 # NPS power switches
 #
 # These are the names of NPS switches used by the Sequencer.

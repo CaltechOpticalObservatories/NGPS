@@ -54,6 +54,16 @@ namespace Sequencer {
   };
 
   /**
+   * @enum  VirtualSlitMode
+   * @brief the mode selects the source of slit offset
+   */
+  enum VirtualSlitMode : size_t {
+    VSM_EXPOSE,   // uses VIRTUAL_SLIT_OFFSET_EXPOSE from cfg file
+    VSM_ACQUIRE,  // uses VIRTUAL_SLIT_OFFSET_ACQUIRE from cfg file
+    VSM_DATABASE  // uses value stored in database for current target
+  };
+
+  /**
    * @enum  DaemonBits
    * @brief assigns each subsystem a bit to indicate its state
    */
@@ -267,7 +277,10 @@ namespace Sequencer {
           tcs_preauth_time(0),
           do_once(false),
           tcs_which("real"),
-          tcs_name("offline") {
+          tcs_name("offline"),
+          slitoffsetexpose(0.0),
+          slitoffsetacquire(0.0)
+          {
             seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_seqstate(); });
             thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { broadcast_threadstate(); });
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
@@ -365,6 +378,9 @@ namespace Sequencer {
 
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
+      float slitoffsetexpose;   ///< "virtual slit mode" offset for expose
+      float slitoffsetacquire;  ///< "virtual slit mode" offset for acquire
+
       std::vector<std::string> camera_prologue;  ///< commands to send to camera on initialization, read from cfg file
       std::vector<std::string> camera_epilogue;  ///< commands to send to camera on shutdown, read from cfg file
 
@@ -434,7 +450,7 @@ namespace Sequencer {
       void sequence_start();         ///< main sequence start thread
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
-      long slit_set();               ///< sets slit according to target entry params
+      long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();

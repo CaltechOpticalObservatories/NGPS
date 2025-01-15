@@ -292,7 +292,8 @@ namespace Sequencer {
         //
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
                            { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
-                           { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this)       },
+                           { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
+                                                                    Sequencer::VSM_ACQUIRE) },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
                            { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this)    },
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      }
@@ -375,6 +376,17 @@ namespace Sequencer {
       this->is_usercontinue.store(false);
 
       this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+
+      // Ensure slit offset is in "expose" position
+      //
+      auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
+      try {
+        error |= slitset.get();
+      }
+      catch (const std::exception& e) {
+        logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
+        return;
+      }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
@@ -507,22 +519,42 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::slit_set ****************************************/
   /**
-   * @brief      sets the slit according to the parameters in the target entry
+   * @brief      sets the slit width and offset
+   * @details    Slit width is always set according to the value in the target
+   *             database entry, offset set according to mode.
+   * @param[in]  mode  selects source of slit offset
    * @return     ERROR | NO_ERROR
    *
    */
-  long Sequence::slit_set() {
+  long Sequence::slit_set(VirtualSlitMode mode) {
     const std::string function("Sequencer::Sequence::slit_set");
-    std::string reply;
-    std::stringstream slitcmd;
+    std::string reply, modestr;
+    std::stringstream slitcmd, message;
 
     ScopedState thr_state( Sequencer::THR_SLIT_SET, thread_state_manager );
 
     // send the SET command to slitd
     //
-    slitcmd << SLITD_SET << " " << this->target.slitwidth_req << " " << this->target.slitoffset_req;
+    slitcmd << SLITD_SET << " " << this->target.slitwidth_req;
 
-    logwrite( function, "sending: "+slitcmd.str() );
+    switch (mode) {
+      case Sequencer::VSM_EXPOSE:
+        slitcmd << " " << this->slitoffsetexpose;
+        modestr = "EXPOSE";
+        break;
+      case Sequencer::VSM_ACQUIRE:
+        slitcmd << " " << this->slitoffsetacquire;
+        modestr = "ACQUIRE";
+        break;
+      case Sequencer::VSM_DATABASE:
+        slitcmd << " " << this->target.slitoffset_req;
+        modestr = "DATABASE";
+        break;
+    }
+
+    this->async.enqueue( "NOTICE: moving slit to "+modestr+" position" );
+
+    logwrite( function, " sending: "+slitcmd.str() );
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR setting slit" );
@@ -3843,6 +3875,49 @@ namespace Sequencer {
       }
 
 //    if (error==NO_ERROR) std::thread( dothread_runscript, std::ref(*this) ).detach();
+    }
+    else
+
+    // ---------------------------------------------------------
+    // slitset -- spawn slit_set with the selected mode
+    // ---------------------------------------------------------
+    //
+    if ( testname == "slitset" ) {
+
+      if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" || tokens[1] == "-h" ) ) {
+        retstring = "test slitset <mode>\n";
+        retstring.append( "  Spawn slit_set for <mode> = { expose, acquire, database }\n" );
+        return HELP;
+      }
+
+      if ( tokens.size() < 2 ) {
+        logwrite( function, "ERROR expected slitset <mode>" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      Sequencer::VirtualSlitMode mode;
+
+      if ( tokens[1]=="expose" )   { mode = Sequencer::VSM_EXPOSE; }
+      else
+      if ( tokens[1]=="acquire" )  { mode = Sequencer::VSM_ACQUIRE; }
+      else
+      if ( tokens[1]=="database" ) { mode = Sequencer::VSM_DATABASE; }
+      else {
+        logwrite( function, "ERROR invalid mode "+tokens[1]+": expected { expose acquire database }" );
+        retstring="invalid_argument";
+        return ERROR;
+      }
+
+      auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, mode);
+      try {
+        error = slitset.get();
+      }
+      catch (const std::exception& e) {
+        retstring="slit_set_exception";
+        logwrite( function, "ERROR slit set exception: "+std::string(e.what()) );
+        return ERROR;
+      }
     }
     else
 
