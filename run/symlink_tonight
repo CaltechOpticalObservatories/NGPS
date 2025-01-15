@@ -1,3 +1,0 @@
-#!/bin/bash
-tonight=$(ls -1 /data|grep -E '^[0-9]{8}$'|sort -r|head -n 1)
-ln -snf /data/$tonight /data/tonight
