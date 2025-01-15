@@ -562,6 +562,18 @@ namespace TcsEmulator {
     try {
       ra_off  = std::stod( tokens.at(0) ) / 3600.;  // convert from arcsec to deg
       dec_off = std::stod( tokens.at(1) ) / 3600.;
+      // If there's an (optional) 3rd argument then that's the offset rate
+      // which must be within range to be accepted.
+      //
+      if ( tokens.size()==3 ) {
+        double testrate = std::stod( tokens.at(2) );
+        if ( testrate < 1 || testrate > 50 ) {
+          std::cerr << get_timestamp() << function << "ERROR offset rate " << testrate << " outside range {1:50}\n";
+          return;
+        }
+        telescope.offsetrate_ra  = testrate;
+        telescope.offsetrate_dec = testrate;
+      }
     }
     catch( std::invalid_argument &e ) {
       std::cerr << get_timestamp() << function << "unable to convert one or more values from \"" 
@@ -1082,8 +1094,8 @@ namespace TcsEmulator {
         retstring = "-3";              // unable to execute at this time
       }
       else
-      if ( nargs != 2 ) {
-        std::cerr << get_timestamp() << function << "ERROR: expected 2 args but received " << nargs << "\n";
+      if ( nargs < 2 ) {
+        std::cerr << get_timestamp() << function << "ERROR need at least 2 args but received " << nargs << "\n";
         retstring = "-2";              // invalid parameters
       }
       else {
