@@ -241,12 +241,13 @@ namespace Slit {
       long close();                              ///< closes the PI socket connection
       long is_open( std::string arg, std::string &retstring );     ///< are motor controllers connected?
       long home( std::string args, std::string &help );            ///< home all daisy-chained motors
-      long is_home( std::string arg, std::string &retstring );    ///< return the home state of the motors
+      long is_home( std::string arg, std::string &retstring );     ///< return the home state of the motors
 
-      long set( Slit::Interface &iface, std::string args, std::string &retstring ); ///< set the slit width and offset
-      long get( std::string args, std::string &retstring );                         ///< get the current width and offset
-      long get( std::string &retstring );                                           ///< get the current width and offset
-      long get();                                                                   ///< get the current width and offset
+      long offset( std::string args, std::string &retstring );     ///< set the slit offset only
+      long set( std::string args, std::string &retstring );        ///< set the slit width and offset
+      long get( std::string args, std::string &retstring );        ///< get the current width and offset
+      long get( std::string &retstring );                          ///< get the current width and offset
+      long get();                                                  ///< get the current width and offset
       long read_positions( float &width, float &offset, float &posa, float &posb );
       long read_positions( float &width, float &offset );
 

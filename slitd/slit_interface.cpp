@@ -259,10 +259,49 @@ namespace Slit {
   /***** Slit::Interface::is_home *********************************************/
 
 
+  /***** Slit::Interface::offset **********************************************/
+  /**
+   * @brief      set the slit offset only
+   * @details    This function calls Slit::Interface::set() using the current
+   *             width stored in the class and the passed-in args for the offset.
+   *             All error checking is done by Slit::Interface::set(). Returns
+   *             an error if width was not previously set.
+   * @param[in]  args       string containing offset
+   * @param[out] retstring  string contains the width and offset after move
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::offset( std::string args, std::string &retstring ) {
+    const std::string function("Slit::Interface::offset");
+
+    // Help
+    //
+    if ( args == "?" || args == "help" || args == "-h" ) {
+      retstring = SLITD_OFFSET;
+      retstring.append( " <offset>\n" );
+      retstring.append( "  Set slit <offset> only. Default units arcsec, add \"mm\" to use\n" );
+      retstring.append( "  actuator units. Current slit width will be used, so a width must\n" );
+      retstring.append( "  have previously been set.\n" );
+      return HELP;
+    }
+
+    if ( std::isnan(snapshot.width.arcsec()) ) {
+      logwrite( "Slit::Interface::offset", "ERROR width not previously set" );
+      retstring="undefined_width";
+      return ERROR;
+    }
+
+    std::stringstream cmd;
+    cmd << snapshot.width.arcsec() << " " << args;
+
+    return this->set( cmd.str(), retstring );
+  }
+  /***** Slit::Interface::offset **********************************************/
+
+
   /***** Slit::Interface::set *************************************************/
   /**
    * @brief      set the slit width and offset
-   * @param[in]  iface      reference to main Slit::Interface object
    * @param[in]  args       string containing width, or width and offset
    * @param[out] retstring  string contains the width and offset after move
    * @return     ERROR | NO_ERROR | HELP
@@ -276,7 +315,7 @@ namespace Slit {
    * not otherwise have access to this-> object.
    *
    */
-  long Interface::set( Slit::Interface &iface, std::string args, std::string &retstring ) {
+  long Interface::set( std::string args, std::string &retstring ) {
     std::string function = "Slit::Interface::set";
     std::stringstream message;
     long error = NO_ERROR;

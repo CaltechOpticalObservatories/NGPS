@@ -14,6 +14,7 @@ const std::string SLITD_HOME = "home";      const int SLITD_HOME_TIMEOUT = 60000
 const std::string SLITD_ISHOME = "ishome";  const int SLITD_ISHOME_TIMEOUT = 3000;
 const std::string SLITD_ISOPEN = "isopen";  const int SLITD_ISOPEN_TIMEOUT = 3000;
 const std::string SLITD_NATIVE = "native";  const int SLITD_NATIVE_TIMEOUT = 3000;
+const std::string SLITD_OFFSET = "offset";  const int SLITD_OFFSET_TIMEOUT = 20000;
 const std::string SLITD_OPEN = "open";      const int SLITD_OPEN_TIMEOUT = 3000;
 const std::string SLITD_SET  = "set";       const int SLITD_SET_TIMEOUT = 20000;
 
@@ -24,6 +25,7 @@ const std::vector<std::string> SLITD_SYNTAX = {
                                                  SLITD_ISHOME+" [ ? ]",
                                                  SLITD_ISOPEN+" [ ? ]",
                                                  SLITD_NATIVE+" ? | <name> <cmd> [ <axis> <arg> ]",
+                                                 SLITD_OFFSET+" ? | <offset>",
                                                  SLITD_OPEN+" [ ? ]",
                                                  SLITD_SET+" ? | <width> [ <offset> ]",
                                                  TELEMREQUEST+" [?]"

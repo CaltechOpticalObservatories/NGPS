@@ -571,10 +571,17 @@ namespace Slit {
       }
       else
 
+      // set offset only
+      //
+      if ( cmd == SLITD_OFFSET ) {
+                      ret = this->interface.offset( args, retstring );
+      }
+      else
+
       // set width and offset
       //
       if ( cmd == SLITD_SET ) {
-                      ret = this->interface.set( std::ref( this->interface ), args, retstring );
+                      ret = this->interface.set( args, retstring );
       }
       else
 

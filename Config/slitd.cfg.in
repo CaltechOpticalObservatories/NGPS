@@ -44,7 +44,7 @@ MOTOR_CONTROLLER="B @IP_ETS8P@ @ETS8P_SLIT@ 2 1"
 #MOTOR_CONTROLLER="B localhost @SLITD_PI_PORT@ 2 1" # emulator
 
 # For each actuator's controller specify:
-# MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref>"
+# MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref> [ <default> ]"
 # valid <ref> types are { neg pos ref na }
 #       (use "na" if axis does not support referencing)
 #
