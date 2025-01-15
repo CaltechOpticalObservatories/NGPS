@@ -1918,7 +1918,6 @@ namespace Sequencer {
   /**
    * @brief      performs the acqusition sequence
    * @details    this gets called by the move_to_target thread
-   * @param[in]  seq  reference to Sequencer::Sequence object
    *
    * This function is spawned in a thread.
    *
@@ -2053,7 +2052,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::startup *****************************************/
   /**
    * @brief      performs nightly startup
-   * @param[in]  seq  reference to Sequence object
    * @return     ERROR or NO_ERROR
    *
    */
@@ -2067,7 +2065,7 @@ namespace Sequencer {
 
     this->thread_error_manager.clear_all();                                    // clear the thread error state
 
-    this->cancel_flag.store(false);
+    this->cancel_flag.store(false);                                            // clear the cancel flag
 
     // Everything (except TCS) needs the power control to be running 
     // so initialize the power control first.
@@ -2180,14 +2178,9 @@ namespace Sequencer {
   /***** Sequencer::Sequence::shutdown ****************************************/
   /**
    * @brief      performs nightly shutdown
-   * @param[in]  seq  reference to Sequence object
    * @return     ERROR or NO_ERROR
-   * @details
-   * The shutdown sequence puts hardware into safe conditions, such as closing dust
-   * covers, etc., commands daemons to close their connections to hardware components,
-   * disconnects the sequencer's connection to the daemons, then turns off the power
-   * to hardware components, then finally closes and disconnects the power daemon.
-   * This can only be performed in the READY state.
+   * @details    The shutdown sequence puts hardware into safe conditions,
+   *             closes connections, and turns off power.
    *
    */
   long Sequence::shutdown() {
@@ -2197,11 +2190,17 @@ namespace Sequencer {
 
     ScopedState thr_state(Sequencer::THR_SHUTDOWN, this->thread_state_manager);  // this thread is running
 
+    // stop everything
+    //
+    this->abort_process();
+
+    this->reset_ontarget();
+    this->reset_usercontinue();
+    this->reset_cancel_flag();
+
     // clear the thread error state
     //
     this->thread_error_manager.clear_all();
-
-    this->cancel_flag.store(false);
 
     // Everything (except TCS) needs the power control to be running 
     // so make sure power control is initialized before continuing.
@@ -2732,7 +2731,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::target_offset ***********************************/
   /**
    * @brief      performs target offset
-   * @param[in]  seq  reference to Sequence object
    * @return     ERROR or NO_ERROR
    *
    */
