@@ -1312,6 +1312,7 @@ namespace Sequencer {
       //
       if ( cmd == SEQUENCERD_STARTONE ) {
                   this->sequence.single_obsid=args;
+                  this->sequence.abort_process();
                   std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence) ).detach();
                   ret = NO_ERROR;
       }

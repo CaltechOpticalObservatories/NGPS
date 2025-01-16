@@ -41,6 +41,7 @@ namespace Sequencer {
   void Sequence::broadcast_seqstate() {
     this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate",
                                  "RUNSTATE: "+seq_state_manager.get_set_states() );
+    this->cv.notify_all();
   }
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
 
@@ -718,7 +719,7 @@ namespace Sequencer {
     logwrite( function, "disconnecting from slitd" );
     this->slitd.disconnect();
 
-    this->seq_state_manager.clear( Sequencer::SEQ_WAIT_SLIT );
+    this->daemon_manager.clear(Sequencer::DAEMON_SLIT);
 
     return NO_ERROR;
   }
@@ -845,7 +846,7 @@ namespace Sequencer {
       error=ERROR;
     }
 
-    this->seq_state_manager.clear( Sequencer::SEQ_WAIT_SLICECAM );
+    this->daemon_manager.clear(Sequencer::DAEMON_SLICECAM);
 
     return NO_ERROR;
   }
@@ -929,7 +930,6 @@ namespace Sequencer {
     bool was_opened=false;
     if ( this->open_hardware(this->calibd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing calib control" );
-      this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
       this->thread_error_manager.set( THR_CALIB_INIT );
       return ERROR;
     }
@@ -1043,16 +1043,15 @@ namespace Sequencer {
     ScopedState thr_state(Sequencer::THR_TCS_INIT, thread_state_manager);
     ScopedState seq_state( Sequencer::SEQ_WAIT_TCS, seq_state_manager );
 
-    this->daemon_manager.clear( Sequencer::DAEMON_TCS );
+    this->daemon_manager.clear( Sequencer::DAEMON_TCS );  // tcsd not ready
 
     if ( this->open_hardware(this->tcsd) != NO_ERROR ) {
       this->async.enqueue_and_log( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
-      this->daemon_manager.clear( Sequencer::DAEMON_TCS );
       this->thread_error_manager.set( THR_TCS_INIT );
       return ERROR;
     }
 
-    this->daemon_manager.set( Sequencer::DAEMON_TCS );
+    this->daemon_manager.set( Sequencer::DAEMON_TCS );    // tcsd is ready
 
     return NO_ERROR;
   }
@@ -1212,7 +1211,6 @@ namespace Sequencer {
     bool was_opened=false;
     if ( this->open_hardware(this->focusd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing focus control" );
-      this->daemon_manager.clear( Sequencer::DAEMON_FOCUS );
       this->thread_error_manager.set( THR_FOCUS_INIT );
       return ERROR;
     }
@@ -1296,7 +1294,7 @@ namespace Sequencer {
     logwrite( function, "disconnecting from focusd" );
     this->focusd.disconnect();
 
-    this->seq_state_manager.clear( Sequencer::SEQ_WAIT_FOCUS );
+    this->daemon_manager.clear(Sequencer::DAEMON_FOCUS);
 
     return NO_ERROR;
   }
@@ -1753,8 +1751,15 @@ namespace Sequencer {
       logwrite( function, "stop exposure sent to camerad" );
     }
     else
+    if ( error == NOTHING ) {
+      // if not exposing, this is a way to ensure WAIT_EXPOSE bit can be cleared
+      this->async.enqueue_and_log( function, "NOTICE: not exposing" );
+      this->seq_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );
+    }
+    else
     if ( error == BUSY ) {
       this->async.enqueue_and_log( function, "NOTICE: too late to stop exposure" );
+      // can't stop in the last 5 sec so wait that long and it should stop on its own
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
     else {
