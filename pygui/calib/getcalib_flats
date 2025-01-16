@@ -1,4 +1,4 @@
- 
+#!/usr/bin/bash -f 
 ### Matuszewski 24/11/16
 ### First stab at a CAL acquisition
 ### Nothing fancy, no error checking, assumes instrument is OK to command

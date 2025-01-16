@@ -1,9 +1,9 @@
 import sys
-from PyQt5.QtWidgets import QMainWindow, QApplication, QTabWidget, QVBoxLayout, QLabel, QPushButton, QWidget, QDesktopWidget
-from tabs.commands_tab import CommandsTab
-from tabs.afternoon_tab import AfternoonTab
-from tabs.focus_tab import FocusTab
-from tabs.science_tab import ScienceTab
+from PyQt5.QtWidgets import QMainWindow, QApplication, QTabWidget, QDesktopWidget
+from calib.tabs.commands_tab import CommandsTab
+from calib.tabs.afternoon_tab import AfternoonTab
+from calib.tabs.focus_tab import FocusTab
+from calib.tabs.science_tab import ScienceTab
 import os
 
 class CalibrationGUI(QMainWindow):
@@ -18,14 +18,14 @@ class CalibrationGUI(QMainWindow):
         tab_widget = QTabWidget()
 
         # Create the tabs
-        commands_tab = CommandsTab()
         afternoon_tab = AfternoonTab()
+        commands_tab = CommandsTab()
         focus_tab = FocusTab()
         science_tab = ScienceTab()
 
         # Add tabs to the tab widget
-        tab_widget.addTab(focus_tab, "Focus")
         tab_widget.addTab(afternoon_tab, "Afternoon")
+        tab_widget.addTab(focus_tab, "Focus")
         tab_widget.addTab(science_tab, "Science")
         tab_widget.addTab(commands_tab, "Commands")
 

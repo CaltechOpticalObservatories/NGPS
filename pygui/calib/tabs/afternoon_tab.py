@@ -26,6 +26,21 @@ class AfternoonTab(QWidget):
         form_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
         form_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
 
+        # Getcalib Command Section (./getcalib)
+        getcalib_button = QPushButton("Get Calibration", self)
+        getcalib_button.clicked.connect(self.run_getcalib)
+        getcalib_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", getcalib_button)  # Place button below the input
+
+        # Getcalib_flat Command Section (./getcalib_flat)
+        getcalib_flat_button = QPushButton("Get Calibration Flats", self)
+        getcalib_flat_button.clicked.connect(self.run_getcalib_flat)
+        getcalib_flat_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", getcalib_flat_button)  # Place button below the input
+
+        # Add vertical spacing between sections
+        form_layout.addRow("", QLabel())  # Empty row for spacing
+
         # Slit Set Command Section (slit set <value>)
         self.slit_value_input = QLineEdit(self)
         self.slit_value_input.setPlaceholderText("Enter slit value")
@@ -90,21 +105,6 @@ class AfternoonTab(QWidget):
         focus_button.clicked.connect(self.set_focus)
         focus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
         form_layout.addRow("", focus_button)  # Place button below the input
-
-        # Add vertical spacing between sections
-        form_layout.addRow("", QLabel())  # Empty row for spacing
-
-        # Getcalib Command Section (./getcalib)
-        getcalib_button = QPushButton("Get Calibration", self)
-        getcalib_button.clicked.connect(self.run_getcalib)
-        getcalib_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
-        form_layout.addRow("", getcalib_button)  # Place button below the input
-
-        # Getcalib_flat Command Section (./getcalib_flat)
-        getcalib_flat_button = QPushButton("Get Calibration Flats", self)
-        getcalib_flat_button.clicked.connect(self.run_getcalib_flat)
-        getcalib_flat_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
-        form_layout.addRow("", getcalib_flat_button)  # Place button below the input
 
         # Create a QWidget to hold the form layout
         form_widget = QWidget(self)

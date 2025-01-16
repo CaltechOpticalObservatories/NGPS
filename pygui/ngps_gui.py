@@ -10,7 +10,7 @@ from sequencer_service import SequencerService
 from login_service import LoginDialog, CreateAccountDialog
 from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
 from status_service import StatusService
-
+from calib.calibration import CalibrationGUI
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -31,6 +31,9 @@ class NgpsGUI(QMainWindow):
 
         # Initialize the UI
         self.init_ui()
+        
+        # Initialize the Calibration GUI
+        self.calibration_gui = None  # Will hold the reference to CalibrationGUI instance
         
         # Check sequencer state on startup
         if self.is_sequencer_ready():
@@ -196,6 +199,15 @@ class NgpsGUI(QMainWindow):
         except subprocess.CalledProcessError as e:
             print(f"Error checking sequencer state: {e}")
         return False  # If not READY or an error occurs, return False
+
+    def open_calibration_gui(self):
+        """Method to open the Calibration GUI"""
+        if self.calibration_gui is None or not self.calibration_gui.isVisible():
+            self.calibration_gui = CalibrationGUI()
+            self.calibration_gui.show()
+        else:
+            self.calibration_gui.raise_()  # Brings the window to the front if already open
+            self.calibration_gui.activateWindow()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
