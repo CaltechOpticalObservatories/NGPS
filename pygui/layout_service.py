@@ -786,7 +786,8 @@ class LayoutService:
                     background-color: #2C6B2F;  /* Even darker green when pressed */
                 }
             """)
-
+            self.control_tab.offset_to_target_button.setEnabled(False)
+            self.control_tab.continue_button.setEnabled(False) 
             # Select the row after updating the table (to highlight it)
             self.target_list_display.selectRow(selected_row)
             

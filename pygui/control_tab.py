@@ -151,7 +151,7 @@ class ControlTab(QWidget):
         self.offset_to_target_button.setEnabled(False)
 
         # Continue Target Button
-        self.continue_button = QPushButton("Continue")
+        self.continue_button = QPushButton("Expose")
         self.continue_button.clicked.connect(self.on_continue_button_click)
         self.continue_button.setEnabled(False)
         
