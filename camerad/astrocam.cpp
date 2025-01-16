@@ -4265,12 +4265,19 @@ logwrite(function, message.str());
    * @brief      stop the exposure now (as soon as possible)
    * @param[in]  args        not used
    * @param[out] retstring   return string
-   * @return     ERROR | NO_ERROR
+   * @return     BUSY | NOTHING | NO_ERROR
    *
    */
   long Interface::stop_exposure( std::string args, std::string &retstring ) {
     const std::string function("AstroCam::Interface::stop_exposure");
     std::stringstream message;
+
+    // nothing to do if not exposing
+    //
+    if ( ! this->exposure_pending() ) {
+      logwrite( function, "not exposing" );
+      return NOTHING;
+    }
 
     // Block changes within the last 5 seconds of exposure.
     // The remaining time is returned by the PreciseTimer object
@@ -4283,7 +4290,7 @@ logwrite(function, message.str());
               << " (" << remaining_time << ")";
       logwrite( function, message.str() );
       retstring="too_late";
-      return ERROR;
+      return BUSY;
     }
 
     // The PreciseTimer object .stop(&ms) function modifies remaining_time
