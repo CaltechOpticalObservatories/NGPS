@@ -204,8 +204,8 @@ namespace TCS {
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::open( const std::string &arg, std::string &retstring ) {
-    std::string function = "TCS::Interface::open";
+  long Interface::open( std::string arg, std::string &retstring ) {
+    const std::string function("TCS::Interface::open");
     std::stringstream message, asyncmsg;
     long error = NO_ERROR;
 
@@ -223,13 +223,17 @@ namespace TCS {
       return HELP;
     }
 
-    // Need the name of the tcs to connect to
+    // get the name of the tcs to connect to, or use default if specified
     //
-    if ( arg.empty() ) {
-      message.str(""); message << "ERROR: must specify a valid TCS name";
-      logwrite( function, message.str() );
+    if ( arg.empty() && this->default_tcs.empty() ) {
+      logwrite( function, "ERROR no TCS name specified and no default configured" );
       retstring="missing_argument";
       return ERROR;
+    }
+    if ( arg.empty() ) {
+      message.str(""); message << "NOTICE: no TCS name specified, using default \"" << this->default_tcs << "\"";
+      logwrite( function, message.str() );
+      arg = this->default_tcs;
     }
 
     // Typically, a second call to open might not return an error but this function returns an error

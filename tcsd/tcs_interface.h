@@ -483,7 +483,7 @@ namespace TCS {
        */
       long list( const std::string &arg, std::string &retstring );
       long llist( const std::string &arg, std::string &retstring );
-      long open( const std::string &arg, std::string &retstring );
+      long open( std::string arg, std::string &retstring );
       long open();
       bool isopen();
       long isopen( std::string &retstring );
