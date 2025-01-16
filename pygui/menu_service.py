@@ -38,7 +38,7 @@ class MenuService:
 
         # Tools Menu
         tools_menu = self.menubar.addMenu('Tools')
-        settings_action = QAction('Callibration', self.menubar)
+        settings_action = QAction('Calibration', self.menubar)
         settings_action.triggered.connect(self.parent.open_calibration_gui)
         tools_menu.addAction(settings_action)
         
