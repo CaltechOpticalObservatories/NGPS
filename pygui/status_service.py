@@ -2,6 +2,7 @@ import socket
 import threading
 import time
 from PyQt5.QtCore import pyqtSignal, QObject, QTimer
+from PyQt5.QtWidgets import QMessageBox
 import struct
 import re
 import select
@@ -101,7 +102,9 @@ class StatusService(QObject):
 
     def _handle_message(self, message):
         """Handle the incoming message and decide what to do with it."""
-        if message.startswith("EXPTIME"):
+        if message == "RUNSTATE: READY":
+            self._show_popup("NGPS is Ready.")
+        elif message.startswith("EXPTIME"):
             self._parse_exptime_message(message)
         elif message.startswith("PIXELCOUNT"):
             self._parse_pixelcount_message(message)
@@ -135,3 +138,13 @@ class StatusService(QObject):
                 progress_percentage = (current_count / total_count) * 100
                 progress_percentage = min(max(progress_percentage, 0), 100)
                 self.readout_progress_updated_signal.emit(int(progress_percentage))
+
+    def _show_popup(self, message):
+        """Show a popup message on the screen."""
+        # Create a QMessageBox
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setWindowTitle("Status Update")
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()

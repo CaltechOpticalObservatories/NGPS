@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout
-import subprocess
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout, QSpacerItem
 from PyQt5.QtCore import Qt
+import subprocess
 
 class FocusTab(QWidget):
     def __init__(self):
@@ -20,26 +20,48 @@ class FocusTab(QWidget):
 
         # Form Layout for Parameterized BOI (camera boi {channel} {skip_row} {rows})
         boi_form_layout = QFormLayout()
+
+        # Channel input field
         self.channel_input = QLineEdit(self)
         self.channel_input.setPlaceholderText("Enter channel (for parameterized BOI)")
         self.channel_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.channel_input.setMinimumWidth(150)  # Minimum width for the input
+        self.channel_input.setMinimumHeight(35)  # Minimum height for the input
         boi_form_layout.addRow("Channel:", self.channel_input)
 
+        # Spacer between input fields
+        spacer1 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        boi_form_layout.addItem(spacer1)
+
+        # Skip Rows input field
         self.skip_rows_input = QLineEdit(self)
         self.skip_rows_input.setPlaceholderText("Rows to skip")
         self.skip_rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.skip_rows_input.setMinimumWidth(150)  # Minimum width for the input
+        self.skip_rows_input.setMinimumHeight(35)  # Minimum height for the input
         boi_form_layout.addRow("Skip Rows:", self.skip_rows_input)
+        
+        # Spacer between input fields
+        spacer1 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        boi_form_layout.addItem(spacer1)
 
+        # Rows to Read input field
         self.rows_input = QLineEdit(self)
         self.rows_input.setPlaceholderText("Rows to read")
         self.rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.rows_input.setMinimumWidth(150)  # Minimum width for the input
+        self.rows_input.setMinimumHeight(35)  # Minimum height for the input
         boi_form_layout.addRow("Rows to Read:", self.rows_input)
 
         scroll_area_layout.addLayout(boi_form_layout)
 
+        # Spacer between input fields
+        spacer1 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        boi_form_layout.addItem(spacer1)
+
         # Camera BOI Button with parameters (Centered)
         boi_button = QPushButton("Activate BOI", self)
-        boi_button.setFixedWidth(200)  # Set a fixed width for the button
+        boi_button.setFixedWidth(150)  # Set a fixed width for the button
 
         # Create a horizontal layout for the button to center it
         button_layout = QHBoxLayout()
@@ -53,6 +75,7 @@ class FocusTab(QWidget):
         self.full_channel_input = QLineEdit(self)
         self.full_channel_input.setPlaceholderText("Enter channel")
         self.full_channel_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.full_channel_input.setFixedWidth(150)  # Minimum width for the input
         scroll_area_layout.addWidget(QLabel("Enter channel for full BOI:"))
         scroll_area_layout.addWidget(self.full_channel_input)
 
@@ -217,6 +240,11 @@ class FocusTab(QWidget):
 
         # Set the layout of the main window
         self.setLayout(main_layout)
+
+        # Set window properties to ensure it maintains aspect ratio
+        self.setMinimumSize(800, 600)  # Minimum window size (adjust as needed)
+        self.setWindowTitle("Focus Tab")
+
 
     def run_command(self, command_list):
         """Helper function to run terminal command and handle errors"""

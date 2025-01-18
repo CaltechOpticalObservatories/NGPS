@@ -131,7 +131,7 @@ QProgressBar {
 }
 
 QProgressBar::chunk {
-    background-color: #7e7e7e;  /* Lighter gray for the progress chunk */
+    background-color:rgb(43, 255, 57);  /* Lighter gray for the progress chunk */
     width: 10px;
     margin: 0.5px;
 }

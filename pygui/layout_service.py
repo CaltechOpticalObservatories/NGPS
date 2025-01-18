@@ -130,8 +130,7 @@ class LayoutService:
 
         # Add the tabs to the QTabWidget
         self.parent.tabs.addTab(self.parent.control_tab, "Control")
-        self.parent.tabs.addTab(self.parent.status_tab, "Status")
-        self.parent.tabs.addTab(self.parent.engineering_tab, "Engineering")
+        # self.parent.tabs.addTab(self.parent.status_tab, "Status")
 
         # Add the QTabWidget to the third column layout
         third_column_layout.addWidget(self.parent.tabs)
@@ -837,41 +836,148 @@ class LayoutService:
             self.target_list_display.setColumnWidth(col, width)
             
     def create_second_column_top_half(self):
-        """Create the top half of the second column with tabs: 'Planning' and 'ETC'"""
-
+        """Create the top half of the second column with 'Status', Calibration Lamps, and additional status fields"""
+        
         # Create a QVBoxLayout to hold everything in the top half
         second_column_top_half_layout = QVBoxLayout()
 
-        # Create a QTabWidget to hold the tabs (Planning and ETC)
-        self.parent.tabs = QTabWidget()
+        # Create the "Status" section
+        status_group = QGroupBox("Status")
+        status_layout = QVBoxLayout()
 
-        # Create the two tabs: Planning and ETC
-        self.parent.planning_tab = QWidget()
-        self.parent.etc = QWidget()
+        # Create Calibration Lamps section
+        calibration_lamps_group = QGroupBox("Calibration Lamps")
+        calibration_lamps_layout = QVBoxLayout()
 
-        # Add the tabs to the QTabWidget
-        self.parent.tabs.addTab(self.parent.planning_tab, "Planning")
-        self.parent.tabs.addTab(self.parent.etc, "ETC")
+        # Define lamps and their corresponding statuses
+        lamps = ["ThAR", "FeAr", "RedCont", "BlueCont"]
+        self.lamp_checkboxes = {}  # To store lamp checkboxes
+        self.modulator_checkboxes = {}  # To store modulator checkboxes
 
-        # Set up the layout for the "Planning" tab
-        planning_layout = QVBoxLayout()
-        planning_group = self.create_planning_info_group()
-        planning_layout.addWidget(planning_group)
-        self.parent.planning_tab.setLayout(planning_layout)
+        # Create the header row for "Lamps On/Off" and "Modulator On/Off"
+        header_layout = QHBoxLayout()
 
-        # Set up the layout for the "ETC" tab
-        self.create_etc_tab()  # Dynamically populate the "ETC" tab layout
+        # Add "Lamps On/Off" label (smaller font size)
+        lamps_header = QLabel("Lamps On/Off")
+        lamps_header.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(lamps_header)
 
-        # Add the QTabWidget to the second column's top half layout
-        second_column_top_half_layout.addWidget(self.parent.tabs)
+        # Add "Modulator On/Off" label (smaller font size)
+        modulator_header = QLabel("Modulator On/Off")
+        modulator_header.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(modulator_header)
 
-        # Set the layout for the second_column_top_half (containing the tabs)
-        second_column_top_half = QWidget()
-        second_column_top_half.setLayout(second_column_top_half_layout)
+        # Add the header row to the calibration lamps layout
+        calibration_lamps_layout.addLayout(header_layout)
+
+        # For each lamp, create a row with two checkboxes: Lamp On/Off and Modulator On/Off
+        for lamp in lamps:
+            lamp_layout = QHBoxLayout()
+
+            # Lamp Name Label (displayed next to the checkboxes)
+            lamp_name = QLabel(lamp)
+            lamp_layout.addWidget(lamp_name)
+
+            # Lamp On/Off checkbox
+            lamp_checkbox = QCheckBox("On/Off")
+            lamp_checkbox.setChecked(False)  # Default to Off
+            lamp_layout.addWidget(lamp_checkbox)
+
+            # Modulator On/Off checkbox
+            modulator_checkbox = QCheckBox("On/Off")
+            modulator_checkbox.setChecked(False)  # Default to Off
+            lamp_layout.addWidget(modulator_checkbox)
+
+            # Store checkboxes for later updates
+            self.lamp_checkboxes[lamp] = lamp_checkbox
+            self.modulator_checkboxes[lamp] = modulator_checkbox
+
+            # Add this lamp's row to the calibration lamps layout
+            calibration_lamps_layout.addLayout(lamp_layout)
+
+        # Add the Calibration Lamps section to the status layout
+        calibration_lamps_group.setLayout(calibration_lamps_layout)
+        status_layout.addWidget(calibration_lamps_group)
+
+        # ----------------------------
+        # Add the Seeing and Airmass status fields in the first row
+        # ----------------------------
+
+        # Create a horizontal layout to arrange Seeing and Airmass side by side
+        first_row_layout = QHBoxLayout()
+
+        # Seeing (arcsec) field
+        seeing_layout = QVBoxLayout()
+        seeing_label = QLabel("Seeing (arcsec):")
+        self.seeing_input = QLineEdit()
+        self.seeing_input.setReadOnly(True)  # Make it read-only
+        self.seeing_input.setText("0.8")  # Placeholder text or dynamically updated value
+        
+        seeing_layout.addWidget(seeing_label)
+        seeing_layout.addWidget(self.seeing_input)
+
+        # Airmass field
+        airmass_layout = QVBoxLayout()
+        airmass_label = QLabel("Airmass:")
+        self.airmass_input = QLineEdit()
+        self.airmass_input.setReadOnly(True)  # Make it read-only
+        self.airmass_input.setText("1.2")  # Placeholder text or dynamically updated value
+        
+        airmass_layout.addWidget(airmass_label)
+        airmass_layout.addWidget(self.airmass_input)
+
+        # Add the individual layouts to the first row layout
+        first_row_layout.addLayout(seeing_layout)
+        first_row_layout.addLayout(airmass_layout)
+
+        # Add the first row layout to the status layout
+        status_layout.addLayout(first_row_layout)
+
+        # ----------------------------
+        # Add the Binning and Slit Width Offset status fields in the second row
+        # ----------------------------
+
+        # Create a second row layout for Binning and Slit Width Offset
+        second_row_layout = QHBoxLayout()
+
+        # Binning field
+        binning_layout = QVBoxLayout()
+        binning_label = QLabel("Binning:")
+        self.binning_input = QLineEdit()
+        self.binning_input.setReadOnly(True)  # Make it read-only
+        self.binning_input.setText("2x2")  # Placeholder text or dynamically updated value
+        
+        binning_layout.addWidget(binning_label)
+        binning_layout.addWidget(self.binning_input)
+
+        # Slit Width Offset field
+        slit_width_layout = QVBoxLayout()
+        slit_width_label = QLabel("Slit Width Offset:")
+        self.slit_width_input = QLineEdit()
+        self.slit_width_input.setReadOnly(True)  # Make it read-only
+        self.slit_width_input.setText("0.05")  # Placeholder text or dynamically updated value
+        
+        slit_width_layout.addWidget(slit_width_label)
+        slit_width_layout.addWidget(self.slit_width_input)
+
+        # Add the individual layouts to the second row layout
+        second_row_layout.addLayout(binning_layout)
+        second_row_layout.addLayout(slit_width_layout)
+
+        # Add the second row layout to the status layout
+        status_layout.addLayout(second_row_layout)
+
+        # Set the status section layout and add it to the second column
+        status_group.setLayout(status_layout)
+        second_column_top_half_layout.addWidget(status_group)
 
         # Optional: Set maximum size for the group if needed (can be adjusted depending on available space)
-        second_column_top_half.setMaximumHeight(350)  # Adjust based on design
-        second_column_top_half.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Allow vertical resizing if needed
+        status_group.setMaximumHeight(350)  # Adjust based on design
+        status_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Allow vertical resizing if needed
+
+        # Return the layout for the second column's top half
+        second_column_top_half = QWidget()
+        second_column_top_half.setLayout(second_column_top_half_layout)
 
         return second_column_top_half
 

@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout
 from PyQt5.QtCore import Qt
 from menu_service import MenuService
 from logic_service import LogicService
@@ -11,6 +11,7 @@ from login_service import LoginDialog, CreateAccountDialog
 from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
 from status_service import StatusService
 from calib.calibration import CalibrationGUI
+from control_tab import ControlTab 
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -46,8 +47,8 @@ class NgpsGUI(QMainWindow):
         screen_width, screen_height = screen_geometry.width(), screen_geometry.height()
 
         # Set window size relative to screen size (e.g., 80% of screen size)
-        window_width = int(screen_width * 0.2)
-        window_height = int(screen_height * 0.2)
+        window_width = int(screen_width * 0.8)  # Use 80% for the left side content
+        window_height = int(screen_height * 0.8)  # Adjust height as well
 
         # Set the geometry (position + size)
         self.setGeometry(int(screen_width * 0.1), int(screen_height * 0.1), window_width, window_height)
@@ -55,6 +56,45 @@ class NgpsGUI(QMainWindow):
         # Load and apply the QSS stylesheet
         self.load_stylesheet("styles.qss")
 
+        # Show ControlTab as a separate window
+        # self.show_control_tab()
+        
+        # Initialize services
+        self.initialize_services()
+
+        self.setWindowState(Qt.WindowMaximized)
+
+    def init_ui(self):
+        # Set up Menu
+        menubar = self.menuBar()
+        menu_service = MenuService(self, menubar)
+        menu_service.create_menus()
+
+        # Set up Layout
+        self.layout_service = LayoutService(self)
+        main_layout = self.layout_service.create_layout()
+
+        self.logic_service = LogicService(self)
+        
+        # Try to connect to the MySQL database
+        self.connection = self.logic_service.connect_to_mysql("config/db_config.ini")
+
+        # Add layout to central widget
+        central_widget = QWidget()
+        central_widget.setLayout(main_layout)
+
+        # Create a QHBoxLayout to hold the main layout and control tab side-by-side
+        main_window_layout = QHBoxLayout()
+
+        # Add the central widget (main content) to the left side
+        main_window_layout.addWidget(central_widget)
+
+        # Create a QWidget to hold the layout and set it as the central widget
+        central_widget = QWidget()
+        central_widget.setLayout(main_window_layout)
+        self.setCentralWidget(central_widget)
+
+    def initialize_services(self):
         # Initialize the InstrumentStatusService
         self.instrument_status_service = InstrumentStatusService(self)
 
@@ -70,8 +110,6 @@ class NgpsGUI(QMainWindow):
         self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
         self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
 
-        # Subscribe to a specific topic
-        
         # Initialize the ZMQStatusService
         self.zmq_status_service = ZmqStatusService(self)
         self.zmq_status_service.connect()
@@ -82,35 +120,6 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("calibd")
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
-        
-        self.setWindowState(Qt.WindowMaximized)
-
-    def init_ui(self):
-        # Set up Menu
-        menubar = self.menuBar()
-        menu_service = MenuService(self, menubar)
-        menu_service.create_menus()
-
-
-        # Initialize the message log
-        self.message_log = None
-        
-        # Set up Layout
-        self.layout_service = LayoutService(self)
-        main_layout = self.layout_service.create_layout()
-
-        self.logic_service = LogicService(self)
-        
-        # Try to connect to the MySQL database
-        self.connection = self.logic_service.connect_to_mysql("config/db_config.ini")
-
-        # Add layout to central widget
-        central_widget = QWidget()
-        central_widget.setLayout(main_layout)
-        self.setCentralWidget(central_widget)
-
-        # Connect the DateTimeEdit to the on_date_time_changed function
-        self.start_date_time_edit.dateTimeChanged.connect(self.on_date_time_changed)
 
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
@@ -208,6 +217,15 @@ class NgpsGUI(QMainWindow):
         else:
             self.calibration_gui.raise_()  # Brings the window to the front if already open
             self.calibration_gui.activateWindow()
+            
+    # def show_control_tab(self):
+    #     """
+    #     This method creates and shows the ControlTab as a separate, closable popup window.
+    #     """
+    #     control_window = ControlTab(self)
+    #     control_window.setGeometry(1400, 100, 400, 600)
+    #     # Show the ControlTab window as a popup
+    #     control_window.show()  
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

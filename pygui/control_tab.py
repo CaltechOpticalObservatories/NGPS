@@ -1,11 +1,11 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFrame, QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFrame, QMessageBox, QDialog
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
 from logic_service import LogicService
 import astropy.units as u
 import subprocess
 
-class ControlTab(QWidget):
+class ControlTab(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
