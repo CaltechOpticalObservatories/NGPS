@@ -300,7 +300,7 @@ class LayoutService:
             print("Startup button clicked!")
             command = f"startup\n"
             self.parent.send_command(command)
-            self.update_system_status("idle")  # Set to 'idle' when starting up
+            # self.update_system_status("idle")  # Set to 'idle' when starting up
         else:
             # Change the button back to Startup (green)
             self.startup_shutdown_button.setText("Startup")
@@ -322,7 +322,7 @@ class LayoutService:
             print("Shutdown button clicked!")
             command = f"shutdown\n"
             self.parent.send_command(command) 
-            self.update_system_status("stopped")  # Set to 'stopped' when shutting down
+            # self.update_system_status("stopped")  # Set to 'stopped' when shutting down
 
     def update_system_status(self, status):
         # Iterate through all status widgets and "disable" them
@@ -364,10 +364,14 @@ class LayoutService:
         progress_and_image_layout = QVBoxLayout()
         progress_and_image_layout.setSpacing(10)
 
+        # Create the progress layout with separate rows for exposure and overhead
         progress_layout = self.create_progress_layout()
+
+        # Create the image info layout and message log as before
         image_info_layout = self.create_image_info_layout()
         message_log = self.create_message_log()
 
+        # Add all components to the main layout
         progress_and_image_layout.addLayout(progress_layout)
         progress_and_image_layout.addLayout(image_info_layout)
         progress_and_image_layout.addWidget(QLabel("Log Messages:"))
@@ -382,25 +386,34 @@ class LayoutService:
         return progress_and_image_group
 
     def create_progress_layout(self):
-        progress_layout = QHBoxLayout()
-        progress_layout.setSpacing(10)
+        progress_layout = QVBoxLayout()  # Use QVBoxLayout for vertical stacking
 
+        # Create the exposure progress bar and label
+        exposure_layout = QHBoxLayout()  # Horizontal layout for exposure row
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
-        self.parent.exposure_progress.setMaximumWidth(200)  # Max width for progress bar
+        self.parent.exposure_progress.setMaximumWidth(300)  # Set same width for both bars
+        exposure_layout.setSpacing(0)  # Remove any spacing between label and progress bar
+        exposure_layout.addWidget(QLabel("Exposure Progress"))
+        exposure_layout.addWidget(self.parent.exposure_progress)
 
+        # Create the overhead progress bar and label
+        overhead_layout = QHBoxLayout()  # Horizontal layout for overhead row
         self.parent.overhead_progress = QProgressBar()
         self.parent.overhead_progress.setValue(0)
         self.parent.overhead_progress.setRange(0, 100)
-        self.parent.overhead_progress.setMaximumWidth(220)  # Max width for progress bar
+        self.parent.overhead_progress.setMaximumWidth(300)  # Set same width for both bars
+        overhead_layout.setSpacing(0)  # Remove any spacing between label and progress bar
+        overhead_layout.addWidget(QLabel("Readout Progress"))
+        overhead_layout.addWidget(self.parent.overhead_progress)
 
-        progress_layout.addWidget(QLabel("Readout Progress"))
-        progress_layout.addWidget(self.parent.overhead_progress)
-        progress_layout.addWidget(QLabel("Exposure Progress"))
-        progress_layout.addWidget(self.parent.exposure_progress)
+        # Add both rows to the main progress layout (vertical stacking)
+        progress_layout.addLayout(exposure_layout)
+        progress_layout.addLayout(overhead_layout)
 
         return progress_layout
+
 
     def update_exposure_progress(self, progress_percentage):
         """Update the exposure progress bar based on the received percentage."""

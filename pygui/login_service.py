@@ -96,17 +96,21 @@ class LoginDialog(QDialog):
 
         self.login_button = QPushButton("Login", self)
         self.cancel_button = QPushButton("Cancel", self)
+        self.account_button = QPushButton("Create Account", self)
+        self.forgot_button = QPushButton("Forgot Password", self)
 
         # Layout
         layout = QFormLayout()
         layout.addRow("Username:", self.username_field)
         layout.addRow("Password:", self.password_field)
         layout.addRow(self.login_button, self.cancel_button)
+        layout.addRow(self.account_button, self.forgot_button)
         self.setLayout(layout)
 
         # Connect signals
         self.login_button.clicked.connect(self.on_login)
         self.cancel_button.clicked.connect(self.reject)
+        self.account_button.clicked.connect(self.on_create_account)
 
         self.owner = None
 
@@ -129,6 +133,10 @@ class LoginDialog(QDialog):
         """Handles the cancel action."""
         print("Login cancelled")
         self.reject()  # Close the dialog without doing anything (cancel)
+    
+    def on_create_account(self):
+        self.reject() 
+        self.parent.on_create_account()
 
     def validate_user_credentials(self, username, password):
         """Validate user credentials against the MySQL database using an existing connection."""

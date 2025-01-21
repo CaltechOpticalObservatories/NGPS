@@ -63,6 +63,8 @@ class NgpsGUI(QMainWindow):
         self.initialize_services()
 
         self.setWindowState(Qt.WindowMaximized)
+        
+        self.on_login()
 
     def init_ui(self):
         # Set up Menu
@@ -155,7 +157,9 @@ class NgpsGUI(QMainWindow):
             self.current_owner = self.login_dialog.owner
             # After loading data, populate the target lists dropdown
             self.layout_service.load_target_lists(self.login_dialog.set_name)
-
+            
+            if self.layout_service.startup_shutdown_button.text() is "Startup":
+                self.layout_service.toggle_startup_shutdown()
 
     def load_mysql_data(self, all_targets):
         """Load data from MySQL after successful login."""
