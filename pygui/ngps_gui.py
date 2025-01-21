@@ -159,8 +159,8 @@ class NgpsGUI(QMainWindow):
             # After loading data, populate the target lists dropdown
             self.layout_service.load_target_lists(self.login_dialog.set_name)
             
-            if self.layout_service.startup_shutdown_button.text() is "Startup":
-                self.layout_service.toggle_startup_shutdown()
+            if self.layout_service.startup_shutdown_button.text() == "Startup":
+                self.layout_service.control_tab.toggle_startup_shutdown()
 
     def load_mysql_data(self, all_targets):
         """Load data from MySQL after successful login."""
@@ -193,8 +193,8 @@ class NgpsGUI(QMainWindow):
             
             # Check if the output starts with "READY"
             if state.startswith('READY'):
-                self.layout_service.startup_shutdown_button.setText("Shutdown")
-                self.layout_service.startup_shutdown_button.setStyleSheet("""
+                self.layout_service.control_tab.startup_shutdown_button.setText("Shutdown")
+                self.layout_service.control_tab.startup_shutdown_button.setStyleSheet("""
                     QPushButton {
                         background-color: #000000;  /* Black for shutdown */
                         border: none;

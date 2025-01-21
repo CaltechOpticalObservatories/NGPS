@@ -112,7 +112,7 @@ class StatusService(QObject):
             self._parse_pixelcount_message(message)
         elif "instrument is shut down" in message:
             self.parent.show_popup("NGPS is Shutdown.")
-            self.parent.layout_service.update_system_status("shutdown")
+            self.parent.layout_service.update_system_status("stopped")
         else:
             self.status = message
             self.heartbeat_misses = 0

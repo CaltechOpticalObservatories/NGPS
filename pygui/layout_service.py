@@ -21,7 +21,6 @@ class LayoutService:
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
-        self.startup_shutdown_button = self.control_tab.startup_shutdown_button
         
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
