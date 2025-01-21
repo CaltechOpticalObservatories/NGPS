@@ -457,10 +457,10 @@ class LogicService:
         # List of columns to hide
         columns_to_hide = [
             "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER",
-            "SEQUENCE_NUMBER", "SLITOFFSET", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW",  "WRANGE_HIGH", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
+            "SEQUENCE_NUMBER", "SLITOFFSET", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW",  "WRANGE_HIGH", "SRCMODEL", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
             "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start", "OTMexp_end",
             "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew", "OTMmoon", "OTMSNR",
-            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
+            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "COMMENT", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
         # Step 2: Check if the data is a list (entire dataset) or a single row (selected row)
@@ -557,10 +557,10 @@ class LogicService:
         # List of columns to hide
         columns_to_hide = [
             "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER",
-            "SEQUENCE_NUMBER", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
+            "SEQUENCE_NUMBER", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW", "WRANGE_HIGH", "SRCMODEL", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
             "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start", "OTMexp_end",
             "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew", "OTMmoon", "OTMSNR",
-            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "OWNER", "NOTBEFORE", "POINTMODE"
+            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "COMMENT", "OWNER", "NOTBEFORE", "POINTMODE"
         ]
 
         # Step 2: Filter the data by set_id (SET_ID column)

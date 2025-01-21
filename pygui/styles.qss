@@ -233,24 +233,3 @@ QHeaderView::section {
     border: 1px solid #888888;
     background-color: #555555;
 }
-
-/* Table Cells */
-QTableWidget::item, QTableView::item {
-    padding: 8px 16px;
-    border: 1px solid #777777;  /* Light gray border for cells */
-    background-color: #3a3a3a;  /* Darker background for cells */
-}
-
-QTableWidget::item:selected, QTableView::item:selected {
-    background-color: #4CAF50;  /* Green background for selected rows/cells */
-    color: white;  /* White text for selected cells */
-}
-
-/* Alternating Row Colors */
-QTableWidget::item:nth-child(even), QTableView::item:nth-child(even) {
-    background-color: #444444;  /* Dark gray for even rows */
-}
-
-QTableWidget::item:nth-child(odd), QTableView::item:nth-child(odd) {
-    background-color: #3a3a3a;  /* Even darker gray for odd rows */
-}

@@ -592,7 +592,7 @@ class LayoutService:
             }
 
             QHeaderView::section {
-                padding: 8px;
+                padding: 4px;
                 border: 1px solid #888888;
                 background-color: #555555;
             }
@@ -609,6 +609,16 @@ class LayoutService:
             QScrollBar::add-line, QScrollBar::sub-line {
                 border: none;
                 background: none;
+            }
+            
+            * Highlighting the focus item with a subtle border */
+            QTableWidget::item:focus, QTableView::item:focus {
+                border: 1px solid #00ccff;  /* Light cyan border for focused item */
+                background-color: #005b99;  /* Slightly darker blue for focused row */
+            }
+            /* Ensure selected row color covers the entire row */
+            QTableWidget::item:selected:active, QTableView::item:selected:active {
+                background-color: #0066cc;  /* Blue background for the entire selected row */
             }
         """)
         self.target_list_display.setRowCount(0)  # Set to 0 initially
