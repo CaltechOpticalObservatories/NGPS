@@ -11,6 +11,7 @@ from login_service import LoginDialog, CreateAccountDialog
 from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
 from status_service import StatusService
 from calib.calibration import CalibrationGUI
+from etc_popup import EtcPopup
 from control_tab import ControlTab 
 
 class NgpsGUI(QMainWindow):
@@ -221,6 +222,11 @@ class NgpsGUI(QMainWindow):
         else:
             self.calibration_gui.raise_()  # Brings the window to the front if already open
             self.calibration_gui.activateWindow()
+
+    def open_etc_popup(self):
+        """Opens the EtcPopup when the button is clicked."""
+        self.etc_popup = EtcPopup(self)  # Pass the parent as the current MainWindow
+        self.etc_popup.exec_()
 
     def show_popup(self, message):
         """Show a popup message on the screen."""

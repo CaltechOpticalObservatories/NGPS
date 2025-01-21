@@ -11,6 +11,7 @@ class ControlTab(QDialog):
         self.parent = parent
         self.create_control_tab()
         self.logic_service = LogicService(self.parent)
+        self.startup_shutdown_button = QPushButton()
 
     def create_control_tab(self):
         # Create the main layout for the Control tab
@@ -233,14 +234,41 @@ class ControlTab(QDialog):
 
         # Create the buttons
         self.binning_button = QPushButton("Binning")
+        self.etc_button = QPushButton("Run ETC")
         self.headers_button = QPushButton("Headers")
+        self.calibration_button = QPushButton("Calibration")
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.on_reset_button_click)
 
         # Add buttons to each vertical layout
         binning_layout.addWidget(self.binning_button)
+        binning_layout.addWidget(self.etc_button)
         display_layout.addWidget(self.headers_button)
+        display_layout.addWidget(self.calibration_button)
         lamps_layout.addWidget(self.reset_button)
+        
+        # Create the Startup/Shutdown button
+        self.startup_shutdown_button = QPushButton("Startup")
+        self.startup_shutdown_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green for startup */
+                border: none;
+                color: white;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;
+            }
+        """)
+
+        # Button click handler: toggle between Startup and Shutdown
+        self.startup_shutdown_button.clicked.connect(self.toggle_startup_shutdown)
+
+        # Add the button to the layout
+        lamps_layout.addWidget(self.startup_shutdown_button)
 
         # Add the vertical layouts to the main row layout
         row5_layout.addLayout(binning_layout)
@@ -250,6 +278,51 @@ class ControlTab(QDialog):
         row5_widget = QWidget()
         row5_widget.setLayout(row5_layout)
         return row5_widget
+    
+    def toggle_startup_shutdown(self):
+        # Get the current button text and toggle
+        current_text = self.startup_shutdown_button.text()
+
+        if current_text == "Startup":
+            # Change the button to Shutdown (black)
+            self.startup_shutdown_button.setText("Shutdown")
+            self.startup_shutdown_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #000000;  /* Black for shutdown */
+                    border: none;
+                    color: white;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #333333;
+                }
+                QPushButton:pressed {
+                    background-color: #555555;
+                }
+            """)
+            print("Startup button clicked!")
+            command = f"startup\n"
+            self.parent.send_command(command)
+        else:
+            # Change the button back to Startup (green)
+            self.startup_shutdown_button.setText("Startup")
+            self.startup_shutdown_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green for startup */
+                    border: none;
+                    color: white;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #388E3C;
+                }
+                QPushButton:pressed {
+                    background-color: #2C6B2F;
+                }
+            """)
+            print("Shutdown button clicked!")
+            command = f"shutdown\n"
+            self.parent.send_command(command) 
 
     def add_separator_line(self, layout):
         """ Helper method to add a thin light gray line (separator) between rows. """

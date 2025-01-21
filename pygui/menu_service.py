@@ -42,6 +42,10 @@ class MenuService:
         settings_action.triggered.connect(self.parent.open_calibration_gui)
         tools_menu.addAction(settings_action)
         
+        etc_action = QAction('ETC', self.menubar)
+        etc_action.triggered.connect(self.parent.open_etc_popup)
+        tools_menu.addAction(etc_action)    
+        
         # User Menu
         user_menu = self.menubar.addMenu('User')
 

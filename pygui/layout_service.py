@@ -17,11 +17,11 @@ class LayoutService:
         self.target_list_display = None 
         self.target_list_name = QComboBox()
         self.add_row_button = QPushButton()
-        self.startup_shutdown_button = QPushButton()
         self.save_button = QPushButton()
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
+        self.startup_shutdown_button = self.control_tab.startup_shutdown_button
         
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
@@ -170,6 +170,10 @@ class LayoutService:
         system_status_group = self.create_system_status_group()
         left_top_layout.addWidget(system_status_group)
 
+        # TCS Status
+        tcs_status_group = self.create_tcs_status_group()
+        left_top_layout.addWidget(tcs_status_group)
+        
         # Sequencer Mode
         sequencer_mode_group = self.create_sequencer_mode_group()
         left_top_layout.addWidget(sequencer_mode_group)
@@ -247,30 +251,6 @@ class LayoutService:
             # Hide the widget initially (default is 'stopped')
             status_widget.setVisible(False)
 
-        # Create the Startup/Shutdown button
-        self.startup_shutdown_button = QPushButton("Startup")
-        self.startup_shutdown_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green for startup */
-                border: none;
-                color: white;
-                font-weight: bold;
-                padding: 5px 10px;  /* Reduced padding */
-            }
-            QPushButton:hover {
-                background-color: #388E3C;
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;
-            }
-        """)
-
-        # Button click handler: toggle between Startup and Shutdown
-        self.startup_shutdown_button.clicked.connect(self.toggle_startup_shutdown)
-
-        # Add the button to the layout
-        system_status_layout.addWidget(self.startup_shutdown_button)
-
         system_status_group.setLayout(system_status_layout)
 
         # Set maximum width and height for the system status group
@@ -281,55 +261,6 @@ class LayoutService:
         self.update_system_status("stopped")
 
         return system_status_group
-
-    def toggle_startup_shutdown(self):
-        # Get the current button text and toggle
-        current_text = self.startup_shutdown_button.text()
-
-        if current_text == "Startup":
-            # Change the button to Shutdown (black)
-            self.startup_shutdown_button.setText("Shutdown")
-            self.startup_shutdown_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #000000;  /* Black for shutdown */
-                    border: none;
-                    color: white;
-                    font-weight: bold;
-                    padding: 5px 10px;  /* Reduced padding */
-                }
-                QPushButton:hover {
-                    background-color: #333333;
-                }
-                QPushButton:pressed {
-                    background-color: #555555;
-                }
-            """)
-            print("Startup button clicked!")
-            command = f"startup\n"
-            self.parent.send_command(command)
-            # self.update_system_status("idle")  # Set to 'idle' when starting up
-        else:
-            # Change the button back to Startup (green)
-            self.startup_shutdown_button.setText("Startup")
-            self.startup_shutdown_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;  /* Green for startup */
-                    border: none;
-                    color: white;
-                    font-weight: bold;
-                    padding: 5px 10px;  /* Reduced padding */
-                }
-                QPushButton:hover {
-                    background-color: #388E3C;
-                }
-                QPushButton:pressed {
-                    background-color: #2C6B2F;
-                }
-            """)
-            print("Shutdown button clicked!")
-            command = f"shutdown\n"
-            self.parent.send_command(command) 
-            # self.update_system_status("stopped")  # Set to 'stopped' when shutting down
 
     def update_system_status(self, status):
         """
@@ -344,6 +275,83 @@ class LayoutService:
         if status in self.status_widgets:
             self.status_widgets[status]['widget'].setVisible(True)
 
+    def create_tcs_status_group(self):
+        tcs_status_group = QGroupBox("TCS Status")
+        tcs_status_layout = QVBoxLayout()
+        tcs_status_layout.setSpacing(3)  # Reduced space between items in the layout
+        tcs_status_layout.setContentsMargins(5, 5, 5, 5)  # Reduced margins around the layout
+
+        # Create a mapping for status colors
+        tcs_status_map = {
+            "idle": QColor(255, 255, 0),       # Yellow
+            "tracking": QColor(0, 255, 0),    # Green
+            "paused": QColor(255, 165, 0),     # Orange
+            "error": QColor(255, 0, 0),        # Red
+        }
+
+        # Create a dictionary to hold the status widgets, which we will enable/disable
+        self.tcs_status_widgets = {}
+
+        # Create status widgets and add them to the layout
+        for status, color in tcs_status_map.items():
+            # Create a QWidget to contain the status layout
+            status_widget = QWidget()
+
+            # Create a layout for the status (color + label)
+            status_layout = QHBoxLayout()
+            status_layout.setSpacing(10)  # Reduced space between color and label
+            status_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for the status layout
+
+            # Color indicator
+            status_color_rect = QWidget()
+            status_color_rect.setFixedSize(16, 16)  # Smaller color indicator
+            status_color_rect.setStyleSheet(f"background-color: {color.name()};")
+
+            # Label showing the status
+            status_label = QLabel(status.capitalize())
+            status_label.setMargin(0)  # Remove extra margin around the label
+
+            # Layout for each status (color + label)
+            status_layout.addWidget(status_color_rect)
+            status_layout.addWidget(status_label)
+
+            # Set the layout for the status widget
+            status_widget.setLayout(status_layout)
+
+            # Add the status widget to the main layout
+            tcs_status_layout.addWidget(status_widget)
+
+            # Store status widgets in a dictionary for later use
+            self.tcs_status_widgets[status] = {
+                'widget': status_widget,
+                'color_rect': status_color_rect,
+                'label': status_label,
+                'color': color
+            }
+
+            # Hide the widget initially (default is 'idle')
+            status_widget.setVisible(False)
+
+        tcs_status_group.setLayout(tcs_status_layout)
+
+        # Set maximum width and height for the TCS status group
+        tcs_status_group.setMaximumWidth(300)  # Maximum width
+        tcs_status_group.setMaximumHeight(250)  # Maximum height
+
+        # Ensure only the 'idle' status is fully active by default
+        self.update_tcs_status("idle")
+
+        return tcs_status_group
+
+    def update_tcs_status(self, status):
+        """Update the TCS status and make the appropriate widget visible."""
+        # Hide all widgets initially
+        for status_key, status_info in self.tcs_status_widgets.items():
+            status_info['widget'].setVisible(False)
+
+        # Show the widget corresponding to the current status
+        if status in self.tcs_status_widgets:
+            self.tcs_status_widgets[status]['widget'].setVisible(True)
 
     def create_sequencer_mode_group(self):
         sequencer_mode_group = QGroupBox("Sequencer Mode")
@@ -1461,151 +1469,6 @@ class LayoutService:
         # Add a spacer to ensure widgets aren't squished
         spacer = QSpacerItem(20, 30, QSizePolicy.Minimum, QSizePolicy.Expanding)
         etc_layout.addItem(spacer)
-
-
-    def validate_inputs(self):
-        """Validates user inputs in the ETC tab and highlights invalid fields."""
-        
-        # Helper function to check if the input is a valid float and not empty
-        def is_valid_float(text):
-            if text.strip() == '':  # Check if the text is empty
-                return False
-            try:
-                float(text)  # Try to convert to float
-                return True
-            except ValueError:
-                return False  # Return False if the conversion fails
-
-        # Reset all fields to default state (clear previous error highlighting)
-        self.magnitude_input.setStyleSheet("")
-        self.sky_mag_input.setStyleSheet("")
-        self.snr_input.setStyleSheet("")
-        self.slit_width_input.setStyleSheet("")
-        self.range_input_start.setStyleSheet("")
-        self.range_input_end.setStyleSheet("")
-        
-        try:
-            # Check if all numeric inputs are valid
-            if not is_valid_float(self.magnitude_input.text()):
-                self.magnitude_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Magnitude must be a valid number.")
-            magnitude = float(self.magnitude_input.text())
-
-            if not is_valid_float(self.sky_mag_input.text()):
-                self.sky_mag_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Sky Mag must be a valid number.")
-            sky_mag = float(self.sky_mag_input.text())
-
-            if not is_valid_float(self.snr_input.text()):
-                self.snr_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("SNR must be a valid number.")
-            snr = float(self.snr_input.text())
-
-            if not is_valid_float(self.slit_width_input.text()):
-                self.slit_width_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Slit Width must be a valid number.")
-            slit_width = float(self.slit_width_input.text())
-
-            if not is_valid_float(self.range_input_start.text()):
-                self.range_input_start.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Range Start must be a valid number.")
-            range_start = float(self.range_input_start.text())
-
-            if not is_valid_float(self.range_input_end.text()):
-                self.range_input_end.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Range End must be a valid number.")
-            range_end = float(self.range_input_end.text())
-            
-            # Ensure range_start is less than range_end
-            if range_start >= range_end:
-                self.range_input_start.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                self.range_input_end.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Range start must be less than range end.")
-
-            # Check for valid values (you can adjust this for your specific needs)
-            if magnitude <= 0 or sky_mag <= 0 or snr <= 0 or slit_width <= 0:
-                raise ValueError("Magnitude, Sky Mag, SNR, and Slit Width must be positive values.")
-            
-            self.save_button.setEnabled(True)
-            return True  # All inputs are valid
-
-        except ValueError as e:
-            # Show error message
-            error_msg = f"Invalid input: {str(e)}"
-            print(error_msg)
-            return False  # Input is invalid
-
-
-    def run_etc(self):
-        """Handles the logic for the 'Run ETC' button."""
-        
-        # Validate inputs before running the command
-        if not self.validate_inputs():
-            return  # If inputs are invalid, do not proceed
-        
-        # Collecting all necessary data from input fields
-        filter_value = self.filter_dropdown.currentText()  # e.g., "G"
-        magnitude_value = self.magnitude_input.text()  # e.g., "18.0"
-        sky_mag_value = self.sky_mag_input.text()  # e.g., "21.4"
-        snr_value = self.snr_input.text()  # e.g., "10"
-        slit_width_value = self.slit_width_input.text()  # e.g., "0.5"
-        slit_option = self.slit_dropdown.currentText()  # e.g., "SET X"
-        seeing_value = self.seeing_input.text()
-        airmass_value = self.airmass_input.text()
-        mag_system_value = self.system_field.text()  # e.g., "AB"
-        mag_filter_value = "match"  # e.g., "match"
-        
-        # Handling the range inputs
-        range_start_value = self.range_input_start.text()
-        range_end_value = self.range_input_end.text()
-
-        # Construct the command string
-        command = f"python3 ETC/ETC_main.py {filter_value} {range_start_value} {range_end_value} SNR {snr_value} " \
-                f"-slit {slit_option} {slit_width_value} -seeing {seeing_value} 500 -airmass {airmass_value} " \
-                f"-skymag {sky_mag_value} -mag {magnitude_value} -magsystem {mag_system_value} -magfilter {mag_filter_value}"
-
-        # Print the command for debugging
-        print(f"Running command: {command}")
-        
-        # Run the command and capture the output
-        try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True)
-            output = result.stdout.strip()  # Get the output from the command
-            print(f"Command output: {output}")
-
-            # Extract EXPTIME and RESOLUTION from the output using regex
-            exptime_match = re.search(r"EXPTIME=([0-9.]+) s", output)
-            resolution_match = re.search(r"RESOLUTION=([0-9.]+)", output)
-
-            if exptime_match:
-                exptime = float(exptime_match.group(1))
-                exptime_rounded = round(exptime)  # Round EXPTIME to the nearest integer
-                self.exptime_input.setText(str(exptime_rounded))  # Update GUI field with rounded EXPTIME
-
-            if resolution_match:
-                resolution = float(resolution_match.group(1))
-                resolution_rounded = round(resolution)  # Round RESOLUTION to the nearest integer
-                self.resolution_input.setText(str(resolution_rounded))  # Update GUI field with rounded RESOLUTION
-
-        except subprocess.CalledProcessError as e:
-            # Handle errors if the command fails
-            print(f"Error running ETC: {e}")
-        
-        # Display the result in the results display (GUI)
-        result_text = f"Running ETC with the following parameters:\n{command}\n\n" \
-                    f"EXPTIME: {self.exptime_input.text()}\n" \
-                    f"RESOLUTION: {self.resolution_input.text()}"
-        print(result_text)
-        self.save_button.setEnabled(True)
-
-    def save_etc(self):
-        exptime = self.exptime_input.text()
-        resolution = self.resolution_input.text()
-        if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exptime)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exptime)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMres", resolution)
-            self.save_button.setEnabled(False)
 
     def create_target_dropdown_group(self):
         # Create the group box for Target List
