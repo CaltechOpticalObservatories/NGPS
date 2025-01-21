@@ -173,6 +173,10 @@ class LayoutService:
         # Sequencer Mode
         sequencer_mode_group = self.create_sequencer_mode_group()
         left_top_layout.addWidget(sequencer_mode_group)
+        
+        # Target List Dropdown Mode
+        target_dropdown_group = self.create_target_dropdown_group()
+        left_top_layout.addWidget(target_dropdown_group)
 
         return left_top_layout
 
@@ -239,6 +243,9 @@ class LayoutService:
                 'label': status_label,
                 'color': color
             }
+
+            # Hide the widget initially (default is 'stopped')
+            status_widget.setVisible(False)
 
         # Create the Startup/Shutdown button
         self.startup_shutdown_button = QPushButton("Startup")
@@ -325,21 +332,17 @@ class LayoutService:
             # self.update_system_status("stopped")  # Set to 'stopped' when shutting down
 
     def update_system_status(self, status):
-        # Iterate through all status widgets and "disable" them
-        for status_key, status_data in self.status_widgets.items():
-            widget = status_data['widget']
-            color_rect = status_data['color_rect']
-            label = status_data['label']
-            original_color = status_data['color']
+        """
+        Update the system status and make only the relevant widget visible.
+        Hide all other status widgets.
+        """
+        # Hide all status widgets
+        for status_key, status_info in self.status_widgets.items():
+            status_info['widget'].setVisible(False)
 
-            if status_key != status:
-                # Disable the status widget (make it gray)
-                color_rect.setStyleSheet(f"background-color: {QColor(169, 169, 169).name()};")  # Grey color
-                label.setStyleSheet("color: #A9A9A9;")  # Gray text for disabled status
-            else:
-                # Enable the current status (show its original color)
-                color_rect.setStyleSheet(f"background-color: {original_color.name()};")
-                label.setStyleSheet("color: white;")  # Black text for active status
+        # Show the widget corresponding to the current status
+        if status in self.status_widgets:
+            self.status_widgets[status]['widget'].setVisible(True)
 
 
     def create_sequencer_mode_group(self):
@@ -847,7 +850,8 @@ class LayoutService:
             # Use the width from the list, or a default width if the list is too short
             width = column_widths[col] if col < len(column_widths) else 100
             self.target_list_display.setColumnWidth(col, width)
-            
+
+
     def create_second_column_top_half(self):
         """Create the top half of the second column with 'Status', Calibration Lamps, and additional status fields"""
         
@@ -883,23 +887,39 @@ class LayoutService:
         # Add the header row to the calibration lamps layout
         calibration_lamps_layout.addLayout(header_layout)
 
-        # For each lamp, create a row with two checkboxes: Lamp On/Off and Modulator On/Off
+        # For each lamp, create two separate HBoxes: one for Lamp and one for Modulator, with a separator bar between them
         for lamp in lamps:
-            lamp_layout = QHBoxLayout()
+            lamp_layout = QHBoxLayout()  # Main layout for each lamp's row
 
-            # Lamp Name Label (displayed next to the checkboxes)
+            # Create a layout for the lamp side (left side)
+            lamp_side_layout = QHBoxLayout()
             lamp_name = QLabel(lamp)
-            lamp_layout.addWidget(lamp_name)
+            lamp_side_layout.addWidget(lamp_name)
 
             # Lamp On/Off checkbox
             lamp_checkbox = QCheckBox("On/Off")
             lamp_checkbox.setChecked(False)  # Default to Off
-            lamp_layout.addWidget(lamp_checkbox)
+            lamp_side_layout.addWidget(lamp_checkbox)
 
+            # Create the white separator bar between the Lamp and Modulator sections
+            separator = QFrame()
+            separator.setFrameShape(QFrame.VLine)  # Vertical line
+            separator.setFrameShadow(QFrame.Sunken)
+            separator.setStyleSheet("background-color: white;")  # Set the color to white
+            separator.setLineWidth(1)  # Ensure the line has a defined width
+
+            # Create a layout for the modulator side (right side)
+            modulator_side_layout = QHBoxLayout()
+            
             # Modulator On/Off checkbox
             modulator_checkbox = QCheckBox("On/Off")
             modulator_checkbox.setChecked(False)  # Default to Off
-            lamp_layout.addWidget(modulator_checkbox)
+            modulator_side_layout.addWidget(modulator_checkbox)
+
+            # Add both the lamp side layout, separator, and modulator side layout to the main lamp_layout
+            lamp_layout.addLayout(lamp_side_layout)
+            lamp_layout.addWidget(separator)  # Single continuous separator
+            lamp_layout.addLayout(modulator_side_layout)
 
             # Store checkboxes for later updates
             self.lamp_checkboxes[lamp] = lamp_checkbox
@@ -1556,3 +1576,25 @@ class LayoutService:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exptime)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMres", resolution)
             self.save_button.setEnabled(False)
+
+    def create_target_dropdown_group(self):
+        # Create the group box for Target List
+        target_dropdown_group = QGroupBox("Target List")
+        target_dropdown_layout = QVBoxLayout()
+        target_dropdown_layout.setSpacing(10)  # Adjust space between items
+
+        # Add the target list names or radio buttons (depending on your design)
+        self.target_list_name = QComboBox()  # Assuming a combo box for target selection
+        self.target_list_name.setMaximumWidth(250)  # Set a max width for the combo box
+        target_dropdown_layout.addWidget(self.target_list_name)
+
+        # Load the target list dynamically (similar to sequencer buttons)
+        self.load_target_lists()  # Load the target lists (you need to define this method)
+
+        target_dropdown_group.setLayout(target_dropdown_layout)
+
+        # Set maximum width and height for the target list group
+        target_dropdown_group.setMaximumWidth(300)  # Maximum width for the group box
+        target_dropdown_group.setMaximumHeight(150)  # Maximum height for the group box
+
+        return target_dropdown_group

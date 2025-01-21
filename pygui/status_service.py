@@ -103,7 +103,8 @@ class StatusService(QObject):
     def _handle_message(self, message):
         """Handle the incoming message and decide what to do with it."""
         if message == "RUNSTATE: READY":
-            self._show_popup("NGPS is Ready.")
+            self.parent.show_popup("NGPS is Ready.")
+            self.parent.layout_service.update_system_status("idle")
         elif message.startswith("EXPTIME"):
             self._parse_exptime_message(message)
         elif message.startswith("PIXELCOUNT"):
@@ -138,13 +139,3 @@ class StatusService(QObject):
                 progress_percentage = (current_count / total_count) * 100
                 progress_percentage = min(max(progress_percentage, 0), 100)
                 self.readout_progress_updated_signal.emit(int(progress_percentage))
-
-    def _show_popup(self, message):
-        """Show a popup message on the screen."""
-        # Create a QMessageBox
-        msg_box = QMessageBox()
-        msg_box.setIcon(QMessageBox.Information)
-        msg_box.setWindowTitle("Status Update")
-        msg_box.setText(message)
-        msg_box.setStandardButtons(QMessageBox.Ok)
-        msg_box.exec_()

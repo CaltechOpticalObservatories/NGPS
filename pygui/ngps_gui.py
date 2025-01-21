@@ -64,7 +64,7 @@ class NgpsGUI(QMainWindow):
 
         self.setWindowState(Qt.WindowMaximized)
         
-        self.on_login()
+        # self.on_login()
 
     def init_ui(self):
         # Set up Menu
@@ -221,6 +221,16 @@ class NgpsGUI(QMainWindow):
         else:
             self.calibration_gui.raise_()  # Brings the window to the front if already open
             self.calibration_gui.activateWindow()
+
+    def show_popup(self, message):
+        """Show a popup message on the screen."""
+        # Create a QMessageBox
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.setWindowTitle("Status Update")
+        msg_box.setText(message)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
             
     # def show_control_tab(self):
     #     """
