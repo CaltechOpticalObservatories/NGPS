@@ -573,6 +573,44 @@ class LayoutService:
 
         # Create the QTableWidget for the target list
         self.target_list_display = QTableWidget()
+        self.target_list_display.setStyleSheet("""
+            /* PyQt Table Styling */
+            QTableWidget, QTableView {
+                background-color: #444444;  /* Dark gray background for the table */
+                color: #e0e0e0;  /* Light gray text */
+                font-size: 14pt;
+                font-weight: bold;
+            }
+
+            /* Table Header */
+            QHeaderView {
+                background-color: #555555;  /* Slightly lighter gray for the header */
+                color: #e0e0e0;
+                border: 1px solid #888888;  /* Border around the header */
+                font-weight: bold;
+                font-size: 16pt;
+            }
+
+            QHeaderView::section {
+                padding: 8px;
+                border: 1px solid #888888;
+                background-color: #555555;
+            }
+            QScrollBar:vertical, QScrollBar:horizontal {
+                border: 2px solid grey;
+                background: #F0F0F0;
+                width: 20px;
+                height: 20px;
+            }
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+                background: #FFCC40;
+                border-radius: 10px;
+            }
+            QScrollBar::add-line, QScrollBar::sub-line {
+                border: none;
+                background: none;
+            }
+        """)
         self.target_list_display.setRowCount(0)  # Set to 0 initially
         self.target_list_display.setColumnCount(0)  # Set column count to 0 initially
 
@@ -603,24 +641,6 @@ class LayoutService:
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.target_list_display)
         scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
-
-        # Customize the scroll bars to make them large when visible
-        scroll_area.setStyleSheet("""
-            QScrollBar:vertical, QScrollBar:horizontal {
-                border: 2px solid grey;
-                background: #F0F0F0;
-                width: 20px;
-                height: 20px;
-            }
-            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #FFCC40;
-                border-radius: 10px;
-            }
-            QScrollBar::add-line, QScrollBar::sub-line {
-                border: none;
-                background: none;
-            }
-        """)
 
         # Add the scroll area to the layout instead of the table directly
         bottom_section_layout.addWidget(scroll_area)
@@ -848,7 +868,7 @@ class LayoutService:
         # Ensure we don't exceed the number of available columns
         for col in range(column_count):
             # Use the width from the list, or a default width if the list is too short
-            width = column_widths[col] if col < len(column_widths) else 100
+            width = column_widths[col] if col < len(column_widths) else 150
             self.target_list_display.setColumnWidth(col, width)
 
 

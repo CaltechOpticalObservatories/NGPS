@@ -13,8 +13,9 @@ class StatusService(QObject):
     progress_updated_signal = pyqtSignal(int)  # Signal to update exposure progress bar (0-100)
     readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
 
-    def __init__(self, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
+    def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
         super().__init__()
+        self.parent = parent  # reference to the parent window or main UI
         self.ip = ip
         self.port = port
         self.update_interval = update_interval
@@ -102,7 +103,7 @@ class StatusService(QObject):
 
     def _handle_message(self, message):
         """Handle the incoming message and decide what to do with it."""
-        if message == "RUNSTATE: READY":
+        if "RUNSTATE: READY" in message:
             self.parent.show_popup("NGPS is Ready.")
             self.parent.layout_service.update_system_status("idle")
         elif message.startswith("EXPTIME"):

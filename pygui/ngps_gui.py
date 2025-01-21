@@ -105,7 +105,7 @@ class NgpsGUI(QMainWindow):
         self.sequencer_service.connect()
         
         # Start the StatusService in a separate thread with heartbeat
-        self.status_service = StatusService()
+        self.status_service = StatusService(self)
         self.status_service.status_updated_signal.connect(self.layout_service.update_message_log)
         self.status_service.start()
         
