@@ -235,8 +235,10 @@ class ControlTab(QDialog):
         # Create the buttons
         self.binning_button = QPushButton("Binning")
         self.etc_button = QPushButton("Run ETC")
+        self.etc_button.clicked.connect(self.parent.open_etc_popup)
         self.headers_button = QPushButton("Headers")
         self.calibration_button = QPushButton("Calibration")
+        self.calibration_button.clicked.connect(self.parent.open_calibration_gui)
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.on_reset_button_click)
 
