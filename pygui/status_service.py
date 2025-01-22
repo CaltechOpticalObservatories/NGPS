@@ -103,13 +103,16 @@ class StatusService(QObject):
 
     def _handle_message(self, message):
         """Handle the incoming message and decide what to do with it."""
-        if message == "SEQSTATE:READY":
+        if message == "SEQSTATE: READY":
             self.parent.show_popup("NGPS is Ready.")
             self.parent.layout_service.update_system_status("idle")
         elif message.startswith("EXPTIME"):
             self._parse_exptime_message(message)
         elif message.startswith("PIXELCOUNT"):
             self._parse_pixelcount_message(message)
+        elif "ready for next exposure" in message:
+            self.progress_updated_signal.emit(int(0))
+            self.progress_updated_signal.emit(int(0))
         elif "instrument is shut down" in message:
             self.parent.show_popup("NGPS is Shutdown.")
             self.parent.layout_service.update_system_status("stopped")
