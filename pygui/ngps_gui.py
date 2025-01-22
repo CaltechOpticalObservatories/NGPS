@@ -209,6 +209,7 @@ class NgpsGUI(QMainWindow):
                         background-color: #555555;
                     }
                 """)
+                self.layout_service.update_system_status("idle")
                 return True  # Indicate that the sequencer is ready
         except subprocess.CalledProcessError as e:
             print(f"Error checking sequencer state: {e}")
