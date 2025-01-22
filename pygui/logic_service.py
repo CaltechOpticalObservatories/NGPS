@@ -84,7 +84,7 @@ class LogicService:
                 'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
                 'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start', 
                 'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR', 
-                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE'
+                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE', 'PRIORITY'
             ]
 
             # Step 5: Loop through each row and dynamically generate the insert query
@@ -107,15 +107,19 @@ class LogicService:
                         # Text columns (defaults to empty string "")
                         elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
                             value = ""  # Empty string as default for text fields
-                        # # Timestamp columns (defaults to NULL)
-                        # elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
-                        #     value = None  # Default to NULL for timestamps
-                        # else:
-                        #     value = None  # Default to NULL for other columns without a defined default
+                        # Timestamp columns (defaults to NULL)
+                        elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
+                            value = None  # Default to NULL for timestamps
+                        else:
+                            value = None  # Default to NULL for other columns without a defined default
 
                     # Special case: if `OFFSET_RA` or `OFFSET_DEC` are empty, set them to 0.0
                     if column in ['OFFSET_RA', 'OFFSET_DEC'] and (value == '' or value is None):
                         value = 0.0  # Default to 0.0 if empty or None
+
+                    # Special case: if "PRIORITY" is empty, set it to "1"
+                    if column == "PRIORITY" and (value == '' or value is None):
+                        value = "1"  # Default to "1" if empty or None
 
                     # Add the column and value to the query
                     insert_columns.append(column)
@@ -141,7 +145,6 @@ class LogicService:
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
-            # self.load_mysql_and_fetch_target_sets(config_file="config/db_config.ini")
             self.fetch_and_update_target_list()
 
         except mysql.connector.Error as err:
@@ -389,6 +392,16 @@ class LogicService:
         
         # Close the database connection after usage
         connection.close()
+        
+    def fetch_set_id(self, target_list=None):
+        self.target_list_display = self.parent.layout_service.target_list_display
+
+        # Find the set_id that corresponds to the target_list
+        set_id = None
+        for key, val in self.parent.user_set_data.items():
+            if val == target_list:
+                set_id = key
+        return set_id
 
     def fetch_and_update_target_list(self):
         """Fetch target data and update the table in the parent window."""
@@ -425,6 +438,63 @@ class LogicService:
                 print(f"Database error: {err}")
             finally:
                 self.connection.close()
+
+    def insert_target_to_db(self, target_name, ra, decl, offset_ra=None, offset_dec=None, exptime=None, slitwidth=None, magnitude=None):
+        """
+        Insert a new target into the targets table for the specific SET_ID.
+        """
+        # Step 1: Ensure that required fields are provided
+        if not target_name or not ra or not decl:
+            print("Error: Name, RA, and Decl are required fields.")
+            return
+
+        # Step 2: Fetch the current set_id
+        set_id = self.fetch_set_id()  # Assuming target_list is already selected
+        if set_id is None:
+            print("Error: Unable to fetch set_id. No matching target list found.")
+            return
+
+        try:
+            # Step 3: Connect to MySQL using the config file
+            connection = self.connect_to_mysql("config/db_config.ini")
+            
+            if connection is None:
+                print("Failed to connect to MySQL. Cannot insert target data.")
+                return
+            cursor = connection.cursor()  # Create a cursor for executing the query
+
+            # Step 4: Prepare the SQL insert query
+            query = """
+            INSERT INTO ngps.targets (SET_ID, Name, RA, Decl, Offset_RA, Offset_Dec, EXPTime, Slitwidth, Magnitude)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            # Step 5: Prepare the data to insert into the table (use NULL for optional fields if not provided)
+            data = (
+                set_id, 
+                target_name, 
+                ra, 
+                decl, 
+                offset_ra if offset_ra is not None else None, 
+                offset_dec if offset_dec is not None else None, 
+                exptime if exptime is not None else None, 
+                slitwidth if slitwidth is not None else None, 
+                magnitude if magnitude is not None else None
+            )
+
+            # Step 6: Execute the query with the provided values
+            cursor.execute(query, data)
+
+            # Step 7: Commit the transaction to apply the changes
+            connection.commit()
+
+            cursor.close()
+            print(f"Successfully inserted target '{target_name}' with SET_ID {set_id} into the database.")
+        except mysql.connector.Error as err:
+            print(f"Error executing insert query: {err}")
+        finally:
+            if connection:
+                connection.close()
 
     def filter_target_list(self):
         """

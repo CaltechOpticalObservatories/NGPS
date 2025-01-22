@@ -700,6 +700,7 @@ class LayoutService:
             "Magnitude": QLineEdit(),
         }
 
+        # Add labels and corresponding fields to the layout
         for field_name, field_widget in fields.items():
             label = QLabel(field_name)
             dialog_layout.addWidget(label)
@@ -717,18 +718,30 @@ class LayoutService:
 
         # Show the dialog and wait for the result
         if dialog.exec_() == QDialog.Accepted:
-            # Get the values from the dialog fields
-            row_data = []
-            for field_name, field_widget in fields.items():
-                row_data.append(field_widget.text())
+            # Get the data from the fields after the dialog is accepted
+            target_name = fields["Name"].text()
+            ra = fields["RA"].text()
+            decl = fields["Decl"].text()
+            offset_ra = fields["Offset RA"].text() or None
+            offset_dec = fields["Offset Dec"].text() or None
+            exptime = fields["EXPTime"].text() or None
+            slitwidth = fields["Slitwidth"].text() or None
+            magnitude = fields["Magnitude"].text() or None
 
-            # Add a new row to the table with the input data
-            current_row_count = self.target_list_display.rowCount()
-            self.target_list_display.insertRow(current_row_count)
+            # Validate the required fields: Name, RA, Decl
+            if not target_name or not ra or not decl:
+                print("Error: Name, RA, and Decl are required fields.")
+                return
 
-            # Add data to the new row
-            for column, value in enumerate(row_data):
-                self.target_list_display.setItem(current_row_count, column, QTableWidgetItem(value))
+            # Fetch the current set_id
+            set_id = self.fetch_set_id()
+            if set_id is None:
+                print("Error: Unable to fetch set_id. No matching target list found.")
+                return
+
+            # Call the insert function to insert the target into the database
+            self.insert_target_to_db(target_name, ra, decl, offset_ra, offset_dec, exptime, slitwidth, magnitude)
+    
 
     def update_target_info(self):
         # Get the selected row's index
@@ -817,8 +830,10 @@ class LayoutService:
             
             if target_name:
                 self.control_tab.target_name_label.setText(f"Selected Target: {target_name}")
+                self.control_tab.ra_dec_label.setText(f"RA: {ra}, Dec: {dec}")
             else:
-                self.control_tab.target_name_label.setText("Selected Target: Not Selected")
+                self.control_tab.setText("Selected Target: Not Selected")
+                self.control_tab.ra_dec_label.setText(f"RA: Not Set, Dec: Not Set")
 
             # Enable the "Go" button when a row is selected
             self.control_tab.go_button.setEnabled(True)  # Enable the "Go" button

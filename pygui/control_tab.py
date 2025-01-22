@@ -55,18 +55,25 @@ class ControlTab(QDialog):
         self.connect_input_fields()
 
     def create_row1(self):
-        """Create Row 1 layout with Target Name Label and Refresh Button"""
-        row1_layout = QHBoxLayout()
+        """Create Row 1 layout with Target Name Label, RA/Dec Label, and Refresh Button"""
+        row1_layout = QVBoxLayout()  # Use a QVBoxLayout to stack the labels vertically
         row1_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Create the QLabel with default text
+        # Create the QLabel with default text for Target Name
         self.target_name_label = QLabel("Selected Target: Not Selected")
         self.target_name_label.setAlignment(Qt.AlignCenter)
 
+        # Create the QLabel for RA/Dec with default values
+        self.ra_dec_label = QLabel("RA: Not Set, Dec: Not Set")
+        self.ra_dec_label.setAlignment(Qt.AlignCenter)
+
+        # Add widgets to the layout
         row1_layout.addWidget(self.target_name_label)
+        row1_layout.addWidget(self.ra_dec_label)
 
         row1_widget = QWidget()
         row1_widget.setLayout(row1_layout)
+
         return row1_widget
 
     def create_row2(self):
