@@ -96,10 +96,10 @@ class StatusService(QObject):
                 self.status = "Heartbeat lost - Service Disconnected"
                 self.heartbeat_misses = 0
 
-        # # Emit the updated status to the GUI if it's a new message
-        # if self.status != self.last_emitted_message:
-        #     self.status_updated_signal.emit(self.status)
-        #     self.last_emitted_message = self.status
+        # Emit the updated status to the GUI if it's a new message
+        if self.status != self.last_emitted_message:
+            self.status_updated_signal.emit(self.status)
+            self.last_emitted_message = self.status
 
     def _handle_message(self, message):
         """Handle the incoming message and decide what to do with it."""
