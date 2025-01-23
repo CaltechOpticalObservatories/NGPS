@@ -18,6 +18,8 @@ class LayoutService:
         self.target_list_name = QComboBox()
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
+        self.lamp_checkboxes = {}  # To store lamp checkboxes
+        self.modulator_checkboxes = {}  # To store modulator checkboxes
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -912,10 +914,37 @@ class LayoutService:
             self.target_list_display.setColumnWidth(col, width)
 
 
+    def update_status_ui(self, data, modulator_data):
+        """ Update the UI based on the received data and modulator data. """
+        if not isinstance(data, dict) or not isinstance(modulator_data, dict):
+            self.logger.error("Invalid data format received.")
+            return
+
+        # List of lamps to process
+        lamps = ["LAMPBLUC", "LAMPFEAR", "LAMPREDC", "LAMPTHAR"]  # List of lamps in the message
+
+        for lamp in lamps:
+            # Update the lamp checkbox
+            lamp_checkbox = self.lamp_checkboxes.get(lamp)
+            if lamp_checkbox:
+                # Set the checkbox state based on the value from the payload (True/False)
+                lamp_checkbox.setChecked(data.get(lamp, False))  # Will be unchecked if not found
+
+            # Update the modulator checkbox based on the corresponding modulator state in modulator_data
+            modulator_checkbox = self.modulator_checkboxes.get(lamp)
+            if modulator_checkbox:
+                # Get the modulator status from modulator_data (e.g., MODBLCON, MODFEAR, etc.)
+                modulator_key = f"MOD{lamp[4:]}"  # For LAMPBLUC, this would give "MODBLCON"
+                
+                modulator_status = modulator_data.get(modulator_key, "off")
+                
+                # Determine if the modulator is on or off based on the modulator status
+                modulator_checkbox.setChecked(modulator_status.startswith("on"))  # "on" means checked, "off" means unchecked
+
+
     def create_second_column_top_half(self):
         """Create the top half of the second column with 'Status', Calibration Lamps, and additional status fields"""
         
-        # Create a QVBoxLayout to hold everything in the top half
         second_column_top_half_layout = QVBoxLayout()
 
         # Create the "Status" section
@@ -928,64 +957,51 @@ class LayoutService:
 
         # Define lamps and their corresponding statuses
         lamps = ["ThAR", "FeAr", "RedCont", "BlueCont"]
-        self.lamp_checkboxes = {}  # To store lamp checkboxes
-        self.modulator_checkboxes = {}  # To store modulator checkboxes
 
         # Create the header row for "Lamps On/Off" and "Modulator On/Off"
         header_layout = QHBoxLayout()
 
-        # Add "Lamps On/Off" label (smaller font size)
         lamps_header = QLabel("Lamps On/Off")
         lamps_header.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(lamps_header)
 
-        # Add "Modulator On/Off" label (smaller font size)
         modulator_header = QLabel("Modulator On/Off")
         modulator_header.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(modulator_header)
 
-        # Add the header row to the calibration lamps layout
         calibration_lamps_layout.addLayout(header_layout)
 
         # For each lamp, create two separate HBoxes: one for Lamp and one for Modulator, with a separator bar between them
         for lamp in lamps:
             lamp_layout = QHBoxLayout()  # Main layout for each lamp's row
 
-            # Create a layout for the lamp side (left side)
             lamp_side_layout = QHBoxLayout()
             lamp_name = QLabel(lamp)
             lamp_side_layout.addWidget(lamp_name)
 
-            # Lamp On/Off checkbox
             lamp_checkbox = QCheckBox("On/Off")
             lamp_checkbox.setChecked(False)  # Default to Off
             lamp_side_layout.addWidget(lamp_checkbox)
 
-            # Create the white separator bar between the Lamp and Modulator sections
             separator = QFrame()
             separator.setFrameShape(QFrame.VLine)  # Vertical line
             separator.setFrameShadow(QFrame.Sunken)
-            separator.setStyleSheet("background-color: white;")  # Set the color to white
-            separator.setLineWidth(1)  # Ensure the line has a defined width
+            separator.setStyleSheet("background-color: white;")
+            separator.setLineWidth(1)
 
-            # Create a layout for the modulator side (right side)
             modulator_side_layout = QHBoxLayout()
-            
-            # Modulator On/Off checkbox
             modulator_checkbox = QCheckBox("On/Off")
             modulator_checkbox.setChecked(False)  # Default to Off
             modulator_side_layout.addWidget(modulator_checkbox)
 
-            # Add both the lamp side layout, separator, and modulator side layout to the main lamp_layout
             lamp_layout.addLayout(lamp_side_layout)
-            lamp_layout.addWidget(separator)  # Single continuous separator
+            lamp_layout.addWidget(separator)
             lamp_layout.addLayout(modulator_side_layout)
 
             # Store checkboxes for later updates
             self.lamp_checkboxes[lamp] = lamp_checkbox
             self.modulator_checkboxes[lamp] = modulator_checkbox
 
-            # Add this lamp's row to the calibration lamps layout
             calibration_lamps_layout.addLayout(lamp_layout)
 
         # Add the Calibration Lamps section to the status layout
@@ -1004,7 +1020,7 @@ class LayoutService:
         seeing_label = QLabel("Seeing (arcsec):")
         self.seeing_input = QLineEdit()
         self.seeing_input.setReadOnly(True)  # Make it read-only
-        self.seeing_input.setText("0.8")  # Placeholder text or dynamically updated value
+        self.seeing_input.setText("N/A")  # Placeholder text or dynamically updated value
         
         seeing_layout.addWidget(seeing_label)
         seeing_layout.addWidget(self.seeing_input)
@@ -1014,7 +1030,7 @@ class LayoutService:
         airmass_label = QLabel("Airmass:")
         self.airmass_input = QLineEdit()
         self.airmass_input.setReadOnly(True)  # Make it read-only
-        self.airmass_input.setText("1.2")  # Placeholder text or dynamically updated value
+        self.airmass_input.setText("N/A")  # Placeholder text or dynamically updated value
         
         airmass_layout.addWidget(airmass_label)
         airmass_layout.addWidget(self.airmass_input)
@@ -1038,7 +1054,7 @@ class LayoutService:
         binning_label = QLabel("Binning:")
         self.binning_input = QLineEdit()
         self.binning_input.setReadOnly(True)  # Make it read-only
-        self.binning_input.setText("2x2")  # Placeholder text or dynamically updated value
+        self.binning_input.setText("N/A")  # Placeholder text or dynamically updated value
         
         binning_layout.addWidget(binning_label)
         binning_layout.addWidget(self.binning_input)
@@ -1048,7 +1064,7 @@ class LayoutService:
         slit_width_label = QLabel("Slit Width Offset:")
         self.slit_width_input = QLineEdit()
         self.slit_width_input.setReadOnly(True)  # Make it read-only
-        self.slit_width_input.setText("0.05")  # Placeholder text or dynamically updated value
+        self.slit_width_input.setText("N/A")  # Placeholder text or dynamically updated value
         
         slit_width_layout.addWidget(slit_width_label)
         slit_width_layout.addWidget(self.slit_width_input)
@@ -1513,3 +1529,17 @@ class LayoutService:
         target_dropdown_group.setMaximumHeight(150)  # Maximum height for the group box
 
         return target_dropdown_group
+    
+    def update_lamps(self, lamp_states):
+        """ Update the lamp checkboxes based on the received state """
+        for lamp, state in lamp_states.items():
+            checkbox = self.lamp_checkboxes.get(lamp)
+            if checkbox:
+                checkbox.setChecked(state)
+
+    def update_modulators(self, modulator_states):
+        """ Update the modulator checkboxes based on the received state """
+        for modulator, state in modulator_states.items():
+            checkbox = self.modulator_checkboxes.get(modulator)
+            if checkbox:
+                checkbox.setChecked(state)

@@ -122,9 +122,13 @@ class NgpsGUI(QMainWindow):
         # # Start the ZMQStatusService in a separate thread
         self.zmq_status_service_thread = ZmqStatusServiceThread(self.zmq_status_service)
         self.zmq_status_service_thread.start()
+        self.zmq_status_service.subscribe_to_topic("powerd")
         self.zmq_status_service.subscribe_to_topic("calibd")
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
+        self.zmq_status_service.lamp_states_signal.connect(self.layout_service.update_lamps)
+        self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
+
 
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
