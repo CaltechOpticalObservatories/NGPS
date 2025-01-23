@@ -703,7 +703,7 @@ class ControlTab(QDialog):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", "SET " + exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", "SET " + exposure_time)
 
     def on_slit_width_changed(self):
@@ -722,5 +722,5 @@ class ControlTab(QDialog):
             self.slit_angle_box.setText(slit_angle)
 
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", "SET " + slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
