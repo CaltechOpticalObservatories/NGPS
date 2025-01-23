@@ -435,10 +435,6 @@ class LayoutService:
 
     def update_image_number(self, image_number):
         """Update the current image number."""
-        self.image_number.setValue(image_number)
-
-    def update_image_number(self, image_number):
-        """Update the current image number."""
         self.image_number.setText(image_number)
 
     def update_image_name(self, image_name):
