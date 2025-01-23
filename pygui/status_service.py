@@ -112,7 +112,7 @@ class StatusService(QObject):
             self._parse_pixelcount_message(message)
         elif "ready for next exposure" in message:
             self.progress_updated_signal.emit(int(0))
-            self.progress_updated_signal.emit(int(0))
+            self.readout_progress_updated_signal.emit(int(0))
         elif "instrument is shut down" in message:
             self.parent.show_popup("NGPS is Shutdown.")
             self.parent.layout_service.update_system_status("stopped")
