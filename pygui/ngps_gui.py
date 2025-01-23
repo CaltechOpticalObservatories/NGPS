@@ -31,6 +31,9 @@ class NgpsGUI(QMainWindow):
         # Login status flag
         self.logged_in = False
 
+        self.lamp_checkboxes = {}  # To store lamp checkboxes
+        self.modulator_checkboxes = {}  # To store modulator checkboxes
+
         # Initialize the UI
         self.init_ui()
         

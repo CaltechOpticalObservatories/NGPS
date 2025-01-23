@@ -18,8 +18,6 @@ class LayoutService:
         self.target_list_name = QComboBox()
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
-        self.lamp_checkboxes = {}  # To store lamp checkboxes
-        self.modulator_checkboxes = {}  # To store modulator checkboxes
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -925,13 +923,13 @@ class LayoutService:
 
         for lamp in lamps:
             # Update the lamp checkbox
-            lamp_checkbox = self.lamp_checkboxes.get(lamp)
+            lamp_checkbox = self.parent.lamp_checkboxes.get(lamp)
             if lamp_checkbox:
                 # Set the checkbox state based on the value from the payload (True/False)
                 lamp_checkbox.setChecked(data.get(lamp, False))  # Will be unchecked if not found
 
             # Update the modulator checkbox based on the corresponding modulator state in modulator_data
-            modulator_checkbox = self.modulator_checkboxes.get(lamp)
+            modulator_checkbox = self.parent.modulator_checkboxes.get(lamp)
             if modulator_checkbox:
                 # Get the modulator status from modulator_data (e.g., MODBLCON, MODFEAR, etc.)
                 modulator_key = f"MOD{lamp[4:]}"  # For LAMPBLUC, this would give "MODBLCON"
