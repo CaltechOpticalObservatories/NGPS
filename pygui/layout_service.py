@@ -437,13 +437,21 @@ class LayoutService:
         """Update the current image number."""
         self.image_number.setValue(image_number)
 
+    def update_image_number(self, image_number):
+        """Update the current image number."""
+        self.image_number.setText(image_number)
+
+    def update_image_name(self, image_name):
+        """Update the current image name."""
+        self.image_name.setText(image_name)
+
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
         image_info_layout.setSpacing(10)
 
         # Create the QLineEdit widgets
-        self.image_name = QLineEdit("NGPS_2024_11_21_Image_1.fits")
-        self.image_number = QLineEdit("1")
+        self.image_name = QLineEdit("N/A")
+        self.image_number = QLineEdit("N/A")
 
         # Set the image_name widget to stretch and fill available space
         self.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

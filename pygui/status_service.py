@@ -13,6 +13,7 @@ class StatusService(QObject):
     progress_updated_signal = pyqtSignal(int)  # Signal to update exposure progress bar (0-100)
     readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
     image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
+    image_name_updated_signal = pyqtSignal(int)  # Signal to update image number
 
     def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
         super().__init__()
@@ -119,6 +120,22 @@ class StatusService(QObject):
         elif "instrument is shut down" in message:
             self.parent.show_popup("NGPS is Shutdown.")
             self.parent.layout_service.update_system_status("stopped")
+        elif "CAMERAD:IMNAME:" in message:
+            # Regex to extract the string starting with /data
+            pattern = r'(?<=CAMERAD:IMNAME:)(/.*)'
+            match = re.search(pattern, message)
+            if match:
+                extracted_string = match.group(1)
+                print(f"Extracted file path: {extracted_string}")
+                self.image_number_updated_signal.emit(extracted_string)
+        elif "CAMERAD:IMNUM:" in message:
+            # Regex to extract the integer after 'CAMERAD:IMNUM:'
+            pattern = r'(?<=CAMERAD:IMNUM:)(\d+)'
+            match = re.search(pattern, message)
+            if match:
+                extracted_int = int(match.group(1))
+                print(f"Extracted image number: {extracted_int}")
+                self.image_number_updated_signal.emit(int(extracted_int))
         else:
             self.status = message
             self.heartbeat_misses = 0
