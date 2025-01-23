@@ -685,41 +685,25 @@ namespace Sequencer {
         this->sequence.async.enqueue_and_log( function, message.str() );
       }
 
-      // SLIT_DEFAULT
-      if (config.param[entry]=="SLIT_DEFAULT") {
-        this->sequence.slit_default = this->config.arg[entry];
+      // *__INIT
+      // store all INIT values in config_init map indexed by parameter
+      //
+      if (config.param[entry].find("__INIT") != std::string::npos ) {
+        auto pos = config.param[entry].find("__INIT");  // by definition already != npos
+        auto key = config.param[entry].substr(0, pos);  // only the first part
+        this->sequence.config_init[key] = this->config.arg[entry];
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
       }
 
-      // ACAM_FILTER_DEFAULT
-      if (config.param[entry]=="ACAM_FILTER_DEFAULT") {
-        this->sequence.acam_filter_default = this->config.arg[entry];
-        applied++;
-        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
-      }
-
-      // ACAM_COVER_DEFAULT
-      if (config.param[entry]=="ACAM_COVER_DEFAULT") {
-        this->sequence.acam_cover_default = this->config.arg[entry];
-        applied++;
-        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
-      }
-
-      // CALIB_COVER_DEFAULT
-      if (config.param[entry]=="CALIB_COVER_DEFAULT") {
-        this->sequence.calib_cover_default = this->config.arg[entry];
-        applied++;
-        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
-      }
-
-      // CALIB_DOOR_DEFAULT
-      if (config.param[entry]=="CALIB_DOOR_DEFAULT") {
-        this->sequence.calib_door_default = this->config.arg[entry];
+      // *__SHUTDOWN
+      // store all SHUTDOWN values in config_shutdown map indexed by parameter
+      //
+      if (config.param[entry].find("__SHUTDOWN") != std::string::npos ) {
+        auto pos = config.param[entry].find("__SHUTDOWN");  // by definition already != npos
+        auto key = config.param[entry].substr(0, pos);      // only the first part
+        this->sequence.config_shutdown[key] = this->config.arg[entry];
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
@@ -748,6 +732,15 @@ namespace Sequencer {
       //
       // configure the power switch parameters
       //
+
+      // POWER_LAMP
+      if (config.param[entry].compare( 0, POWER_LAMP.length(), POWER_LAMP )==0) {
+        if ( this->sequence.power_switch[POWER_LAMP].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
+      }
 
       // POWER_SLIT
       if (config.param[entry].compare( 0, POWER_SLIT.length(), POWER_SLIT )==0) {

@@ -52,6 +52,7 @@ namespace Sequencer {
   const std::string CAMERA_PROLOGUE="CAMERA_PROLOGUE";  ///< parameter name which defines CAMERA_PROLOGUE commands
   const std::string CAMERA_EPILOGUE="CAMERA_EPILOGUE";  ///< parameter name which defines CAMERA_EPILOGUE commands
 
+  const std::string POWER_LAMP="POWER_LAMP";         ///< parameter name which defines NPS_PLUG names required for lamps
   const std::string POWER_SLIT="POWER_SLIT";         ///< parameter name which defines NPS_PLUG names required for slit hardware
   const std::string POWER_CAMERA="POWER_CAMERA";     ///< parameter name which defines NPS_PLUG names required for camera hardware
   const std::string POWER_CALIB="POWER_CALIB";       ///< parameter name which defines NPS_PLUG names required for calib hardware

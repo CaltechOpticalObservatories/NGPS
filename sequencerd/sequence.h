@@ -422,13 +422,11 @@ namespace Sequencer {
                          std::function<void(const nlohmann::json&)>> topic_handlers;
                                                        ///< maps a handler function to each topic
 
+      std::unordered_map<std::string, std::string> config_init;      ///< init values from config file
+      std::unordered_map<std::string, std::string> config_shutdown;  ///< shutdown values from config file
+
       std::vector<std::string> camera_prologue;  ///< commands sent to camera on init, read from cfg file
       std::vector<std::string> camera_epilogue;  ///< commands sent to camera on shutdown, read from cfg file
-      std::string slit_default;                  ///< default width offset sent to slit on init, read from cfg file
-      std::string acam_filter_default;           ///< default ACAM filter
-      std::string acam_cover_default;            ///< default ACAM cover position
-      std::string calib_cover_default;           ///< default calib cover position
-      std::string calib_door_default;            ///< default calib door position
 
 ///   inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
 ///   inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?

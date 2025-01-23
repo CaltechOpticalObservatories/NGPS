@@ -874,10 +874,10 @@ namespace Sequencer {
       }
     }
 
-    // send default only if connection was just opened now
+    // send init values only if connection was just opened now
     //
-    if ( was_opened && !this->slit_default.empty() ) {
-      std::string cmd = SLITD_SET+" "+this->slit_default;
+    if ( was_opened && !this->config_init["SLIT"].empty() ) {
+      std::string cmd = SLITD_SET+" "+this->config_init["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to slit" );
         return ERROR;
@@ -922,6 +922,16 @@ namespace Sequencer {
     }
 
     if ( this->connect_to_daemon(this->slitd) != NO_ERROR ) return ERROR;
+
+    // set shutdown state
+    //
+    if (error==NO_ERROR && !this->config_shutdown["SLIT"].empty() ) {
+      std::string cmd = SLITD_SET+" "+this->config_shutdown["SLIT"];
+      if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to slit" );
+        return ERROR;
+      }
+    }
 
     // close connections between slitd and the hardware with which it communicates
     //
@@ -1005,19 +1015,19 @@ namespace Sequencer {
       return ERROR;
     }
 
-    // send defaults only if connection was just opened now
+    // send init values only if connection was just opened now
     //
     if ( was_opened) {
       std::string cmd, reply;
-      if ( ! this->acam_filter_default.empty() ) {
-        cmd = ACAMD_FILTER+" "+this->acam_filter_default;
+      if ( ! this->config_init["ACAM_FILTER"].empty() ) {
+        cmd = ACAMD_FILTER+" "+this->config_init["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           return ERROR;
         }
       }
-      if ( ! this->acam_cover_default.empty() ) {
-        cmd = ACAMD_COVER+" "+this->acam_cover_default;
+      if ( ! this->config_init["ACAM_COVER"].empty() ) {
+        cmd = ACAMD_COVER+" "+this->config_init["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           return ERROR;
@@ -1107,6 +1117,26 @@ namespace Sequencer {
     //
     error = this->connect_to_daemon(this->acamd);
 
+    // set shutdown states
+    //
+    if ( error==NO_ERROR ) {
+      std::string cmd, reply;
+      if ( ! this->config_shutdown["ACAM_FILTER"].empty() ) {
+        cmd = ACAMD_FILTER+" "+this->config_shutdown["ACAM_FILTER"];
+        if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
+          return ERROR;
+        }
+      }
+      if ( ! this->config_shutdown["ACAM_COVER"].empty() ) {
+        cmd = ACAMD_COVER+" "+this->config_shutdown["ACAM_COVER"];
+        if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
+          return ERROR;
+        }
+      }
+    }
+
     // send ACAMD_SHUTDOWN command to acamd -- this will cause it to nicely
     // close connections between acamd and the hardware with which it communicates
     //
@@ -1189,13 +1219,13 @@ namespace Sequencer {
           return ERROR;
         }
       }
-      // set defaults if any specified
+      // set init values
       // actuators won't move if already in position
-      if ( !this->calib_cover_default.empty() && !this->calib_door_default.empty() ) {
+      if ( !this->config_init["CALIB_COVER"].empty() && !this->config_init["CALIB_DOOR"].empty() ) {
         std::stringstream cmd;
         cmd << CALIBD_SET;
-        if ( !this->calib_cover_default.empty() ) cmd << " cover=" << this->calib_cover_default;
-        if ( !this->calib_door_default.empty() )  cmd << " door="  << this->calib_door_default;
+        if ( !this->config_init["CALIB_COVER"].empty() ) cmd << " cover=" << this->config_init["CALIB_COVER"];
+        if ( !this->config_init["CALIB_DOOR"].empty() )  cmd << " door="  << this->config_init["CALIB_DOOR"];
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
@@ -1219,8 +1249,6 @@ namespace Sequencer {
    */
   long Sequence::calib_shutdown() {
     const std::string function("Sequencer::Sequence::calib_shutdown");
-    std::stringstream message;
-    std::string reply;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CALIB_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
@@ -1229,18 +1257,26 @@ namespace Sequencer {
     //
     long error = this->connect_to_daemon(this->calibd);
 
-    // ensure door and cover are closed
+    // set shutdown values
     //
     if ( error==NO_ERROR ) {
-      logwrite( function, "closing calib door and cover" );
-      message.str(""); message << CALIBD_SET << " cover=close door=close";
-      error = this->calibd.command_timeout( message.str(), CALIBD_SET_TIMEOUT );
-      if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR closing calib door and/or cover" );
+      if ( !this->config_shutdown["CALIB_COVER"].empty() && !this->config_shutdown["CALIB_DOOR"].empty() ) {
+        std::stringstream cmd;
+        cmd << CALIBD_SET;
+        if ( !this->config_shutdown["CALIB_COVER"].empty() ) cmd << " cover=" << this->config_shutdown["CALIB_COVER"];
+        if ( !this->config_shutdown["CALIB_DOOR"].empty() )  cmd << " door="  << this->config_shutdown["CALIB_DOOR"];
+        logwrite( function, "calib default: "+cmd.str() );
+        if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+          return ERROR;
+        }
+      }
     }
 
     // close connections between calibd and the hardware with which it communicates
     //
     if ( error==NO_ERROR ) {
+      std::string reply;
       logwrite( function, "closing calib hardware" );
       error = this->calibd.send( CALIBD_CLOSE, reply );
       if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR: closing connection to calib hardware" );
@@ -1255,6 +1291,13 @@ namespace Sequencer {
     //
     if ( this->set_power_switch(OFF, POWER_CALIB, std::chrono::seconds(0)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR switching off calib hardware" );
+      error=ERROR;
+    }
+
+    // turn off power to lamps
+    //
+    if ( this->set_power_switch(OFF, POWER_LAMP, std::chrono::seconds(5)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR powering off lamps" );
       error=ERROR;
     }
 

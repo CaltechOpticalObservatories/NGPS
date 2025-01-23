@@ -68,20 +68,25 @@ CAMERA_PROLOGUE=(basename ngps)
 CAMERA_EPILOGUE=(native POF)
 CAMERA_EPILOGUE=(close)
 
-# Default slit (width offset)
-# can be left blank
+# slit init and shutdown states
+# formatted as (width offset)
 #
-SLIT_DEFAULT=(0.5 0.0)
+SLIT__INIT=(0.5 0.0)
+SLIT__SHUTDOWN=
 
-# ACAM defaults, any can be left blank
+# ACAM init and shutdown states
 #
-ACAM_FILTER_DEFAULT=r
-ACAM_COVER_DEFAULT=open
+ACAM_FILTER__INIT=r
+ACAM_COVER__INIT=open
+ACAM_FILTER__SHUTDOWN=
+ACAM_COVER__SHUTDOWN=close
 
-# calib defaults, any can be left blank
+# calib init and shutdown states
 #
-CALIB_COVER_DEFAULT=open
-CALIB_DOOR_DEFAULT=close
+CALIB_COVER__INIT=open
+CALIB_DOOR__INIT=close
+CALIB_COVER__SHUTDOWN=close
+CALIB_DOOR__SHUTDOWN=close
 
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
@@ -100,6 +105,7 @@ VIRTUAL_SLIT_EXPOSE=3.0    # slit offset for science exposure
 POWER_SLIT=SLIT
 POWER_CAMERA=(SHUTTER LEACH_R LEACH_I)
 POWER_CALIB=(CAL_MOT LAMP_MOD)
+POWER_LAMP=(LAMPTHAR LAMPFEAR LAMPBLUC LAMPREDC)
 POWER_FLEXURE=(FLEX_I FLEX_R)
 POWER_FILTER=ACAM_MOT
 POWER_FOCUS=(FOCUS_IR)
