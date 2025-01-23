@@ -433,25 +433,29 @@ class LayoutService:
         """Update the readout progress bar based on the received percentage."""
         self.parent.overhead_progress.setValue(progress_percentage)
 
+    def update_image_number(self, image_number):
+        """Update the current image number."""
+        self.image_number.setValue(image_number)
+
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
         image_info_layout.setSpacing(10)
 
         # Create the QLineEdit widgets
-        self.parent.image_name = QLineEdit("NGPS_2024_11_21_Image_1.fits")
-        self.parent.image_number = QLineEdit("1")
+        self.image_name = QLineEdit("NGPS_2024_11_21_Image_1.fits")
+        self.image_number = QLineEdit("1")
 
         # Set the image_name widget to stretch and fill available space
-        self.parent.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # Set the image_number widget to be smaller
-        self.parent.image_number.setFixedWidth(80)  # You can adjust the width as needed
+        self.image_number.setFixedWidth(80)  # You can adjust the width as needed
 
         # Add the QLabel and QLineEdit widgets to the layout
         image_info_layout.addWidget(QLabel("Image Dir:"))
-        image_info_layout.addWidget(self.parent.image_name)
+        image_info_layout.addWidget(self.image_name)
         image_info_layout.addWidget(QLabel("Image Number:"))
-        image_info_layout.addWidget(self.parent.image_number)
+        image_info_layout.addWidget(self.image_number)
 
         return image_info_layout
 

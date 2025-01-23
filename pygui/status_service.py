@@ -12,6 +12,7 @@ class StatusService(QObject):
     status_updated_signal = pyqtSignal(str)
     progress_updated_signal = pyqtSignal(int)  # Signal to update exposure progress bar (0-100)
     readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
+    image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
 
     def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
         super().__init__()
@@ -108,8 +109,10 @@ class StatusService(QObject):
             self.parent.layout_service.update_system_status("idle")
         elif message.startswith("EXPTIME"):
             self._parse_exptime_message(message)
+            self.parent.layout_service.update_system_status("exposing")
         elif message.startswith("PIXELCOUNT"):
             self._parse_pixelcount_message(message)
+            self.parent.layout_service.update_system_status("idle")
         elif "ready for next exposure" in message:
             self.progress_updated_signal.emit(int(0))
             self.readout_progress_updated_signal.emit(int(0))
@@ -129,8 +132,7 @@ class StatusService(QObject):
             progress = int(match.group(3))
 
             # Calculate the progress as a percentage
-            if max_time > 0:
-                self.progress_updated_signal.emit(int(progress))
+            self.progress_updated_signal.emit(int(progress))
 
     def _parse_pixelcount_message(self, message):
         """Parse PIXELCOUNT message and update the readout progress."""

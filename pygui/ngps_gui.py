@@ -112,6 +112,7 @@ class NgpsGUI(QMainWindow):
         
         self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
         self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
+        self.status_service.image_number_updated_signal.connect(self.layout_service.update_image_number)
 
         # Initialize the ZMQStatusService
         self.zmq_status_service = ZmqStatusService(self)
