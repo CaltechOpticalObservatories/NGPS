@@ -10,10 +10,11 @@ import select
 class StatusService(QObject):
     # Signals to communicate with the main GUI thread
     status_updated_signal = pyqtSignal(str)
-    # progress_updated_signal = pyqtSignal(int)  # Signal to update exposure progress bar (0-100)
-    # readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
-    # # image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
-    # # image_name_updated_signal = pyqtSignal(str)
+    progress_updated_signal = pyqtSignal(int)  # Signal to update exposure progress bar (0-100)
+    readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
+    image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
+    image_name_updated_signal = pyqtSignal(str)
+    update_status_signal = pyqtSignal(str)
 
     def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
         super().__init__()
@@ -107,25 +108,25 @@ class StatusService(QObject):
         """Handle the incoming message and decide what to do with it."""
         if message == "SEQSTATE: READY":
             self.parent.show_popup("NGPS is Ready.")
-            self.parent.layout_service.update_system_status("idle")
+            self.update_status_signal.emit("idle")
         elif message.startswith("EXPTIME"):
             self._parse_exptime_message(message)
-            self.parent.layout_service.update_system_status("exposing")
+            self.update_status_signal.emit("exposing")
         elif message.startswith("PIXELCOUNT"):
             self._parse_pixelcount_message(message)
-            self.parent.layout_service.update_system_status("idle")
+            self.update_status_signal.emit("idle")
         elif message.startswith("CAMERAD:IMMNUM"):
             match = re.match(r"EXPTIME:(\d+) (\d+) (\d+)", message)
-            self.parent.layout_service.image_number(int(match.group[1]))
+            self.image_number_updated_signal.emit(int(match.group[1]))
         elif message.startswith("CAMERAD:IMNAME"):
             match = re.match(r"EXPTIME:(\d+) (\d+) (\d+)", message)
-            self.parent.layout_service.update_image_name(int(match.group[1]))
+            self.image_name_updated_signal.emit(int(match.group[1]))
         elif "ready for next exposure" in message:
-            self.parent.layout_service.update_exposure_progress(int(0))
-            self.parent.layout_service.update_readout_progress(int(0))
+            self.progress_updated_signal.emit(int(0))
+            self.readout_progress_updated_signal.emit(int(0))
         elif "instrument is shut down" in message:
             self.parent.show_popup("NGPS is Shutdown.")
-            self.parent.layout_service.update_system_status("stopped")
+            self.update_status_signal.emit("stopped")
         else:
             self.status = message
             self.heartbeat_misses = 0
@@ -139,7 +140,7 @@ class StatusService(QObject):
             progress = int(match.group(3))
 
             # Calculate the progress as a percentage
-            self.parent.layout_service.update_exposure_progress(int(progress))
+            self.progress_updated_signal.emit(int(progress))
 
     def _parse_pixelcount_message(self, message):
         """Parse PIXELCOUNT message and update the readout progress."""
@@ -152,4 +153,4 @@ class StatusService(QObject):
             if total_count > 0:
                 progress_percentage = (current_count / total_count) * 100
                 progress_percentage = min(max(progress_percentage, 0), 100)
-                self.parent.layout_service.update_readout_progress(int(progress_percentage))
+                self.readout_progress_updated_signal.emit(int(progress_percentage))

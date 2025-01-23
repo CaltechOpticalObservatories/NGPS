@@ -1,11 +1,18 @@
 import zmq
 import os
 import logging
+import json
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
 
 class ZmqStatusService(QObject):
     # Signal to send a new message
     new_message_signal = pyqtSignal(str)
+
+    # Signal to send lamp states as a dictionary {lamp_name: bool}
+    lamp_states_signal = pyqtSignal(dict)
+    
+    # Signal to send modulator states as a dictionary {modulator_name: bool}
+    modulator_states_signal = pyqtSignal(dict)
 
     def __init__(self, parent, broker_publish_endpoint="tcp://127.0.0.1:5556"):
         super().__init__()
@@ -101,13 +108,22 @@ class ZmqStatusService(QObject):
             while True:
                 message = self.socket.recv_string()  # Receive the message as a string
                 self.logger.info(f"Received message: {message}")
-                
+
                 # Check if the message contains a space to separate topic and payload
                 if ' ' in message:
                     topic, payload = message.split(' ', 1)  # Split the message assuming space-separated topic and payload
                     self.logger.info(f"Processed message: Topic = {topic}, Payload = {payload}")
-                    # Emit the message to the UI thread
-                    self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+
+                    # Assuming the payload is a JSON string, parse it into a dictionary
+                    try:
+                        data = json.loads(payload)
+                        # Emit the message to the UI thread
+                        self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+
+                        # Update the UI based on the parsed data
+                        self.update_ui(data)
+                    except json.JSONDecodeError as e:
+                        self.logger.error(f"Error parsing JSON payload: {e}")
                 else:
                     # If there is no space, treat the whole message as the topic
                     self.logger.info(f"Processed message with no payload: Topic = {message}")
@@ -124,6 +140,30 @@ class ZmqStatusService(QObject):
             self.socket.close()
             self.is_connected = False
             self.logger.info("Disconnected from broker.")
+
+    def update_ui(self, data, modulator_data):
+        """ Emit signals with the lamp and modulator states """
+        if not isinstance(data, dict) or not isinstance(modulator_data, dict):
+            self.logger.error("Invalid data format received.")
+            return
+        
+        lamp_states = {}
+        modulator_states = {}
+
+        # Process lamps
+        lamps = ["LAMPBLUC", "LAMPFEAR", "LAMPREDC", "LAMPTHAR"]
+        for lamp in lamps:
+            lamp_states[lamp] = data.get(lamp, False)
+
+        # Process modulators
+        for lamp in lamps:
+            modulator_key = f"MOD{lamp[4:]}"  # Get the modulator key from the lamp name
+            modulator_status = modulator_data.get(modulator_key, "off")
+            modulator_states[modulator_key] = modulator_status.startswith("on")
+        
+        # Emit signals with the states
+        self.lamp_states_signal.emit(lamp_states)
+        self.modulator_states_signal.emit(modulator_states)
 
 class ZmqStatusServiceThread(QThread):
     def __init__(self, zmq_status_service):

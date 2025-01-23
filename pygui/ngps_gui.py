@@ -31,9 +31,6 @@ class NgpsGUI(QMainWindow):
         # Login status flag
         self.logged_in = False
 
-        self.lamp_checkboxes = {}  # To store lamp checkboxes
-        self.modulator_checkboxes = {}  # To store modulator checkboxes
-
         # Initialize the UI
         self.init_ui()
         
@@ -113,10 +110,11 @@ class NgpsGUI(QMainWindow):
         self.status_service.status_updated_signal.connect(self.layout_service.update_message_log)
         self.status_service.start()
         
-        # self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
-        # self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
-        # self.status_service.image_number_updated_signal.connect(self.layout_service.update_image_number)
-        # self.status_service.image_name_updated_signal.connect(self.layout_service.update_image_name)
+        self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
+        self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
+        self.status_service.image_number_updated_signal.connect(self.layout_service.update_image_number)
+        self.status_service.image_name_updated_signal.connect(self.layout_service.update_image_name)
+        self.status_service.update_status_signal.connect(self.layout_service.update_system_status)
 
         # Initialize the ZMQStatusService
         self.zmq_status_service = ZmqStatusService(self)
@@ -129,8 +127,8 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("calibd")
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
-        # self.zmq_status_service.lamp_states_signal.connect(self.layout_service.update_lamps)
-        # self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
+        self.zmq_status_service.lamp_states_signal.connect(self.layout_service.update_lamps)
+        self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
 
 
     def on_date_time_changed(self, datetime):
