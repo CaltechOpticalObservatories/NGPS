@@ -62,6 +62,7 @@ namespace TCS {
     jmessage_out["DOMESHUT"]   = this->tcs_info.domeshutters==1?"open":"closed";
     jmessage_out["TELFOCUS"]   = this->tcs_info.focus;
     jmessage_out["AIRMASS"]    = this->tcs_info.airmass;
+    jmessage_out["MOTION"]     = this->tcs_info.motion;
 
     // for backwards compatibility
     jmessage_out["messagetype"] = "tcsinfo";
@@ -112,6 +113,10 @@ namespace TCS {
     error |= this->send_command( "?WEATHER", retstring, TCS::FAST_RESPONSE );
     std::replace( retstring.begin(), retstring.end(), '\n', ',');
     this->tcs_info.parse_weather( retstring );
+
+    error |= this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE );
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
+    this->tcs_info.motion = retstring;
 
     return error;
   }
@@ -1538,7 +1543,7 @@ logwrite(function,"[DEBUG] input args= "+args );
     std::string reply;
 
     tcs.execute_command( cmd, reply, conn_type, to );
-logwrite(function,"[DEBUG] reply="+reply);
+logwrite(function,"[DEBUG] cmd="+cmd+" reply="+reply);
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.
@@ -1606,7 +1611,7 @@ logwrite(function,"[DEBUG] reply="+reply);
    *
    */
   long Interface::parse_reply_code( std::string codein, std::string &reply ) {
-    std::string function = "TCS::Interface::parse_reply_code";
+    const std::string function("TCS::Interface::parse_reply_code");
     std::stringstream message;
     int code = TCS_UNDEFINED;
 
@@ -1615,13 +1620,8 @@ logwrite(function,"[DEBUG] reply="+reply);
     try {
       code = std::stoi( codein );
     }
-    catch( std::out_of_range &e ) {
-      message.str(""); message << "EXCEPTION: out of range parsing TCS return value \"" << codein << "\": " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-    catch( std::invalid_argument &e ) {
-      message.str(""); message << "EXCEPTION: converting TCS return value \"" << codein << "\" to integer: " << e.what();
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR parsing TCS return value \"" << codein << "\": " << e.what();
       logwrite( function, message.str() );
       return ERROR;
     }
@@ -1641,6 +1641,7 @@ logwrite(function,"[DEBUG] reply="+reply);
                                      return ERROR;
       case TCS_UNDEFINED:
       default:                       reply = TCS_UNDEFINED_STR;
+                                     logwrite( function, "ERROR undefined reply code: "+codein );
                                      return ERROR;
     }
   }
@@ -1704,7 +1705,7 @@ logwrite(function,"[DEBUG] reply="+reply);
 
   /***** TCS::TcsInfo::parse_weather ******************************************/
   void TcsInfo::parse_weather( std::string &input ) {
-    const std::string function="TCS::TcsInfo::parse_weather";
+    const std::string function("TCS::TcsInfo::parse_weather");
     std::stringstream message;
 
     // input string is expected to be:
@@ -1748,8 +1749,9 @@ logwrite(function,"[DEBUG] reply="+reply);
     return;
   }
 
+
   void TcsInfo::parse_reqstat( std::string &input ) {
-    const std::string function="TCS::TcsInfo::parse_weather";
+    const std::string function("TCS::TcsInfo::parse_weather");
     std::stringstream message;
 
     // input string is expected to be:

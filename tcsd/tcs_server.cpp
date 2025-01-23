@@ -763,7 +763,7 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
                       ret = this->interface.native( args, retstring );
       }
       else
-      if ( caseCompareString( cmd, TELEMREQUEST ) ) {
+      if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
                       if ( args=="?" || args=="help" ) {
                         retstring=TELEMREQUEST+"\n";
                         retstring.append( "  Returns a serialized JSON message containing telemetry\n" );

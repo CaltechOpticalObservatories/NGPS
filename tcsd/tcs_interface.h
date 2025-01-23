@@ -57,6 +57,7 @@ namespace TCS {
       std::string ha;       /// hh:mm:ss.s
       std::string ra_hms;   /// hh:mm:ss.ss
       std::string dec_dms;  /// dd:mm:ss.ss
+      std::string motion;   /// one of the human readable TCS_MOTION*_STRs from tcs_constants.h
 
       double ra_h_dec;      /// h.hhhhh (decimal hours)
       double dec_d_dec;     /// d.ddddd (decimal degrees)
