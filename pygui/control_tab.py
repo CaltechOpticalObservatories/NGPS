@@ -703,15 +703,15 @@ class ControlTab(QDialog):
         # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", "SET " + exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", "SET " + exposure_time)
 
     def on_slit_width_changed(self):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", "SET " + slit_width)
 
     def on_slit_angle_changed(self):
         # Retrieve the slit width and send the query to the database
@@ -722,5 +722,5 @@ class ControlTab(QDialog):
             self.slit_angle_box.setText(slit_angle)
 
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", "SET " + slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)

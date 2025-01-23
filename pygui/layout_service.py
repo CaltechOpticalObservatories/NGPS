@@ -435,14 +435,6 @@ class LayoutService:
         """Update the readout progress bar based on the received percentage."""
         self.parent.overhead_progress.setValue(progress_percentage)
 
-    def update_image_number(self, image_number):
-        """Update the current image number."""
-        self.parent.image_number.setText(str(image_number))
-
-    def update_image_name(self, image_name):
-        """Update the current image name."""
-        self.parent.image_name.setText(str(image_name))
-
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
         image_info_layout.setSpacing(10)
@@ -464,6 +456,14 @@ class LayoutService:
         image_info_layout.addWidget(self.parent.image_number)
 
         return image_info_layout
+
+    def update_image_number(self, image_number):
+        """Update the current image number."""
+        self.parent.image_number.setText(str(image_number))
+
+    def update_image_name(self, image_name):
+        """Update the current image name."""
+        self.parent.image_name.setText(str(image_name))
 
     def create_message_log(self):
         self.parent.message_log = QTextEdit(self.parent)
