@@ -999,8 +999,8 @@ class LayoutService:
             lamp_layout.addLayout(modulator_side_layout)
 
             # Store checkboxes for later updates
-            self.lamp_checkboxes[lamp] = lamp_checkbox
-            self.modulator_checkboxes[lamp] = modulator_checkbox
+            self.parent.lamp_checkboxes[lamp] = lamp_checkbox
+            self.parent.modulator_checkboxes[lamp] = modulator_checkbox
 
             calibration_lamps_layout.addLayout(lamp_layout)
 
