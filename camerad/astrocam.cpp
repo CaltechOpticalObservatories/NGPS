@@ -3134,8 +3134,8 @@ logwrite(function,message.str() );
         const PrimaryInfo keyarray[] = {
           {"OBS_ID",   "", "Observation ID"},
           {"NAME",     "", "target name"},
-          {"BINSPECT", "", "binning in spectral direction"},
-          {"BINSPAT",  "", "binning in spatial direction"},
+//        {"BINSPECT", "", "binning in spectral direction"},
+//        {"BINSPAT",  "", "binning in spatial direction"},
           {"SLITA",    "", "slit angle in deg"},
           {"POINTMDE", "", "pointing mode"},
           {"RA",       "", "requested Right Ascension in J2000"},
@@ -4314,7 +4314,7 @@ logwrite(function, message.str());
    * @brief      pause the exposure now (as soon as possible)
    * @param[in]  args        not used
    * @param[out] retstring   return string
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR | BUSY
    *
    */
   long Interface::pause_exposure( std::string args, std::string &retstring ) {
@@ -4331,7 +4331,7 @@ logwrite(function, message.str());
       message.str(""); message << "ERROR cannot pause exposure time with less than 5 s exptime remaining";
       logwrite( function, message.str() );
       retstring="too_late";
-      return ERROR;
+      return BUSY;
     }
 
     // pause the shutter delay timer
@@ -4697,7 +4697,7 @@ logwrite(function, message.str());
       this->controller[dev].info.binning[_ROW_] = this->camera_info.binning[_ROW_];
       this->controller[dev].info.binning[_COL_] = this->camera_info.binning[_COL_];
 
-      // If binned by a non-evenly-divisible factor then skip that
+      // If binned by a non-evenly-divisible factor then skip modulo that
       // many at the start. These will be removed from the image.
       //
       this->controller[dev].skipcols = cols % bincols;
