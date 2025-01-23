@@ -130,9 +130,7 @@ class StatusService(QObject):
 
             # Calculate the progress as a percentage
             if max_time > 0:
-                progress_percentage = (progress / max_time)
-                progress_percentage = min(max(progress_percentage, 0), 100)
-                self.progress_updated_signal.emit(int(progress_percentage))
+                self.progress_updated_signal.emit(int(progress))
 
     def _parse_pixelcount_message(self, message):
         """Parse PIXELCOUNT message and update the readout progress."""
