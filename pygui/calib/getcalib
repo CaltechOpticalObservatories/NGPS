@@ -98,23 +98,23 @@ T_etalon=`/usr/bin/python3.9 -c "print(int($T_etalon_nom * $contmultiplier))"`
 #
 
 # close the cover, open the door
-./fake calib set cover=close door=open
+sh fake calib set cover=close door=open
 
 # close the lollipops
 
 for i in $(/usr/bin/seq 1 6);
 do
-  ./fake calib lampmod $i 0 1000
+  sh fake calib lampmod $i 0 1000
   # calib lampmod $i 0 1000
   sleep 0.5
 done
 
 if [ $dolamps -ne 0 ]; then
 # turn on the lamps
-./fake power LAMPTHAR on
-./fake power LAMPFEAR on
-./fake power LAMPREDC on
-./fake turn on dome hilamp here
+sh fake power LAMPTHAR on
+sh fake power LAMPFEAR on
+sh fake power LAMPREDC on
+sh fake turn on dome hilamp here
 fi
 
 ####### THAR
@@ -129,16 +129,16 @@ basename=(`camera basename`[1])
 
 echo "First exposure: $firstex. Basename: $basename"
 
-./fake camera key IMGTYPE=THAR//Calibration. ThAr lamp
-./fake calib lampmod $tharmod 1 1000
-./fake camera exptime $T_thar
-./fake exposen $N_thar
+sh fake camera key IMGTYPE=THAR//Calibration. ThAr lamp
+sh fake calib lampmod $tharmod 1 1000
+sh fake camera exptime $T_thar
+sh fake exposen $N_thar
 
 # turn off the ThAr lamp 
-./fake calib lampmod $tharmod 0 1000
+sh fake calib lampmod $tharmod 0 1000
 
 if [ $dolamps -ne 0 ]; then
-./fake power LAMPTHAR off
+sh fake power LAMPTHAR off
 fi
 fi
 
@@ -153,17 +153,17 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $fistex. Basename: $basename"
 
-./fake camera key IMGTYPE=FEAR//Calibration. FeAr lamp
-./fake calib lampmod $fearmod 1 1000
+sh fake camera key IMGTYPE=FEAR//Calibration. FeAr lamp
+sh ake calib lampmod $fearmod 1 1000
 
-./fake camera exptime $T_fear
-./fake exposen $N_fear
+sh fake camera exptime $T_fear
+sh fake exposen $N_fear
 
 # turn off the FeAr lamp 
-./fake calib lampmod $fearmod 0 1000
+sh fake calib lampmod $fearmod 0 1000
 
 if [ $dolamps -ne 0 ]; then
-./fake power LAMPFEAR off
+sh fake power LAMPFEAR off
 fi
 fi
 
@@ -181,14 +181,14 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $firstex. Basename: $basename"
 
-./fake camera key IMGTYPE=CONT//Calibration. Internal Continuum
-./fake calib lampmod $redccont 1 1000
+sh fake camera key IMGTYPE=CONT//Calibration. Internal Continuum
+sh fake calib lampmod $redccont 1 1000
 
-./fake camera exptime $T_cont
-./fake exposen $N_cont
+sh fake camera exptime $T_cont
+sh fake exposen $N_cont
 
 # close the cont lollipop
-./fake calib lampmod $redccont 0 1000
+sh fake calib lampmod $redccont 0 1000
 fi
 
 
