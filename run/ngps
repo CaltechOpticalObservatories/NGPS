@@ -83,6 +83,10 @@ start_proc( ) {
 	#
 	cmd="$2 $3"$DAEMON
 	echo "starting "$1"..."
+  # kludgey but allows time for tcsd to initialize
+  if [ "$1" == "sequencerd" ]; then
+    sleep 6
+  fi
 	output=$(eval "$cmd")
 
 	# wait 0.5 sec and check if the process is running
