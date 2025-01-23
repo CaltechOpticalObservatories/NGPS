@@ -1,0 +1,9 @@
+#!/bin/bash
+# Source global and user-specific shell environments
+source /etc/profile
+source ~/.bash_profile
+source ~/.bashrc
+
+/usr/bin/vncserver -Authentication=None -SecurityTypes=None :2
+/usr/bin/vncserver -Authentication=None -SecurityTypes=None :3
+/usr/bin/vncserver -Authentication=None -SecurityTypes=None :4
