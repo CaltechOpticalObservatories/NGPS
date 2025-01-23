@@ -437,31 +437,31 @@ class LayoutService:
 
     def update_image_number(self, image_number):
         """Update the current image number."""
-        self.image_number.setText(image_number)
+        self.parent.image_number.setText(str(image_number))
 
     def update_image_name(self, image_name):
         """Update the current image name."""
-        self.image_name.setText(image_name)
+        self.parent.image_name.setText(str(image_name))
 
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
         image_info_layout.setSpacing(10)
 
         # Create the QLineEdit widgets
-        self.image_name = QLineEdit("N/A")
-        self.image_number = QLineEdit("N/A")
+        self.parent.image_name = QLineEdit("N/A")
+        self.parent.image_number = QLineEdit("N/A")
 
         # Set the image_name widget to stretch and fill available space
-        self.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.parent.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # Set the image_number widget to be smaller
-        self.image_number.setFixedWidth(80)  # You can adjust the width as needed
+        self.parent.image_number.setFixedWidth(80)  # You can adjust the width as needed
 
         # Add the QLabel and QLineEdit widgets to the layout
         image_info_layout.addWidget(QLabel("Image Dir:"))
-        image_info_layout.addWidget(self.image_name)
+        image_info_layout.addWidget(self.parent.image_name)
         image_info_layout.addWidget(QLabel("Image Number:"))
-        image_info_layout.addWidget(self.image_number)
+        image_info_layout.addWidget(self.parent.image_number)
 
         return image_info_layout
 
