@@ -710,7 +710,7 @@ class ControlTab(QDialog):
         # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
         if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", "SET " + slit_width)
 
     def on_slit_angle_changed(self):
