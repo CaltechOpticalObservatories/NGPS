@@ -34,6 +34,8 @@
  */
 namespace Sequencer {
 
+  const std::string DAEMON_NAME = "sequencerd";  ///< when run as a daemon, this is my name
+
   // These are not the values of the configuration parameters,
   // but the names of the parameters themselves, as used in the .cfg file
   // and other places
@@ -385,6 +387,7 @@ namespace Sequencer {
       double         slitoffset_req;      ///< slit offset for this target
       int            binspect;            ///< binning in spectral direction for this target
       int            binspat;             ///< binning in spatial direction for this target
+      int            nexp;                ///< number of exposures to perform for this target
       double         airmasslimit;        ///< individual target airmass limit, above which we don't observe
       mysqlx::string obsmode;             ///< observation mode contains CCD settings TBD
       mysqlx::string note;                ///< observer notes, read just so that it can be written back to the DB completed table (!)
@@ -392,7 +395,7 @@ namespace Sequencer {
 
       mysqlx::string state;               ///< current target state
       double         slitangle;           ///< current slit angle
-      long           nexp;                ///< number of repeat exposures on this target
+//    long           nexp;                ///< number of repeat exposures on this target
 
       double         offset_threshold;    ///< computed offset below this threshold (in arcsec) defines successful acquisition
       double         max_tcs_offset;      ///< max allowable TCS offset

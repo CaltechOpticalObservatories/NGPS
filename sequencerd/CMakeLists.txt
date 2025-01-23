@@ -22,6 +22,9 @@ find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 include_directories( ${PYTHON_DEV} )
 
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
 # -- MySQL database ------------------------------------------------------------
 #
 set( MYSQL_DIR "/usr/local/mysql/connector" )
@@ -51,6 +54,8 @@ target_link_libraries(sequencerd
         ${CFITS_LIB}
         ${MYSQL_LIB}
         ${PYTHON_LIB}
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         )
 
 # Set the setgid bit on the resulting executable

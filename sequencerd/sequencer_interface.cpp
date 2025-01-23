@@ -68,6 +68,7 @@ namespace Sequencer {
     this->obsmode.clear();
     this->binspect=-1;
     this->binspat=-1;
+    this->nexp=1;
     this->airmasslimit=99.;
     this->acquired=false;
     this->notbefore="1901-01-01 00:00:00.000";
@@ -734,6 +735,8 @@ namespace Sequencer {
       // camera for the actual exposure time, which I call exptime_act.
       //
       this->exptime_req    = extract_column_from_row<double>( "OTMexpt", row );
+
+//    this->nexp           = extract_column_from_row<int>( "NEXP", row );
 
       this->binspect       = extract_column_from_row<int>( "BINSPECT", row );
       this->binspat        = extract_column_from_row<int>( "BINSPAT", row );

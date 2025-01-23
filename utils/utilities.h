@@ -624,6 +624,14 @@ class ImprovedStateManager {
       }
       notify();
     }
+    void set_only( std::initializer_list<size_t> setbits ) {
+      {
+      std::lock_guard<std::mutex> lock(mtx);
+      state_bits.reset();
+      for ( auto set : setbits ) state_bits.set(set);
+      }
+      notify();
+    }
     void set_and_clear( std::initializer_list<size_t> setbits, std::initializer_list<size_t> clrbits ) {
       {
       std::lock_guard<std::mutex> lock(mtx);
@@ -659,6 +667,15 @@ class ImprovedStateManager {
       }
       return true;
     }
+    bool are_all_clear() const {
+      std::lock_guard<std::mutex> lock(mtx);
+      for ( size_t i=0; i < state_bits.size(); ++i ) {
+        if (state_bits.test(i)) {
+          return false;
+        }
+      }
+      return true;
+    }
     std::string get_set_states() const {
       std::string result;
       std::lock_guard<std::mutex> lock(mtx);
@@ -682,21 +699,50 @@ class ImprovedStateManager {
 };
 
 
+/***** ScopedState ************************************************************/
+/**
+ * @class   ScopedState
+ * @brief   object sets a state on construction, clears on destruction
+ * @details This class is used to create a scoped state object. Constructed
+ *          with a state manager object and a state, the state is set on
+ *          construction and when this object goes out of scope the state is
+ *          cleared.
+ *
+ */
 template <size_t N>
 class ScopedState {
   private:
-    size_t _statebit;
-    ImprovedStateManager<N> &_manager;
+    size_t _statebit;                   // set this state on construction
+    size_t _destructbit;                // optionally set this state on destruction
+    bool _set_on_destruct;              // set destruct bit if this is true
+    ImprovedStateManager<N> &_manager;  // reference to ImprovedStateManager to use
 
   public:
-    ScopedState( size_t statebit, ImprovedStateManager<N> &manager )
-      : _statebit(statebit), _manager(manager) {
+    ScopedState( ImprovedStateManager<N> &manager, size_t statebit )
+      : _statebit(statebit),
+        _set_on_destruct(false),
+        _manager(manager) {
         _manager.set(_statebit);
       }
+    ScopedState( ImprovedStateManager<N> &manager, size_t statebit, bool setonly )
+      : _statebit(statebit),
+        _set_on_destruct(false),
+        _manager(manager) {
+        if (setonly) _manager.set_only({_statebit});
+        else _manager.set(_statebit);
+      }
+    // When this object goes out of scope, clear the _statebit.
+    // If _set_on_destruct was set then set _destructbit and clear _statebit.
     ~ScopedState() {
-      _manager.clear(_statebit);
+      if (_set_on_destruct) _manager.set_and_clear({_destructbit}, {_statebit});
+      else _manager.clear(_statebit);
+    }
+    void destruct_set( size_t destructbit ) {
+      _destructbit=destructbit;
+      _set_on_destruct=true;
     }
 };
+/***** ScopedState ************************************************************/
 
 
 /***** StateManager ***********************************************************/

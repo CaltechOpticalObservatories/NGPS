@@ -28,6 +28,7 @@ const std::string SEQUENCERD_STOP       = "stop";
 const std::string SEQUENCERD_TARGETSET  = "targetset";
 const std::string SEQUENCERD_TARGETOFFSET  = "targetoffset";
 const std::string SEQUENCERD_TEST       = "test";
+const std::string SEQUENCERD_WSTATE     = "wstate";
 
 const std::string SEQUENCERD_ACAM       = "acam";
 const std::string SEQUENCERD_CALIB      = "calib";
@@ -63,6 +64,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_STARTONE,
                                                      SEQUENCERD_STARTUP,
                                                      SEQUENCERD_STATE,
+                                                     SEQUENCERD_WSTATE,
                                                      SEQUENCERD_STOP,
                                                      SEQUENCERD_TARGETSET+" [ <targetid> | <targetname> ]",
                                                      SEQUENCERD_TARGETOFFSET,

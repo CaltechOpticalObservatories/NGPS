@@ -22,6 +22,7 @@
 
 #include "sequencer_interface.h"  // this defines the classes used to interface with various subsystems
 
+#include "common.h"
 #include "acamd_commands.h"
 #include "slicecamd_commands.h"
 #include "calibd_commands.h"
@@ -65,96 +66,97 @@ namespace Sequencer {
 
   /**
    * @enum  DaemonBits
-   * @brief assigns each subsystem a bit to indicate its state
+   * @brief set when the associated daemon is ready
    */
   enum DaemonBits : size_t {
-    DAEMON_ACAM=0,
-    DAEMON_CALIB,
-    DAEMON_CAMERA,
-    DAEMON_FLEXURE,
-    DAEMON_FOCUS,
-    DAEMON_POWER,
-    DAEMON_SLICECAM,
-    DAEMON_SLIT,
-    DAEMON_TCS,
+    DAEMON_ACAM=0,           ///< set when acamd is ready
+    DAEMON_CALIB,            ///< set when calibd is ready
+    DAEMON_CAMERA,           ///< set when camerad is ready
+    DAEMON_FLEXURE,          ///< set when flexured is ready
+    DAEMON_FOCUS,            ///< set when focusd is ready
+    DAEMON_POWER,            ///< set when powerd is ready
+    DAEMON_SLICECAM,         ///< set when slicecamd is ready
+    DAEMON_SLIT,             ///< set when slitd is ready
+    DAEMON_TCS,              ///< set when tcsd is ready
     NUM_DAEMONS
   };
 
   const std::map<size_t, std::string> daemon_names = {
-    {DAEMON_ACAM,      "acam"},
-    {DAEMON_CALIB,     "calib"},
-    {DAEMON_CAMERA,    "camera"},
-    {DAEMON_FLEXURE,   "flexure"},
-    {DAEMON_FOCUS,     "focus"},
-    {DAEMON_POWER,     "power"},
-    {DAEMON_SLICECAM,  "slicecam"},
-    {DAEMON_SLIT,      "slit"},
-    {DAEMON_TCS,       "tcs"}
+    {DAEMON_ACAM,      "acamd"},
+    {DAEMON_CALIB,     "calibd"},
+    {DAEMON_CAMERA,    "camerad"},
+    {DAEMON_FLEXURE,   "flexured"},
+    {DAEMON_FOCUS,     "focusd"},
+    {DAEMON_POWER,     "powerd"},
+    {DAEMON_SLICECAM,  "slicecamd"},
+    {DAEMON_SLIT,      "slitd"},
+    {DAEMON_TCS,       "tcsd"}
   };
 
   /**
    * @enum  SequenceStateBits
-   * @brief assigns each subsystem a bit to indicate its state
+   * @brief states of the sequencer
    */
   enum SequenceStateBits : size_t {
-    SEQ_OFFLINE=0,           ///< set when when offline
-    SEQ_ABORTREQ,            ///< set when an abort is requested
-    SEQ_STOPREQ,             ///< set when a stop is requested
     SEQ_NOTREADY,            ///< set when sequencer is not ready
     SEQ_READY,               ///< set when sequencer is ready to be started
     SEQ_RUNNING,             ///< set when sequencer is running
-    SEQ_SHUTTING,            ///< set when sequencer is shutting down
-    SEQ_PAUSE,               ///< set when sequencer is paused
+    SEQ_STOPPING,            ///< set when sequencer is shutting down
+    SEQ_PAUSED,              ///< set when sequencer is paused
     SEQ_STARTING,            ///< set when sequencer is starting up
-    SEQ_WAIT_ACAM,           ///< set when waiting for acam
-    SEQ_WAIT_SLICECAM,       ///< set when waiting for slicecam
-    SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
-    SEQ_WAIT_CALIB,          ///< set when waiting for calib
-    SEQ_WAIT_CAMERA,         ///< set when waiting for camera
-    SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
-    SEQ_GUIDE,               ///< set/clear to enable/disable guide thread
-    SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
-    SEQ_WAIT_FILTER,         ///< set when waiting for filter
-    SEQ_WAIT_FLEXURE,        ///< set when waiting for flexure
-    SEQ_WAIT_FOCUS,          ///< set when waiting for focus
-    SEQ_WAIT_POWER,          ///< set when waiting for power
-    SEQ_WAIT_SLIT,           ///< set when waiting for slit
-    SEQ_WAIT_TCS,            ///< set when waiting for tcs
-    SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
-    SEQ_WAIT_USER,           ///< set when waiting specifically for user input
-    SEQ_WAIT_SETTLE,         ///< set when waiting specifically for tcs settle
-    SEQ_WAIT_SLEW,           ///< set when waiting specifically for tcs slew
     NUM_SEQ_STATES
   };
 
   const std::map<size_t, std::string> seq_state_names = {
-    {SEQ_OFFLINE,       "OFFLINE"},
-    {SEQ_ABORTREQ,      "ABORTREQ"},
-    {SEQ_STOPREQ,       "STOPREQ"},
     {SEQ_NOTREADY,      "NOTREADY"},
     {SEQ_READY,         "READY"},
     {SEQ_RUNNING,       "RUNNING"},
-    {SEQ_SHUTTING,      "SHUTTING"},
-    {SEQ_PAUSE,         "PAUSE"},
-    {SEQ_STARTING,      "STARTING"},
+    {SEQ_STOPPING,      "STOPPING"},
+    {SEQ_PAUSED,        "PAUSED"},
+    {SEQ_STARTING,      "STARTING"}
+  };
+
+  /**
+   * @enum  WaitStateBits
+   * @brief assigns each subsystem a bit to indicate activity
+   */
+  enum WaitStateBits : size_t {
+    // daemons
+    SEQ_WAIT_ACAM,           ///< set when waiting for acam
+    SEQ_WAIT_CALIB,          ///< set when waiting for calib
+    SEQ_WAIT_CAMERA,         ///< set when waiting for camera
+    SEQ_WAIT_FLEXURE,        ///< set when waiting for flexure
+    SEQ_WAIT_FOCUS,          ///< set when waiting for focus
+    SEQ_WAIT_POWER,          ///< set when waiting for power
+    SEQ_WAIT_SLICECAM,       ///< set when waiting for slicecam
+    SEQ_WAIT_SLIT,           ///< set when waiting for slit
+    SEQ_WAIT_TCS,            ///< set when waiting for tcs
+    // states
+    SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
+    SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
+    SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
+    SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
+    SEQ_WAIT_USER,           ///< set when waiting specifically for user input
+    NUM_WAIT_STATES
+  };
+
+  const std::map<size_t, std::string> wait_state_names = {
+    // daemons
     {SEQ_WAIT_ACAM,     "ACAM"},
-    {SEQ_WAIT_SLICECAM, "SLICECAM"},
-    {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
     {SEQ_WAIT_CALIB,    "CALIB"},
     {SEQ_WAIT_CAMERA,   "CAMERA"},
-    {SEQ_WAIT_EXPOSE,   "EXPOSE"},
-    {SEQ_GUIDE,         "GUIDE"},
-    {SEQ_WAIT_READOUT,  "READOUT"},
-    {SEQ_WAIT_FILTER,   "FILTER"},
     {SEQ_WAIT_FLEXURE,  "FLEXURE"},
     {SEQ_WAIT_FOCUS,    "FOCUS"},
     {SEQ_WAIT_POWER,    "POWER"},
+    {SEQ_WAIT_SLICECAM, "SLICECAM"},
     {SEQ_WAIT_SLIT,     "SLIT"},
     {SEQ_WAIT_TCS,      "TCS"},
+    // states
+    {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
+    {SEQ_WAIT_EXPOSE,   "EXPOSE"},
+    {SEQ_WAIT_READOUT,  "READOUT"},
     {SEQ_WAIT_TCSOP,    "TCSOP"},
-    {SEQ_WAIT_USER,     "USER"},
-    {SEQ_WAIT_SETTLE,   "SETTLE"},
-    {SEQ_WAIT_SLEW,     "SLEW"}
+    {SEQ_WAIT_USER,     "USER"}
   };
 
   /**
@@ -256,6 +258,7 @@ namespace Sequencer {
    */
   class Sequence {
     private:
+      zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
@@ -264,6 +267,7 @@ namespace Sequencer {
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
     public:
       Sequence() :
+          context(),
           ready_to_start(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),
@@ -279,12 +283,20 @@ namespace Sequencer {
           tcs_which("real"),
           tcs_name("offline"),
           slitoffsetexpose(0.0),
-          slitoffsetacquire(0.0)
+          slitoffsetacquire(0.0),
+          subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false)
           {
             seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_seqstate(); });
-            thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { broadcast_threadstate(); });
+            wait_state_manager.set_callback([this](const std::bitset<NUM_WAIT_STATES>& states) { broadcast_waitstate(); });
+            thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { publish_threadstate(); });
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
-            seq_state_manager.set(Sequencer::SEQ_NOTREADY);
+
+            topic_handlers = {
+              { "_snapshot", std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+            };
           }
 
       ~Sequence() { };
@@ -342,6 +354,7 @@ namespace Sequencer {
 
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error_manager{ Sequencer::thread_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state_manager{Sequencer::seq_state_names};
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_WAIT_STATES)>   wait_state_manager{Sequencer::wait_state_names};
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state_manager{ Sequencer::thread_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_manager{ Sequencer::daemon_names };
 
@@ -381,8 +394,41 @@ namespace Sequencer {
       float slitoffsetexpose;   ///< "virtual slit mode" offset for expose
       float slitoffsetacquire;  ///< "virtual slit mode" offset for acquire
 
-      std::vector<std::string> camera_prologue;  ///< commands to send to camera on initialization, read from cfg file
-      std::vector<std::string> camera_epilogue;  ///< commands to send to camera on shutdown, read from cfg file
+      // publish/subscribe functions
+      //
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
+
+      void handletopic_snapshot( const nlohmann::json &jmessage );
+      void publish_snapshot();
+      void publish_snapshot(std::string &retstring);
+      void publish_seqstate();
+      void publish_waitstate();
+      void publish_daemonstate();
+      void publish_threadstate();
+
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
+
+      std::vector<std::string> camera_prologue;  ///< commands sent to camera on init, read from cfg file
+      std::vector<std::string> camera_epilogue;  ///< commands sent to camera on shutdown, read from cfg file
+      std::string slit_default;                  ///< default width offset sent to slit on init, read from cfg file
+      std::string acam_filter_default;           ///< default ACAM filter
+      std::string acam_cover_default;            ///< default ACAM cover position
+      std::string calib_cover_default;           ///< default calib cover position
+      std::string calib_door_default;            ///< default calib door position
 
 ///   inline bool is_seqstate_set( uint32_t mb ) { return( mb & this->seqstate.load() ); }  ///< is the masked bit set in seqstate?
 ///   inline bool is_reqstate_set( uint32_t mb ) { return( mb & this->reqstate.load() ); }  ///< is the masked bit set in reqstate?
@@ -391,6 +437,7 @@ namespace Sequencer {
       void broadcast_daemonstate();             ///<
       void broadcast_threadstate();             ///<
       void broadcast_seqstate();                ///< writes the seqstate string to the async port
+      void broadcast_waitstate();               ///< writes the waitstate string to the async port
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -447,7 +494,7 @@ namespace Sequencer {
       void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
       void dothread_test();
-      void sequence_start();         ///< main sequence start thread
+      void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode

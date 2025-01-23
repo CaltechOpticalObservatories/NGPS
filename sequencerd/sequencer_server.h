@@ -40,7 +40,6 @@
  */
 namespace Sequencer {
 
-  const std::string DAEMON_NAME = "sequencerd";  ///< when run as a daemon, this is my name
   const std::string ACK = "ACK\n";
   const std::string ERR = "ERR\n";
 

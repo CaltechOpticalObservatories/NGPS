@@ -127,6 +127,17 @@ int main(int argc, char **argv) {
     sequencerd.exit_cleanly();
   }
 
+  // initialize the pub/sub handler
+  //
+  if ( sequencerd.sequence.init_pubsub() == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    sequencerd.exit_cleanly();
+  }
+  sequencerd.sequence.seq_state_manager.set(Sequencer::SEQ_NOTREADY);
+
+  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  sequencerd.sequence.publish_snapshot();
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.
@@ -241,8 +252,6 @@ int main(int argc, char **argv) {
   if ( sequencerd.sequence.slicecamd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to slicecamd");
   if ( sequencerd.sequence.slitd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to slitd");
   if ( sequencerd.sequence.tcsd.connect() != NO_ERROR ) logwrite(function, "ERROR connecting to tcsd");
-
-  sequencerd.sequence.async.enqueue( "SEQUENCERD:started" );  // broadcast that I have started
 
   // Dynamically create a new listening socket and thread to handle
   // each connection request on the blocking port.

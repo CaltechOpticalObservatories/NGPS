@@ -9,7 +9,13 @@ DAEMON=no
 
 MESSAGEPORT=@MESSAGEPORT@
 MESSAGEGROUP=239.1.1.234          # or set to NONE if not using ASYNC messaging
-PUBLISHER_PORT="tcp://127.0.0.1:@SEQUENCERD_PUB_PORT@"  # my zeromq pub port
+
+# Message pub/sub
+# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 
 # daemon ports
 #
@@ -61,6 +67,21 @@ CAMERA_PROLOGUE=(basename ngps)
 #
 CAMERA_EPILOGUE=(native POF)
 CAMERA_EPILOGUE=(close)
+
+# Default slit (width offset)
+# can be left blank
+#
+SLIT_DEFAULT=(0.5 0.0)
+
+# ACAM defaults, any can be left blank
+#
+ACAM_FILTER_DEFAULT=r
+ACAM_COVER_DEFAULT=open
+
+# calib defaults, any can be left blank
+#
+CALIB_COVER_DEFAULT=open
+CALIB_DOOR_DEFAULT=close
 
 # Virtual Slit Mode slit offset positions
 # units are arcseconds

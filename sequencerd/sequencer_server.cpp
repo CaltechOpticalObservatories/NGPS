@@ -167,6 +167,23 @@ namespace Sequencer {
         applied++;
       }
 
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->sequence.publisher_address = config.arg[entry];
+        this->sequence.publisher_topic = DAEMON_NAME;
+        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        applied++;
+      }
+
+      // SUB_ENDPOINT
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->sequence.subscriber_address = config.arg[entry];
+        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        applied++;
+      }
+
       // ACAMD_PORT
       if (config.param[entry] == "ACAMD_PORT") {
         try {
@@ -663,6 +680,46 @@ namespace Sequencer {
       // CAMERA_EPILOGUE
       if (config.param[entry].compare( 0, CAMERA_EPILOGUE.length(), CAMERA_EPILOGUE )==0) {
         this->sequence.camera_epilogue.push_back( this->config.arg[entry] );
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
+      // SLIT_DEFAULT
+      if (config.param[entry]=="SLIT_DEFAULT") {
+        this->sequence.slit_default = this->config.arg[entry];
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
+      // ACAM_FILTER_DEFAULT
+      if (config.param[entry]=="ACAM_FILTER_DEFAULT") {
+        this->sequence.acam_filter_default = this->config.arg[entry];
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
+      // ACAM_COVER_DEFAULT
+      if (config.param[entry]=="ACAM_COVER_DEFAULT") {
+        this->sequence.acam_cover_default = this->config.arg[entry];
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
+      // CALIB_COVER_DEFAULT
+      if (config.param[entry]=="CALIB_COVER_DEFAULT") {
+        this->sequence.calib_cover_default = this->config.arg[entry];
+        applied++;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+      }
+
+      // CALIB_DOOR_DEFAULT
+      if (config.param[entry]=="CALIB_DOOR_DEFAULT") {
+        this->sequence.calib_door_default = this->config.arg[entry];
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
         this->sequence.async.enqueue_and_log( function, message.str() );
@@ -1294,16 +1351,8 @@ namespace Sequencer {
       // Sequence "start"
       //
       if ( cmd == SEQUENCERD_START ) {
-                  // The Sequencer can only be started once
-                  //
-                  if ( this->sequence.thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
-                    this->sequence.async.enqueue_and_log( function, "ERROR sequencer already running" );
-                    ret = ERROR;
-                  }
-                  else {
-                    std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence) ).detach();
-                    ret = NO_ERROR;
-                  }
+                  std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence), args ).detach();
+                  ret = NO_ERROR;
       }
       else
 
@@ -1311,9 +1360,7 @@ namespace Sequencer {
       // args is expected to contain an OBSID to get from the database
       //
       if ( cmd == SEQUENCERD_STARTONE ) {
-                  this->sequence.single_obsid=args;
-                  this->sequence.abort_process();
-                  std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence) ).detach();
+                  std::thread( &Sequencer::Sequence::sequence_start, std::ref(this->sequence), args ).detach();
                   ret = NO_ERROR;
       }
       else
@@ -1321,8 +1368,14 @@ namespace Sequencer {
       // repeat the last exposure
       //
       if ( cmd == SEQUENCERD_REPEAT ) {
-                  std::thread( &Sequencer::Sequence::repeat_exposure, std::ref(this->sequence) ).detach();
-                  ret = NO_ERROR;
+                  if ( !this->sequence.seq_state_manager.is_set( Sequencer::SEQ_READY ) ) {
+                    this->sequence.async.enqueue_and_log( function, "ERROR cannot start exposure: not ready" );
+                    ret = ERROR;
+                  }
+                  else {
+                    std::thread( &Sequencer::Sequence::repeat_exposure, std::ref(this->sequence) ).detach();
+                    ret = NO_ERROR;
+                  }
       }
       else
 
@@ -1340,6 +1393,7 @@ namespace Sequencer {
       if ( cmd == SEQUENCERD_ABORT ) {
                   logwrite( function, "requesting abort" );
                   std::thread( &Sequencer::Sequence::abort_process, std::ref(this->sequence) ).detach();
+                  ret=NO_ERROR;
       }
       else
 
@@ -1396,6 +1450,16 @@ namespace Sequencer {
       }
       else
 
+      // Report the Wait State(s),
+      // which will be returned, logged, and written to the async message port.
+      //
+      if ( cmd == SEQUENCERD_WSTATE ) {
+                  this->sequence.broadcast_waitstate();
+                  retstring = this->sequence.seq_state_manager.get_set_states();
+                  ret = NO_ERROR;
+      }
+      else
+
       // Set/Get the Target Set ID
       //
       if ( cmd == SEQUENCERD_TARGETSET ) {
@@ -1418,14 +1482,14 @@ namespace Sequencer {
                   else
                   // Can't already be paused
                   //
-                  if ( this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSE ) ) {
+                  if ( this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSED ) ) {
                     this->sequence.async.enqueue_and_log( function, "ERROR: already paused" );
                     ret = ERROR;
                   }
                   else {
                     this->sequence.camerad.async( CAMERAD_PAUSE );
 //                  probably set these states automatically:
-//                  this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSE, Sequencer::SEQ_RUNNING );  // set pause, clear running
+//                  this->sequence.seq_state.set_and_clear( Sequencer::SEQ_PAUSED, Sequencer::SEQ_RUNNING );  // set pause, clear running
                     this->sequence.broadcast_seqstate();
                     ret = NO_ERROR;
                   }
@@ -1437,14 +1501,14 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_RESUME ) == 0) {
                       // Can only resume when paused
                       //
-                      if ( ! this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSE ) ) {
+                      if ( ! this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSED ) ) {
                         this->sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
                         ret = ERROR;
                       }
                       else {
                         this->sequence.camerad.async( CAMERAD_RESUME );
 //                      probably set these states automatically:
-//                      this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSE );  // set running, clear pause
+//                      this->sequence.seq_state.set_and_clear( Sequencer::SEQ_RUNNING, Sequencer::SEQ_PAUSED );  // set running, clear pause
                         this->sequence.broadcast_seqstate();
                         ret = NO_ERROR;
                       }
