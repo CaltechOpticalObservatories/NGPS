@@ -1,5 +1,5 @@
 import subprocess
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QSizePolicy, QHBoxLayout, QScrollArea
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QSizePolicy, QHBoxLayout, QScrollArea, QFrame
 
 class AfternoonTab(QWidget):
     def __init__(self):
@@ -26,6 +26,20 @@ class AfternoonTab(QWidget):
         form_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
         form_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
 
+        # Thrufocus Script Section (./thrufocus | tee <output log file>)
+        self.log_file_input = QLineEdit(self)
+        self.log_file_input.setPlaceholderText("Enter output log file path")
+        self.log_file_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Log File Path:", self.log_file_input)
+
+        thrufocus_button = QPushButton("Run thrufocus", self)
+        thrufocus_button.clicked.connect(self.run_thrufocus_script)
+        thrufocus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", thrufocus_button)  # Place button below the input
+
+        # Add vertical spacing between sections
+        form_layout.addRow("", QLabel())  # Empty row for spacing
+
         # Getcalib Command Section (./getcalib)
         getcalib_button = QPushButton("Get Calibration", self)
         getcalib_button.clicked.connect(self.run_getcalib)
@@ -41,6 +55,16 @@ class AfternoonTab(QWidget):
         # Add vertical spacing between sections
         form_layout.addRow("", QLabel())  # Empty row for spacing
 
+        # Add white divider line before Slit Set
+        divider = QFrame(self)
+        divider.setFrameShape(QFrame.HLine)
+        divider.setFrameShadow(QFrame.Sunken)
+        divider.setStyleSheet('background-color: white;')  # Set divider color to white
+        form_layout.addRow(divider)
+
+        # Add vertical spacing between sections
+        form_layout.addRow("", QLabel())  # Empty row for spacing
+
         # Slit Set Command Section (slit set <value>)
         self.slit_value_input = QLineEdit(self)
         self.slit_value_input.setPlaceholderText("Enter slit value")
@@ -51,6 +75,9 @@ class AfternoonTab(QWidget):
         slit_button.clicked.connect(self.set_slit)
         slit_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
         form_layout.addRow("", slit_button)  # Place button below the input
+
+        # Add vertical spacing between sections
+        form_layout.addRow("", QLabel())  # Empty row for spacing
 
         # Camera Bin Section (spatial binning and spectral binning)
         self.spatial_binning_input = QLineEdit(self)
@@ -76,33 +103,40 @@ class AfternoonTab(QWidget):
         # Add vertical spacing between sections
         form_layout.addRow("", QLabel())  # Empty row for spacing
 
-        # Thrufocus Script Section (./thrufocus | tee <output log file>)
-        self.log_file_input = QLineEdit(self)
-        self.log_file_input.setPlaceholderText("Enter output log file path")
-        self.log_file_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
-        form_layout.addRow("Log File Path:", self.log_file_input)
-
-        thrufocus_button = QPushButton("Run thrufocus", self)
-        thrufocus_button.clicked.connect(self.run_thrufocus_script)
-        thrufocus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
-        form_layout.addRow("", thrufocus_button)  # Place button below the input
-
-        # Add vertical spacing between sections
-        form_layout.addRow("", QLabel())  # Empty row for spacing
-
         # Focus Set Command Section (focus set <band> <value>)
-        self.band_input = QLineEdit(self)
-        self.band_input.setPlaceholderText("Enter band (e.g., R, I)")
-        self.band_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
-        form_layout.addRow("Band:", self.band_input)
+        self.band_r_input = QLineEdit(self)
+        self.band_r_input.setPlaceholderText("R")
+        self.band_r_input.setReadOnly(True)
+        self.band_r_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Band:", self.band_r_input)
 
         self.value_input = QLineEdit(self)
         self.value_input.setPlaceholderText("Enter focus value")
         self.value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
         form_layout.addRow("Focus Value:", self.value_input)
 
-        focus_button = QPushButton("Set Focus Value", self)
-        focus_button.clicked.connect(self.set_focus)
+        focus_button = QPushButton("Set Focus Value (R Band)", self)
+        focus_button.clicked.connect(self.set_focus_r)
+        focus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", focus_button)  # Place button below the input
+
+        # Add vertical spacing between sections
+        form_layout.addRow("", QLabel())  # Empty row for spacing
+
+        # Focus Set Command Section (focus set <band> <value>)
+        self.band_i_input = QLineEdit(self)
+        self.band_i_input.setPlaceholderText("I")
+        self.band_i_input.setReadOnly(True)
+        self.band_i_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Band:", self.band_i_input)
+
+        self.value_input = QLineEdit(self)
+        self.value_input.setPlaceholderText("Enter focus value")
+        self.value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Focus Value:", self.value_input)
+
+        focus_button = QPushButton("Set Focus Value (I Band)", self)
+        focus_button.clicked.connect(self.set_focus_i)
         focus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
         form_layout.addRow("", focus_button)  # Place button below the input
 
@@ -176,9 +210,21 @@ class AfternoonTab(QWidget):
         else:
             print("Please provide a valid log file path.")
 
-    def set_focus(self):
+    def set_focus_r(self):
         # Get input values for the focus set command
-        band = self.band_input.text()
+        band = self.band_r_input.text()
+        value = self.value_input.text()
+
+        # Ensure both band and value are provided
+        if band and value:
+            command = f"focus set {band} {value}"
+            self.execute_command(command)
+        else:
+            print("Please provide both band and value for the focus set command.")
+
+    def set_focus_i(self):
+        # Get input values for the focus set command
+        band = self.band_i_input.text()
         value = self.value_input.text()
 
         # Ensure both band and value are provided
