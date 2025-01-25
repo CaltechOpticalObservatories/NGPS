@@ -1,32 +1,12 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout, QSpacerItem
 from PyQt5.QtCore import Qt
 import subprocess
-from PyQt5.QtCore import QThread, pyqtSignal
-
-# Worker thread to run the command
-class CommandThread(QThread):
-    # Signal to pass the result back to the main thread
-    result_signal = pyqtSignal(str)
-
-    def __init__(self, command_list):
-        super().__init__()
-        self.command_list = command_list
-
-    def run(self):
-        try:
-            # Running the command in subprocess
-            result = subprocess.run(self.command_list, check=True, text=True, capture_output=True)
-            # Emit the result to update the UI
-            self.result_signal.emit(result.stdout)
-        except subprocess.CalledProcessError as e:
-            self.result_signal.emit(f"Error: {e.stderr}")
-
+import glob
 
 class FocusTab(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.worker = None
 
     def initUI(self):
         main_layout = QVBoxLayout()
@@ -280,6 +260,42 @@ class FocusTab(QWidget):
         full_boi_button_layout.addWidget(full_boi_button)
         full_boi_button_layout.setAlignment(full_boi_button, Qt.AlignCenter) 
         scroll_area_layout.addRow(full_boi_button_layout)
+        
+        # Add a button to run the focus_andor.py command
+        run_focus_andor_button = QPushButton("Run Focus Andor Command", self)     
+        run_focus_andor_button.clicked.connect(self.run_focus_andor)
+        run_focus_andor_button.setFixedHeight(45)
+        run_focus_andor_button.setFixedWidth(300)
+        run_focus_andor_button_layout = QHBoxLayout()
+        run_focus_andor_button_layout.addWidget(run_focus_andor_button)
+        run_focus_andor_button_layout.setAlignment(run_focus_andor_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(run_focus_andor_button_layout)
+
+        # Add a button to open images with eog
+        open_images_button = QPushButton("Open Focus Images", self)
+        open_images_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007BFF;  /* Blue color */
+                color: white;
+                border-radius: 8px;
+                padding: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;  /* Slightly darker blue on hover */
+            }
+            QPushButton:pressed {
+                background-color: #004085;  /* Darker blue when pressed */
+            }
+        """)
+        open_images_button.clicked.connect(self.open_focus_images)
+        open_images_button.setFixedHeight(45)
+        open_images_button.setFixedWidth(300)
+        open_images_button_layout = QHBoxLayout()
+        open_images_button_layout.addWidget(open_images_button)
+        open_images_button_layout.setAlignment(open_images_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(open_images_button_layout)
+
 
         # Set scrollable widget layout
         scroll_area_widget.setLayout(scroll_area_layout)
@@ -301,23 +317,12 @@ class FocusTab(QWidget):
 
 
     def run_command(self, command_list):
-        """Run the command in a separate thread to prevent blocking the UI."""
-        if self.worker and self.worker.isRunning():
-            print("Command is already running.")
-            return  # Prevent starting a new thread if the previous one is still running
-        
-        # Create a new worker thread for the command
-        self.worker = CommandThread(command_list)
-        # Connect the result signal to handle the command output
-        self.worker.result_signal.connect(self.handle_command_result)
-        # Start the worker thread
-        self.worker.start()
-
-    def closeEvent(self, event):
-        """Ensure the worker thread finishes before the widget is destroyed."""
-        if self.worker and self.worker.isRunning():
-            self.worker.wait()  # Wait for the thread to finish
-        event.accept()
+        """Helper function to run terminal command and handle errors"""
+        try:
+            result = subprocess.run(command_list, check=True, text=True, capture_output=True)
+            print(f"Command output: {result.stdout}")
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with error: {e.stderr}")
     
     def activate_boi_r(self):
         # Get the user input or use the placeholder (default values)
@@ -439,33 +444,53 @@ class FocusTab(QWidget):
             self.run_command(command.split())
         else:
             print("Please provide a valid input for the TCS focus.")
-            
-    def run_focus(self):
-        """Trigger focus-related actions in sequence."""
-        print("Running Focus...")
-        self.commands_queue = [
-            self.set_basename,
-            self.activate_boi_r,
-            self.activate_boi_i,
-            self.activate_row_bin,
-            self.activate_col_bin,
-            self.set_exptime,
-            self.set_slit,
-            self.camstep_focus,
-            self.camstep_focus_acam,
-        ]
-        self.current_command = 0  # Start from the first command
-        self.run_next_command()
 
-    def handle_command_result(self, result):
-        """Handle the result from the command and update the UI."""
-        print(result)  # You can update the UI here, for example, show result in a QLabel
+    # Event handler methods for R and I bands
+    def run_focus(self):
+        # This method will run all the other buttons when clicked
+        print("Running Focus...")
+
+        # Call each button's functionality
+        self.set_basename("focus")
+        self.activate_boi_r()
+        self.activate_boi_i()
+        self.activate_row_bin()
+        self.activate_col_bin()
+        self.set_exptime()
+        self.set_slit()
+        self.camstep_focus()
+        self.camstep_focus_acam()
+        self.set_basename()
+        self.run_focus_andor()
+        self.open_focus_images()
 
     def set_basename(self, basename="ngps"):
-        """Set the camera basename"""
+        """Set the basename."""
 
         if basename:
             command = f"camera basename {basename}"
             self.run_command(command.split())
-        else:
-            print("Please provide a valid basename.")
+
+    def run_focus_andor(self):
+        """Run the focus_andor.py script with specified arguments."""
+        command = "bash calib/andor.sh"
+        self.execute_command(command)
+
+    def open_focus_images(self):
+        """Run the exact eog command to open images."""
+        command = "eog /home/observer/focus/focus_andor_*.png"
+        
+        try:
+            # Run the command exactly as it is
+            subprocess.run(command, shell=True, check=True)
+            print("Command executed successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred: {e.stderr}")
+
+    def execute_command(self, command):
+        """Runs the given command in the terminal"""
+        try:
+            print(f"Running command: {command}")
+            subprocess.run(command, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing command: {e}")

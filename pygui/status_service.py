@@ -116,11 +116,11 @@ class StatusService(QObject):
             self._parse_pixelcount_message(message)
             self.update_status_signal.emit("idle")
         elif message.startswith("CAMERAD:IMMNUM"):
-            match = re.match(r"EXPTIME:(\d+) (\d+) (\d+)", message)
-            self.image_number_updated_signal.emit(int(match.group[1]))
+            match = re.match(r"CAMERAD:IMNUM:(\d+)", message)
+            self.image_number_updated_signal.emit(int(match.group(1)))
         elif message.startswith("CAMERAD:IMNAME"):
-            match = re.match(r"EXPTIME:(\d+) (\d+) (\d+)", message)
-            self.image_name_updated_signal.emit(int(match.group[1]))
+            match = re.match(r"CAMERAD:IMNAME:(/.*)", message)
+            self.image_name_updated_signal.emit(int(match.group(1)))
         elif "ready for next exposure" in message:
             self.progress_updated_signal.emit(int(0))
             self.readout_progress_updated_signal.emit(int(0))
