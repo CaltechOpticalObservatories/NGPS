@@ -816,13 +816,11 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_POWER_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_POWER );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_POWER );
 
     // disconnect me from powerd
     logwrite( function, "disconnecting from powerd" );
     this->powerd.disconnect();
-
-    // set this as not ready
-    this->daemon_manager.clear( Sequencer::DAEMON_POWER );
 
     return NO_ERROR;
   }
@@ -904,6 +902,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SLIT_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_SLIT );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_SLIT );
 
     // already off?
     //
@@ -917,7 +916,6 @@ namespace Sequencer {
     //
     if ( !poweron ) {
       logwrite( function, "slit already powered off. nothing to do." );
-      this->daemon_manager.clear(Sequencer::DAEMON_SLIT);
       return NO_ERROR;
     }
 
@@ -943,8 +941,6 @@ namespace Sequencer {
     //
     logwrite( function, "disconnecting from slitd" );
     this->slitd.disconnect();
-
-    this->daemon_manager.clear(Sequencer::DAEMON_SLIT);
 
     return NO_ERROR;
   }
@@ -1055,6 +1051,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SLICECAM_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_SLICECAM );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_SLICECAM );
 
     // already off?
     //
@@ -1068,7 +1065,6 @@ namespace Sequencer {
     //
     if ( !poweron ) {
       logwrite( function, "slicecam already powered off. nothing to do." );
-      this->daemon_manager.clear(Sequencer::DAEMON_SLICECAM);
       return NO_ERROR;
     }
 
@@ -1092,8 +1088,6 @@ namespace Sequencer {
       error=ERROR;
     }
 
-    this->daemon_manager.clear(Sequencer::DAEMON_SLICECAM);
-
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::slicecam_shutdown *******************************/
@@ -1112,6 +1106,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ACAM_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_ACAM );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_ACAM );
 
     // ensure a connection to the daemon
     //
@@ -1158,10 +1153,6 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "ERROR switching off acam" );
       error=ERROR;
     }
-
-    // set this system as not ready
-    //
-    this->daemon_manager.clear( Sequencer::DAEMON_ACAM );
 
     // set this thread's error status
     //
@@ -1249,17 +1240,27 @@ namespace Sequencer {
    */
   long Sequence::calib_shutdown() {
     const std::string function("Sequencer::Sequence::calib_shutdown");
+    long error=NO_ERROR;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CALIB_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_CALIB );
+
+    // is calib hardware powered?
+    //
+    bool poweron=false;
+    if ( check_power_switch(ON, POWER_CALIB, poweron ) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR checking calib power switch" );
+      error=ERROR;
+    }
 
     // ensure a connection to the daemon
     //
-    long error = this->connect_to_daemon(this->calibd);
+    error |= this->connect_to_daemon(this->calibd);
 
-    // set shutdown values
+    // set shutdown values if connected and powered
     //
-    if ( error==NO_ERROR ) {
+    if ( poweron && error==NO_ERROR ) {
       if ( !this->config_shutdown["CALIB_COVER"].empty() && !this->config_shutdown["CALIB_DOOR"].empty() ) {
         std::stringstream cmd;
         cmd << CALIBD_SET;
@@ -1268,7 +1269,7 @@ namespace Sequencer {
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
-          return ERROR;
+          error=ERROR;
         }
       }
     }
@@ -1279,7 +1280,7 @@ namespace Sequencer {
       std::string reply;
       logwrite( function, "closing calib hardware" );
       error = this->calibd.send( CALIBD_CLOSE, reply );
-      if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR: closing connection to calib hardware" );
+      if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR closing connection to calib hardware" );
     }
 
     // disconnect me from calibd, irrespective of any previous error
@@ -1294,16 +1295,12 @@ namespace Sequencer {
       error=ERROR;
     }
 
-    // turn off power to lamps
+    // always turn off power to lamps
     //
     if ( this->set_power_switch(OFF, POWER_LAMP, std::chrono::seconds(5)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering off lamps" );
       error=ERROR;
     }
-
-    // set this system as not ready
-    //
-    this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
     // set this thread's error status
     //
@@ -1353,6 +1350,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_TCS_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_TCS );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_TCS );
 
     // ensure a connection to the daemon
     //
@@ -1371,10 +1369,6 @@ namespace Sequencer {
     //
     logwrite( function, "disconnecting from tcsd" );
     this->tcsd.disconnect();
-
-    // set this system as not ready
-    //
-    this->daemon_manager.clear( Sequencer::DAEMON_TCS );
 
     return NO_ERROR;
   }
@@ -1429,6 +1423,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_FLEXURE_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_FLEXURE );
 
     // already off?
     //
@@ -1442,7 +1437,6 @@ namespace Sequencer {
     //
     if ( !poweron ) {
       logwrite( function, "flexure already powered off. nothing to do." );
-      this->daemon_manager.clear(Sequencer::DAEMON_FLEXURE);
       return NO_ERROR;
     }
 
@@ -1465,10 +1459,6 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "ERROR switching off flexure" );
       error=ERROR;
     }
-
-    // set this system as not ready
-    //
-    this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );
 
     return NO_ERROR;
   }
@@ -1550,6 +1540,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_FOCUS_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_FOCUS );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_FOCUS );
 
     // already off?
     //
@@ -1563,7 +1554,6 @@ namespace Sequencer {
     //
     if ( !poweron ) {
       logwrite( function, "focus already powered off. nothing to do." );
-      this->daemon_manager.clear(Sequencer::DAEMON_FOCUS);
       return NO_ERROR;
     }
 
@@ -1580,8 +1570,6 @@ namespace Sequencer {
     //
     logwrite( function, "disconnecting from focusd" );
     this->focusd.disconnect();
-
-    this->daemon_manager.clear(Sequencer::DAEMON_FOCUS);
 
     return NO_ERROR;
   }
@@ -1644,6 +1632,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CAMERA_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
+    ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_CAMERA );
 
     // Are any cameras on?
     //
@@ -1657,7 +1646,6 @@ namespace Sequencer {
     //
     if ( !poweron ) {
       logwrite( function, "cameras already powered off. nothing to do." );
-      this->daemon_manager.clear(Sequencer::DAEMON_CAMERA);
       return NO_ERROR;
     }
 
@@ -1685,8 +1673,6 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "ERROR powering off camera" );
       return ERROR;
     }
-
-    this->daemon_manager.clear(Sequencer::DAEMON_CAMERA);
 
     return NO_ERROR;
   }
@@ -2555,8 +2541,7 @@ namespace Sequencer {
    */
   long Sequence::shutdown() {
     const std::string function("Sequencer::Sequence::shutdown");
-    std::stringstream message;
-    std::string retstring;
+    long error=ERROR;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
 
@@ -2611,18 +2596,26 @@ namespace Sequencer {
     //
     for ( auto &[thr, future] : worker_futures) {
       try {
-        future.get(); // wait for this worker to finish
+        error=future.get(); // wait for this worker to finish
         logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
       }
       catch (const std::exception& e) {
         logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
-        return ERROR;
+        error=ERROR;
       }
     }
 
-    this->async.enqueue_and_log( function, "NOTICE: instrument is shut down" );
+    std::stringstream message;
+    if (error==NO_ERROR) {
+      message << "NOTICE: instrument is shut down";
+    }
+    else {
+      message << "ERROR occurred during shutdown and may not have completed";
+    }
 
-    return( NO_ERROR );
+    this->async.enqueue_and_log( function, message.str() );
+
+    return error;
   }
   /***** Sequencer::Sequence::shutdown ****************************************/
 
