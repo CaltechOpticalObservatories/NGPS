@@ -444,3 +444,7 @@ class FocusTab(QWidget):
         self.camstep_focus()
         self.camstep_focus_acam()
 
+    def handle_command_result(self, result):
+        """Handle the result from the command and update the UI."""
+        print(result)  # You can update the UI here, for example, show result in a QLabel
+
