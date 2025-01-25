@@ -1,6 +1,26 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout, QSpacerItem
 from PyQt5.QtCore import Qt
 import subprocess
+from PyQt5.QtCore import QThread, pyqtSignal
+
+# Worker thread to run the command
+class CommandThread(QThread):
+    # Signal to pass the result back to the main thread
+    result_signal = pyqtSignal(str)
+
+    def __init__(self, command_list):
+        super().__init__()
+        self.command_list = command_list
+
+    def run(self):
+        try:
+            # Running the command in subprocess
+            result = subprocess.run(self.command_list, check=True, text=True, capture_output=True)
+            # Emit the result to update the UI
+            self.result_signal.emit(result.stdout)
+        except subprocess.CalledProcessError as e:
+            self.result_signal.emit(f"Error: {e.stderr}")
+
 
 class FocusTab(QWidget):
     def __init__(self):
@@ -280,17 +300,30 @@ class FocusTab(QWidget):
 
 
     def run_command(self, command_list):
-        """Helper function to run terminal command and handle errors"""
-        try:
-            result = subprocess.run(command_list, check=True, text=True, capture_output=True)
-            print(f"Command output: {result.stdout}")
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed with error: {e.stderr}")
+        """Run the command in a separate thread to prevent blocking the UI."""
+        self.worker = CommandThread(command_list)
+        # Connect the result signal to handle the command output
+        self.worker.result_signal.connect(self.handle_command_result)
+        # Start the worker thread
+        self.worker.start()
     
     def activate_boi_r(self):
-        channel = self.channel_r_input.text()
-        skip_rows = self.skip_rows_r_input.text()
-        rows = self.rows_r_input.text()
+        # Get the user input or use the placeholder (default values)
+        channel = self.channel_r_input.text() or self.channel_r_input.placeholderText()
+        skip_rows = self.skip_rows_r_input.text() or self.skip_rows_r_input.placeholderText()
+        rows = self.rows_r_input.text() or self.rows_r_input.placeholderText()
+
+        if channel and skip_rows and rows:
+            command = f"camera boi {channel} {skip_rows} {rows}"
+            self.run_command(command.split())
+        else:
+            print("Please provide valid input for channel, rows to skip, and rows to read.")
+
+    def activate_boi_r(self):
+        # Use placeholder text if no input provided
+        channel = self.channel_r_input.text() or self.channel_r_input.placeholderText()
+        skip_rows = self.skip_rows_r_input.text() or self.skip_rows_r_input.placeholderText()
+        rows = self.rows_r_input.text() or self.rows_r_input.placeholderText()
 
         if channel and skip_rows and rows:
             command = f"camera boi {channel} {skip_rows} {rows}"
@@ -299,9 +332,10 @@ class FocusTab(QWidget):
             print("Please provide valid input for channel, rows to skip, and rows to read.")
 
     def activate_boi_i(self):
-        channel = self.channel_i_input.text()
-        skip_rows = self.skip_rows_i_input.text()
-        rows = self.rows_i_input.text()
+        # Use placeholder text if no input provided
+        channel = self.channel_i_input.text() or self.channel_i_input.placeholderText()
+        skip_rows = self.skip_rows_i_input.text() or self.skip_rows_i_input.placeholderText()
+        rows = self.rows_i_input.text() or self.rows_i_input.placeholderText()
 
         if channel and skip_rows and rows:
             command = f"camera boi {channel} {skip_rows} {rows}"
@@ -310,15 +344,15 @@ class FocusTab(QWidget):
             print("Please provide valid input for channel, rows to skip, and rows to read.")
 
     def activate_boi_full(self):
-        command = f"camera boi R full"
-        self.run_command(command.split())
-        
-        command = f"camera boi I full"
-        self.run_command(command.split())
+        command_r = f"camera boi R full"
+        command_i = f"camera boi I full"
+        self.run_command(command_r.split())
+        self.run_command(command_i.split())
 
     def activate_row_bin(self):
-        axis = self.axis_input_row.text()
-        binfactor = self.binfactor_input_row.text()
+        # Use placeholder text if no input provided
+        axis = self.axis_input_row.text() or self.axis_input_row.placeholderText()
+        binfactor = self.binfactor_input_row.text() or self.binfactor_input_row.placeholderText()
 
         if axis and binfactor:
             command = f"camera bin {axis} {binfactor}"
@@ -327,8 +361,9 @@ class FocusTab(QWidget):
             print("Please provide valid input for axis and bin factor.")
 
     def activate_col_bin(self):
-        axis = self.axis_input_col.text()
-        binfactor = self.binfactor_input_col.text()
+        # Use placeholder text if no input provided
+        axis = self.axis_input_col.text() or self.axis_input_col.placeholderText()
+        binfactor = self.binfactor_input_col.text() or self.binfactor_input_col.placeholderText()
 
         if axis and binfactor:
             command = f"camera bin {axis} {binfactor}"
@@ -337,7 +372,8 @@ class FocusTab(QWidget):
             print("Please provide valid input for axis and bin factor.")
 
     def set_exptime(self):
-        exptime = self.exptime_input.text()
+        # Use placeholder text if no input provided
+        exptime = self.exptime_input.text() or self.exptime_input.placeholderText()
 
         if exptime:
             command = f"camera exptime {exptime}"
@@ -346,8 +382,9 @@ class FocusTab(QWidget):
             print("Please provide a valid input for exposure time.")
 
     def set_slit(self):
-        width = self.slit_width_input.text()
-        offset = self.slit_offset_input.text()
+        # Use placeholder text if no input provided
+        width = self.slit_width_input.text() or self.slit_width_input.placeholderText()
+        offset = self.slit_offset_input.text() or self.slit_offset_input.placeholderText()
 
         if width and offset:
             command = f"slit set {width} {offset}"
@@ -356,10 +393,11 @@ class FocusTab(QWidget):
             print("Please provide valid input for slit width and offset.")
 
     def camstep_focus(self):
-        value = self.focus_value_input.text()
-        upper = self.focus_upper_input.text()
-        lower = self.focus_lower_input.text()
-        step = self.focus_step_input.text()
+        # Use placeholder text if no input provided
+        value = self.focus_value_input.text() or self.focus_value_input.placeholderText()
+        upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
+        lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
+        step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
 
         if value and upper and lower and step:
             command = f"camstep focus all focusloop {value} {upper} {lower} {step}"
@@ -368,10 +406,11 @@ class FocusTab(QWidget):
             print("Please provide valid input for focus loop parameters.")
 
     def camstep_focus_acam(self):
-        value = self.focus_value_input.text()
-        upper = self.focus_upper_input.text()
-        lower = self.focus_lower_input.text()
-        step = self.focus_step_input.text()
+        # Use placeholder text if no input provided
+        value = self.focus_value_input.text() or self.focus_value_input.placeholderText()
+        upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
+        lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
+        step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
 
         if value and upper and lower and step:
             command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
@@ -380,13 +419,15 @@ class FocusTab(QWidget):
             print("Please provide valid input for ACAM focus loop parameters.")
 
     def set_tcs_focus(self):
-        value = self.tcs_focus_value_input.text()
+        # Use placeholder text if no input provided
+        value = self.tcs_focus_value_input.text() or self.tcs_focus_value_input.placeholderText()
 
         if value:
             command = f"tcs setfocus {value}"
             self.run_command(command.split())
         else:
             print("Please provide a valid input for the TCS focus.")
+
             
     # Event handler methods for R and I bands
     def run_focus(self):
