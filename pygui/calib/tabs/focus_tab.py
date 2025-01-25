@@ -36,7 +36,7 @@ class FocusTab(QWidget):
             }
         """)        
         run_focus_button.clicked.connect(self.run_focus)
-        run_focus_button.setFixedHeight(35)
+        run_focus_button.setFixedHeight(50)
         run_focus_button.setFixedWidth(300)
         run_focus_button_layout = QHBoxLayout()
         run_focus_button_layout.addWidget(run_focus_button)
@@ -65,7 +65,7 @@ class FocusTab(QWidget):
         # BOI Activation Button for R (right-aligned)
         boi_r_button = QPushButton("Activate BOI (R)", self)
         boi_r_button.clicked.connect(self.activate_boi_r)
-        boi_r_button.setFixedHeight(35)
+        boi_r_button.setFixedHeight(50)
         boi_r_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
         boi_r_button_layout = QHBoxLayout()
         boi_r_button_layout.addWidget(boi_r_button)
@@ -94,7 +94,7 @@ class FocusTab(QWidget):
         # BOI Activation Button for I (right-aligned)
         boi_i_button = QPushButton("Activate BOI (I)", self)
         boi_i_button.clicked.connect(self.activate_boi_i)
-        boi_i_button.setFixedHeight(35)
+        boi_i_button.setFixedHeight(50)
         boi_i_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
         boi_i_button_layout = QHBoxLayout()
         boi_i_button_layout.addWidget(boi_i_button)
@@ -129,20 +129,44 @@ class FocusTab(QWidget):
         # Camera and Focus Section
         scroll_area_layout.addRow(QLabel("Camera and Focus Commands"))
         
-        # Camera Bin Command Form
-        self.axis_input = QLineEdit(self)
-        self.axis_input.setPlaceholderText("Enter axis (for camera bin)")
-        self.binfactor_input = QLineEdit(self)
-        self.binfactor_input.setPlaceholderText("Bin factor")
-        bin_button = QPushButton("Activate Camera Bin", self)
-        bin_button.clicked.connect(self.activate_bin)
-        bin_button.setFixedWidth(300)  # Half-width button
-        bin_button_layout = QHBoxLayout()
-        bin_button_layout.addWidget(bin_button)
-        bin_button_layout.setAlignment(bin_button, Qt.AlignCenter)  # Right-align the button
-        scroll_area_layout.addRow("Axis:", self.axis_input)
-        scroll_area_layout.addRow("Bin Factor:", self.binfactor_input)
-        scroll_area_layout.addRow(bin_button_layout)
+        # Camera Bin Command Form (Row Bin)
+        self.axis_input_row = QLineEdit(self)
+        self.axis_input_row.setPlaceholderText("row")
+        self.binfactor_input_row = QLineEdit(self)
+        self.binfactor_input_row.setPlaceholderText("4")
+
+        row_bin_button = QPushButton("Activate Row Bin", self)
+        row_bin_button.clicked.connect(self.activate_row_bin)
+        row_bin_button.setFixedHeight(50)
+        row_bin_button.setFixedWidth(300)  # Half-width button
+        row_bin_button_layout = QHBoxLayout()
+        row_bin_button_layout.addWidget(row_bin_button)
+        row_bin_button_layout.setAlignment(row_bin_button, Qt.AlignCenter)  # Center the button
+
+        # Add Row Bin Form and button to layout
+        scroll_area_layout.addRow("Axis (Row Bin):", self.axis_input_row)
+        scroll_area_layout.addRow("Row Bin Factor:", self.binfactor_input_row)
+        scroll_area_layout.addRow(row_bin_button_layout)
+
+        # Camera Bin Command Form (Col Bin)
+        self.axis_input_col = QLineEdit(self)
+        self.axis_input_col.setPlaceholderText("col")
+        self.binfactor_input_col = QLineEdit(self)
+        self.binfactor_input_col.setPlaceholderText("1")
+
+        col_bin_button = QPushButton("Activate Col Bin", self)
+        col_bin_button.clicked.connect(self.activate_col_bin)
+        col_bin_button.setFixedHeight(50)
+        col_bin_button.setFixedWidth(300)  # Half-width button
+        col_bin_button_layout = QHBoxLayout()
+        col_bin_button_layout.addWidget(col_bin_button)
+        col_bin_button_layout.setAlignment(col_bin_button, Qt.AlignCenter)  # Center the button
+
+        # Add Col Bin Form and button to layout
+        scroll_area_layout.addRow("Axis (Col Bin):", self.axis_input_col)
+        scroll_area_layout.addRow("Col Bin Factor:", self.binfactor_input_col)
+        scroll_area_layout.addRow(col_bin_button_layout)
+
         scroll_area_layout.addRow(divider2)
 
         # Exposure Time Command
@@ -150,7 +174,7 @@ class FocusTab(QWidget):
         self.exptime_input.setPlaceholderText("10000")
         exptime_button = QPushButton("Set Camera Exposure Time", self)
         exptime_button.clicked.connect(self.set_exptime)
-        exptime_button.setFixedHeight(35)
+        exptime_button.setFixedHeight(50)
         exptime_button.setFixedWidth(300)  # Half-width button
         exptime_button_layout = QHBoxLayout()
         exptime_button_layout.addWidget(exptime_button)
@@ -166,7 +190,7 @@ class FocusTab(QWidget):
         self.slit_offset_input.setPlaceholderText("3")
         slit_button = QPushButton("Set Slit", self)
         slit_button.clicked.connect(self.set_slit)
-        slit_button.setFixedHeight(35)
+        slit_button.setFixedHeight(50)
         slit_button.setFixedWidth(300)  # Half-width button
         slit_button_layout = QHBoxLayout()
         slit_button_layout.addWidget(slit_button)
@@ -187,7 +211,7 @@ class FocusTab(QWidget):
         
         camstep_button = QPushButton("Camstep Focus (General)", self)
         camstep_button.clicked.connect(self.camstep_focus)
-        camstep_button.setFixedHeight(35)
+        camstep_button.setFixedHeight(50)
         camstep_button.setFixedWidth(300)  # Half-width button
         camstep_button_layout = QHBoxLayout()
         camstep_button_layout.addWidget(camstep_button)
@@ -201,7 +225,7 @@ class FocusTab(QWidget):
         # Camstep Focus Button (ACAM)
         camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
         camstep_acam_button.clicked.connect(self.camstep_focus_acam)
-        camstep_acam_button.setFixedHeight(35)
+        camstep_acam_button.setFixedHeight(50)
         camstep_acam_button.setFixedWidth(300)  # Half-width button
         camstep_acam_button_layout = QHBoxLayout()
         camstep_acam_button_layout.addWidget(camstep_acam_button)
@@ -213,7 +237,7 @@ class FocusTab(QWidget):
         self.tcs_focus_value_input.setPlaceholderText("Set TCS focus value")
         tcs_button = QPushButton("Set TCS Focus", self)
         tcs_button.clicked.connect(self.set_tcs_focus)
-        tcs_button.setFixedHeight(35)
+        tcs_button.setFixedHeight(50)
         tcs_button.setFixedWidth(300)  # Half-width button
         tcs_button_layout = QHBoxLayout()
         tcs_button_layout.addWidget(tcs_button)
@@ -228,7 +252,7 @@ class FocusTab(QWidget):
         # Full BOI Section
         full_boi_button = QPushButton("Activate Full BOI", self)
         full_boi_button.clicked.connect(self.activate_boi_full)
-        full_boi_button.setFixedHeight(35)
+        full_boi_button.setFixedHeight(50)
         full_boi_button.setFixedWidth(300)  # Half-width button
         full_boi_button_layout = QHBoxLayout()
         full_boi_button_layout.addWidget(full_boi_button)
@@ -291,9 +315,19 @@ class FocusTab(QWidget):
         command = f"camera boi I full"
         self.run_command(command.split())
 
-    def activate_bin(self):
-        axis = self.axis_input.text()
-        binfactor = self.binfactor_input.text()
+    def activate_row_bin(self):
+        axis = self.axis_input_row.text()
+        binfactor = self.binfactor_input_row.text()
+
+        if axis and binfactor:
+            command = f"camera bin {axis} {binfactor}"
+            self.run_command(command.split())
+        else:
+            print("Please provide valid input for axis and bin factor.")
+
+    def activate_col_bin(self):
+        axis = self.axis_input_col.text()
+        binfactor = self.binfactor_input_col.text()
 
         if axis and binfactor:
             command = f"camera bin {axis} {binfactor}"
@@ -361,4 +395,10 @@ class FocusTab(QWidget):
         # Call each button's functionality
         self.activate_boi_r()
         self.activate_boi_i()
+        self.activate_row_bin()
+        self.activate_col_bin()
+        self.set_exptime()
+        self.set_slit()
+        self.camstep_focus()
+        self.camstep_focus_acam()
 
