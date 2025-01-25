@@ -23,7 +23,6 @@ class FocusTab(QWidget):
             QPushButton {
                 background-color: #4CAF50;  /* Green color */
                 color: white;
-                font-size: 16px;
                 border-radius: 8px;
                 padding: 10px;
                 border: none;
@@ -36,7 +35,7 @@ class FocusTab(QWidget):
             }
         """)        
         run_focus_button.clicked.connect(self.run_focus)
-        run_focus_button.setFixedHeight(50)
+        run_focus_button.setFixedHeight(45)
         run_focus_button.setFixedWidth(300)
         run_focus_button_layout = QHBoxLayout()
         run_focus_button_layout.addWidget(run_focus_button)
@@ -65,7 +64,7 @@ class FocusTab(QWidget):
         # BOI Activation Button for R (right-aligned)
         boi_r_button = QPushButton("Activate BOI (R)", self)
         boi_r_button.clicked.connect(self.activate_boi_r)
-        boi_r_button.setFixedHeight(50)
+        boi_r_button.setFixedHeight(45)
         boi_r_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
         boi_r_button_layout = QHBoxLayout()
         boi_r_button_layout.addWidget(boi_r_button)
@@ -94,7 +93,7 @@ class FocusTab(QWidget):
         # BOI Activation Button for I (right-aligned)
         boi_i_button = QPushButton("Activate BOI (I)", self)
         boi_i_button.clicked.connect(self.activate_boi_i)
-        boi_i_button.setFixedHeight(50)
+        boi_i_button.setFixedHeight(45)
         boi_i_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
         boi_i_button_layout = QHBoxLayout()
         boi_i_button_layout.addWidget(boi_i_button)
@@ -132,6 +131,7 @@ class FocusTab(QWidget):
         # Camera Bin Command Form (Row Bin)
         self.axis_input_row = QLineEdit(self)
         self.axis_input_row.setPlaceholderText("row")
+        self.axis_input_row.setReadOnly(True)
         self.binfactor_input_row = QLineEdit(self)
         self.binfactor_input_row.setPlaceholderText("4")
 
@@ -151,12 +151,13 @@ class FocusTab(QWidget):
         # Camera Bin Command Form (Col Bin)
         self.axis_input_col = QLineEdit(self)
         self.axis_input_col.setPlaceholderText("col")
+        self.axis_input_col.setReadOnly(True)
         self.binfactor_input_col = QLineEdit(self)
         self.binfactor_input_col.setPlaceholderText("1")
 
         col_bin_button = QPushButton("Activate Col Bin", self)
         col_bin_button.clicked.connect(self.activate_col_bin)
-        col_bin_button.setFixedHeight(50)
+        col_bin_button.setFixedHeight(45)
         col_bin_button.setFixedWidth(300)  # Half-width button
         col_bin_button_layout = QHBoxLayout()
         col_bin_button_layout.addWidget(col_bin_button)
@@ -174,7 +175,7 @@ class FocusTab(QWidget):
         self.exptime_input.setPlaceholderText("10000")
         exptime_button = QPushButton("Set Camera Exposure Time", self)
         exptime_button.clicked.connect(self.set_exptime)
-        exptime_button.setFixedHeight(50)
+        exptime_button.setFixedHeight(45)
         exptime_button.setFixedWidth(300)  # Half-width button
         exptime_button_layout = QHBoxLayout()
         exptime_button_layout.addWidget(exptime_button)
@@ -190,7 +191,7 @@ class FocusTab(QWidget):
         self.slit_offset_input.setPlaceholderText("3")
         slit_button = QPushButton("Set Slit", self)
         slit_button.clicked.connect(self.set_slit)
-        slit_button.setFixedHeight(50)
+        slit_button.setFixedHeight(45)
         slit_button.setFixedWidth(300)  # Half-width button
         slit_button_layout = QHBoxLayout()
         slit_button_layout.addWidget(slit_button)
@@ -211,7 +212,7 @@ class FocusTab(QWidget):
         
         camstep_button = QPushButton("Camstep Focus (General)", self)
         camstep_button.clicked.connect(self.camstep_focus)
-        camstep_button.setFixedHeight(50)
+        camstep_button.setFixedHeight(45)
         camstep_button.setFixedWidth(300)  # Half-width button
         camstep_button_layout = QHBoxLayout()
         camstep_button_layout.addWidget(camstep_button)
@@ -225,7 +226,7 @@ class FocusTab(QWidget):
         # Camstep Focus Button (ACAM)
         camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
         camstep_acam_button.clicked.connect(self.camstep_focus_acam)
-        camstep_acam_button.setFixedHeight(50)
+        camstep_acam_button.setFixedHeight(45)
         camstep_acam_button.setFixedWidth(300)  # Half-width button
         camstep_acam_button_layout = QHBoxLayout()
         camstep_acam_button_layout.addWidget(camstep_acam_button)
@@ -237,7 +238,7 @@ class FocusTab(QWidget):
         self.tcs_focus_value_input.setPlaceholderText("Set TCS focus value")
         tcs_button = QPushButton("Set TCS Focus", self)
         tcs_button.clicked.connect(self.set_tcs_focus)
-        tcs_button.setFixedHeight(50)
+        tcs_button.setFixedHeight(45)
         tcs_button.setFixedWidth(300)  # Half-width button
         tcs_button_layout = QHBoxLayout()
         tcs_button_layout.addWidget(tcs_button)
@@ -252,7 +253,7 @@ class FocusTab(QWidget):
         # Full BOI Section
         full_boi_button = QPushButton("Activate Full BOI", self)
         full_boi_button.clicked.connect(self.activate_boi_full)
-        full_boi_button.setFixedHeight(50)
+        full_boi_button.setFixedHeight(45)
         full_boi_button.setFixedWidth(300)  # Half-width button
         full_boi_button_layout = QHBoxLayout()
         full_boi_button_layout.addWidget(full_boi_button)
