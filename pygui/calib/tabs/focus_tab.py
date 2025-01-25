@@ -14,8 +14,34 @@ class FocusTab(QWidget):
         scroll_area_widget = QWidget()  # Create a widget that will be scrolled
         scroll_area_layout = QFormLayout()  # Use a QFormLayout to organize the sections
         
-        scroll_area_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
+        scroll_area_layout.setContentsMargins(15, 15, 15, 15)  # Inner margins around form
         scroll_area_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
+        
+        # Run Focus Button (Before Band of Interest Section)
+        run_focus_button = QPushButton("Run Focus", self)
+        run_focus_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green color */
+                color: white;
+                font-size: 16px;
+                border-radius: 8px;
+                padding: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #45a049;  /* Slightly darker green on hover */
+            }
+            QPushButton:pressed {
+                background-color: #3e8e41;  /* Darker green when pressed */
+            }
+        """)        
+        run_focus_button.clicked.connect(self.run_focus)
+        run_focus_button.setFixedHeight(35)
+        run_focus_button.setFixedWidth(300)
+        run_focus_button_layout = QHBoxLayout()
+        run_focus_button_layout.addWidget(run_focus_button)
+        run_focus_button_layout.setAlignment(run_focus_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(run_focus_button_layout)
         
         # Band of Interest Section
         scroll_area_layout.addRow(QLabel("Band of Interest (R)"))
@@ -39,6 +65,7 @@ class FocusTab(QWidget):
         # BOI Activation Button for R (right-aligned)
         boi_r_button = QPushButton("Activate BOI (R)", self)
         boi_r_button.clicked.connect(self.activate_boi_r)
+        boi_r_button.setFixedHeight(35)
         boi_r_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
         boi_r_button_layout = QHBoxLayout()
         boi_r_button_layout.addWidget(boi_r_button)
@@ -67,23 +94,12 @@ class FocusTab(QWidget):
         # BOI Activation Button for I (right-aligned)
         boi_i_button = QPushButton("Activate BOI (I)", self)
         boi_i_button.clicked.connect(self.activate_boi_i)
+        boi_i_button.setFixedHeight(35)
         boi_i_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
         boi_i_button_layout = QHBoxLayout()
         boi_i_button_layout.addWidget(boi_i_button)
         boi_i_button_layout.setAlignment(boi_i_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow(boi_i_button_layout)
-
-        # Full BOI Section
-        self.full_channel_input = QLineEdit(self)
-        self.full_channel_input.setPlaceholderText("Enter channel")
-        full_boi_button = QPushButton("Activate BOI (Full)", self)
-        full_boi_button.clicked.connect(self.activate_boi_full)
-        full_boi_button.setFixedWidth(300)  # Half-width button
-        full_boi_button_layout = QHBoxLayout()
-        full_boi_button_layout.addWidget(full_boi_button)
-        full_boi_button_layout.setAlignment(full_boi_button, Qt.AlignCenter)  # Right-align the button
-        scroll_area_layout.addRow("Enter channel for full BOI:", self.full_channel_input)
-        scroll_area_layout.addRow(full_boi_button_layout)
 
         # Add white divider line
         divider = QFrame(self)
@@ -134,6 +150,7 @@ class FocusTab(QWidget):
         self.exptime_input.setPlaceholderText("10000")
         exptime_button = QPushButton("Set Camera Exposure Time", self)
         exptime_button.clicked.connect(self.set_exptime)
+        exptime_button.setFixedHeight(35)
         exptime_button.setFixedWidth(300)  # Half-width button
         exptime_button_layout = QHBoxLayout()
         exptime_button_layout.addWidget(exptime_button)
@@ -149,6 +166,7 @@ class FocusTab(QWidget):
         self.slit_offset_input.setPlaceholderText("3")
         slit_button = QPushButton("Set Slit", self)
         slit_button.clicked.connect(self.set_slit)
+        slit_button.setFixedHeight(35)
         slit_button.setFixedWidth(300)  # Half-width button
         slit_button_layout = QHBoxLayout()
         slit_button_layout.addWidget(slit_button)
@@ -156,7 +174,6 @@ class FocusTab(QWidget):
         scroll_area_layout.addRow("Slit Width:", self.slit_width_input)
         scroll_area_layout.addRow("Slit Offset:", self.slit_offset_input)
         scroll_area_layout.addRow(slit_button_layout)
-        scroll_area_layout.addRow(divider4)
 
         # Camstep Focus Command
         self.focus_value_input = QLineEdit(self)
@@ -170,6 +187,7 @@ class FocusTab(QWidget):
         
         camstep_button = QPushButton("Camstep Focus (General)", self)
         camstep_button.clicked.connect(self.camstep_focus)
+        camstep_button.setFixedHeight(35)
         camstep_button.setFixedWidth(300)  # Half-width button
         camstep_button_layout = QHBoxLayout()
         camstep_button_layout.addWidget(camstep_button)
@@ -183,6 +201,7 @@ class FocusTab(QWidget):
         # Camstep Focus Button (ACAM)
         camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
         camstep_acam_button.clicked.connect(self.camstep_focus_acam)
+        camstep_acam_button.setFixedHeight(35)
         camstep_acam_button.setFixedWidth(300)  # Half-width button
         camstep_acam_button_layout = QHBoxLayout()
         camstep_acam_button_layout.addWidget(camstep_acam_button)
@@ -194,12 +213,27 @@ class FocusTab(QWidget):
         self.tcs_focus_value_input.setPlaceholderText("Set TCS focus value")
         tcs_button = QPushButton("Set TCS Focus", self)
         tcs_button.clicked.connect(self.set_tcs_focus)
+        tcs_button.setFixedHeight(35)
         tcs_button.setFixedWidth(300)  # Half-width button
         tcs_button_layout = QHBoxLayout()
         tcs_button_layout.addWidget(tcs_button)
         tcs_button_layout.setAlignment(tcs_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("TCS Focus Value:", self.tcs_focus_value_input)
         scroll_area_layout.addRow(tcs_button_layout)
+
+        scroll_area_layout.addRow(divider4)
+
+        # Band of Interest Section
+        scroll_area_layout.addRow(QLabel("Full BOI"))
+        # Full BOI Section
+        full_boi_button = QPushButton("Activate Full BOI", self)
+        full_boi_button.clicked.connect(self.activate_boi_full)
+        full_boi_button.setFixedHeight(35)
+        full_boi_button.setFixedWidth(300)  # Half-width button
+        full_boi_button_layout = QHBoxLayout()
+        full_boi_button_layout.addWidget(full_boi_button)
+        full_boi_button_layout.setAlignment(full_boi_button, Qt.AlignCenter) 
+        scroll_area_layout.addRow(full_boi_button_layout)
 
         # Set scrollable widget layout
         scroll_area_widget.setLayout(scroll_area_layout)
@@ -251,13 +285,11 @@ class FocusTab(QWidget):
             print("Please provide valid input for channel, rows to skip, and rows to read.")
 
     def activate_boi_full(self):
-        full_channel = self.full_channel_input.text()
-
-        if full_channel:
-            command = f"camera boi {full_channel} full"
-            self.run_command(command.split())
-        else:
-            print("Please provide a valid input for the channel.")
+        command = f"camera boi R full"
+        self.run_command(command.split())
+        
+        command = f"camera boi I full"
+        self.run_command(command.split())
 
     def activate_bin(self):
         axis = self.axis_input.text()
@@ -320,3 +352,13 @@ class FocusTab(QWidget):
             self.run_command(command.split())
         else:
             print("Please provide a valid input for the TCS focus.")
+            
+    # Event handler methods for R and I bands
+    def run_focus(self):
+        # This method will run all the other buttons when clicked
+        print("Running Focus...")
+
+        # Call each button's functionality
+        self.activate_boi_r()
+        self.activate_boi_i()
+
