@@ -14,6 +14,9 @@ class FocusTab(QWidget):
         scroll_area_widget = QWidget()  # Create a widget that will be scrolled
         scroll_area_layout = QFormLayout()  # Use a QFormLayout to organize the sections
         
+        scroll_area_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
+        scroll_area_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
+        
         # Band of Interest Section
         scroll_area_layout.addRow(QLabel("Band of Interest (R)"))
         
