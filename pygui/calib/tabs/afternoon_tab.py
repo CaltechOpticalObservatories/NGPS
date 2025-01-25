@@ -241,5 +241,5 @@ class AfternoonTab(QWidget):
 
     def run_getcalib_flat(self):
         """Runs the getcalib_flat command"""
-        command = "bash calib/getcalib_flat"
+        command = "bash calib/getcalib_flats"
         self.execute_command(command)

@@ -96,11 +96,12 @@ bash  calib/fake calib set cover=close door=open
 
 # close the lollipops
 
-for i in $(/usr/bin/seq 1 6);
-  
-  # calib lampmod $i 0 1000 
+# Close the lollipops
+for i in $(seq 1 6); do
+  # calib lampmod $i 0 1000
   sleep 0.5
 done
+
 
 if [ $dolamps -ne 0 ]; then
 # turn on the lamps

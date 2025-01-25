@@ -42,6 +42,41 @@ class FocusTab(QWidget):
         run_focus_button_layout.addWidget(run_focus_button)
         run_focus_button_layout.setAlignment(run_focus_button, Qt.AlignCenter)  # Center the button
         scroll_area_layout.addRow(run_focus_button_layout)
+
+        # Camstep Focus Command
+        scroll_area_layout.addRow(QLabel("camstep Focus"))
+
+        self.focus_value_input = QLineEdit(self)
+        self.focus_value_input.setPlaceholderText("1")
+        self.focus_upper_input = QLineEdit(self)
+        self.focus_upper_input.setPlaceholderText("Upper bound")
+        self.focus_lower_input = QLineEdit(self)
+        self.focus_lower_input.setPlaceholderText("Lower bound")
+        self.focus_step_input = QLineEdit(self)
+        self.focus_step_input.setPlaceholderText(".2")
+        
+        camstep_button = QPushButton("camstep Focus (General)", self)
+        camstep_button.clicked.connect(self.camstep_focus)
+        camstep_button.setFixedHeight(45)
+        camstep_button.setFixedWidth(300)  # Half-width button
+        camstep_button_layout = QHBoxLayout()
+        camstep_button_layout.addWidget(camstep_button)
+        camstep_button_layout.setAlignment(camstep_button, Qt.AlignCenter)  # Right-align the button
+        scroll_area_layout.addRow("Image Number:", self.focus_value_input)
+        scroll_area_layout.addRow("Upper Bound:", self.focus_upper_input)
+        scroll_area_layout.addRow("Lower Bound:", self.focus_lower_input)
+        scroll_area_layout.addRow("Step:", self.focus_step_input)
+        scroll_area_layout.addRow(camstep_button_layout)
+
+        # Camstep Focus Button (ACAM)
+        camstep_acam_button = QPushButton("camstep Focus (ACAM)", self)
+        camstep_acam_button.clicked.connect(self.camstep_focus_acam)
+        camstep_acam_button.setFixedHeight(45)
+        camstep_acam_button.setFixedWidth(300)  # Half-width button
+        camstep_acam_button_layout = QHBoxLayout()
+        camstep_acam_button_layout.addWidget(camstep_acam_button)
+        camstep_acam_button_layout.setAlignment(camstep_acam_button, Qt.AlignCenter)  # Right-align the button
+        scroll_area_layout.addRow(camstep_acam_button_layout)
         
         # Band of Interest Section
         scroll_area_layout.addRow(QLabel("Band of Interest (R)"))
@@ -201,39 +236,6 @@ class FocusTab(QWidget):
         scroll_area_layout.addRow("Slit Offset:", self.slit_offset_input)
         scroll_area_layout.addRow(slit_button_layout)
 
-        # Camstep Focus Command
-        self.focus_value_input = QLineEdit(self)
-        self.focus_value_input.setPlaceholderText("1")
-        self.focus_upper_input = QLineEdit(self)
-        self.focus_upper_input.setPlaceholderText("Upper bound")
-        self.focus_lower_input = QLineEdit(self)
-        self.focus_lower_input.setPlaceholderText("Lower bound")
-        self.focus_step_input = QLineEdit(self)
-        self.focus_step_input.setPlaceholderText(".2")
-        
-        camstep_button = QPushButton("Camstep Focus (General)", self)
-        camstep_button.clicked.connect(self.camstep_focus)
-        camstep_button.setFixedHeight(45)
-        camstep_button.setFixedWidth(300)  # Half-width button
-        camstep_button_layout = QHBoxLayout()
-        camstep_button_layout.addWidget(camstep_button)
-        camstep_button_layout.setAlignment(camstep_button, Qt.AlignCenter)  # Right-align the button
-        scroll_area_layout.addRow("Image Number:", self.focus_value_input)
-        scroll_area_layout.addRow("Upper Bound:", self.focus_upper_input)
-        scroll_area_layout.addRow("Lower Bound:", self.focus_lower_input)
-        scroll_area_layout.addRow("Step:", self.focus_step_input)
-        scroll_area_layout.addRow(camstep_button_layout)
-
-        # Camstep Focus Button (ACAM)
-        camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
-        camstep_acam_button.clicked.connect(self.camstep_focus_acam)
-        camstep_acam_button.setFixedHeight(45)
-        camstep_acam_button.setFixedWidth(300)  # Half-width button
-        camstep_acam_button_layout = QHBoxLayout()
-        camstep_acam_button_layout.addWidget(camstep_acam_button)
-        camstep_acam_button_layout.setAlignment(camstep_acam_button, Qt.AlignCenter)  # Right-align the button
-        scroll_area_layout.addRow(camstep_acam_button_layout)
-
         # TCS Set Focus Command
         self.tcs_focus_value_input = QLineEdit(self)
         self.tcs_focus_value_input.setPlaceholderText("Set TCS focus value")
@@ -262,7 +264,7 @@ class FocusTab(QWidget):
         scroll_area_layout.addRow(full_boi_button_layout)
         
         # Add a button to run the focus_andor.py command
-        run_focus_andor_button = QPushButton("Run Focus Andor Command", self)     
+        run_focus_andor_button = QPushButton("Analyze Focus", self)     
         run_focus_andor_button.clicked.connect(self.run_focus_andor)
         run_focus_andor_button.setFixedHeight(45)
         run_focus_andor_button.setFixedWidth(300)
@@ -461,6 +463,7 @@ class FocusTab(QWidget):
         self.camstep_focus()
         self.camstep_focus_acam()
         self.set_basename()
+        self.activate_boi_full()
         self.run_focus_andor()
         self.open_focus_images()
 
