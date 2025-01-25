@@ -32,11 +32,14 @@ class FocusTab(QWidget):
         scroll_area_layout.addRow("Rows to Read:", self.rows_input)
         scroll_area_layout.addItem(spacer)
 
-        # BOI Activation Button (half-width)
+        # BOI Activation Button (right-aligned)
         boi_button = QPushButton("Activate BOI", self)
         boi_button.clicked.connect(self.activate_boi)
-        boi_button.setFixedWidth(200)  # Set fixed width (half of the layout width, adjust as needed)
-        scroll_area_layout.addRow(boi_button)
+        boi_button.setFixedWidth(250)  # Set fixed width (half of the layout width, adjust as needed)
+        boi_button_layout = QHBoxLayout()
+        boi_button_layout.addWidget(boi_button)
+        boi_button_layout.setAlignment(boi_button, Qt.AlignCenter)  # Right-align the button
+        scroll_area_layout.addRow(boi_button_layout)
 
         # Full BOI Section
         self.full_channel_input = QLineEdit(self)
@@ -44,14 +47,18 @@ class FocusTab(QWidget):
         full_boi_button = QPushButton("Activate BOI (Full)", self)
         full_boi_button.clicked.connect(self.activate_boi_full)
         full_boi_button.setFixedWidth(200)  # Half-width button
+        full_boi_button_layout = QHBoxLayout()
+        full_boi_button_layout.addWidget(full_boi_button)
+        full_boi_button_layout.setAlignment(full_boi_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("Enter channel for full BOI:", self.full_channel_input)
-        scroll_area_layout.addRow(full_boi_button)
+        scroll_area_layout.addRow(full_boi_button_layout)
 
-        # Divider line
+        # Add white divider line
         divider = QFrame(self)
         divider.setFrameShape(QFrame.HLine)
         divider.setFrameShadow(QFrame.Sunken)
-        scroll_area_layout.addWidget(divider)
+        divider.setStyleSheet('background-color: white;')  # Set divider color to white
+        scroll_area_layout.addRow(divider)
 
         # Camera and Focus Section
         scroll_area_layout.addRow(QLabel("Camera and Focus Commands"))
@@ -63,20 +70,25 @@ class FocusTab(QWidget):
         self.binfactor_input.setPlaceholderText("Bin factor")
         bin_button = QPushButton("Activate Camera Bin", self)
         bin_button.clicked.connect(self.activate_bin)
-        bin_button.setFixedWidth(200)  # Half-width button
-        
+        bin_button.setFixedWidth(250)  # Half-width button
+        bin_button_layout = QHBoxLayout()
+        bin_button_layout.addWidget(bin_button)
+        bin_button_layout.setAlignment(bin_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("Axis:", self.axis_input)
         scroll_area_layout.addRow("Bin Factor:", self.binfactor_input)
-        scroll_area_layout.addRow(bin_button)
+        scroll_area_layout.addRow(bin_button_layout)
 
         # Exposure Time Command
         self.exptime_input = QLineEdit(self)
         self.exptime_input.setPlaceholderText("10000")
         exptime_button = QPushButton("Set Camera Exposure Time", self)
         exptime_button.clicked.connect(self.set_exptime)
-        exptime_button.setFixedWidth(200)  # Half-width button
+        exptime_button.setFixedWidth(250)  # Half-width button
+        exptime_button_layout = QHBoxLayout()
+        exptime_button_layout.addWidget(exptime_button)
+        exptime_button_layout.setAlignment(exptime_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("Exposure Time (ms):", self.exptime_input)
-        scroll_area_layout.addRow(exptime_button)
+        scroll_area_layout.addRow(exptime_button_layout)
 
         # Slit Set Command
         self.slit_width_input = QLineEdit(self)
@@ -86,10 +98,12 @@ class FocusTab(QWidget):
         slit_button = QPushButton("Set Slit", self)
         slit_button.clicked.connect(self.set_slit)
         slit_button.setFixedWidth(200)  # Half-width button
-
+        slit_button_layout = QHBoxLayout()
+        slit_button_layout.addWidget(slit_button)
+        slit_button_layout.setAlignment(slit_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("Slit Width:", self.slit_width_input)
         scroll_area_layout.addRow("Slit Offset:", self.slit_offset_input)
-        scroll_area_layout.addRow(slit_button)
+        scroll_area_layout.addRow(slit_button_layout)
 
         # Camstep Focus Command
         self.focus_value_input = QLineEdit(self)
@@ -103,28 +117,36 @@ class FocusTab(QWidget):
         
         camstep_button = QPushButton("Camstep Focus (General)", self)
         camstep_button.clicked.connect(self.camstep_focus)
-        camstep_button.setFixedWidth(200)  # Half-width button
-        
+        camstep_button.setFixedWidth(250)  # Half-width button
+        camstep_button_layout = QHBoxLayout()
+        camstep_button_layout.addWidget(camstep_button)
+        camstep_button_layout.setAlignment(camstep_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("Image Number:", self.focus_value_input)
         scroll_area_layout.addRow("Upper Bound:", self.focus_upper_input)
         scroll_area_layout.addRow("Lower Bound:", self.focus_lower_input)
         scroll_area_layout.addRow("Step:", self.focus_step_input)
-        scroll_area_layout.addRow(camstep_button)
+        scroll_area_layout.addRow(camstep_button_layout)
 
         # Camstep Focus Button (ACAM)
         camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
         camstep_acam_button.clicked.connect(self.camstep_focus_acam)
-        camstep_acam_button.setFixedWidth(200)  # Half-width button
-        scroll_area_layout.addRow(camstep_acam_button)
+        camstep_acam_button.setFixedWidth(250)  # Half-width button
+        camstep_acam_button_layout = QHBoxLayout()
+        camstep_acam_button_layout.addWidget(camstep_acam_button)
+        camstep_acam_button_layout.setAlignment(camstep_acam_button, Qt.AlignCenter)  # Right-align the button
+        scroll_area_layout.addRow(camstep_acam_button_layout)
 
         # TCS Set Focus Command
         self.tcs_focus_value_input = QLineEdit(self)
         self.tcs_focus_value_input.setPlaceholderText("Set TCS focus value")
         tcs_button = QPushButton("Set TCS Focus", self)
         tcs_button.clicked.connect(self.set_tcs_focus)
-        tcs_button.setFixedWidth(200)  # Half-width button
+        tcs_button.setFixedWidth(250)  # Half-width button
+        tcs_button_layout = QHBoxLayout()
+        tcs_button_layout.addWidget(tcs_button)
+        tcs_button_layout.setAlignment(tcs_button, Qt.AlignCenter)  # Right-align the button
         scroll_area_layout.addRow("TCS Focus Value:", self.tcs_focus_value_input)
-        scroll_area_layout.addRow(tcs_button)
+        scroll_area_layout.addRow(tcs_button_layout)
 
         # Set scrollable widget layout
         scroll_area_widget.setLayout(scroll_area_layout)
@@ -143,6 +165,7 @@ class FocusTab(QWidget):
         # Set window properties to ensure it maintains aspect ratio
         self.setMinimumSize(800, 600)  # Minimum window size (adjust as needed)
         self.setWindowTitle("Focus Tab")
+
 
     def run_command(self, command_list):
         """Helper function to run terminal command and handle errors"""
