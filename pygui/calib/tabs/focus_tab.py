@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit
 from PyQt5.QtCore import Qt
 import subprocess
 
-
 class FocusTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -12,17 +11,182 @@ class FocusTab(QWidget):
         main_layout = QVBoxLayout()
 
         # Scroll Area Widget to make layout scrollable
-        scroll_area_widget = QWidget()
-        scroll_area_layout = QVBoxLayout()
+        scroll_area_widget = QWidget()  # Create a widget that will be scrolled
+        scroll_area_layout = QVBoxLayout()  # Layout for the scrollable widget
+        
+        # Turn on Band of Interest Section
+        boi_label = QLabel("Turn on Band of Interest", self)
+        scroll_area_layout.addWidget(boi_label)
 
-        # Add Band of Interest Section
-        self.add_boi_section(scroll_area_layout)
+        # Form Layout for Parameterized BOI
+        boi_form_layout = QFormLayout()
+
+        # Channel input field
+        self.channel_input = QLineEdit(self)
+        self.channel_input.setPlaceholderText("Enter channel (for parameterized BOI)")
+        self.channel_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.channel_input.setMinimumHeight(35)
+        boi_form_layout.addRow("Channel:", self.channel_input)
+        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        boi_form_layout.addItem(spacer)
+
+        # Skip Rows input field
+        self.skip_rows_input = QLineEdit(self)
+        self.skip_rows_input.setPlaceholderText("Rows to skip")
+        self.skip_rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.skip_rows_input.setMinimumHeight(35)
+        boi_form_layout.addRow("Skip Rows:", self.skip_rows_input)
+        boi_form_layout.addItem(spacer)
+
+        # Rows to Read input field
+        self.rows_input = QLineEdit(self)
+        self.rows_input.setPlaceholderText("Rows to read")
+        self.rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.rows_input.setMinimumHeight(35)
+        boi_form_layout.addRow("Rows to Read:", self.rows_input)
+        boi_form_layout.addItem(spacer)
+
+
+        scroll_area_layout.addLayout(boi_form_layout)
+
+        # Camera BOI Button with parameters (Centered)
+        boi_button = QPushButton("Activate BOI", self)
+        boi_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # Create a horizontal layout for the button to center it
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(boi_button)
+        button_layout.setAlignment(boi_button, Qt.AlignCenter)  # Center the button
+
+        boi_button.clicked.connect(self.activate_boi)
+        scroll_area_layout.addLayout(button_layout)
+
+        # Full BOI Section
+        self.full_channel_input = QLineEdit(self)
+        self.full_channel_input.setPlaceholderText("Enter channel")
+        self.full_channel_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        scroll_area_layout.addWidget(QLabel("Enter channel for full BOI:"))
+        scroll_area_layout.addWidget(self.full_channel_input)
+
+        # Full BOI Button (Centered)
+        boi_full_button = QPushButton("Activate BOI (Full)", self)
+        boi_full_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        full_button_layout = QHBoxLayout()
+        full_button_layout.addWidget(boi_full_button)
+        full_button_layout.setAlignment(boi_full_button, Qt.AlignCenter)  # Center the button
+
+        boi_full_button.clicked.connect(self.activate_boi_full)
+        scroll_area_layout.addLayout(full_button_layout)
 
         # Divider (horizontal line) to separate sections
-        self.add_divider(scroll_area_layout)
+        divider = QFrame(self)
+        divider.setFrameShape(QFrame.HLine)
+        divider.setFrameShadow(QFrame.Sunken)
+        scroll_area_layout.addWidget(divider)
 
-        # Add Camera and Focus Section
-        self.add_camera_focus_section(scroll_area_layout)
+        # Camera and Focus Section
+        commands_label = QLabel("Camera and Focus Commands", self)
+        scroll_area_layout.addWidget(commands_label)
+
+        # Form Layout for Camera Bin Command
+        bin_form_layout = QFormLayout()
+        self.axis_input = QLineEdit(self)
+        self.axis_input.setPlaceholderText("Enter axis (for camera bin)")
+        self.axis_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        bin_form_layout.addRow("Axis:", self.axis_input)
+
+        self.binfactor_input = QLineEdit(self)
+        self.binfactor_input.setPlaceholderText("Bin factor")
+        self.binfactor_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        bin_form_layout.addRow("Bin Factor:", self.binfactor_input)
+
+        scroll_area_layout.addLayout(bin_form_layout)
+
+        # Camera Bin Button (Centered)
+        bin_button = QPushButton("Activate Camera Bin", self)
+        bin_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        bin_button_layout = QHBoxLayout()
+        bin_button_layout.addWidget(bin_button)
+        bin_button_layout.setAlignment(bin_button, Qt.AlignCenter)  # Center the button
+
+        bin_button.clicked.connect(self.activate_bin)
+        scroll_area_layout.addLayout(bin_button_layout)
+
+        # Camera Exptime Command Input Fields
+        exptime_form_layout = QFormLayout()
+        self.exptime_input = QLineEdit(self)
+        self.exptime_input.setPlaceholderText("Exposure time (in msec)")
+        self.exptime_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        exptime_form_layout.addRow("Exposure Time (ms):", self.exptime_input)
+        scroll_area_layout.addLayout(exptime_form_layout)
+
+        # Exposure Time Button (Centered)
+        exptime_button = QPushButton("Set Camera Exposure Time", self)
+        exptime_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        exptime_button_layout = QHBoxLayout()
+        exptime_button_layout.addWidget(exptime_button)
+        exptime_button_layout.setAlignment(exptime_button, Qt.AlignCenter)  # Center the button
+
+        exptime_button.clicked.connect(self.set_exptime)
+        scroll_area_layout.addLayout(exptime_button_layout)
+
+        # Slit Set Command Input Fields
+        slit_form_layout = QFormLayout()
+        self.slit_width_input = QLineEdit(self)
+        self.slit_width_input.setPlaceholderText("Slit width")
+        self.slit_width_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        slit_form_layout.addRow("Slit Width:", self.slit_width_input)
+
+        self.slit_offset_input = QLineEdit(self)
+        self.slit_offset_input.setPlaceholderText("Slit offset")
+        self.slit_offset_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        slit_form_layout.addRow("Slit Offset:", self.slit_offset_input)
+
+        scroll_area_layout.addLayout(slit_form_layout)
+
+        # Slit Button (Centered)
+        slit_button = QPushButton("Set Slit", self)
+        slit_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        slit_button_layout = QHBoxLayout()
+        slit_button_layout.addWidget(slit_button)
+        slit_button_layout.setAlignment(slit_button, Qt.AlignCenter)  # Center the button
+
+        slit_button.clicked.connect(self.set_slit)
+        scroll_area_layout.addLayout(slit_button_layout)
+
+        # Camstep Focus Command Input Fields (General)
+        camstep_form_layout = QFormLayout()
+        self.focus_value_input = QLineEdit(self)
+        self.focus_value_input.setPlaceholderText("Focus loop value")
+        self.focus_value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        camstep_form_layout.addRow("Focus Value:", self.focus_value_input)
+
+        self.focus_upper_input = QLineEdit(self)
+        self.focus_upper_input.setPlaceholderText("Upper bound")
+        self.focus_upper_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        camstep_form_layout.addRow("Upper Bound:", self.focus_upper_input)
+
+        self.focus_lower_input = QLineEdit(self)
+        self.focus_lower_input.setPlaceholderText("Lower bound")
+        self.focus_lower_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        camstep_form_layout.addRow("Lower Bound:", self.focus_lower_input)
+
+        self.focus_step_input = QLineEdit(self)
+        self.focus_step_input.setPlaceholderText("Focus step")
+        self.focus_step_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        camstep_form_layout.addRow("Focus Step:", self.focus_step_input)
+
+        scroll_area_layout.addLayout(camstep_form_layout)
+
+        # Camstep Focus Button (General)
+        camstep_button = QPushButton("Camstep Focus (General)", self)
+        camstep_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        camstep_button_layout = QHBoxLayout()
+        camstep_button_layout.addWidget(camstep_button)
+        camstep_button_layout.setAlignment(camstep_button, Qt.AlignCenter)  # Center the button
+
+        camstep_button.clicked.connect(self.camstep_focus)
+        scroll_area_layout.addLayout(camstep_button_layout)
 
         # Set scrollable widget layout
         scroll_area_widget.setLayout(scroll_area_layout)
@@ -42,115 +206,6 @@ class FocusTab(QWidget):
         self.setMinimumSize(800, 600)  # Minimum window size (adjust as needed)
         self.setWindowTitle("Focus Tab")
 
-    def add_boi_section(self, layout):
-        # Turn on Band of Interest Section
-        layout.addWidget(QLabel("Turn on Band of Interest", self))
-
-        # Form Layout for Parameterized BOI
-        boi_form_layout = QFormLayout()
-
-        self.channel_input = self.create_input_field("Enter channel (for parameterized BOI)")
-        boi_form_layout.addRow("Channel:", self.channel_input)
-
-        self.skip_rows_input = self.create_input_field("Rows to skip")
-        boi_form_layout.addRow("Skip Rows:", self.skip_rows_input)
-
-        self.rows_input = self.create_input_field("Rows to read")
-        boi_form_layout.addRow("Rows to Read:", self.rows_input)
-
-        layout.addLayout(boi_form_layout)
-
-        # BOI Activate Button (Centered)
-        boi_button = self.create_centered_button("Activate BOI", self.activate_boi)
-        layout.addLayout(boi_button)
-
-        # Full BOI Section
-        self.full_channel_input = self.create_input_field("Enter channel for full BOI:")
-        layout.addWidget(QLabel("Enter channel for full BOI:"))
-        layout.addWidget(self.full_channel_input)
-
-        # Full BOI Button (Centered)
-        boi_full_button = self.create_centered_button("Activate BOI (Full)", self.activate_boi_full)
-        layout.addLayout(boi_full_button)
-
-    def add_divider(self, layout):
-        divider = QFrame(self)
-        divider.setFrameShape(QFrame.HLine)
-        divider.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(divider)
-
-    def add_camera_focus_section(self, layout):
-        # Camera and Focus Commands
-        layout.addWidget(QLabel("Camera and Focus Commands", self))
-
-        # Camera Bin Command Inputs
-        self.add_input_fields_to_layout(layout, [("Axis", "Enter axis (for camera bin)"), 
-                                                  ("Bin Factor", "Bin factor")])
-
-        # Camera Bin Button
-        bin_button = self.create_centered_button("Activate Camera Bin", self.activate_bin)
-        layout.addLayout(bin_button)
-
-        # Exposure Time Command
-        self.add_input_fields_to_layout(layout, [("Exposure Time (ms)", "Exposure time (in msec)")])
-
-        # Exposure Time Button
-        exptime_button = self.create_centered_button("Set Camera Exposure Time", self.set_exptime)
-        layout.addLayout(exptime_button)
-
-        # Slit Command
-        self.add_input_fields_to_layout(layout, [("Slit Width", "Slit width"), 
-                                                  ("Slit Offset", "Slit offset")])
-
-        # Slit Button
-        slit_button = self.create_centered_button("Set Slit", self.set_slit)
-        layout.addLayout(slit_button)
-
-        # Camstep Focus Command Inputs (General)
-        self.add_input_fields_to_layout(layout, [("Focus Value", "Focus loop value"),
-                                                  ("Upper Bound", "Upper bound"),
-                                                  ("Lower Bound", "Lower bound"),
-                                                  ("Focus Step", "Focus step")])
-
-        # Camstep Focus Button (General)
-        camstep_button = self.create_centered_button("Camstep Focus (General)", self.camstep_focus)
-        layout.addLayout(camstep_button)
-
-        # Camstep Focus Button (ACAM)
-        camstep_acam_button = self.create_centered_button("Camstep Focus (ACAM)", self.camstep_focus_acam)
-        layout.addLayout(camstep_acam_button)
-
-        # TCS Set Focus Command Inputs
-        self.add_input_fields_to_layout(layout, [("TCS Focus Value", "Set TCS focus value")])
-
-        # TCS Set Focus Button
-        tcs_button = self.create_centered_button("Set TCS Focus", self.set_tcs_focus)
-        layout.addLayout(tcs_button)
-
-    def create_input_field(self, placeholder):
-        input_field = QLineEdit(self)
-        input_field.setPlaceholderText(placeholder)
-        input_field.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        input_field.setMinimumWidth(150)  # Minimum width for the input
-        input_field.setMinimumHeight(35)  # Minimum height for the input
-        return input_field
-
-    def add_input_fields_to_layout(self, layout, field_data):
-        form_layout = QFormLayout()
-        for label, placeholder in field_data:
-            input_field = self.create_input_field(placeholder)
-            form_layout.addRow(label + ":", input_field)
-        layout.addLayout(form_layout)
-
-    def create_centered_button(self, text, action):
-        button = QPushButton(text, self)
-        button.setFixedWidth(200)  # Set a fixed width for the button
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(button)
-        button_layout.setAlignment(button, Qt.AlignCenter)  # Center the button
-        button.clicked.connect(action)
-        return button_layout
-
     def run_command(self, command_list):
         """Helper function to run terminal command and handle errors"""
         try:
@@ -158,7 +213,7 @@ class FocusTab(QWidget):
             print(f"Command output: {result.stdout}")
         except subprocess.CalledProcessError as e:
             print(f"Command failed with error: {e.stderr}")
-
+    
     def activate_boi(self):
         channel = self.channel_input.text()
         skip_rows = self.skip_rows_input.text()
