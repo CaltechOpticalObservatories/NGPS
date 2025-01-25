@@ -26,6 +26,7 @@ class FocusTab(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
+        self.worker = None
 
     def initUI(self):
         main_layout = QVBoxLayout()
@@ -301,11 +302,22 @@ class FocusTab(QWidget):
 
     def run_command(self, command_list):
         """Run the command in a separate thread to prevent blocking the UI."""
+        if self.worker and self.worker.isRunning():
+            print("Command is already running.")
+            return  # Prevent starting a new thread if the previous one is still running
+        
+        # Create a new worker thread for the command
         self.worker = CommandThread(command_list)
         # Connect the result signal to handle the command output
         self.worker.result_signal.connect(self.handle_command_result)
         # Start the worker thread
         self.worker.start()
+
+    def closeEvent(self, event):
+        """Ensure the worker thread finishes before the widget is destroyed."""
+        if self.worker and self.worker.isRunning():
+            self.worker.wait()  # Wait for the thread to finish
+        event.accept()
     
     def activate_boi_r(self):
         # Get the user input or use the placeholder (default values)
