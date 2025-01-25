@@ -100,6 +100,7 @@ class FocusTab(QWidget):
         bin_form_layout.addRow("Bin Factor:", self.binfactor_input)
 
         scroll_area_layout.addLayout(bin_form_layout)
+        # Divider (horizontal line) to separate sections
 
         # Camera Bin Button (Centered)
         bin_button = QPushButton("Activate Camera Bin", self)
@@ -110,11 +111,12 @@ class FocusTab(QWidget):
 
         bin_button.clicked.connect(self.activate_bin)
         scroll_area_layout.addLayout(bin_button_layout)
-
+        scroll_area_layout.addWidget(divider)
+        
         # Camera Exptime Command Input Fields
         exptime_form_layout = QFormLayout()
         self.exptime_input = QLineEdit(self)
-        self.exptime_input.setPlaceholderText("Exposure time (in msec)")
+        self.exptime_input.setPlaceholderText("10000")
         self.exptime_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         exptime_form_layout.addRow("Exposure Time (ms):", self.exptime_input)
         scroll_area_layout.addLayout(exptime_form_layout)
@@ -152,7 +154,8 @@ class FocusTab(QWidget):
 
         slit_button.clicked.connect(self.set_slit)
         scroll_area_layout.addLayout(slit_button_layout)
-
+        scroll_area_layout.addWidget(divider)
+        
         # Camstep Focus Command Input Fields (General)
         camstep_form_layout = QFormLayout()
         self.focus_value_input = QLineEdit(self)
@@ -161,6 +164,7 @@ class FocusTab(QWidget):
         self.focus_value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         camstep_form_layout.addRow("Image Number:", self.focus_value_input)
         camstep_form_layout.addItem(spacer)
+        camstep_form_layout.addItem(spacer)
 
         self.focus_upper_input = QLineEdit(self)
         self.focus_upper_input.setPlaceholderText("Upper bound")
@@ -168,12 +172,14 @@ class FocusTab(QWidget):
         self.focus_upper_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         camstep_form_layout.addRow("Upper Bound:", self.focus_upper_input)
         camstep_form_layout.addItem(spacer)
+        camstep_form_layout.addItem(spacer)
 
         self.focus_lower_input = QLineEdit(self)
         self.focus_lower_input.setPlaceholderText("Lower bound")
         self.focus_lower_input.setMinimumHeight(35)
         self.focus_lower_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         camstep_form_layout.addRow("Lower Bound:", self.focus_lower_input)
+        camstep_form_layout.addItem(spacer)
         camstep_form_layout.addItem(spacer)
 
         self.focus_step_input = QLineEdit(self)
@@ -183,6 +189,7 @@ class FocusTab(QWidget):
         camstep_form_layout.addRow("Step:", self.focus_step_input)
 
         scroll_area_layout.addLayout(camstep_form_layout)
+        camstep_form_layout.addItem(spacer)
         camstep_form_layout.addItem(spacer)
 
         # Camstep Focus Button (General)
@@ -195,10 +202,8 @@ class FocusTab(QWidget):
         camstep_button.clicked.connect(self.camstep_focus)
         scroll_area_layout.addLayout(camstep_button_layout)
     
-    
         # Camstep Focus Button (ACAM)
         camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
-        camstep_acam_button.setFixedWidth(200)  # Set a fixed width for the button
         camstep_acam_button_layout = QHBoxLayout()
         camstep_acam_button_layout.addWidget(camstep_acam_button)
         camstep_acam_button_layout.setAlignment(camstep_acam_button, Qt.AlignCenter)  # Center the button
