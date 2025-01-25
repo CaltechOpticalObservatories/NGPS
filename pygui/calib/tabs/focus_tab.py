@@ -23,7 +23,7 @@ class FocusTab(QWidget):
 
         # Channel input field
         self.channel_input = QLineEdit(self)
-        self.channel_input.setPlaceholderText("Enter channel (for parameterized BOI)")
+        self.channel_input.setPlaceholderText("R")
         self.channel_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.channel_input.setMinimumHeight(35)
         boi_form_layout.addRow("Channel:", self.channel_input)
@@ -32,7 +32,7 @@ class FocusTab(QWidget):
 
         # Skip Rows input field
         self.skip_rows_input = QLineEdit(self)
-        self.skip_rows_input.setPlaceholderText("Rows to skip")
+        self.skip_rows_input.setPlaceholderText("400")
         self.skip_rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.skip_rows_input.setMinimumHeight(35)
         boi_form_layout.addRow("Skip Rows:", self.skip_rows_input)
@@ -40,12 +40,11 @@ class FocusTab(QWidget):
 
         # Rows to Read input field
         self.rows_input = QLineEdit(self)
-        self.rows_input.setPlaceholderText("Rows to read")
+        self.rows_input.setPlaceholderText("200")
         self.rows_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.rows_input.setMinimumHeight(35)
         boi_form_layout.addRow("Rows to Read:", self.rows_input)
         boi_form_layout.addItem(spacer)
-
 
         scroll_area_layout.addLayout(boi_form_layout)
 
@@ -133,12 +132,12 @@ class FocusTab(QWidget):
         # Slit Set Command Input Fields
         slit_form_layout = QFormLayout()
         self.slit_width_input = QLineEdit(self)
-        self.slit_width_input.setPlaceholderText("Slit width")
+        self.slit_width_input.setPlaceholderText("5")
         self.slit_width_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         slit_form_layout.addRow("Slit Width:", self.slit_width_input)
 
         self.slit_offset_input = QLineEdit(self)
-        self.slit_offset_input.setPlaceholderText("Slit offset")
+        self.slit_offset_input.setPlaceholderText("3")
         self.slit_offset_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         slit_form_layout.addRow("Slit Offset:", self.slit_offset_input)
 
@@ -157,26 +156,34 @@ class FocusTab(QWidget):
         # Camstep Focus Command Input Fields (General)
         camstep_form_layout = QFormLayout()
         self.focus_value_input = QLineEdit(self)
-        self.focus_value_input.setPlaceholderText("Focus loop value")
+        self.focus_value_input.setPlaceholderText("Image Number")
+        self.focus_value_input.setMinimumHeight(35)
         self.focus_value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        camstep_form_layout.addRow("Focus Value:", self.focus_value_input)
+        camstep_form_layout.addRow("Image Number:", self.focus_value_input)
+        camstep_form_layout.addItem(spacer)
 
         self.focus_upper_input = QLineEdit(self)
         self.focus_upper_input.setPlaceholderText("Upper bound")
+        self.focus_upper_input.setMinimumHeight(35)
         self.focus_upper_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         camstep_form_layout.addRow("Upper Bound:", self.focus_upper_input)
+        camstep_form_layout.addItem(spacer)
 
         self.focus_lower_input = QLineEdit(self)
         self.focus_lower_input.setPlaceholderText("Lower bound")
+        self.focus_lower_input.setMinimumHeight(35)
         self.focus_lower_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         camstep_form_layout.addRow("Lower Bound:", self.focus_lower_input)
+        camstep_form_layout.addItem(spacer)
 
         self.focus_step_input = QLineEdit(self)
-        self.focus_step_input.setPlaceholderText("Focus step")
+        self.focus_step_input.setPlaceholderText("Step")
+        self.focus_step_input.setMinimumHeight(35)
         self.focus_step_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        camstep_form_layout.addRow("Focus Step:", self.focus_step_input)
+        camstep_form_layout.addRow("Step:", self.focus_step_input)
 
         scroll_area_layout.addLayout(camstep_form_layout)
+        camstep_form_layout.addItem(spacer)
 
         # Camstep Focus Button (General)
         camstep_button = QPushButton("Camstep Focus (General)", self)
@@ -187,6 +194,36 @@ class FocusTab(QWidget):
 
         camstep_button.clicked.connect(self.camstep_focus)
         scroll_area_layout.addLayout(camstep_button_layout)
+    
+    
+        # Camstep Focus Button (ACAM)
+        camstep_acam_button = QPushButton("Camstep Focus (ACAM)", self)
+        camstep_acam_button.setFixedWidth(200)  # Set a fixed width for the button
+        camstep_acam_button_layout = QHBoxLayout()
+        camstep_acam_button_layout.addWidget(camstep_acam_button)
+        camstep_acam_button_layout.setAlignment(camstep_acam_button, Qt.AlignCenter)  # Center the button
+
+        camstep_acam_button.clicked.connect(self.camstep_focus_acam)
+        scroll_area_layout.addLayout(camstep_acam_button_layout)
+
+        # TCS Set Focus Command Input Fields (tcs setfocus <value>)
+        tcs_form_layout = QFormLayout()
+        self.tcs_focus_value_input = QLineEdit(self)
+        self.tcs_focus_value_input.setPlaceholderText("Set TCS focus value")
+        self.tcs_focus_value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tcs_form_layout.addRow("TCS Focus Value:", self.tcs_focus_value_input)
+        scroll_area_layout.addLayout(tcs_form_layout)
+
+        # TCS Set Focus Button (Centered)
+        tcs_button = QPushButton("Set TCS Focus", self)
+        tcs_button.setFixedWidth(200)  # Set a fixed width for the button
+        tcs_button_layout = QHBoxLayout()
+        tcs_button_layout.addWidget(tcs_button)
+        tcs_button_layout.setAlignment(tcs_button, Qt.AlignCenter)  # Center the button
+
+        tcs_button.clicked.connect(self.set_tcs_focus)
+        scroll_area_layout.addLayout(tcs_button_layout)
+
 
         # Set scrollable widget layout
         scroll_area_widget.setLayout(scroll_area_layout)
