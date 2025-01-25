@@ -439,24 +439,33 @@ class FocusTab(QWidget):
             self.run_command(command.split())
         else:
             print("Please provide a valid input for the TCS focus.")
-
             
-    # Event handler methods for R and I bands
     def run_focus(self):
-        # This method will run all the other buttons when clicked
+        """Trigger focus-related actions in sequence."""
         print("Running Focus...")
-
-        # Call each button's functionality
-        self.activate_boi_r()
-        self.activate_boi_i()
-        self.activate_row_bin()
-        self.activate_col_bin()
-        self.set_exptime()
-        self.set_slit()
-        self.camstep_focus()
-        self.camstep_focus_acam()
+        self.commands_queue = [
+            self.set_basename,
+            self.activate_boi_r,
+            self.activate_boi_i,
+            self.activate_row_bin,
+            self.activate_col_bin,
+            self.set_exptime,
+            self.set_slit,
+            self.camstep_focus,
+            self.camstep_focus_acam,
+        ]
+        self.current_command = 0  # Start from the first command
+        self.run_next_command()
 
     def handle_command_result(self, result):
         """Handle the result from the command and update the UI."""
         print(result)  # You can update the UI here, for example, show result in a QLabel
 
+    def set_basename(self, basename="ngps"):
+        """Set the camera basename"""
+
+        if basename:
+            command = f"camera basename {basename}"
+            self.run_command(command.split())
+        else:
+            print("Please provide a valid basename.")
