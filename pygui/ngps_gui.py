@@ -24,6 +24,7 @@ class NgpsGUI(QMainWindow):
         self.current_dec = None
         self.current_offset_ra = None
         self.current_offset_dec = None
+        self.num_of_exposures = None
         self.user_set_data = {}
         self.all_targets = None
         self.current_owner = None
@@ -62,9 +63,7 @@ class NgpsGUI(QMainWindow):
         
         # Initialize services
         self.initialize_services()
-
-        self.setWindowState(Qt.WindowMaximized)
-        
+     
         # self.on_login()
 
     def init_ui(self):

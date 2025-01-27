@@ -772,6 +772,7 @@ class LayoutService:
             target_name = None
             offset_ra = None
             offset_dec = None
+            num_of_exposures = None
 
             print("Selected Row:", selected_row)  # Print the selected row index
             print("Column Headers:", column_headers)  # Print the column headers
@@ -789,13 +790,13 @@ class LayoutService:
 
                 # Check if the header is 'Exposure Time' and extract its value
                 if header == 'RA':
-                    ra = value  # Store the exposure time
-                    print(f"Found RA: {exposure_time}")  # Print the found exposure time
+                    ra = value  # Store the ra
+                    print(f"Found RA: {ra}")  # Print the found ra
 
                 # Check if the header is 'Exposure Time' and extract its value
                 if header == 'DECL':
-                    dec = value  # Store the exposure time
-                    print(f"Found DEC: {exposure_time}")  # Print the found exposure time
+                    dec = value  # Store the dec
+                    print(f"Found DEC: {dec}")  # Print the found dec
 
                 # Check if the header is 'Exposure Time' and extract its value
                 if header == 'EXPTIME':
@@ -823,6 +824,12 @@ class LayoutService:
                 if header == 'NAME':
                     target_name = value
 
+                # Check if the header is 'NEXP' and extract its value
+                if header == 'NEXP':
+                    num_of_exposures = value  # Store the NEXP
+                    print(f"Found NEXP: {num_of_exposures}")  # Print the found NEXP 
+                    self.control_tab.num_of_exposures_box.setText(num_of_exposures)
+
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
             # self.parent.logic_service.update_target_list_table(target_data)
@@ -837,6 +844,7 @@ class LayoutService:
                 self.parent.current_dec = dec
                 self.parent.current_offset_ra = offset_ra
                 self.parent.current_offset_dec = offset_dec
+                self.parent.num_of_exposures = num_of_exposures
             
             if target_name:
                 self.control_tab.target_name_label.setText(f"Selected Target: {target_name}")

@@ -110,10 +110,19 @@ class ControlTab(QDialog):
         slit_angle_layout.addWidget(self.slit_angle_label)
         slit_angle_layout.addWidget(self.slit_angle_box)
 
+        self.num_of_exposures_label = QLabel("Number of Exposures:")
+        self.num_of_exposures_box = QLineEdit()
+        self.num_of_exposures_box.setPlaceholderText("Enter Number of Exposures")
+        self.num_of_exposures_box.setFixedWidth(120)
+
+        num_of_exposures_layout = QHBoxLayout()
+        num_of_exposures_layout.addWidget(self.num_of_exposures_label)
+        num_of_exposures_layout.addWidget(self.num_of_exposures_box)
 
         row2_layout.addLayout(exposure_time_layout)
         row2_layout.addLayout(slit_width_layout)
         row2_layout.addLayout(slit_angle_layout)
+        row2_layout.addLayout(num_of_exposures_layout)
 
         # Confirm Button
         self.confirm_button = QPushButton("Confirm Changes")
@@ -300,6 +309,7 @@ class ControlTab(QDialog):
         self.exposure_time_box.textChanged.connect(self.on_input_changed)
         self.slit_width_box.textChanged.connect(self.on_input_changed)
         self.slit_angle_box.textChanged.connect(self.on_input_changed)
+        self.num_of_exposures_box.textChanged.connect(self.on_input_changed)
 
     def on_continue_button_click(self):
         """Handle the 'Expose' button click and check for 'USER' in command output"""
@@ -625,10 +635,11 @@ class ControlTab(QDialog):
         exposure_time = self.exposure_time_box.text()
         slit_width = self.slit_width_box.text()
         slit_angle = self.slit_angle_box.text()
+        num_of_exposures = self.num_of_exposures_box.text()
         
-        if exposure_time and slit_width and slit_angle:
+        if exposure_time and slit_width and slit_angle and num_of_exposures:
             # Handle the confirmed changes, e.g., update internal state or UI
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
+            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
             self.on_slit_angle_changed()  # Handle slit angle change as well
@@ -724,3 +735,10 @@ class ControlTab(QDialog):
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
+
+    def on_slit_angle_changed(self):
+        # Retrieve the slit width and send the query to the database
+        num_of_exposures = self.num_of_exposures_box.text()
+
+        if (self.parent.current_observation_id):
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "nexp", num_of_exposures)
