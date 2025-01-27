@@ -114,6 +114,7 @@ class NgpsGUI(QMainWindow):
         self.status_service.image_number_updated_signal.connect(self.layout_service.update_image_number)
         self.status_service.image_name_updated_signal.connect(self.layout_service.update_image_name)
         self.status_service.update_status_signal.connect(self.layout_service.update_system_status)
+        self.status_service.user_can_expose_signal.connect(self.layout_service.control_tab.enable_continue_and_offset_button)
 
         # Initialize the ZMQStatusService
         self.zmq_status_service = ZmqStatusService(self)

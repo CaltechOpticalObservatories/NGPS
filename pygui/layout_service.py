@@ -441,7 +441,9 @@ class LayoutService:
 
         # Create the QLineEdit widgets
         self.parent.image_name = QLineEdit("N/A")
+        self.parent.image_name.setReadOnly(True)
         self.parent.image_number = QLineEdit("N/A")
+        self.parent.image_number.setReadOnly(True)
 
         # Set the image_name widget to stretch and fill available space
         self.parent.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

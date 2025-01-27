@@ -15,6 +15,7 @@ class StatusService(QObject):
     image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
     image_name_updated_signal = pyqtSignal(str)
     update_status_signal = pyqtSignal(str)
+    user_can_expose_signal = pyqtSignal(bool)
 
     def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
         super().__init__()
@@ -124,6 +125,8 @@ class StatusService(QObject):
         elif "ready for next exposure" in message:
             self.progress_updated_signal.emit(int(0))
             self.readout_progress_updated_signal.emit(int(0))
+        elif '''waiting for USER to send "continue" signal''' in message:
+             self.user_can_expose_signal.emit(True)
         elif "instrument is shut down" in message:
             self.parent.show_popup("NGPS is Shutdown.")
             self.update_status_signal.emit("stopped")

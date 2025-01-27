@@ -314,6 +314,8 @@ class ControlTab(QDialog):
     def on_continue_button_click(self):
         """Handle the 'Expose' button click and check for 'USER' in command output"""
         print("On Continue button clicked!")
+        # disable the offset button
+        self.offset_to_target_button.setEnabled(False)
         
         # Send the usercontinue command
         command = f"usercontinue\n"
@@ -533,24 +535,17 @@ class ControlTab(QDialog):
             """)
 
             # Show a popup message
-            self.show_waiting_popup()
-            self.offset_to_target_button.setEnabled(True)
-            self.offset_to_target_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green when enabled */
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #388E3C;  /* Darker green when hovered */
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;  /* Even darker green when pressed */
-            }
-        """)            
+            self.show_waiting_popup()          
+            # Start a QTimer to re-enable the button after 60 seconds
+            # self.timer = QTimer(self)
+            # self.timer.setSingleShot(True)  # Ensure the timer only runs once
+            # self.timer.timeout.connect(self.enable_go_button)
+            # self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
+
+        else:
+            print("No observation ID available.")
+
+    def enable_continue_and_offset_button(self):
             self.continue_button.setEnabled(True)
             self.continue_button.setStyleSheet("""
             QPushButton {
@@ -568,15 +563,24 @@ class ControlTab(QDialog):
                 background-color: #2C6B2F;  /* Even darker green when pressed */
             }
         """)
-
-            # Start a QTimer to re-enable the button after 60 seconds
-            # self.timer = QTimer(self)
-            # self.timer.setSingleShot(True)  # Ensure the timer only runs once
-            # self.timer.timeout.connect(self.enable_go_button)
-            # self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
-
-        else:
-            print("No observation ID available.")
+            
+            self.offset_to_target_button.setEnabled(True)
+            self.offset_to_target_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)  
 
     def show_waiting_popup(self):
         """Show a popup message with a 'Close' button."""
