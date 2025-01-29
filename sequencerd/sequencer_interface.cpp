@@ -711,13 +711,22 @@ namespace Sequencer {
       // field is empty, otherwise the field is required and will throw an exception if
       // empty.
       //
+
+      // If the name starts with "CAL_" then it is a calibration target. This
+      // flag will tell the sequencer how to select the calibration settings,
+      // which are stored in the config file indexed by name.
+      //
+      this->name           = extract_column_from_row<mysqlx::string>( "NAME", row );
+
+      std::string _name(this->name);
+      this->iscal = ( _name.compare(0, 4, "CAL_")==0 );
+
       this->state          = extract_column_from_row<mysqlx::string>( "STATE", row );
       this->owner          = extract_column_from_row<mysqlx::string>( "OWNER", row );
       this->obsid          = extract_column_from_row<int>( "OBSERVATION_ID", row );
       this->obsorder       = extract_column_from_row<int>( "OBS_ORDER", row );
       this->targetnum      = extract_column_from_row<long>( "TARGET_NUMBER", row );
       this->sequencenum    = extract_column_from_row<long>( "SEQUENCE_NUMBER", row );
-      this->name           = extract_column_from_row<mysqlx::string>( "NAME", row );
       this->ra_hms         = extract_column_from_row<mysqlx::string>( "RA", row );
       this->dec_dms        = extract_column_from_row<mysqlx::string>( "DECL", row );
       this->offset_ra      = extract_column_from_row<double>( "OFFSET_RA", row );
@@ -736,7 +745,7 @@ namespace Sequencer {
       //
       this->exptime_req    = extract_column_from_row<double>( "OTMexpt", row );
 
-//    this->nexp           = extract_column_from_row<int>( "NEXP", row );
+      this->nexp           = extract_column_from_row<int>( "NEXP", row );
 
       this->binspect       = extract_column_from_row<int>( "BINSPECT", row );
       this->binspat        = extract_column_from_row<int>( "BINSPAT", row );
@@ -1100,14 +1109,12 @@ namespace Sequencer {
 
   /***** Sequencer::PowerSwitch::configure ************************************/
   /**
-   * @brief      
+   * @brief      parses POWER_* entry from configuration file
    * @param[in]  arglist
    * @return     ERROR or NO_ERROR
    *
    */
   long PowerSwitch::configure( std::string arglist ) {
-    std::string function = "Sequencer::PowerSwitch::PowerSwitch";
-    std::stringstream message;
     std::vector<std::string> tokens;
 
     int size = Tokenize( arglist, tokens, " \t" );
@@ -1119,5 +1126,96 @@ namespace Sequencer {
     return( size < 1 ? ERROR : NO_ERROR );
   }
   /***** Sequencer::PowerSwitch::configure ************************************/
+
+
+  /***** Sequencer::CalibrationTarget::configure ******************************/
+  /**
+   * @brief      parses CAL_TARGET entry from configuration file
+   * @param[in]  args  args for CAL_TARGET key
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long CalibrationTarget::configure( const std::string &args ) {
+    const std::string function("Sequencer::CalibrationTarget::configure");
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    auto size = Tokenize( args, tokens, " \t" );
+
+    // there must be 15 args. see cfg file for complete description
+    if ( size != 15 ) {
+      message << "ERROR expected 15 but received " << size << " parameters";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // token[0] = name
+    // name can't be empty, must be "SCIENCE" or start with "CAL_"
+    std::string name(tokens[0]);
+    if ( name.empty() || ( name != "SCIENCE" &&
+                           name.compare(0, 4, "CAL_") !=0 ) ) {
+      message << "ERROR invalid calibration target name \"" << name << "\": must be \"SCIENCE\" or start with \"CAL_\" ";
+      return ERROR;
+    }
+    this->calmap[name].name = name;
+
+    // token[1] = caldoor
+    if ( tokens[1].empty() ||
+         ( tokens[1].find("open")==std::string::npos && tokens[1].find("close") ) ) {
+      message << "ERROR invalid caldoor \"" << tokens[1] << "\": expected {open|close}";
+      return ERROR;
+    }
+    this->calmap[name].caldoor = (tokens.at(1).find("open")==0);
+
+    // token[2] = calcover
+    if ( tokens[2].empty() ||
+         ( tokens[2].find("open")==std::string::npos && tokens[2].find("close") ) ) {
+      message << "ERROR invalid calcover \"" << tokens[2] << "\": expected {open|close}";
+      return ERROR;
+    }
+    this->calmap[name].calcover = (tokens.at(2).find("open")==0);
+
+    // tokens[3:6] = LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
+    int n=3;  // incremental token counter used for the following groups
+    for ( const auto &lamp : this->lampnames ) {
+      if ( tokens[n].empty() ||
+           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
+        message << "ERROR invalid state \"" << tokens[n] << "\" for " << lamp << ": expected {on|off}";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+      this->calmap[name].lamp[lamp] = (tokens[n].find("on")==0);
+      n++;
+    }
+
+    // tokens[7:8] = domelamps
+    // i indexes domelampnames vector {0,1}
+    // j indexes domelamp map {1,2}
+    for ( int i=0,j=1; j<=2; i++,j++ ) {
+      if ( tokens[n].empty() ||
+           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
+        message << "ERROR invalid state \"" << tokens[n] << "\" for " << domelampnames[i] << ": expected {on|off}";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+      this->calmap[name].domelamp[j] = (tokens[n].find("on")==0);
+      n++;
+    }
+
+    // tokens[0:14] = lampmod{1:6}
+    for ( int i=1; i<=6; i++ ) {
+      if ( tokens[n].empty() ||
+           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
+        message << "ERROR invalid state \"" << tokens[n] << "\" for lampmod" << n << ": expected {on|off}";
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+      this->calmap[name].lampmod[i] = (tokens[n].find("on")==0);
+      n++;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::CalibrationTarget::configure ******************************/
 
 }

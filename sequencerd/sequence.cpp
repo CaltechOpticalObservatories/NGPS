@@ -559,35 +559,41 @@ namespace Sequencer {
  *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
  ***/
 
-      // waiting for user signal (or cancel)
+      // If not a calibration target then introduce a pause for the user
+      // to make adjustments, send offsets, etc.
       //
-      // The sequencer is effectively paused waiting for user input. This
-      // gives the user a chance to ensure the correct target is on the slit,
-      // select offset stars, etc.
-      //
-      {
-      ScopedState seq_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+      if ( !this->target.iscal ) {
 
-      this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
+        // waiting for user signal (or cancel)
+        //
+        // The sequencer is effectively paused waiting for user input. This
+        // gives the user a chance to ensure the correct target is on the slit,
+        // select offset stars, etc.
+        //
+        {
+        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
 
-      while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-        std::unique_lock<std::mutex> lock(cv_mutex);
-        this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
+
+        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+          std::unique_lock<std::mutex> lock(cv_mutex);
+          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        }
+
+        this->async.enqueue_and_log( function, "NOTICE: received "
+                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                               +" signal!" );
+        }  // end scope for wait_state = WAIT_USER
+
+        if ( this->cancel_flag.load() ) {
+          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+          return;
+        }
+
+        this->is_usercontinue.store(false);
+
+        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
       }
-
-      this->async.enqueue_and_log( function, "NOTICE: received "
-                                             +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                             +" signal!" );
-      }
-
-      if ( this->cancel_flag.load() ) {
-        this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-        return;
-      }
-
-      this->is_usercontinue.store(false);
-
-      this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
 
       // Ensure slit offset is in "expose" position
       //
@@ -1805,6 +1811,10 @@ namespace Sequencer {
                                            +" signal!" );
     }
 
+    // If waiting for TCS operator was cancelled then don't continue
+    //
+    if ( this->cancel_flag.load() ) return NO_ERROR;
+
     // Send casangle using tcsd wrapper for RINGGO command
     //
     {
@@ -1969,12 +1979,78 @@ namespace Sequencer {
    */
   long Sequence::calib_set() {
     const std::string function("Sequencer::Sequence::calib_set");
+    std::stringstream message;
+    long error=NO_ERROR;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIBRATOR_SET );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
 
-    logwrite( function, "[TODO] calibrator not yet implemented." );
+    // name will index the caltarget map
+    //
+    std::string name(this->target.name);
 
-    return NO_ERROR;
+    if ( this->target.iscal ) {
+      name = this->target.name;
+      this->async.enqueue_and_log( function, "NOTICE: configuring calibrator for "+name );
+    }
+    else {
+      this->async.enqueue_and_log( function, "NOTICE: disabling calibrator for science target "+name );
+      name="SCIENCE";  // override for indexing the map
+    }
+
+    // Get the calibration target map.
+    // This contains a map of all the required settings, indexed by target name.
+    //
+    auto calinfo = this->caltarget.get_info(name);
+
+    std::stringstream cmd;
+
+    // set the calib door and cover
+    //
+    cmd.str(""); cmd << CALIBD_SET
+                     << " door="  << ( calinfo->caldoor  ? "open" : "close" )
+                     << " cover=" << ( calinfo->calcover ? "open" : "close" );
+
+    logwrite( function, "calib: "+cmd.str() );
+    if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+      error=ERROR;
+    }
+
+    // set the internal calibration lamps
+    //
+    for ( const auto &[lamp,state] : calinfo->lamp ) {
+      cmd.str(""); cmd << lamp << " " << (state?"on":"off");
+      message.str(""); message << "power " << cmd.str();
+      logwrite( function, message.str() );
+      std::string reply;
+      if ( this->powerd.send( cmd.str(), reply ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR "+message.str() );
+        error=ERROR;
+      }
+    }
+
+    // set the dome lamps
+    //
+    for ( const auto &[lamp,state] : calinfo->domelamp ) {
+      cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
+      if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
+        error=ERROR;
+      }
+    }
+
+    // set the lamp modulators
+    //
+    for ( const auto &[mod,state] : calinfo->lampmod ) {
+      cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
+      if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
+        error=ERROR;
+      }
+    }
+
+    return error;
   }
   /***** Sequencer::Sequence::calib_set ***************************************/
 
@@ -2180,8 +2256,9 @@ namespace Sequencer {
     logwrite( function, "[DEBUG] sending expose command" );
 
     // Send the EXPOSE command to camera daemon on the non-blocking port and don't wait for reply
-    if ( this->camerad.async( CAMERAD_EXPOSE ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR sending command: CAMERAD_EXPOSE" );
+    message.str(""); message << CAMERAD_EXPOSE << " " << this->target.nexp;
+    if ( this->camerad.async( message.str() ) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR sending camera "+message.str() );
       this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );      // clear EXPOSE bit
@@ -2546,7 +2623,9 @@ namespace Sequencer {
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
 
     // set only STOPPING (and clear everything else)
-    ScopedState seq_state( seq_state_manager, Sequencer::SEQ_STOPPING, true );  // state=STOPPING (only)
+    ScopedState seq_state( seq_state_manager, Sequencer::SEQ_STOPPING, true );     // state=STOPPING (only)
+
+    seq_state.destruct_set( Sequencer::SEQ_NOTREADY );                             // set state=NOTREADY on exit
 
     // stop everything
     //
@@ -3514,6 +3593,7 @@ namespace Sequencer {
       retstring.append( "   addrow ? | <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\n" );
       retstring.append( "   async [ ? | <message> ]\n" );
       retstring.append( "   acquire [ ? ]\n" );
+      retstring.append( "   calibset [ ? ]\n" );
       retstring.append( "   cameraset [ ? ]\n" );
       retstring.append( "   cancel [ ? ]\n" );
       retstring.append( "   clearlasttarget\n" );
@@ -3613,6 +3693,29 @@ namespace Sequencer {
       retstring.append( message.str() );
 
       error = NO_ERROR;
+    }
+    else
+
+    // ----------------------------------------------------
+    // calibset -- sets the calibrator according to the parameters in the target entry
+    // ----------------------------------------------------
+    //
+    if ( testname == "calibset" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test calibset\n";
+        retstring.append( "  Set only the calib according to the parameters in the target row.\n" );
+        return HELP;
+      }
+      // launch thread and wait for it to return
+      auto calibset = std::async(std::launch::async, &Sequence::calib_set, this);
+      try {
+        error = calibset.get();
+      }
+      catch (const std::exception& e) {
+        logwrite( function, "ERROR calib_set exception: "+std::string(e.what()) );
+        return ERROR;
+      }
+      return error;
     }
     else
 

@@ -563,6 +563,7 @@ namespace AstroCam {
       int FITS_BPP16;
       int FITS_BPP32;
 
+      int nexp;
       int nfilmstrip;              //!< number of filmstrip frames (for enhanced-clocking dual-exposure mode)
       int deltarows;               //!< number of delta rows (for enhanced-clocking dual-exposure mode)
       int nfpseq;                  //!< number of frames per sequence
@@ -1006,8 +1007,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       void set_imagesize(int rowsin, int colsin, int* status);
 
-      long expose(std::string nseq_in);
-      long do_expose(std::string nseq_in);
+      long expose(std::string nexp_in);
+      long do_expose(int nexp_in);
       void make_telemetry_message( std::string &retstring );
       void collect_telemetry();
       void collect_telemetry(std::string name, std::string &retstring);

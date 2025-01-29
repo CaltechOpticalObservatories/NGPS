@@ -143,6 +143,26 @@ ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in 
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 
+# Calibration Settings
+# CAL_TARGET=(name caldoor calcover lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
+#
+# where name must be "DEFAULT" or start with "CAL_"
+#       caldoor  = open | close
+#       calcover = open | close
+#       lamp* = on | off
+#       mod*  = on | off
+# for a total of 15 required parameters
+# name=SCIENCE defines science target operation
+#
+CAL_TARGET=(CAL_THAR   open  close on  off off off off off off off off off off on )
+CAL_TARGET=(CAL_FEAR   open  close off off on  off off off on  off off off off off)
+CAL_TARGET=(CAL_CONT   open  close off off off on  off off off off off on  off off)
+CAL_TARGET=(CAL_ETALON open  close off off off on  off off off off on  off off off)
+CAL_TARGET=(CAL_DOME   close open  off off off off off on  off off off off off off)
+CAL_TARGET=(CAL_BIAS   close close off off off off off off off off off off off off)
+CAL_TARGET=(CAL_DARK   close close off off off off off off off off off off off off)
+CAL_TARGET=(SCIENCE    close open  off off off off off off off off off off off off)
+
 # miscellaneous
 #
 UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining

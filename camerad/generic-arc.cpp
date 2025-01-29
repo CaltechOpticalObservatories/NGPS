@@ -108,8 +108,26 @@ namespace AstroCam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::expose( std::string nseq_in ) {
-    return this->do_expose( nseq_in );
+  long Interface::expose( std::string nexp_in ) {
+    const std::string function("AstroCam::Interface::expose");
+    std::stringstream message;
+
+    int nexp=1;
+
+    // If nexp_in is not supplied then set nexp to 1
+    //
+    if ( !nexp_in.empty() ) {
+      try {
+        nexp = std::stoi( nexp_in );
+      }
+      catch ( const std::exception &e ) {
+        message.str(""); message << "ERROR parsing nexp " << nexp_in;
+        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        return ERROR;
+      }
+    }
+
+    return( this->do_expose(nexp) );
   }
   /***** AstroCam::Interface::expose ****************8*************************/
 

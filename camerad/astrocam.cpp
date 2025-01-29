@@ -195,6 +195,7 @@ namespace AstroCam {
   Interface::Interface() {
     this->state_monitor_thread_running = false;
     this->modeselected = false;
+    this->nexp=1;
     this->numdev = 0;
     this->nframes = 1;
     this->nfpseq = 1;
@@ -321,7 +322,7 @@ namespace AstroCam {
     this->controller[dev].info.systemkeys.add_key( "FT", this->controller[dev].have_ft, "frame transfer used", EXT, chan );
 
     this->controller[dev].info.systemkeys.add_key( "IMG_ROWS", this->controller[dev].info.axes[_ROW_], "image rows", EXT, chan );
-    this->controller[dev].info.systemkeys.add_key( "IMG_COLS", this->controller[dev].info.axes[_COL_], "image cols", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "IMG_COLS", this->controller[dev].info.axes[_COL_]-oscols, "image cols", EXT, chan );
 
     this->controller[dev].info.systemkeys.add_key( "OS_ROWS", osrows, "overscan rows", EXT, chan );
     this->controller[dev].info.systemkeys.add_key( "OS_COLS", oscols, "overscan cols", EXT, chan );
@@ -341,10 +342,10 @@ namespace AstroCam {
     int ltv2 = B * osrows / binspat;
     int ltv1 = L * oscols / binspec;
 
-message.str(""); message << "[DEBUG] B=" << B << " L=" << L << " osrows=" << osrows << " oscols=" << oscols
-                         << " binning_row=" << binspat << " binning_col=" << binspec
-                         << " ltv2=" << ltv2 << " ltv1=" << ltv1;
-logwrite(function,message.str() );
+//message.str(""); message << "[DEBUG] B=" << B << " L=" << L << " osrows=" << osrows << " oscols=" << oscols
+//                         << " binning_row=" << binspat << " binning_col=" << binspec
+//                         << " ltv2=" << ltv2 << " ltv1=" << ltv1;
+//logwrite(function,message.str() );
 
     this->controller[dev].info.systemkeys.add_key( "LTV2", ltv2, "", EXT, chan );
     this->controller[dev].info.systemkeys.add_key( "LTV1", ltv1, "", EXT, chan );
@@ -376,6 +377,7 @@ logwrite(function,message.str() );
     //
     std::stringstream sec;
 
+    /* 01-24-2025 ***
     sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] << ":" << this->controller[dev].info.region_of_interest[1]
                      << "," << this->controller[dev].info.region_of_interest[2] << ":" << this->controller[dev].info.region_of_interest[3] << "]";
     this->controller[dev].info.systemkeys.add_key( "CCDSEC", sec.str(), "physical format of CCD", EXT, chan );
@@ -386,6 +388,15 @@ logwrite(function,message.str() );
 
     sec.str(""); sec << '[' << cols << ":" << cols+oscols
                      << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows+osrows << "]";
+    this->controller[dev].info.systemkeys.add_key( "BIASSEC", sec.str(), "overscan section", EXT, chan );
+    *** */
+    sec.str(""); sec << "[" << oscols+1-2  // -2 is KLUDGE FACTOR
+                     << ":" << cols-2      // -2 is KLUDGE FACTOR
+                     << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows << "]";
+    this->controller[dev].info.systemkeys.add_key( "DATASEC", sec.str(), "section containing the CCD data", EXT, chan );
+
+    sec.str(""); sec << "[" << this->controller[dev].info.region_of_interest[0] << ":" << oscols-2  // -2 is KLUDGE FACTOR
+                     << "," << this->controller[dev].info.region_of_interest[2] + skiprows << ":" << rows << "]";
     this->controller[dev].info.systemkeys.add_key( "BIASSEC", sec.str(), "overscan section", EXT, chan );
 
     return;
@@ -823,14 +834,14 @@ logwrite(function,message.str() );
           return( ERROR );
         }
 
-        // Make a copy of the class binning and update that with the
+        // Make a local copy of the class binning and update that with the
         // axis being set here. The class is not updated here because
         // that is done in image_size().
         //
-        int binning[2];
-        binning[_ROW_] = this->camera_info.binning[_ROW_];
-        binning[_COL_] = this->camera_info.binning[_COL_];
-        binning[axis]  = binfactor;
+        int _binning[2];
+        _binning[_ROW_] = this->camera_info.binning[_ROW_];
+        _binning[_COL_] = this->camera_info.binning[_COL_];
+        _binning[axis]  = binfactor;
 
         // Now, since binning applies equally to all devices and the image
         // must be resized for binning, set the image size for each device.
@@ -844,8 +855,8 @@ logwrite(function,message.str() );
                   << this->controller[dev].detcols << " "
                   << this->controller[dev].osrows0 << " "
                   << this->controller[dev].oscols0 << " "
-                  << binning[_ROW_] << " "
-                  << binning[_COL_];
+                  << _binning[_ROW_] << " "
+                  << _binning[_COL_];
           error = this->image_size( message.str(), retstring );  // this retstring only used on error
         }
       }
@@ -1848,6 +1859,7 @@ logwrite(function,message.str() );
     airmass = ( airmass1 + airmass0 ) / 2.0;
 
     interface.camera.shutter.condition.notify_all();  // notify waiting threads that the shutter has closed
+    logwrite(function,"[DEBUG] threads notified of shutter closure");
 
     // Add keywords to primary keyword database for this expbuf.
     // These have to be added to fitsinfo[expbuf] because the exposure has already started,
@@ -1863,6 +1875,7 @@ logwrite(function,message.str() );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS0", airmass0, "airmass at start of exposure" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS1", airmass1, "airmass at end of exposure" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "AIRMASS", airmass, "average of AIRMASS0 and AIRMASS1" );
+    message.str(""); message << "[DEBUG] wrote fitsinfo[" << expbuf << "] keys like AIRMASS " << airmass; logwrite(function,message.str());
     return;
   }
   /***** AstroCam::Interface::dothread_shutter ********************************/
@@ -2382,7 +2395,7 @@ logwrite(function,message.str() );
    *
    */
   void Interface::dothread_monitor_exposure_pending( Interface &interface ) {
-    std::string function = "AstroCam::Interface::dothread_monitor_exposure_pending";
+    const std::string function("AstroCam::Interface::dothread_monitor_exposure_pending");
     std::stringstream message;
 
     // Log this message once only
@@ -2409,8 +2422,15 @@ logwrite(function,message.str() );
     message.str(""); message << "[DEBUG] incremented expbuf buffer to " << interface.get_expbuf(); logwrite( function, message.str() );
 #endif
 
-    interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
-    interface.camera.async.enqueue( "CAMERAD:READY:true" );
+    if ( --interface.nexp > 0 ) {
+      message.str(""); message << "NOTICE:starting next exposure, " << interface.nexp << " remaining";
+      interface.camera.async.enqueue_and_log( function, message.str() );
+      interface.do_expose(interface.nexp);
+    }
+    else {
+      interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
+      interface.camera.async.enqueue( "CAMERAD:READY:true" );
+    }
 
     return;
   }
@@ -2420,18 +2440,17 @@ logwrite(function,message.str() );
   /***** AstroCam::Interface::do_expose ***************************************/
   /**
    * @brief      initiate an exposure
-   * @param[in]  nseq_in  if set becomes the number of sequences
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::do_expose(std::string nseq_in) {
-    std::string function = "AstroCam::Interface::do_expose";
+  long Interface::do_expose(int nexp_in) {
+    const std::string function("AstroCam::Interface::do_expose");
     std::stringstream message;
-    std::string nseqstr;
     std::string devstr;
     std::string _start_time;
     long error;
-    int nseq;
+
+    this->nexp = nexp_in;
 
     // Different controllers may have different rules about when to set and clear their
     // exposure_pending flag (depending on whether or not they support frame transfer), but
@@ -2463,6 +2482,8 @@ logwrite(function,message.str() );
       return( ERROR );
     }
 
+    logwrite( function, "starting exposure" );
+
     // This is the exposure buffer number for this exposure.
     // Lock it in now, before another exposure comes in.
     //
@@ -2490,41 +2511,6 @@ logwrite(function,message.str() );
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
         return( ERROR );
       }
-    }
-
-//logwrite( function, "[TEST] RETURNING HERE -- NO EXPOSURE" );
-//return( NO_ERROR );
-
-    // If nseq_in is not supplied then set nseq to 1
-    //
-    if ( nseq_in.empty() ) {
-      nseqstr = "1";
-      nseq=1;
-    }
-    else {                                                          // sequence argument passed in
-      try {
-        nseq = std::stoi( nseq_in );                                // test that nseq_in is an integer
-        nseqstr = nseq_in;                                          // before trying to use it
-      }
-      catch ( std::invalid_argument & ) {
-        message.str(""); message << "ERROR: unable to convert sequences: " << nseq_in << " to integer";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
-        return( ERROR );
-      }
-      catch ( std::out_of_range & ) {
-        message.str(""); message << "ERROR: sequences " << nseq_in << " outside integer range";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
-        return(ERROR);
-      }
-      // Set the extension = 0 for each controller
-      //
-      for ( const auto &dev : this->devnums ) { this->controller[ dev ].info.extension = 0; }
-    }
-
-    if ( nseq > 1 ) {
-      message.str(""); message << "NOTICE: multiple exposures not currently supported";
-      logwrite( function, message.str() );
-      server.camera.async.enqueue( message.str() );
     }
 
     // Clear the abort flag for a new exposure, in case it was previously set
@@ -3142,6 +3128,8 @@ logwrite(function,message.str() );
           {"DECL",     "", "requested Declination in J2000"}
         };
         for ( const auto &keyinfo : keyarray ) {
+          message.str(""); message << "[DEBUG] targetinfo key " << keyinfo.jkey << "=" << jmessage[keyinfo.jkey];
+          logwrite(function,message.str());
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
         }
       }
@@ -3647,6 +3635,8 @@ for ( const auto &dev : selectdev ) {
     }  // end if ! retstring.empty()
 
     retstring = std::to_string( con.get_bufsize() );
+
+//  message.str(""); message << "[DEBUG] allocated " << retstring << " bytes"; logwrite( function, message.str() );
 
     return(NO_ERROR);
   }
@@ -4674,9 +4664,9 @@ logwrite(function, message.str());
         return( ERROR );
       }
 
-      message.str(""); message << "[DEBUG] imsize: " << rows << " " << cols << " "
-                               << osrows << " " << oscols << " " << binrows << " " << bincols;
-      logwrite( function, message.str() );
+//    message.str(""); message << "[DEBUG] input imsize: " << rows << " " << cols << " "
+//                             << osrows << " " << oscols << " " << binrows << " " << bincols;
+//    logwrite( function, message.str() );
 
       // Store the geometry in the class. This is the new detector geometry,
       // unchanged by binning, so that when reverting to binning=1 from some
@@ -4703,14 +4693,23 @@ logwrite(function, message.str());
       this->controller[dev].skipcols = cols % bincols;
       this->controller[dev].skiprows = rows % binrows;
 
+//    message.str(""); message << "[DEBUG] skipcols=" << this->controller[dev].skipcols << " skiprows=" << this->controller[dev].skiprows;
+//    logwrite( function, message.str() );
+
       cols -= this->controller[dev].skipcols;
       rows -= this->controller[dev].skiprows;
+
+//    message.str(""); message << "[DEBUG] cols=" << cols << " rows=" << rows;
+//    logwrite( function, message.str() );
 
       // Adjust the number of overscans to make them evenly divisible
       // by the binning factor.
       //
       oscols -= ( oscols % bincols );
       osrows -= ( osrows % binrows );
+
+//    message.str(""); message << "[DEBUG] oscols=" << oscols << " osrows=" << osrows;
+//    logwrite( function, message.str() );
 
       // Now that the rows/cols and osrows/oscols have been adjusted for
       // binning, store them in the class as detector_pixels for this controller.
@@ -4727,6 +4726,12 @@ logwrite(function, message.str());
       this->controller[dev].info.ismex = true;
       this->controller[dev].info.bitpix = 16;
       this->controller[dev].info.frame_type = Camera::FRAME_RAW;
+
+//    message.str("");
+//    message << "[DEBUG] new binned values before set_axes() to re-calculate:"
+//            << " detector_pixels[" << _COL_ << "]=" << this->controller[dev].info.detector_pixels[_COL_]
+//            << " detector_pixels[" << _ROW_ << "]=" << this->controller[dev].info.detector_pixels[_ROW_];
+//    logwrite(function, message.str());
 
       // *** This is where the binned-image dimensions are re-calculated ***
       //
@@ -4777,12 +4782,20 @@ logwrite(function, message.str());
                   << this->controller[dev].info.axes[_ROW_] << " "
                   << this->controller[dev].info.axes[_COL_];
 
+//      message.str("");
+//      message << "[DEBUG] allocating buffer for " << this->controller[dev].info.axes[_ROW_] << " x "
+//                                                  << this->controller[dev].info.axes[_COL_];
+//      logwrite( function, message.str() );
+
         if ( this->buffer( geostring.str(), retstring ) != NO_ERROR ) {
           message.str(""); message << "ERROR: allocating buffer for chan " << this->controller[dev].channel
                                    << " " << this->controller[dev].devname;
           logwrite( function, message.str() );
           return ERROR;
         }
+
+//      message.str(""); message << "[DEBUG] calling do_geometry( " << geostring.str() << " )";
+//      logwrite(function, message.str());
 
         if ( this->do_geometry( geostring.str(), retstring ) != NO_ERROR ) {
           message.str(""); message << "ERROR: setting geometry for chan " << this->controller[dev].channel;
@@ -4883,7 +4896,7 @@ logwrite(function,message.str() );
 
     // Return the values stored in the class
     //
-    message.str("");
+    message.str(""); message << "detrows detcols osrows oscols binrow bincol = ";
     message << this->controller[dev].detrows << " " << this->controller[dev].detcols << " "
             << this->controller[dev].osrows << " " << this->controller[dev].oscols << " "
             << this->camera_info.binning[_ROW_] << " " << this->camera_info.binning[_COL_]
@@ -4980,21 +4993,21 @@ logwrite(function,message.str() );
         return( ERROR );
       }
 
-      message.str(""); message << "[DEBUG] " << this->controller[dev].devname
-                                             << " chan " << this->controller[dev].channel << " rows:" << setrows << " cols:" << setcols;
-      logwrite( function, message.str() );
+//    message.str(""); message << "[DEBUG] " << this->controller[dev].devname
+//                                           << " chan " << this->controller[dev].channel << " rows:" << setrows << " cols:" << setcols;
+//    logwrite( function, message.str() );
 
       // Write the geometry to the selected controllers
       //
       std::stringstream cmd;
 
-      cmd.str(""); cmd << "WRM 0x400001 " << setcols;
+      cmd.str(""); cmd << "WRM 0x400001 " << setcols;  // NSR
       if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
-      cmd.str(""); cmd << "WRM 0x400002 " << setrows;
+      cmd.str(""); cmd << "WRM 0x400002 " << setrows;  // NPR
       if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
     }
-    else if ( tokens.size() != 0 ) {                 // some other number of args besides 0 or 2 is confusing
+    else if ( tokens.size() != 0 ) {                   // some other number of args besides 0 or 2 is confusing
       message.str(""); message << "ERROR: expected [ rows cols ] but received \"" << retstring << "\"";
       logwrite( function, message.str() );
       retstring="bad_arguments";

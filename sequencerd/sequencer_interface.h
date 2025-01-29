@@ -76,6 +76,12 @@ namespace Sequencer {
   const std::string TARGET_COMPLETE="completed";     ///< target status complete
   const std::string TARGET_UNASSIGNED="inactive";    ///< target status unassigned
 
+  const std::string IMGTYPE_CAL="CAL";
+  const std::string IMGTYPE_DOMEFLAT="DOMEFLAT";
+  const std::string IMGTYPE_BIAS="BIAS";
+  const std::string IMGTYPE_DARK="DARK";
+  const std::string IMGTYPE_SCI="SCI";
+
 
   /***** Sequencer::PowerSwitch ***********************************************/
   /**
@@ -112,6 +118,58 @@ namespace Sequencer {
   /***** Sequencer::PowerSwitch ***********************************************/
 
 
+  /***** Sequencer::CalibrationTarget *****************************************/
+  /**
+   * @class  CalibrationTarget
+   * @brief  This class handles all calibration target info. It contains a map
+   *         indexed by the calibration target name to hold all of the
+   *         parameters needed to set the instrument for a calibration which
+   *         are not otherwise in the target database, and a function for
+   *         parsing the configuration file.
+   *
+   */
+  class CalibrationTarget {
+    public:
+      CalibrationTarget() :
+        lampnames { "LAMPTHAR", "LAMPFEAR", "LAMPBLUC", "LAMPREDC" },
+        domelampnames { "LOLAMP", "HILAMP" } { }
+
+      ///< struct holds all calibration parameters not in the target database
+      typedef struct {
+        std::string name;                  // calibration target name
+        bool caldoor;                      // true=open
+        bool calcover;                     // true=open
+        std::map<std::string, bool> lamp;  // true=on
+        std::map<int, bool> domelamp;      // 1=LOLAMP, 2=HILAMP, true=on
+        std::map<int, bool> lampmod;       // true=on
+      } calinfo_t;
+
+      ///< parses config file
+      long configure( const std::string &arglist );
+
+      ///< returns pointer to the entire map
+      const std::unordered_map<std::string, calinfo_t> &getmap() const { return calmap; };
+
+      ///< returns just the map contents for specified targetname key
+      const calinfo_t* get_info( const std::string &_name ) const {
+        auto it = calmap.find(_name);
+        if ( it != calmap.end() ) return &it->second;
+        return nullptr;
+      }
+
+    private:
+      std::unordered_map<std::string, calinfo_t> calmap;
+      std::vector<std::string> lampnames;
+      std::vector<std::string> domelampnames;
+  };
+  /***** Sequencer::CalibrationTarget *****************************************/
+
+
+  /***** Sequencer::DatabaseManager *******************************************/
+  /**
+   * @class  DatabaseManager
+   *
+   */
   class DatabaseManager {
     private:
       mysqlx::Session session;
@@ -139,6 +197,7 @@ namespace Sequencer {
         return query.execute();
       }
   };
+  /***** Sequencer::DatabaseManager *******************************************/
 
 
   /***** Sequencer::TargetInfo ************************************************/
@@ -176,6 +235,7 @@ namespace Sequencer {
                                        "DECL",
                                        "OFFSET_RA",
                                        "OFFSET_DEC",
+                                       "NEXP",
                                        "OTMexpt",
                                        "OTMslitwidth",
                                        "OTMslitangle",
@@ -361,6 +421,8 @@ namespace Sequencer {
       int            obsorder;            ///< observation order (DB internal)
       long           targetnum;           ///< ??
       long           sequencenum;         ///< ??
+      bool           iscal;               ///< is this a calibration target?
+      std::string    imgtype;             ///< image type. camerad will use this to fill IMGTYPE keyword
       mysqlx::string name;                ///< name of astronomical target or calibration
       mysqlx::string fitsfile;            ///< file with the spectrum images
       mysqlx::string ra_hms;              ///< current target right ascension in units hh:mm:ss

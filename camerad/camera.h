@@ -697,6 +697,12 @@ namespace Camera {
                 << " region_of_interest[2]=" << this->region_of_interest[2]
                 << " axes[0]=" << this->axes[0]
                 << " axes[1]=" << this->axes[1]
+                << " axes[2]=" << this->axes[2]
+                << " section_size=" << this->section_size << "pix"
+                << " detector_pixels[0]=" << this->detector_pixels[0]
+                << " detector_pixels[1]=" << this->detector_pixels[1]
+                << " bytes_per_pixel=" << bytes_per_pixel
+                << " image_memory=" << this->image_memory << "bytes"
                 << " binning[0]=" << this->binning[0]
                 << " binning[1]=" << this->binning[1];
         logwrite( function, message.str() );

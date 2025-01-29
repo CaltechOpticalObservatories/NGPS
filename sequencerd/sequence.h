@@ -361,6 +361,8 @@ namespace Sequencer {
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
+      CalibrationTarget caltarget;
+
       std::string single_obsid;       ///< obsid for single-target GETONE command
       std::string prev_single_obsid;  ///< the previous single_obsid, used for REPEAT
 
@@ -449,6 +451,7 @@ namespace Sequencer {
 
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
 
+      long parse_calibration_target();
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
       long test( std::string args, std::string &retstring );                   ///< handles test commands

@@ -832,6 +832,15 @@ namespace Sequencer {
         }
       }
 
+      // CAL_TARGET
+      if ( config.param[entry] == "CAL_TARGET" ) {
+        if ( this->sequence.caltarget.configure( config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
+      }
+
       // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
       //
       if ( config.param[entry] == "TELEM_PROVIDER" ) {
