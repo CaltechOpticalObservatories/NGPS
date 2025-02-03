@@ -391,7 +391,7 @@ class ControlTab(QDialog):
         print("Abort button clicked!")
         command = f"abort\n"
         self.parent.send_command(command)
-        self.go_button.setEnabled(False)
+        self.go_button.setEnabled(True)
         self.offset_to_target_button.setEnabled(False)
         self.continue_button.setEnabled(False)
         self.continue_button.setStyleSheet("""

@@ -1,9 +1,11 @@
 import subprocess
+import asyncio
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QSizePolicy, QHBoxLayout, QScrollArea, QFrame
 
 class AfternoonTab(QWidget):
-    def __init__(self):
+    def __init__(self, log_message_callback):
         super().__init__()
+        self.log_message = log_message_callback  # Set log_message callback from the parent
         self.initUI()
 
     def initUI(self):
@@ -155,91 +157,85 @@ class AfternoonTab(QWidget):
         # Set the main layout
         self.setLayout(layout)
 
-    def execute_command(self, command):
-        """Runs the given command in the terminal"""
+    async def execute_command(self, command):
+        """Runs the given command in the terminal asynchronously."""
         try:
             print(f"Running command: {command}")
-            subprocess.run(command, shell=True, check=True)
-        except subprocess.CalledProcessError as e:
+            # Start the subprocess asynchronously
+            process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            
+            # Wait for the command to finish and get the output and errors
+            stdout, stderr = await process.communicate()
+
+            # If the process has an error output, print it
+            if stderr:
+                print(f"Error executing command: {stderr.decode()}")
+            
+            # Otherwise, print the output
+            if stdout:
+                print(f"Command output: {stdout.decode()}")
+
+            # Check the returncode for success/failure
+            if process.returncode != 0:
+                print(f"Command failed with return code {process.returncode}")
+        
+        except Exception as e:
             print(f"Error executing command: {e}")
 
-    def start_afternoon_session(self):
-        print("Afternoon session started...")
-
     def set_slit(self):
-        # Get input value for the slit set command
         slit_value = self.slit_value_input.text()
-
-        # Ensure the slit value is provided
         if slit_value:
             command = f"slit set {slit_value}"
             self.execute_command(command)
         else:
-            print("Please provide a valid slit value.")
+            self.log_message("Please provide a valid slit value.")
 
     def set_spatial_binning(self):
-        # Get input value for spatial binning
         spatial_binning = self.spatial_binning_input.text()
-
-        # Ensure the spatial binning value is provided
         if spatial_binning:
             command_row = f"camera bin row {spatial_binning}"
             self.execute_command(command_row)
         else:
-            print("Please provide a spatial binning value.")
+            self.log_message("Please provide a spatial binning value.")
 
     def set_spectral_binning(self):
-        # Get input value for spectral binning
         spectral_binning = self.spectral_binning_input.text()
-
-        # Ensure the spectral binning value is provided
         if spectral_binning:
             command_col = f"camera bin col {spectral_binning}"
             self.execute_command(command_col)
         else:
-            print("Please provide a spectral binning value.")
+            self.log_message("Please provide a spectral binning value.")
 
     def run_thrufocus_script(self):
-        # Get the output log file path
         log_file = self.log_file_input.text()
-
-        # Ensure the log file path is provided
         if log_file:
             command = f"bash calib/thrufocus | tee {log_file}"
             self.execute_command(command)
         else:
-            print("Please provide a valid log file path.")
+            self.log_message("Please provide a valid log file path.")
 
     def set_focus_r(self):
-        # Get input values for the focus set command
         band = self.band_r_input.text()
         value = self.value_input.text()
-
-        # Ensure both band and value are provided
         if band and value:
             command = f"focus set {band} {value}"
             self.execute_command(command)
         else:
-            print("Please provide both band and value for the focus set command.")
+            self.log_message("Please provide both band and value for the focus set command.")
 
     def set_focus_i(self):
-        # Get input values for the focus set command
         band = self.band_i_input.text()
         value = self.value_input.text()
-
-        # Ensure both band and value are provided
         if band and value:
             command = f"focus set {band} {value}"
             self.execute_command(command)
         else:
-            print("Please provide both band and value for the focus set command.")
+            self.log_message("Please provide both band and value for the focus set command.")
 
     def run_getcalib(self):
-        """Runs the getcalib command"""
         command = "bash calib/getcalib"
         self.execute_command(command)
 
     def run_getcalib_flat(self):
-        """Runs the getcalib_flat command"""
         command = "bash calib/getcalib_flats"
         self.execute_command(command)

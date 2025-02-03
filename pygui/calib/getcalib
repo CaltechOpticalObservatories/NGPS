@@ -154,7 +154,7 @@ basename=(`camera basename`[1])
 echo "First exposure: $fistex. Basename: $basename"
 
 bash calib/fake camera key IMGTYPE=FEAR//Calibration. FeAr lamp
-bash ake calib lampmod $fearmod 1 1000
+bash calib/fake calib lampmod $fearmod 1 1000
 
 bash calib/fake camera exptime $T_fear
 bash calib/fake exposen $N_fear

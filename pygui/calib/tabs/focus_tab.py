@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout, QSpacerItem
 from PyQt5.QtCore import Qt
 import subprocess
-import glob
+import asyncio
 
 class FocusTab(QWidget):
-    def __init__(self):
+    def __init__(self, log_message_callback):
         super().__init__()
+        self.log_message = log_message_callback
         self.initUI()
 
     def initUI(self):
@@ -317,14 +318,23 @@ class FocusTab(QWidget):
         self.setMinimumSize(800, 600)  # Minimum window size (adjust as needed)
         self.setWindowTitle("Focus Tab")
 
-
-    def run_command(self, command_list):
-        """Helper function to run terminal command and handle errors"""
+    async def run_command(self, command_list):
+        """Run the terminal command asynchronously."""
         try:
-            result = subprocess.run(command_list, check=True, text=True, capture_output=True)
-            print(f"Command output: {result.stdout}")
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed with error: {e.stderr}")
+            process = await asyncio.create_subprocess_exec(
+                *command_list,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+
+            if process.returncode == 0:
+                print(f"Command output: {stdout.decode()}")
+            else:
+                print(f"Command failed with error: {stderr.decode()}")
+
+        except Exception as e:
+            print(f"Error while running command: {e}")
     
     def activate_boi_r(self):
         # Get the user input or use the placeholder (default values)
@@ -474,10 +484,10 @@ class FocusTab(QWidget):
             command = f"camera basename {basename}"
             self.run_command(command.split())
 
-    def run_focus_andor(self):
-        """Run the focus_andor.py script with specified arguments."""
+    async def run_focus_andor(self):
+        """Run the focus_andor.py script with specified arguments asynchronously."""
         command = "bash calib/andor.sh"
-        self.execute_command(command)
+        await self.execute_command_async(command)
 
     def open_focus_images(self):
         """Run the exact eog command to open images."""
@@ -490,10 +500,27 @@ class FocusTab(QWidget):
         except subprocess.CalledProcessError as e:
             print(f"Error occurred: {e.stderr}")
 
-    def execute_command(self, command):
-        """Runs the given command in the terminal"""
+    async def execute_command(self, command):
+        """Runs the given command in the terminal asynchronously."""
         try:
             print(f"Running command: {command}")
-            subprocess.run(command, shell=True, check=True)
-        except subprocess.CalledProcessError as e:
+            # Start the subprocess asynchronously
+            process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            
+            # Wait for the command to finish and get the output and errors
+            stdout, stderr = await process.communicate()
+
+            # If the process has an error output, print it
+            if stderr:
+                print(f"Error executing command: {stderr.decode()}")
+            
+            # Otherwise, print the output
+            if stdout:
+                print(f"Command output: {stdout.decode()}")
+
+            # Check the returncode for success/failure
+            if process.returncode != 0:
+                print(f"Command failed with return code {process.returncode}")
+        
+        except Exception as e:
             print(f"Error executing command: {e}")

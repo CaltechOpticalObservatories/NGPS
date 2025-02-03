@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QComboBox, QHBoxLayout, QScrollArea
 import subprocess
+import asyncio
 
 class CalibTab(QWidget):
     def __init__(self):
@@ -101,12 +102,29 @@ class CalibTab(QWidget):
         final_layout.addWidget(scroll_area)
         self.setLayout(final_layout)
 
-    def execute_command(self, command: str):
-        """Executes the given command in the terminal."""
+    async def execute_command(self, command):
+        """Runs the given command in the terminal asynchronously."""
         try:
             print(f"Running command: {command}")
-            subprocess.run(command, shell=True, check=True)  # Execute the command in the terminal
-        except subprocess.CalledProcessError as e:
+            # Start the subprocess asynchronously
+            process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            
+            # Wait for the command to finish and get the output and errors
+            stdout, stderr = await process.communicate()
+
+            # If the process has an error output, print it
+            if stderr:
+                print(f"Error executing command: {stderr.decode()}")
+            
+            # Otherwise, print the output
+            if stdout:
+                print(f"Command output: {stdout.decode()}")
+
+            # Check the returncode for success/failure
+            if process.returncode != 0:
+                print(f"Command failed with return code {process.returncode}")
+        
+        except Exception as e:
             print(f"Error executing command: {e}")
 
     def execute_calib_command(self, command: str):
