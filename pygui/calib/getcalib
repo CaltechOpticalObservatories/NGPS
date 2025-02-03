@@ -25,11 +25,11 @@ T_dark=10000
 
 ### Nominal exposure counts. These should be command line or parameter
 ## file inputs, etc.
-N_thar=2
-N_fear=2
+N_thar=3
+N_fear=3
 N_cont=3
 N_etalon=0
-N_dome=5
+N_dome=0
 N_bias=7
 N_dark=0
 
