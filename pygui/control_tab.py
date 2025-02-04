@@ -391,8 +391,42 @@ class ControlTab(QDialog):
         print("Abort button clicked!")
         command = f"abort\n"
         self.parent.send_command(command)
+        
+        # Re-enable the button and reset its appearance
         self.go_button.setEnabled(True)
+        self.go_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;  /* Optional: Round corners */
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)
         self.offset_to_target_button.setEnabled(False)
+        self.offset_to_target_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #D3D3D3;  /* Light gray when disabled */
+                    color: black;
+                    font-weight: bold;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;  /* Optional: Round corners */
+                }
+                QPushButton:hover {
+                    background-color: #D3D3D3;  /* No hover effect when disabled */
+                }
+                QPushButton:pressed {
+                    background-color: #D3D3D3;  /* No pressed effect when disabled */
+                }
+        """)
         self.continue_button.setEnabled(False)
         self.continue_button.setStyleSheet("""
                 QPushButton {
