@@ -1,6 +1,7 @@
 import subprocess
 import asyncio
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QSizePolicy, QHBoxLayout, QScrollArea, QFrame
+from calib.tabs.async_command_thread import AsyncCommandThread
 
 class AfternoonTab(QWidget):
     def __init__(self, log_message_callback):
@@ -157,36 +158,11 @@ class AfternoonTab(QWidget):
         # Set the main layout
         self.setLayout(layout)
 
-    async def execute_command(self, command):
-        """Runs the given command in the terminal asynchronously."""
-        try:
-            print(f"Running command: {command}")
-            # Start the subprocess asynchronously
-            process = await asyncio.create_subprocess_shell(command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            
-            # Wait for the command to finish and get the output and errors
-            stdout, stderr = await process.communicate()
-
-            # If the process has an error output, print it
-            if stderr:
-                print(f"Error executing command: {stderr.decode()}")
-            
-            # Otherwise, print the output
-            if stdout:
-                print(f"Command output: {stdout.decode()}")
-
-            # Check the returncode for success/failure
-            if process.returncode != 0:
-                print(f"Command failed with return code {process.returncode}")
-        
-        except Exception as e:
-            print(f"Error executing command: {e}")
-
     def set_slit(self):
         slit_value = self.slit_value_input.text()
         if slit_value:
             command = f"slit set {slit_value}"
-            self.execute_command(command)
+            self.run_command_in_background(command)
         else:
             self.log_message("Please provide a valid slit value.")
 
@@ -194,7 +170,7 @@ class AfternoonTab(QWidget):
         spatial_binning = self.spatial_binning_input.text()
         if spatial_binning:
             command_row = f"camera bin row {spatial_binning}"
-            self.execute_command(command_row)
+            self.run_command_in_background(command_row)
         else:
             self.log_message("Please provide a spatial binning value.")
 
@@ -202,7 +178,7 @@ class AfternoonTab(QWidget):
         spectral_binning = self.spectral_binning_input.text()
         if spectral_binning:
             command_col = f"camera bin col {spectral_binning}"
-            self.execute_command(command_col)
+            self.run_command_in_background(command_col)
         else:
             self.log_message("Please provide a spectral binning value.")
 
@@ -210,7 +186,7 @@ class AfternoonTab(QWidget):
         log_file = self.log_file_input.text()
         if log_file:
             command = f"bash calib/thrufocus | tee {log_file}"
-            self.execute_command(command)
+            self.run_command_in_background(command)
         else:
             self.log_message("Please provide a valid log file path.")
 
@@ -219,7 +195,7 @@ class AfternoonTab(QWidget):
         value = self.value_input.text()
         if band and value:
             command = f"focus set {band} {value}"
-            self.execute_command(command)
+            self.run_command_in_background(command)
         else:
             self.log_message("Please provide both band and value for the focus set command.")
 
@@ -228,14 +204,20 @@ class AfternoonTab(QWidget):
         value = self.value_input.text()
         if band and value:
             command = f"focus set {band} {value}"
-            self.execute_command(command)
+            self.run_command_in_background(command)
         else:
             self.log_message("Please provide both band and value for the focus set command.")
 
     def run_getcalib(self):
         command = "bash calib/getcalib"
-        self.execute_command(command)
+        self.run_command_in_background(command)
 
     def run_getcalib_flat(self):
         command = "bash calib/getcalib_flats"
-        self.execute_command(command)
+        self.run_command_in_background(command)
+
+    def run_command_in_background(self, command):
+        """Run the command in a background thread."""
+        self.thread = AsyncCommandThread(command)
+        self.thread.output_signal.connect(self.log_message)
+        self.thread.start()

@@ -128,13 +128,15 @@ QProgressBar {
     text-align: center;
     font-size: 14pt;  /* Larger font size */
     font-weight: bold;  /* Bold font */
+    color: rgb(0, 39, 0);  /* Set text color to match the green */
 }
 
 QProgressBar::chunk {
-    background-color:rgb(43, 255, 57);  /* Lighter gray for the progress chunk */
+    background-color: rgb(43, 255, 57);  /* Lighter green for the progress chunk */
     width: 10px;
     margin: 0.5px;
 }
+
 
 /* Style for QTabWidget */
 QTabWidget::pane {
