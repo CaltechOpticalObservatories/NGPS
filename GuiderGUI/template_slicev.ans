@@ -16,7 +16,7 @@ buttonbar
 JOG SETTINGS
 *
 button
-$param(jogSettings) ; echo "$jog_arcsec" > $dir/jog.ini | $null   # save the jog setting to file
+$param(jogSettings) ; echo "$jog_arcsec" > /tmp/jog.ini | $null   # save the jog setting to file
 #############
 LEFT
 *

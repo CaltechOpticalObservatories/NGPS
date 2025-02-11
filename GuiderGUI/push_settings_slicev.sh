@@ -23,7 +23,7 @@ navg=${5:-1}
 
 # Get the jog size parameter which is just 1 number saved in a file
 # The jog settings menu writes to this file
-JOGSIZE_ARCSEC=`cat $SCRIPT_DIR/jog.ini`
+JOGSIZE_ARCSEC=`cat $jogfile`
 
 # create new analysis file from template and new parameters
 sed -e "s/DEFexptime/$exptime/" \
