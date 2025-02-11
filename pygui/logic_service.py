@@ -94,7 +94,7 @@ class LogicService:
                     value = row.get(column)  # Get the value from the CSV, default to None if not present
 
                     # Handle missing columns (apply defaults based on column type)
-                    if value is Non or value == '':
+                    if value is None or value == '':
                         # Numeric columns (defaults to 0)
                         if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'BINSPECT', 'BINSPAT']:
                             value = 0
