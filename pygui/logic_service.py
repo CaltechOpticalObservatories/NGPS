@@ -45,43 +45,49 @@ class LogicService:
 
     def upload_csv_to_mysql(self, file_path, target_set_name):
         """Upload the CSV to MySQL and associate it with a new target set."""
-
+        
+        # Step 1: Read the CSV
         try:
-            # Step 1: Read the CSV
             with open(file_path, 'r') as file:
                 reader = csv.DictReader(file)
                 data = list(reader)  # Convert CSV to list of dictionaries
                 print(f"CSV file loaded. Total rows: {len(data)}")
+        except Exception as e:
+            print(f"Error reading CSV file: {e}")
+            return
 
-            # Step 2: Start a MySQL transaction
+        # Step 2: Insert a new entry into the `target_sets` table
+        try:
             cursor = self.connection.cursor()
-            self.connection.start_transaction()
-
-            # Step 3: Insert a new entry into the `target_sets` table
             cursor.execute("INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
                         (target_set_name, self.parent.current_owner))  # Use the current owner's info
             self.connection.commit()
 
-            # Step 4: Fetch the new SET_ID (for the newly inserted target set)
+            # Step 3: Fetch the new SET_ID (for the newly inserted target set)
             cursor.execute("SELECT LAST_INSERT_ID()")
             set_id = cursor.fetchone()[0]
             print(f"New target set created with SET_ID: {set_id}")
+            cursor.close()
 
-            # Step 5: Dynamically construct the insert query for `targets`
+            # Step 4: Dynamically construct the insert query
+            cursor = self.connection.cursor()
+
+            # Get the columns in the CSV file (i.e., DictReader's fieldnames)
             csv_columns = reader.fieldnames  # List of column names from the CSV
             print(f"CSV Columns: {csv_columns}")
 
+            # Define all columns from your table `targets` (based on your schema)
             all_columns = [
-                'OBSERVATION_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME',
-                'RA', 'DECL', 'OFFSET_RA', 'OFFSET_DEC', 'EXPTIME', 'SLITWIDTH', 'SLITOFFSET', 'OBSMODE',
-                'BINSPECT', 'BINSPAT', 'SLITANGLE', 'AIRMASS_MAX', 'WRANGE_LOW', 'WRANGE_HIGH', 'CHANNEL',
-                'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass',
-                'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start',
-                'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR',
+                'OBSERVATION_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME', 
+                'RA', 'DECL', 'OFFSET_RA', 'OFFSET_DEC', 'EXPTIME', 'SLITWIDTH', 'SLITOFFSET', 'OBSMODE', 
+                'BINSPECT', 'BINSPAT', 'SLITANGLE', 'AIRMASS_MAX', 'WRANGE_LOW', 'WRANGE_HIGH', 'CHANNEL', 
+                'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
+                'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start', 
+                'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR', 
                 'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE', 'PRIORITY'
             ]
 
-            # Step 6: Loop through each row and insert data into `targets` table
+            # Step 5: Loop through each row and dynamically generate the insert query
             for idx, row in enumerate(data):
                 row_data = [set_id]  # Start with the SET_ID as the first element in row_data
                 insert_columns = ['SET_ID']  # Always include SET_ID
@@ -89,7 +95,7 @@ class LogicService:
 
                 print(f"Inserting row {idx + 1}: {row}")
 
-                # Step 7: Add only non-empty fields to the insert query
+                # Step 6: Add only non-empty fields to the insert query
                 for column in all_columns:
                     value = row.get(column)  # Get the value from the CSV, default to None if not present
 
@@ -134,18 +140,16 @@ class LogicService:
                 # Execute the insert query with dynamically generated values
                 cursor.execute(insert_query, row_data)
 
-            # Commit the transaction after all inserts
+            # Commit the transaction
             self.connection.commit()
-            print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
 
+            print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
             # Emit the signal after the upload is complete
             self.fetch_and_update_target_list()
 
         except mysql.connector.Error as err:
             print(f"Error inserting data into MySQL: {err}")
-            self.connection.rollback()  # Rollback the transaction if there's an error
-            print("Transaction rolled back.")
-
+            self.parent.show_popup("Error uploading target list! Please try again.")
 
     def get_or_create_target_set(self, connection, target_set_name):
         """
