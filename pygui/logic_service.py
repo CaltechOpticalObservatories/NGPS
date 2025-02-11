@@ -361,9 +361,6 @@ class LogicService:
             self.parent.target_list_name.currentIndexChanged.connect(self.filter_target_list)
         else:
             print(f"No data found in the {target_table} table.")
-        
-        # Close the database connection after usage
-        connection.close()
 
 
     def load_mysql_and_fetch_target_sets(self, config_file):
@@ -390,9 +387,6 @@ class LogicService:
             self.update_target_sets_table(rows)
         else:
             print(f"No data found in the {target_sets_table} table.")
-        
-        # Close the database connection after usage
-        connection.close()
         
     def fetch_set_id(self, target_list=None):
         self.target_list_display = self.parent.layout_service.target_list_display
@@ -437,8 +431,6 @@ class LogicService:
                 
             except mysql.connector.Error as err:
                 print(f"Database error: {err}")
-            finally:
-                self.connection.close()
 
     def insert_target_to_db(self, target_name, ra, decl, offset_ra=None, offset_dec=None, exptime=None, slitwidth=None, magnitude=None):
         """
@@ -493,9 +485,6 @@ class LogicService:
             print(f"Successfully inserted target '{target_name}' with SET_ID {set_id} into the database.")
         except mysql.connector.Error as err:
             print(f"Error executing insert query: {err}")
-        finally:
-            if connection:
-                connection.close()
 
     def filter_target_list(self):
         """
