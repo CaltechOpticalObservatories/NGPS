@@ -146,9 +146,6 @@ class LogicService:
             self.connection.rollback()  # Rollback the transaction if there's an error
             print("Transaction rolled back.")
 
-        finally:
-            cursor.close()
-
 
     def get_or_create_target_set(self, connection, target_set_name):
         """
