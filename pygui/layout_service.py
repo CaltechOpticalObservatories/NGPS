@@ -429,58 +429,10 @@ class LayoutService:
 
     def update_exposure_progress(self, progress_percentage):
         """Update the exposure progress bar based on the received percentage."""
-        if progress_percentage < 50:
-            self.parent.exposure_progress.setStyleSheet("""
-                QProgressBar {
-                background-color: #444444;  /* Very dark gray progress bar background */
-                border: 1px solid #777777;
-                border-radius: 5px;
-                text-align: center;
-                font-size: 14pt;  /* Larger font size */
-                font-weight: bold;  /* Bold font */
-                color: #e0e0e0;  /* Set text color to match the green */
-                }
-            """)             
-        else:
-            self.parent.exposure_progress.setStyleSheet("""
-                QProgressBar {
-                background-color: #444444;  /* Very dark gray progress bar background */
-                border: 1px solid #777777;
-                border-radius: 5px;
-                text-align: center;
-                font-size: 14pt;  /* Larger font size */
-                font-weight: bold;  /* Bold font */
-                color: #000000;  /* Black after 50% */
-                }
-            """)     
         self.parent.exposure_progress.setValue(progress_percentage)
 
     def update_readout_progress(self, progress_percentage):
         """Update the readout progress bar based on the received percentage."""
-        if progress_percentage < 50:
-            self.parent.overhead_progress.setStyleSheet("""
-                QProgressBar {
-                background-color: #444444;  /* Very dark gray progress bar background */
-                border: 1px solid #777777;
-                border-radius: 5px;
-                text-align: center;
-                font-size: 14pt;  /* Larger font size */
-                font-weight: bold;  /* Bold font */
-                color: #e0e0e0;  /* Set text color to match the green */
-                }
-            """)             
-        else:
-            self.parent.overhead_progress.setStyleSheet("""
-                QProgressBar {
-                background-color: #444444;  /* Very dark gray progress bar background */
-                border: 1px solid #777777;
-                border-radius: 5px;
-                text-align: center;
-                font-size: 14pt;  /* Larger font size */
-                font-weight: bold;  /* Bold font */
-                color: #000000;  /* Black after 50% */
-                }
-            """)   
         self.parent.overhead_progress.setValue(progress_percentage)
 
     def create_image_info_layout(self):

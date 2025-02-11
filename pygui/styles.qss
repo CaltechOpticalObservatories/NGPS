@@ -131,11 +131,10 @@ QProgressBar {
 }
 
 QProgressBar::chunk {
-    background-color: rgb(146, 255, 153);  /* Lighter green for the progress chunk */
+    background-color: #4CAF50;  /* Lighter green for the progress chunk */
     width: 10px;
     margin: 0.5px;
 }
-
 
 /* Style for QTabWidget */
 QTabWidget::pane {
