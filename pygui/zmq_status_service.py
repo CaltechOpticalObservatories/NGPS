@@ -106,13 +106,12 @@ class ZmqStatusService(QObject):
         try:
             self.logger.info("Starting to listen for messages from the broker...")
             while True:
-                message = self.socket.recv_string()  # Receive the message as a string
-                self.logger.info(f"Received message: {message}")
+                message = self.socket.recv_multipart()  # Receive the message as multipart (topic, payload)
+                if len(message) == 2:  # Ensure there are exactly two parts: topic and payload
+                    topic = message[0].decode('utf-8')  # The topic is the first part (byte array -> string)
+                    payload = message[1].decode('utf-8')  # The payload is the second part
 
-                # Check if the message contains a space to separate topic and payload
-                if ' ' in message:
-                    topic, payload = message.split(' ', 1)  # Split the message assuming space-separated topic and payload
-                    self.logger.info(f"Processed message: Topic = {topic}, Payload = {payload}")
+                    self.logger.info(f"Received message: Topic = {topic}, Payload = {payload}")
 
                     # Assuming the payload is a JSON string, parse it into a dictionary
                     try:
@@ -120,14 +119,13 @@ class ZmqStatusService(QObject):
                         # Emit the message to the UI thread
                         self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
-                        # Update the UI based on the parsed data
-                        self.update_ui(data)
+                        # # Assuming you want to update the UI based on parsed data
+                        # modulator_data = {}  # You need to fetch modulator data from somewhere
+                        # self.update_ui(data, modulator_data)
                     except json.JSONDecodeError as e:
                         self.logger.error(f"Error parsing JSON payload: {e}")
                 else:
-                    # If there is no space, treat the whole message as the topic
-                    self.logger.info(f"Processed message with no payload: Topic = {message}")
-                    self.new_message_signal.emit(f"Topic: {message}, Payload: None")
+                    self.logger.warning("Received malformed message (not two parts).")
                     
         except Exception as e:
             self.logger.error(f"Error while listening for messages: {e}")
