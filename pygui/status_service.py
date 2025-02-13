@@ -17,7 +17,7 @@ class StatusService(QObject):
     update_status_signal = pyqtSignal(str)
     user_can_expose_signal = pyqtSignal(bool)
 
-    def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=120):
+    def __init__(self, parent, ip="239.1.1.234", port=1300, update_interval=5, heartbeat_timeout=3, max_heartbeat_misses=3, timeout_duration=1800):
         super().__init__()
         self.parent = parent  # reference to the parent window or main UI
         self.ip = ip

@@ -119,9 +119,13 @@ class ZmqStatusService(QObject):
                         # Emit the message to the UI thread
                         self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
+                        # If the topic is "calibd", update modulator states
+                        if topic == "calibd":
+                            self.update_modulator_states(data)
+
                         # # Assuming you want to update the UI based on parsed data
-                        # modulator_data = {}  # You need to fetch modulator data from somewhere
-                        # self.update_ui(data, modulator_data)
+                        # lamp_data = {}  # You should have some lamp data
+                        # self.update_lamp_states(lamp_data)  # Update lamp states
                     except json.JSONDecodeError as e:
                         self.logger.error(f"Error parsing JSON payload: {e}")
                 else:
@@ -139,28 +143,43 @@ class ZmqStatusService(QObject):
             self.is_connected = False
             self.logger.info("Disconnected from broker.")
 
-    def update_ui(self, data, modulator_data):
-        """ Emit signals with the lamp and modulator states """
-        if not isinstance(data, dict) or not isinstance(modulator_data, dict):
-            self.logger.error("Invalid data format received.")
+    def update_lamp_states(self, data):
+        """ Emit signal with the lamp states """
+        if not isinstance(data, dict):
+            self.logger.error("Invalid data format received for lamp states.")
             return
         
         lamp_states = {}
-        modulator_states = {}
-
-        # Process lamps
         lamps = ["LAMPBLUC", "LAMPFEAR", "LAMPREDC", "LAMPTHAR"]
         for lamp in lamps:
             lamp_states[lamp] = data.get(lamp, False)
 
-        # Process modulators
-        for lamp in lamps:
-            modulator_key = f"MOD{lamp[4:]}"  # Get the modulator key from the lamp name
-            modulator_status = modulator_data.get(modulator_key, "off")
-            modulator_states[modulator_key] = modulator_status.startswith("on")
-        
-        # Emit signals with the states
+        # Emit the signal for lamp states
         self.lamp_states_signal.emit(lamp_states)
+
+    def update_modulator_states(self, modulator_data):
+        """ Emit signal with the modulator states """
+        if not isinstance(modulator_data, dict):
+            self.logger.error("Invalid data format received for modulator states.")
+            return
+        
+        modulator_states = {}
+        # List of modulators we are interested in
+        modulator_keys = ["MODTHAR", "MODFEAR", "MODRDCON", "MODBLCON"]
+
+        for modulator_key in modulator_keys:
+            # Get the status from the modulator data
+            modulator_status = modulator_data.get(modulator_key, "err")  # Default to "err" if not found
+
+            # If "err" is in the status, consider it as the hardware not ready
+            if "err" in modulator_status:
+                modulator_states[modulator_key] = False  # Hardware is not ready, so set to False (off)
+            else:
+                # Otherwise, treat the modulator as "on" or "off"
+                # If it contains the term "on", we consider it as True (on)
+                modulator_states[modulator_key] = modulator_status.startswith("on")
+
+        # Emit the signal for modulator states
         self.modulator_states_signal.emit(modulator_states)
 
 class ZmqStatusServiceThread(QThread):
