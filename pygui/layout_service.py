@@ -878,7 +878,7 @@ class LayoutService:
             # Select the row after updating the table (to highlight it)
             self.target_list_display.selectRow(selected_row)
             
-            slit_angle = 0
+            slit_angle = "0"
             if self.parent.current_ra != '' and self.parent.current_dec != '':
                 slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             self.control_tab.slit_angle_box.setText(slit_angle)
