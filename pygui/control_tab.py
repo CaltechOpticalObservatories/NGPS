@@ -227,6 +227,7 @@ class ControlTab(QDialog):
             print("Pausing action...")
             command = f"pause\n"
             self.parent.send_command(command)
+            self.parent.layout_service.update_system_status("paused")
 
     def on_stop_now_button_click(self):
         """Handle Stop Now button click."""

@@ -1,5 +1,3 @@
-import subprocess
-import asyncio
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QSizePolicy, QHBoxLayout, QScrollArea, QFrame
 from calib.tabs.async_command_thread import AsyncCommandThread
 
@@ -218,6 +216,6 @@ class AfternoonTab(QWidget):
 
     def run_command_in_background(self, command):
         """Run the command in a background thread."""
-        self.thread = AsyncCommandThread(command)
+        self.thread = AsyncCommandThread(command, self.log_message)
         self.thread.output_signal.connect(self.log_message)
         self.thread.start()

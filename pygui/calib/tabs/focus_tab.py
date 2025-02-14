@@ -20,30 +20,30 @@ class FocusTab(QWidget):
         scroll_area_layout.setContentsMargins(15, 15, 15, 15)  # Inner margins around form
         scroll_area_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
         
-        # Run Focus Button (Before Band of Interest Section)
-        run_focus_button = QPushButton("Run Focus", self)
-        run_focus_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green color */
-                color: white;
-                border-radius: 8px;
-                padding: 10px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #45a049;  /* Slightly darker green on hover */
-            }
-            QPushButton:pressed {
-                background-color: #3e8e41;  /* Darker green when pressed */
-            }
-        """)        
-        run_focus_button.clicked.connect(self.run_focus)
-        run_focus_button.setFixedHeight(45)
-        run_focus_button.setFixedWidth(300)
-        run_focus_button_layout = QHBoxLayout()
-        run_focus_button_layout.addWidget(run_focus_button)
-        run_focus_button_layout.setAlignment(run_focus_button, Qt.AlignCenter)  # Center the button
-        scroll_area_layout.addRow(run_focus_button_layout)
+        # # Run Focus Button (Before Band of Interest Section)
+        # run_focus_button = QPushButton("Run Focus", self)
+        # run_focus_button.setStyleSheet("""
+        #     QPushButton {
+        #         background-color: #4CAF50;  /* Green color */
+        #         color: white;
+        #         border-radius: 8px;
+        #         padding: 10px;
+        #         border: none;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #45a049;  /* Slightly darker green on hover */
+        #     }
+        #     QPushButton:pressed {
+        #         background-color: #3e8e41;  /* Darker green when pressed */
+        #     }
+        # """)        
+        # run_focus_button.clicked.connect(self.run_focus)
+        # run_focus_button.setFixedHeight(45)
+        # run_focus_button.setFixedWidth(300)
+        # run_focus_button_layout = QHBoxLayout()
+        # run_focus_button_layout.addWidget(run_focus_button)
+        # run_focus_button_layout.setAlignment(run_focus_button, Qt.AlignCenter)  # Center the button
+        # scroll_area_layout.addRow(run_focus_button_layout)
 
         # Camstep Focus Command
         scroll_area_layout.addRow(QLabel("camstep Focus"))
@@ -256,14 +256,24 @@ class FocusTab(QWidget):
         # Band of Interest Section
         scroll_area_layout.addRow(QLabel("Full BOI"))
         # Full BOI Section
-        full_boi_button = QPushButton("Activate Full BOI", self)
-        full_boi_button.clicked.connect(self.activate_boi_full)
+        full_boi_button = QPushButton("Activate Full BOI R Band", self)
+        full_boi_button.clicked.connect(self.activate_boi_r_full)
         full_boi_button.setFixedHeight(45)
         full_boi_button.setFixedWidth(300)  # Half-width button
         full_boi_button_layout = QHBoxLayout()
         full_boi_button_layout.addWidget(full_boi_button)
         full_boi_button_layout.setAlignment(full_boi_button, Qt.AlignCenter) 
         scroll_area_layout.addRow(full_boi_button_layout)
+        
+        # Full BOI Section
+        full_boi_i_button = QPushButton("Activate Full BOI I Band", self)
+        full_boi_i_button.clicked.connect(self.activate_boi_i_full)
+        full_boi_i_button.setFixedHeight(45)
+        full_boi_i_button.setFixedWidth(300)  # Half-width button
+        full_boi_i_button_layout = QHBoxLayout()
+        full_boi_i_button_layout.addWidget(full_boi_i_button)
+        full_boi_i_button_layout.setAlignment(full_boi_i_button, Qt.AlignCenter) 
+        scroll_area_layout.addRow(full_boi_i_button_layout)
         
         # Add a button to run the focus_andor.py command
         run_focus_andor_button = QPushButton("Analyze Focus", self)     
@@ -319,14 +329,6 @@ class FocusTab(QWidget):
         self.setMinimumSize(800, 600)  # Minimum window size (adjust as needed)
         self.setWindowTitle("Focus Tab")
 
-
-    def run_command(self, command_list):
-        """Helper function to run terminal command and handle errors"""
-        try:
-            result = subprocess.run(command_list, check=True, text=True, capture_output=True)
-            print(f"Command output: {result.stdout}")
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed with error: {e.stderr}")
     
     def activate_boi_r(self):
         # Get the user input or use the placeholder (default values)
@@ -336,19 +338,7 @@ class FocusTab(QWidget):
 
         if channel and skip_rows and rows:
             command = f"camera boi {channel} {skip_rows} {rows}"
-            self.run_command_in_background(command.split())
-        else:
-            print("Please provide valid input for channel, rows to skip, and rows to read.")
-
-    def activate_boi_r(self):
-        # Use placeholder text if no input provided
-        channel = self.channel_r_input.text() or self.channel_r_input.placeholderText()
-        skip_rows = self.skip_rows_r_input.text() or self.skip_rows_r_input.placeholderText()
-        rows = self.rows_r_input.text() or self.rows_r_input.placeholderText()
-
-        if channel and skip_rows and rows:
-            command = f"camera boi {channel} {skip_rows} {rows}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for channel, rows to skip, and rows to read.")
 
@@ -360,15 +350,17 @@ class FocusTab(QWidget):
 
         if channel and skip_rows and rows:
             command = f"camera boi {channel} {skip_rows} {rows}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for channel, rows to skip, and rows to read.")
 
-    def activate_boi_full(self):
+    def activate_boi_r_full(self):
         command_r = f"camera boi R full"
+        self.run_command_in_background(command_r)
+
+    def activate_boi_i_full(self):
         command_i = f"camera boi I full"
-        self.run_command_in_background(command_r.split())
-        self.run_command_in_background(command_i.split())
+        self.run_command_in_background(command_i)
 
     def activate_row_bin(self):
         # Use placeholder text if no input provided
@@ -377,7 +369,7 @@ class FocusTab(QWidget):
 
         if axis and binfactor:
             command = f"camera bin {axis} {binfactor}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for axis and bin factor.")
 
@@ -388,7 +380,7 @@ class FocusTab(QWidget):
 
         if axis and binfactor:
             command = f"camera bin {axis} {binfactor}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for axis and bin factor.")
 
@@ -398,7 +390,7 @@ class FocusTab(QWidget):
 
         if exptime:
             command = f"camera exptime {exptime}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide a valid input for exposure time.")
 
@@ -409,7 +401,7 @@ class FocusTab(QWidget):
 
         if width and offset:
             command = f"slit set {width} {offset}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for slit width and offset.")
 
@@ -422,7 +414,7 @@ class FocusTab(QWidget):
 
         if value and upper and lower and step:
             command = f"camstep focus all focusloop {value} {upper} {lower} {step}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for focus loop parameters.")
 
@@ -435,7 +427,7 @@ class FocusTab(QWidget):
 
         if value and upper and lower and step:
             command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide valid input for ACAM focus loop parameters.")
 
@@ -445,12 +437,34 @@ class FocusTab(QWidget):
 
         if value:
             command = f"tcs setfocus {value}"
-            self.run_command_in_background(command.split())
+            self.run_command_in_background(command)
         else:
             print("Please provide a valid input for the TCS focus.")
 
+    def set_basename(self, basename="ngps"):
+        """Set the basename."""
+        if basename:
+            command = f"camera basename {basename}"
+            self.run_command_in_background(command)
+
+    def run_focus_andor(self):
+        """Run the focus_andor.py script with specified arguments."""
+        command = "bash calib/andor.sh"
+        self.run_command_in_background(command)
+
+    def open_focus_images(self):
+        """Run the exact eog command to open images."""
+        command = "eog /home/observer/focus/focus_andor_*.png"
+        
+        try:
+            # Run the command exactly as it is
+            subprocess.run(command, shell=True, check=True)
+            print("Command executed successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred: {e.stderr}")
+
     # Event handler methods for R and I bands
-    def run_focus(self):
+    async def run_focus(self):
         # This method will run all the other buttons when clicked
         print("Running Focus...")
 
@@ -469,31 +483,8 @@ class FocusTab(QWidget):
         self.run_focus_andor()
         self.open_focus_images()
 
-    def set_basename(self, basename="ngps"):
-        """Set the basename."""
-
-        if basename:
-            command = f"camera basename {basename}"
-            self.run_command_in_background(command.split())
-
-    def run_focus_andor(self):
-        """Run the focus_andor.py script with specified arguments."""
-        command = "bash calib/andor.sh"
-        self.run_command_in_background(command)
-
-    def open_focus_images(self):
-        """Run the exact eog command to open images."""
-        command = "eog /home/observer/focus/focus_andor_*.png"
-        
-        try:
-            # Run the command exactly as it is
-            subprocess.run(command, shell=True, check=True)
-            print("Command executed successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error occurred: {e.stderr}")
-
     def run_command_in_background(self, command):
         """Run the command in a background thread."""
-        self.thread = AsyncCommandThread(command)
+        self.thread = AsyncCommandThread(command, self.log_message)
         self.thread.output_signal.connect(self.log_message)
         self.thread.start()

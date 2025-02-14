@@ -123,9 +123,9 @@ class ZmqStatusService(QObject):
                         if topic == "calibd":
                             self.update_modulator_states(data)
 
-                        # # Assuming you want to update the UI based on parsed data
-                        # lamp_data = {}  # You should have some lamp data
-                        # self.update_lamp_states(lamp_data)  # Update lamp states
+                        # If the topic is "powerinfo", update lamp states
+                        if topic == "powerd":
+                            self.update_lamp_states(data)  # Update lamp states
                     except json.JSONDecodeError as e:
                         self.logger.error(f"Error parsing JSON payload: {e}")
                 else:
@@ -150,9 +150,12 @@ class ZmqStatusService(QObject):
             return
         
         lamp_states = {}
-        lamps = ["LAMPBLUC", "LAMPFEAR", "LAMPREDC", "LAMPTHAR"]
-        for lamp in lamps:
-            lamp_states[lamp] = data.get(lamp, False)
+        # List of lamps we are interested in
+        lamp_keys = ["LAMPBLUC", "LAMPFEAR", "LAMPREDC", "LAMPTHAR"]
+
+        for lamp_key in lamp_keys:
+            # Get the lamp state from the data (default to False if not found)
+            lamp_states[lamp_key] = data.get(lamp_key, False)
 
         # Emit the signal for lamp states
         self.lamp_states_signal.emit(lamp_states)
