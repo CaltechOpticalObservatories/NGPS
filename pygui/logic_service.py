@@ -762,7 +762,7 @@ class LogicService:
         
         # Create an Observer instance with the location
         try:
-            observer = Observer(location=location, name="Observer", timezone="UTC")
+            observer = Observer(location=location, name="Observer", timezone="LST")
             print(f"Observer created with location: {observer.location}")
         except Exception as e:
             print(f"Error creating observer: {e}")
