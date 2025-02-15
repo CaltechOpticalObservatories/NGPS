@@ -260,7 +260,7 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $fistex. Basename: $basename"
 
-bash calib/fake camera key IMGTYPE=BIAS//Calibration. Dome Flat
+bash calib/fake camera key IMGTYPE=BIAS//Calibration. Bias
 bash calib/fake calib set cover=close door=close
 bash calib/fake camera shutter disable
 

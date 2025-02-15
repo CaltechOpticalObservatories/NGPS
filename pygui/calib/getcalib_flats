@@ -97,7 +97,7 @@ bash  calib/fake calib set cover=close door=open
 # close the lollipops
 
 # Close the lollipops
-for i in $(seq 1 6); do
+for i in $(/usr/bin/seq 1 6); do
   # calib lampmod $i 0 1000
   sleep 0.5
 done
@@ -253,7 +253,7 @@ echo "First exposure: $fistex. Basename: $basename"
 
 bash  calib/fake camera key IMGTYPE=BIAS//Calibration. Dome Flat
 bash  calib/fake calib set cover=close door=close
-bash  calib/fake camera bash utter disable
+bash  calib/fake camera shutter disable
 
 
 bash  calib/fake camera exptime 0
@@ -274,7 +274,7 @@ echo "First exposure: $firstex. Basename: $basename"
 
 bash  calib/fake camera key IMGTYPE=DARK//Calibration. Dome Flat
 bash  calib/fake calib set cover=close door=close
-bash  calib/fake camera bash utter disable
+bash  calib/fake camera shutter disable
 bash  calib/fake camera exptime $T_dark
 bash  calib/fake exposen $N_dark
 fi
