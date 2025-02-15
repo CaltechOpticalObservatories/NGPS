@@ -36,9 +36,6 @@ target_link_libraries(focusd
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
-# Set the setgid bit on the resulting executable
-add_custom_command( TARGET focusd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:focusd> )
-
 # -- Port Definitions ----------------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and is used to generate the

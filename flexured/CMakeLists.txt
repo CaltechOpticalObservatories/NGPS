@@ -31,9 +31,6 @@ target_link_libraries(flexured
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
-# Set the setgid bit on the resulting executable
-add_custom_command( TARGET flexured POST_BUILD COMMAND chmod g+s $<TARGET_FILE:flexured> )
-
 # -- Port Definitions ----------------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and is used to generate the

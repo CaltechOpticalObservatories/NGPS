@@ -82,9 +82,6 @@ target_link_libraries(acamd
 
 target_compile_options(acamd PRIVATE -g -Wall -O1 -Wno-variadic-macros -ggdb)
 
-# Set the setgid bit on the resulting executable
-add_custom_command( TARGET acamd POST_BUILD COMMAND chmod u+s $<TARGET_FILE:acamd> )
-
 add_executable( newpytest
         ${ACAMD_DIR}/newpytest.cpp 
         ${PYTHON_DEV}

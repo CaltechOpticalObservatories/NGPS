@@ -38,9 +38,6 @@ target_link_libraries(powerd
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
-# Set the setgid bit on the resulting executable
-add_custom_command( TARGET powerd POST_BUILD COMMAND chmod g+s $<TARGET_FILE:powerd> )
-
 # -- Port/Address Definitions --------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and privatelan is the master

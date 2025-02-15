@@ -44,9 +44,6 @@ target_link_libraries(thermald
         ${MYSQL_LIB}
         )
 
-# Set the setgid bit on the resulting executable
-add_custom_command( TARGET thermald POST_BUILD COMMAND chmod g+s $<TARGET_FILE:thermald> )
-
 # -- Port/Address Definitions --------------------------------------------------
 #
 # portdefs is the master list of ports for NGPS and privatelan is the master

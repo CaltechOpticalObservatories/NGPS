@@ -36,7 +36,6 @@ target_link_libraries(emulatord.acam
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
         )
-add_custom_command( TARGET emulatord.acam POST_BUILD COMMAND chmod g+s $<TARGET_FILE:emulatord.acam> )
 
 # ----------------------------------------------------------------------------
 # calib
