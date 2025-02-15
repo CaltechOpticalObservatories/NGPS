@@ -12,7 +12,7 @@
 
 namespace Slicecam {
 
-  constexpr double OFFSETRATE=20.;
+  constexpr int OFFSETRATE=20;
 
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 

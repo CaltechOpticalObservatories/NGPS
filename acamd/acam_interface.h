@@ -45,7 +45,7 @@ namespace Acam {
 
   constexpr std::string_view DEFAULT_IMAGENAME = "/tmp/acam.fits";
 
-  constexpr const char* PYTHON_PATH = "/home/developer/dhale/sandbox/NGPS/Python:/home/developer/dhale/sandbox/NGPS/Python/acam_skyinfo";
+  constexpr const char* PYTHON_PATH = "/home/developer/Software/Python";
   constexpr const char* PYTHON_ASTROMETRY_MODULE = "astrometry";
   constexpr const char* PYTHON_ASTROMETRY_FUNCTION = "astrometry_cwrap";
   constexpr const char* PYTHON_IMAGEQUALITY_MODULE = "image_quality";
@@ -526,6 +526,9 @@ namespace Acam {
       std::atomic<int> nsave_preserve_frames;  ///< number of frames to preserve (normally overwritten)
       std::atomic<int> nskip_preserve_frames;  ///< number of frames to skip before saving nsave... frames
 
+      std::condition_variable newframe;
+      std::mutex newframe_mutex;
+      std::atomic<bool> newframe_ready;
 
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
@@ -562,6 +565,7 @@ namespace Acam {
           nskip_before_acquire(0),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
+          newframe_ready(false),
           snapshot_status {
             {"tcsd",       false},
             {"slitd",      false}

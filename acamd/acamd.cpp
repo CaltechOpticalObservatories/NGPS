@@ -42,8 +42,24 @@ int main(int argc, char **argv) {
   }
 
   if ( getpid() != getppid() ) {
-  message.str(""); message << "XPA_NSUSERS=" << std::getenv("XPA_NSUSERS") << " PYTHONPATH=" << std::getenv("PYTHONPATH");
-  logwrite( function, message.str() );
+#ifdef DEBUG_DEBUG
+  message.str("");
+  message << "[ENV] USER=" << (std::getenv("USER") ? std::getenv("USER") : "");
+  logwrite(function, message.str());
+
+  message.str("");
+  message << "[ENV] PYTHONPATH=" << (std::getenv("PYTHONPATH") ? std::getenv("PYTHONPATH") : "");
+  logwrite(function, message.str());
+
+  message.str("");
+  message << "[ENV] RUBIN_SIM_DATA_DIR="
+          << (std::getenv("RUBIN_SIM_DATA_DIR") ? std::getenv("RUBIN_SIM_DATA_DIR") : "");
+  logwrite(function, message.str());
+
+  message.str("");
+  message << "[ENV] XPA_NSUSERS=" << (std::getenv("XPA_NSUSERS") ? std::getenv("XPA_NSUSERS") : "");
+  logwrite(function, message.str());
+#endif
 
   logwrite( function, "daemonized. child process running" );
 
@@ -129,6 +145,11 @@ int main(int argc, char **argv) {
     logwrite(function, "ERROR: unable to initialize logging system");
     acamd.exit_cleanly();
   }
+
+  uid_t uid = getuid();
+  gid_t gid = getgid();
+  message.str(""); message << "[NOTICE] user id = " << uid << " group id = " << gid;
+  logwrite( function, message.str() );
 
   message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
   logwrite(function, message.str());

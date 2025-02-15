@@ -12,7 +12,7 @@
 
 namespace Acam {
 
-  constexpr double OFFSETRATE=40.;
+  constexpr int OFFSETRATE=40;
   constexpr float  GAIN1=0.71;      ///< e-/ADU for unity CCD gain
 
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
@@ -2763,12 +2763,20 @@ namespace Acam {
       }
 //logwrite(function, "[DEBUG] acquire complete");
 
+      iface.newframe_ready.store(false);                              // while writing, the frame cannot be ready
+
       error = iface.camera.write_frame( sourcefile,
                                         iface.imagename,
                                         iface.tcs_online.load(std::memory_order_acquire) );    // write to FITS file
       if (error==ERROR) {
         logwrite(function,"ERROR writing frame");
         continue;
+      }
+
+      {
+      std::lock_guard<std::mutex> lock(iface.newframe_mutex);
+      iface.newframe_ready.store(true);                               // after writing, the frame is ready
+      iface.newframe.notify_all();
       }
 
       iface.framegrab_time = std::chrono::steady_clock::time_point::min();
@@ -3195,12 +3203,46 @@ logwrite( function, "[DEBUG] acquire here" );
       std::string result;
       long matches;
       double rmsarcsec;
+
+      // before calling solve, wait for a new framegrab
+      logwrite(function,"NOTICE: waiting for newframe");
+      auto start_time = std::chrono::steady_clock::now();
+      while (true) {
+        std::unique_lock<std::mutex> lock(newframe_mutex);
+
+
+        // Wait for either notify() or timeout after ETIME duration
+        auto etime=std::chrono::seconds(3*static_cast<long>(this->camera.andor.camera_info.exptime));
+        bool notified = this->newframe.wait_for(lock, etime, [this]() { return this->newframe_ready.load(); });
+
+        // If notified or elapsed time exceeds ETIME, break the loop
+        if (notified) {
+          logwrite(function, "NOTICE: was notified");
+          break;
+        }
+
+        // If elapsed time exceeds ETIME, break the loop
+        auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+        if (elapsed_time >= etime) {
+          logwrite(function, "NOTICE: timeout before notified");
+          break;
+        }
+      }
+
       this->astrometry.solve( last_imagename, this->target.ext_solver_args );
 logwrite(function, "[DEBUG] setting goals from solver" );
       this->astrometry.get_solution( result, this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle, matches, rmsarcsec );
-message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle;
+message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle
+                         << " file=" << last_imagename;
 logwrite( function, message.str() );
 
+      if ( result=="EXCEPTION" ) {
+        logwrite(function, "ERROR bad astrometry solution!");
+//std::filesystem::copy( last_imagename, "/tmp/badsolve.fits");
+//std::string dontcare;
+//this->framegrab( "stop", dontcare );
+        return ERROR;
+      }
       return( this->target.acquire( Acam::TARGET_ACQUIRE_HERE ) );        // disables Target guide/acquisition
     } else
 
