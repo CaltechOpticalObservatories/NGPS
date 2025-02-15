@@ -34,6 +34,7 @@ if [[ "$camera" == "guider" ]]; then
 	focus=`xpaget $id fits header keyword TELFOCUS`
 	focus=`printf "%'.2f\n" $focus`
 	navg=`xpaget $id fits header keyword NAVG`
+  navg=`printf "%'.1f\n" $navg`
 	vbin=`xpaget $id fits header 1 keyword VBIN`
 	status=`xpaget $id fits header keyword STATUS`
 
@@ -87,6 +88,7 @@ if [[ "$camera" == "slicev" ]]; then
 	slitw_arcsec=`xpaget $id fits header 1 keyword SLITW`
 	slitw_arcsec=`printf "%'.3f\n" $slitw_arcsec`
 	navg=`xpaget $id fits header keyword NAVG`
+  navg=`printf "%'.1f\n" $navg`
 
 	xslit=`xpaget $id fits header 1 keyword CRPIX1`  # DS9 coordinate origin is on Left camera?
 	yslit=`xpaget $id fits header 1 keyword CRPIX2`
@@ -115,7 +117,7 @@ if [[ "$camera" == "slicev" ]]; then
 	echo "$reg" | xpaset $id region
 
 	# Slit/Slice labels
-	YCENTER=$(($NAXIS2 - 36/$vbin))
+  YCENTER=$((($NAXIS2 - 36)/$vbin))
 	reg="image; text $xslit $YCENTER # text={TOP SLICE        SLIT=${slitw_arcsec}\"       BOTTOM SLICE   } \
 	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}"
 	echo "$reg" | xpaset $id region

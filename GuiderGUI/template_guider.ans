@@ -9,6 +9,12 @@ endparam
 param focusParam
     focus entry {TCS Focus (mm)} {DEFfocus} { }
 endparam
+param guideStart
+    # variable type {label} {default} {Long description}
+    here checkbox {Guide Here} 1 {Ignore coordinates below and guide on current position.}
+    RA entry {RA} { } {Slit target RA (decimal deg or hh:mm:ss.s)}
+    DEC entry {DEC} { } {Slit target DEC (decimal deg or dd:mm:ss.s)}
+endparam
 #############
 buttonbar
 #############
@@ -30,7 +36,7 @@ $message(yesno,Move slit center to crosshairs?  Note: open loop TCS moves are ne
 GUIDE
 *
 button
-$message(yesno,Start guiding in this position?) | acam acquire here # | $text
+$param(guideStart) ; $dir/guide_start.sh $here $RA $DEC | $text
 #############
 STOP GUIDING
 *
