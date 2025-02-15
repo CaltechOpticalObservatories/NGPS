@@ -97,8 +97,8 @@ namespace Daemon {
     // Close file descriptors, either {0:MAX} (closefd=true)
     // or only {0:2} (closefd=false).
     //
-    int fdmax = ( closefd ? sysconf( _SC_OPEN_MAX ) : 2 );
-    for( int fd = fdmax; fd >= 0; fd-- ) close( fd );
+    long fdmax = ( closefd ? sysconf( _SC_OPEN_MAX ) : 2 );
+    if (fdmax>-1) for( long fd = fdmax; fd >= 0; fd-- ) close( static_cast<int>(fd) );
 
     // reopen stdin, stdout, stderr
     //

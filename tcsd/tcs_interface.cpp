@@ -357,24 +357,24 @@ namespace TCS {
       return HELP;
     }
 
-    std::string name;
+    std::string _name;
 
     for ( const auto &[key,val] : this->tcsmap ) {
       if ( val->isconnected() ) {
-        name = val->getname();        // Found a connected TCS
+        _name = val->getname();       // Found a connected TCS
         break;                        // so get out now.
       }
     }
 
-    this->tcs_info.isopen  = ( ! name.empty() ? true : false );
-    this->tcs_info.tcsname = name;
+    this->tcs_info.isopen  = ( ! _name.empty() ? true : false );
+    this->tcs_info.tcsname = _name;
 
     retstring = ( this->tcs_info.isopen ? "true" : "false" );  // return string is the state
 
     asyncmsg.str(""); asyncmsg << "TCSD:open:" << retstring;
     this->async.enqueue( asyncmsg.str() );              // broadcast the state
 
-    asyncmsg.str(""); asyncmsg << "TCSD:name:" << ( ! name.empty() ? name : "offline" );
+    asyncmsg.str(""); asyncmsg << "TCSD:name:" << ( ! _name.empty() ? _name : "offline" );
     this->async.enqueue( asyncmsg.str() );              // broadcast the name
 
     return NO_ERROR;
@@ -1129,7 +1129,7 @@ namespace TCS {
       return error;
     }
 
-    int offsetrate=-1;
+    int _offsetrate=0;
 
     std::vector<std::string> tokens;
     Tokenize( arg, tokens, " " );
@@ -1141,7 +1141,7 @@ namespace TCS {
     }
 
     try {
-      offsetrate  = std::stoi( tokens.at(0) );
+      _offsetrate = std::stoi( tokens.at(0) );
     }
     catch( const std::exception &e ) {
       message.str(""); message << "ERROR parsing \"" << arg << "\" expected integer {1:50} : " << e.what();
@@ -1149,12 +1149,14 @@ namespace TCS {
       error = ERROR;
     }
 
-    if ( offsetrate  < 1 || offsetrate  > 50 ) {
-      message.str(""); message << "ERROR offset rate " << offsetrate << " must be integer in range { 1:50 }";
+    if ( _offsetrate  < 1 || _offsetrate  > 50 ) {
+      message.str(""); message << "ERROR offset rate " << _offsetrate << " must be integer in range { 1:50 }";
       logwrite( function, message.str() );
       retstring="invalid_argument";
       return ERROR;
     }
+
+    this->offsetrate = _offsetrate;
 
     return error;
   }
@@ -1274,7 +1276,7 @@ namespace TCS {
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
 
-    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, 60000 );
+    if ( error != ERROR ) error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, 300000 );
 
     return error;
   }
@@ -1360,7 +1362,7 @@ namespace TCS {
     // check minimum/maximum number of arguments
     //
     std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
+    Tokenize( strip_control_characters(args), tokens, " " );
 
     if ( tokens.size() > 3 ) {
       logwrite( function, "ERROR invalid number of arguments: expected <ra> <dec> [ <rate> ]" );
@@ -1371,12 +1373,12 @@ namespace TCS {
     // Try to convert them to double to ensure that they are good numbers
     // before sending them to the TCS.
     //
-    double raoff, decoff, rate;
+    double raoff, decoff;
+    int rate;
     try {
-logwrite(function,"[DEBUG] input args= "+args );
-      raoff  = std::abs( std::stod( tokens.at(0) ) );
-      decoff = std::abs( std::stod( tokens.at(1) ) );
-      if (tokens.size()==3) rate=std::stod(tokens.at(2)); else rate=40.;
+      raoff  = ( std::stod( tokens.at(0) ) );
+      decoff = ( std::stod( tokens.at(1) ) );
+      rate   = ( tokens.size()==3 ? std::stoi(tokens.at(2)) : this->offsetrate );
     }
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing \"" << args << "\":" << e.what();
@@ -1391,25 +1393,23 @@ logwrite(function,"[DEBUG] input args= "+args );
       return ERROR;
     }
 
-    if ( rate > 0 && rate <= 50 ) {
-      this->offsetrate=rate;
-    }
-    else {
-      logwrite( function, "ERROR invalid rate "+std::to_string(rate)+" using default=40" );
-      this->offsetrate=40;
-      rate=40;
+    if ( rate < 1 || rate > 50 ) {
+      logwrite( function, "ERROR invalid rate "+std::to_string(rate)+
+                          " using default: "+std::to_string(this->offsetrate) );
+      // default should be good but check anyway, never want to divide by zero
+      rate = ( this->offsetrate < 1 ? 40 : this->offsetrate );
     }
 
     // offsetrate is offset rates in arcsec/sec
     // so ra_t/offsetrate and dec_t/offsetrate are arcsec / arcsec / sec = sec
     //
-    int ra_t  = static_cast<int>( 1000 * raoff  / this->offsetrate  );  // time (ms) to offset RA
-    int dec_t = static_cast<int>( 1000 * decoff / this->offsetrate );   // time (ms) to offset DEC
-    int max_t = static_cast<int>( 1.5  * std::max( ra_t, dec_t ) );     // greater of those two times + 3s
-    max_t = std::max( max_t, 200 );                                     // minimum 3s
+    int ra_t  = static_cast<int>( 1000 * std::abs(raoff)  / this->offsetrate  );  // time (ms) to offset RA
+    int dec_t = static_cast<int>( 1000 * std::abs(decoff) / this->offsetrate );   // time (ms) to offset DEC
+    int max_t = static_cast<int>( 1.5  * std::max( ra_t, dec_t ) );     // greater of the two, plus 50%
+    max_t = std::max( max_t, PTOFFSET_MIN_TIMEOUT );                    // minimum timeout
 
     std::stringstream cmd;
-    cmd << "PT " << args; // " " << raoff << " " << decoff; // << " " << rate;
+    cmd << "PT " << raoff << " " << decoff << " " << rate;
 
     long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, max_t );  // perform the offset here
 
@@ -1533,7 +1533,7 @@ logwrite(function,"[DEBUG] input args= "+args );
     // Is it configured?
     //
     if ( tcsloc == tcsmap.end() ) {
-      message.str(""); message << "ERROR sending \"" << cmd << "\": no TCS " << this->name << " not configured";
+      message.str(""); message << "ERROR sending \"" << cmd << "\": TCS " << this->name << " not configured";
       logwrite( function, message.str() );
       return ERROR;
     }
@@ -1542,8 +1542,10 @@ logwrite(function,"[DEBUG] input args= "+args );
 
     std::string reply;
 
+message.str(""); message << "DEBUG] sending cmd=" << cmd << " with type=" << (conn_type==TCS::FAST_RESPONSE?"fast":"slow") << " and to=" << to;
+logwrite(function,message.str());
     tcs.execute_command( cmd, reply, conn_type, to );
-logwrite(function,"[DEBUG] cmd="+cmd+" reply="+reply);
+logwrite(function,"[DEBUG] back from cmd="+cmd+" with reply="+reply);
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.

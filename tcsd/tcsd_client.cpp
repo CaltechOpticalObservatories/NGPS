@@ -97,7 +97,8 @@
     // and I want to extract the state true|false so remove the " DONE" from the reply.
     // std::string::erase can throw an exception
     //
-    std::string::size_type pos = reply.find(" DONE");
+    std::string::size_type pos;
+    pos=reply.find(" DONE");
     if (pos != std::string::npos) {
       reply.erase(pos);
     }
@@ -115,7 +116,7 @@
       // reply is "true DONE" here, and this removes the "true " and " DONE"
       //
       error = this->client.send( TCSD_GET_NAME, tcsname );
-      std::string::size_type pos = tcsname.find(" DONE");
+      pos = tcsname.find(" DONE");
       if (pos != std::string::npos) {
         tcsname.erase(pos);
       }
@@ -296,14 +297,17 @@
    * @brief      send command to tcsd to send guider offsets
    * @param[in]  ra_d   RA in degrees
    * @param[in]  dec_d  DEC in degrees
-   * @return     ERROR or NO_ERROR
+   * @param[in]  rate   offset rate has default value if not specified
+   * @return     ERROR | NO_ERROR
    *
    */
-  long TcsDaemonClient::pt_offset( double ra_d, double dec_d, double rate ) {
-    std::string function = "TcsDaemonClient::pt_offset";
+  long TcsDaemonClient::pt_offset( double ra_d, double dec_d, int rate ) {
+    const std::string function("TcsDaemonClient::pt_offset");
     std::string tcsreply;
     std::stringstream tcscmd;
 
+    // build the command
+    //
     tcscmd << TCSD_PTOFFSET << " " << std::fixed << std::setprecision(6)
            << ra_d << " " << dec_d << " " << rate;
 
@@ -311,7 +315,6 @@
     // divide by offset rate, and multiply by 1.5 for safety, x1000 for msec
     //
     double quad = std::sqrt( std::pow(ra_d,2) + std::pow(dec_d,2) );
-    if ( rate <=0 ) rate = 10;
     int to = static_cast<int>( std::max( 5000.0, ( 5000.0 + (quad / rate) * 1000.0 * 1.5 ) ) );
     logwrite( function, "[DEBUG] ra_d="+std::to_string(ra_d)+
                                " dec_d="+std::to_string(dec_d)+

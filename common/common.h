@@ -1072,7 +1072,7 @@ namespace Common {
       long connect();                                              ///< initialize socket connection to daemon
       void disconnect();                                           ///< close socket connection to daemon
       inline void set_name( const std::string &name_in ) { this->name=name_in; } ///< name this daemon
-      inline void set_port( const int &port ) { this->port=port; }               ///< set the port number
+      inline void set_port( const int &_port ) { this->port=_port; }             ///< set the port number
 
       long is_connected( std::string &reply );
       bool poll_open();                                            ///< is device open?

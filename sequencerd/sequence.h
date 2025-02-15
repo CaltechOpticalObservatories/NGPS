@@ -284,6 +284,7 @@ namespace Sequencer {
           tcs_name("offline"),
           slitoffsetexpose(0.0),
           slitoffsetacquire(0.0),
+          slitwidthacquire(0.5),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false)
@@ -395,6 +396,7 @@ namespace Sequencer {
 
       float slitoffsetexpose;   ///< "virtual slit mode" offset for expose
       float slitoffsetacquire;  ///< "virtual slit mode" offset for acquire
+      float slitwidthacquire;   ///< "virtual slit mode" width for acquire
 
       // publish/subscribe functions
       //
@@ -484,6 +486,8 @@ namespace Sequencer {
       long open_hardware( Common::DaemonClient &daemon, bool &was_opened );
       long open_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout );
       long open_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout, bool &was_opened );
+      long open_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout, bool &was_opened, bool forceopen );
+      long reopen_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout );
       long connect_to_daemon( Common::DaemonClient &daemon );
       // These are various jobs that are done in their own threads
       //

@@ -90,7 +90,7 @@ namespace Sequencer {
    *
    */
   long TargetInfo::configure_db( std::string param, std::string value ) {
-    std::string function = "Sequencer::TargetInfo::configure_db";
+    const std::string function("Sequencer::TargetInfo::configure_db");
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -161,10 +161,6 @@ namespace Sequencer {
          !this->db_completed.empty()  &&
          !this->db_sets.empty()       &&
          this->db_port  != -1         ) {
-      this->dbManager = std::make_unique<DatabaseManager>(this->db_host, this->db_port,
-                                                          this->db_user, this->db_pass,
-                                                          this->db_schema, this->db_active);
-      this->db_configured = true;
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] host=" << this->db_host << " port=" << this->db_port
                                << " user=" << this->db_user << " pass=" << this->db_pass
@@ -172,6 +168,22 @@ namespace Sequencer {
                                << " completed table=" << this->db_completed << " target sets table=" << this->db_sets;
       logwrite( function, message.str() );
 #endif
+      try {
+        this->dbManager = std::make_unique<DatabaseManager>(this->db_host, this->db_port,
+                                                            this->db_user, this->db_pass,
+                                                            this->db_schema, this->db_active);
+      }
+      catch (const mysqlx::Error& e) {
+        message.str(""); message << "ERROR starting database: " << e.what();
+        logwrite( function, message.str() );
+        return error;
+      }
+      catch( const std::exception &e ) {
+        message.str(""); message << "ERROR starting database: " << e.what();
+        logwrite( function, message.str() );
+        return error;
+      }
+      this->db_configured = true;
     }
     else { this->db_configured = false; }
 

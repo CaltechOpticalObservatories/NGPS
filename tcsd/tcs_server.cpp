@@ -77,7 +77,7 @@ namespace TCS {
     std::stringstream message;
     std::vector<std::string> tokens;
     std::string tryname, tryhost;
-    int tryport=-1;
+    uint16_t tryport=0;
 
     // Extract the name, host and port from the input string
     //
@@ -92,7 +92,7 @@ namespace TCS {
     try {
       tryname = tokens.at(0);
       tryhost = tokens.at(1);
-      tryport = std::stoi( tokens.at(2) );
+      tryport = static_cast<uint16_t>(std::stoul( tokens.at(2) ));
     }
     catch ( std::invalid_argument &e ) {
       message.str(""); message << "ERROR loading tokens from input: " << input << ": " << e.what();
@@ -172,9 +172,9 @@ namespace TCS {
       // NBPORT -- nonblocking listening port for the tcs daemon
       //
       if (config.param[entry].compare(0, 6, "NBPORT")==0) {
-        int port;
+        uint16_t port;
         try {
-          port = std::stoi( config.arg[entry] );
+          port = static_cast<uint16_t>(std::stoul( config.arg[entry] ));
         }
         catch (std::invalid_argument &) {
           logwrite(function, "ERROR: bad NBPORT: unable to convert to integer");
@@ -193,9 +193,9 @@ namespace TCS {
       // BLKPORT -- blocking listening port for the tcs daemon
       //
       if (config.param[entry].compare(0, 7, "BLKPORT")==0) {
-        int port;
+        uint16_t port;
         try {
-          port = std::stoi( config.arg[entry] );
+          port = static_cast<uint16_t>(std::stoul( config.arg[entry] ));
         }
         catch (std::invalid_argument &) {
           logwrite(function, "ERROR: bad BLKPORT: unable to convert to integer");
@@ -214,9 +214,9 @@ namespace TCS {
       // ASYNCPORT -- asynchronous broadcast message port for the tcs daemon
       //
       if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
-        int port;
+        uint16_t port;
         try {
-          port = std::stoi( config.arg[entry] );
+          port = static_cast<uint16_t>(std::stoul( config.arg[entry] ));
         }
         catch (std::invalid_argument &) {
           logwrite(function, "ERROR: bad ASYNCPORT: unable to convert to integer");

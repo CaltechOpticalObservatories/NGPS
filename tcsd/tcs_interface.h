@@ -33,6 +33,7 @@ namespace TCS {
   const std::string DAEMON_NAME = "tcsd";        ///< when run as a daemon, this is my name
 
   constexpr bool BLOCK=true;
+  constexpr int  PTOFFSET_MIN_TIMEOUT=3000;      ///< minimum timeout [ms] for PT offset
 
   enum ConnectionType {
     FAST_RESPONSE,
@@ -153,13 +154,13 @@ namespace TCS {
       std::condition_variable cv;
 
     public:
-      TcsIO(const std::string &name, const std::string &host, int port, char term_write, char term_read)
-        : name(name),
-          host(host),
-          port(port),
-          term_write(term_write),
-          term_read(term_read),
-          sock_slow(std::make_shared<Network::Interface>(name, host, port, term_write, term_read)),
+      TcsIO(const std::string &_name, const std::string &_host, int _port, char _term_write, char _term_read)
+        : name(_name),
+          host(_host),
+          port(_port),
+          term_write(_term_write),
+          term_read(_term_read),
+          sock_slow(std::make_shared<Network::Interface>(_name, _host, _port, _term_write, _term_read)),
           slow_inuse(false) { }
 
       static const size_t poolsize = 3;   ///< size of fast-response connection pool
@@ -278,6 +279,9 @@ namespace TCS {
        *
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type ) {
+std::stringstream message;
+message << "[DEBUG] in 3 arg version and using polltimeout=" << POLLTIMEOUT;
+logwrite("TCS::TcsIO::execute_command", message.str());
         return execute_command( cmd, reply, conn_type, POLLTIMEOUT );
       }
       /***** TCS::TcsIO::execute_command **************************************/
@@ -293,7 +297,10 @@ namespace TCS {
        *
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type, int timeout ) {
-        const std::string function="TCS::TcsIO::get_connection";
+        const std::string function("TCS::TcsIO::execute_command");
+std::stringstream message;
+message << "[DEBUG] in 4 arg version with timeout=" << timeout;
+logwrite(function,message.str());
         long ret=ERROR;
 
         if ( conn_type == TCS::SLOW_RESPONSE ) {
@@ -441,7 +448,7 @@ namespace TCS {
 
       Interface()
         : context(),
-          offsetrate(-1),
+          offsetrate(0),
           publish_enable(false),
           collect_enable(false),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),

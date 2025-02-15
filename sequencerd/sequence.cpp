@@ -753,19 +753,22 @@ namespace Sequencer {
 
     // send the SET command to slitd
     //
-    slitcmd << SLITD_SET << " " << this->target.slitwidth_req;
+    slitcmd << SLITD_SET << " ";
 
     switch (mode) {
       case Sequencer::VSM_EXPOSE:
-        slitcmd << " " << this->slitoffsetexpose;
+        // uses width from target database entry and virtual-mode offset for expose
+        slitcmd << this->target.slitwidth_req << " " << this->slitoffsetexpose;
         modestr = "EXPOSE";
         break;
       case Sequencer::VSM_ACQUIRE:
-        slitcmd << " " << this->slitoffsetacquire;
+        // uses virtual-mode width and offset for acquire
+        slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
       case Sequencer::VSM_DATABASE:
-        slitcmd << " " << this->target.slitoffset_req;
+        // uses width and offset from target databsae entry
+        slitcmd << this->target.slitwidth_req << " " << this->target.slitoffset_req;
         modestr = "DATABASE";
         break;
     }
@@ -799,7 +802,7 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
 
-    if ( this->open_hardware(this->powerd) != NO_ERROR ) {
+    if ( this->reopen_hardware(this->powerd, POWERD_REOPEN, 10000 ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing power control" );
       return ERROR;
     }
@@ -1338,6 +1341,12 @@ namespace Sequencer {
       return ERROR;
     }
 
+    ///< @TODO Use a long 300 s timeout here until I implement a better way.
+    //         This becomes the timeout between the sequencer and tcsd for
+    //         all commands. Even though tcsd has a properly timed call to
+    //         the TCS, the connection from seq<->tcsd could timeout prematurly.
+    this->tcsd.socket.set_totime( 300000 );
+
     this->daemon_manager.set( Sequencer::DAEMON_TCS );    // tcsd is ready
 
     return NO_ERROR;
@@ -1604,7 +1613,7 @@ namespace Sequencer {
     }
 
     bool was_opened=false;
-    if ( this->open_hardware(this->camerad, was_opened) != NO_ERROR ) {
+    if ( this->open_hardware(this->camerad, "open", 12000, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing camera" );
       return ERROR;
     }
@@ -1827,17 +1836,19 @@ namespace Sequencer {
 
     error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
 
-    // if not success then wait 1s and try again
-    if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-      std::this_thread::sleep_for( std::chrono::seconds(1) );
-      error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
-      // second failure report error but allow continuing, the TCS operator can always help us
-      if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-        message.str(""); message << "ERROR sending RINGGO command. TCS reply: " << ringgo_reply;
-        this->async.enqueue_and_log( function, message.str() );
-        this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-      }
-    }
+//  Ignore failure/success from RINGGO for now 2025-02-04
+//
+//  // if not success then wait 1s and try again
+//  if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
+//    std::this_thread::sleep_for( std::chrono::seconds(1) );
+//    error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
+//    // second failure report error but allow continuing, the TCS operator can always help us
+//    if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
+//      message.str(""); message << "ERROR sending RINGGO command. TCS reply: " << ringgo_reply;
+//      this->async.enqueue_and_log( function, message.str() );
+//      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
+//    }
+//  }
     }
 
     // if ontarget (not cancelled) then acquire target
@@ -2002,17 +2013,21 @@ namespace Sequencer {
     // This contains a map of all the required settings, indexed by target name.
     //
     auto calinfo = this->caltarget.get_info(name);
-
-    std::stringstream cmd;
+    if (!calinfo) {
+      logwrite( function, "ERROR unrecognized calibration target: "+name );
+      return ERROR;
+    }
 
     // set the calib door and cover
     //
+    std::stringstream cmd;
     cmd.str(""); cmd << CALIBD_SET
                      << " door="  << ( calinfo->caldoor  ? "open" : "close" )
                      << " cover=" << ( calinfo->calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
-    if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
+    if ( !this->cancel_flag.load() &&
+          this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
       error=ERROR;
     }
@@ -2020,6 +2035,7 @@ namespace Sequencer {
     // set the internal calibration lamps
     //
     for ( const auto &[lamp,state] : calinfo->lamp ) {
+      if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
       logwrite( function, message.str() );
@@ -2030,24 +2046,32 @@ namespace Sequencer {
       }
     }
 
-    // set the dome lamps
-    //
-    for ( const auto &[lamp,state] : calinfo->domelamp ) {
-      cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
-      if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
-        error=ERROR;
-      }
-    }
+//  Not working yet 2025-02-04
+//
+//  // set the dome lamps
+//  //
+//  for ( const auto &[lamp,state] : calinfo->domelamp ) {
+//    if ( this->cancel_flag.load() ) break;
+//    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
+//    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
+//      this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
+//      error=ERROR;
+//    }
+//  }
 
     // set the lamp modulators
     //
     for ( const auto &[mod,state] : calinfo->lampmod ) {
+      if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
         error=ERROR;
       }
+    }
+
+    if ( this->cancel_flag.load() ) {
+      this->async.enqueue_and_log( function, "NOTICE: abort may have left calib system partially set" );
     }
 
     return error;
@@ -2112,7 +2136,8 @@ namespace Sequencer {
     // Send command to the camera to stop the exposure.
     //
     std::string reply;
-    long error = this->camerad.async( CAMERAD_STOP, reply );
+//  long error = this->camerad.async( CAMERAD_STOP, reply );
+    long error = this->camerad.send( CAMERAD_STOP, reply );
     if ( error == NO_ERROR ) {
       logwrite( function, "stop exposure sent to camerad" );
     }
@@ -2257,12 +2282,15 @@ namespace Sequencer {
 
     // Send the EXPOSE command to camera daemon on the non-blocking port and don't wait for reply
     message.str(""); message << CAMERAD_EXPOSE << " " << this->target.nexp;
-    if ( this->camerad.async( message.str() ) != NO_ERROR ) {
+//  if ( this->camerad.async( message.str() ) != NO_ERROR ) {
+//  if ( this->camerad.send( message.str(), reply ) != NO_ERROR ) {
+    if ( this->camerad.command_timeout( message.str(), reply, 12000 ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR sending camera "+message.str() );
       this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );      // clear EXPOSE bit
       this->arm_readout_flag = false;                                    // disarm async_listener from looking for readout
+      return ERROR;
     }
 
     error = this->target.update_state( Sequencer::TARGET_EXPOSING );     // set EXPOSE state in database
@@ -2304,7 +2332,8 @@ namespace Sequencer {
     //
     std::stringstream cmd;
     cmd << CAMERAD_MODEXPTIME << " " << (long)(1000*exptime_in);
-    if ( error==NO_ERROR ) error = this->camerad.async( cmd.str(), reply );
+//  if ( error==NO_ERROR ) error = this->camerad.async( cmd.str(), reply );
+    if ( error==NO_ERROR ) error = this->camerad.send( cmd.str(), reply );
 
     // Reply from camera will contain DONE or ERROR
     //
@@ -3459,17 +3488,29 @@ namespace Sequencer {
 
   long Sequence::open_hardware( Common::DaemonClient &daemon ) {
     bool dontcare;
-    return open_hardware( daemon, "open", 6000, dontcare );
+    return open_hardware( daemon, "open", 6000, dontcare, false );
   }
 
   long Sequence::open_hardware( Common::DaemonClient &daemon, bool &was_opened ) {
-    return open_hardware( daemon, "open", 6000, was_opened );
+    return open_hardware( daemon, "open", 6000, was_opened, false );
   }
 
   long Sequence::open_hardware( Common::DaemonClient &daemon,
                                 const std::string opencmd, const int opentimeout ) {
     bool dontcare;
-    return open_hardware( daemon, opencmd, opentimeout, dontcare );
+    return open_hardware( daemon, opencmd, opentimeout, dontcare, false );
+  }
+
+  long Sequence::open_hardware( Common::DaemonClient &daemon,
+                                const std::string opencmd, const int opentimeout,
+                                bool &was_opened ) {
+    return open_hardware( daemon, opencmd, opentimeout, was_opened, false );
+  }
+
+  long Sequence::reopen_hardware( Common::DaemonClient &daemon,
+                                  const std::string opencmd, const int opentimeout ) {
+    bool dontcare;
+    return open_hardware( daemon, opencmd, opentimeout, dontcare, true );
   }
 
 
@@ -3487,7 +3528,7 @@ namespace Sequencer {
    */
   long Sequence::open_hardware( Common::DaemonClient &daemon,
                                 const std::string opencmd, const int opentimeout,
-                                bool &was_opened ) {
+                                bool &was_opened, bool forceopen ) {
     const std::string function("Sequencer::Sequence::open_hardware");
     bool isopen=false;
     std::string reply;
@@ -3508,7 +3549,7 @@ namespace Sequencer {
 
     // and open it if necessary.
     //
-    if ( !isopen ) {
+    if ( forceopen || !isopen ) {
       logwrite( function, "opening "+daemon.name+" hardware connections with "
                           +std::to_string(opentimeout)+" ms timeout" );
       if ( daemon.command_timeout( opencmd, reply, opentimeout ) != NO_ERROR ) {

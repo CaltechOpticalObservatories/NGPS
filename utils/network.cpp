@@ -37,7 +37,7 @@ namespace Network {
    * Use this to construct a UDP multi-cast datagram server object
    *
    */
-  UdpSocket::UdpSocket(int port_in, std::string group_in) {
+  UdpSocket::UdpSocket(uint16_t port_in, std::string group_in) {
     this->fd = -1;
     this->port = port_in;
     this->group = group_in;
@@ -53,7 +53,7 @@ namespace Network {
    */
   UdpSocket::UdpSocket() {
     this->fd = -1;
-    this->port = -1;
+    this->port = 0;
     this->group.clear();
     this->service_running = false;
   }
@@ -130,7 +130,7 @@ namespace Network {
 
     // now that there is a group, check that the port is initialized
     //
-    if (this->port < 0) {
+    if (this->port < 1) {
       logwrite(function, "ERROR: ASYNCPORT not initialized. Cannot create socket");
       return -1;
     }
@@ -177,7 +177,7 @@ namespace Network {
   int UdpSocket::Send(std::string message) {
     std::string function = "Network::UdpSocket::Send";
     std::stringstream errstm;
-    int nbytes;
+    ssize_t nbytes;
 
     if ( !this->is_running() ) return 0;  // silently do nothing if the UDP multicast socket isn't running
 
@@ -233,7 +233,7 @@ namespace Network {
 
     // now that there is a group, check that the port is initialized
     //
-    if ( this->port < 0 ) {
+    if ( this->port < 1 ) {
       logwrite( function, "ERROR: ASYNCPORT not initialized. Cannot create socket" );
       return -1;
     }
@@ -297,16 +297,16 @@ namespace Network {
    * @return     number of bytes received
    *
    */
-  int UdpSocket::Receive( std::string &message ) {
+  ssize_t UdpSocket::Receive( std::string &message ) {
     char msgbuf[ UDPMSGLEN ];
     socklen_t addrlen = sizeof( this->addr );
-    int nbytes = recvfrom ( this->fd,
-                            msgbuf,
-                            UDPMSGLEN,
-                            0,
-                            (struct sockaddr *) &this->addr,
-                            &addrlen
-                          );
+    ssize_t nbytes = recvfrom ( this->fd,
+                                msgbuf,
+                                UDPMSGLEN,
+                                0,
+                                (struct sockaddr *) &this->addr,
+                                &addrlen
+                              );
     msgbuf[ nbytes ] = '\0';
 
     std::string msg( msgbuf, nbytes );
@@ -355,7 +355,7 @@ namespace Network {
    * Use this to construct a server's listening socket object
    *
    */
-  TcpSocket::TcpSocket(int port_in, bool block_in, int totime_in, int id_in) {
+  TcpSocket::TcpSocket(uint16_t port_in, bool block_in, int totime_in, int id_in) {
     this->port = port_in;
     this->blocking = block_in;
     this->asyncflag = false;
@@ -381,7 +381,7 @@ namespace Network {
    * Use this to construct a server's listening socket object
    *
    */
-  TcpSocket::TcpSocket(int port_in, bool block_in, bool async_in, int totime_in, int id_in) {
+  TcpSocket::TcpSocket(uint16_t port_in, bool block_in, bool async_in, int totime_in, int id_in) {
     this->port = port_in;
     this->blocking = block_in;
     this->asyncflag = async_in;
@@ -408,7 +408,7 @@ namespace Network {
    * Use this to construct a server's listening socket object
    *
    */
-  TcpSocket::TcpSocket( std::string host_in, int port_in, bool block_in, bool async_in, int totime_in, int id_in) {
+  TcpSocket::TcpSocket( std::string host_in, uint16_t port_in, bool block_in, bool async_in, int totime_in, int id_in) {
     this->host = host_in;
     this->port = port_in;
     this->blocking = block_in;
@@ -432,9 +432,9 @@ namespace Network {
    * Use this to construct a client object
    *
    */
-  TcpSocket::TcpSocket( std::string host, int port ) {
-    this->host = host;
-    this->port = port;
+  TcpSocket::TcpSocket( std::string _host, uint16_t _port ) {
+    this->host = _host;
+    this->port = _port;
     this->totime = POLLTIMEOUT;    /// default Poll timeout in msec
     this->fd = -1;
     this->addrs = nullptr;
@@ -449,7 +449,7 @@ namespace Network {
    *
    */
   TcpSocket::TcpSocket() {
-    this->port = -1;
+    this->port = 0;
     this->blocking = false;
     this->asyncflag = false;
     this->totime = POLLTIMEOUT;    /// default Poll timeout in msec
@@ -579,7 +579,7 @@ namespace Network {
 
     // get address information and bind it to the socket
     //
-    struct sockaddr_in servaddr = {0};
+    struct sockaddr_in servaddr = {};
     servaddr.sin_family      = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     servaddr.sin_port        = htons(this->port);
@@ -675,7 +675,7 @@ namespace Network {
     std::string function = "Network::TcpSocket::Connect";
     std::stringstream errstm;
 
-    struct addrinfo hints = {0};       /// destination for getaddrinfo
+    struct addrinfo hints = {};        /// destination for getaddrinfo
 
     hints.ai_family = AF_INET;         /// IPv4 address only
     hints.ai_socktype = SOCK_STREAM ;  /// non-blocking, connection-based socket
@@ -784,9 +784,9 @@ namespace Network {
    * @return     number of bytes written
    *
    */
-  int TcpSocket::Write(std::string msg_in) {
+  ssize_t TcpSocket::Write(std::string msg_in) {
     size_t bytes_sent;       // total bytes sent
-    int    this_write;       // bytes sent with this write()
+    ssize_t this_write;      // bytes sent with this write()
     const char* buf = msg_in.c_str();
     bytes_sent = 0;
 
@@ -846,10 +846,10 @@ namespace Network {
    * buffer and the number of bytes to read.
    *
    */
-  int TcpSocket::Read(void* buf, const size_t count) {
+  ssize_t TcpSocket::Read(void* buf, const size_t count) {
     std::string function = "Network::TcpSocket::Read[cbuf]";
     std::stringstream message;
-    int nread;
+    ssize_t nread;
 
     // get the time now for timeout purposes
     //
@@ -889,7 +889,7 @@ namespace Network {
    * This function is overloaded
    *
    */
-  int TcpSocket::Read( std::string &retstring ) {
+  ssize_t TcpSocket::Read( std::string &retstring ) {
     return this->Read( retstring, '\n' );
   }
   /***** Network::TcpSocket::Read *********************************************/
@@ -909,7 +909,7 @@ namespace Network {
    * in the string.
    *
    */
-  int TcpSocket::Read( std::string &retstring, const char &term ) {
+  ssize_t TcpSocket::Read( std::string &retstring, const char &term ) {
     std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
     size_t bytesread=0;
@@ -921,7 +921,7 @@ namespace Network {
 
     while ( true ) {
       char charin;
-      size_t nread = read( this->fd, &charin, 1 );  // read a byte at a time
+      ssize_t nread = read( this->fd, &charin, 1 );  // read a byte at a time
       if ( nread<0 ) {
         message << "ERROR reading data on fd " << this->fd << ": " << strerror(errno);
         logwrite( function, message.str() );
@@ -974,11 +974,11 @@ namespace Network {
    * and an end string to read until.
    *
    */
-  int TcpSocket::Read( std::string &retstring, const std::string &endstr ) {
+  ssize_t TcpSocket::Read( std::string &retstring, const std::string &endstr ) {
     std::string function = "Network::TcpSocket::Read[endstr]";
     std::stringstream message;
     std::stringstream bufstream;
-    int nread, bytesread=0;
+    ssize_t nread, bytesread=0;
     const int bufsz=8192;                // read buffer in chunks
     char buf[bufsz+1];
     memset(buf,'\0',bufsz+1);
@@ -1058,7 +1058,7 @@ namespace Network {
 
     while ( true ) {
       char buf[1024];
-      int len = recv( poll_struct.fd, buf, sizeof(buf), MSG_DONTWAIT );
+      ssize_t len = recv( poll_struct.fd, buf, sizeof(buf), MSG_DONTWAIT );
       if ( len == -1 ) break;
     }
     return;
@@ -1073,7 +1073,7 @@ namespace Network {
    */
   Interface::Interface( ) {
     this->name.clear();
-    this->port = -1;
+    this->port = 0;
     this->term_write = '\n';
     this->term_read  = '\n';
     this->initialized = false;
@@ -1090,10 +1090,10 @@ namespace Network {
    * @param[in]  port   port number of the device
    *
    */
-  Interface::Interface( std::string name, std::string host, int port ) {
-    this->name = name;
-    this->port = port;
-    this->host = host;
+  Interface::Interface( std::string _name, std::string _host, uint16_t _port ) {
+    this->name = _name;
+    this->port = _port;
+    this->host = _host;
     this->term_write = '\n';
     this->term_read  = '\n';
     this->initialized = true;
@@ -1112,12 +1112,12 @@ namespace Network {
    * @param[in]  term_read   send_command() looks for this char on reads (if reply requested)
    *
    */
-  Interface::Interface( std::string name, std::string host, int port, char term_write, char term_read ) {
-    this->name = name;
-    this->port = port;
-    this->host = host;
-    this->term_write = term_write;
-    this->term_read  = term_read;
+  Interface::Interface( std::string _name, std::string _host, uint16_t _port, char _term_write, char _term_read ) {
+    this->name = _name;
+    this->port = _port;
+    this->host = _host;
+    this->term_write = _term_write;
+    this->term_read  = _term_read;
     this->initialized = true;
   }
   /***** Network::Interface::Interface ****************************************/
@@ -1265,7 +1265,7 @@ namespace Network {
     // send the command
     //
     cmd += this->term_write;                       // add the terminating character for writes
-    int written = this->sock.Write( cmd );         // write the command
+    ssize_t written = this->sock.Write( cmd );     // write the command
     if ( written <= 0 ) {                          // return error if error writing to socket
       cmd.erase(std::remove(cmd.begin(), cmd.end(), '\n' ), cmd.end());  // remove the newline for better logging
       message.str(""); message << "ERROR sending \"" << cmd << "\" to " << this->name;

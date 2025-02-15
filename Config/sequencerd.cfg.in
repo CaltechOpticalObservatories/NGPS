@@ -71,7 +71,7 @@ CAMERA_EPILOGUE=(close)
 # slit init and shutdown states
 # formatted as (width offset)
 #
-SLIT__INIT=(0.5 0.0)
+SLIT__INIT=(0.5 3.0)
 SLIT__SHUTDOWN=
 
 # ACAM init and shutdown states
@@ -91,8 +91,9 @@ CALIB_DOOR__SHUTDOWN=close
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
 #
-VIRTUAL_SLIT_ACQUIRE=-3.0  # slit offset for acquiring target
-VIRTUAL_SLIT_EXPOSE=3.0    # slit offset for science exposure
+VIRTUAL_SLITW_ACQUIRE=0.5   # slit width during acquire
+VIRTUAL_SLITO_ACQUIRE=-3.0  # slit offset for acquiring target
+VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 
 # NPS power switches
 #

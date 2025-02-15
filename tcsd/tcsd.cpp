@@ -116,7 +116,7 @@ int main(int argc, char **argv) {
     tcsd.exit_cleanly();
   }
 
-  if (tcsd.nbport == -1 || tcsd.blkport == -1) {
+  if (tcsd.nbport == 0 || tcsd.blkport == 0) {
     logwrite(function, "ERROR: tcsd ports not configured");
     tcsd.exit_cleanly();
   }

@@ -56,7 +56,7 @@ namespace TCS {
       /**
        * @brief  class constructor
        */
-      Server() : nbport(-1), blkport(-1), asyncport(-1), cmd_num(0), threads_active(0), id_pool(TCS::N_THREADS) {
+      Server() : nbport(0), blkport(0), asyncport(0), cmd_num(0), threads_active(0), id_pool(TCS::N_THREADS) {
         instance=this;
 
         // Register these signals
@@ -81,9 +81,9 @@ namespace TCS {
       /***** TCS::~Server *****************************************************/
 
 
-      int nbport;                        ///< non-blocking port
-      int blkport;                       ///< blocking port
-      int asyncport;                     ///< asynchronous message port
+      uint16_t nbport;                   ///< non-blocking port
+      uint16_t blkport;                  ///< blocking port
+      uint16_t asyncport;                ///< asynchronous message port
       std::atomic<int> cmd_num;          ///< keep a running tally of number of commands received by tcsd
       std::atomic<int> threads_active;   ///< number of blocking threads that exist
 

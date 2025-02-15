@@ -59,13 +59,7 @@ int main() {
     // and set the permissions
     if ( !fs::exists(newdir) ) {
       fs::create_directory(newdir);
-      fs::permissions( newdir,
-                       fs::perms::owner_all   |
-                       fs::perms::group_read  |
-                       fs::perms::group_exec  |
-                       fs::perms::others_read |
-                       fs::perms::others_exec
-                     );
+      fs::permissions( newdir, fs::perms::owner_all | fs::perms::group_all);
       std::cout << "created directory " << newdir << std::endl;
     }
     else std::cout << "directory " << newdir << " already exists" << std::endl;

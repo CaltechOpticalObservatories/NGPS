@@ -64,7 +64,7 @@ namespace Network {
   class TcpSocket {
 
     private:
-      int port;
+      uint16_t port;
       bool blocking;
       bool asyncflag;
       int totime;                      ///< timeout time for poll
@@ -78,10 +78,10 @@ namespace Network {
 
     public:
       TcpSocket();                       ///< basic class constructor
-      TcpSocket(int port_in, bool block_in, int totime_in, int id_in);  ///< useful constructor for a server
-      TcpSocket(int port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
-      TcpSocket( std::string host, int port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
-      TcpSocket( std::string host, int port );                          ///< client constructor
+      TcpSocket(uint16_t port_in, bool block_in, int totime_in, int id_in);  ///< useful constructor for a server
+      TcpSocket(uint16_t port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
+      TcpSocket( std::string host, uint16_t port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
+      TcpSocket( std::string host, uint16_t port );                          ///< client constructor
       TcpSocket(const TcpSocket &obj);   ///< copy constructor
 
       struct addrinfo *addrs;            ///< dynamically allocated linked list returned by getaddrinfo()
@@ -96,7 +96,7 @@ namespace Network {
       int polltimeout() { return this->totime; };
       void sethost(std::string host_in) { this->host = host_in; };
       std::string gethost() { return this->host; };
-      void setport(int port_in) { this->port = port_in; };
+      void setport(uint16_t port_in) { this->port = port_in; };
       int getport() { return this->port; };
 
       int Accept();                      ///< creates a new connected socket for pending connection
@@ -105,19 +105,19 @@ namespace Network {
       int Poll( int timeout );           ///< polls a single file descriptor with specified timeout
       int Connect();                     ///< connect to this->host on this->port
       int Close();                       ///< close a socket connection
-      int Read( void* buf, const size_t count ); ///< read data from connected socket
-      int Read(std::string &retstring);  ///< read data from connected socket until newline
-      int Read( std::string &retstring, const char &term); ///< read data from connected socket until terminating char found
-      int Read( std::string &retstring, const std::string &endstr);  ///< read data from connected socket until endstr
+      ssize_t Read( void* buf, const size_t count ); ///< read data from connected socket
+      ssize_t Read(std::string &retstring);  ///< read data from connected socket until newline
+      ssize_t Read( std::string &retstring, const char &term); ///< read data from connected socket until terminating char found
+      ssize_t Read( std::string &retstring, const std::string &endstr);  ///< read data from connected socket until endstr
       int Bytes_ready();                 ///< get the number of bytes available on the socket descriptor this->fd
       void Flush();                      ///< flush a socket by reading until it's empty
 
-      int Write(std::string msg_in);     ///< write data to a socket
+      ssize_t Write(std::string msg_in); ///< write data to a socket
 
       ssize_t Write( const char* c );
 
       template <class T>
-      int Write(T* buf, size_t count) {  ///< write raw data to a socket
+      ssize_t Write(T* buf, size_t count) {  ///< write raw data to a socket
         size_t bytes_sent=0;
         int    this_write=0;
 
@@ -147,7 +147,7 @@ namespace Network {
   class UdpSocket {
 
     private:
-      int port;                                             ///< port (for subscriber or broadcast)
+      uint16_t port;                                        ///< port (for subscriber or broadcast)
       std::string group;                                    ///< group for multicast subscribers
       int fd;                                               ///< connected socket file descriptor
       struct sockaddr_in addr;                              ///< for UDP multicast
@@ -156,11 +156,11 @@ namespace Network {
 
     public:
       UdpSocket();                                          ///< basic class constructor
-      UdpSocket(int port_in, std::string group_in);         ///< useful constructor for a server
+      UdpSocket(uint16_t port_in, std::string group_in);    ///< useful constructor for a server
       UdpSocket(const UdpSocket &obj);                      ///< copy constructor
       ~UdpSocket();                                         ///< class destructor
 
-      void setport(int port_in) { this->port = port_in; };  ///< use to set port when default constructor used
+      void setport(uint16_t port_in) { this->port = port_in; };  ///< use to set port when default constructor used
       int getport() { return this->port; };                 ///< use to get port
       bool is_running() { return this->service_running; };  ///< is the UDP service running?
 
@@ -171,7 +171,7 @@ namespace Network {
       int Send(std::string message);                        ///< transmit the message to the UDP socket
       int Close();                                          ///< close the UDP socket connection
       int Listener();                                       ///< creates a UDP listener, returns a file descriptor
-      int Receive( std::string &message );                  ///< receive a UDP message from the Listener fd
+      ssize_t Receive( std::string &message );              ///< receive a UDP message from the Listener fd
   };
   /***** UdpSocket ************************************************************/
 
@@ -186,7 +186,7 @@ namespace Network {
     private:
       std::string name;           ///< a friendly name for info purposes
       std::string host;           ///< host name for the device
-      int port;                   ///< port number for device on host
+      uint16_t port;              ///< port number for device on host
       bool initialized;           ///< has the class been initialized?
       std::mutex mtx;
       char term_write;            ///< send_command() adds this char on writes
@@ -209,8 +209,8 @@ namespace Network {
 
       inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
 
-      Interface( std::string name, std::string host, int port, char term_write, char term_read );
-      Interface( std::string name, std::string host, int port );
+      Interface( std::string name, std::string host, uint16_t port, char term_write, char term_read );
+      Interface( std::string name, std::string host, uint16_t port );
       Interface();
       ~Interface();
 

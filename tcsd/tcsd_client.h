@@ -44,7 +44,7 @@
       long get_coords( double &ra_h, double &dec_d, bool poll );
       long get_weather_coords( double &ra_h, double &dec_d );
       long get_coords_type( std::string cmd, double &ra_h, double &dec_d );
-      long pt_offset( double ra_d, double dec_d, double rate=45. );
+      long pt_offset( double ra_d, double dec_d, int rate=40 );
       long ret_offsets();
 
       double radec_to_decimal( std::string str_in );

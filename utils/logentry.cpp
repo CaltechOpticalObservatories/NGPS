@@ -33,7 +33,7 @@ bool to_stderr = true;         /// write to stderr
  *
  */
 long init_log( std::string logpath, std::string name ) {
-  return init_log( logpath, name, true );
+  return init_log( logpath, name, false );
 }
 
 
@@ -74,10 +74,10 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
             + 12*3600                                         // plus seconds until noon
             + 10;                                             // plus 10s for directories to be made
 
-  // open the log file stream for append
+  // open the log file stream for append (if exists) but create if necessary
   //
   try {
-    filestream.open(filename.str(), std::ios_base::app);
+    filestream.open(filename.str(), std::ios::out|std::ios_base::app);
   }
   catch ( const std::filesystem::filesystem_error& e ) {
     message.str(""); message << "ERROR " << filename.str() << ": " << e.what() << ": " << e.code().value();
