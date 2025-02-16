@@ -1379,6 +1379,10 @@ namespace TCS {
       raoff  = ( std::stod( tokens.at(0) ) );
       decoff = ( std::stod( tokens.at(1) ) );
       rate   = ( tokens.size()==3 ? std::stoi(tokens.at(2)) : this->offsetrate );
+
+      // Round the values to 3 decimal places
+      raoff = std::round(raoff * 1000) / 1000.0;
+      decoff = std::round(decoff * 1000) / 1000.0;
     }
     catch( std::out_of_range &e ) {
       message.str(""); message << "ERROR parsing \"" << args << "\":" << e.what();
@@ -1409,7 +1413,7 @@ namespace TCS {
     max_t = std::max( max_t, PTOFFSET_MIN_TIMEOUT );                    // minimum timeout
 
     std::stringstream cmd;
-    cmd << "PT " << raoff << " " << decoff << " " << rate;
+    cmd << "PT " << std::fixed << std::setprecision(3) << raoff << " " << decoff << " " << rate;
 
     long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, max_t );  // perform the offset here
 
