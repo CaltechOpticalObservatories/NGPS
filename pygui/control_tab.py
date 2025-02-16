@@ -676,6 +676,25 @@ class ControlTab(QDialog):
         slit_angle = self.slit_angle_box.text()
         num_of_exposures = self.num_of_exposures_box.text()
         
+        # Re-enable the button and reset its appearance
+        self.go_button.setEnabled(True)
+        self.go_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;  /* Green when enabled */
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;  /* Optional: Round corners */
+            }
+            QPushButton:hover {
+                background-color: #388E3C;  /* Darker green when hovered */
+            }
+            QPushButton:pressed {
+                background-color: #2C6B2F;  /* Even darker green when pressed */
+            }
+        """)
+        
         if exposure_time and slit_width and slit_angle and num_of_exposures:
             # Handle the confirmed changes, e.g., update internal state or UI
             print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")

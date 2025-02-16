@@ -105,10 +105,10 @@ class AfternoonTab(QWidget):
         self.band_r_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
         form_layout.addRow("Band:", self.band_r_input)
 
-        self.value_input = QLineEdit(self)
-        self.value_input.setPlaceholderText("Enter focus value")
-        self.value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
-        form_layout.addRow("Focus Value:", self.value_input)
+        self.value_r_input = QLineEdit(self)
+        self.value_r_input.setPlaceholderText("2.45")
+        self.value_r_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
+        form_layout.addRow("Focus Value:", self.value_r_input)
 
         focus_button = QPushButton("Set Focus Value (R Band)", self)
         focus_button.clicked.connect(self.set_focus_r)
@@ -126,7 +126,7 @@ class AfternoonTab(QWidget):
         form_layout.addRow("Band:", self.band_i_input)
 
         self.value_input = QLineEdit(self)
-        self.value_input.setPlaceholderText("Enter focus value")
+        self.value_input.setPlaceholderText("4.85")
         self.value_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
         form_layout.addRow("Focus Value:", self.value_input)
 
@@ -183,19 +183,23 @@ class AfternoonTab(QWidget):
             self.log_message("Failed running thrufocus!")
 
     def set_focus_r(self):
-        band = self.band_r_input.text()
-        value = self.value_input.text()
-        if band and value:
-            command = f"focus set {band} {value}"
+        if self.value_r_input.placeholderText():
+            value = self.value_r_input.placeholderText()
+        else:
+            value = self.value_r_input.text()
+        if value:
+            command = f"focus set R {value}"
             self.run_command_in_background(command)
         else:
             self.log_message("Please provide both band and value for the focus set command.")
 
     def set_focus_i(self):
-        band = self.band_i_input.text()
-        value = self.value_input.text()
-        if band and value:
-            command = f"focus set {band} {value}"
+        if self.value_input.placeholderText():
+            value = self.value_input.placeholderText()
+        else:
+            value = self.value_input.text()
+        if value:
+            command = f"focus set I {value}"
             self.run_command_in_background(command)
         else:
             self.log_message("Please provide both band and value for the focus set command.")
