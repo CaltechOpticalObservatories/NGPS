@@ -626,6 +626,11 @@ namespace Common {
       //
       this->socket.Write( command );
 
+      // This indicates that the caller only wants to send the command,
+      // and doesn't want to read the reply.
+      //
+      if (reply=="DONTWAIT") return NO_ERROR;
+
       // Wait (poll) connected socket for incoming data...
       //
       pollret = this->socket.Poll(timeout_in);

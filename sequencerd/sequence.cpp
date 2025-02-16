@@ -1708,6 +1708,7 @@ namespace Sequencer {
     long error=NO_ERROR;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
 
     // If RA and DEC fields are both empty then no telescope move
     //
@@ -1767,6 +1768,17 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, message.str() );
     }
 
+    // Send casangle using tcsd wrapper for RINGGO command
+    // do not wait for reply
+    //
+    {
+    std::stringstream ringgo_cmd;
+    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
+    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
+    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
+    error = this->tcsd.send( ringgo_cmd.str(), noreply );
+    }
+
     // Send coordinates using TCS-native COORDS command.
     // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
     // so convert that as it's being sent here.
@@ -1789,7 +1801,7 @@ namespace Sequencer {
     logwrite( function, message.str() );
     }
 
-    error  = this->tcsd.send( coords_cmd.str(), coords_reply );                                                // send to the TCS
+    error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
 
     // waiting for TCS Operator input (or cancel)
     {
@@ -1798,7 +1810,7 @@ namespace Sequencer {
     // if not success then wait 1s and try again
     if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
       std::this_thread::sleep_for( std::chrono::seconds(1) );
-      error  = this->tcsd.send( coords_cmd.str(), coords_reply );                                                // send to the TCS
+      error  = this->tcsd.send( coords_cmd.str(), coords_reply );                  // send to the TCS
       // second failure return error
       if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
         message.str(""); message << "ERROR sending COORDS command. TCS reply: " << coords_reply;
@@ -1823,33 +1835,6 @@ namespace Sequencer {
     // If waiting for TCS operator was cancelled then don't continue
     //
     if ( this->cancel_flag.load() ) return NO_ERROR;
-
-    // Send casangle using tcsd wrapper for RINGGO command
-    //
-    {
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
-
-    std::stringstream ringgo_cmd;
-    std::string       ringgo_reply;
-    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                              // this is calculated cass angle
-    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
-
-    error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
-
-//  Ignore failure/success from RINGGO for now 2025-02-04
-//
-//  // if not success then wait 1s and try again
-//  if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-//    std::this_thread::sleep_for( std::chrono::seconds(1) );
-//    error = this->tcsd.send( ringgo_cmd.str(), ringgo_reply );
-//    // second failure report error but allow continuing, the TCS operator can always help us
-//    if ( error != NO_ERROR || ringgo_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-//      message.str(""); message << "ERROR sending RINGGO command. TCS reply: " << ringgo_reply;
-//      this->async.enqueue_and_log( function, message.str() );
-//      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-//    }
-//  }
-    }
 
     // if ontarget (not cancelled) then acquire target
     //
