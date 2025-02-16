@@ -3203,25 +3203,30 @@ logwrite( function, "[DEBUG] acquire here" );
       std::string result;
       long matches;
       double rmsarcsec;
+      bool goodsolution=false;
+      int solveretries=0;
 
+      do {
       // before calling solve, wait for a new framegrab
       logwrite(function,"NOTICE: waiting for newframe");
       auto start_time = std::chrono::steady_clock::now();
+      this->newframe_ready.store(false);
       while (true) {
         std::unique_lock<std::mutex> lock(newframe_mutex);
+        auto _exptime = static_cast<long>(this->camera.andor.camera_info.exptime);
+        std::this_thread::sleep_for(std::chrono::seconds(_exptime));
 
-
-        // Wait for either notify() or timeout after ETIME duration
-        auto etime=std::chrono::seconds(3*static_cast<long>(this->camera.andor.camera_info.exptime));
+        // Wait for either notify() or timeout after etime duration
+        auto etime=std::chrono::seconds(2 * _exptime);
         bool notified = this->newframe.wait_for(lock, etime, [this]() { return this->newframe_ready.load(); });
 
-        // If notified or elapsed time exceeds ETIME, break the loop
+        // If notified or elapsed time exceeds etime, break the loop
         if (notified) {
           logwrite(function, "NOTICE: was notified");
           break;
         }
 
-        // If elapsed time exceeds ETIME, break the loop
+        // If elapsed time exceeds etime, break the loop
         auto elapsed_time = std::chrono::steady_clock::now() - start_time;
         if (elapsed_time >= etime) {
           logwrite(function, "NOTICE: timeout before notified");
@@ -3230,20 +3235,33 @@ logwrite( function, "[DEBUG] acquire here" );
       }
 
       this->astrometry.solve( last_imagename, this->target.ext_solver_args );
-logwrite(function, "[DEBUG] setting goals from solver" );
       this->astrometry.get_solution( result, this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle, matches, rmsarcsec );
-message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle
-                         << " file=" << last_imagename;
-logwrite( function, message.str() );
 
-      if ( result=="EXCEPTION" ) {
-        logwrite(function, "ERROR bad astrometry solution!");
-//std::filesystem::copy( last_imagename, "/tmp/badsolve.fits");
-//std::string dontcare;
-//this->framegrab( "stop", dontcare );
-        return ERROR;
+      if ( result=="NOISY" || result=="GOOD" ) {
+        goodsolution=true;
+        message.str(""); message << "setting goals from solver: " << this->target.acam_goal.ra  << " "
+                                                                  << this->target.acam_goal.dec << " " 
+                                                                  << this->target.acam_goal.angle;
+        logwrite( function, message.str() );
+        break;
       }
-      return( this->target.acquire( Acam::TARGET_ACQUIRE_HERE ) );        // disables Target guide/acquisition
+      else {
+        solveretries++;
+        message.str(""); message << "ERROR bad astrometry solution! attempt " << solveretries << " of 5";
+        logwrite(function, message.str());
+        //std::filesystem::copy( last_imagename, "/tmp/badsolve.fits");
+        //std::string dontcare;
+        //this->framegrab( "stop", dontcare );
+        if ( solveretries < 5 ) continue; else break;
+      }
+
+      } while ( true );
+
+      if (!goodsolution) {
+        logwrite(function, "ERROR exceeded max attempts with no astrometry solution");
+        return( this->target.acquire( Acam::TARGET_NOP ) );      // disables Target guide/acquisition
+      }
+      return( this->target.acquire( Acam::TARGET_ACQUIRE_HERE ) );
     } else
 
     // If not already stopped then stop (disable by setting mode to NOP)
