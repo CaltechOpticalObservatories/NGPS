@@ -15,6 +15,11 @@ param guideStart
     RA entry {RA} { } {Slit target RA (decimal deg or hh:mm:ss.s)}
     DEC entry {DEC} { } {Slit target DEC (decimal deg or dd:mm:ss.s)}
 endparam
+param saveSettings
+    # variable type {label} {default} {Long description}
+    startStop menu {Start/Stop} {START|STOP} { }
+    Nperiod entry {N} {1} {Save every Nth frame (1 = save all)}
+endparam
 #############
 buttonbar
 #############
@@ -36,7 +41,7 @@ $message(yesno,Move slit center to crosshairs?  Note: open loop TCS moves are ne
 GUIDE
 *
 button
-$param(guideStart) ; $dir/guide_start.sh $here $RA $DEC | $text
+$param(guideStart) ; $dir/guide_start.sh $here $RA $DEC #| $text
 #############
 STOP GUIDING
 *
@@ -65,6 +70,11 @@ GRAB HEADER
 *
 button
 xpaget $xpa fits header | $text
+#############
+SAVE SERIES
+*
+button
+$param(saveSettings) ; $dir/save_series.sh $startStop $Nperiod | $text
 #############
 GUI HELP
 *
