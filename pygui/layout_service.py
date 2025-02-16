@@ -7,7 +7,6 @@ from PyQt5.QtCore import Qt
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
 import re
-import subprocess
 
 class LayoutService:
     def __init__(self, parent):
@@ -285,6 +284,7 @@ class LayoutService:
         # Create a mapping for status colors
         tcs_status_map = {
             "idle": QColor(255, 255, 0),       # Yellow
+            "on": QColor(0, 255, 0),           # Green
             "tracking": QColor(0, 255, 0),    # Green
             "paused": QColor(255, 165, 0),     # Orange
             "error": QColor(255, 0, 0),        # Red
@@ -340,7 +340,7 @@ class LayoutService:
         tcs_status_group.setMaximumHeight(250)  # Maximum height
 
         # Ensure only the 'idle' status is fully active by default
-        self.update_tcs_status("idle")
+        self.update_tcs_status("on")
 
         return tcs_status_group
 

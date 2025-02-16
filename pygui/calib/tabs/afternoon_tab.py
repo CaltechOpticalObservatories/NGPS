@@ -27,12 +27,6 @@ class AfternoonTab(QWidget):
         form_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
         form_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
 
-        # Thrufocus Script Section (./thrufocus | tee <output log file>)
-        self.log_file_input = QLineEdit(self)
-        self.log_file_input.setPlaceholderText("Enter output log file path")
-        self.log_file_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Input expands horizontally
-        form_layout.addRow("Log File Path:", self.log_file_input)
-
         thrufocus_button = QPushButton("Run thrufocus", self)
         thrufocus_button.clicked.connect(self.run_thrufocus_script)
         thrufocus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
@@ -183,10 +177,10 @@ class AfternoonTab(QWidget):
     def run_thrufocus_script(self):
         log_file = self.log_file_input.text()
         if log_file:
-            command = f"bash calib/thrufocus | tee {log_file}"
+            command = f"bash calib/thrufocus"
             self.run_command_in_background(command)
         else:
-            self.log_message("Please provide a valid log file path.")
+            self.log_message("Failed running thrufocus!")
 
     def set_focus_r(self):
         band = self.band_r_input.text()
