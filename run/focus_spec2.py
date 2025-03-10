@@ -36,7 +36,7 @@ help = 'Measure focus from sharpness in X or Y; project out other direction'
 parser.add_argument('-fa', '--focus-axis', type=str, choices=['x','X','y','Y'], required=True ,help=help)
 
 help = 'Focus keyword in FITS header that we are optimizing (FOCUS, TELFOCUS, IMNUM, IMNUM_HACK)'
-parser.add_argument('-fk','--focuskey', type=str, default='IMNUM' ,help=help)
+parser.add_argument('-fk','--focuskey', type=str, default='IMNUM_HACK' ,help=help)
 
 help = 'U channel DS9 region file'
 parser.add_argument('-U', type=str ,help=help)
@@ -81,12 +81,8 @@ GROUPBY_SLICE = not args.groupby_feature  # Group plots by slice (true) or spect
 df = all_headers_to_df(args.flist)
 focuskey = args.focuskey
 imnumkey = 'IMNUM'
-datekey = 'DATE'
 
-# Make a timestamp from the first file
-timestamp = df.iloc[0][datekey]
-timestamp = timestamp.split(':')[:-1] # E.g. 2025-01-02T22:30:13.455 --> take day, hour, minutes
-timestamp = ''.join(timestamp)  # join with no colons, 2025-01-02T2230
+breakpoint()
 
 # Check which channels are used and whether they have region files
 channels_detected = [s for s in df['SPEC_ID'].unique() if isinstance(s, str)]
@@ -182,6 +178,6 @@ for ch in regdict:
     axes_g[0].legend(bbox_to_anchor=(1.02, 1.02), loc='upper left', borderaxespad=0, prop={'size': 10}, title=legendTitle)
     plt.tight_layout()
 
-    outname = 'focus_spec_%s_%s.png'%(ch, timestamp)
+    outname = 'focus_spec_%s.png'%ch
     plt.savefig(outname)
     print(outname)

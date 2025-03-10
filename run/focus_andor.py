@@ -41,6 +41,7 @@ from acam_skyinfo import settings as s
 focuskey = 'TELFOCUS'  # FITS header used for focus
 metrickey = 'FWHM_IMAGE'
 # metrickey = 'FWHM_WORLD'
+datekey = 'EXPSTART'
 
 print(s.SEXTRACTOR_CONFIG)
 
@@ -94,6 +95,11 @@ def DS9regions_from_sextable(df, regfilename):
 
 # Scrape all FITS headers, load into DataFrame
 df = all_headers_to_df(flist)
+
+# Make a timestamp from the first file
+timestamp = df.iloc[0][datekey]
+timestamp = timestamp.split(':')[:-1] # E.g. 2025-01-02T22:30:13.455 --> take day, hour, minutes
+timestamp = ''.join(timestamp)  # join with no colons, 2025-01-02T2230
 
 # Count unique extensions, decide ACAM or SCAM
 camname = 'acam' if len(df["EXTN"].unique())==1 else 'scam'
@@ -170,6 +176,7 @@ for ex in df[extkey].unique():
 
     plt.xlabel(focuskey)
     plt.ylabel(metrickey)
+    plt.minorticks_on()
 
     print('Ext '+str(ex)+'  '+metrickey+" Minimum at:", df_ex[df_ex[metrickey]==df_ex[metrickey].min()][focuskey].values , \
         "  Vertex fit at:", vertex)
@@ -207,6 +214,7 @@ for ex in df[extkey].unique():
     plt.plot(x, np.polyval(pfit, x), ls='--')
 
     plt.ylabel("STDDEV (ADU)")
+    plt.minorticks_on()
 
     print('Ext '+str(ex)+'  '+"STD Minimum at:", df_ex[df_ex['STDDEV']==df_ex['STDDEV'].min()][focuskey].values , \
         "  Vertex fit at:", vertex)
@@ -215,7 +223,7 @@ plt.legend()
 plt.xlabel(focuskey)
 plt.ylabel('STD/SUM')
 
-outname = 'focus_andor_STD_'+camname+'.png'
+outname = 'focus_andor_STD_%s_%s.png' % (camname,timestamp)
 print(outname)
 plt.savefig(outname)
 
