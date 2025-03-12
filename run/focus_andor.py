@@ -182,7 +182,8 @@ for ex in df[extkey].unique():
         "  Vertex fit at:", vertex)
     
 plt.legend()
-outname = 'focus_andor_FWHM_'+camname+'.png'
+
+outname = 'focus_andor_FWHM_%s_%s.png' % (camname,timestamp)
 print(outname)
 plt.savefig(outname)
 
