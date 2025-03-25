@@ -156,7 +156,7 @@ for ex in df["EXTN"].unique():
 
 for ex in df[extkey].unique():
 
-    df_ex = df[df[extkey]==ex]
+    df_ex = df[df[extkey]==ex].copy()
     y = df_ex[metrickey]
 
     try:  # Fails if no sources detected
@@ -183,9 +183,14 @@ for ex in df[extkey].unique():
     
 plt.legend()
 
-outname = 'focus_andor_FWHM_%s_%s.png' % (camname,timestamp)
-print(outname)
-plt.savefig(outname)
+# Save time-tagged (for archive) and non-tagged version (for display)
+for tag in ('_'+timestamp, ''):
+
+    basename = 'focus_andor_FWHM_'+camname+tag
+
+    outname = basename+'.png'
+    plt.savefig(outname)
+    print(outname)
 
 
 # PLOT STDDEV vs. focus key
@@ -224,9 +229,14 @@ plt.legend()
 plt.xlabel(focuskey)
 plt.ylabel('STD/SUM')
 
-outname = 'focus_andor_STD_%s_%s.png' % (camname,timestamp)
-print(outname)
-plt.savefig(outname)
+# Save time-tagged (for archive) and non-tagged version (for display)
+for tag in ('_'+timestamp, ''):
+
+    basename = 'focus_andor_STD_'+camname+tag
+
+    outname = basename+'.png'
+    plt.savefig(outname)
+    print(outname)
 
 
 

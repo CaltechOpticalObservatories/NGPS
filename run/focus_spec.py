@@ -143,7 +143,7 @@ for ch in regdict:
 
     plt.figure()
         
-    df_ch = df[df['SPEC_ID']==ch]
+    df_ch = df[df['SPEC_ID']==ch].copy()
     ROInames = list(regdict[ch].keys())
     sliceTags = np.unique([rn.split('_')[0] for rn in ROInames])
     featureTags = np.unique([rn.split('_')[1] for rn in ROInames])
@@ -182,6 +182,21 @@ for ch in regdict:
     axes_g[0].legend(bbox_to_anchor=(1.02, 1.02), loc='upper left', borderaxespad=0, prop={'size': 10}, title=legendTitle)
     plt.tight_layout()
 
-    outname = 'focus_spec_%s_%s.png'%(ch, timestamp)
-    plt.savefig(outname)
-    print(outname)
+    # Save time-tagged (for archive) and non-tagged version (for display)
+    for tag in ('_'+timestamp, ''):
+
+        basename = 'focus_spec_'+ch+tag
+
+        outname = basename+'.png'
+        plt.savefig(outname)
+        print(outname)
+
+        # Save the data as CSV file
+        outkeys = df_ch.iloc[0]['std_dict'].keys() 
+        for k in outkeys: 
+            df_ch[k] = df_ch.apply(lambda row: row['std_dict'][k], axis=1)
+
+        outname = basename+'.csv'
+        df_ch[[focuskey]+[*outkeys]].to_csv(outname, index=False)
+        print(outname)
+
