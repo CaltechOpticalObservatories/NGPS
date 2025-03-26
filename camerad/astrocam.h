@@ -563,6 +563,7 @@ namespace AstroCam {
       int FITS_BPP16;
       int FITS_BPP32;
 
+      std::atomic<int> pci_cmd_num;
       int nexp;
       int nfilmstrip;              //!< number of filmstrip frames (for enhanced-clocking dual-exposure mode)
       int deltarows;               //!< number of delta rows (for enhanced-clocking dual-exposure mode)
@@ -861,6 +862,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
            */
           std::vector<Camera::Information> expinfo;
 
+          std::mutex pcimtx;               //!< mutex protects talking to this PCI driver
+
           int error;
 
           int cols;                        //!< total number of columns read (includes overscan)
@@ -1030,7 +1033,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       static void dothread_shutter( int expbuf, Interface &interface );
       static void dothread_read( Camera::Camera &cam, Controller &con, int expbuf );
       static void dothread_expose( Controller &con );
-      static void dothread_native( Controller &con, std::vector<uint32_t> cmd );
+      void dothread_native( int dev, std::vector<uint32_t> cmd );
+//    static void dothread_native( Controller &con, std::vector<uint32_t> cmd );
       static void handle_frame( int expbuf, int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer );
       static void handle_queue( std::string message );
       void handle_queue2( std::string message );

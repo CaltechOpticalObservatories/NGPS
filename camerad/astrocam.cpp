@@ -195,6 +195,7 @@ namespace AstroCam {
   Interface::Interface() {
     this->state_monitor_thread_running = false;
     this->modeselected = false;
+    this->pci_cmd_num.store(0);
     this->nexp=1;
     this->numdev = 0;
     this->nframes = 1;
@@ -1071,6 +1072,7 @@ namespace AstroCam {
         //
         if ( !this->controller[dev].connected ) this->do_disconnect_controller(dev);
 
+/****** YOU CAN'T DO THIS
         // Now that controller is open, update it with the current image size
         // that has been stored in the class. Create an arg string in the same
         // format as that found in the config file.
@@ -1095,6 +1097,7 @@ namespace AstroCam {
           this->do_disconnect_controller(dev);
           error = ERROR;
         }
+ ******/
       }
       catch ( const std::exception &e ) { // arc::gen3::CArcPCI::open and reset may throw exceptions
         message.str(""); message << "ERROR opening " << this->controller[dev].devname
@@ -1633,12 +1636,12 @@ namespace AstroCam {
         cmd.push_back( (uint32_t)parse_val( tok ) );  // then push each converted arg into cmd vector
       }
 
-      // Log the complete command (with arg list) that will be sent
-      //
-      message.str("");   message << "sending command:"
-                                 << std::setfill('0') << std::setw(2) << std::hex << std::uppercase;
-      for (const auto &arg : cmd) message << " 0x" << arg;
-      logwrite(function, message.str());
+//    // Log the complete command (with arg list) that will be sent
+//    //
+//    message.str("");   message << "sending command:"
+//                               << std::setfill('0') << std::setw(2) << std::hex << std::uppercase;
+//    for (const auto &arg : cmd) message << " 0x" << arg;
+//    logwrite(function, message.str());
     }
     catch(std::out_of_range &) {  // should be impossible but here for safety
       message.str(""); message << "ERROR: unable to parse command ";
@@ -1661,7 +1664,8 @@ namespace AstroCam {
     {                                       // start local scope for this stuff
     std::vector<std::thread> threads;       // local scope vector stores all of the threads created here
     for ( const auto &dev : selectdev ) {   // spawn a thread for each device in selectdev
-      std::thread thr( std::ref(AstroCam::Interface::dothread_native), std::ref(this->controller[dev]), cmd );
+//    std::thread thr( std::ref(AstroCam::Interface::dothread_native), std::ref(this->controller[dev]), cmd );
+      std::thread thr( &AstroCam::Interface::dothread_native, std::ref(*this), dev, cmd );
       threads.push_back(std::move(thr));    // push the thread into a vector
     }
 
@@ -1714,12 +1718,23 @@ namespace AstroCam {
     // Log the return values
     ///< TODO @todo need a way to send these back to the calling function
     //
+    long error = NO_ERROR;
+/***
     for ( const auto &dev : selectdev ) {
-      message.str(""); message << this->controller[dev].devname << " returns " << std::dec << this->controller[dev].retval
-                               << " (0x" << std::hex << std::uppercase << this->controller[dev].retval << ")";
-      logwrite(function, message.str());
+      // any command that doesn't return DON sets error flag
+      if ( this->controller[dev].retval != 0x00444F4E ) {
+        error = ERROR;
+      }
+
+//    std::string retvalstring;
+//    this->retval_to_string( this->controller[dev].retval, retvalstring );
+//    message.str(""); message << this->controller[dev].devname << " \"" << cmdstr << "\""
+//                             << " returns " << retvalstring
+//                             << " (0x" << std::hex << std::uppercase << this->controller[dev].retval << ")";
+//    logwrite(function, message.str());
     }
-    return ( NO_ERROR );
+***/
+    return error;
   }
   /***** AstroCam::Interface::do_native ***************************************/
 
@@ -2168,10 +2183,22 @@ namespace AstroCam {
    * @param[in]  cmd  vector containing command and args
    *
    */
-  void Interface::dothread_native( Controller &con, std::vector<uint32_t> cmd ) {
-    std::string function = "AstroCam::Interface::dothread_native";
+//void Interface::dothread_native( Controller &con, std::vector<uint32_t> cmd ) {
+  void Interface::dothread_native( int dev, std::vector<uint32_t> cmd ) {
+    const std::string function ( "AstroCam::Interface::dothread_native" );
     std::stringstream message;
     uint32_t command;
+
+    std::lock_guard<std::mutex> lock(this->controller[dev].pcimtx);
+
+    ++this->pci_cmd_num;
+
+    message << "sending command (" << std::dec << this->pci_cmd_num << ") to chan "
+            << this->controller[dev].channel << " dev " << dev << ":"
+            << std::setfill('0') << std::setw(2) << std::hex << std::uppercase;
+    for (const auto &arg : cmd) message << " 0x" << arg;
+    logwrite(function, message.str());
+
 
     try {
       if ( cmd.size() > 0 ) command = cmd.at(0);
@@ -2179,40 +2206,49 @@ namespace AstroCam {
       // ARC_API now uses an initialized_list object for the TIM_ID, command, and arguments.
       // The list object must be instantiated with a fixed size at compile time.
       //
-      if (cmd.size() == 1) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0) } );
+      if (cmd.size() == 1) this->controller[dev].retval = this->controller[dev].pArcDev->command( { TIM_ID, cmd.at(0) } );
       else
-      if (cmd.size() == 2) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1) } );
+      if (cmd.size() == 2) this->controller[dev].retval = this->controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1) } );
       else
-      if (cmd.size() == 3) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2) } );
+      if (cmd.size() == 3) this->controller[dev].retval = this->controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2) } );
       else
-      if (cmd.size() == 4) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3) } );
+      if (cmd.size() == 4) this->controller[dev].retval = this->controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3) } );
       else
-      if (cmd.size() == 5) con.retval = con.pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3), cmd.at(4) } );
+      if (cmd.size() == 5) this->controller[dev].retval = this->controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3), cmd.at(4) } );
       else {
         message.str(""); message << "ERROR: invalid number of command arguments: " << cmd.size() << " (expecting 1,2,3,4,5)";
         logwrite(function, message.str());
-        con.retval = 0x455252;
+        this->controller[dev].retval = 0x455252;
       }
     }
     catch(const std::runtime_error &e) {
-      message.str(""); message << "ERROR sending 0x" << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
-                                                     << command << " to " << con.devname << ": " << e.what();
+      message.str(""); message << "ERROR sending (" << this->pci_cmd_num << ") 0x"
+                               << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
+                               << command << " to " << this->controller[dev].devname << ": " << e.what();
       logwrite(function, message.str());
-      con.retval = 0x455252;
+      this->controller[dev].retval = 0x455252;
       return;
     }
     catch(std::out_of_range &) {  // impossible
-      logwrite(function, "ERROR: indexing command argument");
-      con.retval = 0x455252;
+      logwrite(function, "ERROR: indexing command argument ("+std::to_string(this->pci_cmd_num)+")");
+      this->controller[dev].retval = 0x455252;
       return;
     }
     catch(...) {
-      message.str(""); message << "unknown error sending 0x" << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
-                                                             << command << " to " << con.devname;
+      message.str(""); message << "ERROR sending (" << std::dec << this->pci_cmd_num << ") 0x"
+                               << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
+                               << command << " to " << this->controller[dev].devname << ": unknown";
       logwrite(function, message.str());
-      con.retval = 0x455252;
+      this->controller[dev].retval = 0x455252;
       return;
     }
+
+    std::string retvalstring;
+    this->retval_to_string( this->controller[dev].retval, retvalstring );
+    message.str(""); message << this->controller[dev].devname << std::dec << " (" << this->pci_cmd_num << ")"
+                             << " returns " << retvalstring;
+    logwrite( function, message.str() );
+
     return;
   }
   /***** AstroCam::Interface::dothread_native *********************************/
