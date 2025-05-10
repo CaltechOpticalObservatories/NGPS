@@ -1102,6 +1102,10 @@ class LayoutService:
 
         return second_column_top_half
 
+    def update_airmass(self, airmass):
+        """Update the airmass based on the incoming TCS status."""
+        self.airmass_input.setText(str(airmass))
+
 
     def create_planning_info_group(self):
         # Create a group box for planning information
@@ -1542,16 +1546,91 @@ class LayoutService:
 
         return target_dropdown_group
     
+
     def update_lamps(self, lamp_states):
         """ Update the lamp checkboxes based on the received state """
+        
+        # Mapping of incoming lamp names to checkbox names
+        lamp_name_map = {
+            'LAMPBLUC': 'BlueCont',
+            'LAMPFEAR': 'FeAr',
+            'LAMPREDC': 'RedCont',
+            'LAMPTHAR': 'ThAR'
+        }
+        
         for lamp, state in lamp_states.items():
-            checkbox = self.lamp_checkboxes.get(lamp)
-            if checkbox:
-                checkbox.setChecked(state)
+            # Map the incoming lamp key to the checkbox key using the lamp_name_map
+            mapped_lamp = lamp_name_map.get(lamp)
+            
+            if mapped_lamp:
+                # Get the checkbox corresponding to the mapped lamp name
+                checkbox = self.lamp_checkboxes.get(mapped_lamp)
+                
+                if checkbox:
+                    # Update the checkbox based on the state
+                    checkbox.setChecked(state)
+                    
+                    # Optionally, apply a style based on the state
+                    if state:
+                        checkbox.setStyleSheet("""
+                            QCheckBox::indicator:checked {
+                                background-color: green;
+                                border: 2px solid darkgreen;
+                            }
+                        """)
+                    else:
+                        checkbox.setStyleSheet("""
+                            QCheckBox::indicator:unchecked {
+                                background-color: gray;
+                                border: 2px solid darkgray;
+                            }
+                        """)
+                else:
+                    print(f"Checkbox for {mapped_lamp} not found")
+            else:
+                print(f"Lamp {lamp} not mapped to a checkbox")
+
 
     def update_modulators(self, modulator_states):
         """ Update the modulator checkboxes based on the received state """
+
+        # Mapping of incoming modulator names to checkbox names
+        modulator_name_map = {
+            'MODTHAR': 'ThAR',
+            'MODFEAR': 'FeAr',
+            'MODRDCON': 'RedCont',
+            'MODBLCON': 'BlueCont'
+        }
+
+        # Iterate over the modulator states and apply the changes to the checkboxes
         for modulator, state in modulator_states.items():
-            checkbox = self.modulator_checkboxes.get(modulator)
-            if checkbox:
-                checkbox.setChecked(state)
+            # Check if we have a mapping for this modulator
+            mapped_modulator = modulator_name_map.get(modulator)
+
+            if mapped_modulator:
+                checkbox = self.modulator_checkboxes.get(mapped_modulator)
+                if checkbox:
+                    print(f"Setting {mapped_modulator} checkbox to {state}")
+                    checkbox.setChecked(state)
+
+                    # Style the checkbox based on whether it's checked or not
+                    if state:
+                        # If checked, apply normal style (you can customize this)
+                        checkbox.setStyleSheet("""
+                            QCheckBox::indicator:checked {
+                                background-color: green;
+                                border: 2px solid darkgreen;
+                            }
+                        """)
+                    else:
+                        # If unchecked, apply gray style
+                        checkbox.setStyleSheet("""
+                            QCheckBox::indicator:unchecked {
+                                background-color: gray;
+                                border: 2px solid darkgray;
+                            }
+                        """)
+                else:
+                    print(f"Checkbox for {mapped_modulator} not found")
+            else:
+                print(f"Modulator {modulator} not mapped to a checkbox")

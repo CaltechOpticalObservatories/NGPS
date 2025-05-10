@@ -14,6 +14,8 @@ class ZmqStatusService(QObject):
     # Signal to send modulator states as a dictionary {modulator_name: bool}
     modulator_states_signal = pyqtSignal(dict)
 
+    airmass_signal = pyqtSignal(float) 
+
     def __init__(self, parent, broker_publish_endpoint="tcp://127.0.0.1:5556"):
         super().__init__()
         self.parent = parent  # Reference to the parent window or main UI
@@ -125,7 +127,12 @@ class ZmqStatusService(QObject):
 
                         # If the topic is "powerinfo", update lamp states
                         if topic == "powerd":
-                            self.update_lamp_states(data)  # Update lamp states
+                            self.update_lamp_states(data)  # Update lamp statesi
+
+                        # If the topic is "tcsd", handle TCS information
+                        if topic == "tcsd":
+                            self.update_tcs_info(data)
+
                     except json.JSONDecodeError as e:
                         self.logger.error(f"Error parsing JSON payload: {e}")
                 else:
@@ -159,6 +166,7 @@ class ZmqStatusService(QObject):
 
         # Emit the signal for lamp states
         self.lamp_states_signal.emit(lamp_states)
+        print(f"Emitting modulator states: {lamp_states}")
 
     def update_modulator_states(self, modulator_data):
         """ Emit signal with the modulator states """
@@ -184,6 +192,35 @@ class ZmqStatusService(QObject):
 
         # Emit the signal for modulator states
         self.modulator_states_signal.emit(modulator_states)
+        print(f"Emitting modulator states: {modulator_states}")
+
+    def update_tcs_info(self, data):
+        """ Handle and process the 'tcsd' message and payload. """
+        # Extract relevant data or handle it as needed
+        airmass = data.get('AIRMASS', None)
+        alt = data.get('ALT', None)
+        az = data.get('AZ', None)
+        dec = data.get('DEC', None)
+        domeaz = data.get('DOMEAZ', None)
+        domeshut = data.get('DOMESHUT', None)
+        ra = data.get('RA', None)
+        raoffset = data.get('RAOFFSET', None)
+        zenangle = data.get('ZENANGLE', None)
+
+        # Here you can process or log the data, for example:
+        # print(f"Processing TCS info: AIRMASS = {airmass}, ALT = {alt}, AZ = {az}, RAOFFSET = {raoffset}, etc.")
+
+        # Emit the TCS info to the UI thread (TODO)
+        # self.new_message_signal.emit(f"TCS Info: {data}")
+
+        # Emit the AIRMASS value as a dedicated signal if available
+        if airmass is not None:
+            print("airmass.")
+            self.airmass_signal.emit(airmass)
+        else:
+            self.logger.warning("AIRMASS data is not available.")
+
+
 
 class ZmqStatusServiceThread(QThread):
     def __init__(self, zmq_status_service):

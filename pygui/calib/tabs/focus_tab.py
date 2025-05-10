@@ -1,9 +1,10 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout, QSpacerItem
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 import subprocess
 from calib.tabs.async_command_thread import AsyncCommandThread
 
 class FocusTab(QWidget):
+    output_signal = pyqtSignal(str)
     def __init__(self, log_message_callback):
         super().__init__()
         self.log_message = log_message_callback  # Set log_message callback from the parent
@@ -20,30 +21,56 @@ class FocusTab(QWidget):
         scroll_area_layout.setContentsMargins(15, 15, 15, 15)  # Inner margins around form
         scroll_area_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
         
-        # # Run Focus Button (Before Band of Interest Section)
-        # run_focus_button = QPushButton("Run Focus", self)
-        # run_focus_button.setStyleSheet("""
-        #     QPushButton {
-        #         background-color: #4CAF50;  /* Green color */
-        #         color: white;
-        #         border-radius: 8px;
-        #         padding: 10px;
-        #         border: none;
-        #     }
-        #     QPushButton:hover {
-        #         background-color: #45a049;  /* Slightly darker green on hover */
-        #     }
-        #     QPushButton:pressed {
-        #         background-color: #3e8e41;  /* Darker green when pressed */
-        #     }
-        # """)        
-        # run_focus_button.clicked.connect(self.run_focus)
-        # run_focus_button.setFixedHeight(45)
-        # run_focus_button.setFixedWidth(300)
-        # run_focus_button_layout = QHBoxLayout()
-        # run_focus_button_layout.addWidget(run_focus_button)
-        # run_focus_button_layout.setAlignment(run_focus_button, Qt.AlignCenter)  # Center the button
-        # scroll_area_layout.addRow(run_focus_button_layout)
+        # Run Focus Button (Before Band of Interest Section)
+        #self.run_focus_button = QPushButton("Run Focus", self)
+        #self.run_focus_button.setStyleSheet("""
+        #    QPushButton {
+        #       background-color: #4CAF50;  /* Green color */
+        #        color: white;
+        #        border-radius: 8px;
+        #        padding: 10px;
+        #        border: none;
+        #    }
+        #    QPushButton:hover {
+        #        background-color: #45a049;  /* Slightly darker green on hover */
+        #    }
+        #    QPushButton:pressed {
+        #        background-color: #3e8e41;  /* Darker green when pressed */
+        #    }
+        #""")        
+        #self.run_focus_button.clicked.connect(self.run_focus)
+        #self.run_focus_button.setFixedHeight(45)
+        #self.run_focus_button.setFixedWidth(300)
+        #self.run_focus_button_layout = QHBoxLayout()
+        #self.run_focus_button_layout.addWidget(self.run_focus_button)
+        #self.run_focus_button_layout.setAlignment(self.run_focus_button, Qt.AlignCenter)  # Center the button
+        #scroll_area_layout.addRow(self.run_focus_button_layout)
+
+        # Run ACAM Focus Button (Before Band of Interest Section)
+        self.run_acam_focus_button = QPushButton("Run ACAM Focus", self)
+        self.run_acam_focus_button.setStyleSheet("""
+            QPushButton {
+               background-color: #4CAF50;  /* Green color */
+                color: white;
+                border-radius: 8px;
+                padding: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #45a049;  /* Slightly darker green on hover */
+            }
+            QPushButton:pressed {
+                background-color: #3e8e41;  /* Darker green when pressed */
+            }
+        """)
+        self.run_acam_focus_button.clicked.connect(self.run_focus_acam)
+        self.run_acam_focus_button.setFixedHeight(45)
+        self.run_acam_focus_button.setFixedWidth(300)
+        self.run_acam_focus_button_layout = QHBoxLayout()
+        self.run_acam_focus_button_layout.addWidget(self.run_acam_focus_button)
+        self.run_acam_focus_button_layout.setAlignment(self.run_acam_focus_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(self.run_acam_focus_button_layout)
+
 
         # Camstep Focus Command
         scroll_area_layout.addRow(QLabel("camstep Focus"))
@@ -55,7 +82,7 @@ class FocusTab(QWidget):
         self.focus_lower_input = QLineEdit(self)
         self.focus_lower_input.setPlaceholderText("Lower bound")
         self.focus_step_input = QLineEdit(self)
-        self.focus_step_input.setPlaceholderText(".2")
+        self.focus_step_input.setPlaceholderText("0.2")
         
         camstep_button = QPushButton("camstep Focus (General)", self)
         camstep_button.clicked.connect(self.camstep_focus)
@@ -464,27 +491,206 @@ class FocusTab(QWidget):
             print(f"Error occurred: {e.stderr}")
 
     # Event handler methods for R and I bands
-    async def run_focus(self):
+    def run_focus(self):
         # This method will run all the other buttons when clicked
         print("Running Focus...")
 
-        # Call each button's functionality
-        self.set_basename("focus")
-        self.activate_boi_r()
-        self.activate_boi_i()
-        self.activate_row_bin()
-        self.activate_col_bin()
-        self.set_exptime()
-        self.set_slit()
-        self.camstep_focus()
-        self.camstep_focus_acam()
-        self.set_basename()
-        self.activate_boi_full()
-        self.run_focus_andor()
+
+        self.run_focus_button.setEnabled(False)
+        self.run_focus_button.setStyleSheet("""
+                 QPushButton {
+                     background-color: lightgray;
+                 }
+            """)        
+ 
+        # Set basename
+        command = f"camera basename focus"
+        self.run_command(command)
+        # Activate BOI R
+        channel = self.channel_r_input.text() or self.channel_r_input.placeholderText()
+        skip_rows = self.skip_rows_r_input.text() or self.skip_rows_r_input.placeholderText()
+        rows = self.rows_r_input.text() or self.rows_r_input.placeholderText()
+ 
+        if channel and skip_rows and rows:
+            command = f"camera boi {channel} {skip_rows} {rows}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for channel, rows to skip, and rows to read.")
+ 
+        # Activate BOI I
+        channel = self.channel_i_input.text() or self.channel_i_input.placeholderText()
+        skip_rows = self.skip_rows_i_input.text() or self.skip_rows_i_input.placeholderText()
+        rows = self.rows_i_input.text() or self.rows_i_input.placeholderText()
+ 
+        if channel and skip_rows and rows:
+            command = f"camera boi {channel} {skip_rows} {rows}"
+            self.run_command(command)
+ 
+        # Activate Row BIN
+        axis = self.axis_input_row.text() or self.axis_input_row.placeholderText()
+        binfactor = self.binfactor_input_row.text() or self.binfactor_input_row.placeholderText()
+ 
+        if axis and binfactor:
+            command = f"camera bin {axis} {binfactor}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for axis and bin factor.")
+ 
+        # Activate COL BIN
+        axis = self.axis_input_col.text() or self.axis_input_col.placeholderText()
+        binfactor = self.binfactor_input_col.text() or self.binfactor_input_col.placeholderText()
+ 
+        if axis and binfactor:
+            command = f"camera bin {axis} {binfactor}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for axis and bin factor.")
+ 
+        # Set EXPTime
+        exptime = self.exptime_input.text() or self.exptime_input.placeholderText()
+ 
+        if exptime:
+            command = f"camera exptime {exptime}"
+            self.run_command(command)
+        else:
+            print("Please provide a valid input for exposure time.")
+            
+        # Set slitwidth
+        width = self.slit_width_input.text() or self.slit_width_input.placeholderText()
+        offset = self.slit_offset_input.text() or self.slit_offset_input.placeholderText()
+ 
+        if width and offset:
+            command = f"slit set {width} {offset}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for slit width and offset.")
+ 
+ 
+        # Set CAM focus CAMSTEP
+        value = self.focus_value_input.text() or self.focus_value_input.placeholderText()
+        upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
+        lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
+        step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
+
+        if value and upper and lower and step:
+            command = f"camstep focus all focusloop {value} {upper} {lower} {step}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for focus loop parameters.")
+ 
+ 
+        # Set CAM focus ACAM
+        value = self.focus_value_input.text() or self.focus_value_input.placeholderText()
+        upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
+        lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
+        step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
+ 
+        if value and upper and lower and step:
+            command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for ACAM focus loop parameters.")
+
+
+        command = f"camera basename ngps"
+        self.run_command(command)
+         
+        command_r = f"camera boi R full"
+        self.run_command(command_r)
+ 
+        command_i = f"camera boi I full"
+        self.run_command(command_i)
+         
+        # Run the focus_andor.py script with specified arguments. 
+        command = "bash calib/andor.sh"
+        self.run_command(command)
+        
         self.open_focus_images()
+     
+        self.run_focus_button.setEnabled(True)
+        self.run_focus_button.setStyleSheet("""
+             QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+        """)  
+
+    def run_focus_acam(self):
+        # This method will run all the other buttons when clicked
+        print("Running Focus ACAM...")
+        self.run_acam_focus_button.setEnabled(False)
+        self.run_acam_focus_button.setStyleSheet("""
+                 QPushButton {
+                     background-color: lightgray;
+                 }
+             """)         
+        self.run_acam_focus_button.setStyleSheet("""
+             QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+         """)  
+
+        command = f"camera basename focus"
+        self.run_command(command)
+        
+        # Set CAM focus ACAM
+        value = self.focus_value_input.text() or self.focus_value_input.placeholderText()
+        upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
+        lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
+        step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
+
+        if value and upper and lower and step:
+            command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
+            self.run_command(command)
+        else:
+            print("Please provide valid input for ACAM focus loop parameters.")
+
+
+        command = f"camera basename ngps"
+        self.run_command(command)
+
+        # Run the focus_andor.py script with specified arguments. 
+        command = "bash calib/andor.sh"
+        self.run_command(command)
+
+        self.open_focus_images()
+
+        self.run_acam_focus_button.setEnabled(True)
 
     def run_command_in_background(self, command):
         """Run the command in a background thread."""
         self.thread = AsyncCommandThread(command, self.log_message)
         self.thread.output_signal.connect(self.log_message)
         self.thread.start()
+
+    def run_command(self, command):
+         """Run command."""
+         self.output_signal.connect(self.log_message)
+         
+         try:
+             # Run the command exactly as it is
+             result = subprocess.run(command, shell=True, check=True)
+             #self.output_signal.emit(result)
+             print("Command executed successfully.")
+         except subprocess.CalledProcessError as e:
+             print(f"Error occurred: {e.stderr}")
+             #self.output_signal.emit(e.stderr)

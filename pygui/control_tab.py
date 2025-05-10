@@ -675,7 +675,7 @@ class ControlTab(QDialog):
         slit_width = self.slit_width_box.text()
         slit_angle = self.slit_angle_box.text()
         num_of_exposures = self.num_of_exposures_box.text()
-        
+
         # Re-enable the button and reset its appearance
         self.go_button.setEnabled(True)
         self.go_button.setStyleSheet("""
@@ -701,7 +701,8 @@ class ControlTab(QDialog):
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
             self.on_slit_angle_changed()  # Handle slit angle change as well
-            
+            self.num_of_exposures_changed()
+
             # Disable the button again after confirmation
             self.confirm_button.setEnabled(False)
             self.confirm_button.setStyleSheet("""
@@ -794,7 +795,7 @@ class ControlTab(QDialog):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
 
-    def on_slit_angle_changed(self):
+    def num_of_exposures_changed(self):
         # Retrieve the slit width and send the query to the database
         num_of_exposures = self.num_of_exposures_box.text()
 

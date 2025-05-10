@@ -27,11 +27,25 @@ class AfternoonTab(QWidget):
         form_layout.setContentsMargins(10, 10, 10, 10)  # Inner margins around form
         form_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
 
-        thrufocus_button = QPushButton("Run thrufocus", self)
-        thrufocus_button.clicked.connect(self.run_thrufocus_script)
-        thrufocus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
-        form_layout.addRow("", thrufocus_button)  # Place button below the input
-
+        self.thrufocus_button = QPushButton("Run thrufocus", self)
+        self.thrufocus_button.setStyleSheet("""
+        QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+        """)   
+        self.thrufocus_button.clicked.connect(self.run_thrufocus_script)
+        self.thrufocus_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", self.thrufocus_button)  # Place button below the input
         # Add vertical spacing between sections
         form_layout.addRow("", QLabel())  # Empty row for spacing
 
@@ -175,12 +189,33 @@ class AfternoonTab(QWidget):
             self.log_message("Please provide a spectral binning value.")
 
     def run_thrufocus_script(self):
-        log_file = self.log_file_input.text()
-        if log_file:
-            command = f"bash calib/thrufocus"
-            self.run_command_in_background(command)
-        else:
-            self.log_message("Failed running thrufocus!")
+        self.thrufocus_button.setEnabled(False)
+        self.thrufocus_button.setStyleSheet("""
+                 QPushButton {
+                     background-color: lightgray;
+                 }
+         """)    
+ 
+ 
+        command = f"bash calib/thrufocus"
+        self.run_command_in_background(command)
+ 
+        self.thrufocus_button.setEnabled(True)
+        self.thrufocus_button.setStyleSheet("""
+             QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+        """)  
 
     def set_focus_r(self):
         if self.value_r_input.placeholderText():

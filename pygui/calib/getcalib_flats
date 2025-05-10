@@ -283,7 +283,7 @@ fi
 echo
 echo "--- WRAP UP ---"
 
-bash  calib/fake camera bash utter enable
+bash  calib/fake camera shutter enable
 bash  calib/fake camera key IMGTYPE=SCI//Science
 bash  calib/fake camera exptime $origexptime
 
