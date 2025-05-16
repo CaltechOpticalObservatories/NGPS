@@ -18,6 +18,7 @@ const std::string CAMERAD_BUFFER = "buffer";
 const std::string CAMERAD_CLOSE = "close";
 const std::string CAMERAD_CONFIG = "config";
 const std::string CAMERAD_ECHO = "echo";
+const std::string CAMERAD_EXIT = "exit";
 const std::string CAMERAD_EXPOSE = "expose";
 const std::string CAMERAD_EXPTIME = "exptime";
 const std::string CAMERAD_FITSNAME = "fitsname";
@@ -38,6 +39,7 @@ const std::string CAMERAD_MODEXPTIME = "modexptime";
 const std::string CAMERAD_NATIVE = "native";
 const std::string CAMERAD_OPEN = "open";  const int CAMERAD_OPEN_TIMEOUT = 10000;
 const std::string CAMERAD_PAUSE = "pause";
+const std::string CAMERAD_POWER = "power";
 const std::string CAMERAD_PREEXPOSURES = "preexposures";
 const std::string CAMERAD_READOUT = "readout";
 const std::string CAMERAD_RESUME = "resume";
@@ -57,6 +59,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_CLOSE,
                                                   CAMERAD_CONFIG,
                                                   CAMERAD_ECHO,
+                                                  CAMERAD_EXIT,
                                                   CAMERAD_EXPOSE,
                                                   CAMERAD_EXPTIME+" [ <exptime in msec> ]",
                                                   CAMERAD_FITSNAME,
@@ -77,6 +80,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_NATIVE+" ? | [<DEV>|<CHAN>] <CMD> [ <ARG1> [ < ARG2> [ <ARG3> [ <ARG4> ] ] ] ]",
                                                   CAMERAD_OPEN+" [ ? | <devlist> ]",
                                                   CAMERAD_PAUSE,
+                                                  CAMERAD_POWER,
                                                   CAMERAD_PREEXPOSURES,
                                                   CAMERAD_READOUT+" [ ? ] | [ <dev#> | <chan> [ <amp> ] ]",
                                                   CAMERAD_RESUME,
