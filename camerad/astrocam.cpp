@@ -340,8 +340,8 @@ namespace AstroCam {
       default:     L=0; B=0;
     }
 
-    int ltv2 = B * osrows / binspat;
-    int ltv1 = L * oscols / binspec;
+    int ltv2 = B * osrows;
+    int ltv1 = L * oscols;
 
 //message.str(""); message << "[DEBUG] B=" << B << " L=" << L << " osrows=" << osrows << " oscols=" << oscols
 //                         << " binning_row=" << binspat << " binning_col=" << binspec
