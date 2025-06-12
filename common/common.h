@@ -883,6 +883,7 @@ namespace Common {
                          const std::string &jkey,
                          const std::string &keyword,
                          const std::string &comment,
+                         const std::string &type,
                          bool use_extension,
                          const std::string &chan="") {
         const std::string function="Common::Header::add_json_key";
@@ -894,6 +895,8 @@ namespace Common {
           message.str(""); message << "added extension chan " << chan << " to keydb";
           logwrite( function, message.str() );
         }
+
+        const std::string &keyname = (!keyword.empty() ? keyword : jkey);
 
         try {
           // extract the value from the JSON message using jkey as the key
@@ -910,39 +913,67 @@ namespace Common {
           //
           FitsKeys &keydb = ( use_extension ? elmo(chan) : primary() );
 
-          // type-check each value to call add_key with the correct type
-          // keyword is the header keyword if not empty, otherwise use jkey
+          // if a type was explicitly specified then use that
+          //
+          if (type=="DOUBLE" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<double>(), comment );
+            return;
+          }
+          else
+          if (type=="FLOAT" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<float>(), comment );
+            return;
+          }
+          else
+          if (type=="LONG" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<long>(), comment );
+            return;
+          }
+          else
+          if (type=="INT" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<int>(), comment );
+            return;
+          }
+          else
+          if (type=="BOOL") {
+            this->add_key( keydb, keyname, jvalue.template get<bool>(), comment );
+            return;
+          }
+          else
+          if (type=="STRING") {
+            this->add_key( keydb, keyname, jvalue.template get<std::string>(), comment );
+            return;
+          }
+
+          // if we're still here, type-check each value to call add_key with the
+          // correct type
           //
           if ( jvalue.type() == json::value_t::boolean ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<bool>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<bool>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_integer ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<int>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<int>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_unsigned ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<uint16_t>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<uint16_t>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_float ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<double>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<double>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::string ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<std::string>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<std::string>(), comment );
           }
           else {
-            message << "ERROR unknown type for keyword " << (!keyword.empty()?keyword:jkey) << "=" << jvalue;
+            message << "ERROR unknown type for keyword " << keyname << "=" << jvalue;
             logwrite( function, message.str() );
           }
         }
-        catch( const json::exception &e ) {
-          message.str(""); message << "JSON exception adding keyword " << (!keyword.empty()?keyword:jkey) << ": " << e.what();
-          logwrite( function, message.str() );
-        }
         catch( const std::exception &e ) {
-          message.str(""); message << "ERROR exception adding keyword " << (!keyword.empty()?keyword:jkey) << ": " << e.what();
+          message.str(""); message << "ERROR adding keyword " << keyname << ": " << e.what();
           logwrite( function, message.str() );
         }
       }
