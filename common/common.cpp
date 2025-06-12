@@ -122,10 +122,12 @@ namespace Common {
    *
    */
   std::string FitsKeys::get_keytype(std::string keyvalue) {
-    std::size_t pos(0);
+
+    // strip leading and trailing spaces
+    keyvalue.erase(0, keyvalue.find_first_not_of(' '));
+    keyvalue.erase(keyvalue.find_last_not_of(' ')+1);
 
     // If it's empty then what else can it be but string
-    //
     if ( keyvalue.empty() ) return std::string( "STRING" );
 
     // if the entire string is either (exactly) T or F then it's a boolean
@@ -133,35 +135,58 @@ namespace Common {
       return std::string( "BOOL" );
     }
 
-    // skip the whitespaces
-    pos = keyvalue.find_first_not_of(' ');
-    if (pos == keyvalue.size()) return std::string("STRING");   // all spaces, so it's a string
-
     // check the significand
+    std::size_t pos(0);
     if (keyvalue[pos] == '+' || keyvalue[pos] == '-') ++pos;    // skip the sign if exist
 
-    // count the number of digits and number of decimal points
-    int n_nm, n_pt;
-    for (n_nm = 0, n_pt = 0; std::isdigit(keyvalue[pos]) || keyvalue[pos] == '.'; ++pos) {
-        keyvalue[pos] == '.' ? ++n_pt : ++n_nm;
+    // count the number of numbers and number of decimal points
+    // stops early if any other character is found, which makes the type STRING
+    int numnum, numpts;
+    for (numnum=0, numpts=0;
+         pos<keyvalue.size() && (std::isdigit(keyvalue[pos]) || keyvalue[pos] == '.');
+         ++pos) {
+        keyvalue[pos] == '.' ? ++numpts : ++numnum;
     }
 
-    if (n_pt>1 || n_nm<1 || pos<keyvalue.size()){ // no more than one point, no numbers, or a non-digit character
-      return std::string("STRING");               // then it's a string
+    if ( pos<keyvalue.size()  ||     // encountered non-num, non-point
+         numpts>1             ||     // more than one decimal point
+         numnum<1 ) {                // no numbers
+      return std::string("STRING");  // then it's a string
+    }
+    else
+    // one decimal is float or double...
+    if (numpts==1 && numnum>0) {
+      size_t loc = keyvalue.find('.');
+      // get the integer and fractional parts of the number
+      std::string  intpart = (loc==std::string::npos) ? keyvalue : keyvalue.substr(0, loc);
+      std::string fracpart = (loc==std::string::npos) ? "" : keyvalue.substr(loc+1);
+
+      // remove leading and trailing zeros
+      intpart.erase(0, intpart.find_first_not_of('0'));
+      fracpart.erase(fracpart.find_last_not_of('0'));
+
+      // number of significant figures
+      size_t sigfigs = intpart.length() + fracpart.length();
+
+      // more than 7 significant figures requires a double
+      return (sigfigs > 7 ? std::string("DOUBLE") : std::string("FLOAT"));
+    }
+    else
+    // no decimal must be int or long
+    if (numpts==0 && numnum>0) {
+      try {
+        // safely convert to long
+        long long val = std::stoll(keyvalue);
+        // if in range of int then use int, otherwise long
+        if (val >= INT_MIN && val <= INT_MAX) return std::string("INT");
+        else return std::string("LONG");
+      }
+      // failed conversion returns string
+      catch (...) { return std::string("STRING"); }
     }
 
-    // skip the trailing whitespaces
-    while (keyvalue[pos] == ' ') {
-        ++pos;
-    }
-
-    if (pos == keyvalue.size()) {
-      if (keyvalue.find(".") == std::string::npos)    // all numbers and no decimals, it's an integer
-        return std::string("INT");
-      else                                            // otherwise numbers with a decimal, it's a double
-        return std::string("DOUBLE");
-    }
-    else return std::string("STRING");                // lastly, must be a string
+    // if this somehow falls through then return string
+    return std::string("STRING");
   }
   /***** Common::FitsKeys::get_keytype ****************************************/
 

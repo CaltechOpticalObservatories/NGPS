@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <climits>
 #include <sstream>
 #include <queue>
 #include <string>
