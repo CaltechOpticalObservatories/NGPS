@@ -634,6 +634,13 @@ namespace Common {
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment ) {
         return do_addkey( key, tval, comment, DEFAULTPRECISION, "" );
       }
+      template <class T> long addkey( const std::string &key, T tval, const std::string &comment, const char* type ) {
+        const std::string _type = type ? std::string(type) : std::string();
+        return do_addkey( key, tval, comment, DEFAULTPRECISION, _type );
+      }
+      template <class T> long addkey( const std::string &key, T tval, const std::string &comment, std::string type ) {
+        return do_addkey( key, tval, comment, DEFAULTPRECISION, type );
+      }
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment, int prec ) {
         return do_addkey( key, tval, comment, prec, "" );
       }
@@ -641,18 +648,30 @@ namespace Common {
                                          T tval,
                                          const std::string &comment,
                                          int prec,
-                                         const std::string &type_in ) {
+                                         std::string type_in ) {
         std::stringstream val;
         std::string type, value;
 
         if ( key.empty() || ( key.find(" ") != std::string::npos ) ) return NO_ERROR;
 
+        // this determines the type based on the templated tval
+        // and formats the value if needed (for floating point precision)
+        //
         resolve_type_and_value(tval, prec, type, value);
+
+        // if requested type_in not a recognized type then ignore it
+        //
+        if ( !type_in.empty() && (type_in != "DOUBLE" ||
+                                  type_in != "FLOAT"  ||
+                                  type_in != "INT"    ||
+                                  type_in != "LONG"   ||
+                                  type_in != "BOOL"   ||
+                                  type_in != "STRING" ) ) type_in.clear();
 
         // insert new entry into the database
         //
         this->keydb[key].keyword    = key;
-        this->keydb[key].keytype    = type;
+        this->keydb[key].keytype    = type_in.empty() ? type : type_in;  // allow override detected type
         this->keydb[key].keyvalue   = value;
         this->keydb[key].keycomment = comment;
 
@@ -660,6 +679,7 @@ namespace Common {
         std::string function = "Common::FitsKeys::addkey";
         std::stringstream message;
         message << "[DEBUG] added key " << key << "=" << value  << " (" << type << ") // " << comment;
+        if (!type_in.empty()) message << " *** override type as " << type_in << " ***";
         logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
