@@ -569,10 +569,14 @@ namespace Common {
           }
         }
         else {
+          // If type was unresolved then try to infer it
           valstr << tval;
-          // requested floating point but it's not, so try to infer the type
-          if (type=="DOUBLE" || type=="FLOAT") {
-            type = get_keytype(valstr.str());
+          if constexpr (!std::is_same_v<T, bool> &&
+                        !std::is_same_v<T, double> &&
+                        !std::is_same_v<T, float> &&
+                        !std::is_same_v<T, int> &&
+                        !std::is_same_v<T, long>) {
+              type = get_keytype(valstr.str());  // content-based inference
           }
         }
         value = valstr.str();
