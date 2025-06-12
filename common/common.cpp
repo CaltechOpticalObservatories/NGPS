@@ -280,8 +280,14 @@ namespace Common {
 
     size_t pos = keystring.find(comment_separator);                        // location of the comment separator
     keyvalue = keystring.substr(0, pos);                                   // keyvalue is everything up to comment
-    keyvalue = keyvalue.erase(0, keyvalue.find_first_not_of(" "));         // remove leading spaces from keyvalue
-    keyvalue = keyvalue.erase(keyvalue.find_last_not_of(" ")+1);           // remove trailing spaces from keyvalue
+
+    size_t first = keyvalue.find_first_not_of(' ');
+    if (first==std::string::npos) keyvalue.clear();
+    else {
+      size_t last = keyvalue.find_last_not_of(' ');
+      keyvalue = keyvalue.substr(first, last-first+1);                     // substr removes leading/trailing spaces
+    }
+
     if (pos != std::string::npos) {
       keycomment = keystring.erase(0, pos + comment_separator.length());
       keycomment = keycomment.erase(0, keycomment.find_first_not_of(" ")); // remove leading spaces from keycomment

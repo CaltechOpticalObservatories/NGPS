@@ -40,6 +40,8 @@ const std::string SNAPSHOT = "snapshot";       ///< common daemon command forces
 constexpr bool EXT = true;   ///< constant for use_extension arg of Common::Header::add_key()
 constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Header::add_key()
 
+constexpr int DEFAULTPRECISION = 8;  ///< default precision for floating point keywords
+
 /***** Common *****************************************************************/
 /**
  * @namespace Common
@@ -627,12 +629,19 @@ namespace Common {
        *
        */
       inline long addkey( const std::string &key, bool bval, const std::string &comment ) {
-        return addkey( key, (bval?"T":"F"), comment, 0 );
+        return do_addkey( key, (bval?"T":"F"), comment, 0, "" );
       }
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment ) {
-        return addkey( key, tval, comment, 8 );
+        return do_addkey( key, tval, comment, DEFAULTPRECISION, "" );
       }
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment, int prec ) {
+        return do_addkey( key, tval, comment, prec, "" );
+      }
+      template <class T> long do_addkey( const std::string &key,
+                                         T tval,
+                                         const std::string &comment,
+                                         int prec,
+                                         const std::string &type_in ) {
         std::stringstream val;
         std::string type, value;
 
