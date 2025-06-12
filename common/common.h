@@ -538,6 +538,48 @@ namespace Common {
       long addkey( const std::string &arg );                 ///< add FITS key to the internal database
       long addkey( const std::vector<std::string> &vec );    ///< add FITS key to the internal database
 
+    private:
+      template <class T> void resolve_type_and_value(T tval, int prec, std::string &type, std::string &value) {
+        // Set the type based on type T of tval.
+        // The use of constexpr() ensures that the compiler discards branches
+        // that are not valid for the given T.
+        //
+        if constexpr (std::is_same_v<T, bool>) type = "BOOL";
+        else
+        if constexpr (std::is_same_v<T, double>) type = "DOUBLE";
+        else
+        if constexpr (std::is_same_v<T, float>) type = "FLOAT";
+        else
+        if constexpr (std::is_same_v<T, int>) type = "INT";
+        else
+        if constexpr (std::is_same_v<T, long>) type = "LONG";
+        else type = "STRING";
+
+        std::stringstream valstr;
+
+        // If floating point value is NAN then change to string "NaN"
+        if constexpr (std::is_floating_point_v<T>) {
+          if (std::isnan(tval)) {
+            valstr << "NaN";
+            type = "STRING";
+          }
+          else {
+            // floating points are formatted with requested precision
+            valstr << std::fixed << std::setprecision(prec) << tval;
+          }
+        }
+        else {
+          valstr << tval;
+          // requested floating point but it's not, so try to infer the type
+          if (type=="DOUBLE" || type=="FLOAT") {
+            type = get_keytype(valstr.str());
+          }
+        }
+        value = valstr.str();
+      }
+
+    public:
+
       /***** Common::FitsKeys::addkey *****************************************/
       /**
        * @brief      template function adds FITS keyword to internal database
@@ -576,53 +618,57 @@ namespace Common {
       }
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment, int prec ) {
         std::stringstream val;
-        std::string type;
+        std::string type, value;
 
-        // "convert" the type <T> value into a string via the appropriate stream
-        // and set the type string.
-        //
-        // The use of constexpr() ensures that the compiler discards brances
-        // that are not valid for the given T.
-        //
-        if constexpr( std::is_same<T, double>::value ) {
-          val << std::fixed << std::setprecision( prec );
-          if ( !std::isnan(tval) ) val << tval; else val << "NaN";
-          type = ( !std::isnan(tval) ? "DOUBLE" : "STRING" );
-        }
-        else
-        if constexpr( std::is_same<T, float>::value ) {
-          val << std::fixed << std::setprecision( prec );
-          if ( !std::isnan(tval) ) val << tval; else val << "NaN";
-          type = ( !std::isnan(tval) ? "FLOAT" : "STRING" );
-        }
-        else
-        if constexpr( std::is_same<T, int>::value ) {
-          val << tval;
-          type = "INT";
-        }
-        else
-        if constexpr( std::is_same<T, long>::value ) {
-          val << tval;
-          type = "LONG";
-        }
-        else {
-          val << tval;
-          type = this->get_keytype( val.str() );  // try to infer the type from any string
-        }
+/***
+ *      // "convert" the type <T> value into a string via the appropriate stream
+ *      // and set the type string.
+ *      //
+ *      // The use of constexpr() ensures that the compiler discards brances
+ *      // that are not valid for the given T.
+ *      //
+ *      if constexpr( std::is_same<T, double>::value ) {
+ *        val << std::fixed << std::setprecision( prec );
+ *        if ( !std::isnan(tval) ) val << tval; else val << "NaN";
+ *        type = ( !std::isnan(tval) ? "DOUBLE" : "STRING" );
+ *      }
+ *      else
+ *      if constexpr( std::is_same<T, float>::value ) {
+ *        val << std::fixed << std::setprecision( prec );
+ *        if ( !std::isnan(tval) ) val << tval; else val << "NaN";
+ *        type = ( !std::isnan(tval) ? "FLOAT" : "STRING" );
+ *      }
+ *      else
+ *      if constexpr( std::is_same<T, int>::value ) {
+ *        val << tval;
+ *        type = "INT";
+ *      }
+ *      else
+ *      if constexpr( std::is_same<T, long>::value ) {
+ *        val << tval;
+ *        type = "LONG";
+ *      }
+ *      else {
+ *        val << tval;
+ *        type = this->get_keytype( val.str() );  // try to infer the type from any string
+ *      }
+ ***/
 
         if ( key.empty() || ( key.find(" ") != std::string::npos ) ) return NO_ERROR;
+
+        resolve_type_and_value(tval, prec, type, value);
 
         // insert new entry into the database
         //
         this->keydb[key].keyword    = key;
         this->keydb[key].keytype    = type;
-        this->keydb[key].keyvalue   = val.str();
+        this->keydb[key].keyvalue   = value;
         this->keydb[key].keycomment = comment;
 
 #ifdef LOGLEVEL_DEBUG
         std::string function = "Common::FitsKeys::addkey";
         std::stringstream message;
-        message << "[DEBUG] added key type " << type << ": " << key << "=" << tval << " (" << this->keydb[key].keytype << ") // " << comment;
+        message << "[DEBUG] added key " << key << "=" << value  << " (" << type << ") // " << comment;
         logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
