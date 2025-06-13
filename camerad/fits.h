@@ -23,7 +23,7 @@
 #include "utilities.h"
 #include "logentry.h"
 
-const int FITS_WRITE_WAIT = 5000;                   ///< approx time (in msec) to wait for a frame to be written
+const int FITS_WRITE_WAIT = 6000;                   ///< approx time (in msec) to wait for a frame to be written
 
 /***** FITS_file **************************************************************/
 /**
@@ -376,7 +376,7 @@ this->foo(HDUTYPE::Primary);
       int last_threadcount = this->threadcount;
       int wait = FITS_WRITE_WAIT;
       while (this->threadcount > 0) {
-        usleep(1000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         if (this->threadcount >= last_threadcount) {         // threads are not completing
           wait--;                                            // start decrementing wait timer
         }
@@ -447,7 +447,7 @@ this->foo(HDUTYPE::Primary);
       //
       int wait = FITS_WRITE_WAIT;
       while (self->writing_file) {
-        usleep(1000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         if (--wait < 0) {
           message.str(""); message << "ERROR: timeout waiting for last frame to complete. "
                                    << "unable to write " << self->fits_name;
@@ -523,7 +523,7 @@ this->foo(HDUTYPE::Primary);
       int last_threadcount = this->threadcount;
       int wait = FITS_WRITE_WAIT;
       while (this->extension != this->framen) {
-        usleep(1000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         if (this->threadcount >= last_threadcount) {  // threads are not completing
           wait--;                                     // start decrementing wait timer
         }
