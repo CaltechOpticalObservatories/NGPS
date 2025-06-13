@@ -1,12 +1,20 @@
 import sys
-from PyQt5.QtWidgets import QMainWindow, QApplication, QTabWidget, QDesktopWidget, QVBoxLayout, QTextEdit, QWidget, QPushButton
+import os
+from PyQt5.QtWidgets import (
+    QMainWindow, QApplication, QTabWidget, QDesktopWidget,
+    QVBoxLayout, QTextEdit, QWidget, QPushButton
+)
+from PyQt5.QtCore import pyqtSignal
+
 from calib.tabs.commands_tab import CommandsTab
 from calib.tabs.afternoon_tab import AfternoonTab
 from calib.tabs.focus_tab import FocusTab
 from calib.tabs.science_tab import ScienceTab
-import os
+
 
 class CalibrationGUI(QMainWindow):
+    log_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Calibrations")
@@ -14,17 +22,19 @@ class CalibrationGUI(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        
         # Create a QTextEdit for logging
         self.log_text_edit = QTextEdit(self)
-        self.log_text_edit.setReadOnly(True)  # Make it read-only to prevent user editing
+        self.log_text_edit.setReadOnly(True)
         self.log_text_edit.setPlaceholderText("Log messages will appear here...")
         self.log_text_edit.setMinimumHeight(150)
-        
-        # Define the logging callback function
+
+        # Connect signal to safe GUI update method
+        self.log_signal.connect(self.append_log)
+
+        # Define the thread-safe logging callback function
         def log_message(msg):
-            self.log_text_edit.append(msg)  # Add message to the QTextEdit
-        
+            self.log_signal.emit(msg)
+
         # Create the QTabWidget
         tab_widget = QTabWidget()
 
@@ -42,15 +52,13 @@ class CalibrationGUI(QMainWindow):
 
         # Set up layout and widgets
         main_layout = QVBoxLayout()
-        main_layout.addWidget(tab_widget, stretch=3)         # Main tab area
-
-        # Add the QTextEdit to the layout
-        main_layout.addWidget(self.log_text_edit, stretch=2) # Log window gets more vertical space
+        main_layout.addWidget(tab_widget, stretch=3)
+        main_layout.addWidget(self.log_text_edit, stretch=2)
 
         # Optionally, add a button to clear the log
         clear_log_button = QPushButton("Clear Log", self)
         clear_log_button.clicked.connect(self.clear_log)
-        main_layout.addWidget(clear_log_button, stretch=0)   # Button doesn't need stretch
+        main_layout.addWidget(clear_log_button, stretch=0)
 
         # Create a QWidget and set the layout
         central_widget = QWidget(self)
@@ -58,12 +66,10 @@ class CalibrationGUI(QMainWindow):
         self.setCentralWidget(central_widget)
 
         self.load_stylesheet("styles.qss")
-        
-        # Adjust window size based on screen resolution
         self.adjust_window_size()
 
-    def log_message(self, message):
-        """Append a log message to the QTextEdit widget."""
+    def append_log(self, message):
+        """Safely append a log message to the QTextEdit widget from the main thread."""
         self.log_text_edit.append(message)
 
     def clear_log(self):
@@ -71,52 +77,45 @@ class CalibrationGUI(QMainWindow):
         self.log_text_edit.clear()
 
     def adjust_window_size(self):
-        screen = QDesktopWidget().screenGeometry()  # Get screen size
+        screen = QDesktopWidget().screenGeometry()
         width = screen.width()
         height = screen.height()
 
-        # Set a default window size as a percentage of screen size (for example, 80% width and 60% height)
         new_width = int(width * 0.4)
         new_height = int(height * 0.6)
-
-        self.setFixedSize(new_width, new_height)  # Set window size dynamically
+        self.setFixedSize(new_width, new_height)
 
     def resizeEvent(self, event):
-        # Maintain 4:3 aspect ratio on window resizing
         aspect_ratio = 4 / 3
         current_width = self.width()
         current_height = self.height()
 
-        # Calculate the new width/height to preserve aspect ratio
         if current_width / current_height > aspect_ratio:
-            new_width = int(current_height * aspect_ratio)  # Ensure integer type
+            new_width = int(current_height * aspect_ratio)
             new_height = current_height
         else:
-            new_height = int(current_width / aspect_ratio)  # Ensure integer type
+            new_height = int(current_width / aspect_ratio)
             new_width = current_width
 
-        # Resize the window to maintain aspect ratio
         self.resize(new_width, new_height)
-
-        # Call the original resizeEvent
         super().resizeEvent(event)
 
     def load_stylesheet(self, filename):
-        """Load and apply the stylesheet from a .qss file"""
         if os.path.exists(filename):
             with open(filename, "r") as file:
                 stylesheet = file.read()
                 self.setStyleSheet(stylesheet)
         else:
-            self.log_message(f"Stylesheet file {filename} not found.")
+            self.log_signal.emit(f"Stylesheet file {filename} not found.")
+
 
 def main():
     app = QApplication(sys.argv)
     main_window = CalibrationGUI()
     main_window.show()
-    # Example of logging a message
-    main_window.log_message("Calibration started...")
+    main_window.log_signal.emit("Calibration started...")  # Thread-safe initial log
     sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     main()

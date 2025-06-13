@@ -497,7 +497,7 @@ class FocusTab(QWidget):
 
     def open_focus_images(self):
         """Run the exact eog command to open images."""
-        command = "eog /home/observer/focus/focus_andor_*.png"
+        command = "eog focus_spec_I.png focus_spec_R.png"
         
         try:
             # Run the command exactly as it is
