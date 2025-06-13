@@ -119,6 +119,14 @@ class ZmqStatusService(QObject):
                     try:
                         data = json.loads(payload)
                         # Emit the message to the UI thread
+                        
+                        # If the topic is "sequencerd"
+                        if topic == "sequencerd":
+                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+                        
+                        # If the topic is "sequencerd"
+                        if topic == "slitd":
+                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
                         # If the topic is "calibd", update modulator states
                         if topic == "calibd":
