@@ -33,7 +33,7 @@ namespace Flexure {
   long Server::configure_flexured() {
     std::string function = "Flexure::Server::configure_flexured";
     std::stringstream message;
-    int applied=0;
+    int numapplied=0, lastapplied=0;
     long error;
 
     // Clear the motormap map before loading new information from the config file
@@ -43,6 +43,8 @@ namespace Flexure {
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      lastapplied=numapplied;
 
       // NBPORT -- nonblocking listening port for the flexure daemon
       //
@@ -60,10 +62,9 @@ namespace Flexure {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // BLKPORT -- blocking listening port for the flexure daemon
       //
@@ -81,10 +82,9 @@ namespace Flexure {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // ASYNCPORT -- asynchronous broadcast message port for the flexure daemon
       //
@@ -102,30 +102,27 @@ namespace Flexure {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // ASYNCGROUP -- asynchronous broadcast group for the flexure daemon
       //
       if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //                     Each CONTROLLER is stored in an STL map indexed by motorname
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
         if ( this->interface.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
-          message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
       }
+      else
 
       // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
       //
@@ -145,9 +142,7 @@ namespace Flexure {
 
         if ( loc != _motormap.end() ) {
           this->interface.motorinterface.add_axis( AXIS );
-          message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
         else {
           message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
@@ -160,6 +155,95 @@ namespace Flexure {
           break;
         }
       }
+      else
+
+      // COLLIMATOR_POSITION_RXE
+      //
+      if ( config.param[entry] == "COLLIMATOR_POSITION_RXE" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RXE, 3 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // COLLIMATOR_POSITION_RYE
+      //
+      if ( config.param[entry] == "COLLIMATOR_POSITION_RYE" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RYE, 3 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // COLLIMATOR_POSITION_IXE
+      //
+      if ( config.param[entry] == "COLLIMATOR_POSITION_IXE" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IXE, 3 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // COLLIMATOR_POSITION_IYE
+      //
+      if ( config.param[entry] == "COLLIMATOR_POSITION_IYE" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IYE, 3 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // FLEXURE_POLY_IX
+      //
+      if ( config.param[entry] == "FLEXURE_POLY_IX" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IX, 20 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // FLEXURE_POLY_IY
+      //
+      if ( config.param[entry] == "FLEXURE_POLY_IY" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IY, 20 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // FLEXURE_POLY_RX
+      //
+      if ( config.param[entry] == "FLEXURE_POLY_RX" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RX, 20 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // FLEXURE_POLY_RY
+      //
+      if ( config.param[entry] == "FLEXURE_POLY_RY" ) {
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RY, 20 );
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
 
       // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
       //
@@ -181,22 +265,24 @@ namespace Flexure {
           logwrite( function, message.str() );
           return ERROR;
         }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
-        applied++;
+        numapplied++;
       }
 
+      if (numapplied>lastapplied) {
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
+      }
     } // end loop through the entries in the configuration file
 
     message.str("");
-    if (applied==0) {
+    if (numapplied==0) {
       message << "ERROR: ";
       error = ERROR;
     }
     else {
       error = NO_ERROR;
     }
-    message << "applied " << applied << " configuration lines to flexured";
+    message << "applied " << numapplied << " configuration lines to flexured";
     logwrite(function, message.str());
 
     if ( error == NO_ERROR ) error = this->interface.initialize_class();

@@ -13,6 +13,7 @@
 #include "logentry.h"
 #include "common.h"
 #include "flexured_commands.h"
+#include "flexure_compensator.h"
 #include <sys/stat.h>
 #include <map>
 #include <condition_variable>
@@ -51,6 +52,8 @@ namespace Flexure {
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
 
       Common::Queue async;
+
+      Compensator compensator;
 
       // PI Interface class for the Piezo type
       //

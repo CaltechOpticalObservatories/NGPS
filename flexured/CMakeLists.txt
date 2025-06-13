@@ -20,6 +20,7 @@ add_executable(flexured
         ${FLEXURED_DIR}/flexured.cpp 
         ${FLEXURED_DIR}/flexure_server.cpp 
         ${FLEXURED_DIR}/flexure_interface.cpp 
+        ${FLEXURED_DIR}/flexure_compensator.cpp
         )
 
 target_link_libraries(flexured
