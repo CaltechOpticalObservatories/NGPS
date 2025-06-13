@@ -1,3 +1,4 @@
+import datetime
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QLineEdit, QFormLayout, QFrame, QScrollArea, QSizePolicy, QHBoxLayout, QSpacerItem
 from PyQt5.QtCore import Qt, pyqtSignal
 import subprocess
@@ -13,6 +14,19 @@ class FocusTab(QWidget):
 
     def initUI(self):
         main_layout = QVBoxLayout()
+        
+        main_layout.setSpacing(10)  # Set spacing between sections to make it readable
+
+        # Create a horizontal layout for the label to center it
+        label_layout = QHBoxLayout()
+        label_layout.setContentsMargins(0, 0, 0, 0)  # Remove outer margins for the label layout
+
+        # Afternoon Tab Label
+        label = QLabel("Focus", self)
+        label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)  # Keep label fixed in height
+        label_layout.addWidget(label)
+
+        main_layout.addLayout(label_layout)  # Add label layout to the main layout
 
         # Scroll Area Widget to make layout scrollable
         scroll_area_widget = QWidget()  # Create a widget that will be scrolled
@@ -22,29 +36,29 @@ class FocusTab(QWidget):
         scroll_area_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
         
         # Run Focus Button (Before Band of Interest Section)
-        #self.run_focus_button = QPushButton("Run Focus", self)
-        #self.run_focus_button.setStyleSheet("""
-        #    QPushButton {
-        #       background-color: #4CAF50;  /* Green color */
-        #        color: white;
-        #        border-radius: 8px;
-        #        padding: 10px;
-        #        border: none;
-        #    }
-        #    QPushButton:hover {
-        #        background-color: #45a049;  /* Slightly darker green on hover */
-        #    }
-        #    QPushButton:pressed {
-        #        background-color: #3e8e41;  /* Darker green when pressed */
-        #    }
-        #""")        
-        #self.run_focus_button.clicked.connect(self.run_focus)
-        #self.run_focus_button.setFixedHeight(45)
-        #self.run_focus_button.setFixedWidth(300)
-        #self.run_focus_button_layout = QHBoxLayout()
-        #self.run_focus_button_layout.addWidget(self.run_focus_button)
-        #self.run_focus_button_layout.setAlignment(self.run_focus_button, Qt.AlignCenter)  # Center the button
-        #scroll_area_layout.addRow(self.run_focus_button_layout)
+        self.run_focus_button = QPushButton("Run Focus", self)
+        self.run_focus_button.setStyleSheet("""
+           QPushButton {
+              background-color: #4CAF50;  /* Green color */
+               color: white;
+               border-radius: 8px;
+               padding: 10px;
+               border: none;
+           }
+           QPushButton:hover {
+               background-color: #45a049;  /* Slightly darker green on hover */
+           }
+           QPushButton:pressed {
+               background-color: #3e8e41;  /* Darker green when pressed */
+           }
+        """)        
+        self.run_focus_button.clicked.connect(self.run_focus)
+        self.run_focus_button.setFixedHeight(45)
+        self.run_focus_button.setFixedWidth(300)
+        self.run_focus_button_layout = QHBoxLayout()
+        self.run_focus_button_layout.addWidget(self.run_focus_button)
+        self.run_focus_button_layout.setAlignment(self.run_focus_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(self.run_focus_button_layout)
 
         # Run ACAM Focus Button (Before Band of Interest Section)
         self.run_acam_focus_button = QPushButton("Run ACAM Focus", self)
@@ -352,10 +366,8 @@ class FocusTab(QWidget):
         # Set the layout of the main window
         self.setLayout(main_layout)
 
-        # Set window properties to ensure it maintains aspect ratio
-        self.setMinimumSize(800, 600)  # Minimum window size (adjust as needed)
-        self.setWindowTitle("Focus Tab")
-
+        # Final stretch to force scrolling if content exceeds visible area
+        scroll_area_widget.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
     
     def activate_boi_r(self):
         # Get the user input or use the placeholder (default values)
@@ -440,7 +452,9 @@ class FocusTab(QWidget):
         step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
 
         if value and upper and lower and step:
-            command = f"camstep focus all focusloop {value} {upper} {lower} {step}"
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            label = f"focusloop_{timestamp}"
+            command = f"camstep focus all {label} {value} {upper} {lower} {step}"
             self.run_command_in_background(command)
         else:
             print("Please provide valid input for focus loop parameters.")
@@ -453,7 +467,9 @@ class FocusTab(QWidget):
         step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
 
         if value and upper and lower and step:
-            command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            label = f"focusloop_{timestamp}"
+            command = f"camstep focus acam {label} {value} {upper} {lower} {step}"
             self.run_command_in_background(command)
         else:
             print("Please provide valid input for ACAM focus loop parameters.")
@@ -633,21 +649,6 @@ class FocusTab(QWidget):
                      background-color: lightgray;
                  }
              """)         
-        self.run_acam_focus_button.setStyleSheet("""
-             QPushButton {
-                 background-color: #4CAF50;  /* Green color */
-                 color: white;
-                 border-radius: 8px;
-                 padding: 10px;
-                 border: none;
-             }
-             QPushButton:hover {
-                 background-color: #45a049;  /* Slightly darker green on hover */
-             }
-             QPushButton:pressed {
-                 background-color: #3e8e41;  /* Darker green when pressed */
-             }
-         """)  
 
         command = f"camera basename focus"
         self.run_command(command)
@@ -675,6 +676,21 @@ class FocusTab(QWidget):
         self.open_focus_images()
 
         self.run_acam_focus_button.setEnabled(True)
+        self.run_acam_focus_button.setStyleSheet("""
+             QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+         """)  
 
     def run_command_in_background(self, command):
         """Run the command in a background thread."""

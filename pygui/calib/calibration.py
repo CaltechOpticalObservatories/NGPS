@@ -19,6 +19,7 @@ class CalibrationGUI(QMainWindow):
         self.log_text_edit = QTextEdit(self)
         self.log_text_edit.setReadOnly(True)  # Make it read-only to prevent user editing
         self.log_text_edit.setPlaceholderText("Log messages will appear here...")
+        self.log_text_edit.setMinimumHeight(150)
         
         # Define the logging callback function
         def log_message(msg):
@@ -39,17 +40,17 @@ class CalibrationGUI(QMainWindow):
         tab_widget.addTab(self.science_tab, "Science")
         tab_widget.addTab(self.commands_tab, "Commands")
 
-        # Set the tab widget as the central widget of the main window
+        # Set up layout and widgets
         main_layout = QVBoxLayout()
-        main_layout.addWidget(tab_widget)
+        main_layout.addWidget(tab_widget, stretch=3)         # Main tab area
 
         # Add the QTextEdit to the layout
-        main_layout.addWidget(self.log_text_edit)
+        main_layout.addWidget(self.log_text_edit, stretch=2) # Log window gets more vertical space
 
         # Optionally, add a button to clear the log
         clear_log_button = QPushButton("Clear Log", self)
         clear_log_button.clicked.connect(self.clear_log)
-        main_layout.addWidget(clear_log_button)
+        main_layout.addWidget(clear_log_button, stretch=0)   # Button doesn't need stretch
 
         # Create a QWidget and set the layout
         central_widget = QWidget(self)
