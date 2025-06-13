@@ -39,9 +39,9 @@ class CalibrationGUI(QMainWindow):
         tab_widget = QTabWidget()
 
         # Create the tabs
-        self.afternoon_tab = AfternoonTab(log_message_callback=log_message)
+        self.afternoon_tab = AfternoonTab(log_message_callback=self.log_signal.emit)
         self.commands_tab = CommandsTab()
-        self.focus_tab = FocusTab(log_message_callback=log_message)
+        self.focus_tab = FocusTab(log_message_callback=self.log_signal.emit)
         self.science_tab = ScienceTab()
 
         # Add tabs to the tab widget

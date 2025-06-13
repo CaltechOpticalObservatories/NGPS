@@ -8,7 +8,7 @@ class FocusTab(QWidget):
     output_signal = pyqtSignal(str)
     def __init__(self, log_message_callback):
         super().__init__()
-        self.log_message = log_message_callback  # Set log_message callback from the parent
+        self.log_message_callback = log_message_callback  # Set log_message callback from the parent
         self.initUI()
 
 
@@ -697,8 +697,8 @@ class FocusTab(QWidget):
 
     def run_command_in_background(self, command):
         """Run the command in a background thread."""
-        self.thread = AsyncCommandThread(command, self.log_message)
-        self.thread.output_signal.connect(self.log_message)
+        self.thread = AsyncCommandThread(command, self.log_message_callback)
+        self.thread.output_signal.connect(self.log_message_callback)
         self.thread.start()
 
     def run_command(self, command):
