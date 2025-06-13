@@ -134,7 +134,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.lamp_states_signal.connect(self.layout_service.update_lamps)
         self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
         self.zmq_status_service.airmass_signal.connect(self.layout_service.update_airmass)
-        self.zmq_status_service.slit_state_signal.connect(self.layout_service.update_slit_info_fields)
+        self.zmq_status_service.slit_info_signal.connect(self.layout_service.update_slit_info_fields)
 
 
     def on_date_time_changed(self, datetime):
