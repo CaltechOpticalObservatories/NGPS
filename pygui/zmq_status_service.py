@@ -128,8 +128,6 @@ class ZmqStatusService(QObject):
                         
                         # If the topic is "sequencerd"
                         if topic == "slitd":
-                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
-
                             slit_width = data.get("SLITW", None)
                             slit_offset = data.get("SLITO", None)
                             if slit_width is not None and slit_offset is not None:

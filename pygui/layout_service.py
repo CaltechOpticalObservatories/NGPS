@@ -975,11 +975,11 @@ class LayoutService:
         # Create the header row for "Lamps On/Off" and "Modulator On/Off"
         header_layout = QHBoxLayout()
 
-        lamps_header = QLabel("Lamps On/Off")
+        lamps_header = QLabel("Lamps")
         lamps_header.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(lamps_header)
 
-        modulator_header = QLabel("Modulator On/Off")
+        modulator_header = QLabel("Modulator")
         modulator_header.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(modulator_header)
 
@@ -1075,7 +1075,7 @@ class LayoutService:
 
         # Slit Width Offset field
         slit_width_layout = QVBoxLayout()
-        slit_width_label = QLabel("Slit Width Offset:")
+        slit_width_label = QLabel("Slitwidth & Offset:")
         self.slit_width_input = QLineEdit()
         self.slit_width_input.setReadOnly(True)  # Make it read-only
         self.slit_width_input.setText("N/A")  # Placeholder text or dynamically updated value
