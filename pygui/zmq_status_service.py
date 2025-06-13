@@ -119,14 +119,15 @@ class ZmqStatusService(QObject):
                     try:
                         data = json.loads(payload)
                         # Emit the message to the UI thread
-                        self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
                         # If the topic is "calibd", update modulator states
                         if topic == "calibd":
+                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
                             self.update_modulator_states(data)
 
                         # If the topic is "powerinfo", update lamp states
                         if topic == "powerd":
+                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
                             self.update_lamp_states(data)  # Update lamp statesi
 
                         # If the topic is "tcsd", handle TCS information
@@ -215,7 +216,6 @@ class ZmqStatusService(QObject):
 
         # Emit the AIRMASS value as a dedicated signal if available
         if airmass is not None:
-            print("airmass.")
             self.airmass_signal.emit(airmass)
         else:
             self.logger.warning("AIRMASS data is not available.")
