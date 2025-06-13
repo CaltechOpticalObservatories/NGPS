@@ -709,6 +709,9 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::camera_set");
     std::string reply;
     std::stringstream camcmd;
+    long error=NO_ERROR;
+
+    logwrite( function, "setting camera parameters");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
@@ -720,16 +723,23 @@ namespace Sequencer {
     //
     long exptime_msec = (long)( this->target.exptime_req * 1000 );
     camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime_msec;
+    error |= this->camerad.send( camcmd.str(), reply );
 
-    logwrite( function, "sending "+camcmd.str() );
+    // send binning parameters
+    // this is only good for I/R and will have to change to be more general
+    // because not all detectors will be oriented the same!
+    //
+    camcmd.str(""); camcmd << CAMERAD_BIN << " row " << this->target.binspat;
+    error |= this->camerad.send( camcmd.str(), reply );
+    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
+    error |= this->camerad.send( camcmd.str(), reply );
 
-    if ( this->camerad.send( camcmd.str(), reply ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR setting exptime" );
+    if ( error != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR setting camera" );
       this->thread_error_manager.set( THR_CAMERA_SET );
-      return ERROR;
     }
 
-    return NO_ERROR;
+    return error;
   }
   /***** Sequencer::Sequence::camera_set **************************************/
 
