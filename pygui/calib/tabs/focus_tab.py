@@ -661,10 +661,9 @@ class FocusTab(QWidget):
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         label = f"focusloop_{timestamp}"
-        command = f"camstep focus acam {label} {value} {upper} {lower} {step}"
 
         if value and upper and lower and step:
-            command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
+            command = f"camstep focus acam {label} {value} {upper} {lower} {step}"
             self.run_command(command)
         else:
             print("Please provide valid input for ACAM focus loop parameters.")
