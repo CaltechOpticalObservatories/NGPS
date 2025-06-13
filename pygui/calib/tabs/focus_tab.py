@@ -36,29 +36,29 @@ class FocusTab(QWidget):
         scroll_area_layout.setSpacing(10)  # Spacing between rows (increased for better readability)
         
         # Run Focus Button (Before Band of Interest Section)
-        self.run_focus_button = QPushButton("Run Focus", self)
-        self.run_focus_button.setStyleSheet("""
-           QPushButton {
-              background-color: #4CAF50;  /* Green color */
-               color: white;
-               border-radius: 8px;
-               padding: 10px;
-               border: none;
-           }
-           QPushButton:hover {
-               background-color: #45a049;  /* Slightly darker green on hover */
-           }
-           QPushButton:pressed {
-               background-color: #3e8e41;  /* Darker green when pressed */
-           }
-        """)        
-        self.run_focus_button.clicked.connect(self.run_focus)
-        self.run_focus_button.setFixedHeight(45)
-        self.run_focus_button.setFixedWidth(300)
-        self.run_focus_button_layout = QHBoxLayout()
-        self.run_focus_button_layout.addWidget(self.run_focus_button)
-        self.run_focus_button_layout.setAlignment(self.run_focus_button, Qt.AlignCenter)  # Center the button
-        scroll_area_layout.addRow(self.run_focus_button_layout)
+        # self.run_focus_button = QPushButton("Run Focus", self)
+        # self.run_focus_button.setStyleSheet("""
+        #    QPushButton {
+        #       background-color: #4CAF50;  /* Green color */
+        #        color: white;
+        #        border-radius: 8px;
+        #        padding: 10px;
+        #        border: none;
+        #    }
+        #    QPushButton:hover {
+        #        background-color: #45a049;  /* Slightly darker green on hover */
+        #    }
+        #    QPushButton:pressed {
+        #        background-color: #3e8e41;  /* Darker green when pressed */
+        #    }
+        # """)        
+        # self.run_focus_button.clicked.connect(self.run_focus)
+        # self.run_focus_button.setFixedHeight(45)
+        # self.run_focus_button.setFixedWidth(300)
+        # self.run_focus_button_layout = QHBoxLayout()
+        # self.run_focus_button_layout.addWidget(self.run_focus_button)
+        # self.run_focus_button_layout.setAlignment(self.run_focus_button, Qt.AlignCenter)  # Center the button
+        # scroll_area_layout.addRow(self.run_focus_button_layout)
 
         # Run ACAM Focus Button (Before Band of Interest Section)
         self.run_acam_focus_button = QPushButton("Run ACAM Focus", self)
@@ -658,6 +658,10 @@ class FocusTab(QWidget):
         upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
         lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
         step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        label = f"focusloop_{timestamp}"
+        command = f"camstep focus acam {label} {value} {upper} {lower} {step}"
 
         if value and upper and lower and step:
             command = f"camstep focus acam focusloop {value} {upper} {lower} {step}"
