@@ -953,6 +953,8 @@ class LayoutService:
                 # Determine if the modulator is on or off based on the modulator status
                 modulator_checkbox.setChecked(modulator_status.startswith("on"))  # "on" means checked, "off" means unchecked
 
+    def update_slit_info_fields(self, slit_width, slit_offset):
+        self.slit_width_input.setText(f"{slit_width:.3f} / {slit_offset:.3f}")
 
     def create_second_column_top_half(self):
         """Create the top half of the second column with 'Status', Calibration Lamps, and additional status fields"""

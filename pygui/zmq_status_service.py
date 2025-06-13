@@ -15,6 +15,8 @@ class ZmqStatusService(QObject):
     modulator_states_signal = pyqtSignal(dict)
 
     airmass_signal = pyqtSignal(float) 
+    
+    slit_info_signal = pyqtSignal(float, float)
 
     def __init__(self, parent, broker_publish_endpoint="tcp://127.0.0.1:5556"):
         super().__init__()
@@ -127,6 +129,11 @@ class ZmqStatusService(QObject):
                         # If the topic is "sequencerd"
                         if topic == "slitd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+
+                            slit_width = data.get("SLITW", None)
+                            slit_offset = data.get("SLITO", None)
+                            if slit_width is not None and slit_offset is not None:
+                                self.slit_info_signal.emit(slit_width, slit_offset)
 
                         # If the topic is "calibd", update modulator states
                         if topic == "calibd":
