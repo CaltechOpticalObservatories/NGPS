@@ -128,7 +128,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("powerd")
         self.zmq_status_service.subscribe_to_topic("calibd")
         self.zmq_status_service.subscribe_to_topic("tcsd")
-        self.zmq_status_service.subscribe_to_topic("sequencerd")
+        self.zmq_status_service.subscribe_to_topic("acamd")
         self.zmq_status_service.subscribe_to_topic("slitd")
 
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
