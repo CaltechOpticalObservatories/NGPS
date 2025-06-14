@@ -2302,16 +2302,6 @@ namespace Acam {
       // close the Andor
       //
       error |= this->camera.close();
-
-      // close the database connection
-      // this may throw an exception
-      //
-      try { this->database.close(); }
-      catch ( const std::exception &e ) {
-        message.str(""); message << "ERROR " << e.what();
-        logwrite( function, message.str() );
-        return ERROR;
-      }
     }
 
     // close connection to tcsd

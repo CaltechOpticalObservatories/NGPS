@@ -11,6 +11,11 @@
 #include <vector>
 #include <memory>
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <map>
+#include <string>
 #include "logentry.h"
 
 
@@ -21,12 +26,88 @@
  */
 namespace Database {
 
+  constexpr int DBPOOLSIZE = 10;
+
   void get_mysql_type( mysqlx::Value value, std::string &type );
+
+  /***** Database::DatabasePool ***********************************************/
+  /**
+   * @class    DatabasePool
+   * @brief    manages a pool of database sessions
+   * @details  Provides for safe multi-threaded access to a MySQL database by
+   *           returning a unique connection for each request. A mutex and
+   *           condition variable are used for thread synchronization. A pool
+   *           of established connections improves performance.
+   *
+   */
+  class DatabasePool {
+    private:
+      // For these mysqlx objects an instance cannot be directly created
+      // so instead create pointers and wrap them into one struct.
+      struct DatabaseHandle {
+        std::unique_ptr<mysqlx::Session> session;
+        std::unique_ptr<mysqlx::Table>   table;
+        std::unique_ptr<mysqlx::Schema>  schema;
+      };
+
+      // create a single mysqlx database connection
+      std::shared_ptr<DatabaseHandle> _create_handle();
+
+      // queue of DatabaseHandle
+      std::queue<std::shared_ptr<DatabaseHandle>> _db_queue;
+
+      // This is the database info needed to construct a
+      // Database object and connect to a table in the database.
+      std::string _dbhost;
+      int         _dbport;
+      std::string _dbuser;
+      std::string _dbpass;
+      std::string _dbschema;
+      std::string _dbtable;
+
+      int _poolsz;
+
+      std::mutex _mtx;
+      std::condition_variable _cv;
+
+      /**
+       * @brief  helper class to ensure handles are always returned
+       */
+      class HandleGuard {
+        private:
+          DatabasePool* _pool;                      // pointer to pool
+          std::shared_ptr<DatabaseHandle> _handle;  // borrowed database handle
+        public:
+          /// borrows a handle from the pool on construction
+          HandleGuard(DatabasePool* pool) : _pool(pool), _handle(pool->borrow_handle()) { }
+
+          /// when destructed the handle is returned
+          ~HandleGuard() { if (_handle) _pool->return_handle(_handle); }
+
+          /// returns the handle that was borrowed on construction
+          std::shared_ptr<DatabasePool::DatabaseHandle> get() { return _handle; }
+      };
+
+    public:
+      DatabasePool(const std::string &host, int port, const std::string &user,
+                   const std::string &pass, const std::string &schema,
+                   const std::string &table, int poolsz=DBPOOLSIZE);
+      ~DatabasePool();
+
+      std::shared_ptr<DatabaseHandle> borrow_handle(int timeout_ms=5000);
+
+      void return_handle(std::shared_ptr<DatabaseHandle> db);
+
+      void write(std::map<std::string, mysqlx::Value> data);
+  };
+  /***** Database::DatabasePool ***********************************************/
+
 
   /***** Database::Database ***************************************************/
   /**
-   * @class  Database
-   * @brief  constructs a MySQL database object
+   * @class    Database
+   * @brief    provides an interface to a MySQL database
+   * @details  Makes use of DatabasePool for safe multi-threaded access.
    *
    */
   class Database {
@@ -43,17 +124,6 @@ namespace Database {
       std::string _dbtable;
 
       std::atomic<bool> _dbconfigured;
-      std::atomic<bool> _dbconnected;
-      std::atomic<bool> _sessionopen;
-
-      // For these mysqlx objects an instance cannot be directly created
-      // so instead create pointers.
-      //
-      std::unique_ptr<mysqlx::Session> _session;
-      std::unique_ptr<mysqlx::Table>   _table;
-      std::unique_ptr<mysqlx::Schema>  _schema;
-
-      void _create_connection();
 
       // These map stores in memory the record to be written to
       // the database. The data is essentially a variant type so
@@ -63,9 +133,11 @@ namespace Database {
 
       std::mutex _data_mtx;       ///< protecs _data map access
 
+      std::unique_ptr<DatabasePool> _pool;
+      void _initialize_pool();
+
     public:
-      Database() : _dbconfigured(false), _dbconnected(false), _sessionopen(false),
-                   _session(nullptr), _table(nullptr), _schema(nullptr) { }
+      Database() : _dbconfigured(false) { }
       Database( std::vector<std::string> info );
       Database( std::string host,
                 int         port,
@@ -76,12 +148,8 @@ namespace Database {
 
       ~Database();
 
-      inline bool dbconfigured() { return _dbconfigured; }
-      inline bool dbconnected()  { return _dbconnected; }
-      inline bool sessionopen()  { return _sessionopen; }
-
-      void initialize_class( std::vector<std::string> info );
-      void close();
+      void initialize_class();
+      void initialize_class(std::vector<std::string> dbinfo);
 
       /***** Database::Database::add_key_val **********************************/
       /**
