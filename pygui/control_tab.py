@@ -109,6 +109,23 @@ class ControlTab(QDialog):
         slit_angle_layout = QHBoxLayout()
         slit_angle_layout.addWidget(self.slit_angle_label)
         slit_angle_layout.addWidget(self.slit_angle_box)
+    
+        self.bin_spect_label = QLabel("Bin Spectral:")
+        self.bin_spect_box = QLineEdit()
+        self.bin_spect_box.setPlaceholderText("Enter Value")
+        self.bin_spect_box.setFixedWidth(120)
+        
+        self.bin_spat_label = QLabel("Bin Spatial:")
+        self.bin_spat_box = QLineEdit()
+        self.bin_spat_box.setPlaceholderText("Enter Value")
+        self.bin_spat_box.setFixedWidth(120)
+
+        bin_spect_layout = QHBoxLayout()
+        bin_spect_layout.addWidget(self.bin_spect_label)
+        bin_spect_layout.addWidget(self.bin_spect_box)
+        bin_spat_layout = QHBoxLayout()
+        bin_spat_layout.addWidget(self.bin_spat_label)
+        bin_spat_layout.addWidget(self.bin_spat_box)
 
         self.num_of_exposures_label = QLabel("Number of Exposures:")
         self.num_of_exposures_box = QLineEdit()
@@ -122,6 +139,8 @@ class ControlTab(QDialog):
         row2_layout.addLayout(exposure_time_layout)
         row2_layout.addLayout(slit_width_layout)
         row2_layout.addLayout(slit_angle_layout)
+        row2_layout.addLayout(bin_spect_layout)
+        row2_layout.addLayout(bin_spat_layout)
         row2_layout.addLayout(num_of_exposures_layout)
 
         # Confirm Button

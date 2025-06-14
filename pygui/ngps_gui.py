@@ -24,6 +24,8 @@ class NgpsGUI(QMainWindow):
         self.current_dec = None
         self.current_offset_ra = None
         self.current_offset_dec = None
+        self.current_bin_spect = None
+        self.current_bin_spat = None
         self.num_of_exposures = None
         self.user_set_data = {}
         self.all_targets = None

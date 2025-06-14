@@ -703,7 +703,7 @@ class FocusTab(QWidget):
 
     def run_command(self, command):
          """Run command."""
-         self.output_signal.connect(self.log_message)
+         self.output_signal.connect(self.log_message_callback)
          
          try:
              # Run the command exactly as it is

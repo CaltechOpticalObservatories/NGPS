@@ -821,6 +821,18 @@ class LayoutService:
                 if header == 'OFFSET_DEC':
                     offset_dec = value  # Store the DEC
                     print(f"Found OFFSET_DEC: {offset_dec}")  # Print the found DEC 
+
+                # Check if the header is 'BINSPECT' and extract its value
+                if header == 'BINSPECT':
+                    binspect = value  
+                    print(f"Found BINSPECT: {binspect}") 
+                    self.control_tab.bin_spect_box.setText(binspect)
+
+                # Check if the header is 'BINSPAT' and extract its value
+                if header == 'BINSPAT':
+                    binspat = value 
+                    print(f"Found BINSPAT: {binspat}")
+                    self.control_tab.bin_spat_box.setText(binspat) 
                 
                 # If the header is 'NAME', store it as the target name
                 if header == 'NAME':
@@ -847,6 +859,8 @@ class LayoutService:
                 self.parent.current_offset_ra = offset_ra
                 self.parent.current_offset_dec = offset_dec
                 self.parent.num_of_exposures = num_of_exposures
+                self.parent.current_bin_spect = binspect
+                self.parent.current_bin_spat = binspat
             
             if target_name:
                 self.control_tab.target_name_label.setText(f"Selected Target: {target_name}")
