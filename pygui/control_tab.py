@@ -694,6 +694,8 @@ class ControlTab(QDialog):
         slit_width = self.slit_width_box.text()
         slit_angle = self.slit_angle_box.text()
         num_of_exposures = self.num_of_exposures_box.text()
+        bin_spect = self.bin_spect_box.text()
+        bin_spat = self.bin_spat_box.text()
 
         # Re-enable the button and reset its appearance
         self.go_button.setEnabled(True)
@@ -714,7 +716,7 @@ class ControlTab(QDialog):
             }
         """)
         
-        if exposure_time and slit_width and slit_angle and num_of_exposures:
+        if exposure_time and slit_width and slit_angle and num_of_exposures and bin_spect and bin_spat:
             # Handle the confirmed changes, e.g., update internal state or UI
             print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")
             self.on_exposure_time_changed()
@@ -820,3 +822,17 @@ class ControlTab(QDialog):
 
         if (self.parent.current_observation_id):
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "nexp", num_of_exposures)
+
+    def bin_spect_changed(self):
+        # Retrieve the bin spectral and send the query to the database
+        bin_spect = self.bin_spect_box.text()
+
+        if (self.parent.current_observation_id):
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "BINSPECT", bin_spect)
+
+    def bin_spat_changed(self):
+        # Retrieve the bin spatial and send the query to the database
+        bin_spat = self.bin_spat_box.text()
+
+        if (self.parent.current_observation_id):
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "BINSPAT", bin_spat)
