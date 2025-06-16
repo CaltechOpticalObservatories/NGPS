@@ -1120,8 +1120,8 @@ namespace Slicecam {
     Common::extract_telemetry_value( jmessage, "SLITO",  telem.slitoffset );
     Common::extract_telemetry_value( jmessage, "SLITW",  telem.slitwidth );
 
-    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
-    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
+    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
+    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
   }
 
 
