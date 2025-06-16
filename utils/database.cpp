@@ -12,9 +12,8 @@ namespace Database {
 
   /***** DatabasePool::DatabasePool *******************************************/
   /**
-   * @brief      DatabasePool class destructor
-   * @details    connections will be automatically closed and queue emptied
-   *             when the object is destroyed
+   * @brief      DatabasePool class constructor
+   * @details    creates a pool (queue) of connected database sessions on construction
    *
    */
   DatabasePool::DatabasePool(const std::string &host, int port, const std::string &user,
@@ -62,58 +61,74 @@ namespace Database {
   std::shared_ptr<DatabasePool::DatabaseHandle> DatabasePool::_create_handle() {
     auto db = std::make_shared<DatabaseHandle>();
 
-    try {
-      db->session = std::make_unique<mysqlx::Session>( mysqlx::SessionOption::HOST, _dbhost,
-                                                       mysqlx::SessionOption::PORT, _dbport,
-                                                       mysqlx::SessionOption::USER, _dbuser,
-                                                       mysqlx::SessionOption::PWD,  _dbpass );
-      db->schema  = std::make_unique<mysqlx::Schema>( *(db->session), _dbschema );
-      db->table   = std::make_unique<mysqlx::Table>( db->schema->getTable( _dbtable ) );
-    }
-    catch ( const mysqlx::Error &err ) {
-      throw mysqlx::Error( err );
-    }
-    catch ( std::exception &e ) {
-      throw std::exception( e );
-    }
+    db->session = std::make_unique<mysqlx::Session>( mysqlx::SessionOption::HOST, _dbhost,
+                                                     mysqlx::SessionOption::PORT, _dbport,
+                                                     mysqlx::SessionOption::USER, _dbuser,
+                                                     mysqlx::SessionOption::PWD,  _dbpass );
+    db->schema  = std::make_unique<mysqlx::Schema>( *(db->session), _dbschema );
+    db->table   = std::make_unique<mysqlx::Table>( db->schema->getTable( _dbtable ) );
 
     return db;
   }
   /***** DatabasePool::_create_handle *****************************************/
 
 
-  /***** DatabasePool::borrow_handle ******************************************/
+  /***** DatabasePool::_test_connection ***************************************/
+  /**
+   * @brief      tests db connection using a simple table query
+   * @paramm[in] db  database handle
+   * @return     true|false
+   *
+   */
+  bool DatabasePool::_test_connection(std::shared_ptr<DatabasePool::DatabaseHandle> db) {
+    // pass-fail
+    try {
+      db->session->sql("SELECT 1").execute();
+      return true;                             // it either works,
+    }
+    catch (...) { return false; }              // or it doesn't.
+  }
+  /***** DatabasePool::_test_connection ***************************************/
+
+
+  /***** DatabasePool::_borrow_handle *****************************************/
   /**
    * @brief      get a db handle from the pool
+   * @details    Database connections are always tested before given out, and
+   *             if bad/stale then a new one is opened.
    * @return     shared pointer to a DatabaseHandle
    *
    */
-  std::shared_ptr<DatabasePool::DatabaseHandle> DatabasePool::borrow_handle(int timeout_ms) {
+  std::shared_ptr<DatabasePool::DatabaseHandle> DatabasePool::_borrow_handle(int timeout_ms) {
     std::unique_lock<std::mutex> lock(_mtx);
     if (!_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] {return !_db_queue.empty(); })) {
       throw std::runtime_error("timeout waiting for database connection");
     }
     auto db = _db_queue.front();
     _db_queue.pop();
+
+    // make a new handle if this one is bad
+    if (!_test_connection(db)) db = _create_handle();
+
     return db;
   }
-  /***** DatabasePool::borrow_handle ******************************************/
+  /***** DatabasePool::_borrow_handle *****************************************/
 
 
-  /***** DatabasePool::return_handle ******************************************/
+  /***** DatabasePool::_return_handle *****************************************/
   /**
    * @brief      returns a db handle back to the pool
    * @param[in]  db  shared pointer to a DatabaseHandle
    *
    */
-  void DatabasePool::return_handle(std::shared_ptr<DatabasePool::DatabaseHandle> db) {
+  void DatabasePool::_return_handle(std::shared_ptr<DatabasePool::DatabaseHandle> db) {
     {
     std::lock_guard<std::mutex> lock(_mtx);
     _db_queue.push(db);
     }
     _cv.notify_one();
   }
-  /***** DatabasePool::return_handle ******************************************/
+  /***** DatabasePool::_return_handle *****************************************/
 
 
   /***** DatabasePool::write **************************************************/
@@ -127,10 +142,6 @@ namespace Database {
    *
    */
   void DatabasePool::write( std::map<std::string, mysqlx::Value> data ) {
-
-    HandleGuard handle(this);
-
-    auto db = handle.get();
 
     if (data.empty()) throw std::runtime_error("no data");
 
@@ -153,6 +164,10 @@ namespace Database {
     // Insert a row into the database table
     //
     try {
+      // safely get a DB handle from the pool
+      HandleGuard handle(this);
+      auto db = handle.get();
+
       db->table->insert( cols ).values( vals ).execute();
     }
     catch ( const std::exception &err ) {
@@ -280,9 +295,9 @@ namespace Database {
         _dbconfigured = true;
         _initialize_pool();
       }
-      else throw std::runtime_error("bad or missing database info");
+      else throw std::runtime_error("bad or missing database info (check config file)");
     }
-    catch( std::exception &e ) {
+    catch( const std::exception &e ) {
       throw;
     }
   }
@@ -295,7 +310,7 @@ namespace Database {
    */
   void Database::initialize_class(std::vector<std::string> dbinfo) {
     if ( dbinfo.size() != 6 ) {
-      throw std::invalid_argument( "bad info vector size constructing Database object" );
+      throw std::invalid_argument( "bad info vector size constructing Database object (check config file)" );
     }
 
     try {
@@ -308,7 +323,7 @@ namespace Database {
 
       initialize_class();
     }
-    catch( std::exception &e ) {
+    catch( const std::exception &e ) {
       throw;
     }
   }
@@ -322,8 +337,6 @@ namespace Database {
    *
    */
   void Database::_initialize_pool() {
-    std::string function = "Database::Database::_initialize_pool";
-
     if (!_dbconfigured) throw std::runtime_error("database not configured");
 
     // create a pool which will own all DB connections

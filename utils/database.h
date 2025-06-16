@@ -34,7 +34,8 @@ namespace Database {
   /**
    * @class    DatabasePool
    * @brief    manages a pool of database sessions
-   * @details  Provides for safe multi-threaded access to a MySQL database by
+   * @details  This uses a queue object to create a pool of database sessions,
+   *           to provides for safe multi-threaded access to a MySQL database by
    *           returning a unique connection for each request. A mutex and
    *           condition variable are used for thread synchronization. A pool
    *           of established connections improves performance.
@@ -50,11 +51,12 @@ namespace Database {
         std::unique_ptr<mysqlx::Schema>  schema;
       };
 
-      // create a single mysqlx database connection
-      std::shared_ptr<DatabaseHandle> _create_handle();
+      std::queue<std::shared_ptr<DatabaseHandle>> _db_queue;                    ///< pool of database connections
 
-      // queue of DatabaseHandle
-      std::queue<std::shared_ptr<DatabaseHandle>> _db_queue;
+      std::shared_ptr<DatabaseHandle> _create_handle();                         /// create a single mysqlx database connection
+      std::shared_ptr<DatabaseHandle> _borrow_handle(int timeout_ms=5000);      ///< get connection from pool
+      void _return_handle(std::shared_ptr<DatabaseHandle> db);                  ///< return connection to pool
+      bool _test_connection(std::shared_ptr<DatabasePool::DatabaseHandle> db);  ///< test connection
 
       // This is the database info needed to construct a
       // Database object and connect to a table in the database.
@@ -79,10 +81,10 @@ namespace Database {
           std::shared_ptr<DatabaseHandle> _handle;  // borrowed database handle
         public:
           /// borrows a handle from the pool on construction
-          HandleGuard(DatabasePool* pool) : _pool(pool), _handle(pool->borrow_handle()) { }
+          HandleGuard(DatabasePool* pool) : _pool(pool), _handle(pool->_borrow_handle()) { }
 
           /// when destructed the handle is returned
-          ~HandleGuard() { if (_handle) _pool->return_handle(_handle); }
+          ~HandleGuard() { if (_handle) _pool->_return_handle(_handle); }
 
           /// returns the handle that was borrowed on construction
           std::shared_ptr<DatabasePool::DatabaseHandle> get() { return _handle; }
@@ -93,10 +95,6 @@ namespace Database {
                    const std::string &pass, const std::string &schema,
                    const std::string &table, int poolsz=DBPOOLSIZE);
       ~DatabasePool();
-
-      std::shared_ptr<DatabaseHandle> borrow_handle(int timeout_ms=5000);
-
-      void return_handle(std::shared_ptr<DatabaseHandle> db);
 
       void write(std::map<std::string, mysqlx::Value> data);
   };
@@ -133,7 +131,7 @@ namespace Database {
 
       std::mutex _data_mtx;       ///< protecs _data map access
 
-      std::unique_ptr<DatabasePool> _pool;
+      std::unique_ptr<DatabasePool> _pool;  ///< this is the pool of database connections
       void _initialize_pool();
 
     public:
