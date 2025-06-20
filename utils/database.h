@@ -16,6 +16,7 @@
 #include <queue>
 #include <map>
 #include <string>
+#include <optional>
 #include "logentry.h"
 
 
@@ -30,82 +31,80 @@ namespace Database {
 
   void get_mysql_type( mysqlx::Value value, std::string &type );
 
-  /***** Database::DatabasePool ***********************************************/
+  /***** Database::SessionPool ************************************************/
   /**
-   * @class    DatabasePool
+   * @class    SessionPool
    * @brief    manages a pool of database sessions
    * @details  This uses a queue object to create a pool of database sessions,
    *           to provides for safe multi-threaded access to a MySQL database by
    *           returning a unique connection for each request. A mutex and
    *           condition variable are used for thread synchronization. A pool
-   *           of established connections improves performance.
+   *           of established connections improves performance. Only the session
+   *           is pooled; the schema and table names must be provided.
    *
    */
-  class DatabasePool {
+  class SessionPool {
     private:
-      // For these mysqlx objects an instance cannot be directly created
-      // so instead create pointers and wrap them into one struct.
-      struct DatabaseHandle {
-        std::unique_ptr<mysqlx::Session> session;
-        std::unique_ptr<mysqlx::Table>   table;
-        std::unique_ptr<mysqlx::Schema>  schema;
-      };
+      std::queue<std::shared_ptr<mysqlx::Session>> _queue;                    ///< pool of database sessions is a queue
 
-      std::queue<std::shared_ptr<DatabaseHandle>> _db_queue;                    ///< pool of database connections
+      std::shared_ptr<mysqlx::Session> _create_session();                     /// create a single mysqlx database session
+      std::shared_ptr<mysqlx::Session> _borrow_session(int timeout_ms=5000);  ///< get a session from pool
+      void _return_session(std::shared_ptr<mysqlx::Session> db);              ///< return a session to pool
+      bool _test_session(std::shared_ptr<mysqlx::Session> db);                ///< test a session
 
-      std::shared_ptr<DatabaseHandle> _create_handle();                         /// create a single mysqlx database connection
-      std::shared_ptr<DatabaseHandle> _borrow_handle(int timeout_ms=5000);      ///< get connection from pool
-      void _return_handle(std::shared_ptr<DatabaseHandle> db);                  ///< return connection to pool
-      bool _test_connection(std::shared_ptr<DatabasePool::DatabaseHandle> db);  ///< test connection
-
-      // This is the database info needed to construct a
-      // Database object and connect to a table in the database.
+      // This is the minimum info needed to create a database session/connection.
       std::string _dbhost;
       int         _dbport;
       std::string _dbuser;
       std::string _dbpass;
-      std::string _dbschema;
-      std::string _dbtable;
 
-      int _poolsz;
-
-      std::mutex _mtx;
+      std::mutex _mtx;        ///< protects access to the pool
       std::condition_variable _cv;
 
       /**
-       * @brief  helper class to ensure handles are always returned
+       * @brief   helper class to ensure sessions are always returned
+       * @details By wrapping the session pool in this class, if something
+       *          causes the class to go out of scope, this class's destructor
+       *          guarantees the session is returned to the pool.
        */
-      class HandleGuard {
+      class SessionGuard {
         private:
-          DatabasePool* _pool;                      // pointer to pool
-          std::shared_ptr<DatabaseHandle> _handle;  // borrowed database handle
+          SessionPool* _pool;                         // pointer to pool to manage
+          std::shared_ptr<mysqlx::Session> _session;  // borrowed database session
         public:
-          /// borrows a handle from the pool on construction
-          HandleGuard(DatabasePool* pool) : _pool(pool), _handle(pool->_borrow_handle()) { }
+          /// borrows a session from the pool on construction
+          SessionGuard(SessionPool* pool) : _pool(pool), _session(pool->_borrow_session()) { }
 
-          /// when destructed the handle is returned
-          ~HandleGuard() { if (_handle) _pool->_return_handle(_handle); }
+          /// when destructed the session is returned
+          ~SessionGuard() { if (_session) _pool->_return_session(_session); }
 
-          /// returns the handle that was borrowed on construction
-          std::shared_ptr<DatabasePool::DatabaseHandle> get() { return _handle; }
+          /// returns the session that was borrowed on construction
+          std::shared_ptr<mysqlx::Session> get() { return _session; }
       };
 
     public:
-      DatabasePool(const std::string &host, int port, const std::string &user,
-                   const std::string &pass, const std::string &schema,
-                   const std::string &table, int poolsz=DBPOOLSIZE);
-      ~DatabasePool();
+      SessionPool(const std::string &host, int port, const std::string &user, const std::string &pass);
+      ~SessionPool();
 
-      void write(std::map<std::string, mysqlx::Value> data);
+      void write(const std::string &schemaname, const std::string &tablename,
+                 const std::map<std::string, mysqlx::Value> &data);
+
+      mysqlx::RowResult read(const std::string &schemaname, const std::string &tablename,
+                             const std::vector<std::string> &columns,
+                             const std::string &where_clause,
+                             const std::map<std::string, mysqlx::Value> &bind_params={},
+                             const std::string &order_by = "",
+                             std::optional<int> limit = std::nullopt,
+                             std::optional<int> offset = std::nullopt);
   };
-  /***** Database::DatabasePool ***********************************************/
+  /***** Database::SessionPool ************************************************/
 
 
   /***** Database::Database ***************************************************/
   /**
    * @class    Database
    * @brief    provides an interface to a MySQL database
-   * @details  Makes use of DatabasePool for safe multi-threaded access.
+   * @details  Makes use of SessionPool for safe multi-threaded access.
    *
    */
   class Database {
@@ -118,8 +117,9 @@ namespace Database {
       int         _dbport;
       std::string _dbuser;
       std::string _dbpass;
-      std::string _dbschema;
-      std::string _dbtable;
+
+      std::string _dbschema;  ///< optional on construction
+      std::string _dbtable;   ///< optional on construction
 
       std::atomic<bool> _dbconfigured;
 
@@ -131,23 +131,54 @@ namespace Database {
 
       std::mutex _data_mtx;       ///< protecs _data map access
 
-      std::unique_ptr<DatabasePool> _pool;  ///< this is the pool of database connections
+      std::unique_ptr<SessionPool> _pool;  ///< this is the pool of database connections
       void _initialize_pool();
 
     public:
       Database() : _dbconfigured(false) { }
       Database( std::vector<std::string> info );
+      // schema and table are optional at construction,
+      // specify both, neither, or schema only.
       Database( std::string host,
                 int         port,
                 std::string user,
                 std::string pass,
-                std::string schema,
-                std::string table );
+                std::string schema="",
+                std::string table="" );
 
       ~Database();
 
       void initialize_class();
       void initialize_class(std::vector<std::string> dbinfo);
+
+      mysqlx::RowResult read(const std::vector<std::string> &columns,
+                             const std::string &where_clause,
+                             const std::map<std::string, mysqlx::Value> &bind_params,
+                             const std::string &order_by = "",
+                             std::optional<int> limit = std::nullopt,
+                             std::optional<int> offset = std::nullopt);
+      mysqlx::RowResult read(const std::string &tablename,
+                             const std::vector<std::string> &columns,
+                             const std::string &where_clause,
+                             const std::map<std::string, mysqlx::Value> &bind_params,
+                             const std::string &order_by = "",
+                             std::optional<int> limit = std::nullopt,
+                             std::optional<int> offset = std::nullopt);
+      mysqlx::RowResult read(const std::string &schemaname, const std::string &tablename,
+                             const std::vector<std::string> &columns,
+                             const std::string &where_clause,
+                             const std::map<std::string, mysqlx::Value> &bind_params={},
+                             const std::string &order_by = "",
+                             std::optional<int> limit = std::nullopt,
+                             std::optional<int> offset = std::nullopt);
+
+      void write();                                             ///< write class map
+
+      void write(const std::map<std::string, mysqlx::Value> &data);
+      void write(const std::string &tablename,
+                 const std::map<std::string, mysqlx::Value> &data);
+      void write(const std::string &schemaname, const std::string &tablename,
+                 const std::map<std::string, mysqlx::Value> &data);
 
       /***** Database::Database::add_key_val **********************************/
       /**
@@ -198,9 +229,6 @@ namespace Database {
         }
       }
       /***** Database::Database::add_from_json ********************************/
-
-      void write( std::map<std::string, mysqlx::Value> data );  ///< write passed map
-      void write();                                             ///< write class map
 
       /**
        * @brief      writes an STL map of any single type rather than mysqlx::Value
