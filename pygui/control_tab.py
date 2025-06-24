@@ -139,8 +139,8 @@ class ControlTab(QDialog):
         row2_layout.addLayout(exposure_time_layout)
         row2_layout.addLayout(slit_width_layout)
         row2_layout.addLayout(slit_angle_layout)
-        row2_layout.addLayout(bin_spect_layout)
         row2_layout.addLayout(bin_spat_layout)
+        row2_layout.addLayout(bin_spect_layout)
         row2_layout.addLayout(num_of_exposures_layout)
 
         # Confirm Button
@@ -723,6 +723,8 @@ class ControlTab(QDialog):
             self.on_slit_width_changed()
             self.on_slit_angle_changed()  # Handle slit angle change as well
             self.num_of_exposures_changed()
+            self.bin_spect_changed()
+            self.bin_spat_changed()
 
             # Disable the button again after confirmation
             self.confirm_button.setEnabled(False)

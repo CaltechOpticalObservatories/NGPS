@@ -497,8 +497,19 @@ class FocusTab(QWidget):
 
     def open_focus_images(self):
         """Run the exact eog command to open images."""
-        command = "eog focus_spec_I.png focus_spec_R.png"
+        command = "eog /home/observer/focus/focus_spec_I.png /home/observer/focus/focus_spec_R.png"
         
+        try:
+            # Run the command exactly as it is
+            subprocess.run(command, shell=True, check=True)
+            print("Command executed successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred: {e.stderr}")
+
+    def open_focus_acam_images(self):
+        """Run the exact eog command to open images."""
+        command = "eog /home/observer/focus/focus_andor_FWHM_acam.png"
+
         try:
             # Run the command exactly as it is
             subprocess.run(command, shell=True, check=True)
@@ -676,7 +687,7 @@ class FocusTab(QWidget):
         command = "bash calib/andor.sh"
         self.run_command(command)
 
-        self.open_focus_images()
+        self.open_focus_acam_images()
 
         self.run_acam_focus_button.setEnabled(True)
         self.run_acam_focus_button.setStyleSheet("""
