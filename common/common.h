@@ -661,12 +661,12 @@ namespace Common {
 
         // if requested type_in not a recognized type then ignore it
         //
-        if ( !type_in.empty() && (type_in != "DOUBLE" ||
-                                  type_in != "FLOAT"  ||
-                                  type_in != "INT"    ||
-                                  type_in != "LONG"   ||
-                                  type_in != "BOOL"   ||
-                                  type_in != "STRING" ) ) type_in.clear();
+        if ( type_in != "DOUBLE" &&
+             type_in != "FLOAT"  &&
+             type_in != "INT"    &&
+             type_in != "LONG"   &&
+             type_in != "BOOL"   &&
+             type_in != "STRING" ) type_in.clear();
 
         // insert new entry into the database
         //
@@ -678,8 +678,8 @@ namespace Common {
 #ifdef LOGLEVEL_DEBUG
         std::string function = "Common::FitsKeys::addkey";
         std::stringstream message;
-        message << "[DEBUG] added key " << key << "=" << value  << " (" << type << ") // " << comment;
-        if (!type_in.empty()) message << " *** override type as " << type_in << " ***";
+        message << "[DEBUG] added key " << key << "=" << value  << " (" << this->keydb[key].keytype << ") // " << comment
+                << " type_in=" << type_in << " resolved type=" << type;
         logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
@@ -837,6 +837,12 @@ namespace Common {
        *
        */
       template <typename T>
+      void add_key_t( FitsKeys &keydb,
+                    const std::string &keyword, const T &value, const std::string &comment, std::string type_override ) {
+        keydb.addkey( keyword, value, comment, type_override );
+      }
+
+      template <typename T>
       void add_key( FitsKeys &keydb,
                     const std::string &keyword, const T &value, const std::string &comment ) {
         keydb.addkey( keyword, value, comment );
@@ -916,32 +922,32 @@ namespace Common {
           // if a type was explicitly specified then use that
           //
           if (type=="DOUBLE" && jvalue.is_number()) {
-            this->add_key( keydb, keyname, jvalue.template get<double>(), comment );
+            this->add_key_t<double>( keydb, keyname, jvalue.template get<double>(), comment, type );
             return;
           }
           else
           if (type=="FLOAT" && jvalue.is_number()) {
-            this->add_key( keydb, keyname, jvalue.template get<float>(), comment );
+            this->add_key_t<float>( keydb, keyname, jvalue.template get<float>(), comment, type );
             return;
           }
           else
           if (type=="LONG" && jvalue.is_number()) {
-            this->add_key( keydb, keyname, jvalue.template get<long>(), comment );
+            this->add_key_t<long>( keydb, keyname, jvalue.template get<long>(), comment, type );
             return;
           }
           else
           if (type=="INT" && jvalue.is_number()) {
-            this->add_key( keydb, keyname, jvalue.template get<int>(), comment );
+            this->add_key_t<int>( keydb, keyname, jvalue.template get<int>(), comment, type );
             return;
           }
           else
           if (type=="BOOL") {
-            this->add_key( keydb, keyname, jvalue.template get<bool>(), comment );
+            this->add_key_t<bool>( keydb, keyname, jvalue.template get<bool>(), comment, type );
             return;
           }
           else
           if (type=="STRING") {
-            this->add_key( keydb, keyname, jvalue.template get<std::string>(), comment );
+            this->add_key_t<std::string>( keydb, keyname, jvalue.template get<std::string>(), comment, type );
             return;
           }
 
