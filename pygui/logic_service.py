@@ -102,8 +102,12 @@ class LogicService:
                     # Handle missing columns (apply defaults based on column type)
                     if value is None or value == '':
                         # Numeric columns (defaults to 0)
-                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'BINSPECT', 'BINSPAT']:
+                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER']:
                             value = 0
+                        elif column in ['BINSPECT']:
+                            value = 1
+                        elif column in ['BINSPAT']:
+                            value = 2
                         # Text columns (defaults to empty string "")
                         elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
                             value = ""  # Empty string as default for text fields
