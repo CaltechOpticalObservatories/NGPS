@@ -1,7 +1,6 @@
 from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QTableWidgetItem,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont
-from instrument_status_service import InstrumentStatusService
 from logic_service import LogicService
 from PyQt5.QtCore import Qt
 from control_tab import ControlTab
@@ -11,7 +10,6 @@ import re
 class LayoutService:
     def __init__(self, parent):
         self.parent = parent
-        self.instrument_status_service = InstrumentStatusService(self.parent)
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
@@ -521,21 +519,27 @@ class LayoutService:
 
     def create_target_list_group(self):
         target_list_group = QGroupBox()
-        bottom_section_layout = QVBoxLayout()
-        bottom_section_layout.setSpacing(5)
+        outer_layout = QVBoxLayout()  # Outer layout for the whole group box
 
-        # Create a horizontal layout for the label and the (+) button
+        # Create a QTabWidget
+        tab_widget = QTabWidget()
+
+        # ---------- Target List Tab ----------
+        target_list_tab = QWidget()
+        target_list_layout = QVBoxLayout()
+        target_list_layout.setSpacing(5)
+
+        # Reuse your entire existing layout inside this tab
+        # (Your current bottom_section_layout content)
         header_layout = QHBoxLayout()
-        header_layout.setSpacing(10)  # Set the space between the label and the button
+        header_layout.setSpacing(10)
 
-        # Create the label with the "Target List" text
-        target_list_label = QLabel("Target List")
+        target_list_label = QLabel("Science")
         header_layout.addWidget(target_list_label)
 
-        # Create the (+) button to add a new row (small button)
         self.add_row_button = QPushButton("+")
         self.add_row_button.setToolTip("Add a new row")
-        self.add_row_button.setFixedSize(25, 25)  # Make the button small
+        self.add_row_button.setFixedSize(25, 25)
         self.add_row_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -552,19 +556,16 @@ class LayoutService:
                 background-color: #2C6B2F;
             }
             QPushButton:disabled {
-                background-color: #D3D3D3;  /* Grey background when disabled */
-                color: #A9A9A9;  /* Grey text color when disabled */
+                background-color: #D3D3D3;
+                color: #A9A9A9;
             }
         """)
-        self.add_row_button.clicked.connect(self.add_new_row)  # Connect to function to add a new row
+        self.add_row_button.clicked.connect(self.add_new_row)
         self.add_row_button.setEnabled(False)
-        # Add the (+) button next to the label
         header_layout.addWidget(self.add_row_button)
 
-        # Add the header layout to the main layout
-        bottom_section_layout.addLayout(header_layout)
+        target_list_layout.addLayout(header_layout)
 
-        # Create the button to load the target list
         self.load_target_button = QPushButton("Please login or load your target list to start")
         self.load_target_button.setStyleSheet("""
             QPushButton {
@@ -581,108 +582,52 @@ class LayoutService:
                 background-color: #FF6600;
             }
         """)
-
-        # Center the button by using a QHBoxLayout
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.load_target_button)
         button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
+        self.load_target_button.clicked.connect(self.parent.on_login)
+        target_list_layout.addWidget(self.load_target_button)
 
-        self.load_target_button.clicked.connect(self.parent.on_login)  # Connect to load CSV functionality
-        bottom_section_layout.addWidget(self.load_target_button)
-
-        # Create the QTableWidget for the target list
         self.target_list_display = QTableWidget()
-        self.target_list_display.setStyleSheet("""
-            /* PyQt Table Styling */
-            QTableWidget, QTableView {
-                background-color: #444444;  /* Dark gray background for the table */
-                color: #e0e0e0;  /* Light gray text */
-                font-size: 14pt;
-                font-weight: bold;
-            }
-
-            /* Table Header */
-            QHeaderView {
-                background-color: #555555;  /* Slightly lighter gray for the header */
-                color: #e0e0e0;
-                border: 1px solid #888888;  /* Border around the header */
-                font-weight: bold;
-                font-size: 16pt;
-            }
-
-            QHeaderView::section {
-                padding: 4px;
-                border: 1px solid #888888;
-                background-color: #555555;
-            }
-            QScrollBar:vertical, QScrollBar:horizontal {
-                border: 2px solid grey;
-                background: #F0F0F0;
-                width: 20px;
-                height: 20px;
-            }
-            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #FFCC40;
-                border-radius: 10px;
-            }
-            QScrollBar::add-line, QScrollBar::sub-line {
-                border: none;
-                background: none;
-            }
-            
-            * Highlighting the focus item with a subtle border */
-            QTableWidget::item:focus, QTableView::item:focus {
-                border: 1px solid #00ccff;  /* Light cyan border for focused item */
-                background-color: #005b99;  /* Slightly darker blue for focused row */
-            }
-            /* Ensure selected row color covers the entire row */
-            QTableWidget::item:selected:active, QTableView::item:selected:active {
-                background-color: #0066cc;  /* Blue background for the entire selected row */
-            }
-        """)
-        self.target_list_display.setRowCount(0)  # Set to 0 initially
-        self.target_list_display.setColumnCount(0)  # Set column count to 0 initially
-
-        # Create a placeholder column for the target data
-        self.target_list_display.setHorizontalHeaderLabels([])  # Initially no headers
-
-        # Remove the bold font from headers
+        self.target_list_display.setStyleSheet("""  ... (keep your table style code) ... """)
+        self.target_list_display.setRowCount(0)
+        self.target_list_display.setColumnCount(0)
+        self.target_list_display.setHorizontalHeaderLabels([])
         header = self.target_list_display.horizontalHeader()
-        header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
-
-        # Enable sorting on column headers
+        header.setFont(QFont("Arial", 10, QFont.Normal))
         self.target_list_display.setSortingEnabled(True)
-
-        # Enable horizontal scrolling if the content exceeds the available width
         self.target_list_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.target_list_display.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        # Allow manual resizing of the columns (on the horizontal header)
         header.setSectionResizeMode(QHeaderView.Interactive)
-
-        # Disable editing of table cells
         self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
-        # Set selection mode to select entire rows when a cell is clicked
         self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
 
-        # Enable horizontal scrolling by adding the table to a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidget(self.target_list_display)
-        scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
+        scroll_area.setWidgetResizable(True)
+        target_list_layout.addWidget(scroll_area)
 
-        # Add the scroll area to the layout instead of the table directly
-        bottom_section_layout.addWidget(scroll_area)
-
-        # Initially, hide the table
         self.target_list_display.setVisible(False)
-
-        # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
-        target_list_group.setLayout(bottom_section_layout)
+        target_list_tab.setLayout(target_list_layout)
+
+        # ---------- Calibration Tab ----------
+        calibration_tab = QWidget()
+        calibration_layout = QVBoxLayout()
+        calibration_layout.addWidget(QLabel("Calibration lamps and tools will go here"))
+        calibration_tab.setLayout(calibration_layout)
+
+        # Add both tabs to the QTabWidget
+        tab_widget.addTab(target_list_tab, "Target List")
+        tab_widget.addTab(calibration_tab, "Calibration")
+
+        # ---------- Add the tabs to the outer layout ----------
+        outer_layout.addWidget(tab_widget)
+        target_list_group.setLayout(outer_layout)
 
         return target_list_group
+
 
     def on_row_selected(self):
         # Get the selected row's index
@@ -752,7 +697,7 @@ class LayoutService:
                 return
 
             # Call the insert function to insert the target into the database
-            self.insert_target_to_db(target_name, ra, decl, offset_ra, offset_dec, exptime, slitwidth, magnitude)
+            self.logic_service.insert_target_to_db(target_name, ra, decl, offset_ra, offset_dec, exptime, slitwidth, magnitude)
     
 
     def update_target_info(self):
@@ -1148,105 +1093,141 @@ class LayoutService:
 
         return planning_group
 
-
     def create_left_planning_column(self):
         # Create the main vertical layout for the left planning column
         left_planning_column = QVBoxLayout()
-        left_planning_column.setSpacing(10)  # Space between widgets
-        left_planning_column.setContentsMargins(0, 0, 0, 0)  # Optional: Remove margins for better alignment
-        self.load_target_lists()  # Call the method to load target lists
+        left_planning_column.setSpacing(10)
+        left_planning_column.setContentsMargins(0, 0, 0, 0)
 
-        # Create and add widgets to the left column
+        # Create the Start Date & Time edit
         self.parent.start_date_time_edit = QDateTimeEdit()
         self.parent.start_date_time_edit.setDateTime(QDateTime.currentDateTime())
         self.parent.start_date_time_edit.setDisplayFormat("MM/dd/yyyy h:mm AP")
         self.parent.start_date_time_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        
+
+        # Seeing input
         self.parent.seeing = QLineEdit("1.0")
         self.parent.seeing.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        
+
+        # Airmass limit input
         self.parent.airmass_limit = QLineEdit("2.0")
         self.parent.airmass_limit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        
+
+        # Target List Type dropdown (NEW)
+        target_list_type_layout = QHBoxLayout()
+        target_list_type_label = QLabel("Target List Type")
+        target_list_type_label.setMaximumHeight(40)
+
+        self.target_list_type_dropdown = QComboBox()
+        self.target_list_type_dropdown.addItems(["Science", "Calibration"])
+        self.target_list_type_dropdown.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # For now, just print when it changes
+        self.target_list_type_dropdown.currentIndexChanged.connect(
+            lambda: print(f"Target List Type switched to: {self.target_list_type_dropdown.currentText()}")
+        )
+
+        target_list_type_layout.addWidget(target_list_type_label)
+        target_list_type_layout.addWidget(self.target_list_type_dropdown)
+
+        # Target List name dropdown
         self.target_list_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        # Create horizontal layouts for each pair of label and widget (like buttons and input fields)
+        # Start Date layout
         start_date_layout = QVBoxLayout()
         label = QLabel("Start Date & Time (PST)")
-        label.setMaximumHeight(40)  # Set the maximum width for the label
+        label.setMaximumHeight(40)
         start_date_layout.addWidget(label)
         start_date_layout.addWidget(self.parent.start_date_time_edit)
         start_date_layout.setAlignment(Qt.AlignLeft)
 
+        # Seeing layout
         seeing_layout = QHBoxLayout()
         seeing_layout.addWidget(QLabel("Seeing (arcsec)"))
         seeing_layout.addWidget(self.parent.seeing)
         seeing_layout.setAlignment(Qt.AlignLeft)
 
+        # Airmass layout
         airmass_layout = QHBoxLayout()
         airmass_layout.addWidget(QLabel("Airmass Limit"))
         airmass_layout.addWidget(self.parent.airmass_limit)
         airmass_layout.setAlignment(Qt.AlignLeft)
 
+        # Target List layout
         target_list_layout = QVBoxLayout()
         target_label = QLabel("Target List")
-        target_label.setMaximumHeight(40)  # Set the maximum width for the label
+        target_label.setMaximumHeight(40)
         target_list_layout.addWidget(target_label)
         target_list_layout.addWidget(self.target_list_name)
         target_list_layout.setAlignment(Qt.AlignLeft)
-        self.load_target_lists()  # Call the method to load target lists
 
-        # Add these layouts to the main left_planning_column
+        # Add layouts to the main column
         left_planning_column.addLayout(start_date_layout)
         left_planning_column.addLayout(seeing_layout)
         left_planning_column.addLayout(airmass_layout)
+        left_planning_column.addLayout(target_list_type_layout)
         left_planning_column.addLayout(target_list_layout)
 
-        # Optionally, limit the overall width of the left column
-        left_planning_column.setContentsMargins(0, 0, 0, 0)  # Remove margins for better control
-        left_planning_column.setSpacing(10)  # Space between rows
+        # Optional: Load target lists when first created
+        self.load_target_lists()
 
         return left_planning_column
+
     
     def load_target_lists(self, target_lists=None):
-        """Populate the ComboBox with target lists passed as a parameter."""
+        """Populate the ComboBox with target lists, switching between Science and Calibration modes."""
         try:
-            # If no list is passed, attempt to load target lists from the database or another source
-            if target_lists is None:
-                target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+            if self.target_list_mode_toggle.isChecked():
+                # Calibration mode: load calibration target lists
+                print("Loading Calibration target lists...")
+                # target_lists = self.logic_service.load_calibration_target_sets("config/db_config.ini")
 
-                # Ensure target_lists is iterable (like a list or tuple)
-                if not isinstance(target_lists, (list, tuple)):
-                    print("Error: Fetched data is not a valid iterable (list or tuple).")
-                    target_lists = []  # Set to empty list if not valids
+                # # Ensure calibration target lists is iterable
+                # if not isinstance(target_lists, (list, tuple)):
+                #     print("Error: Calibration data is not a valid iterable (list or tuple).")
+                #     target_lists = []
+
+            else:
+                # Science mode: use the existing logic
+                print("Loading Science target lists...")
+                if target_lists is None:
+                    target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+
+                    if not isinstance(target_lists, (list, tuple)):
+                        print("Error: Fetched data is not a valid iterable (list or tuple).")
+                        target_lists = []
 
         except Exception as e:
-            # Handle any exception that occurs during fetching
             print(f"Error fetching target lists: {e}")
-            target_lists = []  # Set to empty list if an error occurs
+            target_lists = []
 
-        # If target_lists is empty, we can show a fallback message or an empty list
+        # Fallback if no data is found
         if not target_lists:
-            target_lists = ["No Target Lists Available"]  # Fallback message or an empty list
+            target_lists = ["No Target Lists Available"]
             self.add_row_button.setEnabled(False)
+        else:
+            self.add_row_button.setEnabled(True)
 
-        # Ensure the ComboBox is cleared before populating it
+        # Populate the combo box
         if isinstance(self.target_list_name, QComboBox):
+            self.target_list_name.blockSignals(True)  # Prevent signals during update
             self.target_list_name.clear()
 
-            # Add the fetched or fallback target lists to the ComboBox
+            # Add each target set
             for set_name in target_lists:
                 self.target_list_name.addItem(set_name)
 
-            # Add an option for creating a new target list
+            # Add the "create new" option
             self.target_list_name.addItem("Create a new target list")
 
-            # Set the first item as the default selection (if available)
-            if target_lists:
-                self.target_list_name.setCurrentIndex(0)  # Set the first item as default
+            # Select the first item as default
+            self.target_list_name.setCurrentIndex(0)
 
-            # Connect the signal for user selection change
+            self.target_list_name.blockSignals(False)
+
+            # Connect signal for selection change
             self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
+
 
     def create_new_target_list(self):
         """Handle creating a new target list, uploading CSV, and creating a new target set."""
@@ -1544,24 +1525,56 @@ class LayoutService:
         # Create the group box for Target List
         target_dropdown_group = QGroupBox("Target List")
         target_dropdown_layout = QVBoxLayout()
-        target_dropdown_layout.setSpacing(10)  # Adjust space between items
+        target_dropdown_layout.setSpacing(10)
 
-        # Add the target list names or radio buttons (depending on your design)
-        self.target_list_name = QComboBox()  # Assuming a combo box for target selection
-        self.target_list_name.setMaximumWidth(250)  # Set a max width for the combo box
+        # Create the toggle button
+        self.target_list_mode_toggle = QPushButton("Mode: Science")
+        self.target_list_mode_toggle.setCheckable(True)  # Makes it toggle
+        self.target_list_mode_toggle.setMaximumWidth(150)
+
+        # Set toggle styles (optional)
+        self.target_list_mode_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QPushButton:checked {
+                background-color: #2196F3;
+            }
+        """)
+
+        # Toggle between "Science" and "Calibration"
+        self.target_list_mode_toggle.toggled.connect(self.on_toggle_target_mode)
+
+        # Add the toggle button to the layout
+        target_dropdown_layout.addWidget(self.target_list_mode_toggle)
+
+        # Add the target list name combo box
+        self.target_list_name = QComboBox()
+        self.target_list_name.setMaximumWidth(250)
         target_dropdown_layout.addWidget(self.target_list_name)
 
-        # Load the target list dynamically (similar to sequencer buttons)
-        self.load_target_lists()  # Load the target lists (you need to define this method)
+        # Load the initial target lists
+        self.load_target_lists()
 
         target_dropdown_group.setLayout(target_dropdown_layout)
-
-        # Set maximum width and height for the target list group
-        target_dropdown_group.setMaximumWidth(300)  # Maximum width for the group box
-        target_dropdown_group.setMaximumHeight(150)  # Maximum height for the group box
+        target_dropdown_group.setMaximumWidth(300)
+        target_dropdown_group.setMaximumHeight(150)
 
         return target_dropdown_group
-    
+
+    def on_toggle_target_mode(self, checked):
+        # Update button text
+        if checked:
+            self.target_list_mode_toggle.setText("Mode: Calibration")
+        else:
+            self.target_list_mode_toggle.setText("Mode: Science")
+
+        # Reload target lists based on the new mode
+        self.load_target_lists()
 
     def update_lamps(self, lamp_states):
         """ Update the lamp checkboxes based on the received state """

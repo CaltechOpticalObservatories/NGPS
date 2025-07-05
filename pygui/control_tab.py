@@ -470,6 +470,7 @@ class ControlTab(QDialog):
         print("Reset button clicked!")
         self.logic_service.refresh_table()
 
+
     def toggle_startup_shutdown(self):
         # Get the current button text and toggle
         current_text = self.startup_shutdown_button.text()
@@ -477,7 +478,6 @@ class ControlTab(QDialog):
         if current_text == "Startup":
             # Change the button to Shutdown (black)
             self.startup_shutdown_button.setText("Shutdown")
-            print("HELLO?")
             self.startup_shutdown_button.setStyleSheet("""
                 QPushButton {
                     background-color: #000000;  /* Black for shutdown */
@@ -493,28 +493,41 @@ class ControlTab(QDialog):
                 }
             """)
             print("Startup button clicked!")
-            command = f"startup\n"
+            command = "startup\n"
             self.parent.send_command(command)
+
         else:
-            # Change the button back to Startup (green)
-            self.startup_shutdown_button.setText("Startup")
-            self.startup_shutdown_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;  /* Green for startup */
-                    border: none;
-                    color: white;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #388E3C;
-                }
-                QPushButton:pressed {
-                    background-color: #2C6B2F;
-                }
-            """)
-            print("Shutdown button clicked!")
-            command = f"shutdown\n"
-            self.parent.send_command(command) 
+            # Show confirmation dialog before shutdown
+            confirm = QMessageBox.question(
+                self,
+                "Confirm System Shutdown",
+                "Are you sure you want to shut down the system?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if confirm == QMessageBox.Yes:
+                # Change the button back to Startup (green)
+                self.startup_shutdown_button.setText("Startup")
+                self.startup_shutdown_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4CAF50;  /* Green for startup */
+                        border: none;
+                        color: white;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #388E3C;
+                    }
+                    QPushButton:pressed {
+                        background-color: #2C6B2F;
+                    }
+                """)
+                print("Shutdown button clicked!")
+                command = "shutdown\n"
+                self.parent.send_command(command)
+            else:
+                print("Shutdown canceled.")
 
 
     def on_offset_to_target_click(self):

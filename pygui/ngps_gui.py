@@ -5,7 +5,6 @@ from PyQt5.QtCore import Qt
 from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
-from instrument_status_service import InstrumentStatusService
 from sequencer_service import SequencerService
 from login_service import LoginDialog, CreateAccountDialog
 from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
@@ -99,8 +98,6 @@ class NgpsGUI(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def initialize_services(self):
-        # Initialize the InstrumentStatusService
-        self.instrument_status_service = InstrumentStatusService(self)
 
         # Initialize the SequencerService
         self.sequencer_service = SequencerService(self)
