@@ -23,7 +23,7 @@ QMenuBar::item {
 }
 
 QMenuBar::item:selected {
-    background-color: #4CAF50;  /* Highlight menu item with green */
+    background-color:rgb(54, 122, 56);  /* Highlight menu item with green */
     color: white;  /* White text on selected item */
 }
 
@@ -62,8 +62,8 @@ QCheckBox::indicator {
 }
 
 QCheckBox::indicator:checked {
-    background-color: #4CAF50;  /* Green background when checked */
-    border-color: #4CAF50;  /* Green border when checked */
+    background-color:rgb(58, 136, 60);  /* Green background when checked */
+    border-color:rgb(46, 107, 48);  /* Green border when checked */
 }
 
 QCheckBox::indicator:unchecked {
@@ -131,7 +131,7 @@ QProgressBar {
 }
 
 QProgressBar::chunk {
-    background-color: #4CAF50;  /* Lighter green for the progress chunk */
+    background-color:rgb(42, 101, 44);  /* Lighter green for the progress chunk */
     width: 10px;
     margin: 0.5px;
 }
@@ -139,10 +139,6 @@ QProgressBar::chunk {
 /* Style for QTabWidget */
 QTabWidget::pane {
     border: 1px solid #888888;  /* Light border around tabs */
-}
-
-QTabWidget::tab-bar {
-    alignment: center;
 }
 
 QTabWidget::tab {
