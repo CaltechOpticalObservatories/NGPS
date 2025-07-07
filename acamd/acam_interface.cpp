@@ -3793,9 +3793,8 @@ logwrite( function, message.str() );
     try {
       iface->database.write();
     }
-    catch ( ... ) {
-      logwrite( function, "ERROR writing to database" );
-//    error=ERROR; removed 12/12/2024 -- don't let database errors stop anything
+    catch ( const std::exception &e ) {
+      logwrite( function, "ERROR writing to database: "+std::string(e.what()) );
     }
 
     return error;

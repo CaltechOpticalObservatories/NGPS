@@ -169,18 +169,10 @@ namespace Sequencer {
       logwrite( function, message.str() );
 #endif
       try {
-        this->dbManager = std::make_unique<DatabaseManager>(this->db_host, this->db_port,
-                                                            this->db_user, this->db_pass,
-                                                            this->db_schema, this->db_active);
-      }
-      catch (const mysqlx::Error& e) {
-        message.str(""); message << "ERROR starting database: " << e.what();
-        logwrite( function, message.str() );
-        return error;
+        database = std::make_unique<Database::Database>(db_host, db_port, db_user, db_pass);
       }
       catch( const std::exception &e ) {
-        message.str(""); message << "ERROR starting database: " << e.what();
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR: "+std::string(e.what()) );
         return error;
       }
       this->db_configured = true;
@@ -470,7 +462,7 @@ namespace Sequencer {
   /***** Sequencer::TargetInfo::add_row ***************************************/
 
 
-  TargetInfo::TargetState TargetInfo::get_specified_target( std::string args, std::string &retstring ) {
+  TargetInfo::TargetState TargetInfo::get_specified_target( std::string obsid, std::string &retstring ) {
     const std::string function="Sequencer::TargetInfo::get_specified_target";
     std::stringstream message;
 
@@ -483,13 +475,14 @@ namespace Sequencer {
     }
 
     try {
-      int _obsid = std::stoi(args);
-
-      std::string condition = "OBSERVATION_ID like :obsid";
-      std::string order = "OBSERVATION_ID";
-      std::map<std::string, std::string> bindings = { {"obsid", args} };
-
-      mysqlx::RowResult result = dbManager->do_query(condition, order, bindings, this->targetlist_cols);
+      const std::string condition("OBSERVATION_ID like :obsid");
+      const std::string order("OBSERVATION_ID");
+      std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(obsid) } };
+      mysqlx::RowResult result = database->read(this->db_schema, this->db_active,
+                                                targetlist_cols,
+                                                condition,
+                                                bindings,
+                                                order);
 
       mysqlx::row_count_t rowcount = result.count();
       mysqlx::col_count_t colcount = result.getColumnCount();
@@ -498,7 +491,7 @@ namespace Sequencer {
       logwrite( function, message.str() );
 
       if ( result.count() < 1 ) {
-        message.str(""); message << "no matching target found for obsid " << _obsid;
+        message.str(""); message << "no matching target found for obsid " << obsid;
         retstring = message.str();
         logwrite( function, message.str() );
         init_record();    // ensures that any previous record's info is not mistaken for this one
@@ -519,15 +512,8 @@ namespace Sequencer {
 
       if ( this->parse_target_from_row( row ) != NO_ERROR ) return TARGET_ERROR;
     }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR mySQL exception: " << err;
-      retstring = message.str();
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return TARGET_ERROR;
-    }
     catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR exception: " << ex.what();
+      message.str(""); message << "ERROR: " << ex.what();
       retstring = message.str();
       logwrite( function, message.str() );
       init_record();    // ensures that any previous record's info is not mistaken for this one
