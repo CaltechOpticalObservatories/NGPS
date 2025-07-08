@@ -126,9 +126,9 @@ namespace Database {
   /***** SessionPool::_return_session *****************************************/
 
 
-  /***** SessionPool::write ***************************************************/
+  /***** SessionPool::insert **************************************************/
   /**
-   * @brief      write to the database
+   * @brief      insert a record into the database
    * @param[in]  schemaname database schema name
    * @param[in]  tablename  database table name
    * @param[in]  data       reference to map of column/value data
@@ -136,7 +136,7 @@ namespace Database {
    * This can throw an exception.
    *
    */
-  void SessionPool::write(const std::string &schemaname, const std::string &tablename, const std::map<std::string, mysqlx::Value> &data) {
+  void SessionPool::insert(const std::string &schemaname, const std::string &tablename, const std::map<std::string, mysqlx::Value> &data) {
 
     if ( data.empty() ) throw std::runtime_error("no data");
 
@@ -172,7 +172,7 @@ namespace Database {
       throw;
     }
   }
-  /***** SessionPool::write ***************************************************/
+  /***** SessionPool::insert **************************************************/
 
 
   /***** SessionPool::read ****************************************************/
@@ -221,6 +221,26 @@ namespace Database {
     catch (const std::exception &e) { throw; }
   }
   /***** SessionPool::read ****************************************************/
+
+
+  /***** SessionPool::get_tablenames ******************************************/
+  /**
+   * @brief      return a list of database tablenames
+   * @param[in]  schemaname  schema name
+   * @return     list of strings
+   *
+   */
+  std::list<std::string> SessionPool::get_tablenames(const std::string &schemaname) {
+    try {
+      // safely get a DB session from the pool
+      SessionGuard session(this);
+      auto db = session.get();
+      auto schema = std::make_unique<mysqlx::Schema>( *(db), schemaname );
+      return schema->getTableNames();
+    }
+    catch (const std::exception &e) { throw; }
+  }
+  /***** SessionPool::get_tablenames ******************************************/
 
 
   /***** Database::get_mysql_type *********************************************/
@@ -462,56 +482,111 @@ namespace Database {
   /***** SessionPool::read ****************************************************/
 
 
-  /***** Database::write ******************************************************/
+  /***** Database::insert *****************************************************/
   /**
-   * @brief      write the supplied data to the indicated database table
+   * @brief      insert the supplied data to the indicated database table
    * @details    may throw an exception
    * @param[in]  schemaname  schema name (optional)
    * @param[in]  tablename   table name (optional)
    * @param[in]  data        STL map containing mysqlx data indexed by DB column name
    *
    */
-  void Database::write(const std::map<std::string, mysqlx::Value> &data) {
+  void Database::insert(const std::map<std::string, mysqlx::Value> &data) {
     // schema or table names must come from the class
     if ( _dbschema.empty() || _dbtable.empty() ) throw std::runtime_error("missing schema or table");
-    write(_dbschema, _dbtable, data);
+    insert(_dbschema, _dbtable, data);
   }
-  /***** Database::write ******************************************************/
-  void Database::write(const std::string &tablename,
-                       const std::map<std::string, mysqlx::Value> &data) {
+  /***** Database::insert *****************************************************/
+  void Database::insert(const std::string &tablename,
+                        const std::map<std::string, mysqlx::Value> &data) {
     // schema name must come from the class
     if ( _dbschema.empty() ) throw std::runtime_error("missing schema");
-    write(_dbschema, tablename, data);
+    insert(_dbschema, tablename, data);
   }
-  /***** Database::write ******************************************************/
-  void Database::write(const std::string &schemaname, const std::string &tablename,
-                       const std::map<std::string, mysqlx::Value> &data) {
+  /***** Database::insert *****************************************************/
+  void Database::insert(const std::string &schemaname, const std::string &tablename,
+                        const std::map<std::string, mysqlx::Value> &data) {
     try {
       if (!_pool) throw std::runtime_error("not connected to database");
-      _pool->write(schemaname, tablename, data);
+      _pool->insert(schemaname, tablename, data);
     }
     catch (const std::exception &e) {
-      logwrite("Database::Database::write",
+      logwrite("Database::Database::insert",
                "ERROR writing data: "+std::string(e.what()));
       throw;
     }
   }
-  /***** Database::write ******************************************************/
+  /***** Database::insert *****************************************************/
 
 
-  /***** Database::write ******************************************************/
+  /***** Database::insert *****************************************************/
   /**
-   * @brief      write the class private _data to the MySQL database
+   * @brief      insert the class private _data to the MySQL database
    * @details    may throw an exception
    *             This function overloads the version which accepts a map,
    *             by passing it the class map
    *
    */
-  void Database::write() {
+  void Database::insert() {
     std::lock_guard<std::mutex> lock(_data_mtx);
-    this->write( this->_data );  // Write the record stored in the class,
-    this->_data.clear();         // then erase it.
+    this->insert( this->_data );  // insert the record stored in the class,
+    this->_data.clear();          // then erase it.
   }
-  /***** Database::write ******************************************************/
+  /***** Database::insert *****************************************************/
 
+
+  /***** Database::update *****************************************************/
+  /**
+   * @brief      update column(s) in existing database record
+   * @details    may throw an exception
+   *
+   */
+  void Database::update(const std::map<std::string, mysqlx::Value> &data,
+                        const std::string &condition,
+                        const std::map<std::string, mysqlx::Value> &bindings) {
+    // schema or table names must come from the class
+    if ( _dbschema.empty() || _dbtable.empty() ) throw std::runtime_error("missing schema or table");
+    update(_dbschema, _dbtable, data, condition, bindings);
+  }
+  void Database::update(const std::string &schemaname, const std::string &tablename,
+                        const std::map<std::string, mysqlx::Value> &data,
+                        const std::string &condition,
+                        const std::map<std::string, mysqlx::Value> &bindings) {
+    std::lock_guard<std::mutex> lock(_data_mtx);
+    this->insert( this->_data );  // insert the record stored in the class,
+    this->_data.clear();          // then erase it.
+  }
+  /***** Database::insert *****************************************************/
+
+
+  /***** Database::get_tablenames *********************************************/
+  /**
+   * @brief      return a list of database tablenames
+   * @return     list of strings
+   *
+   */
+  std::list<std::string> Database::get_tablenames() {
+    // schema must come from the class
+    if ( _dbschema.empty() ) throw std::runtime_error("missing schema");
+    return get_tablenames(_dbschema);
+  }
+  /***** Database::get_tablenames *********************************************/
+  /**
+   * @brief      return a list of database tablenames
+   * @param[in]  schemaname  schema name
+   * @return     list of strings
+   *
+   */
+  std::list<std::string> Database::get_tablenames(const std::string &schemaname) {
+    try {
+      if (!_pool) throw std::runtime_error("not connected to database");
+      return _pool->get_tablenames(schemaname);
+    }
+    catch (const std::exception &e) {
+      logwrite("Database::Database::get_tablenames",
+               "ERROR: "+std::string(e.what()));
+      throw;
+    }
+  }
+  /***** Database::get_tablenames *********************************************/
 }

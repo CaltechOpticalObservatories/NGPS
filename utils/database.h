@@ -86,8 +86,13 @@ namespace Database {
       SessionPool(const std::string &host, int port, const std::string &user, const std::string &pass);
       ~SessionPool();
 
-      void write(const std::string &schemaname, const std::string &tablename,
-                 const std::map<std::string, mysqlx::Value> &data);
+      void insert(const std::string &schemaname, const std::string &tablename,
+                  const std::map<std::string, mysqlx::Value> &data);
+
+      void update(const std::string &schemaname, const std::string &tablename,
+                  const std::map<std::string, mysqlx::Value> &data,
+                  const std::string &condition,
+                  const std::map<std::string, mysqlx::Value> &bindings);
 
       mysqlx::RowResult read(const std::string &schemaname, const std::string &tablename,
                              const std::vector<std::string> &columns,
@@ -96,6 +101,8 @@ namespace Database {
                              const std::string &order_by = "",
                              std::optional<int> limit = std::nullopt,
                              std::optional<int> offset = std::nullopt);
+
+      std::list<std::string> get_tablenames(const std::string &schemaname);
   };
   /***** Database::SessionPool ************************************************/
 
@@ -151,6 +158,7 @@ namespace Database {
       void initialize_class();
       void initialize_class(std::vector<std::string> dbinfo);
 
+      // read() is overloaded
       mysqlx::RowResult read(const std::vector<std::string> &columns,
                              const std::string &where_clause,
                              const std::map<std::string, mysqlx::Value> &bind_params,
@@ -172,13 +180,27 @@ namespace Database {
                              std::optional<int> limit = std::nullopt,
                              std::optional<int> offset = std::nullopt);
 
-      void write();                                             ///< write class map
+      // insert() is overloaded
+      void insert();
+      void insert(const std::map<std::string, mysqlx::Value> &data);
+      void insert(const std::string &tablename,
+                  const std::map<std::string, mysqlx::Value> &data);
+      void insert(const std::string &schemaname, const std::string &tablename,
+                  const std::map<std::string, mysqlx::Value> &data);
 
-      void write(const std::map<std::string, mysqlx::Value> &data);
-      void write(const std::string &tablename,
-                 const std::map<std::string, mysqlx::Value> &data);
-      void write(const std::string &schemaname, const std::string &tablename,
-                 const std::map<std::string, mysqlx::Value> &data);
+      // update() is overloaded
+      void update(const std::map<std::string, mysqlx::Value> &data,
+                  const std::string &condition,
+                  const std::map<std::string, mysqlx::Value> &bindings);
+      void update(const std::string &schemaname, const std::string &tablename,
+                  const std::map<std::string, mysqlx::Value> &data,
+                  const std::string &condition,
+                  const std::map<std::string, mysqlx::Value> &bindings);
+
+
+      // get_tablenames() is overloaded
+      std::list<std::string> get_tablenames();
+      std::list<std::string> get_tablenames(const std::string &schemaname);
 
       /***** Database::Database::add_key_val **********************************/
       /**
@@ -231,12 +253,12 @@ namespace Database {
       /***** Database::Database::add_from_json ********************************/
 
       /**
-       * @brief      writes an STL map of any single type rather than mysqlx::Value
+       * @brief      insert an STL map of any single type rather than mysqlx::Value
        * @param[in]  data  map of data of any single type, indexed by field name
        */
       template <typename T>
-      void write( std::map<std::string, T> data ) {
-        this->write(data);
+      void insert( std::map<std::string, T> data ) {
+        this->insert(data);
       }
   };
   /***** Database::Database ***************************************************/

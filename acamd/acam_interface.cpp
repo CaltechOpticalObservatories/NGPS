@@ -3791,7 +3791,7 @@ logwrite( function, message.str() );
     // then will clear the map object once they are written.
     //
     try {
-      iface->database.write();
+      iface->database.insert();
     }
     catch ( const std::exception &e ) {
       logwrite( function, "ERROR writing to database: "+std::string(e.what()) );
@@ -4616,7 +4616,7 @@ logwrite( function, message.str() );
           this->database.add_key_val( "obs_id",   123 );
           this->database.add_key_val( "airmass",   1.23 );
           this->database.add_key_val( "acquired",   true );
-          this->database.write();
+          this->database.insert();
         }
         catch ( const std::exception &e ) {
           message.str(""); message << "ERROR adding keys to database: " << e.what();
