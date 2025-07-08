@@ -143,7 +143,7 @@ namespace Database {
     // Create vectors from the supplied STL map, pre-allocating memory for them.
     // Vectors are easily passed directly to the mysqlx API.
     //
-    int ncols = data.size();
+    size_t ncols = data.size();
     std::vector<std::string>   cols; cols.reserve( ncols );
     std::vector<mysqlx::Value> vals; vals.reserve( ncols );
 

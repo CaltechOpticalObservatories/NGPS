@@ -623,9 +623,9 @@ namespace Thermal {
           server.interface.telemdata.merge( server.interface.campbell.datamap );
           server.interface.telemdata.merge( server.interface.lakeshoredata );
 
-          // write the telemdata map to the database
+          // insert the telemdata map to the database
           //
-          database.write( server.interface.telemdata );
+          database.insert( server.interface.telemdata );
 
           server.telem_sleeptimer.sleepFor( std::chrono::seconds( duration ) );
           timeout( 0, "sec" );
