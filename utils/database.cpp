@@ -175,6 +175,53 @@ namespace Database {
   /***** SessionPool::insert **************************************************/
 
 
+  /***** SessionPool::update **************************************************/
+  /**
+   * @brief      update an existing record
+   * @details    may throw an exception
+   * @param[in]  schemaname  schema name (optional)
+   * @param[in]  tablename   table name (optional)
+   * @param[in]  setdata     STL map containing mysqlx data indexed by DB column name
+   *
+   */
+  void SessionPool::update(const std::string &schemaname, const std::string &tablename,
+                           const std::map<std::string, mysqlx::Value> &setdata,
+                           const std::string &condition,
+                           const std::map<std::string, mysqlx::Value> &bindings) {
+
+    if ( setdata.empty() ) throw std::runtime_error("no data to update");
+
+    // Update the database table
+    //
+    try {
+      // safely get a DB session from the pool
+      SessionGuard session(this);
+      auto db = session.get();
+
+      auto schema = std::make_unique<mysqlx::Schema>( *(db), schemaname );
+      auto table  = std::make_unique<mysqlx::Table>( schema->getTable( tablename ) );
+
+      // create an updater
+      auto updater = table->update();
+
+      // apply .set() calls for each column-data pair
+      for ( const auto &[column, data] : setdata ) updater.set( column, data );
+
+      updater.where(condition);
+
+      // apply .bindings()
+      for ( const auto &[key, val] : bindings ) updater.bind( key, val );
+
+      // perform the update
+      updater.execute();
+    }
+    catch ( const std::exception &err ) {
+      throw;
+    }
+  }
+  /***** SessionPool::update **************************************************/
+
+
   /***** SessionPool::read ****************************************************/
   /**
    * @brief      read from the database
@@ -211,7 +258,7 @@ namespace Database {
       if ( !where_clause.empty() ) select = select.where(where_clause);
       if ( !order_by.empty() )     select = select.orderBy(order_by);
 
-      for (const auto& [key, val] : bind_params) select.bind(key, val);
+      for (const auto &[key, val] : bind_params) select.bind(key, val);
 
       if (limit)  select = select.limit(*limit);
       if (offset) select = select.offset(*offset);
@@ -538,7 +585,11 @@ namespace Database {
   /***** Database::update *****************************************************/
   /**
    * @brief      update column(s) in existing database record
-   * @details    may throw an exception
+   * @details    Gets database session from pool. Schema and Table come from
+   *             the class. may throw an exception
+   * @param[in]  data       map of data
+   * @param[in]  condition
+   * @param[in]  bindings
    *
    */
   void Database::update(const std::map<std::string, mysqlx::Value> &data,
@@ -546,17 +597,44 @@ namespace Database {
                         const std::map<std::string, mysqlx::Value> &bindings) {
     // schema or table names must come from the class
     if ( _dbschema.empty() || _dbtable.empty() ) throw std::runtime_error("missing schema or table");
-    update(_dbschema, _dbtable, data, condition, bindings);
+    try {
+      if (!_pool) throw std::runtime_error("not connected to database");
+      _pool->update(_dbschema, _dbtable, data, condition, bindings);
+    }
+    catch (const std::exception &e) {
+      logwrite("Database::Database::get_tablenames",
+               "ERROR: "+std::string(e.what()));
+      throw;
+    }
   }
+  /***** Database::update *****************************************************/
+  /**
+   * @brief      update column(s) in existing database record
+   * @details    Gets database session from pool. may throw an exception
+   * @param[in]  schemaname  name of schema
+   * @param[in]  tablename   name of table
+   * @param[in]  data        map of data
+   * @param[in]  condition
+   * @param[in]  bindings
+   *
+   */
   void Database::update(const std::string &schemaname, const std::string &tablename,
                         const std::map<std::string, mysqlx::Value> &data,
                         const std::string &condition,
                         const std::map<std::string, mysqlx::Value> &bindings) {
-    std::lock_guard<std::mutex> lock(_data_mtx);
-    this->insert( this->_data );  // insert the record stored in the class,
-    this->_data.clear();          // then erase it.
+    // schema or table names come from args
+    if ( schemaname.empty() || tablename.empty() ) throw std::runtime_error("missing schema or table");
+    try {
+      if (!_pool) throw std::runtime_error("not connected to database");
+      _pool->update(schemaname, tablename, data, condition, bindings);
+    }
+    catch (const std::exception &e) {
+      logwrite("Database::Database::get_tablenames",
+               "ERROR: "+std::string(e.what()));
+      throw;
+    }
   }
-  /***** Database::insert *****************************************************/
+  /***** Database::update *****************************************************/
 
 
   /***** Database::get_tablenames *********************************************/
