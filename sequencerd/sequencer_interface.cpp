@@ -169,7 +169,8 @@ namespace Sequencer {
       logwrite( function, message.str() );
 #endif
       try {
-        database = std::make_unique<Database::Database>(db_host, db_port, db_user, db_pass);
+        // configure database object to use active targets table unless otherwise specified
+        database = std::make_unique<Database::Database>(db_host, db_port, db_user, db_pass, db_schema, db_active);
       }
       catch( const std::exception &e ) {
         logwrite( function, "ERROR: "+std::string(e.what()) );
@@ -254,6 +255,7 @@ namespace Sequencer {
         bindings = { { "setname", mysqlx::Value(setname_in) } };
       }
 
+      // read from active targets table
       mysqlx::RowResult result = database->read(this->db_sets,
                                                 this->targetset_cols,
                                                 condition,
@@ -372,7 +374,7 @@ namespace Sequencer {
                  { "POINTMODE", mysqlx::Value( pointmode_in ) }            // POINTMODE
                };
 
-      database->insert(record);
+      database->insert(record);                                            // into active targets table
     }
     catch ( const std::exception &ex ) {
       logwrite( function, "ERROR: "+std::string(ex.what()) );
@@ -405,6 +407,7 @@ namespace Sequencer {
       const std::string order("OBSERVATION_ID");
       std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(obsid) } };
 
+      // read from active targets table
       mysqlx::RowResult result = database->read(targetlist_cols,
                                                 condition,
                                                 bindings,
@@ -535,6 +538,7 @@ namespace Sequencer {
       std::map<std::string, mysqlx::Value> bindings = { { "state", mysqlx::Value(state_in) },
                                                         { "setid", mysqlx::Value(this->setid) } };
 
+      // read from active targets table
       mysqlx::RowResult result = database->read(this->targetlist_cols,
                                                 condition,
                                                 bindings,
@@ -767,6 +771,7 @@ namespace Sequencer {
       const std::string condition("OBSERVATION_ID like :obsid");
       std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(this->obsid) } };
 
+      // read from active targets table
       mysqlx::RowResult result = database->read(this->targetlist_cols,
                                                 condition,
                                                 bindings);
@@ -782,7 +787,7 @@ namespace Sequencer {
         return( ERROR );
       }
 
-      // update the state here
+      // update state in the active targets table
       //
       std::map<std::string, mysqlx::Value> setdata = { { "STATE", mysqlx::Value(newstate) } };
 
@@ -853,7 +858,7 @@ namespace Sequencer {
                  { "OTMFLAG",        mysqlx::Value( this->otmflag ) }        // from target table
                };
 
-      database->insert( this->db_completed, record );
+      database->insert( this->db_completed, record );                        // into completed targets table
     }
     catch ( const std::exception &e ) {
       logwrite( function, "ERROR: "+std::string(e.what()) );
