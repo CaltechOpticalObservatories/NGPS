@@ -165,41 +165,6 @@ namespace Sequencer {
   /***** Sequencer::CalibrationTarget *****************************************/
 
 
-  /***** Sequencer::DatabaseManager *******************************************/
-  /**
-   * @class  DatabaseManager
-   *
-   */
-  class DatabaseManager {
-    private:
-      mysqlx::Session session;
-      mysqlx::Schema db;
-      mysqlx::Table table;
-
-    public:
-      DatabaseManager( const std::string &host, int port,
-                       const std::string &user, const std::string &password,
-                       const std::string &schema, const std::string tablename )
-        : session( mysqlx::SessionOption::HOST, host,
-                   mysqlx::SessionOption::PORT, port,
-                   mysqlx::SessionOption::USER, user,
-                   mysqlx::SessionOption::PWD, password ),
-          db( session.getSchema(schema) ),
-          table( db.getTable(tablename) ) { }
-
-      mysqlx::RowResult do_query( const std::string &condition, const std::string &order,
-                                  const std::map<std::string, std::string> &bindings,
-                                  const std::vector<std::string> &columns={"*"} ) {
-        auto query = table.select(columns).where(condition).orderBy(order);
-        for ( const auto &[key, value] : bindings ) {
-          query.bind(key, value);
-        }
-        return query.execute();
-      }
-  };
-  /***** Sequencer::DatabaseManager *******************************************/
-
-
   /***** Sequencer::TargetInfo ************************************************/
   /**
    * @class  TargetInfo
@@ -252,7 +217,7 @@ namespace Sequencer {
                                        "SET_NAME" },
                      offset_threshold(0), max_tcs_offset(0) { init_record(); }
 
-      std::unique_ptr<DatabaseManager> dbManager;
+      std::unique_ptr<Database::Database> database;
 
       SkyInfo::FPOffsets fpoffsets;       ///< for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
 
