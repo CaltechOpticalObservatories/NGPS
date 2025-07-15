@@ -169,18 +169,11 @@ namespace Sequencer {
       logwrite( function, message.str() );
 #endif
       try {
-        this->dbManager = std::make_unique<DatabaseManager>(this->db_host, this->db_port,
-                                                            this->db_user, this->db_pass,
-                                                            this->db_schema, this->db_active);
-      }
-      catch (const mysqlx::Error& e) {
-        message.str(""); message << "ERROR starting database: " << e.what();
-        logwrite( function, message.str() );
-        return error;
+        // configure database object to use active targets table unless otherwise specified
+        database = std::make_unique<Database::Database>(db_host, db_port, db_user, db_pass, db_schema, db_active);
       }
       catch( const std::exception &e ) {
-        message.str(""); message << "ERROR starting database: " << e.what();
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR: "+std::string(e.what()) );
         return error;
       }
       this->db_configured = true;
@@ -222,12 +215,12 @@ namespace Sequencer {
 
     if ( args.empty() && this->setid < 0 ) {
       logwrite( function, "ERROR: set ID has not been set and no ID or name provided" );
-      return( ERROR );
+      return ERROR;
     }
 
     if ( !is_db_configured() ) {
       logwrite( function, "ERROR: database not configured (check .cfg file)" );
-      return( ERROR );
+      return ERROR;
     }
 
     try {
@@ -247,37 +240,26 @@ namespace Sequencer {
         setname_in = ( use_id ? "" : args );                                         // get the provided setname
       }
 
-      // create a session for accessing the database
-      //
-      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
-                                 mysqlx::SessionOption::PORT, this->db_port,
-                                 mysqlx::SessionOption::USER, this->db_user,
-                                 mysqlx::SessionOption::PWD,  this->db_pass   );
-
-      // connect to database
-      //
-      mysqlx::Schema db( mySession, this->db_schema );
-
-      // create a table object
-      //
-      mysqlx::Table targetsets = db.getTable( this->db_sets );
-
       // Find a row in the SQL table where either SET_ID is setid_in or SET_NAME is setname_in,
       // depending on if a number or a string was provided above.
       //
-      mysqlx::RowResult result;
+      std::string condition;
+      std::map<std::string, mysqlx::Value> bindings;
+
       if ( use_id ) {
-        result = targetsets.select( this->targetset_cols )
-                           .where( "SET_ID like :setid" )
-                           .bind( "setid", setid_in )
-                           .execute();
+        condition = "SET_ID like :setid";
+        bindings = { { "setid", mysqlx::Value(setid_in) } };
       }
       else {
-        result = targetsets.select( this->targetset_cols )
-                           .where( "SET_NAME like :setname" )
-                           .bind( "setname", setname_in )
-                           .execute();
+        condition = "SET_NAME like :setname";
+        bindings = { { "setname", mysqlx::Value(setname_in) } };
       }
+
+      // read from active targets table
+      mysqlx::RowResult result = database->read(this->db_sets,
+                                                this->targetset_cols,
+                                                condition,
+                                                bindings);
 
       rowcount = result.count();
       colcount = result.getColumnCount();
@@ -288,7 +270,7 @@ namespace Sequencer {
         message.str(""); message << "ERROR no target sets found with requested ";
         if ( use_id ) message << "ID = " << setid_in; else message << "name = " << setname_in;
         logwrite( function, message.str() );
-        return( ERROR );
+        return ERROR;
       }
 
       // fetch the current row
@@ -308,33 +290,14 @@ namespace Sequencer {
       retstream.str(""); retstream << this->setid << " " << this->setname;
       retstring = retstream.str();
     }
-    catch ( std::invalid_argument & ) {
-      message.str(""); message << "ERROR invalid argument: args=" << args << " col=" << col;
-      logwrite(function, message.str() );
-      return( ERROR );
-    }
-    catch ( std::out_of_range & ) {
-      message.str(""); message << "ERROR out of range: args=" << args << " col=" << col;
-      logwrite(function, message.str() );
-      return( ERROR );
-    }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR from mySQL ";
-      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetset_cols.at(col) << ")"; }
-      else { message << "( col = " << col << " )"; }
-      message << ": " << err;
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return( ERROR );
-    }
-    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR std exception ";
+    catch ( const std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      message.str(""); message << "ERROR:";
       if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetset_cols.at(col) << ")"; }
       else { message << "( col = " << col << " )"; }
       message << ": " << ex.what();
       logwrite( function, message.str() );
       init_record();    // ensures that any previous record's info is not mistaken for this one
-      return( ERROR );
+      return ERROR;
     }
     catch ( const char *ex ) {            /// catch everything else
       message.str(""); message << "ERROR other exception ";
@@ -343,7 +306,7 @@ namespace Sequencer {
       message << ": " << ex;
       logwrite( function, message.str() );
       init_record();    // ensures that any previous record's info is not mistaken for this one
-      return( ERROR );
+      return ERROR;
     }
 
     message.str(""); message << "current target set " << retstream.str();
@@ -372,105 +335,62 @@ namespace Sequencer {
    */
   long TargetInfo::add_row( int number_in, std::string name_in, std::string ra_hms_in, std::string dec_dms_in,
                             double slita_in, double slitw_in, double exptime_in, std::string pointmode_in ) {
-    std::string function = "Sequencer::TargetInfo::add_row";
+    const std::string function("Sequencer::TargetInfo::add_row");
     std::stringstream message;
 
     if ( !is_db_configured() ) {
       logwrite( function, "ERROR: database not configured (check .cfg file)" );
-      return( ERROR );
+      return ERROR;
     }
 
     if ( this->setid < 0 ) {
       logwrite( function, "ERROR: targetset has not been provided" );
-      return( ERROR );
+      return ERROR;
     }
 
     try {
-      // create a session for accessing the database
-      //
-      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
-                                 mysqlx::SessionOption::PORT, this->db_port,
-                                 mysqlx::SessionOption::USER, this->db_user,
-                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+      std::map<std::string, mysqlx::Value> record;
 
-      // connect to database
-      //
-      mysqlx::Schema db( mySession, this->db_schema );
+      record = { { "OBSERVATION_ID", mysqlx::Value( number_in ) },         // OBSERVATION_ID
+                 { "OBS_ORDER", mysqlx::Value( number_in ) },              // OBS_ORDER
+                 { "SET_ID", mysqlx::Value( this->setid ) },               // SET_ID
+                 { "STATE", mysqlx::Value( Sequencer::TARGET_PENDING ) },  // STATE
+                 { "NAME", mysqlx::Value( name_in ) },                     // NAME
+                 { "RA", mysqlx::Value( ra_hms_in ) },                     // RA
+                 { "DECL", mysqlx::Value( dec_dms_in ) },                  // DECL
+                 { "EPOCH", mysqlx::Value( "J2000" ) },                    // EPOCH
+                 { "EXPTIME", mysqlx::Value( exptime_in ) },               // EXPTIME
+                 { "OTMexpt", mysqlx::Value( exptime_in ) },               // OTMexpt
+                 { "TARGET_NUMBER", mysqlx::Value( 1 ) },                  // TARGET_NUMBER
+                 { "SEQUENCE_NUMBER", mysqlx::Value( 1 ) },                // SEQUENCE_NUMBER
+                 { "CASANGLE", mysqlx::Value( 0. ) },                      // CASANGLE
+                 { "OTMcass", mysqlx::Value( 0. ) },                       // OTMcass
+                 { "OTMslitangle", mysqlx::Value( slita_in ) },            // OTMslitangle
+                 { "OTMslitwidth", mysqlx::Value( slitw_in ) },            // OTMslitwidth
+                 { "SLITWIDTH", mysqlx::Value( slitw_in ) },               // SLITWIDTH
+                 { "SLITOFFSET", mysqlx::Value( 1 ) },                     // SLITOFFSET
+                 { "BINSPECT", mysqlx::Value( 1 ) },                       // BINSPECT
+                 { "BINSPAT", mysqlx::Value( 1 ) },                        // BINSPAT
+                 { "POINTMODE", mysqlx::Value( pointmode_in ) }            // POINTMODE
+               };
 
-      // create a table object
-      //
-      mysqlx::Table targettable = db.getTable( this->db_active );
-
-      // add the row
-      //
-      targettable.insert( "OBSERVATION_ID",
-                          "OBS_ORDER",
-                          "SET_ID",
-                          "STATE",
-                          "NAME",
-                          "RA",
-                          "DECL",
-                          "EPOCH",
-                          "EXPTIME",
-                          "OTMexpt",
-                          "TARGET_NUMBER",
-                          "SEQUENCE_NUMBER",
-                          "CASANGLE",
-                          "OTMcass",
-                          "OTMslitangle",
-                          "OTMslitwidth",
-                          "SLITWIDTH",
-                          "SLITOFFSET",
-                          "BINSPECT",
-                          "BINSPAT",
-                          "POINTMODE"
-                        )
-                .values( number_in,                  // OBSERVATION_ID
-                         number_in,                  // OBS_ORDER
-                         this->setid,                // SET_ID
-                         Sequencer::TARGET_PENDING,  // STATE
-                         name_in,                    // NAME
-                         ra_hms_in,                  // RA
-                         dec_dms_in,                 // DECL
-                         "J2000",                    // EPOCH
-                         exptime_in,                 // EXPTIME
-                         exptime_in,                 // OTMexpt
-                         1,                          // TARGET_NUMBER
-                         1,                          // SEQUENCE_NUMBER
-                         0.,                         // CASANGLE
-                         0.,                         // OTMcass
-                         slita_in,                   // OTMslitangle
-                         slitw_in,                   // OTMslitwidth
-                         slitw_in,                   // SLITWIDTH
-                         1,                          // SLITOFFSET
-                         1,                          // BINSPECT
-                         1,                          // BINSPAT
-                         pointmode_in                // POINTMODE
-                       )
-                .execute();
+      database->insert(record);                                            // into active targets table
     }
-    catch ( const mysqlx::Error &err ) {
-      message.str(""); message << "ERROR from mySQL: " << err;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch ( std::exception &ex ) {
-      message.str(""); message << "ERROR std exception: " << ex.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+    catch ( const std::exception &ex ) {
+      logwrite( function, "ERROR: "+std::string(ex.what()) );
+      return ERROR;
     }
     catch ( const char *ex ) {
-      message.str(""); message << "ERROR other exception: " << ex;
-      logwrite( function, message.str() );
-      return( ERROR );
+      logwrite( function, "ERROR: "+std::string(ex) );
+      return ERROR;
     }
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Sequencer::TargetInfo::add_row ***************************************/
 
 
-  TargetInfo::TargetState TargetInfo::get_specified_target( std::string args, std::string &retstring ) {
+  TargetInfo::TargetState TargetInfo::get_specified_target( std::string obsid, std::string &retstring ) {
     const std::string function="Sequencer::TargetInfo::get_specified_target";
     std::stringstream message;
 
@@ -483,13 +403,15 @@ namespace Sequencer {
     }
 
     try {
-      int _obsid = std::stoi(args);
+      const std::string condition("OBSERVATION_ID like :obsid");
+      const std::string order("OBSERVATION_ID");
+      std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(obsid) } };
 
-      std::string condition = "OBSERVATION_ID like :obsid";
-      std::string order = "OBSERVATION_ID";
-      std::map<std::string, std::string> bindings = { {"obsid", args} };
-
-      mysqlx::RowResult result = dbManager->do_query(condition, order, bindings, this->targetlist_cols);
+      // read from active targets table
+      mysqlx::RowResult result = database->read(targetlist_cols,
+                                                condition,
+                                                bindings,
+                                                order);
 
       mysqlx::row_count_t rowcount = result.count();
       mysqlx::col_count_t colcount = result.getColumnCount();
@@ -498,7 +420,7 @@ namespace Sequencer {
       logwrite( function, message.str() );
 
       if ( result.count() < 1 ) {
-        message.str(""); message << "no matching target found for obsid " << _obsid;
+        message.str(""); message << "no matching target found for obsid " << obsid;
         retstring = message.str();
         logwrite( function, message.str() );
         init_record();    // ensures that any previous record's info is not mistaken for this one
@@ -519,15 +441,8 @@ namespace Sequencer {
 
       if ( this->parse_target_from_row( row ) != NO_ERROR ) return TARGET_ERROR;
     }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR mySQL exception: " << err;
-      retstring = message.str();
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return TARGET_ERROR;
-    }
     catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR exception: " << ex.what();
+      message.str(""); message << "ERROR: " << ex.what();
       retstring = message.str();
       logwrite( function, message.str() );
       init_record();    // ensures that any previous record's info is not mistaken for this one
@@ -615,31 +530,19 @@ namespace Sequencer {
     }
 
     try {
-      // create a session for accessing the database
-      //
-      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
-                                 mysqlx::SessionOption::PORT, this->db_port,
-                                 mysqlx::SessionOption::USER, this->db_user,
-                                 mysqlx::SessionOption::PWD,  this->db_pass   );
-
-      // connect to database
-      //
-      mysqlx::Schema db( mySession, this->db_schema );
-
-      // create a table object
-      //
-      mysqlx::Table targettable = db.getTable( this->db_active );
-
       // Find a row in the SQL active observations table,
       // the next one (in order) where state is state_in.
       //
-      mysqlx::RowResult result = targettable.select( this->targetlist_cols )
-                                           .where( "SET_ID like :setid && STATE like :state" )
-                                           .orderBy( "OBS_ORDER" )
-                                           .bind( "state", state_in )
-                                           .bind( "setid", this->setid )
-                                           .execute();
+      const std::string condition("SET_ID like :setid && STATE like :state");
+      const std::string order("OBS_ORDER");
+      std::map<std::string, mysqlx::Value> bindings = { { "state", mysqlx::Value(state_in) },
+                                                        { "setid", mysqlx::Value(this->setid) } };
 
+      // read from active targets table
+      mysqlx::RowResult result = database->read(this->targetlist_cols,
+                                                condition,
+                                                bindings,
+                                                order);
       rowcount = result.count();
       colcount = result.getColumnCount();
 
@@ -668,18 +571,8 @@ namespace Sequencer {
 
       error = this->parse_target_from_row( row );
     }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR mySQL exception ";
-      if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
-      else { message << "( col = " << col << " )"; }
-      message << ": " << err;
-      status = message.str();
-      logwrite( function, message.str() );
-      init_record();    // ensures that any previous record's info is not mistaken for this one
-      return TARGET_ERROR;
-    }
-    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR exception ";
+    catch ( std::exception &ex ) {
+      message.str(""); message << "ERROR ";
       if ( col >= 0 && col < colcount ) { message << "(reading " << this->targetlist_cols.at(col) << ")"; }
       else { message << "( col = " << col << " )"; }
       message << ": " << ex.what();
@@ -870,30 +763,18 @@ namespace Sequencer {
     }
 
     try {
-      // create a session for accessing the database
+      // To ensure there's only one matching record, find the row in the SQL active
+      // observations table which matches the current observation ID. The targetlist_cols
+      // vector identifies the fields to retrieve and is initialized by the TargetInfo()
+      // class initializer list.
       //
-      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
-                                 mysqlx::SessionOption::PORT, this->db_port,
-                                 mysqlx::SessionOption::USER, this->db_user,
-                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+      const std::string condition("OBSERVATION_ID like :obsid");
+      std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(this->obsid) } };
 
-      // connect to database
-      //
-      mysqlx::Schema db( mySession, this->db_schema );
-
-      // create a table object
-      //
-      mysqlx::Table targettable = db.getTable( this->db_active );
-
-      // Find the row in the SQL active observations table
-      // which matches the current observation ID. The targetlist_cols
-      // vector identifies the fields to retrieve and is initialized
-      // by the TargetInfo() class initializer list.
-      //
-      mysqlx::RowResult result = targettable.select( this->targetlist_cols )
-                                           .where( "OBSERVATION_ID like :obsid" )
-                                           .bind( "obsid", this->obsid )
-                                           .execute();
+      // read from active targets table
+      mysqlx::RowResult result = database->read(this->targetlist_cols,
+                                                condition,
+                                                bindings);
 
       rowcount = result.count();  /// number or rows that match the select criteria
 
@@ -906,26 +787,21 @@ namespace Sequencer {
         return( ERROR );
       }
 
-      // update the state here
+      // update state in the active targets table
       //
-      targettable.update( )
-                 .set( "STATE", newstate )
-                 .where( "OBSERVATION_ID like :obsid" )
-                 .bind( "obsid", this->obsid )
-                 .execute();
+      std::map<std::string, mysqlx::Value> setdata = { { "STATE", mysqlx::Value(newstate) } };
+
+      database->update(setdata,
+                       condition,
+                       bindings);
 
       message.str(""); message << "target " << this->name << " id " << this->obsid << " state " << newstate;
       logwrite( function, message.str() );
 
       this->state = newstate;  // on success, save the new state to the class so that it can be accessed by enqueue
     }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR from mySQL: " << err;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR std exception: " << ex.what();
+    catch ( const std::exception &ex ) {
+      message.str(""); message << "ERROR: " << ex.what();
       logwrite( function, message.str() );
       return( ERROR );
     }
@@ -954,106 +830,38 @@ namespace Sequencer {
       return ERROR;
     }
 
-    if ( this->name.empty() ) {
-      logwrite( function, "ERROR no record selected" );
-      return ERROR;
-    }
-
     try {
-      // create a session for accessing the database
-      //
-      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
-                                 mysqlx::SessionOption::PORT, this->db_port,
-                                 mysqlx::SessionOption::USER, this->db_user,
-                                 mysqlx::SessionOption::PWD,  this->db_pass   );
+      std::map<std::string, mysqlx::Value> record;
 
-      // connect to database
-      //
-      mysqlx::Schema db( mySession, this->db_schema );
-
-      // create a table object
-      //
-      mysqlx::Table targettable = db.getTable( this->db_completed );
-
-      // create a vector of column names
-      //
-      std::vector<std::string> columns;
-      columns = { "OWNER",            // target table
-                  "OBSERVATION_ID",   // target table
-                  "SET_ID",           // target table
-                  "TARGET_NUMBER",    // target table
-                  "SEQUENCE_NUMBER",  // target table
-                  "NAME",             // target table
-                  "FITSFILE",         // internal from ___
-                  "RA",               // target table
-                  "DECL",             // target table
-                  "SLITANGLE_REQ",    // target table col = SLITANGLE
-                  "POINTMODE",        // target table
-                  "NOTBEFORE",        // target table
-                  "SLEW_START",       // from Sequence::dothread_move_to_target()
-                  "SLEW_END",         // from Sequence::dothread_move_to_target()
-                  "EXPTIME_REQ",      // target table col = OTMexpt
-                  "EXP_START",        // from Sequence::dothread_trigger_exposure()
-                  "EXP_END",          // from Sequence::dothread_sequencer_async_listener() ?
-                  "SLITWIDTH_REQ",    // target table col = SLITWIDTH
-                  "BINSPECT",         // target table
-                  "BINSPAT",          // target table
-                  "OBSMODE",          // target table
-                  "NOTE",             // target table
-                  "OTMFLAG"           // target table
-                };
-
-      // and a vector of corresponding values for those columns
-      //
-      std::vector<mysqlx::Value> values;
-      values = { this->owner,         // OWNER
-                 this->obsid,         // OBSERVATION_ID
-                 this->setid,         // SET_ID
-                 this->targetnum,     // TARGET_NUMBER
-                 this->sequencenum,   // SEQUENCER_NUMBER
-                 this->name,          // NAME
-                 this->fitsfile,      // FITSFILE
-                 this->ra_hms,        // RA
-                 this->dec_dms,       // DECL
-                 this->slitangle_req, // SLITANGLE_REQ
-                 this->pointmode,     // POINTMODE
-                 this->notbefore,     // NOTBEFORE
-                 this->slewstart,     // SLEW_START
-                 this->slewend,       // SLEW_END
-                 this->exptime_req,   // EXPTIME_REQ <-- came in as OTMexpt
-                 this->expstart,      // EXP_START
-                 this->expend,        // EXP_END
-                 this->slitwidth_req, // SLITWIDTH_REQ
-                 this->binspect,      // BINSPECT
-                 this->binspat,       // BINSPAT
-                 this->obsmode,       // OBSMODE
-                 this->note,          // NOTE
-                 this->otmflag        // OTMFLAG
+      record = { { "OWNER",          mysqlx::Value( this->owner ) },         // from target table
+                 { "OBSERVATION_ID", mysqlx::Value( this->obsid ) },         // from target table
+                 { "SET_ID",         mysqlx::Value( this->setid ) },         // from target table
+                 { "TARGET_NUMBER",  mysqlx::Value( this->targetnum ) },     // from target table
+                 { "SEQUENCE_NUMBER",mysqlx::Value( this->sequencenum ) },   // from target table
+                 { "NAME",           mysqlx::Value( this->name ) },          // from target table
+                 { "FITSFILE",       mysqlx::Value( this->fitsfile ) },      // internal from ___
+                 { "RA",             mysqlx::Value( this->ra_hms ) },        // from target table
+                 { "DECL",           mysqlx::Value( this->dec_dms ) },       // from target table
+                 { "SLITANGLE_REQ",  mysqlx::Value( this->slitangle_req ) }, // from target table col = SLITANGLE
+                 { "POINTMODE",      mysqlx::Value( this->pointmode ) },     // from target table
+                 { "NOTBEFORE",      mysqlx::Value( this->notbefore ) },     // from target table
+                 { "SLEW_START",     mysqlx::Value( this->slewstart ) },     // from Sequence::dothread_move_to_target()
+                 { "SLEW_END",       mysqlx::Value( this->slewend ) },       // from Sequence::dothread_move_to_target()
+                 { "EXPTIME_REQ",    mysqlx::Value( this->exptime_req ) },   // came in as OTMexpt from target table col = OTMexpt
+                 { "EXP_START",      mysqlx::Value( this->expstart ) },      // from Sequence::dothread_trigger_exposure()
+                 { "EXP_END",        mysqlx::Value( this->expend ) },        // from Sequence::dothread_sequencer_async_listener() ?
+                 { "SLITWIDTH_REQ",  mysqlx::Value( this->slitwidth_req) },  // from target table col = SLITWIDTH
+                 { "BINSPECT",       mysqlx::Value( this->binspect ) },      // from target table
+                 { "BINSPAT",        mysqlx::Value( this->binspat ) },       // from target table
+                 { "OBSMODE",        mysqlx::Value( this->obsmode ) },       // from target table
+                 { "NOTE",           mysqlx::Value( this->note ) },          // from target table
+                 { "OTMFLAG",        mysqlx::Value( this->otmflag ) }        // from target table
                };
 
-      // The entries in the above "columns" and "values" vectors are fixed.
-      // Now add additional columns/values to each which come from external
-      // telemetry sources, but only add them if they have a valid value.
-      //
-      for ( const auto &[name, data] : this->external_telemetry ) {
-        if ( data.valid ) {
-          columns.push_back( name );
-          values.push_back( data.value );
-        }
-      }
-
-      // add the row --
-      //
-      targettable.insert( columns).values( values ).execute();
-    }
-    catch ( const mysqlx::Error &err ) {
-      message.str(""); message << "ERROR mySQL exception: " << err;
-      logwrite( function, message.str() );
-      return ERROR;
+      database->insert( this->db_completed, record );                        // into completed targets table
     }
     catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR std exception: " << e.what();
-      logwrite( function, message.str() );
+      logwrite( function, "ERROR: "+std::string(e.what()) );
       return ERROR;
     }
 
@@ -1071,50 +879,32 @@ namespace Sequencer {
    *
    */
   long TargetInfo::get_table_names() {
-    std::string function = "Sequencer::TargetInfo::get_table_names";
-    std::stringstream message;
+    const std::string function("Sequencer::TargetInfo::get_table_names");
     std::list<std::string> tablenames;
 
     if ( !is_db_configured() ) {
       logwrite( function, "ERROR: database not configured (check .cfg file)" );
-      return( ERROR );
+      return ERROR;
     }
 
     try {
-      // create a session for accessing the database
-      //
-      mysqlx::Session mySession( mysqlx::SessionOption::HOST, this->db_host,
-                                 mysqlx::SessionOption::PORT, this->db_port,
-                                 mysqlx::SessionOption::USER, this->db_user,
-                                 mysqlx::SessionOption::PWD,  this->db_pass   );
-
-      // connect to database
-      //
-      mysqlx::Schema db( mySession, this->db_schema );
-
-      tablenames  = db.getTableNames();
+      tablenames  = database->get_tablenames();
     }
-    catch ( const mysqlx::Error &err ) {  /// catch errors thrown from mysqlx connector/C++ X DEV API
-      message.str(""); message << "ERROR from mySQL: " << err;
-      logwrite( function, message.str() );
-      return( ERROR );
-    }
-    catch ( std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
-      message.str(""); message << "ERROR std exception: " << ex.what();
-      logwrite( function, message.str() );
-      return( ERROR );
+    catch ( const std::exception &ex ) {        /// catch std::exceptions. This could be if this->colnum() returns a -1
+      logwrite( function, "ERROR: "+std::string(ex.what()) );
+      return ERROR;
     }
     catch ( const char *ex ) {            /// catch everything else
-      message.str(""); message << "ERROR other exception: " << ex;
-      logwrite( function, message.str() );
-      return( ERROR );
+      logwrite( function, "ERROR: "+std::string(ex) );
+      return ERROR;
     }
 
-    message.str(""); message << "TableNames: ";
+    std::stringstream message;
+    message << "TableNames: ";
     for ( const auto &name : tablenames ) message << name << " ";
     logwrite( function, message.str() );
 
-    return( NO_ERROR );
+    return NO_ERROR;
   }
   /***** Sequencer::TargetInfo::get_table_names *******************************/
 
