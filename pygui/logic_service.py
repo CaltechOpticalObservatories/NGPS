@@ -58,6 +58,12 @@ class LogicService:
 
         # Step 2: Insert a new entry into the `target_sets` table
         try:
+            connection = self.connect_to_mysql("config/db_config.ini")  # Assuming you have a method to connect to the DB
+
+            if connection is None:
+                print("Failed to connect to MySQL. Cannot refresh table.")
+                return
+
             cursor = self.connection.cursor()
             cursor.execute("INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
                         (target_set_name, self.parent.current_owner))  # Use the current owner's info
