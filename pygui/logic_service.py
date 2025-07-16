@@ -391,6 +391,38 @@ class LogicService:
             self.update_target_sets_table(rows)
         else:
             print(f"No data found in the {target_sets_table} table.")
+
+    def load_calibration_target_sets(self, config_file):
+        """
+        Loads only calibration target sets (names starting with 'CAL_') from the target_sets table.
+        This is similar to `load_mysql_and_fetch_target_sets` but filters the rows accordingly.
+        """
+        # Step 1: Connect to MySQL using the config file
+        connection = self.connect_to_mysql(config_file)
+        
+        if connection is None:
+            print("Failed to connect to MySQL. Cannot load calibration target sets.")
+            return
+
+        # Step 2: Load data from the 'target_sets' table
+        db_config = self.read_config(config_file)
+        target_sets_table = db_config.get("TARGETSET_TABLE")
+
+        rows = self.load_data_from_mysql(connection, target_sets_table)
+
+        if not rows:
+            print(f"No data found in the {target_sets_table} table.")
+            return
+
+        # Step 3: Filter calibration target sets (those with name starting with 'CAL_')
+        calibration_rows = [row for row in rows if str(row[0]).startswith("CAL_")]
+
+        if calibration_rows:
+            print(f"Fetched {len(calibration_rows)} calibration target sets.")
+            self.update_target_sets_table(calibration_rows)
+        else:
+            print("No calibration target sets found (prefix 'CAL_').")
+
         
     def fetch_set_id(self, target_list=None):
         self.target_list_display = self.parent.layout_service.target_list_display

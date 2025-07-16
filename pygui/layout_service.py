@@ -1233,12 +1233,12 @@ class LayoutService:
             if self.target_list_mode_toggle.isChecked():
                 # Calibration mode: load calibration target lists
                 print("Loading Calibration target lists...")
-                # target_lists = self.logic_service.load_calibration_target_sets("config/db_config.ini")
+                target_lists = self.logic_service.load_calibration_target_sets("config/db_config.ini")
 
-                # # Ensure calibration target lists is iterable
-                # if not isinstance(target_lists, (list, tuple)):
-                #     print("Error: Calibration data is not a valid iterable (list or tuple).")
-                #     target_lists = []
+                # Ensure calibration target lists is iterable
+                if not isinstance(target_lists, (list, tuple)):
+                    print("Error: Calibration data is not a valid iterable (list or tuple).")
+                    target_lists = []
 
             else:
                 # Science mode: use the existing logic
@@ -1582,7 +1582,7 @@ class LayoutService:
 
         # Create the toggle button
         self.target_list_mode_toggle = QPushButton("Mode: Science")
-        self.target_list_mode_toggle.setCheckable(False)  # Makes it toggle
+        self.target_list_mode_toggle.setCheckable(True)
         self.target_list_mode_toggle.setMaximumWidth(150)
 
         # Set toggle styles (optional)
