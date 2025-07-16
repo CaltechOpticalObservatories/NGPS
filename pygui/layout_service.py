@@ -1225,29 +1225,27 @@ class LayoutService:
         self.load_target_lists()
 
         return left_planning_column
-
     
     def load_target_lists(self, target_lists=None):
         """Populate the ComboBox with target lists, switching between Science and Calibration modes."""
         try:
             if self.target_list_mode_toggle.isChecked():
-                # Calibration mode: load calibration target lists
+                # Calibration mode
                 print("Loading Calibration target lists...")
                 target_lists = self.logic_service.load_calibration_target_sets("config/db_config.ini")
 
-                # Ensure calibration target lists is iterable
                 if not isinstance(target_lists, (list, tuple)):
-                    print("Error: Calibration data is not a valid iterable (list or tuple).")
+                    print("Error: Calibration data is not a valid iterable.")
                     target_lists = []
 
             else:
-                # Science mode: use the existing logic
+                # Science mode
                 print("Loading Science target lists...")
                 if target_lists is None:
                     target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
 
                     if not isinstance(target_lists, (list, tuple)):
-                        print("Error: Fetched data is not a valid iterable (list or tuple).")
+                        print("Error: Fetched data is not a valid iterable.")
                         target_lists = []
 
         except Exception as e:
@@ -1263,24 +1261,19 @@ class LayoutService:
 
         # Populate the combo box
         if isinstance(self.target_list_name, QComboBox):
-            self.target_list_name.blockSignals(True)  # Prevent signals during update
+            self.target_list_name.blockSignals(True)
             self.target_list_name.clear()
 
-            # Add each target set
             for set_name in target_lists:
                 self.target_list_name.addItem(set_name)
 
-            # Add the "create new" option
             self.target_list_name.addItem("Create a new target list")
 
-            # Select the first item as default
-            self.target_list_name.setCurrentIndex(0)
+            # Select the most recently added item (last in the list)
+            self.target_list_name.setCurrentIndex(len(target_lists) - 1)
 
             self.target_list_name.blockSignals(False)
-
-            # Connect signal for selection change
             self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
-
 
     def create_new_target_list(self):
         """Handle creating a new target list, uploading CSV, and creating a new target set."""
