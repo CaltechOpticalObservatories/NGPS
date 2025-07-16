@@ -369,104 +369,92 @@ class LogicService:
 
     def load_mysql_and_fetch_target_sets(self, config_file):
         """
-        Loads all target sets for the current user from the 'target_sets' table and updates the UI.
+        Loads all target sets for the current user from the 'target_sets' table.
+        Returns a list of SET_NAMEs for UI population.
         """
         username = getattr(self.parent, "current_owner", None)
         if not username:
             print("No owner information found. Cannot load target sets.")
-            return
+            return []
 
-        # Step 1: Connect to MySQL
         connection = self.connect_to_mysql(config_file)
         if connection is None:
             print("Failed to connect to MySQL.")
-            return
+            return []
 
         try:
             cursor = connection.cursor(dictionary=True)
-
-            # Step 2: Load target sets for the user
             cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (username,))
             set_data = cursor.fetchall()
 
             if not set_data:
                 print(f"No target sets found for user '{username}'.")
-                return
+                return []
 
-            # Step 3: Store SET_ID to SET_NAME mapping
             self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in set_data}
             self.set_name = [row["SET_NAME"] for row in set_data]
 
-            # Step 4: Fetch all target rows for those sets
             self.all_targets = []
             for row in set_data:
                 cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (row["SET_ID"],))
                 targets = cursor.fetchall()
                 self.all_targets.extend(targets)
 
-            # Step 5: Update the UI and select the most recently added set
-            latest_set_name = self.set_name[-1]  # assuming insertion order; use ORDER BY if needed
-            self.update_target_list_combo_box(self.set_name, new_target_list_name=latest_set_name)
-
             print(f"Fetched {len(self.set_name)} target sets for user '{username}'.")
+            return self.set_name
 
         except mysql.connector.Error as err:
             print(f"Database error: {err}")
+            return []
         finally:
             connection.close()
 
 
     def load_calibration_target_sets(self, config_file):
         """
-        Loads only calibration target sets (SET_NAME starts with 'CAL_') owned by the current user.
-        Updates the UI with the filtered target sets and selects the most recent one.
+        Loads calibration target sets (SET_NAME starting with 'CAL_') for the current user.
+        Returns a list of filtered SET_NAMEs for UI population.
         """
         username = getattr(self.parent, "current_owner", None)
         if not username:
             print("No owner information found. Cannot load calibration target sets.")
-            return
+            return []
 
-        # Step 1: Connect to MySQL
         connection = self.connect_to_mysql(config_file)
         if connection is None:
             print("Failed to connect to MySQL.")
-            return
+            return []
 
         try:
             cursor = connection.cursor(dictionary=True)
-
-            # Step 2: Get calibration target sets for the current user
             cursor.execute(
-                "SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s AND SET_NAME LIKE 'CAL\\_%'", 
+                "SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s AND SET_NAME LIKE 'CAL\\_%'",
                 (username,)
             )
-            calibration_sets = cursor.fetchall()
+            set_data = cursor.fetchall()
 
-            if not calibration_sets:
-                print("No calibration target sets found for user:", username)
-                return
+            if not set_data:
+                print(f"No calibration sets found for user '{username}'.")
+                return []
 
-            # Step 3: Update internal data
-            self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in calibration_sets}
-            self.set_name = [row["SET_NAME"] for row in calibration_sets]
+            self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in set_data}
+            self.set_name = [row["SET_NAME"] for row in set_data]
 
-            # Step 4: Load associated targets
             self.all_targets = []
-            for row in calibration_sets:
+            for row in set_data:
                 cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (row["SET_ID"],))
                 targets = cursor.fetchall()
                 self.all_targets.extend(targets)
 
-            # Step 5: Update UI combo box and select the newest entry
-            latest_set_name = self.set_name[-1]  # Assuming order is by insertion
-            self.update_target_list_combo_box(self.set_name, new_target_list_name=latest_set_name)
-
-            print(f"Loaded {len(self.set_name)} calibration target sets for user '{username}'.")
+            print(f"Fetched {len(self.set_name)} calibration target sets.")
+            return self.set_name
 
         except mysql.connector.Error as err:
             print(f"Database error: {err}")
+            return []
         finally:
             connection.close()
+
         
     def fetch_set_id(self, target_list=None):
         self.target_list_display = self.parent.layout_service.target_list_display
