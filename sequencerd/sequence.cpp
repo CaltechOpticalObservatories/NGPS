@@ -1081,7 +1081,6 @@ namespace Sequencer {
         }
       }
     }
-    else throw std::runtime_error("acam connection didn't open");
 
     this->thread_error_manager.clear( THR_ACAM_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_ACAM );  // acamd ready
@@ -1733,7 +1732,6 @@ namespace Sequencer {
         }
       }
     }
-    else throw std::runtime_error("camera not open");
 
     this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_CAMERA );  // camerad ready
