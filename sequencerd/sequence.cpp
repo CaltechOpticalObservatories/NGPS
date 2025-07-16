@@ -700,7 +700,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::camera_set **************************************/
   /**
    * @brief      sets the camera according to the parameters in the target entry
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    * At the moment, this is only exposure time.
    *
@@ -716,6 +717,8 @@ namespace Sequencer {
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
+    this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
+
     // send the EXPTIME command to camerad
     //
     // Everywhere is maintained that exptime is specified in sec except
@@ -723,23 +726,29 @@ namespace Sequencer {
     //
     long exptime_msec = (long)( this->target.exptime_req * 1000 );
     camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime_msec;
-    error |= this->camerad.send( camcmd.str(), reply );
+    if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      throw std::runtime_error( "camera returned "+reply );
+    }
 
     // send binning parameters
     // this is only good for I/R and will have to change to be more general
     // because not all detectors will be oriented the same!
     //
     camcmd.str(""); camcmd << CAMERAD_BIN << " row " << this->target.binspat;
-    error |= this->camerad.send( camcmd.str(), reply );
+    if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      throw std::runtime_error( "camera returned "+reply );
+    }
     camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
-    error |= this->camerad.send( camcmd.str(), reply );
-
-    if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR setting camera" );
-      this->thread_error_manager.set( THR_CAMERA_SET );
+    if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      throw std::runtime_error( "camera returned "+reply );
     }
 
-    return error;
+    this->thread_error_manager.clear( THR_CAMERA_SET );  // success
+
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::camera_set **************************************/
 
@@ -750,7 +759,8 @@ namespace Sequencer {
    * @details    Slit width is always set according to the value in the target
    *             database entry, offset set according to mode.
    * @param[in]  mode  selects source of slit offset
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::slit_set(VirtualSlitMode mode) {
@@ -790,7 +800,7 @@ namespace Sequencer {
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR setting slit" );
       this->thread_error_manager.set( THR_SLIT_SET );
-      return ERROR;
+      throw std::runtime_error("slit returned: "+reply);
     }
 
     return NO_ERROR;
@@ -801,7 +811,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::power_init **************************************/
   /**
    * @brief      initializes the power system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::power_init() {
@@ -814,7 +825,7 @@ namespace Sequencer {
 
     if ( this->reopen_hardware(this->powerd, POWERD_REOPEN, 10000 ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing power control" );
-      return ERROR;
+      throw std::runtime_error("could not initialize power control");
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
@@ -828,6 +839,7 @@ namespace Sequencer {
   /**
    * @brief      disconnects from powerd
    * @details    There's nothing with powerd that needs to be shut down.
+   * @return     NO_ERROR
    *
    */
   long Sequence::power_shutdown() {
@@ -849,7 +861,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::slit_init ***************************************/
   /**
    * @brief      initializes the slit for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::slit_init() {
@@ -860,15 +873,17 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_SLIT );  // slitd not ready
 
+    this->thread_error_manager.set( THR_SLIT_INIT );       // assume the worst, clear on success
+
     if ( this->set_power_switch(ON, POWER_SLIT, std::chrono::seconds(5)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering slit hardware" );
-      return ERROR;
+      throw std::runtime_error("could not power slit hardware");
     }
 
     bool was_opened=false;
     if ( this->open_hardware(this->slitd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR connecting to slit" );
-      return ERROR;
+      throw std::runtime_error("could not open connection to slit hardware");
     }
 
     // Ask slitd if the slit motors are homed,
@@ -877,7 +892,7 @@ namespace Sequencer {
     std::string reply;
     if ( this->slitd.command( SLITD_ISHOME, reply ) ) {
       this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
-      return ERROR;
+      throw std::runtime_error("could not communicate with slit hardware: "+reply);
     }
     this->parse_state( function, reply, ishomed );
 
@@ -887,7 +902,7 @@ namespace Sequencer {
       logwrite( function, "sending home command" );
       if ( this->slitd.command_timeout( SLITD_HOME, reply, SLITD_HOME_TIMEOUT ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
-        return ERROR;
+        throw std::runtime_error("could not home slit hardware: "+reply);
       }
     }
 
@@ -897,10 +912,11 @@ namespace Sequencer {
       std::string cmd = SLITD_SET+" "+this->config_init["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to slit" );
-        return ERROR;
+        throw std::runtime_error("slit "+cmd+" returned: "+reply);
       }
     }
 
+    this->thread_error_manager.clear( THR_SLIT_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_SLIT );  // slitd ready
 
     return NO_ERROR;
@@ -911,6 +927,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::slit_shutdown ***********************************/
   /**
    * @brief      shuts down the slit system
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::slit_shutdown() {
@@ -923,12 +941,14 @@ namespace Sequencer {
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_SLIT );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_SLIT );
 
+    this->thread_error_manager.set( THR_SLIT_SHUTDOWN );    // assume the worst, clear on success
+
     // already off?
     //
     bool poweron=false;
     if ( check_power_switch(ON, POWER_SLIT, poweron ) != NO_ERROR ) {
       logwrite( function, "ERROR checking power switch" );
-      return ERROR;
+      throw std::runtime_error("checking slit power switch");
     }
 
     // if already off then get out now, don't turn them back on
@@ -946,7 +966,7 @@ namespace Sequencer {
       std::string cmd = SLITD_SET+" "+this->config_shutdown["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to slit" );
-        return ERROR;
+        throw std::runtime_error(cmd+" returned: "+reply);
       }
     }
 
@@ -954,12 +974,17 @@ namespace Sequencer {
     //
     logwrite( function, "closing slit hardware" );
     error = this->slitd.command( SLITD_CLOSE, reply );
-    if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR closing connection to slit hardware" );
+    if ( error != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR closing connection to slit hardware" );
+      throw std::runtime_error("closing slit connection returned: "+reply);
+    }
 
     // disconnect me from slitd, irrespective of any previous error
     //
     logwrite( function, "disconnecting from slitd" );
     this->slitd.disconnect();
+
+    this->thread_error_manager.clear( THR_SLIT_SHUTDOWN );  // success
 
     return NO_ERROR;
   }
@@ -969,7 +994,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::slicecam_init ***********************************/
   /**
    * @brief      initializes the slicecam system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::slicecam_init() {
@@ -980,21 +1006,24 @@ namespace Sequencer {
     ScopedState thr_state( thread_state_manager, Sequencer::THR_SLICECAM_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_SLICECAM );
 
+    this->thread_error_manager.set( THR_SLICECAM_INIT );       // assume the worst, clear on success
+
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_SLICECAM, std::chrono::seconds(10)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing slicecam control" );
-      return ERROR;
+      throw std::runtime_error("could not power slicecam hardware");
     }
 
     // open connection is all that is needed, slicecamd takes care of everything
     //
     if ( this->open_hardware(this->slicecamd, SLICECAMD_OPEN, SLICECAMD_OPEN_TIMEOUT) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR starting slicecam" );
-      return ERROR;
+      throw std::runtime_error("could not start slicecam");
     }
 
-    this->daemon_manager.set( Sequencer::DAEMON_SLICECAM );  // slicecamd ready
+    this->daemon_manager.set( Sequencer::DAEMON_SLICECAM );    // slicecamd ready
+    this->thread_error_manager.clear( THR_SLICECAM_INIT );     // success
 
     return NO_ERROR;
   }
@@ -1004,7 +1033,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::acam_init ***************************************/
   /**
    * @brief      initializes the slicecam system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::acam_init() {
@@ -1015,11 +1045,13 @@ namespace Sequencer {
     ScopedState thr_state( thread_state_manager, Sequencer::THR_ACAM_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACAM );
 
+    this->thread_error_manager.set( THR_ACAM_INIT );       // assume the worst, clear on success
+
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_ACAM, std::chrono::seconds(10)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering acam hardware" );
-      return ERROR;
+      throw std::runtime_error("could not power acam hardware");
     }
 
     // open connection is all that is needed, acamd takes care of everything
@@ -1027,7 +1059,7 @@ namespace Sequencer {
     bool was_opened=false;
     if ( this->open_hardware(this->acamd, ACAMD_OPEN, ACAMD_OPEN_TIMEOUT, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR starting acam" );
-      return ERROR;
+      throw std::runtime_error("could not start acam");
     }
 
     // send init values only if connection was just opened now
@@ -1038,18 +1070,20 @@ namespace Sequencer {
         cmd = ACAMD_FILTER+" "+this->config_init["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
-          return ERROR;
+          throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
       if ( ! this->config_init["ACAM_COVER"].empty() ) {
         cmd = ACAMD_COVER+" "+this->config_init["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
-          return ERROR;
+          throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
     }
+    else throw std::runtime_error("acam connection didn't open");
 
+    this->thread_error_manager.clear( THR_ACAM_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_ACAM );  // acamd ready
 
     return NO_ERROR;
@@ -1060,6 +1094,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::slicecam_shutdown *******************************/
   /**
    * @brief      shuts down the slicecam system
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::slicecam_shutdown() {
@@ -1072,12 +1108,14 @@ namespace Sequencer {
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_SLICECAM );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_SLICECAM );
 
+    this->thread_error_manager.set( THR_SLICECAM_SHUTDOWN );    // assume the worst, clear on success
+
     // already off?
     //
     bool poweron=false;
     if ( check_power_switch(ON, POWER_SLICECAM, poweron ) != NO_ERROR ) {
       logwrite( function, "ERROR checking power switch" );
-      return ERROR;
+      throw std::runtime_error("checking slicecam power switch");
     }
 
     // if already off then get out now, don't turn them back on
@@ -1087,13 +1125,16 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
-    if ( this->connect_to_daemon(this->slicecamd) != NO_ERROR ) return ERROR;
+    if ( (error=this->connect_to_daemon(this->slicecamd)) != NO_ERROR ) {
+      this->async.enqueue_and_log(function, "ERROR connecting to slicecamd");
+    }
 
     // close connections between slicecamd and the hardware with which it communicates
     //
     logwrite( function, "closing slicecam hardware" );
-    error = this->slicecamd.command_timeout( SLICECAMD_SHUTDOWN, reply, SLICECAMD_SHUTDOWN_TIMEOUT );
-    if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR closing connection to slicecam hardware" );
+    if ( (error=this->slicecamd.command_timeout( SLICECAMD_SHUTDOWN, reply, SLICECAMD_SHUTDOWN_TIMEOUT )) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR closing connection to slicecam hardware" );
+    }
 
     // disconnect me from slicecamd, irrespective of any previous error
     //
@@ -1104,9 +1145,10 @@ namespace Sequencer {
     //
     if ( this->set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(0)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR switching off slicecam" );
-      error=ERROR;
+      throw std::runtime_error("could not power off slicecam hardware");
     }
 
+    this->thread_error_manager.clear( THR_SLICECAM_SHUTDOWN );  // success
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::slicecam_shutdown *******************************/
@@ -1115,6 +1157,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::acam_shutdown ***********************************/
   /**
    * @brief      shuts down the acam system
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::acam_shutdown() {
@@ -1126,6 +1170,8 @@ namespace Sequencer {
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ACAM_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_ACAM );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_ACAM );
+
+    this->thread_error_manager.set( THR_ACAM_SHUTDOWN );    // assume the worst, clear on success
 
     // ensure a connection to the daemon
     //
@@ -1139,20 +1185,21 @@ namespace Sequencer {
         cmd = ACAMD_FILTER+" "+this->config_shutdown["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
-          return ERROR;
+          throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
       if ( ! this->config_shutdown["ACAM_COVER"].empty() ) {
         cmd = ACAMD_COVER+" "+this->config_shutdown["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
-          return ERROR;
+          throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
     }
 
     // send ACAMD_SHUTDOWN command to acamd -- this will cause it to nicely
     // close connections between acamd and the hardware with which it communicates
+    // Don't throw here, okay to turn off power if close fails.
     //
     if ( error==NO_ERROR ) {
       logwrite( function, "closing acam hardware" );
@@ -1166,18 +1213,15 @@ namespace Sequencer {
     this->acamd.disconnect();
 
     // Turn off power to acam hardware.
-    // Any error here is added to thread_error_manager.
     //
     if ( this->set_power_switch(OFF, POWER_ACAM, std::chrono::seconds(0)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR switching off acam" );
-      error=ERROR;
+      throw std::runtime_error("could not switch off acam");
     }
 
-    // set this thread's error status
-    //
-    if (error!=NO_ERROR) this->thread_error_manager.set( THR_ACAM_SHUTDOWN );
+    this->thread_error_manager.clear( THR_ACAM_SHUTDOWN );  // success
 
-    return error;
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::acam_shutdown ***********************************/
 
@@ -1185,7 +1229,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::calib_init **************************************/
   /**
    * @brief      initializes the calibrator system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::calib_init() {
@@ -1196,18 +1241,19 @@ namespace Sequencer {
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIB_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
 
+    this->thread_error_manager.set( THR_CALIB_INIT );  // assume the worst, clear on success
+
     // make sure calib hardware is powered
     if ( this->set_power_switch(ON, POWER_CALIB, std::chrono::seconds(5)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering focus control" );
-      return ERROR;
+      throw std::runtime_error("could not power focus control");
     }
 
     // connect to calibd
     bool was_opened=false;
     if ( this->open_hardware(this->calibd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing calib control" );
-      this->thread_error_manager.set( THR_CALIB_INIT );
-      return ERROR;
+      throw std::runtime_error("could not power calib control");
     }
 
     // if calibd was just opened, home if needed,
@@ -1219,14 +1265,14 @@ namespace Sequencer {
       long error = this->calibd.command( CALIBD_ISHOME, reply );
       if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
-        return ERROR;
+        throw std::runtime_error("could not communicate with calib hardware: "+reply);
       }
       // home calib actuators if not already homed
       if ( !ishomed ) {
         logwrite( function, "sending home command" );
         if ( this->calibd.command_timeout( CALIBD_HOME, reply, CALIBD_HOME_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
-          return ERROR;
+          throw std::runtime_error("could not communicate with calib hardware: "+reply);
         }
       }
       // set init values
@@ -1239,13 +1285,15 @@ namespace Sequencer {
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
-          return ERROR;
+          throw std::runtime_error("could not move calib door and/or cover");
         }
       }
     }
 
     // calibd is ready
     this->daemon_manager.set( Sequencer::DAEMON_CALIB );
+
+    this->thread_error_manager.clear( THR_CALIB_INIT );
 
     return NO_ERROR;
   }
@@ -1255,6 +1303,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::calib_shutdown **********************************/
   /**
    * @brief      shuts down the calibrator system
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::calib_shutdown() {
@@ -1265,12 +1315,14 @@ namespace Sequencer {
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_CALIB );
 
+    this->thread_error_manager.set( THR_CALIB_SHUTDOWN );    // assume the worst, clear on success
+
     // is calib hardware powered?
     //
     bool poweron=false;
     if ( check_power_switch(ON, POWER_CALIB, poweron ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR checking calib power switch" );
-      error=ERROR;
+      throw std::runtime_error("checking calib power switch");
     }
 
     // ensure a connection to the daemon
@@ -1288,12 +1340,13 @@ namespace Sequencer {
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
-          error=ERROR;
+          throw std::runtime_error("moving calib door and/or cover");
         }
       }
     }
 
     // close connections between calibd and the hardware with which it communicates
+    // no throw here, okay to turn off power if this fails
     //
     if ( error==NO_ERROR ) {
       std::string reply;
@@ -1323,9 +1376,13 @@ namespace Sequencer {
 
     // set this thread's error status
     //
-    if (error!=NO_ERROR) this->thread_error_manager.set( THR_CALIB_SHUTDOWN );
+    if (error!=NO_ERROR) {
+      this->thread_error_manager.set( THR_CALIB_SHUTDOWN );
+      throw std::runtime_error("shutting down calib control");
+    }
 
-    return error;
+    this->thread_error_manager.clear( THR_CALIB_SHUTDOWN );  // success
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::calib_shutdown **********************************/
 
@@ -1336,7 +1393,8 @@ namespace Sequencer {
    * @details    This opens a connection to tcsd, then instructs tcsd to open
    *             a connection to the TCS. The default TCS is opened, as specified
    *             in the tcsd config file.
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::tcs_init() {
@@ -1348,7 +1406,7 @@ namespace Sequencer {
     if ( this->open_hardware(this->tcsd) != NO_ERROR ) {
       this->async.enqueue_and_log( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
       this->thread_error_manager.set( THR_TCS_INIT );
-      return ERROR;
+      throw std::runtime_error("could not initialize TCS");
     }
 
     ///< @TODO Use a long 300 s timeout here until I implement a better way.
@@ -1367,6 +1425,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::tcs_shutdown ************************************/
   /**
    * @brief      shuts down the tcs connection
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::tcs_shutdown() {
@@ -1387,8 +1447,12 @@ namespace Sequencer {
       logwrite( function, "closing connection to TCS" );
       std::string reply;
       error = this->tcsd.send( TCSD_CLOSE, reply );
-      if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR: closing connection to TCS" );
+      if ( error != NO_ERROR ) {
+        this->async.enqueue_and_log( function, "ERROR: closing connection to TCS" );
+        throw std::runtime_error("closing TCS connection: "+reply);
+      }
     }
+    else throw std::runtime_error("no connection to TCS daemon");
 
     // disconnect me from tcsd, irrespective of any previous error
     //
@@ -1403,7 +1467,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::flexure_init ************************************/
   /**
    * @brief      initializes the flexure system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::flexure_init() {
@@ -1418,12 +1483,14 @@ namespace Sequencer {
     //
     if ( this->set_power_switch(ON, POWER_FLEXURE, std::chrono::seconds(21)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering flexure control" );
-      return ERROR;
+      this->thread_error_manager.set( THR_FLEXURE_INIT );
+      throw std::runtime_error("could not power flexure control");
     }
 
     if ( this->open_hardware(this->flexured) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing flexure control" );
-      return ERROR;
+      this->thread_error_manager.set( THR_FLEXURE_INIT );
+      throw std::runtime_error("could not initialize flexure control");
     }
 
     // default actuator positions are defined in ~/Software/Config/flexured.cfg
@@ -1439,6 +1506,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::flexure_shutdown ********************************/
   /**
    * @brief      shuts down the flexure system
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::flexure_shutdown() {
@@ -1455,7 +1524,7 @@ namespace Sequencer {
     bool poweron=false;
     if ( check_power_switch(ON, POWER_FLEXURE, poweron ) != NO_ERROR ) {
       logwrite( function, "ERROR checking power switch" );
-      return ERROR;
+      throw std::runtime_error("checking flexure power switch");
     }
 
     // if already off then get out now, don't turn them back on
@@ -1465,13 +1534,18 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
-    if ( this->connect_to_daemon(this->flexured) != NO_ERROR ) return ERROR;
+    if ( this->connect_to_daemon(this->flexured) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR connecting to flexure hardware" );
+      error=ERROR;
+    }
 
     // close connections between flexured and the hardware with which it communicates
+    // don't throw here, okay to shut off power if this fails
     //
     logwrite( function, "closing flexure hardware" );
-    error = this->flexured.command( FLEXURED_CLOSE, reply );
-    if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR: closing connection to flexure hardware" );
+    if (error==NO_ERROR && (error=this->flexured.command( FLEXURED_CLOSE, reply )) != NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR closing connection to flexure hardware" );
+    }
 
     // disconnect me from flexured, irrespective of any previous error
     //
@@ -1482,7 +1556,7 @@ namespace Sequencer {
     //
     if ( this->set_power_switch(OFF, POWER_FLEXURE, std::chrono::seconds(0)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR switching off flexure" );
-      error=ERROR;
+      throw std::runtime_error("switching off flexure hardware");
     }
 
     return NO_ERROR;
@@ -1493,7 +1567,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::focus_init **************************************/
   /**
    * @brief      initializes the focus system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::focus_init() {
@@ -1504,17 +1579,18 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_FOCUS );  // focusd not ready
 
+    this->thread_error_manager.set( THR_FOCUS_INIT );       // assume failure, clear on success
+
     if ( this->set_power_switch(ON, POWER_FOCUS, std::chrono::seconds(5)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering focus control" );
-      return ERROR;
+      throw std::runtime_error("could not power focus control");
     }
 
     // connect to focusd
     bool was_opened=false;
     if ( this->open_hardware(this->focusd, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing focus control" );
-      this->thread_error_manager.set( THR_FOCUS_INIT );
-      return ERROR;
+      throw std::runtime_error("could not open focus hardware");
     }
 
     // if focusd was just opened, home if needed,
@@ -1526,14 +1602,14 @@ namespace Sequencer {
       long error = this->focusd.command( FOCUSD_ISHOME, reply );
       if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR communicating with focus hardware" );
-        return ERROR;
+        throw std::runtime_error("focus "+FOCUSD_ISHOME+" returned: "+reply);
       }
       // home focus actuators if not already homed
       if ( !ishomed ) {
         logwrite( function, "sending home command" );
         if ( this->focusd.command_timeout( FOCUSD_HOME, reply, FOCUSD_HOME_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR communicating with focus hardware" );
-          return ERROR;
+          throw std::runtime_error("focus "+FOCUSD_HOME+" returned: "+reply);
         }
       }
       // send actuators to nominal positions
@@ -1543,11 +1619,12 @@ namespace Sequencer {
         std::string command = "set " + chan + " nominal";
         if ( this->focusd.command_timeout( command, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR setting focus "+chan );
-          return ERROR;
+          throw std::runtime_error("focus "+command+" returned: "+reply);
         }
       }
     }
 
+    this->thread_error_manager.clear( THR_FOCUS_INIT );     // success
     this->daemon_manager.set( Sequencer::DAEMON_FOCUS );    // focusd is ready
 
     return NO_ERROR;
@@ -1558,10 +1635,14 @@ namespace Sequencer {
   /***** Sequencer::Sequence::focus_shutdown **********************************/
   /**
    * @brief      shuts down the focus system
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::focus_shutdown() {
     const std::string function("Sequencer::Sequence::focus_shutdown");
+    std::string reply;
+    long error=NO_ERROR;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_FOCUS_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_FOCUS );
@@ -1572,7 +1653,7 @@ namespace Sequencer {
     bool poweron=false;
     if ( check_power_switch(ON, POWER_FOCUS, poweron ) != NO_ERROR ) {
       logwrite( function, "ERROR checking power switch" );
-      return ERROR;
+      throw std::runtime_error("checking focus power switch");
     }
 
     // if already off then get out now, don't turn them back on
@@ -1582,19 +1663,30 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
-    if ( this->connect_to_daemon(this->focusd) != NO_ERROR ) return ERROR;
+    if ( this->connect_to_daemon(this->focusd) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR connecting to focus hardware" );
+      error=ERROR;
+    }
 
     // close connections between focusd and the hardware with which it communicates
+    // don't throw here, okay to shut off power if this fails
     //
     logwrite( function, "closing focus hardware" );
-    std::string reply;
-    long error = this->focusd.command( FOCUSD_CLOSE, reply );
-    if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR closing connection to focus hardware" );
+    if (error==NO_ERROR && (error=this->focusd.command( FOCUSD_CLOSE, reply )) != NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR closing connection to focus hardware" );
+    }
 
     // disconnect me from focusd, irrespective of any previous error
     //
     logwrite( function, "disconnecting from focusd" );
     this->focusd.disconnect();
+
+    // Turn off power to focus hardware.
+    //
+    if ( this->set_power_switch(OFF, POWER_FOCUS, std::chrono::seconds(0)) != NO_ERROR ) {
+      this->async.enqueue_and_log( function, "ERROR switching off focus" );
+      throw std::runtime_error("switching off focus hardware");
+    }
 
     return NO_ERROR;
   }
@@ -1604,7 +1696,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::camera_init *************************************/
   /**
    * @brief      initializes the camera system for control from the Sequencer
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::camera_init() {
@@ -1614,18 +1707,19 @@ namespace Sequencer {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->daemon_manager.clear( Sequencer::DAEMON_CAMERA );  // camerad not ready
+    this->thread_error_manager.set( THR_CAMERA_INIT );       // assume failure, clear on success
 
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering camera" );
-      return ERROR;
+      throw std::runtime_error("switching on camera");
     }
 
     bool was_opened=false;
     if ( this->open_hardware(this->camerad, "open", 12000, was_opened) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR initializing camera" );
-      return ERROR;
+      throw std::runtime_error("initializing camera");
     }
 
     // send all of the prologue commands only if camera was just opened now
@@ -1635,11 +1729,13 @@ namespace Sequencer {
       for ( const auto &cmd : this->camera_prologue ) {
         if ( this->camerad.command_timeout( cmd, reply, CAMERA_PROLOG_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to camera" );
-          return ERROR;
+          throw std::runtime_error("sending \""+cmd+"\" to camera");
         }
       }
     }
+    else throw std::runtime_error("camera not open");
 
+    this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_CAMERA );  // camerad ready
 
     return NO_ERROR;
@@ -1650,6 +1746,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::camera_shutdown *********************************/
   /**
    * @brief      shuts down the camera system from the Sequencer
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::camera_shutdown() {
@@ -1659,12 +1757,14 @@ namespace Sequencer {
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_CAMERA );
 
+    this->thread_error_manager.set( THR_CAMERA_SHUTDOWN );    // assume failure, clear on success
+
     // Are any cameras on?
     //
     bool poweron=false;
     if ( check_power_switch(ON, POWER_CAMERA, poweron ) != NO_ERROR ) {
       logwrite( function, "ERROR checking power switch" );
-      return ERROR;
+      throw std::runtime_error("checking camera power switch");
     }
 
     // if already off then get out now, don't turn them back on
@@ -1678,7 +1778,7 @@ namespace Sequencer {
     //
     if ( this->open_hardware(this->camerad, CAMERAD_OPEN, CAMERAD_OPEN_TIMEOUT) != NO_ERROR ) {
       logwrite( function, "ERROR opening camera(s)" );
-      return ERROR;
+      throw std::runtime_error("no connection to camera");
     }
 
     // send all of the epilogue commands
@@ -1696,9 +1796,10 @@ namespace Sequencer {
     //
     if ( this->set_power_switch(OFF, POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR powering off camera" );
-      return ERROR;
+      throw std::runtime_error("switching off camera");
     }
 
+    this->thread_error_manager.clear( THR_CAMERA_SHUTDOWN );  // success
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::camera_shutdown *********************************/
@@ -1707,6 +1808,8 @@ namespace Sequencer {
   /***** Sequencer::Sequence::move_to_target **********************************/
   /**
    * @brief      send request to TCS to move to target coordinates
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    * Disable guiding and send the new target coordinates to the TCS with
    * the instruction to move immediately.
@@ -1751,13 +1854,13 @@ namespace Sequencer {
     bool dec_isnan = std::isnan( dec_in );
 
     if ( ra_isnan || dec_isnan ) {
-      message.str(""); message << "ERROR: converting";
+      message.str(""); message << "converting";
       if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
       if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
       message << " to decimal";
-      this->async.enqueue_and_log( function, message.str() );
+      this->async.enqueue_and_log( function, "ERROR "+message.str() );
       this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-      return ERROR;
+      throw std::runtime_error(message.str());
     }
 
     // Before sending the target coords to the TCS,
@@ -1826,7 +1929,7 @@ namespace Sequencer {
         message.str(""); message << "ERROR sending COORDS command. TCS reply: " << coords_reply;
         this->async.enqueue_and_log( function, message.str() );
         this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-        return ERROR;
+        throw std::runtime_error("sending COORDS to TCS: "+coords_reply);
       }
     }
 
@@ -1941,7 +2044,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::focus_set ***************************************/
   /**
    * @brief      set the focus
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
    * @todo       focus not yet implemented
    *
    */
@@ -1960,7 +2063,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::flexure_set *************************************/
   /**
    * @brief      set the flexure
-   * @return     ERROR | NO_ERROR
+   * @return     NO_ERROR
    * @todo       flexure not yet implemented
    *
    */
@@ -1979,17 +2082,18 @@ namespace Sequencer {
   /***** Sequencer::Sequence::calib_set ***************************************/
   /**
    * @brief      set the calibrator
-   * @return     ERROR | NO_ERROR
-   * @todo       calibrator not yet implemented
+   * @return     NO_ERROR
+   * @throws     std::runtime_error
    *
    */
   long Sequence::calib_set() {
     const std::string function("Sequencer::Sequence::calib_set");
     std::stringstream message;
-    long error=NO_ERROR;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIBRATOR_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
+
+    this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
     // name will index the caltarget map
     //
@@ -2010,7 +2114,7 @@ namespace Sequencer {
     auto calinfo = this->caltarget.get_info(name);
     if (!calinfo) {
       logwrite( function, "ERROR unrecognized calibration target: "+name );
-      return ERROR;
+      throw std::runtime_error("unrecognized calibration target: "+name);
     }
 
     // set the calib door and cover
@@ -2024,7 +2128,7 @@ namespace Sequencer {
     if ( !this->cancel_flag.load() &&
           this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
-      error=ERROR;
+      throw std::runtime_error("moving calib door and/or cover");
     }
 
     // set the internal calibration lamps
@@ -2037,7 +2141,7 @@ namespace Sequencer {
       std::string reply;
       if ( this->powerd.send( cmd.str(), reply ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR "+message.str() );
-        error=ERROR;
+        throw std::runtime_error("setting lamp "+message.str());
       }
     }
 
@@ -2050,7 +2154,7 @@ namespace Sequencer {
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
 //      this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
-//      error=ERROR;
+//      throw std::runtime_error("setting dome lamp: "+cmd.str());
 //    }
 //  }
 
@@ -2061,7 +2165,7 @@ namespace Sequencer {
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
-        error=ERROR;
+        throw std::runtime_error("setting lamp modulator "+cmd.str());
       }
     }
 
@@ -2069,7 +2173,8 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "NOTICE: abort may have left calib system partially set" );
     }
 
-    return error;
+    this->thread_error_manager.clear( THR_CALIBRATOR_SET );  // success
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::calib_set ***************************************/
 
@@ -3611,6 +3716,9 @@ namespace Sequencer {
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
+    // lambda to safely start a detached thread with exception catching
+    auto _safe_thread = [this, &function](auto method) { this->safe_thread(method, function); };
+
     Tokenize( args, tokens, " " );
 
     if ( tokens.size() < 1 ) {
@@ -4220,7 +4328,7 @@ namespace Sequencer {
       this->is_usercontinue.store(false);
 
       logwrite( function, "spawning move_to_target..." );
-      std::thread( &Sequencer::Sequence::move_to_target, this ).detach();
+      _safe_thread(&Sequencer::Sequence::move_to_target);
     }
     else
 
@@ -4442,39 +4550,39 @@ namespace Sequencer {
       if ( testname == "startup" ) isinit=true; else if ( testname == "shutdown" ) isinit=false;
 
       if ( tokens[1] == "power" ) {
-        std::thread( &Sequencer::Sequence::power_init, this ).detach();
+        _safe_thread(&Sequencer::Sequence::power_init);
       }
       else
       if ( tokens[1] == "acam" ) {
-        std::thread( isinit ? &Sequencer::Sequence::acam_init : &Sequencer::Sequence::acam_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::acam_init : &Sequencer::Sequence::acam_shutdown);
       }
       else
       if ( tokens[1] == "calib" ) {
-        std::thread( isinit ? &Sequencer::Sequence::calib_init : &Sequencer::Sequence::calib_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::calib_init : &Sequencer::Sequence::calib_shutdown);
       }
       else
       if ( tokens[1] == "camera" ) {
-        std::thread( isinit ? &Sequencer::Sequence::camera_init : &Sequencer::Sequence::camera_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::camera_init : &Sequencer::Sequence::camera_shutdown);
       }
       else
       if ( tokens[1] == "flexure" ) {
-        std::thread( isinit ? &Sequencer::Sequence::flexure_init : &Sequencer::Sequence::flexure_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::flexure_init : &Sequencer::Sequence::flexure_shutdown);
       }
       else
       if ( tokens[1] == "focus" ) {
-        std::thread( isinit ? &Sequencer::Sequence::focus_init : &Sequencer::Sequence::focus_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::focus_init : &Sequencer::Sequence::focus_shutdown);
       }
       else
       if ( tokens[1] == "slicecam" ) {
-        std::thread( isinit ? &Sequencer::Sequence::slicecam_init : &Sequencer::Sequence::slicecam_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::slicecam_init : &Sequencer::Sequence::slicecam_shutdown);
       }
       else
       if ( tokens[1] == "slit" ) {
-        std::thread( isinit ? &Sequencer::Sequence::slit_init : &Sequencer::Sequence::slit_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::slit_init : &Sequencer::Sequence::slit_shutdown);
       }
       else
       if ( tokens[1] == "tcs" ) {
-        std::thread( isinit ? &Sequencer::Sequence::tcs_init : &Sequencer::Sequence::tcs_shutdown, this ).detach();
+        _safe_thread(isinit ? &Sequencer::Sequence::tcs_init : &Sequencer::Sequence::tcs_shutdown);
       }
       else {
         logwrite( function, "ERROR invalid module \""+tokens[1]+"\"" );

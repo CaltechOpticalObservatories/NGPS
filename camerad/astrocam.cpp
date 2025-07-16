@@ -2995,7 +2995,7 @@ namespace AstroCam {
     // nothing to do if the message is empty
     //
     if ( message_in.empty() ) {
-      logwrite( function, "ERROR empty JSON message" );
+      logwrite( function, "empty JSON message" );
       return ERROR;
     }
 

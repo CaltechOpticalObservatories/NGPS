@@ -265,6 +265,23 @@ namespace Sequencer {
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+
+      /** @brief  safely runs function in a detached thread using lambda to catch exceptions
+       */
+      void safe_thread(long (Sequence::*method)(), const std::string &function) {
+        std::thread([this, method, function]() {
+          try {
+            (this->*method)();
+          }
+          catch (const std::exception &e) {
+            logwrite(function, "ERROR: "+std::string(e.what()));
+          }
+          catch (...) {
+            logwrite(function, "ERROR unknown exception");
+          }
+        }).detach();
+      }
+
     public:
       Sequence() :
           context(),
