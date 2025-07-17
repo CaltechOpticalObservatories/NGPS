@@ -978,6 +978,9 @@ namespace Common {
             logwrite( function, message.str() );
           }
         }
+        catch( const nlohmann::json::out_of_range &e ) {
+          logwrite( function, std::string(e.what()) );
+        }
         catch( const std::exception &e ) {
           message.str(""); message << "ERROR adding keyword " << keyname << ": " << e.what();
           logwrite( function, message.str() );

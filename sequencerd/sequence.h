@@ -260,15 +260,34 @@ namespace Sequencer {
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
+      std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+
+      /** @brief  safely runs function in a detached thread using lambda to catch exceptions
+       */
+      void safe_thread(long (Sequence::*method)(), const std::string &function) {
+        std::thread([this, method, function]() {
+          try {
+            (this->*method)();
+          }
+          catch (const std::exception &e) {
+            logwrite(function, "ERROR: "+std::string(e.what()));
+          }
+          catch (...) {
+            logwrite(function, "ERROR unknown exception");
+          }
+        }).detach();
+      }
+
     public:
       Sequence() :
           context(),
           ready_to_start(false),
+          is_science_frame_transfer(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),
           acquisition_timeout(0),
