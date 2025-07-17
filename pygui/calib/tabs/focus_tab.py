@@ -326,8 +326,8 @@ class FocusTab(QWidget):
         run_focus_andor_button_layout.setAlignment(run_focus_andor_button, Qt.AlignCenter)  # Center the button
         scroll_area_layout.addRow(run_focus_andor_button_layout)
 
-        # Add a button to open images with eog
-        open_images_button = QPushButton("Open Focus Images", self)
+        # Add a button to spectrograph open images with eog
+        open_images_button = QPushButton("Open Spectrograph Focus Images", self)
         open_images_button.setStyleSheet("""
             QPushButton {
                 background-color: #007BFF;  /* Blue color */
@@ -350,6 +350,31 @@ class FocusTab(QWidget):
         open_images_button_layout.addWidget(open_images_button)
         open_images_button_layout.setAlignment(open_images_button, Qt.AlignCenter)  # Center the button
         scroll_area_layout.addRow(open_images_button_layout)
+
+        # Add a button to acam open images with eog
+        acam_open_images_button = QPushButton("Open ACAM Focus Images", self)
+        acam_open_images_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007BFF;  /* Blue color */
+                color: white;
+                border-radius: 8px;
+                padding: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;  /* Slightly darker blue on hover */
+            }
+            QPushButton:pressed {
+                background-color: #004085;  /* Darker blue when pressed */
+            }
+        """)
+        acam_open_images_button.clicked.connect(self.open_focus_acam_images)
+        acam_open_images_button.setFixedHeight(45)
+        acam_open_images_button.setFixedWidth(300)
+        acam_open_images_button = QHBoxLayout()
+        acam_open_images_button.addWidget(open_images_button)
+        acam_open_images_button.setAlignment(open_images_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(acam_open_images_button)
 
 
         # Set scrollable widget layout

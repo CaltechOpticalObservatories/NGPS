@@ -114,7 +114,8 @@ class LogicService:
                             value = 1
                         elif column in ['BINSPAT']:
                             value = 2
-                        # Text columns (defaults to empty string "")
+                        elif column in ['STATE']:
+                            value = "pending"  # Empty string as default for text fields
                         elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
                             value = ""  # Empty string as default for text fields
                         # Timestamp columns (defaults to NULL)
