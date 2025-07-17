@@ -406,7 +406,7 @@ class LayoutService:
         self.parent.exposure_progress.setValue(0)
         self.parent.exposure_progress.setMaximumWidth(300)
         self.parent.exposure_progress.setTextVisible(True)  # Enable text display
-        self.parent.exposure_progress.setFormat("0% (0.0 sec remaining)")  # Initial display
+        self.parent.exposure_progress.setFormat("0% (0 sec remaining)")  # Initial display
 
         exposure_layout.setSpacing(0)
         exposure_layout.addWidget(QLabel("Exposure Progress"))
@@ -1015,6 +1015,7 @@ class LayoutService:
 
             lamp_checkbox = QCheckBox("On/Off")
             lamp_checkbox.setChecked(False)  # Default to Off
+            lamp_checkbox.setEnabled(False)
             lamp_side_layout.addWidget(lamp_checkbox)
 
             separator = QFrame()
@@ -1026,6 +1027,7 @@ class LayoutService:
             modulator_side_layout = QHBoxLayout()
             modulator_checkbox = QCheckBox("On/Off")
             modulator_checkbox.setChecked(False)  # Default to Off
+            modulator_checkbox.setEnabled(False)
             modulator_side_layout.addWidget(modulator_checkbox)
 
             lamp_layout.addLayout(lamp_side_layout)
@@ -1584,7 +1586,7 @@ class LayoutService:
         # Create the toggle button
         self.target_list_mode_toggle = QPushButton("Mode: Science")
         self.target_list_mode_toggle.setCheckable(True)
-        self.target_list_mode_toggle.setMaximumWidth(150)
+        self.target_list_mode_toggle.setMaximumWidth(200)
 
         # Set toggle styles (optional)
         self.target_list_mode_toggle.setStyleSheet("""
@@ -1631,7 +1633,7 @@ class LayoutService:
         self.load_target_lists()
 
     def update_lamps(self, lamp_states):
-        """ Update the lamp checkboxes based on the received state """
+        """Update the lamp checkboxes based on the received state."""
         
         # Mapping of incoming lamp names to checkbox names
         lamp_name_map = {
@@ -1640,20 +1642,18 @@ class LayoutService:
             'LAMPREDC': 'RedCont',
             'LAMPTHAR': 'ThAR'
         }
-        
+
         for lamp, state in lamp_states.items():
-            # Map the incoming lamp key to the checkbox key using the lamp_name_map
             mapped_lamp = lamp_name_map.get(lamp)
             
             if mapped_lamp:
-                # Get the checkbox corresponding to the mapped lamp name
                 checkbox = self.lamp_checkboxes.get(mapped_lamp)
                 
                 if checkbox:
-                    # Update the checkbox based on the state
                     checkbox.setChecked(state)
-                    
-                    # Optionally, apply a style based on the state
+                    checkbox.setText("On" if state else "Off") 
+
+                    # Optional: apply a visual style for on/off
                     if state:
                         checkbox.setStyleSheet("""
                             QCheckBox::indicator:checked {
@@ -1673,9 +1673,8 @@ class LayoutService:
             else:
                 print(f"Lamp {lamp} not mapped to a checkbox")
 
-
     def update_modulators(self, modulator_states):
-        """ Update the modulator checkboxes based on the received state """
+        """Update the modulator checkboxes based on the received state."""
 
         # Mapping of incoming modulator names to checkbox names
         modulator_name_map = {
@@ -1685,20 +1684,19 @@ class LayoutService:
             'MODBLCON': 'BlueCont'
         }
 
-        # Iterate over the modulator states and apply the changes to the checkboxes
         for modulator, state in modulator_states.items():
-            # Check if we have a mapping for this modulator
             mapped_modulator = modulator_name_map.get(modulator)
 
             if mapped_modulator:
                 checkbox = self.modulator_checkboxes.get(mapped_modulator)
+
                 if checkbox:
                     print(f"Setting {mapped_modulator} checkbox to {state}")
                     checkbox.setChecked(state)
+                    checkbox.setText("On" if state else "Off")
 
                     # Style the checkbox based on whether it's checked or not
                     if state:
-                        # If checked, apply normal style (you can customize this)
                         checkbox.setStyleSheet("""
                             QCheckBox::indicator:checked {
                                 background-color: green;
@@ -1706,7 +1704,6 @@ class LayoutService:
                             }
                         """)
                     else:
-                        # If unchecked, apply gray style
                         checkbox.setStyleSheet("""
                             QCheckBox::indicator:unchecked {
                                 background-color: gray;
@@ -1717,3 +1714,4 @@ class LayoutService:
                     print(f"Checkbox for {mapped_modulator} not found")
             else:
                 print(f"Modulator {modulator} not mapped to a checkbox")
+
