@@ -4542,8 +4542,9 @@ logwrite(function, message.str());
     //
     if ( args == "?" ) {
       retstring = CAMERAD_FRAMETRANSFER;
-      retstring.append( " <chan> | <dev#> [ yes | no ]\n" );
+      retstring.append( " <chan> | <dev#> | all [ yes | no ]\n" );
       retstring.append( "  Set or get frame transfer mode for specified device.\n" );
+      retstring.append( "  If \"all\" instead of device then return yes only if all devices are yes." );
       retstring.append( "  If optional yes|no is omitted then current state is returned.\n" );
       retstring.append( "  Specify <chan> from { " );
       message.str("");
@@ -4562,6 +4563,23 @@ logwrite(function, message.str());
       message << "}\n";
       retstring.append( message.str() );
       return HELP;
+    }
+
+    // return and-state of all cameras,
+    // I.E. if all are true, return true, otherwise false
+    //
+    if (args=="all") {
+      bool all_true = true;
+      for ( const auto &dev : this->devnums ) {
+        if ( !this->controller[dev].have_ft ) {
+          all_true=false;
+          break;
+        }
+      }
+      retstring = all_true ? "yes" : "no";
+      message.str(""); message << (all_true?"all":"not all") << " cameras use frame transfer";
+      logwrite(function, message.str());
+      return NO_ERROR;
     }
 
     // Get the devnum and channel from args.

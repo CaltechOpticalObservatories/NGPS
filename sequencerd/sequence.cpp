@@ -647,6 +647,16 @@ namespace Sequencer {
                                << " id " << this->target.obsid << " order " << this->target.obsorder;
       logwrite( function, message.str() );
 
+      // If not using frame transfer then wait for readout, too
+      //
+      if (!this->is_science_frame_transfer) {
+        logwrite( function, "waiting for readout" );
+        while ( !this->cancel_flag.load() && wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
+          std::unique_lock<std::mutex> lock(cv_mutex);
+          this->cv.wait( lock, [this]() { return( !wait_state_manager.is_set(SEQ_WAIT_READOUT) || this->cancel_flag.load() ); } );
+        }
+      }
+
       // Now that we're done waiting, check for errors or abort
       //
       if ( this->thread_error_manager.are_any_set() ) {
@@ -1723,8 +1733,8 @@ namespace Sequencer {
 
     // send all of the prologue commands only if camera was just opened now
     //
+    std::string reply;
     if ( was_opened) {
-      std::string reply;
       for ( const auto &cmd : this->camera_prologue ) {
         if ( this->camerad.command_timeout( cmd, reply, CAMERA_PROLOG_TIMEOUT ) != NO_ERROR ) {
           this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to camera" );
@@ -1732,6 +1742,11 @@ namespace Sequencer {
         }
       }
     }
+
+    // Ask if all devices use frame transfer
+    //
+    this->camerad.send( CAMERAD_FRAMETRANSFER+" all", reply );
+    this->is_science_frame_transfer = ( reply.find("yes") != std::string::npos );
 
     this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_CAMERA );  // camerad ready
@@ -2051,7 +2066,7 @@ namespace Sequencer {
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FOCUS_SET );
 
-    logwrite( function, "[TODO] focus not yet implemented." );
+    logwrite( function, "focus not yet implemented." );
 
     return NO_ERROR;
   }
@@ -2070,7 +2085,7 @@ namespace Sequencer {
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
 
-    logwrite( function, "[TODO] flexure not yet implemented." );
+    logwrite( function, "flexure not yet implemented." );
 
     return NO_ERROR;
   }

@@ -61,7 +61,7 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_EXPTIME+" [ <exptime in msec> ]",
                                                   CAMERAD_FITSNAME,
                                                   CAMERAD_FITSNAMING+" [ time | number ]",
-                                                  CAMERAD_FRAMETRANSFER+" ? | <dev#> | <chan> [ yes | no ]",
+                                                  CAMERAD_FRAMETRANSFER+" ? | <dev#> | <chan> | all [ yes | no ]",
                                                   CAMERAD_GEOMETRY+" ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]",
                                                   CAMERAD_IMDIR+" [ <directory> ]",
                                                   CAMERAD_IMNUM,
