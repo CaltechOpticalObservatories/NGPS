@@ -371,10 +371,10 @@ class FocusTab(QWidget):
         acam_open_images_button.clicked.connect(self.open_focus_acam_images)
         acam_open_images_button.setFixedHeight(45)
         acam_open_images_button.setFixedWidth(300)
-        acam_open_images_button = QHBoxLayout()
-        acam_open_images_button.addWidget(open_images_button)
-        acam_open_images_button.setAlignment(open_images_button, Qt.AlignCenter)  # Center the button
-        scroll_area_layout.addRow(acam_open_images_button)
+        acam_open_images_layout = QHBoxLayout()
+        acam_open_images_layout.addWidget(acam_open_images_button)
+        acam_open_images_layout.setAlignment(acam_open_images_button, Qt.AlignCenter)  # Center the button
+        scroll_area_layout.addRow(acam_open_images_layout)
 
 
         # Set scrollable widget layout
