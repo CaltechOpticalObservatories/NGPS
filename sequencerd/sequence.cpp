@@ -506,11 +506,12 @@ namespace Sequencer {
         //
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
                            { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
-                           { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
-                                                                    Sequencer::VSM_ACQUIRE) },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
                            { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this)    },
-                           { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      }
+                           { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
+                           // for CAL targets, slit comes from database, otherwise use VSM acquire position
+                           { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
+                                                 this->target.iscal ? Sequencer::VSM_DATABASE : Sequencer::VSM_ACQUIRE) }
                          };
       }
 
@@ -593,17 +594,17 @@ namespace Sequencer {
         this->is_usercontinue.store(false);
 
         this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
-      }
 
-      // Ensure slit offset is in "expose" position
-      //
-      auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
-      try {
-        error |= slitset.get();
-      }
-      catch (const std::exception& e) {
-        logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
-        return;
+        // Ensure slit offset is in "expose" position
+        //
+        auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
+        try {
+          error |= slitset.get();
+        }
+        catch (const std::exception& e) {
+          logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
+          return;
+        }
       }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
