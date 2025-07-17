@@ -79,7 +79,7 @@ class FocusTab(QWidget):
         """)
         self.run_acam_focus_button.clicked.connect(self.run_focus_acam)
         self.run_acam_focus_button.setFixedHeight(45)
-        self.run_acam_focus_button.setFixedWidth(300)
+        self.run_acam_focus_button.setFixedWidth(325)
         self.run_acam_focus_button_layout = QHBoxLayout()
         self.run_acam_focus_button_layout.addWidget(self.run_acam_focus_button)
         self.run_acam_focus_button_layout.setAlignment(self.run_acam_focus_button, Qt.AlignCenter)  # Center the button
@@ -101,7 +101,7 @@ class FocusTab(QWidget):
         camstep_button = QPushButton("camstep Focus (General)", self)
         camstep_button.clicked.connect(self.camstep_focus)
         camstep_button.setFixedHeight(45)
-        camstep_button.setFixedWidth(300)  # Half-width button
+        camstep_button.setFixedWidth(325)  # Half-width button
         camstep_button_layout = QHBoxLayout()
         camstep_button_layout.addWidget(camstep_button)
         camstep_button_layout.setAlignment(camstep_button, Qt.AlignCenter)  # Right-align the button
@@ -115,7 +115,7 @@ class FocusTab(QWidget):
         camstep_acam_button = QPushButton("camstep Focus (ACAM)", self)
         camstep_acam_button.clicked.connect(self.camstep_focus_acam)
         camstep_acam_button.setFixedHeight(45)
-        camstep_acam_button.setFixedWidth(300)  # Half-width button
+        camstep_acam_button.setFixedWidth(325)  # Half-width button
         camstep_acam_button_layout = QHBoxLayout()
         camstep_acam_button_layout.addWidget(camstep_acam_button)
         camstep_acam_button_layout.setAlignment(camstep_acam_button, Qt.AlignCenter)  # Right-align the button
@@ -144,7 +144,7 @@ class FocusTab(QWidget):
         boi_r_button = QPushButton("Activate BOI (R)", self)
         boi_r_button.clicked.connect(self.activate_boi_r)
         boi_r_button.setFixedHeight(45)
-        boi_r_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
+        boi_r_button.setFixedWidth(325)  # Set fixed width (adjust as needed)
         boi_r_button_layout = QHBoxLayout()
         boi_r_button_layout.addWidget(boi_r_button)
         boi_r_button_layout.setAlignment(boi_r_button, Qt.AlignCenter)  # Right-align the button
@@ -173,7 +173,7 @@ class FocusTab(QWidget):
         boi_i_button = QPushButton("Activate BOI (I)", self)
         boi_i_button.clicked.connect(self.activate_boi_i)
         boi_i_button.setFixedHeight(45)
-        boi_i_button.setFixedWidth(300)  # Set fixed width (adjust as needed)
+        boi_i_button.setFixedWidth(325)  # Set fixed width (adjust as needed)
         boi_i_button_layout = QHBoxLayout()
         boi_i_button_layout.addWidget(boi_i_button)
         boi_i_button_layout.setAlignment(boi_i_button, Qt.AlignCenter)  # Right-align the button
@@ -217,7 +217,7 @@ class FocusTab(QWidget):
         row_bin_button = QPushButton("Activate Row Bin", self)
         row_bin_button.clicked.connect(self.activate_row_bin)
         row_bin_button.setFixedHeight(50)
-        row_bin_button.setFixedWidth(300)  # Half-width button
+        row_bin_button.setFixedWidth(325)  # Half-width button
         row_bin_button_layout = QHBoxLayout()
         row_bin_button_layout.addWidget(row_bin_button)
         row_bin_button_layout.setAlignment(row_bin_button, Qt.AlignCenter)  # Center the button
@@ -237,7 +237,7 @@ class FocusTab(QWidget):
         col_bin_button = QPushButton("Activate Col Bin", self)
         col_bin_button.clicked.connect(self.activate_col_bin)
         col_bin_button.setFixedHeight(45)
-        col_bin_button.setFixedWidth(300)  # Half-width button
+        col_bin_button.setFixedWidth(325)  # Half-width button
         col_bin_button_layout = QHBoxLayout()
         col_bin_button_layout.addWidget(col_bin_button)
         col_bin_button_layout.setAlignment(col_bin_button, Qt.AlignCenter)  # Center the button
@@ -255,7 +255,7 @@ class FocusTab(QWidget):
         exptime_button = QPushButton("Set Camera Exposure Time", self)
         exptime_button.clicked.connect(self.set_exptime)
         exptime_button.setFixedHeight(45)
-        exptime_button.setFixedWidth(300)  # Half-width button
+        exptime_button.setFixedWidth(325)  # Half-width button
         exptime_button_layout = QHBoxLayout()
         exptime_button_layout.addWidget(exptime_button)
         exptime_button_layout.setAlignment(exptime_button, Qt.AlignCenter)  # Right-align the button
@@ -271,7 +271,7 @@ class FocusTab(QWidget):
         slit_button = QPushButton("Set Slit", self)
         slit_button.clicked.connect(self.set_slit)
         slit_button.setFixedHeight(45)
-        slit_button.setFixedWidth(300)  # Half-width button
+        slit_button.setFixedWidth(325)  # Half-width button
         slit_button_layout = QHBoxLayout()
         slit_button_layout.addWidget(slit_button)
         slit_button_layout.setAlignment(slit_button, Qt.AlignCenter)  # Right-align the button
@@ -285,7 +285,7 @@ class FocusTab(QWidget):
         tcs_button = QPushButton("Set TCS Focus", self)
         tcs_button.clicked.connect(self.set_tcs_focus)
         tcs_button.setFixedHeight(45)
-        tcs_button.setFixedWidth(300)  # Half-width button
+        tcs_button.setFixedWidth(325)  # Half-width button
         tcs_button_layout = QHBoxLayout()
         tcs_button_layout.addWidget(tcs_button)
         tcs_button_layout.setAlignment(tcs_button, Qt.AlignCenter)  # Right-align the button
@@ -300,7 +300,7 @@ class FocusTab(QWidget):
         full_boi_button = QPushButton("Activate Full BOI R Band", self)
         full_boi_button.clicked.connect(self.activate_boi_r_full)
         full_boi_button.setFixedHeight(45)
-        full_boi_button.setFixedWidth(300)  # Half-width button
+        full_boi_button.setFixedWidth(325)  # Half-width button
         full_boi_button_layout = QHBoxLayout()
         full_boi_button_layout.addWidget(full_boi_button)
         full_boi_button_layout.setAlignment(full_boi_button, Qt.AlignCenter) 
@@ -310,7 +310,7 @@ class FocusTab(QWidget):
         full_boi_i_button = QPushButton("Activate Full BOI I Band", self)
         full_boi_i_button.clicked.connect(self.activate_boi_i_full)
         full_boi_i_button.setFixedHeight(45)
-        full_boi_i_button.setFixedWidth(300)  # Half-width button
+        full_boi_i_button.setFixedWidth(325)  # Half-width button
         full_boi_i_button_layout = QHBoxLayout()
         full_boi_i_button_layout.addWidget(full_boi_i_button)
         full_boi_i_button_layout.setAlignment(full_boi_i_button, Qt.AlignCenter) 
@@ -320,7 +320,7 @@ class FocusTab(QWidget):
         run_focus_andor_button = QPushButton("Analyze Focus", self)     
         run_focus_andor_button.clicked.connect(self.run_focus_andor)
         run_focus_andor_button.setFixedHeight(45)
-        run_focus_andor_button.setFixedWidth(300)
+        run_focus_andor_button.setFixedWidth(325)
         run_focus_andor_button_layout = QHBoxLayout()
         run_focus_andor_button_layout.addWidget(run_focus_andor_button)
         run_focus_andor_button_layout.setAlignment(run_focus_andor_button, Qt.AlignCenter)  # Center the button
@@ -345,7 +345,7 @@ class FocusTab(QWidget):
         """)
         open_images_button.clicked.connect(self.open_focus_images)
         open_images_button.setFixedHeight(45)
-        open_images_button.setFixedWidth(300)
+        open_images_button.setFixedWidth(325)
         open_images_button_layout = QHBoxLayout()
         open_images_button_layout.addWidget(open_images_button)
         open_images_button_layout.setAlignment(open_images_button, Qt.AlignCenter)  # Center the button
@@ -370,7 +370,7 @@ class FocusTab(QWidget):
         """)
         acam_open_images_button.clicked.connect(self.open_focus_acam_images)
         acam_open_images_button.setFixedHeight(45)
-        acam_open_images_button.setFixedWidth(300)
+        acam_open_images_button.setFixedWidth(325)
         acam_open_images_layout = QHBoxLayout()
         acam_open_images_layout.addWidget(acam_open_images_button)
         acam_open_images_layout.setAlignment(acam_open_images_button, Qt.AlignCenter)  # Center the button

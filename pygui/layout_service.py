@@ -398,36 +398,44 @@ class LayoutService:
     def create_progress_layout(self):
         progress_layout = QVBoxLayout()  # Use QVBoxLayout for vertical stacking
 
-        # Create the exposure progress bar and label
+        # --- Exposure Progress ---
         exposure_layout = QHBoxLayout()  # Horizontal layout for exposure row
+
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
-        self.parent.exposure_progress.setMaximumWidth(300)  # Set same width for both bars
-        exposure_layout.setSpacing(0)  # Remove any spacing between label and progress bar
+        self.parent.exposure_progress.setMaximumWidth(300)
+        self.parent.exposure_progress.setTextVisible(True)  # Enable text display
+        self.parent.exposure_progress.setFormat("0% (0.0 min remaining)")  # Initial display
+
+        exposure_layout.setSpacing(0)
         exposure_layout.addWidget(QLabel("Exposure Progress"))
         exposure_layout.addWidget(self.parent.exposure_progress)
 
-        # Create the overhead progress bar and label
+        # --- Readout/Overhead Progress ---
         overhead_layout = QHBoxLayout()  # Horizontal layout for overhead row
+
         self.parent.overhead_progress = QProgressBar()
         self.parent.overhead_progress.setValue(0)
         self.parent.overhead_progress.setRange(0, 100)
-        self.parent.overhead_progress.setMaximumWidth(300)  # Set same width for both bars
-        overhead_layout.setSpacing(0)  # Remove any spacing between label and progress bar
+        self.parent.overhead_progress.setMaximumWidth(300)
+        self.parent.overhead_progress.setTextVisible(True)  # Optional: show % on readout bar
+
+        overhead_layout.setSpacing(0)
         overhead_layout.addWidget(QLabel("Readout Progress"))
         overhead_layout.addWidget(self.parent.overhead_progress)
 
-        # Add both rows to the main progress layout (vertical stacking)
+        # Stack both layouts
         progress_layout.addLayout(exposure_layout)
         progress_layout.addLayout(overhead_layout)
 
         return progress_layout
 
-
-    def update_exposure_progress(self, progress_percentage):
-        """Update the exposure progress bar based on the received percentage."""
+    def update_exposure_progress(self, progress_percentage, remaining_minutes):
+        """Update the exposure progress bar with percentage and remaining time."""
+        label_text = f"{progress_percentage}% ({remaining_minutes:.1f} min remaining)"
         self.parent.exposure_progress.setValue(progress_percentage)
+        self.parent.exposure_progress.setFormat(label_text)
 
     def update_readout_progress(self, progress_percentage):
         """Update the readout progress bar based on the received percentage."""

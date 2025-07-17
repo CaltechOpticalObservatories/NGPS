@@ -10,7 +10,7 @@ import select
 class StatusService(QObject):
     # Signals to communicate with the main GUI thread
     status_updated_signal = pyqtSignal(str)
-    progress_updated_signal = pyqtSignal(int)  # Signal to update exposure progress bar (0-100)
+    progress_updated_signal = pyqtSignal(int, float)  # Signal to update exposure progress bar (0-100)
     readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
     image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
     image_name_updated_signal = pyqtSignal(str)
@@ -135,15 +135,23 @@ class StatusService(QObject):
             self.heartbeat_misses = 0
 
     def _parse_exptime_message(self, message):
-        """Parse EXPTIME message and update the exposure progress."""
+        """Parse EXPTIME message and update the exposure progress and time left."""
         match = re.match(r"EXPTIME:(\d+) (\d+) (\d+)", message)
         if match:
-            exposure_time = int(match.group(1))
-            max_time = int(match.group(2))
-            progress = int(match.group(3))
+            exposure_time_ms = int(match.group(1))  # Remaining time in ms
+            max_time_ms = int(match.group(2))       # Max time in ms
+            progress = int(match.group(3))          # Progress percentage
 
-            # Calculate the progress as a percentage
-            self.progress_updated_signal.emit(int(progress))
+            # Convert to minutes (float with 1 decimal)
+            exposure_time_min = exposure_time_ms / 60000.0
+            max_time_min = max_time_ms / 60000.0
+
+            # Emit signal with progress and remaining time in minutes
+            self.progress_updated_signal.emit(progress, exposure_time_min)
+
+            # self.log_message(
+            #     f"{progress}% complete — {exposure_time_min:.1f} min remaining of {max_time_min:.1f} min total"
+            # )
 
     def _parse_pixelcount_message(self, message):
         """Parse PIXELCOUNT message and update the readout progress."""
