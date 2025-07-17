@@ -10,7 +10,7 @@ import select
 class StatusService(QObject):
     # Signals to communicate with the main GUI thread
     status_updated_signal = pyqtSignal(str)
-    progress_updated_signal = pyqtSignal(int, float)  # Signal to update exposure progress bar (0-100)
+    progress_updated_signal = pyqtSignal(int, int)  # Signal to update exposure progress bar (0-100)
     readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
     image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
     image_name_updated_signal = pyqtSignal(str)
@@ -123,7 +123,7 @@ class StatusService(QObject):
             match = re.match(r"CAMERAD:IMNAME:(/.*)", message)
             self.image_name_updated_signal.emit(str(match.group(1)))
         elif "ready for next exposure" in message:
-            self.progress_updated_signal.emit(int(0))
+            self.progress_updated_signal.emit(int(0), int(0))
             self.readout_progress_updated_signal.emit(int(0))
         elif '''waiting for USER to send "continue" signal''' in message:
              self.user_can_expose_signal.emit(True)
@@ -143,8 +143,8 @@ class StatusService(QObject):
             progress = int(match.group(3))          # Progress percentage
 
             # Convert to seconds
-            exposure_time_sec = exposure_time_ms / 1000.0
-            max_time_sec = max_time_ms / 1000.0
+            exposure_time_sec = exposure_time_ms / 1000
+            max_time_sec = max_time_ms / 1000
 
             # Emit signal with progress and remaining time in seconds
             self.progress_updated_signal.emit(progress, exposure_time_sec)

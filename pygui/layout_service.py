@@ -433,7 +433,7 @@ class LayoutService:
 
     def update_exposure_progress(self, progress_percentage, remaining_sec):
         """Update the exposure progress bar with percentage and remaining time."""
-        label_text = f"{progress_percentage}% ({remaining_sec:.1f} sec remaining)"
+        label_text = f"{progress_percentage}% ({remaining_sec} sec remaining)"
         self.parent.exposure_progress.setValue(progress_percentage)
         self.parent.exposure_progress.setFormat(label_text)
 

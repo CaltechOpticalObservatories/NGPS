@@ -720,9 +720,14 @@ class LogicService:
 
         # Step 4: Dynamically create the table based on filtered data
         if filtered_data:
-            # Extract column names from the first row
-            filtered_column_names = list(filtered_data[0].keys())
-            # Set the column count first to avoid any mismatch
+            # Reorder columns: move OBSERVATION_ID to the end if present
+            columns = list(filtered_data[0].keys())
+            if "OBSERVATION_ID" in columns:
+                columns.remove("OBSERVATION_ID")
+                columns.append("OBSERVATION_ID")
+            filtered_column_names = columns
+
+            # Set table headers
             self.target_list_display.setColumnCount(len(filtered_column_names))
             self.target_list_display.setHorizontalHeaderLabels(filtered_column_names)
 
@@ -731,13 +736,13 @@ class LogicService:
                 row_position = self.target_list_display.rowCount()
                 self.target_list_display.insertRow(row_position)
 
-                # Insert data into columns
-                for col_index, (col_name, value) in enumerate(row_data.items()):
+                for col_index, col_name in enumerate(filtered_column_names):
+                    value = row_data.get(col_name, "")
                     item = QTableWidgetItem(str(value))
                     self.target_list_display.setItem(row_position, col_index, item)
 
-            # Step 6: Optionally, sort the table if you want to auto-sort after loading
-            self.target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
+            # Optionally sort
+            self.target_list_display.sortItems(0, Qt.AscendingOrder)
 
         # Step 7: Optionally, hide the button and show the table once the data is loaded
         self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
