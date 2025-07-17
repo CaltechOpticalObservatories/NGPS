@@ -406,7 +406,7 @@ class LayoutService:
         self.parent.exposure_progress.setValue(0)
         self.parent.exposure_progress.setMaximumWidth(300)
         self.parent.exposure_progress.setTextVisible(True)  # Enable text display
-        self.parent.exposure_progress.setFormat("0% (0.0 min remaining)")  # Initial display
+        self.parent.exposure_progress.setFormat("0% (0.0 sec remaining)")  # Initial display
 
         exposure_layout.setSpacing(0)
         exposure_layout.addWidget(QLabel("Exposure Progress"))
@@ -431,9 +431,9 @@ class LayoutService:
 
         return progress_layout
 
-    def update_exposure_progress(self, progress_percentage, remaining_minutes):
+    def update_exposure_progress(self, progress_percentage, remaining_sec):
         """Update the exposure progress bar with percentage and remaining time."""
-        label_text = f"{progress_percentage}% ({remaining_minutes:.1f} min remaining)"
+        label_text = f"{progress_percentage}% ({remaining_sec:.1f} sec remaining)"
         self.parent.exposure_progress.setValue(progress_percentage)
         self.parent.exposure_progress.setFormat(label_text)
 

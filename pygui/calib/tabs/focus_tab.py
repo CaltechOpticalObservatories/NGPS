@@ -709,7 +709,7 @@ class FocusTab(QWidget):
         self.run_command(command)
 
         # Run the focus_andor.py script with specified arguments. 
-        command = "bash calib/andor.sh"
+        command = f"bash calib/andor.sh {label}"
         self.run_command(command)
 
         self.open_focus_acam_images()

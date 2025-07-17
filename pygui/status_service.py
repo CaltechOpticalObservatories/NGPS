@@ -142,15 +142,15 @@ class StatusService(QObject):
             max_time_ms = int(match.group(2))       # Max time in ms
             progress = int(match.group(3))          # Progress percentage
 
-            # Convert to minutes (float with 1 decimal)
-            exposure_time_min = exposure_time_ms / 60000.0
-            max_time_min = max_time_ms / 60000.0
+            # Convert to seconds
+            exposure_time_sec = exposure_time_ms / 1000.0
+            max_time_sec = max_time_ms / 1000.0
 
-            # Emit signal with progress and remaining time in minutes
-            self.progress_updated_signal.emit(progress, exposure_time_min)
+            # Emit signal with progress and remaining time in seconds
+            self.progress_updated_signal.emit(progress, exposure_time_sec)
 
             # self.log_message(
-            #     f"{progress}% complete — {exposure_time_min:.1f} min remaining of {max_time_min:.1f} min total"
+            #     f"{progress}% complete — {exposure_time_sec:.1f} min remaining of {max_time_sec:.1f} min total"
             # )
 
     def _parse_pixelcount_message(self, message):
