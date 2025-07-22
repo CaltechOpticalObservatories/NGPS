@@ -35,7 +35,40 @@ else
     -preserve pan yes -preserve regions yes \
     -view filename no -view object no -view colorbar no -view frame no -view physical no \
     -prefs theme awbreezedark -geometry $geometry  \
-    -analysis load $anstemplate -analysis task startsync
+    -analysis load $anstemplate -analysis task startsync &
   #  -region command "$region_cmd" \
 
+fi
+
+# wait for window to appear then move to preferred position
+
+window_title=""
+if [ "$camera" = "guider" ]; then
+  window_title="SAOImage GUIDER"
+elif [ "$camera" = "slicev" ]; then
+  window_title="SAOImage SLICEVIEW"
+fi
+
+# wait up to 15 sec
+
+timeout=15
+elapsed=0
+
+while !  wmctrl -l | grep -q "$window_title"; do
+ sleep 0.5
+ elapsed=$((elapsed + 1))
+ if [ "$elapsed" -ge $((timeout *2)) ]; then
+   echo "timeout waiting for $window_title window"
+   exit 1
+ fi
+done
+
+# position the window
+
+if [ "$camera" = "guider" ]; then
+  sleep 0.5
+  wmctrl -r "SAOImage GUIDER" -e 0,110,50,625,880
+elif [ "$camera" = "slicev" ]; then
+  sleep 0.5
+  wmctrl -r "SAOImage SLICEVIEW" -e 0,770,50,625,880
 fi
