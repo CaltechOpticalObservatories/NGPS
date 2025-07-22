@@ -676,11 +676,11 @@ namespace Common {
         this->keydb[key].keycomment = comment;
 
 #ifdef LOGLEVEL_DEBUG
-        std::string function = "Common::FitsKeys::addkey";
-        std::stringstream message;
-        message << "[DEBUG] added key " << key << "=" << value  << " (" << this->keydb[key].keytype << ") // " << comment
-                << " type_in=" << type_in << " resolved type=" << type;
-        logwrite( function, message.str() );
+//      std::string function = "Common::FitsKeys::addkey";
+//      std::stringstream message;
+//      message << "[DEBUG] added key " << key << "=" << value  << " (" << this->keydb[key].keytype << ") // " << comment
+//              << " type_in=" << type_in << " resolved type=" << type;
+//      logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
       }
