@@ -676,11 +676,11 @@ namespace Common {
         this->keydb[key].keycomment = comment;
 
 #ifdef LOGLEVEL_DEBUG
-        std::string function = "Common::FitsKeys::addkey";
-        std::stringstream message;
-        message << "[DEBUG] added key " << key << "=" << value  << " (" << this->keydb[key].keytype << ") // " << comment
-                << " type_in=" << type_in << " resolved type=" << type;
-        logwrite( function, message.str() );
+//      std::string function = "Common::FitsKeys::addkey";
+//      std::stringstream message;
+//      message << "[DEBUG] added key " << key << "=" << value  << " (" << this->keydb[key].keytype << ") // " << comment
+//              << " type_in=" << type_in << " resolved type=" << type;
+//      logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
       }
@@ -977,6 +977,9 @@ namespace Common {
             message << "ERROR unknown type for keyword " << keyname << "=" << jvalue;
             logwrite( function, message.str() );
           }
+        }
+        catch( const nlohmann::json::out_of_range &e ) {
+          logwrite( function, std::string(e.what()) );
         }
         catch( const std::exception &e ) {
           message.str(""); message << "ERROR adding keyword " << keyname << ": " << e.what();
