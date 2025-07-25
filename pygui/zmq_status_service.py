@@ -123,7 +123,7 @@ class ZmqStatusService(QObject):
                         # Emit the message to the UI thread
                         
                         # If the topic is "sequencerd"
-                        if topic == "sequencerd":
+                        if topic == "acamd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
                         
                         # If the topic is "sequencerd"
