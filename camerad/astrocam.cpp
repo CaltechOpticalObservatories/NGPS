@@ -3010,6 +3010,7 @@ namespace AstroCam {
       std::string jkey;     // key to extract from jmessage
       std::string keyword;  // optional FITS keyword (uses jkey if not specified)
       std::string comment;  // FITS key comment
+      std::string type="";  // optional keyword datatype
     };
 
     /**
@@ -3024,6 +3025,7 @@ namespace AstroCam {
       std::string jkey;     // key to extract from jmessage
       std::string keyword;  // optional FITS keyword (uses jkey if not specified)
       std::string comment;  // FITS key comment
+      std::string type="";  // optional keyword datatype
     };
 
     auto &telemkeys = this->camera_info.telemkeys;
@@ -3074,7 +3076,7 @@ namespace AstroCam {
           {"CALDOOR",  "", "calib door state"}
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
       else
@@ -3097,7 +3099,7 @@ namespace AstroCam {
           {"U", "FLXPIS_U", "FLXPIS", "U flexure piston axis 1 (Z) in um"}
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
         }
       }
       else
@@ -3112,7 +3114,7 @@ namespace AstroCam {
           {"U", "FOCUSU", "FOCUS", "science camera U focus position in mm" }
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
         }
       }
       else
@@ -3129,7 +3131,7 @@ namespace AstroCam {
           {"LAMPINCA", "", "is Incandescent lamp on"}
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
       else
@@ -3145,7 +3147,7 @@ namespace AstroCam {
           {"SLITPOSB", "", "slit actuator B position in mm"}
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
       else
@@ -3154,19 +3156,19 @@ namespace AstroCam {
       //
       if ( messagetype == "targetinfo" ) {
         const PrimaryInfo keyarray[] = {
-          {"OBS_ID",   "", "Observation ID"},
-          {"NAME",     "", "target name"},
+          {"OBS_ID",   "", "Observation ID", "INT"},
+          {"NAME",     "", "target name", "STRING"},
 //        {"BINSPECT", "", "binning in spectral direction"},
 //        {"BINSPAT",  "", "binning in spatial direction"},
-          {"SLITA",    "", "slit angle in deg"},
-          {"POINTMDE", "", "pointing mode"},
-          {"RA",       "", "requested Right Ascension in J2000"},
-          {"DECL",     "", "requested Declination in J2000"}
+          {"SLITA",    "", "slit angle in deg", "FLOAT"},
+          {"POINTMDE", "", "pointing mode", "STRING"},
+          {"RA",       "", "requested Right Ascension in J2000", "STRING"},
+          {"DECL",     "", "requested Declination in J2000", "STRING"}
         };
         for ( const auto &keyinfo : keyarray ) {
           message.str(""); message << "[DEBUG] targetinfo key " << keyinfo.jkey << "=" << jmessage[keyinfo.jkey];
           logwrite(function,message.str());
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
       else
@@ -3176,20 +3178,20 @@ namespace AstroCam {
       //
       if ( messagetype == "tcsinfo" ) {
         const PrimaryInfo keyarray[] = {
-          {"CASANGLE",   "", "TCS reported Cassegrain angle in deg"},
+          {"CASANGLE",   "", "TCS reported Cassegrain angle in deg", "FLOAT"},
           {"HA",         "", "hour angle"},
           {"RAOFFSET",   "", "offset Right Ascension"},
           {"DECLOFFSET", "", "offset Declination"},
           {"TELRA",      "", "TCS reported Right Ascension"},
           {"TELDEC",     "", "TCS reported Declination"},
           {"AZ",         "", "TCS reported azimuth"},
-          {"ZENANGLE",   "", "TCS reported Zenith angle"},
-          {"DOMEAZ",     "", "TCS reported dome azimuth"},
+          {"ZENANGLE",   "", "TCS reported Zenith angle", "FLOAT"},
+          {"DOMEAZ",     "", "TCS reported dome azimuth", "FLOAT"},
           {"DOMESHUT",   "", "dome shutters"},
-          {"TELFOCUS",   "", "TCS reported telescope focus position in mm"}
+          {"TELFOCUS",   "", "TCS reported telescope focus position in mm", "FLOAT"}
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, pri);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
       else
@@ -3198,22 +3200,22 @@ namespace AstroCam {
       //
       if ( messagetype == "thermalinfo" ) {
         const ExtensionInfo keyarray[] = {
-          {"I", "TCCD_I", "CCDTEMP", "I CCD temperature in Kelvin"},
-          {"R", "TCCD_R", "CCDTEMP", "R CCD temperature in Kelvin"},
-          {"G", "TCCD_G", "CCDTEMP", "G CCD temperature in Kelvin"},
-          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin"},
+          {"I", "TCCD_I", "CCDTEMP", "I CCD temperature in Kelvin", "FLOAT"},
+          {"R", "TCCD_R", "CCDTEMP", "R CCD temperature in Kelvin", "FLOAT"},
+          {"G", "TCCD_G", "CCDTEMP", "G CCD temperature in Kelvin", "FLOAT"},
+          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin", "FLOAT"},
 
-          {"I", "TCOLL_I", "COLTEMP", "I collimator temp in deg C"},
-          {"R", "TCOLL_R", "COLTEMP", "R collimator temp in deg C"},
-          {"G", "TCOLL_G", "COLTEMP", "G collimator temp in deg C"},
+          {"I", "TCOLL_I", "COLTEMP", "I collimator temp in deg C", "FLOAT"},
+          {"R", "TCOLL_R", "COLTEMP", "R collimator temp in deg C", "FLOAT"},
+          {"G", "TCOLL_G", "COLTEMP", "G collimator temp in deg C", "FLOAT"},
 
-          {"I", "TFOCUS_I", "FOCTEMP", "I focus temp in deg C"},
-          {"R", "TFOCUS_R", "FOCTEMP", "R focus temp in deg C"},
-          {"G", "TFOCUS_G", "FOCTEMP", "G focus temp in deg C"},
-          {"U", "TFOCUS_U", "FOCTEMP", "U focus temp in deg C"}
+          {"I", "TFOCUS_I", "FOCTEMP", "I focus temp in deg C", "FLOAT"},
+          {"R", "TFOCUS_R", "FOCTEMP", "R focus temp in deg C", "FLOAT"},
+          {"G", "TFOCUS_G", "FOCTEMP", "G focus temp in deg C", "FLOAT"},
+          {"U", "TFOCUS_U", "FOCTEMP", "U focus temp in deg C", "FLOAT"}
         };
         for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, ext, keyinfo.chan);
+          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
         }
       }
       else

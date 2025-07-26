@@ -1606,8 +1606,8 @@ namespace Acam {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
     snapshot_status["slitd"]=true;
     }
-    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", false);
-    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", false);
+    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
+    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
   }
   /***** Acam::Interface::handletopic_slitd ***********************************/
 

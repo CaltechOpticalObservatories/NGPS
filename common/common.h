@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstddef>
+#include <climits>
 #include <sstream>
 #include <queue>
 #include <string>
@@ -39,6 +40,8 @@ const std::string SNAPSHOT = "snapshot";       ///< common daemon command forces
 
 constexpr bool EXT = true;   ///< constant for use_extension arg of Common::Header::add_key()
 constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Header::add_key()
+
+constexpr int DEFAULTPRECISION = 8;  ///< default precision for floating point keywords
 
 /***** Common *****************************************************************/
 /**
@@ -538,6 +541,64 @@ namespace Common {
       long addkey( const std::string &arg );                 ///< add FITS key to the internal database
       long addkey( const std::vector<std::string> &vec );    ///< add FITS key to the internal database
 
+    private:
+
+      /***** Common::FitsKeys::resolve_type_and_value *************************/
+      /**
+       * @brief      determine type of tval and format as necessary into value string
+       * @details    This determines the type of the template type tval and formats
+       *             it into string value, applying requested floating point precision.
+       * @param[in]  tval   templated value
+       * @param[in]  prec   precision for floating point
+       * @param[out] type   reference to type string
+       * @param[out] value  reference to formatted value string
+       *
+       */
+      template <class T> void resolve_type_and_value(T tval, int prec, std::string &type, std::string &value) {
+        // Set the type based on type T of tval.
+        // The use of constexpr() ensures that the compiler discards branches
+        // that are not valid for the given T.
+        //
+        if constexpr (std::is_same_v<T, bool>) type = "BOOL";
+        else
+        if constexpr (std::is_same_v<T, double>) type = "DOUBLE";
+        else
+        if constexpr (std::is_same_v<T, float>) type = "FLOAT";
+        else
+        if constexpr (std::is_same_v<T, int>) type = "INT";
+        else
+        if constexpr (std::is_same_v<T, long>) type = "LONG";
+
+        std::stringstream valstr;
+
+        // If floating point value is NAN then change to string "NaN"
+        if constexpr (std::is_floating_point_v<T>) {
+          if (std::isnan(tval)) {
+            valstr << "NaN";
+            type = "STRING";
+          }
+          else {
+            // floating points are formatted with requested precision
+            valstr << std::fixed << std::setprecision(prec) << tval;
+          }
+        }
+        else {
+          // If type was unresolved then try to infer it
+          valstr << tval;
+          if constexpr (!std::is_same_v<T, bool> &&
+                        !std::is_same_v<T, double> &&
+                        !std::is_same_v<T, float> &&
+                        !std::is_same_v<T, int> &&
+                        !std::is_same_v<T, long>) {
+              type = get_keytype(valstr.str());  // content-based inference
+          }
+        }
+        value = valstr.str();
+      }
+      /***** Common::FitsKeys::resolve_type_and_value *************************/
+
+    public:
+
       /***** Common::FitsKeys::addkey *****************************************/
       /**
        * @brief      template function adds FITS keyword to internal database
@@ -569,60 +630,57 @@ namespace Common {
        *
        */
       inline long addkey( const std::string &key, bool bval, const std::string &comment ) {
-        return addkey( key, (bval?"T":"F"), comment, 0 );
+        return do_addkey( key, (bval?"T":"F"), comment, 0, "" );
       }
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment ) {
-        return addkey( key, tval, comment, 8 );
+        return do_addkey( key, tval, comment, DEFAULTPRECISION, "" );
+      }
+      template <class T> long addkey( const std::string &key, T tval, const std::string &comment, const char* type ) {
+        const std::string _type = type ? std::string(type) : std::string();
+        return do_addkey( key, tval, comment, DEFAULTPRECISION, _type );
+      }
+      template <class T> long addkey( const std::string &key, T tval, const std::string &comment, std::string type ) {
+        return do_addkey( key, tval, comment, DEFAULTPRECISION, type );
       }
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment, int prec ) {
+        return do_addkey( key, tval, comment, prec, "" );
+      }
+      template <class T> long do_addkey( const std::string &key,
+                                         T tval,
+                                         const std::string &comment,
+                                         int prec,
+                                         std::string type_in ) {
         std::stringstream val;
-        std::string type;
-
-        // "convert" the type <T> value into a string via the appropriate stream
-        // and set the type string.
-        //
-        // The use of constexpr() ensures that the compiler discards brances
-        // that are not valid for the given T.
-        //
-        if constexpr( std::is_same<T, double>::value ) {
-          val << std::fixed << std::setprecision( prec );
-          if ( !std::isnan(tval) ) val << tval; else val << "NaN";
-          type = ( !std::isnan(tval) ? "DOUBLE" : "STRING" );
-        }
-        else
-        if constexpr( std::is_same<T, float>::value ) {
-          val << std::fixed << std::setprecision( prec );
-          if ( !std::isnan(tval) ) val << tval; else val << "NaN";
-          type = ( !std::isnan(tval) ? "FLOAT" : "STRING" );
-        }
-        else
-        if constexpr( std::is_same<T, int>::value ) {
-          val << tval;
-          type = "INT";
-        }
-        else
-        if constexpr( std::is_same<T, long>::value ) {
-          val << tval;
-          type = "LONG";
-        }
-        else {
-          val << tval;
-          type = this->get_keytype( val.str() );  // try to infer the type from any string
-        }
+        std::string type, value;
 
         if ( key.empty() || ( key.find(" ") != std::string::npos ) ) return NO_ERROR;
+
+        // this determines the type based on the templated tval
+        // and formats the value if needed (for floating point precision)
+        //
+        resolve_type_and_value(tval, prec, type, value);
+
+        // if requested type_in not a recognized type then ignore it
+        //
+        if ( !type_in.empty() && (type_in != "DOUBLE" ||
+                                  type_in != "FLOAT"  ||
+                                  type_in != "INT"    ||
+                                  type_in != "LONG"   ||
+                                  type_in != "BOOL"   ||
+                                  type_in != "STRING" ) ) type_in.clear();
 
         // insert new entry into the database
         //
         this->keydb[key].keyword    = key;
-        this->keydb[key].keytype    = type;
-        this->keydb[key].keyvalue   = val.str();
+        this->keydb[key].keytype    = type_in.empty() ? type : type_in;  // allow override detected type
+        this->keydb[key].keyvalue   = value;
         this->keydb[key].keycomment = comment;
 
 #ifdef LOGLEVEL_DEBUG
         std::string function = "Common::FitsKeys::addkey";
         std::stringstream message;
-        message << "[DEBUG] added key type " << type << ": " << key << "=" << tval << " (" << this->keydb[key].keytype << ") // " << comment;
+        message << "[DEBUG] added key " << key << "=" << value  << " (" << type << ") // " << comment;
+        if (!type_in.empty()) message << " *** override type as " << type_in << " ***";
         logwrite( function, message.str() );
 #endif
         return( NO_ERROR );
@@ -826,6 +884,7 @@ namespace Common {
                          const std::string &jkey,
                          const std::string &keyword,
                          const std::string &comment,
+                         const std::string &type,
                          bool use_extension,
                          const std::string &chan="") {
         const std::string function="Common::Header::add_json_key";
@@ -837,6 +896,8 @@ namespace Common {
           message.str(""); message << "added extension chan " << chan << " to keydb";
           logwrite( function, message.str() );
         }
+
+        const std::string &keyname = (!keyword.empty() ? keyword : jkey);
 
         try {
           // extract the value from the JSON message using jkey as the key
@@ -853,39 +914,67 @@ namespace Common {
           //
           FitsKeys &keydb = ( use_extension ? elmo(chan) : primary() );
 
-          // type-check each value to call add_key with the correct type
-          // keyword is the header keyword if not empty, otherwise use jkey
+          // if a type was explicitly specified then use that
+          //
+          if (type=="DOUBLE" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<double>(), comment );
+            return;
+          }
+          else
+          if (type=="FLOAT" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<float>(), comment );
+            return;
+          }
+          else
+          if (type=="LONG" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<long>(), comment );
+            return;
+          }
+          else
+          if (type=="INT" && jvalue.is_number()) {
+            this->add_key( keydb, keyname, jvalue.template get<int>(), comment );
+            return;
+          }
+          else
+          if (type=="BOOL") {
+            this->add_key( keydb, keyname, jvalue.template get<bool>(), comment );
+            return;
+          }
+          else
+          if (type=="STRING") {
+            this->add_key( keydb, keyname, jvalue.template get<std::string>(), comment );
+            return;
+          }
+
+          // if we're still here, type-check each value to call add_key with the
+          // correct type
           //
           if ( jvalue.type() == json::value_t::boolean ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<bool>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<bool>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_integer ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<int>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<int>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_unsigned ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<uint16_t>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<uint16_t>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::number_float ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<double>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<double>(), comment );
           }
           else
           if ( jvalue.type() == json::value_t::string ) {
-            this->add_key( keydb, (!keyword.empty()?keyword:jkey), jvalue.template get<std::string>(), comment );
+            this->add_key( keydb, keyname, jvalue.template get<std::string>(), comment );
           }
           else {
-            message << "ERROR unknown type for keyword " << (!keyword.empty()?keyword:jkey) << "=" << jvalue;
+            message << "ERROR unknown type for keyword " << keyname << "=" << jvalue;
             logwrite( function, message.str() );
           }
         }
-        catch( const json::exception &e ) {
-          message.str(""); message << "JSON exception adding keyword " << (!keyword.empty()?keyword:jkey) << ": " << e.what();
-          logwrite( function, message.str() );
-        }
         catch( const std::exception &e ) {
-          message.str(""); message << "ERROR exception adding keyword " << (!keyword.empty()?keyword:jkey) << ": " << e.what();
+          message.str(""); message << "ERROR adding keyword " << keyname << ": " << e.what();
           logwrite( function, message.str() );
         }
       }
