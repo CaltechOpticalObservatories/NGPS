@@ -316,7 +316,7 @@ this->foo(HDUTYPE::Primary);
      */
     template <class T>
     long write_image(T* data, Camera::Information& info, const std::string extname="" ) {
-      std::string function = "FITS::write_image";
+      const std::string function("FITS::write_image");
       std::stringstream message;
 
       // The file must have been opened first
@@ -334,15 +334,6 @@ this->foo(HDUTYPE::Primary);
         array[i] = data[i];
       }
 
-      // Use a lambda expression to properly spawn a thread without having to
-      // make it static. Each thread gets a pointer to the current object this->
-      // which must continue to exist until all of the threads terminate.
-      // That is ensured by keeping threadcount, incremented for each thread
-      // spawned and decremented on return, and not returning from this function
-      // until threadcount is zero.
-      //
-      this->threadcount++;                                   // increment threadcount for each thread spawned
-
 #ifdef LOGLEVEL_DEBUG
       long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
       long axes[num_axis];
@@ -352,24 +343,54 @@ this->foo(HDUTYPE::Primary);
               << " cubedepth=" << info.cubedepth
               << " axes=";
       for ( auto aa : axes ) message << aa << " ";
-      message << ". spawning image writing thread for frame " << this->framen << " of file \"" << this->fits_name << "\"";
       logwrite(function, message.str());
 #endif
-      std::thread([&]() {                                    // create the detached thread here
-        if (info.ismex) {
-          this->write_mex_thread(array, info, this, extname);
-        }
-        else {
-          this->write_image_thread(array, info, this);
-        }
-        std::lock_guard<std::mutex> lock(this->fits_mutex);  // lock and
-        this->threadcount--;                                 // decrement threadcount
-      }).detach();
+
+      // make copies to ensure the lambda captures are safe
+      auto self=this;
+      auto infocpy=info;
+      auto extnamecpy=extname;
+
+      // Use a lambda expression to properly spawn a thread without having to
+      // make it static. Each thread gets a copy of "this".
+      //
+      std::thread([array, self, infocpy, extnamecpy]() mutable {
+        // create a guarded thread counter:
+        // increments on construction, decrements on destruction
+        GuardedCounter tc(self->threadcount);
+
+        std::stringstream message;
+        const std::string function("FITS::write_image");
+
+        try {
 #ifdef LOGLEVEL_DEBUG
-      message.str("");
-      message << "[DEBUG] spawned image writing thread for frame " << this->framen << " of file \"" << this->fits_name << "\"";
-      logwrite(function, message.str());
+          message << "[DEBUG] spawning image writing thread ID " << std::this_thread::get_id()
+                  << " for frame " << self->framen << " of file \"" << self->fits_name << "\"";
+          logwrite(function, message.str());
 #endif
+          if (infocpy.ismex) {
+            self->write_mex_thread(array, infocpy, self, extnamecpy);
+          }
+          else {
+            self->write_image_thread(array, infocpy, self);
+          }
+#ifdef LOGLEVEL_DEBUG
+          message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
+                                   << " spawned threadcount " << self->threadcount;
+          logwrite(function, message.str());
+#endif
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
+                                   << " exception: " << e.what();
+          logwrite(function, message.str());
+        }
+        catch (...) {
+          message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
+                                   << " unknown exception";
+          logwrite(function, message.str());
+        }
+      }).detach();
 
       // wait for all threads to complete
       //
@@ -386,8 +407,8 @@ this->foo(HDUTYPE::Primary);
         }
         if (wait < 0) {
           message.str(""); message << "ERROR: timeout waiting for threads."
-                                   << " threadcount=" << threadcount 
-                                   << " extension=" << info.extension 
+                                   << " threadcount=" << this->threadcount
+                                   << " extension=" << info.extension
                                    << " framen=" << this->framen
                                    << " file=" << this->fits_name;
           logwrite(function, message.str());

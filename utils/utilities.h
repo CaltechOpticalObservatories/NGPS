@@ -1090,3 +1090,27 @@ class StateManager {
     }
 };
 /***** StateManager ***********************************************************/
+
+
+/***** GuardedCounter *******************************************************/
+/**
+ * @class   GuardedCounter
+ * @brief   automatically increments on construction, decrements on destruction
+ * @details construct with a std::atomic<int> which is passed by reference
+ *
+ */
+class GuardedCounter {
+  public:
+    std::atomic<int> &counter;
+
+    // increments on construction
+    GuardedCounter(std::atomic<int> &c) : counter(c) { ++counter; }
+
+    // decrements on destruction
+    ~GuardedCounter() { --counter; }
+
+    // non-copyable, non-movable
+    GuardedCounter(const GuardedCounter &) = delete;
+    GuardedCounter & operator=(const GuardedCounter &) = delete;
+};
+/***** GuardedCounter *******************************************************/
