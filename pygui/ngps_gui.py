@@ -263,7 +263,7 @@ class NgpsGUI(QMainWindow):
 
     @pyqtSlot()
     def on_delete_target_list(self):
-        target_list_name = self.target_list_name.currentText()
+        target_list_name = self.current_target_list_name
         if not target_list_name:
             QMessageBox.warning(self, "Error", "No target list selected.")
             return
@@ -274,11 +274,14 @@ class NgpsGUI(QMainWindow):
             QMessageBox.Yes | QMessageBox.No
         )
 
-        if confirm == QMessageBox.Yes:
+        if confirm != QMessageBox.Yes:
+            return
+
+        try:
             deleted = self.logic_service.delete_target_list_by_name(target_list_name)
 
             if deleted > 0:
-                # Clean up state
+                # Remove from in-memory structures
                 self.all_targets = [
                     row for row in self.all_targets
                     if row.get("NAME") != target_list_name
@@ -287,18 +290,27 @@ class NgpsGUI(QMainWindow):
                     k: v for k, v in self.user_set_data.items() if v != target_list_name
                 }
 
-                self.target_list_name.removeItem(
-                    self.target_list_name.currentIndex()
-                )
+                # Remove from dropdown
+                dropdown = self.layout_service.target_list_name
+                idx = dropdown.findText(target_list_name)
+                if idx != -1:
+                    dropdown.removeItem(idx)
 
-                self.layout_service.target_list_display.clearContents()
-                self.layout_service.target_list_display.setRowCount(0)
+                # Clear the table
+                table = self.layout_service.target_list_display
+                table.clearContents()
+                table.setRowCount(0)
+
+                # Reset current name
+                self.current_target_list_name = None
 
                 QMessageBox.information(self, "Deleted", f"Target list '{target_list_name}' was deleted.")
             else:
                 QMessageBox.warning(self, "Not Found", f"No target list named '{target_list_name}' was found.")
 
-
+        except Exception as e:
+            print(f"Exception during target list deletion: {e}")
+            QMessageBox.critical(self, "Error", f"An error occurred while deleting the target list:\n{str(e)}")
 
 
 if __name__ == '__main__':
