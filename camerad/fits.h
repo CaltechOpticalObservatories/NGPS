@@ -346,18 +346,10 @@ this->foo(HDUTYPE::Primary);
       logwrite(function, message.str());
 #endif
 
-      // make copies to ensure the lambda captures are safe
-      auto self=this;
-      auto infocpy=info;
-      auto extnamecpy=extname;
-
-      // Use a lambda expression to properly spawn a thread without having to
-      // make it static. Each thread gets a copy of "this".
-      //
-      std::thread([array, self, infocpy, extnamecpy]() mutable {
+      {
         // create a guarded thread counter:
         // increments on construction, decrements on destruction
-        GuardedCounter tc(self->threadcount);
+        GuardedCounter tc(this->threadcount);
 
         std::stringstream message;
         const std::string function("FITS::write_image");
@@ -365,18 +357,18 @@ this->foo(HDUTYPE::Primary);
         try {
 #ifdef LOGLEVEL_DEBUG
           message << "[DEBUG] spawning image writing thread ID " << std::this_thread::get_id()
-                  << " for frame " << self->framen << " of file \"" << self->fits_name << "\"";
+                  << " for frame " << this->framen << " of file \"" << this->fits_name << "\"";
           logwrite(function, message.str());
 #endif
-          if (infocpy.ismex) {
-            self->write_mex_thread(array, infocpy, self, extnamecpy);
+          if (info.ismex) {
+            this->write_mex_thread(array, info, this, extname);
           }
           else {
-            self->write_image_thread(array, infocpy, self);
+            this->write_image_thread(array, info, this);
           }
 #ifdef LOGLEVEL_DEBUG
           message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
-                                   << " spawned threadcount " << self->threadcount;
+                                   << " spawned threadcount " << this->threadcount;
           logwrite(function, message.str());
 #endif
         }
@@ -390,45 +382,16 @@ this->foo(HDUTYPE::Primary);
                                    << " unknown exception";
           logwrite(function, message.str());
         }
-      }).detach();
-
-      // wait for all threads to complete
-      //
-      int last_threadcount = this->threadcount;
-      int wait = FITS_WRITE_WAIT;
-      while (this->threadcount > 0) {
-        usleep(1000);
-        if (this->threadcount >= last_threadcount) {         // threads are not completing
-          wait--;                                            // start decrementing wait timer
-        }
-        else {                                               // a thread was completed so things are still working
-          last_threadcount = this->threadcount;              // reset last threadcount
-          wait = FITS_WRITE_WAIT;                            // reset wait timer
-        }
-        if (wait < 0) {
-          message.str(""); message << "ERROR: timeout waiting for threads."
-                                   << " threadcount=" << this->threadcount
-                                   << " extension=" << info.extension
-                                   << " framen=" << this->framen
-                                   << " file=" << this->fits_name;
-          logwrite(function, message.str());
-          this->writing_file = false;
-          return (ERROR);
-        }
       }
+      message.str(""); message << "thread ID " << std::this_thread::get_id()
+                               << " threadcount " << this->threadcount;
+      logwrite(function, message.str());
 
       if (this->error) {
         message.str("");
         message << "an error occured in one of the FITS writing threads for file \"" << this->fits_name << "\"";
         logwrite(function, message.str());
       }
-#ifdef LOGLEVEL_DEBUG
-      else {
-        message.str("");
-        message << "[DEBUG] file \"" << this->fits_name << "\" complete";
-        logwrite(function, message.str());
-      }
-#endif
 
       return ( this->error ? ERROR : NO_ERROR );
     }
