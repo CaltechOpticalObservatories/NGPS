@@ -334,10 +334,6 @@ this->foo(HDUTYPE::Primary);
         array[i] = data[i];
       }
 
-      // create a guarded thread counter:
-      // increments on construction, decrements on destruction
-      GuardedCounter tc(this->threadcount);
-
       try {
 #ifdef LOGLEVEL_DEBUG
         long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
@@ -355,17 +351,16 @@ this->foo(HDUTYPE::Primary);
         for ( auto aa : axes ) message << aa << " ";
         logwrite(function, message.str());
 #endif
+        // create a guarded thread counter:
+        // increments on construction, decrements on destruction
+        GuardedCounter tc(this->threadcount);
+
         if (info.ismex) {
           this->write_mex_thread(array, info, this, extname);
         }
         else {
           this->write_image_thread(array, info, this);
         }
-#ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
-                                 << " spawned threadcount " << this->threadcount;
-        logwrite(function, message.str());
-#endif
       }
       catch (const std::exception &e) {
         message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
@@ -384,6 +379,11 @@ this->foo(HDUTYPE::Primary);
         logwrite(function, message.str());
       }
 
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
+                               << " threadcount " << this->threadcount;
+      logwrite(function, message.str());
+#endif
       return ( this->error ? ERROR : NO_ERROR );
     }
     /***** FITS_file::write_image *********************************************/
