@@ -406,7 +406,6 @@ class ControlTab(QDialog):
                     background-color: #D3D3D3;  /* No pressed effect when disabled */
                 }
             """)
-        self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
         
     def on_abort_button_click(self):
         """Handle the 'Expose' button click"""
@@ -580,6 +579,7 @@ class ControlTab(QDialog):
     def on_go_button_click(self):
         """Slot to handle 'Go' button click and send the target command."""
         if self.parent.current_observation_id is not None:
+            self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
             observation_id = self.parent.current_observation_id
             print(f"Sending command: seq startone {observation_id}")
             self.parent.layout_service.update_slit_info_fields()
