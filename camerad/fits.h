@@ -344,8 +344,8 @@ this->foo(HDUTYPE::Primary);
         long axes[num_axis];
         for ( int i=0; i < num_axis; i++ ) axes[i] = info.axes[i];
         message.str("");
-        message << "[DEBUG] spawning image writing thread ID=" << std::this_thread::get_id()
-                << " file=" << this->fits_name;
+        message << "[DEBUG] thread ID=" << std::this_thread::get_id()
+                << " spawning image writing thread for " << this->fits_name;
         logwrite(function, message.str());
         message.str("");
         message << "[DEBUG] thread ID=" << std::this_thread::get_id()
