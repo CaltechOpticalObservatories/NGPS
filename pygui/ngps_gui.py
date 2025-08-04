@@ -261,8 +261,47 @@ class NgpsGUI(QMainWindow):
     #     # Show the ControlTab window as a popup
     #     control_window.show()  
 
+    @pyqtSlot()
+    def on_delete_target_list(self):
+        target_list_name = self.parent.target_list_name.currentText()
+        if not target_list_name:
+            QMessageBox.warning(self, "Error", "No target list selected.")
+            return
+
+        confirm = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Are you sure you want to delete target list '{target_list_name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirm == QMessageBox.Yes:
+            deleted = self.logic_service.delete_target_list_by_name(target_list_name)
+
+            if deleted > 0:
+                # Clean up state
+                self.parent.all_targets = [
+                    row for row in self.parent.all_targets
+                    if row.get("NAME") != target_list_name
+                ]
+                self.parent.user_set_data = {
+                    k: v for k, v in self.parent.user_set_data.items() if v != target_list_name
+                }
+
+                self.parent.target_list_name.removeItem(
+                    self.parent.target_list_name.currentIndex()
+                )
+                self.target_list_display.clearContents()
+                self.target_list_display.setRowCount(0)
+
+                QMessageBox.information(self, "Deleted", f"Target list '{target_list_name}' was deleted.")
+            else:
+                QMessageBox.warning(self, "Not Found", f"No target list named '{target_list_name}' was found.")
+
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = NgpsGUI()
     window.show()
     sys.exit(app.exec_())
+

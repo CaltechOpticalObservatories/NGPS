@@ -62,6 +62,11 @@ class MenuService:
         # Targets Menu
         targets_menu = self.menubar.addMenu('Target List')
 
+        # Delete Target List Action
+        delete_target_list_action = QAction('Delete Target List', self.menubar)
+        delete_target_list_action.triggered.connect(self.parent.on_delete_target_list)
+        targets_menu.addAction(delete_target_list_action)
+
         # Help Menu
         help_menu = self.menubar.addMenu('Help')
         help_action = QAction('Help Contents', self.menubar)

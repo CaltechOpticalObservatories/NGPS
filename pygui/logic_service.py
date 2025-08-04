@@ -714,7 +714,7 @@ class LogicService:
                 # Filter the single row
                 filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
                 filtered_data = [filtered_row]  # Treat the single row as a list for consistency
-
+    
         # Step 3: Clear the existing content of the QTableWidget
         self.target_list_display.setRowCount(0)  # Clear all items in the table
 
@@ -882,3 +882,21 @@ class LogicService:
             raise
         
         return f"{parallactic_angle.to(u.deg).value:.2f}"
+    
+    def delete_target_list_by_name(self, target_list_name):
+        """
+        Deletes all rows from the database that belong to the target list with the given name.
+        """
+        self.connection = self.connect_to_mysql("config/db_config.ini")
+        cursor = self.connection.cursor()
+
+        query = "DELETE FROM target_list_table WHERE NAME = %s"
+        cursor.execute(query, (target_list_name,))
+        self.connection.commit()
+
+        deleted_count = cursor.rowcount
+
+        cursor.close()
+        self.connection.close()
+
+        return deleted_count
