@@ -334,58 +334,49 @@ this->foo(HDUTYPE::Primary);
         array[i] = data[i];
       }
 
-#ifdef LOGLEVEL_DEBUG
-      long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
-      long axes[num_axis];
-      for ( int i=0; i < num_axis; i++ ) axes[i] = info.axes[i];
-      message.str("");
-      message << "[DEBUG] threadcount=" << this->threadcount << " ismex=" << info.ismex << " section_size=" << info.section_size 
-              << " cubedepth=" << info.cubedepth
-              << " axes=";
-      for ( auto aa : axes ) message << aa << " ";
-      logwrite(function, message.str());
-#endif
+      // create a guarded thread counter:
+      // increments on construction, decrements on destruction
+      GuardedCounter tc(this->threadcount);
 
-      {
-        // create a guarded thread counter:
-        // increments on construction, decrements on destruction
-        GuardedCounter tc(this->threadcount);
-
-        std::stringstream message;
-        const std::string function("FITS::write_image");
-
-        try {
+      try {
 #ifdef LOGLEVEL_DEBUG
-          message << "[DEBUG] spawning image writing thread ID " << std::this_thread::get_id()
-                  << " for frame " << this->framen << " of file \"" << this->fits_name << "\"";
-          logwrite(function, message.str());
+        long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
+        long axes[num_axis];
+        for ( int i=0; i < num_axis; i++ ) axes[i] = info.axes[i];
+        message.str("");
+        message << "[DEBUG] spawning image writing thread ID=" << std::this_thread::get_id()
+                << " threadcount=" << this->threadcount
+                << " file=" << this->fits_name
+                << " frame=" << this->framen
+                << " ismex=" << info.ismex
+                << " section_size=" << info.section_size
+                << " cubedepth=" << info.cubedepth
+                << " axes=";
+        for ( auto aa : axes ) message << aa << " ";
+        logwrite(function, message.str());
 #endif
-          if (info.ismex) {
-            this->write_mex_thread(array, info, this, extname);
-          }
-          else {
-            this->write_image_thread(array, info, this);
-          }
+        if (info.ismex) {
+          this->write_mex_thread(array, info, this, extname);
+        }
+        else {
+          this->write_image_thread(array, info, this);
+        }
 #ifdef LOGLEVEL_DEBUG
-          message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
-                                   << " spawned threadcount " << this->threadcount;
-          logwrite(function, message.str());
+        message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
+                                 << " spawned threadcount " << this->threadcount;
+        logwrite(function, message.str());
 #endif
-        }
-        catch (const std::exception &e) {
-          message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
-                                   << " exception: " << e.what();
-          logwrite(function, message.str());
-        }
-        catch (...) {
-          message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
-                                   << " unknown exception";
-          logwrite(function, message.str());
-        }
       }
-      message.str(""); message << "thread ID " << std::this_thread::get_id()
-                               << " threadcount " << this->threadcount;
-      logwrite(function, message.str());
+      catch (const std::exception &e) {
+        message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
+                                 << " exception: " << e.what();
+        logwrite(function, message.str());
+      }
+      catch (...) {
+        message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
+                                 << " unknown exception";
+        logwrite(function, message.str());
+      }
 
       if (this->error) {
         message.str("");
