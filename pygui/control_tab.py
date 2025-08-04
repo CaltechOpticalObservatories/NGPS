@@ -807,6 +807,7 @@ class ControlTab(QDialog):
             print("Please enter valid values for all fields.")
         
         if self.parent.current_target_list_name:
+            print(f"Current target list: {self.parent.current_target_list_name}")
             self.logic_service.update_target_table_with_list(self.parent.current_target_list_name)
 
     def on_exposure_time_changed(self):
