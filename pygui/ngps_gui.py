@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog
 from PyQt5.QtCore import Qt, pyqtSlot
 from menu_service import MenuService
 from logic_service import LogicService
@@ -128,7 +128,6 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("calibd")
         self.zmq_status_service.subscribe_to_topic("tcsd")
         self.zmq_status_service.subscribe_to_topic("acamd")
-        self.zmq_status_service.subscribe_to_topic("slitd")
 
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
@@ -262,16 +261,29 @@ class NgpsGUI(QMainWindow):
     #     # Show the ControlTab window as a popup
     #     control_window.show()  
 
-    @pyqtSlot()
     def on_delete_target_list(self):
-        target_list_name = self.current_target_list_name
-        if not target_list_name:
-            QMessageBox.warning(self, "Error", "No target list selected.")
+        # Pull available target list names from user_set_data
+        target_list_names = list(self.user_set_data.values())
+        if not target_list_names:
+            QMessageBox.warning(self, "No Lists", "No target lists available to delete.")
             return
 
+        # Open a popup to select a list
+        selected_list, ok = QInputDialog.getItem(
+            self,
+            "Delete Target List",
+            "Select a target list to delete:",
+            target_list_names,
+            editable=False
+        )
+
+        if not ok or not selected_list:
+            return  # Cancelled
+
         confirm = QMessageBox.question(
-            self, "Confirm Delete",
-            f"Are you sure you want to delete target list '{target_list_name}'?",
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete target list '{selected_list}'?",
             QMessageBox.Yes | QMessageBox.No
         )
 
@@ -279,21 +291,21 @@ class NgpsGUI(QMainWindow):
             return
 
         try:
-            deleted = self.logic_service.delete_target_list_by_name(target_list_name)
+            deleted = self.logic_service.delete_target_list_by_name(selected_list)
 
             if deleted > 0:
                 # Remove from in-memory structures
                 self.all_targets = [
                     row for row in self.all_targets
-                    if row.get("NAME") != target_list_name
+                    if row.get("NAME") != selected_list
                 ]
                 self.user_set_data = {
-                    k: v for k, v in self.user_set_data.items() if v != target_list_name
+                    k: v for k, v in self.user_set_data.items() if v != selected_list
                 }
 
                 # Remove from dropdown
                 dropdown = self.layout_service.target_list_name
-                idx = dropdown.findText(target_list_name)
+                idx = dropdown.findText(selected_list)
                 if idx != -1:
                     dropdown.removeItem(idx)
 
@@ -302,12 +314,13 @@ class NgpsGUI(QMainWindow):
                 table.clearContents()
                 table.setRowCount(0)
 
-                # Reset current name
-                self.current_target_list_name = None
+                # Reset current selection
+                if self.current_target_list_name == selected_list:
+                    self.current_target_list_name = None
 
-                QMessageBox.information(self, "Deleted", f"Target list '{target_list_name}' was deleted.")
+                QMessageBox.information(self, "Deleted", f"Target list '{selected_list}' was deleted.")
             else:
-                QMessageBox.warning(self, "Not Found", f"No target list named '{target_list_name}' was found.")
+                QMessageBox.warning(self, "Not Found", f"No target list named '{selected_list}' was found.")
 
         except Exception as e:
             print(f"Exception during target list deletion: {e}")
