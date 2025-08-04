@@ -746,6 +746,7 @@ class ControlTab(QDialog):
                     background-color: lightgray;
                 }
             """)
+    
         elif exposure_time and slit_width:
             # Handle the confirmed changes, e.g., update internal state or UI
             print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
@@ -804,6 +805,9 @@ class ControlTab(QDialog):
         else:
             # Handle the case where one or more fields are empty
             print("Please enter valid values for all fields.")
+        
+        if self.parent.current_target_list_name:
+            self.logic_service.update_target_table_with_list(self.parent.current_target_list_name)
 
     def on_exposure_time_changed(self):
         # Retrieve the exposure time and send the query to the database
