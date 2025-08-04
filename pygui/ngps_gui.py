@@ -1,7 +1,7 @@
 import sys
 import subprocess
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSlot
 from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
@@ -263,7 +263,7 @@ class NgpsGUI(QMainWindow):
 
     @pyqtSlot()
     def on_delete_target_list(self):
-        target_list_name = self.parent.target_list_name.currentText()
+        target_list_name = self.target_list_name.currentText()
         if not target_list_name:
             QMessageBox.warning(self, "Error", "No target list selected.")
             return
@@ -279,23 +279,25 @@ class NgpsGUI(QMainWindow):
 
             if deleted > 0:
                 # Clean up state
-                self.parent.all_targets = [
-                    row for row in self.parent.all_targets
+                self.all_targets = [
+                    row for row in self.all_targets
                     if row.get("NAME") != target_list_name
                 ]
-                self.parent.user_set_data = {
-                    k: v for k, v in self.parent.user_set_data.items() if v != target_list_name
+                self.user_set_data = {
+                    k: v for k, v in self.user_set_data.items() if v != target_list_name
                 }
 
-                self.parent.target_list_name.removeItem(
-                    self.parent.target_list_name.currentIndex()
+                self.target_list_name.removeItem(
+                    self.target_list_name.currentIndex()
                 )
-                self.target_list_display.clearContents()
-                self.target_list_display.setRowCount(0)
+
+                self.layout_service.target_list_display.clearContents()
+                self.layout_service.target_list_display.setRowCount(0)
 
                 QMessageBox.information(self, "Deleted", f"Target list '{target_list_name}' was deleted.")
             else:
                 QMessageBox.warning(self, "Not Found", f"No target list named '{target_list_name}' was found.")
+
 
 
 
