@@ -336,7 +336,8 @@ class ControlTab(QDialog):
         print("On Continue button clicked!")
         # disable the offset button
         self.offset_to_target_button.setEnabled(False)
-        
+        # Subscribe to slitd just before exposing
+        self.parent.zmq_status_service.subscribe_to_topic("slitd")
         # Send the usercontinue command
         command = f"usercontinue\n"
         self.parent.send_command(command)
@@ -405,6 +406,7 @@ class ControlTab(QDialog):
                     background-color: #D3D3D3;  /* No pressed effect when disabled */
                 }
             """)
+        self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
         
     def on_abort_button_click(self):
         """Handle the 'Expose' button click"""
@@ -580,6 +582,7 @@ class ControlTab(QDialog):
         if self.parent.current_observation_id is not None:
             observation_id = self.parent.current_observation_id
             print(f"Sending command: seq startone {observation_id}")
+            self.parent.layout_service.update_slit_info_fields()
             self.send_target_command(observation_id)
             QSound.play("sound/go_button_clicked.wav")
             self.go_button.setEnabled(False)

@@ -30,6 +30,7 @@ class NgpsGUI(QMainWindow):
         self.all_targets = None
         self.current_owner = None
         self.current_target_list_name = None
+        self.zmq_status_service = None
         
         # Login status flag
         self.logged_in = False

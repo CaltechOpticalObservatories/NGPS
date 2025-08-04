@@ -902,7 +902,6 @@ class LayoutService:
             if self.parent.current_ra != '' and self.parent.current_dec != '':
                 slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             self.control_tab.slit_angle_box.setText(slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
 
         else:
             # Disable the "Go" button when no row is selected
@@ -973,8 +972,11 @@ class LayoutService:
                 # Determine if the modulator is on or off based on the modulator status
                 modulator_checkbox.setChecked(modulator_status.startswith("on"))  # "on" means checked, "off" means unchecked
 
-    def update_slit_info_fields(self, slit_width, slit_offset):
-        self.slit_width_input.setText(f"{slit_width:.3f} / {slit_offset:.3f}")
+    def update_slit_info_fields(self, slit_width=None, slit_offset=None):
+        if slit_width is None or slit_offset is None:
+            self.slit_width_input.setText("N/A")
+        else:
+            self.slit_width_input.setText(f"{slit_width:.3f} / {slit_offset:.3f}")
 
     def create_second_column_top_half(self):
         """Create the top half of the second column with 'Status', Calibration Lamps, and additional status fields"""
