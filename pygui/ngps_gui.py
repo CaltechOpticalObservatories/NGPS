@@ -29,7 +29,7 @@ class NgpsGUI(QMainWindow):
         self.user_set_data = {}
         self.all_targets = None
         self.current_owner = None
-        self.current_target = None
+        self.current_target_list_name = None
         
         # Login status flag
         self.logged_in = False

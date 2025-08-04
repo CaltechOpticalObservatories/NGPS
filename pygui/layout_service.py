@@ -1314,7 +1314,7 @@ class LayoutService:
         """Handle the target set change in the ComboBox."""
         # Get the selected SET_NAME (not the entire list of target sets)
         selected_set_name = self.target_list_name.currentText()
-        self.parent.current_target = self.target_list_name.currentText()
+        self.parent.current_target_list_name = self.target_list_name.currentText()
         self.add_row_button.setEnabled(True)
 
         if selected_set_name == "Create a new target list":
