@@ -822,6 +822,12 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
         this->write_condition.notify_all();
 
+#ifdef LOGLEVEL_DEBUG
+        std::stringstream message;
+        message << "[DEBUG]";
+        for (const auto &dev : this->writes_pending[expbuf]) message << " " << dev;
+        logwrite("Interface::write_pending", message.str());
+#endif
         return;
       }
       /***** Interface::write_pending *****************************************/

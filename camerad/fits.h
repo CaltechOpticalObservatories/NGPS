@@ -316,7 +316,7 @@ this->foo(HDUTYPE::Primary);
      */
     template <class T>
     long write_image(T* data, Camera::Information& info, const std::string extname="" ) {
-      std::string function = "FITS::write_image";
+      const std::string function("FITS::write_image");
       std::stringstream message;
 
       // The file must have been opened first
@@ -334,66 +334,46 @@ this->foo(HDUTYPE::Primary);
         array[i] = data[i];
       }
 
-      // Use a lambda expression to properly spawn a thread without having to
-      // make it static. Each thread gets a pointer to the current object this->
-      // which must continue to exist until all of the threads terminate.
-      // That is ensured by keeping threadcount, incremented for each thread
-      // spawned and decremented on return, and not returning from this function
-      // until threadcount is zero.
-      //
-      this->threadcount++;                                   // increment threadcount for each thread spawned
+      try {
+        // create a guarded thread counter:
+        // increments on construction, decrements on destruction
+        GuardedCounter tc(this->threadcount);
 
 #ifdef LOGLEVEL_DEBUG
-      long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
-      long axes[num_axis];
-      for ( int i=0; i < num_axis; i++ ) axes[i] = info.axes[i];
-      message.str("");
-      message << "[DEBUG] threadcount=" << this->threadcount << " ismex=" << info.ismex << " section_size=" << info.section_size 
-              << " cubedepth=" << info.cubedepth
-              << " axes=";
-      for ( auto aa : axes ) message << aa << " ";
-      message << ". spawning image writing thread for frame " << this->framen << " of file \"" << this->fits_name << "\"";
-      logwrite(function, message.str());
+        long num_axis = ( info.cubedepth > 1 ? 3 : 2 );
+        long axes[num_axis];
+        for ( int i=0; i < num_axis; i++ ) axes[i] = info.axes[i];
+        message.str("");
+        message << "[DEBUG] thread ID=" << std::this_thread::get_id()
+                << " spawning image writing thread for " << this->fits_name;
+        logwrite(function, message.str());
+        message.str("");
+        message << "[DEBUG] thread ID=" << std::this_thread::get_id()
+                << " threadcount=" << this->threadcount
+                << " framen=" << this->framen
+                << " ismex=" << info.ismex
+                << " section_size=" << info.section_size
+                << " cubedepth=" << info.cubedepth
+                << " axes=";
+        for ( auto aa : axes ) message << aa << " ";
+        logwrite(function, message.str());
 #endif
-      std::thread([&]() {                                    // create the detached thread here
         if (info.ismex) {
           this->write_mex_thread(array, info, this, extname);
         }
         else {
           this->write_image_thread(array, info, this);
         }
-        std::lock_guard<std::mutex> lock(this->fits_mutex);  // lock and
-        this->threadcount--;                                 // decrement threadcount
-      }).detach();
-#ifdef LOGLEVEL_DEBUG
-      message.str("");
-      message << "[DEBUG] spawned image writing thread for frame " << this->framen << " of file \"" << this->fits_name << "\"";
-      logwrite(function, message.str());
-#endif
-
-      // wait for all threads to complete
-      //
-      int last_threadcount = this->threadcount;
-      int wait = FITS_WRITE_WAIT;
-      while (this->threadcount > 0) {
-        usleep(1000);
-        if (this->threadcount >= last_threadcount) {         // threads are not completing
-          wait--;                                            // start decrementing wait timer
-        }
-        else {                                               // a thread was completed so things are still working
-          last_threadcount = this->threadcount;              // reset last threadcount
-          wait = FITS_WRITE_WAIT;                            // reset wait timer
-        }
-        if (wait < 0) {
-          message.str(""); message << "ERROR: timeout waiting for threads."
-                                   << " threadcount=" << threadcount 
-                                   << " extension=" << info.extension 
-                                   << " framen=" << this->framen
-                                   << " file=" << this->fits_name;
-          logwrite(function, message.str());
-          this->writing_file = false;
-          return (ERROR);
-        }
+      }
+      catch (const std::exception &e) {
+        message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
+                                 << " exception: " << e.what();
+        logwrite(function, message.str());
+      }
+      catch (...) {
+        message.str(""); message << "ERROR thread ID " << std::this_thread::get_id()
+                                 << " unknown exception";
+        logwrite(function, message.str());
       }
 
       if (this->error) {
@@ -401,14 +381,12 @@ this->foo(HDUTYPE::Primary);
         message << "an error occured in one of the FITS writing threads for file \"" << this->fits_name << "\"";
         logwrite(function, message.str());
       }
-#ifdef LOGLEVEL_DEBUG
-      else {
-        message.str("");
-        message << "[DEBUG] file \"" << this->fits_name << "\" complete";
-        logwrite(function, message.str());
-      }
-#endif
 
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] thread ID " << std::this_thread::get_id()
+                               << " threadcount " << this->threadcount;
+      logwrite(function, message.str());
+#endif
       return ( this->error ? ERROR : NO_ERROR );
     }
     /***** FITS_file::write_image *********************************************/

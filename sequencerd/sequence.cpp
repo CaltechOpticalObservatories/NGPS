@@ -1895,17 +1895,6 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, message.str() );
     }
 
-    // Send casangle using tcsd wrapper for RINGGO command
-    // do not wait for reply
-    //
-    {
-    std::stringstream ringgo_cmd;
-    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
-    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
-    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
-    error = this->tcsd.send( ringgo_cmd.str(), noreply );
-    }
-
     // Send coordinates using TCS-native COORDS command.
     // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
     // so convert that as it's being sent here.
@@ -1919,20 +1908,13 @@ namespace Sequencer {
                             <<   "0 0"  << " "                                     // RA,DEC proper motion not used
                             << "\"" << this->target.name << "\"";                  // target name in quotes
 
-    {
     std::string rastr, decstr;
     double _ra = ra_out * TO_HOURS;
     decimal_to_sexa( _ra, rastr );
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
-    }
-
     error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
-
-    // waiting for TCS Operator input (or cancel)
-    {
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
     // if not success then wait 1s and try again
     if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
@@ -1946,6 +1928,21 @@ namespace Sequencer {
         throw std::runtime_error("sending COORDS to TCS: "+coords_reply);
       }
     }
+
+    // Send casangle using tcsd wrapper for RINGGO command
+    // do not wait for reply
+    //
+    {
+    std::stringstream ringgo_cmd;
+    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
+    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
+    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
+    error = this->tcsd.send( ringgo_cmd.str(), noreply );
+    }
+
+    // waiting for TCS Operator input (or cancel)
+    {
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
     this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 

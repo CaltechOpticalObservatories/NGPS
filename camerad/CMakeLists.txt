@@ -117,10 +117,10 @@ target_link_libraries(camerad
         common
         utilities
         md5
+        ${INTERFACE_TARGET}
         CArcBase
         CArcDevice
         CArcFitsFile
-        ${INTERFACE_TARGET}
         ${CMAKE_THREAD_LIBS_INIT}
         ${CCFITS_LIB}
         ${CFITS_LIB}
