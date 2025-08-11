@@ -28,10 +28,10 @@ namespace Flexure {
     RYE,
     IXE,
     IYE,
-    IX,
-    IY,
-    RX,
-    RY
+    PIX,
+    PIY,
+    PRX,
+    PRY
   };
 
   /***** Flexure::Compensator *************************************************/
@@ -42,7 +42,7 @@ namespace Flexure {
    */
   class Compensator {
     private:
-      std::vector<double> rxe, rye, ixe, iye, ix, rx, iy, ry;
+      std::vector<double> rxe, rye, ixe, iye, pix, prx, piy, pry;
 
       // From Matt Matuszewski
       //

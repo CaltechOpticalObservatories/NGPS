@@ -204,7 +204,7 @@ namespace Flexure {
       // FLEXURE_POLY_IX
       //
       if ( config.param[entry] == "FLEXURE_POLY_IX" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IX, 20 );
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PIX, 20 );
         if (error==NO_ERROR) {
           numapplied++;
         }
@@ -215,7 +215,7 @@ namespace Flexure {
       // FLEXURE_POLY_IY
       //
       if ( config.param[entry] == "FLEXURE_POLY_IY" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IY, 20 );
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PIY, 20 );
         if (error==NO_ERROR) {
           numapplied++;
         }
@@ -226,7 +226,7 @@ namespace Flexure {
       // FLEXURE_POLY_RX
       //
       if ( config.param[entry] == "FLEXURE_POLY_RX" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RX, 20 );
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PRX, 20 );
         if (error==NO_ERROR) {
           numapplied++;
         }
@@ -237,7 +237,7 @@ namespace Flexure {
       // FLEXURE_POLY_RY
       //
       if ( config.param[entry] == "FLEXURE_POLY_RY" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RY, 20 );
+        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PRY, 20 );
         if (error==NO_ERROR) {
           numapplied++;
         }

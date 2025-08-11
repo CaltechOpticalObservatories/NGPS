@@ -21,10 +21,10 @@ namespace Flexure {
       case RYE: return "RYE";
       case IXE: return "IXE";
       case IYE: return "IYE";
-      case IX: return "IY";
-      case IY: return "IY";
-      case RX: return "RX";
-      case RY: return "RY";
+      case PIX: return "PIY";
+      case PIY: return "PIY";
+      case PRX: return "PRX";
+      case PRY: return "PRY";
       default:  return "UNKNOWN";
     }
   }
@@ -59,13 +59,13 @@ namespace Flexure {
                                 break;
       case DataVectorType::IYE: vec = &this->iye;
                                 break;
-      case DataVectorType::IX:  vec = &this->ix;
+      case DataVectorType::PIX: vec = &this->pix;
                                 break;
-      case DataVectorType::IY:  vec = &this->iy;
+      case DataVectorType::PIY: vec = &this->piy;
                                 break;
-      case DataVectorType::RX:  vec = &this->rx;
+      case DataVectorType::PRX: vec = &this->prx;
                                 break;
-      case DataVectorType::RY:  vec = &this->ry;
+      case DataVectorType::PRY: vec = &this->pry;
                                 break;
       default:
         logwrite(function, "ERROR invalid vector type");
@@ -106,6 +106,7 @@ namespace Flexure {
    * @param[in]  vec       vector of coefficients
    * @param[in]  inputvar  independent input variable for the polynomial fit
    * @param[in]  offset    offset in vector to start reading coefficients
+   * @throws     std::out_of_range
    *
    */
   double Compensator::flexure_polynomial_fit(double vec, double inputvar, size_t offset) {
@@ -125,18 +126,22 @@ namespace Flexure {
 
   /***** Flexure::Compensator::flexure_fit ************************************/
   /**
-   * @brief
+   * @brief      calculates fit
+   * @details    C + A1 * sin(cass-theta) + A2 * sin(2*(cass-theta)) or
+   *             C + A1 * cos(cass-theta) + A2 * cos(2*(cass-theta))
+   * @param[in]  poly  vector of polynomial data
    * @param[in]  func  type of trig function to use, Sine or Cosine
-   * @return
+   * @return     fitted value
+   * @throws     std::exception
    *
    */
-  double Compensator::flexure_fit(TrigFunction func) {
+  double Compensator::flexure_fit(double poly, TrigFunction func) {
     const std::string function("Flexure::Compensator::flexure_fit");
     try {
-      double c     = flexure_polynomial_fit(rx, zenith,  0);
-      double a1    = flexure_polynomial_fit(rx, zenith,  5);
-      double theta = flexure_polynomial_fit(rx, zenith, 10);
-      double a2    = flexure_polynomial_fit(rx, zenith, 15);
+      double c     = flexure_polynomial_fit(poly, zenith,  0);
+      double a1    = flexure_polynomial_fit(poly, zenith,  5);
+      double theta = flexure_polynomial_fit(poly, zenith, 10);
+      double a2    = flexure_polynomial_fit(poly, zenith, 15);
 
       switch (func) {
         case TrigFunction::Sine:
@@ -174,9 +179,9 @@ namespace Flexure {
    *
    */
   void Compensator::compute_flexure_compensation(double ha, double dec, double cassring, double exptime,
-                                                 double *prx, double *pry, double *pix, double *piy,
+                                                 double &prx, double &pry, double &pix, double &piy,
                                                  double nrx, double nry, double nix, double niy,
-                                                 double *arx, double *ary, double *aix, double *aiy) {
+                                                 double &arx, double &ary, double &aix, double &aiy) {
 
     double alt, az, pa;         // elevation, azimuth, and parallactic angle from TCS
     double zenith;              // zenith angle
@@ -190,20 +195,20 @@ namespace Flexure {
     double equivalent_cass     = (-(pa + cassring) + 180) % 360 - 180;
 
     // calculate flexure of each axis
-    srx = flexure_fit(equivalent_cass, alt, prx);
-    sry = flexure_fit(equivalent_cass, alt, pry);
-    six = flexure_fit_cos(equivalent_cass, alt, pix);
-    siy = flexure_fit_cos(equivalent_cass, alt, piy);
+    srx = flexure_fit(this->prx, Sine);
+    sry = flexure_fit(this->pry, Sine);
+    six = flexure_fit(this->pix, Cosine);
+    siy = flexure_fit(this->piy, Cosine);
 
 
     collimator_position(srx, sry, &drx, &dry, &tx, &ty);
     collimator_position(six, siy, &tx, &ty, &dix, &diy);
 
     // ajusted stage positions
-    *arx =  drx + nrx;
-    *ary = -dry + nry;
-    *aix =  dix + nix;
-    *aiy = -diy + niy;
+    arx =  drx + nrx;
+    ary = -dry + nry;
+    aix =  dix + nix;
+    aiy = -diy + niy;
   }
   /***** Flexure::Compensator::compute_flexure_compensation ******************/
 
