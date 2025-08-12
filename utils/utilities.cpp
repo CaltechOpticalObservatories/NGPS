@@ -21,11 +21,15 @@ std::mutex generate_tmpfile_mtx;
    * Intended to be called as cmdOptionExists( argv, argv+argc, "-X" )
    * to search for "-X" option in argv.
    *
-   * Pair with getCmdOption() function.
-   *
    */
-  bool cmdOptionExists( char** begin, char** end, const std::string &option ) {
-    return std::find( begin, end, option ) != end;
+  bool cmdOptionExists(const char* const* begin, const char* const* end, std::string_view option) {
+    // iterate through the argv array
+    for (auto it=begin; it!=end; ++it) {
+      // if an element matches option then return true
+      if (std::string_view(*it)==option) return true;
+    }
+    // no match found
+    return false;
   }
   /***** cmdOptionExists ******************************************************/
 
@@ -33,23 +37,28 @@ std::mutex generate_tmpfile_mtx;
   /***** getCmdOption *********************************************************/
   /**
    * @brief      returns pointer to command line option specified with "-X option"
+   * @details    This function is overloaded. Use this form for std::string.
    * @param[in]  begin   this is the beginning, should be argv
    * @param[in]  end     this is the end, should be argv+argc
-   * @param[out] option  string to search for
-   * @return     char*   pointer to the option found
+   * @param[in]  option  what to search for
+   * @return     string  the option found, or empty string
    *
    * Intended to be called as char* option = getCmdOption( argv, argv+argc, "-X" );
    * to get option associated with "-X option" in argv.
    *
-   * Pair with cmdOptionExists()
-   *
    */
-  char* getCmdOption( char** begin, char** end, const std::string &option ) {
-    char** itr = std::find(begin, end, option);
-    if ( itr != end && ++itr != end ) {
-      return *itr;
+  std::string getCmdOption(const char* const* begin, const char* const* end, std::string_view option) {
+    // iterate through the argv array
+    for (auto it=begin; it!=end; ++it) {
+      // if an element matches option then return the next element
+      // or empty string if no next element
+      if (std::string_view(*it)==option) {
+        ++it;
+        if (it != end) return std::string(*it); else return "";
+      }
     }
-    return 0;
+    // no match found
+    return "";
   }
   /***** getCmdOption *********************************************************/
 

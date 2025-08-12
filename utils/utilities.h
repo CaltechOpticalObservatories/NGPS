@@ -50,8 +50,8 @@
 extern std::string tmzone_cfg;                      /// time zone if set in cfg file
 extern std::mutex generate_tmpfile_mtx;
 
-bool cmdOptionExists( char** begin, char** end, const std::string &option );
-char* getCmdOption( char** begin, char** end, const std::string &option );
+bool cmdOptionExists(const char* const* begin, const char* const* end, std::string_view option);
+std::string getCmdOption(const char* const* begin, const char* const* end, std::string_view option);
 int my_hardware_concurrency();
 int cores_available();
 

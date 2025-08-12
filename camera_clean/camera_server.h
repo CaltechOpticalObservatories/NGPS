@@ -42,10 +42,13 @@ namespace Camera {
       std::atomic<int> threads_active;
       std::atomic<int> cmd_num;
 
+      void handle_signal(int signo);
       void new_log_day(std::string logpath);
       void exit_cleanly();
       void block_main(std::shared_ptr<Network::TcpSocket> socket);
       void doit(Network::TcpSocket sock);
+
+      static inline void signal_handler(int signo) { if (interface) { interface->handle_signal(signo); } }
   };
 }
 

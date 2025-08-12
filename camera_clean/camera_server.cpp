@@ -31,6 +31,7 @@ namespace Camera {
    *
    */
   Server::~Server() {
+    close_log();
     delete interface;
   }
   /***** Camera::Server::~Server **********************************************/
@@ -205,17 +206,66 @@ namespace Camera {
   /***** Camera::Server::configure_server *************************************/
 
 
-
-
-  /***** Camera::Server::exit_cleanly *****************************************/
+  /***** Camera::Server::new_log_day ******************************************/
   /**
-   * @brief      exit the server
+   * @brief      creates a new logbook each day
+   * @param[in]  logpath  path for the log file, read from config file
+   *
+   * This thread is started by main and never terminates.
+   * It sleeps until the next occurrence of 12:01:00, at which time it
+   * closes the current log and initializes a new log file.
    *
    */
   void Server::new_log_day(std::string logpath) {
-    const std::string function("Camera::Server::new_log_day");
+    while (true) {
+      // sleep until 12:01:00
+      auto newlogtime = next_occurrence( 12, 01, 00 );
+      std::this_thread::sleep_until( newlogtime );
+      close_log();
+      init_log( logpath, DAEMON_NAME );
+      // ensure it doesn't immediately re-open
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
+    }
   }
-  /***** Camera::Server::exit_cleanly *****************************************/
+  /***** Camera::Server::new_log_day ******************************************/
+
+
+  /***** Camera::Server::handle_signal ****************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   *
+   */
+  void Server::handle_signal(int signo) {
+    const std::string function("Camera::Server::handle_signal");
+    std::stringstream message;
+
+    switch (signo) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite(function, "received termination signal");
+        message << "NOTICE:" << DAEMON_NAME << " exit";
+        this->camera.async.enqueue( message.str() );
+        Server::instance->exit_cleanly();                      // shutdown the daemon
+        break;
+      case SIGHUP:
+        if ( Server::instance->interface.configure_interface( Server::instance->config ) != NO_ERROR ) {
+          logwrite( function, "ERROR unable to configure interface" );
+          this->camera.async.enqueue_and_log( function, message.str() );
+        }
+        break;
+      case SIGPIPE:
+        logwrite(function, "ignored SIGPIPE");
+        break;
+      default:
+        message << "received unknown signal " << strsignal(signo);
+        logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << DAEMON_NAME << " " << strsignal(signo);
+        this->camera.async.enqueue( message.str() );
+        break;
+    }
+    return;
+  }
+  /***** Camera::Server::handle_signal ****************************************/
 
 
   /***** Camera::Server::exit_cleanly *****************************************/
@@ -227,7 +277,7 @@ namespace Camera {
     const std::string function("Camera::Server::exit_cleanly");
     this->interface->disconnect_controller();
     logwrite(function, "server exiting");
-    exit(EXIT_SUCCESS);
+    _exit(EXIT_SUCCESS);
   }
   /***** Camera::Server::exit_cleanly *****************************************/
 

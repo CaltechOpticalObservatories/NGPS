@@ -27,8 +27,6 @@ int main( int argc, char** argv ) {
     start_daemon = false;
   }
 
-  // TODO make configurable
-  //
   std::string daemon_stdout="/dev/null";                            // where daemon sends stdout
   std::string daemon_stderr="/tmp/"+Camera::DAEMON_NAME+".stderr";  // where daemon sends stderr
 
@@ -44,17 +42,17 @@ int main( int argc, char** argv ) {
   //
   Camera::Server camerad;
 
-  // Read Configuration File
-  // check for "-f <filename>" command line option to specify config file
+  // get config file name from "--config <filename>" command line option
   //
-  if ( cmdOptionExists( argv, argv+argc, "-f" ) ) {
-    char* filename = getCmdOption( argv, argv+argc, "-f" );
-    if ( filename ) {
-      camerad.config.filename = std::string( filename );
-    }
+  std::string configfilename = getCmdOption(argv, argv+argc, "--config");
+
+  // assign configuration file
+  //
+  if (!configfilename.empty()) {
+    camerad.config.filename = configfilename;
   }
   else
-  // if no "-f <filename>" then as long as there's at least one arg,
+  // if no "--config <filename>" then as long as there's at least one arg,
   // assume that is the config file name.
   //
   if (argc>1) {
@@ -65,7 +63,7 @@ int main( int argc, char** argv ) {
     camerad.exit_cleanly();
   }
 
-  // read configuration file specified on command line
+  // read configuration file
   //
   if ( camerad.config.read_config(camerad.config) != NO_ERROR) {
     logwrite(function, "ERROR (fatal) unable to read configuration file");
