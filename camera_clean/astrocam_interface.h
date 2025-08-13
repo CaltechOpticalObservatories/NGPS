@@ -58,7 +58,6 @@ namespace Camera {
       //
       long abort( const std::string args, std::string &retstring ) override;
       long autodir( const std::string args, std::string &retstring ) override;
-      long basename( const std::string args, std::string &retstring ) override;
       long bias( const std::string args, std::string &retstring ) override;
       long bin( const std::string args, std::string &retstring ) override;
       long connect_controller( const std::string args, std::string &retstring ) override;
@@ -69,17 +68,20 @@ namespace Camera {
       long native( const std::string args, std::string &retstring ) override;
       long power( const std::string args, std::string &retstring ) override;
       long test( const std::string args, std::string &retstring ) override;
+      int devnum_from_chan(const std::string &chan) override;
 
     private:
-      std::map<int, Controller> controller;
+      std::map<int, Controller> controller; //!< map of AstroCam controllers
       Shutter shutter;
       PreciseTimer shutter_timer;
-      std::vector<FITS_file*> pFits;    //!< vector of FITS containers, one for each exposure number for multiple buffering
+      std::vector<FITS_file*> pFits;        //!< vector of FITS containers, one for each exposure number for multiple buffering
       std::atomic<int> pci_cmd_num;
       int numdev;                           //!< number of PCI devices detected in system
       int nexp;
       int nframes;                          //!< total number of frames to acquire from controller per expose
       bool useframes;                       //!< not all firmware supports frames
+      bool use_bonn_shutter;                //!< false if Bonn shutter not connected (defaults true)
+      bool use_ext_shutter;                 //!< true if external shutter connected to ARC controller (defaults false)
       std::vector<int> configured_devnums;  //!< configured PCI devices (from camerad.cfg file)
       std::vector<int> devnums;             //!< all opened and connected devices
 
@@ -137,6 +139,7 @@ namespace Camera {
       // These functions are specific to the AstroCam Interface and are not
       // found in the base class.
       //
+      long parse_spect_config(std::string args);
       long buffer(std::string size_in, std::string &retstring);
       long disconnect_controller();
       long disconnect_controller(int dev);
@@ -156,6 +159,8 @@ namespace Camera {
       long do_native(std::vector<uint32_t> selectdev, std::string cmdstr);    ///< specified by vector
       long do_native(std::vector<uint32_t> selectdev, std::string cmdstr, std::string &retstring);  ///< specified by vector
       long do_native(int dev, std::string cmdstr, std::string &retstring);  ///< specified by devnum
+      void dothread_native(int dev, std::vector<uint32_t> cmd);
+      void retval_to_string(std::uint32_t retval, std::string& retstring);
 
   };
 }

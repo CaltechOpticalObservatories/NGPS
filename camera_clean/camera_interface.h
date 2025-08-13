@@ -13,9 +13,11 @@
 
 namespace Camera {
 
-  const std::string DAEMON_NAME = "camerad";
+  const std::string DAEMON_NAME = "camerad";  /// my name
 
-  class Server;  // forward declaration for Interface class
+  constexpr long MAX_SHUTTER_DELAY = 3000;    /// maximum shutter delay in msec
+
+  class Server;                               /// forward declaration for Interface class
 
   class Interface {
     protected:
@@ -26,7 +28,12 @@ namespace Camera {
       // vector of pointers to Camera Information containers, one for each exposure number
       std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
+      mode_t dirmode;       /// user specified mode to OR with 0700 for imdir creation
+      long shutter_delay;
+
     public:
+      Interface() :
+        shutter_delay(0) { }
       virtual ~Interface() = default;
 
       Common::Queue async;  /// message queue object
@@ -37,14 +44,18 @@ namespace Camera {
       void handle_queue(std::string message);
       void set_server(Camera::Server* s);
       void func_shared();
+      void set_dirmode(mode_t mode);
       void disconnect_controller();
+      long imdir( std::string args, std::string &retstring );
+      long basename( std::string args, std::string &retstring );
+      long set_shutter_delay( const std::string arg );
+      long set_shutter_delay( long arg );
 
       // These virtual functions have interface-specific implementations
       // and must be implemented by derived classes, implemented in xxxx_interface.cpp
       //
       virtual long abort( std::string args, std::string &retstring ) = 0;
       virtual long autodir( std::string args, std::string &retstring ) = 0;
-      virtual long basename( std::string args, std::string &retstring ) = 0;
       virtual long bias( std::string args, std::string &retstring ) = 0;
       virtual long bin( std::string args, std::string &retstring ) = 0;
       virtual long connect_controller( std::string args, std::string &retstring ) = 0;
@@ -56,6 +67,7 @@ namespace Camera {
       virtual long load_firmware( std::string args, std::string &retstring ) = 0;
       virtual long native( std::string args, std::string &retstring ) = 0;
       virtual long power( std::string args, std::string &retstring ) = 0;
+      virtual int devnum_from_chan( const std::string &chan ) = 0;
       virtual long test( std::string args, std::string &retstring ) = 0;
 
   };

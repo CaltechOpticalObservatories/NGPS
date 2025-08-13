@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "common.h"
 #include <CCfits/CCfits>           // needed here for types in set_axes()
 
 namespace Camera {
@@ -49,7 +50,7 @@ namespace Camera {
       int           exposure_factor;         //!< multiplier for exposure_unit relative to 1 sec (=1 for sec, =1000 for msec, etc.)
       double        exposure_progress;       //!< exposure progress (fraction)
       int           num_pre_exposures;       //!< pre-exposures are exposures taken but not saved
-      std::string   fits_name;               //!< contatenation of Camera's image_dir + image_name + image_num
+      std::string   fits_name;               //!< contatenation of Camera's image_dir + base_name + image_num
       std::string   start_time;              //!< system time when the exposure started (YYYY-MM-DDTHH:MM:SS.sss)
 
       std::vector< std::vector<long> > amp_section;
@@ -68,6 +69,7 @@ namespace Camera {
       int           readout_type;            //!< type of the readout source is an enum
       long          axes[3];                 //!< element 0=cols, 1=cols, 2=cubedepth
 
+      std::string image_dir;                //!< image directory
       std::string base_name;                //!< base image name
       std::map<int, std::string> firmware;  //!< firmware file for given controller
       std::map<int, int> readout_time;      //!< readout time in msec for given controller device number, read from .cfg file

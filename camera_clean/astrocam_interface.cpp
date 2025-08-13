@@ -10,6 +10,8 @@ namespace Camera {
     this->numdev = 0;
     this->nframes = 1;
     this->useframes = true;
+    this->use_bonn_shutter = true;  // defaults to Bonn shutter present
+    this->use_ext_shutter = false;  // defaults to external shutter not present
     this->framethreadcount = 0;
 
     this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
@@ -102,50 +104,6 @@ namespace Camera {
     return ERROR;
   } 
   /***** Camera::AstroCamInterface::autodir ***********************************/
-
-
-  /***** Camera::AstroCamInterface::basename **********************************/
-  /**
-   * @brief      set or get the image basename
-   * @param[in]  args       requested base name
-   * @param[out] retstring  current base name
-   * @return     ERROR | NO_ERROR | HELP
-   *
-   */
-  long AstroCamInterface::basename( const std::string args, std::string &retstring ) {
-    const std::string function("Camera::AstroCamInterface::basename");
-    long error=NO_ERROR;
-
-    // Help
-    //
-    if (args=="?" || args=="help") {
-      retstring = CAMERAD_BASENAME;
-      retstring.append( " [ <name> ]\n" );
-      retstring.append( "  set or get image basename\n" );
-      return HELP;
-    }
-
-    // Base name cannot contain a "/" because that would be a subdirectory,
-    // and subdirectories are not checked here, only by imdir command.
-    //
-    if ( args.find('/') != std::string::npos ) {
-      logwrite( function, "ERROR basename cannot contain '/' character" );
-      error = ERROR;
-    }
-    // if name is supplied the set the image name
-    else if ( !args.empty() ) {
-      this->camera_info.base_name = args;
-      error = NO_ERROR;
-    }
-
-    // In any case, log and return the current value.
-    //
-    logwrite(function, "base name is "+std::string(this->camera_info.base_name));
-    retstring = this->camera_info.base_name;
-
-    return error;
-  }
-  /***** Camera::AstroCamInterface::basename **********************************/
 
 
   /***** Camera::AstroCamInterface::bias **************************************/
@@ -1175,6 +1133,62 @@ namespace Camera {
   /***** Camera::AstroCamInterface::parse_controller_config *******************/
 
 
+  /***** Camera::AstroCamInterface::parse_spect_config ************************/
+  long AstroCamInterface::parse_spect_config( std::string args ) {
+    const std::string function("Camera::AstroCamInterface::parse_spect_config");
+    std::stringstream message;
+    std::vector<std::string> tokens;
+
+    Tokenize( args, tokens, " " );
+
+    if ( tokens.size() != 3 ) {
+      message.str(""); message << "ERROR: bad value \"" << args << "\". expected { CHAN DISPERSION MINWAVELENGTH }";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    std::string chan;
+    double disp=NAN;
+    double wavel=NAN;
+
+    // Parse the three values from the args string
+    //
+    try {
+      chan  = tokens.at(0);
+      disp  = std::stod(tokens.at(1));
+      wavel = std::stod(tokens.at(2));
+    }
+    catch( const std::exception &e ) {
+      message.str(""); message << "ERROR: parsing \"" << args << "\": " << e.what();
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    // There must have been a device configured for this channel.
+    // Not an error if there's not, but can't continue.
+    //
+    int dev = devnum_from_chan(chan);
+
+    if ( dev < 0 ) {
+      message.str(""); message << "NOTICE: no devnum configured for channel \"" << chan << "\"";
+      logwrite( function, message.str() );
+      return NO_ERROR;
+    }
+
+    if ( this->controller.find(dev) == this->controller.end() ) {
+      message.str(""); message << "ERROR dev " << dev << " not found in controller configuration";
+      logwrite( function, message.str() );
+      return ERROR;
+    }
+
+    this->controller[dev].info.dispersion = disp;
+    this->controller[dev].info.minwavel = wavel;
+
+    return NO_ERROR;
+  }
+  /***** Camera::AstroCamInterface::parse_spect_config ************************/
+
+
   /***** Camera::AstroCamInterface::configure_camera **************************/
   /**
    * @brief      perform initial configuration of controller from .cfg file
@@ -1196,54 +1210,56 @@ namespace Camera {
 
     // loop through the entries in the configuration file, stored in config class
     //
-    for (int entry=0; entry < this->server->config.n_entries; entry++) {
+    for (int entry=0; entry < server->config.n_entries; entry++) {
 
-      if ( this->server->config.param[entry].find( "CONTROLLER" ) == 0 ) {
-        if ( this->parse_controller_config( this->server->config.arg[entry] ) != ERROR ) {
-          message.str(""); message << "CAMERAD:config:" << this->server->config.param[entry] << "=" << this->server->config.arg[entry];
+      if ( server->config.param[entry].find( "CONTROLLER" ) == 0 ) {
+        if ( this->parse_controller_config( server->config.arg[entry] ) != ERROR ) {
+          message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
           this->async.enqueue_and_log( function, message.str() );
           applied++;
         }
       }
 
-      if ( this->server->config.param[entry] == "IMAGE_SIZE" ) {
+      if ( server->config.param[entry] == "IMAGE_SIZE" ) {
         std::string retstring;
         bool save_as_default = true;
-        if ( this->image_size( this->server->config.arg[entry], retstring, save_as_default ) != ERROR ) {
-          message.str(""); message << "CAMERAD:config:" << this->server->config.param[entry] << "=" << this->server->config.arg[entry];
+        if ( this->image_size( server->config.arg[entry], retstring, save_as_default ) != ERROR ) {
+          message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
           this->async.enqueue_and_log( function, message.str() );
           applied++;
         }
       }
 
-      if ( this->server->config.param[entry].find( "IMDIR" ) == 0 ) {
-        this->camera.imdir( config.arg[entry] );
-        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+      if ( server->config.param[entry].find( "IMDIR" ) == 0 ) {
+        std::string dontcare;
+        imdir( server->config.arg[entry], dontcare );
+        message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
         logwrite( function, message.str() );
-        this->async.enqueue( message.str() );
+        async.enqueue( message.str() );
         applied++;
       }
 
-      if ( config.param[entry].find( "DIRMODE" ) == 0 ) {
+      if ( server->config.param[entry].find( "DIRMODE" ) == 0 ) {
         try {
-          if ( !config.arg[entry].empty() ) {
-            mode_t mode = (mode_t)std::stoi( config.arg[entry] );
-            this->camera.set_dirmode( mode );
+          if ( !server->config.arg[entry].empty() ) {
+            mode_t mode = (mode_t)std::stoi( server->config.arg[entry] );
+            this->set_dirmode( mode );
           }
         }
         catch (const std::exception &e) {
-          logwrite( function, "ERROR parsing DIRMODE: "+std::string(config.arg[entry]) );
+          logwrite( function, "ERROR parsing DIRMODE: "+std::string(server->config.arg[entry]) );
           return ERROR;
         }
-        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
         logwrite( function, message.str() );
         this->async.enqueue( message.str() );
         applied++;
       }
 
-      if ( this->server->config.param[entry].find( "BASENAME" ) == 0 ) {
-        this->camera.basename( config.arg[entry] );
-        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+      if ( server->config.param[entry].find( "BASENAME" ) == 0 ) {
+        std::string dontcare;
+        this->basename( server->config.arg[entry], dontcare );
+        message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
         logwrite( function, message.str() );
         this->async.enqueue( message.str() );
         applied++;
@@ -1253,31 +1269,31 @@ namespace Camera {
       // to indicate that. If present, which is the normal operating condition,
       // then remove that keyword -- only need to flag this if non-standard condition.
       //
-      if ( this->server->config.param[entry].find( "BONN_SHUTTER" ) == 0 ) {
-        std::string bs = config.arg[entry];
+      if ( server->config.param[entry].find( "BONN_SHUTTER" ) == 0 ) {
+        std::string bs = server->config.arg[entry];
         if ( !bs.empty() && bs=="no" ) {
-          this->camera.bonn_shutter = false;
+          this->use_bonn_shutter = false;
           this->camera_info.systemkeys.primary().addkey( "BONNSHUT", false, "Bonn shutter not in use" );
         }
         else
         if ( !bs.empty() && bs=="yes" ) {
-          this->camera.bonn_shutter = true;
+          this->use_bonn_shutter = true;
           this->camera_info.systemkeys.primary().delkey( "BONNSHUT" );
         }
         else {
           logwrite( function, "ERROR BONN_SHUTTER expected yes | no" );
           return ERROR;
         }
-        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
         logwrite( function, message.str() );
         this->async.enqueue( message.str() );
         applied++;
       }
 
-      if ( this->server->config.param[entry] == "SHUTTER_DELAY" ) {
-        if ( !config.arg[entry].empty() ) {
-          error = this->camera.set_shutter_delay( config.arg[entry] );
-          message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+      if ( server->config.param[entry] == "SHUTTER_DELAY" ) {
+        if ( !server->config.arg[entry].empty() ) {
+          error = this->set_shutter_delay( server->config.arg[entry] );
+          message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
           message << (error==ERROR ? " (ERROR)" : "" );
           logwrite( function, message.str() );
           this->async.enqueue( message.str() );
@@ -1289,30 +1305,30 @@ namespace Camera {
       // to indicate that. If not present, which is the normal operating condition,
       // then remove that keyword -- only need to flag this is in use.
       //
-      if ( this->server->config.param[entry].find( "EXT_SHUTTER" ) == 0 ) {
-        std::string es = config.arg[entry];
+      if ( server->config.param[entry].find( "EXT_SHUTTER" ) == 0 ) {
+        std::string es = server->config.arg[entry];
         if ( !es.empty() && es=="yes" ) {
-          this->camera.ext_shutter = true;
+          this->use_ext_shutter = true;
           this->camera_info.systemkeys.primary().addkey( "EXT_SHUT", true, "external shutter trigger in use" );
         }
         else
         if ( !es.empty() && es=="no" ) {
-          this->camera.ext_shutter = false;
+          this->use_ext_shutter = false;
           this->camera_info.systemkeys.primary().delkey( "EXT_SHUT" );
         }
         else {
           logwrite( function, "ERROR EXT_SHUTTER expected yes | no" );
           return ERROR;
         }
-        message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
+        message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
         logwrite( function, message.str() );
         this->async.enqueue( message.str() );
         applied++;
       }
 
-      if ( this->server->config.param[entry] == "SPECT_INFO" ) {
-        if ( this->parse_spect_config( this->server->config.arg[entry] ) != ERROR ) {
-          message.str(""); message << "CAMERAD:config:" << this->server->config.param[entry] << "=" << this->server->config.arg[entry];
+      if ( server->config.param[entry] == "SPECT_INFO" ) {
+        if ( this->parse_spect_config( server->config.arg[entry] ) != ERROR ) {
+          message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
           this->async.enqueue_and_log( function, message.str() );
           applied++;
         }
@@ -1604,7 +1620,7 @@ namespace Camera {
     {                                       // start local scope for this stuff
     std::vector<std::thread> threads;       // local scope vector stores all of the threads created here
     for ( const auto &dev : selectdev ) {   // spawn a thread for each device in selectdev
-      std::thread thr( &AstroCam::Interface::dothread_native, std::ref(*this), dev, cmd );
+      std::thread thr( &AstroCamInterface::dothread_native, std::ref(*this), dev, cmd );
       threads.push_back(std::move(thr));    // push the thread into a vector
     }
 
@@ -1663,6 +1679,125 @@ namespace Camera {
   /***** AstroCam::Interface::do_native ***************************************/
 
 
+  /***** AstroCamInterface::dothread_native ***********************************/
+  /**
+   * @brief      run in a thread to actually send the command
+   * @param[in]  con  reference to Controller object
+   * @param[in]  cmd  vector containing command and args
+   *
+   */
+  void AstroCamInterface::dothread_native( int dev, std::vector<uint32_t> cmd ) {
+    const std::string function("Camera::AstroCamInterface::dothread_native");
+    std::stringstream message;
+    uint32_t command;
+
+    std::lock_guard<std::mutex> lock(this->controller[dev].pcimtx);
+
+    ++this->pci_cmd_num;
+
+    message << "sending command (" << std::dec << this->pci_cmd_num << ") to chan "
+            << this->controller[dev].channel << " dev " << dev << ":"
+            << std::setfill('0') << std::setw(2) << std::hex << std::uppercase;
+    for (const auto &arg : cmd) message << " 0x" << arg;
+    logwrite(function, message.str());
+
+
+    try {
+      if ( cmd.size() > 0 ) command = cmd.at(0);
+
+      // ARC_API now uses an initialized_list object for the TIM_ID, command, and arguments.
+      // The list object must be instantiated with a fixed size at compile time.
+      //
+      if (cmd.size() == 1) controller[dev].retval = controller[dev].pArcDev->command( { TIM_ID, cmd.at(0) } );
+      else
+      if (cmd.size() == 2) controller[dev].retval = controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1) } );
+      else
+      if (cmd.size() == 3) controller[dev].retval = controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2) } );
+      else
+      if (cmd.size() == 4) controller[dev].retval = controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3) } );
+      else
+      if (cmd.size() == 5) controller[dev].retval = controller[dev].pArcDev->command( { TIM_ID, cmd.at(0), cmd.at(1), cmd.at(2), cmd.at(3), cmd.at(4) } );
+      else {
+        message.str(""); message << "ERROR: invalid number of command arguments: " << cmd.size() << " (expecting 1,2,3,4,5)";
+        logwrite(function, message.str());
+        controller[dev].retval = 0x455252;
+      }
+    }
+    catch(const std::runtime_error &e) {
+      message.str(""); message << "ERROR sending (" << this->pci_cmd_num << ") 0x"
+                               << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
+                               << command << " to " << controller[dev].devname << ": " << e.what();
+      logwrite(function, message.str());
+      controller[dev].retval = 0x455252;
+      return;
+    }
+    catch(std::out_of_range &) {  // impossible
+      logwrite(function, "ERROR: indexing command argument ("+std::to_string(this->pci_cmd_num)+")");
+      controller[dev].retval = 0x455252;
+      return;
+    }
+    catch(...) {
+      message.str(""); message << "ERROR sending (" << std::dec << this->pci_cmd_num << ") 0x"
+                               << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
+                               << command << " to " << controller[dev].devname << ": unknown";
+      logwrite(function, message.str());
+      controller[dev].retval = 0x455252;
+      return;
+    }
+
+    std::string retvalstring;
+    this->retval_to_string( controller[dev].retval, retvalstring );
+    message.str(""); message << controller[dev].devname << std::dec << " (" << this->pci_cmd_num << ")"
+                             << " returns " << retvalstring;
+    logwrite( function, message.str() );
+
+    return;
+  }
+  /***** AstroCamInterface::dothread_native ***********************************/
+
+
+  /***** AstroCamInterface::retval_to_string **********************************/
+  /**
+   * @brief      private function to convert ARC return values (long) to string
+   * @param[in]  retval     integer return value from controller
+   * @param[out] retstring  reference to a string for return value in ASCII
+   *
+   * In addition to converting longs to string, if the retval is a particular
+   * commonly used code, then set the ASCII characters for those codes,
+   * such as DON, ERR, etc. instead of returning a string value of their
+   * numeric counterpart.
+   *
+   */
+  void AstroCamInterface::retval_to_string(std::uint32_t retval, std::string& retstring) {
+    // replace some common values with their ASCII equivalents
+    //
+    if ( retval == 0x00455252 ) { retstring = "ERR";  }
+    else
+    if ( retval == 0x00444F4E ) { retstring = "DON";  }
+    else
+    if ( retval == 0x544F5554 ) { retstring = "TOUT"; }
+    else
+    if ( retval == 0x524F5554 ) { retstring = "ROUT"; }
+    else
+    if ( retval == 0x48455252 ) { retstring = "HERR"; }
+    else
+    if ( retval == 0x00535952 ) { retstring = "SYR";  }
+    else
+    if ( retval == 0x00525354 ) { retstring = "RST";  }
+    else
+    if ( retval == 0x00434E52 ) { retstring = "CNR";  }
+
+    // otherwise just convert the numerical value to a string represented in hex
+    //
+    else {
+      std::stringstream rs;
+      rs << "0x" << std::hex << std::uppercase << retval;
+      retstring = rs.str();
+    }
+  }
+  /***** AstroCamInterface::retval_to_string **********************************/
+
+
   /***** Camera::AstroCamInterface::power *************************************/
   /**
    * @brief
@@ -1674,6 +1809,19 @@ namespace Camera {
     return NO_ERROR;
   }
   /***** Camera::AstroCamInterface::power *************************************/
+
+
+  int AstroCamInterface::devnum_from_chan( const std::string &chan ) {
+    int devnum=-1;
+    for ( const auto &con : this->controller ) {
+      if ( con.second.inactive ) continue; // skip controllers flagged as inactive
+      if ( con.second.channel == chan ) {  // check to see if it matches a configured channel.
+        devnum = con.second.devnum;
+        break;
+      }
+    }
+    return devnum;
+  }
 
 
   /***** Camera::AstroCamInterface::test **************************************/

@@ -47,8 +47,6 @@ namespace Camera {
       void exit_cleanly();
       void block_main(std::shared_ptr<Network::TcpSocket> socket);
       void doit(Network::TcpSocket sock);
-
-      static inline void signal_handler(int signo) { if (interface) { interface->handle_signal(signo); } }
   };
 }
 

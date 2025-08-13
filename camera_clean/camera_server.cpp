@@ -21,6 +21,16 @@ namespace Camera {
   Server::Server() : interface(nullptr), id_pool(N_THREADS) {
     interface = new ControllerType();   // instantiate specific controller implementation
     interface->set_server(this);        // pointer back to this Server instance
+
+    // regsiter my signal handler with sigaction(2)
+    struct sigaction sa;
+    sa.sa_handler=handle_signal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGINT,  &sa, nullptr);
+    sigaction(SIGPIPE, &sa, nullptr);
+    sigaction(SIGHUP,  &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
   }
   /***** Camera::Server::Server ***********************************************/
 

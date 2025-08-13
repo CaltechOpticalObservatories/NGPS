@@ -2,7 +2,9 @@
 
 #include <map>
 #include <atomic>
+#include <mutex>
 
+#include "camera_information.h"
 #include "CArcBase.h"
 #include "ArcDefs.h"
 #include "CExpIFace.h"
@@ -92,6 +94,7 @@ namespace Camera {
         bool  inuse;                    //!< this thread ID is in use, set when thread is spawned, cleared when handle_frame is done
       } frameinfo_t;
 
+      std::mutex pcimtx;                //!< protects talking with this PCI driver
       int error;
 
       int cols;                        //!< total number of columns read (includes overscan)
