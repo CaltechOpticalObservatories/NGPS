@@ -6,9 +6,14 @@
  */
 
 #include "camera_server.h"
-#include "astrocam_interface.h"
+#include "camera_interface.h"    // provides full definition of Interface
+#include "astrocam_interface.h"  // provides AstroCamInterdace
+#include "daemon_config.h"       // provides Camera::Daemon::NAME
 
 using ControllerType = Camera::AstroCamInterface;
+
+Camera::Server* global_server=nullptr;
+extern "C" void signal_handler(int sig) { if (global_server) global_server->handle_signal(sig); }
 
 namespace Camera {
 
@@ -19,12 +24,13 @@ namespace Camera {
    *
    */
   Server::Server() : interface(nullptr), id_pool(N_THREADS) {
+    global_server = this;               // global pointer for catching signals from OS
     interface = new ControllerType();   // instantiate specific controller implementation
     interface->set_server(this);        // pointer back to this Server instance
 
     // regsiter my signal handler with sigaction(2)
     struct sigaction sa;
-    sa.sa_handler=handle_signal;
+    sa.sa_handler=signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     sigaction(SIGINT,  &sa, nullptr);
@@ -52,7 +58,7 @@ namespace Camera {
    * @brief      
    *
    */
-  void Server::configure_server() {
+  long Server::configure_server() {
     const std::string function("Camera::Server::configure_server");
     std::stringstream message;
     int applied=0;
@@ -69,17 +75,17 @@ namespace Camera {
           port = std::stoi( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->camera.log_error( function, "bad NBPORT: unable to convert to integer" );
+          interface->log_error( function, "bad NBPORT: unable to convert to integer" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->camera.log_error( function, "NBPORT number out of integer range" );
+          interface->log_error( function, "NBPORT number out of integer range" );
           return(ERROR);
         }
         this->nbport = port;
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
 
@@ -90,20 +96,20 @@ namespace Camera {
           port = std::stoi( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->camera.log_error( function, "bad BLKPORT: unable to convert to integer" );
+          interface->log_error( function, "bad BLKPORT: unable to convert to integer" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->camera.log_error( function, "BLKPORT number out of integer range" );
+          interface->log_error( function, "BLKPORT number out of integer range" );
           return(ERROR);
         }
         this->blkport = port;
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
-
+/*****
       // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
       //
       if ( config.param[entry] == "TELEM_PROVIDER" ) {
@@ -115,20 +121,20 @@ namespace Camera {
           }
           else {
             message.str(""); message << "bad format \"" << config.arg[entry] << "\": expected <name> <port>";
-            this->camera.log_error( function, message.str() );
+            interface->log_error( function, message.str() );
             return ERROR;
           }
         }
         catch ( const std::exception &e ) {
           message.str(""); message << "parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
-          this->camera.log_error( function, message.str() );
+          interface->log_error( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        interface->async.enqueue_and_log( "CAMERAD", function, message.str() );
         applied++;
       }
-
+*****/
       // ASYNCPORT
       if (config.param[entry].compare(0, 9, "ASYNCPORT")==0) {
         int port;
@@ -136,17 +142,17 @@ namespace Camera {
           port = std::stoi( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->camera.log_error( function, "bad ASYNCPORT: unable to convert to integer" );
+          interface->log_error( function, "bad ASYNCPORT: unable to convert to integer" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->camera.log_error( function, "ASYNCPORT number out of integer range" );
+          interface->log_error( function, "ASYNCPORT number out of integer range" );
           return(ERROR);
         }
         this->asyncport = port;
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
 
@@ -155,47 +161,47 @@ namespace Camera {
         this->asyncgroup = config.arg[entry];
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
 
       // USERKEYS_PERSIST: should userkeys persist or be cleared after each exposure
       //
       if ( config.param[entry] == "USERKEYS_PERSIST" ) {
-        this->camera.is_userkeys_persist = caseCompareString( config.arg[entry], "yes" );
+        interface->is_userkeys_persist = caseCompareString( config.arg[entry], "yes" );
         message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        interface->async.enqueue_and_log( "CAMERAD", function, message.str() );
         applied++;
       }
 
       // LONGERROR
       if (config.param[entry].compare(0, 9, "LONGERROR")==0) {
         std::string dontcare;
-        if ( this->camera.longerror( config.arg[entry], dontcare ) == ERROR ) {
-          this->camera.log_error( function, "setting longerror" );
+        if ( interface->longerror( config.arg[entry], dontcare ) == ERROR ) {
+          interface->log_error( function, "setting longerror" );
           return( ERROR );
         }
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
 
       // GIT_HASH
       if (config.param[entry].compare(0, 8, "GIT_HASH")==0) {
-        this->camera_info.systemkeys.primary().addkey( "GIT_HASH", config.arg[entry], "software git hash" );
+        interface->configure_serverkey( std::string("GIT_HASH"), config.arg[entry], std::string("software git hash") );
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
 
       // PROJ_BUILD_DATE
       if (config.param[entry].compare(0, 15, "PROJ_BUILD_DATE")==0) {
-        this->camera_info.systemkeys.primary().addkey( "SW_BUILD", config.arg[entry], "software build date" );
+        interface->configure_serverkey( std::string("SW_BUILD"), config.arg[entry], std::string("software build date") );
         message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
-        this->camera.async.enqueue( message.str() );
+        interface->async.enqueue( message.str() );
         applied++;
       }
 
@@ -210,10 +216,26 @@ namespace Camera {
       error = NO_ERROR;
     }
     message << "applied " << applied << " configuration lines to server";
-    error==NO_ERROR ? logwrite(function, message.str()) : this->camera.log_error( function, message.str() );
+    error==NO_ERROR ? logwrite(function, message.str()) : interface->log_error( function, message.str() );
     return error;
   }
   /***** Camera::Server::configure_server *************************************/
+
+
+  /***** Camera::Server::configure_interface **********************************/
+  /**
+   * @brief      
+   *
+   */
+  long Server::configure_interface() {
+    const std::string function("Camera::Server::configure_interface");
+    std::stringstream message;
+    int applied=0;
+    long error;
+    logwrite(function, "ERROR not implemented");
+    return ERROR;
+  }
+  /***** Camera::Server::configure_interface **********************************/
 
 
   /***** Camera::Server::new_log_day ******************************************/
@@ -232,7 +254,7 @@ namespace Camera {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, DAEMON_NAME );
+      init_log( logpath, Camera::Daemon::NAME );
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -253,14 +275,14 @@ namespace Camera {
       case SIGTERM:
       case SIGINT:
         logwrite(function, "received termination signal");
-        message << "NOTICE:" << DAEMON_NAME << " exit";
-        this->camera.async.enqueue( message.str() );
-        Server::instance->exit_cleanly();                      // shutdown the daemon
+        message << "NOTICE:" << Camera::Daemon::NAME << " exit";
+        interface->async.enqueue( message.str() );
+        exit_cleanly();
         break;
       case SIGHUP:
-        if ( Server::instance->interface.configure_interface( Server::instance->config ) != NO_ERROR ) {
+        if ( configure_interface() != NO_ERROR ) {
           logwrite( function, "ERROR unable to configure interface" );
-          this->camera.async.enqueue_and_log( function, message.str() );
+          interface->async.enqueue_and_log( function, message.str() );
         }
         break;
       case SIGPIPE:
@@ -269,8 +291,8 @@ namespace Camera {
       default:
         message << "received unknown signal " << strsignal(signo);
         logwrite( function, message.str() );
-        message.str(""); message << "NOTICE:" << DAEMON_NAME << " " << strsignal(signo);
-        this->camera.async.enqueue( message.str() );
+        message.str(""); message << "NOTICE:" << Camera::Daemon::NAME << " " << strsignal(signo);
+        interface->async.enqueue( message.str() );
         break;
     }
     return;
@@ -285,7 +307,7 @@ namespace Camera {
    */
   void Server::exit_cleanly() {
     const std::string function("Camera::Server::exit_cleanly");
-    this->interface->disconnect_controller();
+    interface->disconnect_controller();
     logwrite(function, "server exiting");
     _exit(EXIT_SUCCESS);
   }

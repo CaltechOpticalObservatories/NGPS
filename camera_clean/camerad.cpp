@@ -6,6 +6,8 @@
  */
 
 #include "camerad.h"
+#include "daemon_config.h"
+#include "camera_interface.h"
 
 /***** main *******************************************************************/
 /**
@@ -27,14 +29,16 @@ int main( int argc, char** argv ) {
     start_daemon = false;
   }
 
-  std::string daemon_stdout="/dev/null";                            // where daemon sends stdout
-  std::string daemon_stderr="/tmp/"+Camera::DAEMON_NAME+".stderr";  // where daemon sends stderr
-
   // daemonize
   //
   if (start_daemon) {
     logwrite(function, "starting daemon");
-    Daemon::daemonize( Camera::DAEMON_NAME, "/tmp", daemon_stdout, daemon_stderr, "", false );
+    Daemon::daemonize( Camera::Daemon::NAME,
+                       "/tmp",
+                       Camera::Daemon::STDOUT,
+                       Camera::Daemon::STDERR,
+                       "",
+                       false );
     logwrite(function, "daemonized. child process running");
   }
 
@@ -81,7 +85,7 @@ int main( int argc, char** argv ) {
         logwrite(function, "ERROR (fatal) LOGPATH not specified in configuration file");
         camerad.exit_cleanly();
       }
-      if ( (init_log(logpath, Camera::DAEMON_NAME) != 0) ) {
+      if ( (init_log(logpath, Camera::Daemon::NAME) != 0) ) {
         logwrite(function, "ERROR (fatal) unable to initialize logging system");
         camerad.exit_cleanly();
       }
@@ -112,9 +116,9 @@ int main( int argc, char** argv ) {
 
   // finish parsing the configuration file for ...
   //
-  if (error==NO_ERROR) error=camerad.configure_server();     // ...the server
-  if (error==NO_ERROR) error=camerad.configure_camera();     // ...the camera
-  if (error==NO_ERROR) error=camerad.configure_constkeys();  // ...constant FITS keys
+  if (error==NO_ERROR) error=camerad.configure_server();                // ...the server
+  if (error==NO_ERROR) error=camerad.interface->configure_camera();     // ...the camera
+  if (error==NO_ERROR) error=camerad.interface->configure_constkeys();  // ...constant FITS keys
 
   if (error != NO_ERROR) {
     logwrite(function, "ERROR (fatal) unable to configure system");

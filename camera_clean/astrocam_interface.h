@@ -8,7 +8,7 @@
 #pragma once
 
 #include "camera_interface.h"
-#include "astrocam_controller.h"
+#include "astrocam_controller.h"  // provides Controller
 #include "shutter.h"
 
 #include <map>
@@ -64,14 +64,18 @@ namespace Camera {
       long parse_controller_config(std::string args) override;
       long configure_camera() override;
       long disconnect_controller( const std::string args, std::string &retstring ) override;
+      long geometry(const std::string args, std::string &retstring) override;
       long load_firmware( const std::string args, std::string &retstring ) override;
       long native( const std::string args, std::string &retstring ) override;
       long power( const std::string args, std::string &retstring ) override;
       long test( const std::string args, std::string &retstring ) override;
       int devnum_from_chan(const std::string &chan) override;
 
-    private:
+      bool useframes() { return is_useframes; }
+
       std::map<int, Controller> controller; //!< map of AstroCam controllers
+
+    private:
       Shutter shutter;
       PreciseTimer shutter_timer;
       std::vector<FITS_file*> pFits;        //!< vector of FITS containers, one for each exposure number for multiple buffering
@@ -79,7 +83,7 @@ namespace Camera {
       int numdev;                           //!< number of PCI devices detected in system
       int nexp;
       int nframes;                          //!< total number of frames to acquire from controller per expose
-      bool useframes;                       //!< not all firmware supports frames
+      bool is_useframes;                    //!< not all firmware supports frames
       bool use_bonn_shutter;                //!< false if Bonn shutter not connected (defaults true)
       bool use_ext_shutter;                 //!< true if external shutter connected to ARC controller (defaults false)
       std::vector<int> configured_devnums;  //!< configured PCI devices (from camerad.cfg file)
@@ -116,7 +120,9 @@ namespace Camera {
 
       std::atomic<int> framethreadcount;
       std::mutex framethreadcount_mutex;
+    public:
       void add_framethread();
+    private:
       void remove_framethread();
       int get_framethread_count();
       void init_framethread_count();
@@ -140,14 +146,16 @@ namespace Camera {
       // found in the base class.
       //
       long parse_spect_config(std::string args);
+      long write_frame( int expbuf, int devnum, const std::string chan, int fpbcount );
+      void write_pending( int expbuf, int devnum, bool add );
       long buffer(std::string size_in, std::string &retstring);
-      long disconnect_controller();
-      long disconnect_controller(int dev);
+      long disconnect_controller();         ///< different from the virtual function
+      long disconnect_controller(int dev);  ///< different from the virtual function
       void exposure_progress();
       long exptime( const std::string args, std::string &retstring ) override;
       long expose( const std::string args, std::string &retstring ) override;
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
-      long geometry(std::string args, std::string &retstring);
+      void handle_frame(int expbuf, int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer);
       long image_size( std::string args, std::string &retstring, const bool save_as_default=false );
       bool is_camera_idle(int dev);
       bool is_camera_idle();

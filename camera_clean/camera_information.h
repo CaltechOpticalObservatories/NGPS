@@ -2,7 +2,7 @@
 #pragma once
 
 #include "common.h"
-#include <CCfits/CCfits>           // needed here for types in set_axes()
+#include <CCfits/CCfits>           // provides types in set_axes()
 
 namespace Camera {
 

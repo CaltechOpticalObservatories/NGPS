@@ -25,9 +25,11 @@ namespace Camera {
    * @brief Callback class inherited from the ARC API
    */
   class Callback : public arc::gen3::CooExpIFace {
+    private:
+      Camera::AstroCamInterface* interface;
+
     public:
-      Callback() = default;
-      ~Callback() = default;
+      Callback(Camera::AstroCamInterface* iface) : interface(iface) { };
       void exposeCallback( int devnum, std::uint32_t uiElapsedTime, std::uint32_t uiExposureTime ); ///< called by CArcDevice::expose() during exposure
       void readCallback( int expbuf, int devnum, std::uint32_t uiPixelCount, std::uint32_t uiFrameSize );       ///< called by CArcDevice::expose() during readout
       void frameCallback( int expbuf,

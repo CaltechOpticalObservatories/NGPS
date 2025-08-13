@@ -1,4 +1,5 @@
 #include "camera_interface.h"
+#include "camera_server.h"     // needed for full definition of Server and its members
 
 namespace Camera {
 
@@ -29,6 +30,92 @@ namespace Camera {
     logwrite(function, "common implementation function");
   }
 
+
+  /***** Camera::Interface::log_error *****************************************/
+  /**
+   * @brief      logs the error and saves the message to be returned on the command port
+   * @param[in]  function  string containing the name of the Namespace::Class::function
+   * @param[in]  message   string containing error message
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  void Interface::log_error(const std::string &function, const std::string &message ) {
+    std::stringstream err;
+
+    // Save this message in class variable
+    lasterrorstring.str("");
+    lasterrorstring << message;
+
+    // Form an error string as "ERROR: <message>"
+    err << "ERROR: " << lasterrorstring.str();
+
+    // Log and send to async port in the usual ways
+    logwrite(function, err.str());
+    async.enqueue(err.str());
+  }
+  /***** Camera::Interface::log_error *****************************************/
+
+
+  /***** Camera::Interface::configure_constkeys *******************************/
+  /**
+   * @brief      processes the CONSTKEY_* keywords from the config file
+   * @details    constant keywords allow insertion into all FITS files
+   *             header keywords that won't change
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  long Interface::configure_constkeys() {
+    const std::string function("Camera::Interface::configure_constkeys");
+    std::stringstream message;
+    int applied=0;
+    long error=NO_ERROR;
+
+    // loop through the entries in the configuration file, stored in config class
+    //
+    for (int entry=0; entry < server->config.n_entries; entry++) {
+
+      // CONSTKEY_*
+      //
+      if (server->config.param[entry].compare(0, 9, "CONSTKEY_")==0) {
+        // convert the arg into a vector and use the vector form of addkey()
+        //
+        std::vector<std::string> tokens;
+        Tokenize( server->config.arg[entry], tokens, " " );
+
+        if ( server->config.param[entry].compare( 9, 3, "PRI" )==0 ) error = this->camera_info.systemkeys.primary().addkey( tokens );
+        else
+        if ( server->config.param[entry].compare( 9, 3, "EXT" )==0 ) this->camera_info.systemkeys.add_key(tokens[0],tokens[1],"",true,"all");
+        else
+        continue;
+
+        if ( error == ERROR ) {
+          message.str(""); message << "ERROR: parsing config " << server->config.param[entry] << "=" << server->config.arg[entry];
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+
+        message.str(""); message << "CAMERAD:config:" << server->config.param[entry] << "=" << server->config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+    } // end loop through the entries in the configuration file
+
+    if (applied>0) {
+      message.str(""); message << "applied " << applied << " constant FITS keys";
+      error==NO_ERROR ? logwrite(function, message.str()) : log_error(function, message.str());
+    }
+
+    return error;
+  }
+  /***** Camera::Interface::configure_constkeys *******************************/
+
+
+  long Interface::configure_serverkey(const std::string &key, const std::string &value, const std::string &comment) {
+    return camera_info.systemkeys.primary().addkey(key, value, comment);
+  }
+
+
   /***** Camera::Interface::disconnect_controller *****************************/
   /**
    * @brief      disconnect camera controller
@@ -51,6 +138,56 @@ namespace Camera {
     const std::string function("Camera::Interface::imdir");
     return ERROR;
   }
+
+
+  /***** Camera::Interface::longerror *****************************************/
+  /**
+   * @brief      set or get the longerror state
+   * @param[in]  args       string containing requested state "true" or "false"
+   * @param[out] retstring  reference to string containing the current state "true" or "false"
+   * @return     true or false
+   *
+   * This function is overloaded.
+   *
+   */
+  long Interface::longerror(std::string args, std::string &retstring) {
+    const std::string function("Camera::Interface::longerror");
+    std::stringstream message;
+    int error = NO_ERROR;
+
+    // If something is passed then try to use it to set the longerror state
+    //
+    if ( !args.empty() ) {
+      try {
+        std::transform( args.begin(), args.end(), args.begin(), ::tolower );    // make lowercase
+        if (args == "false" ) this->is_longerror = false;
+        else
+        if (args == "true"  ) this->is_longerror = true;
+        else {
+          message.str(""); message << args << " is invalid. Expecting true or false";
+          log_error( function, message.str() );
+          error = ERROR;
+        }
+      }
+      catch (...) {
+        message.str(""); message << "unknown exception parsing argument: " << args;
+        log_error( function, message.str() );
+        error = ERROR;
+      }
+    }
+
+    // error or not, the state reported is whatever was last successfully set
+    //
+    retstring = (this->is_longerror ? "true" : "false");
+    logwrite( function, retstring );
+    message.str(""); message << "NOTICE:longerror=" << retstring;
+    this->async.enqueue( message.str() );
+
+    // and this lets the server know if it was set or not
+    //
+    return error;
+  }
+  /***** Camera::Interface::longerror *****************************************/
 
 
   /***** Camera::Interface::set_shutter_delay *********************************/

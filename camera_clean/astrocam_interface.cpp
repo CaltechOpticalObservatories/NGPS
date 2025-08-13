@@ -9,7 +9,7 @@ namespace Camera {
     this->nexp=1;
     this->numdev = 0;
     this->nframes = 1;
-    this->useframes = true;
+    this->is_useframes = true;
     this->use_bonn_shutter = true;  // defaults to Bonn shutter present
     this->use_ext_shutter = false;  // defaults to external shutter not present
     this->framethreadcount = 0;
@@ -712,6 +712,149 @@ namespace Camera {
   /***** Camera::AstroCamInterface::geometry **********************************/
 
 
+  /***** Camera::AstroCamInterface::handle_frame ******************************/
+  /**
+   * @brief      process frame received by frameCallback for specified device
+   * @param[in]  expbuf    exposure buffer number
+   * @param[in]  devnum    controller device number
+   * @param[in]  fpbcount  frames per buffer count, returned from the ARC API
+   * @param[in]  fcount    number of frames read, returned from the ARC API
+   * @param[in]  buffer    pointer to the PCI/e buffer, returned from the ARC API
+   *
+   * This function is static, spawned in a thread created by frameCallback()
+   * which is the callback fired by the ARC API when a frame has been received.
+   *
+   * incoming frame from ARC -> frameCallback() -> handle_frame()
+   *
+   */
+  void AstroCamInterface::handle_frame( int expbuf, int devnum, uint32_t fpbcount, uint32_t fcount, void* buffer ) {
+    const std::string function("Camera::AstroCamInterface::handle_frame");
+    std::stringstream message;
+    int error = NO_ERROR;
+
+#ifdef LOGLEVEL_DEBUG
+    message << "[DEBUG] expbuf=" << expbuf << " devnum=" << devnum << " " << "fpbcount=" << fpbcount
+            << " fcount=" << fcount << " PCI buffer=" << std::hex << std::uppercase << buffer;
+    logwrite(function, message.str());
+#endif
+
+    frameinfo_mutex.lock();                 // protect access to frameinfo structure
+
+    // Check to see if there is another frame with the same fpbcount...
+    //
+    // fpbcount is the frame counter that counts from 0 to FPB, so if there are 3 Frames Per Buffer
+    // then for 10 frames, fcount goes from 0,1,2,3,4,5,6,7,8,9
+    // and fpbcount goes from 0,1,2,0,1,2,0,1,2,0
+    //
+    // When useframes is false, fpbcount=0, fcount=0, framenum=0
+    //
+    if ( ! controller[devnum].have_ft ) {
+      exposure_pending( devnum, false );    // this also does the notify
+      state_monitor_condition.notify_all();
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] dev " << devnum << " chan " << controller[devnum].channel << " exposure_pending=false";
+      async.enqueue_and_log( "CAMERAD", function, message.str() );
+#endif
+    }
+    controller[devnum].in_readout = false;
+    state_monitor_condition.notify_all();
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] dev " << devnum << " chan " << controller[devnum].channel << " in_readout=false";
+    async.enqueue_and_log( "CAMERAD", function, message.str() );
+#endif
+
+    controller[devnum].frameinfo[fpbcount].tid    = fpbcount;  // create this index in the .frameinfo[] map
+    controller[devnum].frameinfo[fpbcount].buf    = buffer;
+
+/***
+    if ( controller[devnum].frameinfo.count( fpbcount ) == 0 ) {     // searches .frameinfo[] map for an index of fpbcount (none)
+      controller[devnum].frameinfo[ fpbcount ].tid      = fpbcount;  // create this index in the .frameinfo[] map
+      controller[devnum].frameinfo[ fpbcount ].buf      = buffer;
+      // If useframes is false then set framenum=0 because it doesn't mean anything,
+      // otherwise set it to the fcount received from the API.
+      //
+      controller[devnum].frameinfo[ fpbcount ].framenum = useframes ? fcount : 0;
+    }
+    else {                                                                  // already have this fpbcount in .frameinfo[] map
+      message.str(""); message << "ERROR: frame buffer overrun! Try allocating a larger buffer."
+                               << " chan " << controller[devnum].channel;
+      logwrite( function, message.str() );
+      frameinfo_mutex.unlock();
+      return;
+    }
+***/
+
+    frameinfo_mutex.unlock();               // release access to frameinfo structure
+
+/***
+    // Write the frames in numerical order.
+    // Don't let one thread get ahead of another when it comes to writing.
+    //
+    double start_time = get_clock_time();
+    do {
+      int this_frame = fcount;                     // the current frame
+      int last_frame = controller[devnum].get_framecount();    // the last frame that has been written by this device
+      int next_frame = last_frame + 1;             // the next frame in line
+      if (this_frame != next_frame) {              // if the current frame is NOT the next in line then keep waiting
+        usleep(5);
+        double time_now = get_clock_time();
+        if (time_now - start_time >= 1.0) {        // update progress every 1 sec so the user knows what's going on
+          start_time = time_now;
+          logwrite(function, "waiting for frames");///< TODO @todo presumably update GUI or set a global that the CLI can access
+#ifdef LOGLEVEL_DEBUG
+          message.str(""); message << "[DEBUG] this_frame=" << this_frame << " next_frame=" << next_frame;
+          logwrite(function, message.str());
+#endif
+        }
+      }
+      else {                                       // otherwise it's time to write this frame to disk
+        break;                                     // note that frameinfo_mutex remains locked now until completion
+      }
+
+      if ( abortstate() ) break; // provide the user a way to get out
+
+    } while ( useframes );                  // some firmware doesn't support frames so get out after one frame if it doesn't
+***/
+
+    // If not aborted then write this frame
+    //
+    if ( ! abortstate() ) {
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] calling write_frame for devnum=" << devnum << " fpbcount=" << fpbcount;
+    logwrite(function, message.str());
+#endif
+      error = write_frame( expbuf, devnum, controller[devnum].channel, fpbcount );
+    }
+    else {
+      logwrite(function, "aborted!");
+    }
+
+    if ( error != NO_ERROR ) {
+      message.str(""); message << "ERROR writing frame " << fcount << " for devnum=" << devnum;
+      logwrite( function, message.str() );
+    }
+
+    // Done with the frame identified by "fpbcount".
+    // Erase it from the STL map so it's not seen again.
+    //
+    frameinfo_mutex.lock();                 // protect access to frameinfo structure
+//  controller[devnum].frameinfo.erase( fpbcount );
+
+/*** 10/30/23 BOB
+    controller[devnum].close_file( camera.writekeys_when );
+***/
+
+    frameinfo_mutex.unlock();
+
+    remove_framethread();  // framethread_count is decremented because a thread has completed
+
+    write_pending( expbuf, devnum, false ); // this also does the notify
+
+    return;
+  }
+  /***** Camera::AstroCamInterface::handle_frame ******************************/
+
+
   /***** Camera::AstroCamInterface::image_size ********************************/
   /**
    * @brief      set/get image size parameters and allocate PCI memory
@@ -1098,7 +1241,7 @@ namespace Camera {
     this->controller[dev].have_ft = ft;             // frame transfer supported?
     this->controller[dev].firmware = firm;          // firmware file
     this->controller[dev].pArcDev = ( new arc::gen3::CArcPCI() );        // set the pointer to this object in the public vector
-    this->controller[dev].pCallback = ( new Callback() );          // set the pointer to this object in the public vector
+    this->controller[dev].pCallback = ( new Callback(this) );            // set the pointer to this object in the public vector
     this->controller[dev].devname = "";             // device name
     this->controller[dev].connected = false;        // not yet connected
     this->controller[dev].firmwareloaded = false;   // no firmware loaded
@@ -1187,6 +1330,159 @@ namespace Camera {
     return NO_ERROR;
   }
   /***** Camera::AstroCamInterface::parse_spect_config ************************/
+
+
+  /***** Camera::AstroCamInterface::write_frame *******************************/
+  /**
+   * @brief      writes the image_data buffer to disk for the specified device
+   * @param[in]  expbuf    exposure buffer number
+   * @param[in]  devnum    device number
+   * @param[in]  fpbcount  frame number = also thread ID receiving the frame
+   * @return     ERROR or NO_ERROR
+   *
+   * This function is called by the handle_frame thread.
+   * It will call deinterlace() before calling write().
+   *
+   * incoming frame from ARC -> frameCallback() -> handle_frame() -> write_frame()
+   *
+   */
+  long AstroCamInterface::write_frame( int expbuf, int devnum, const std::string chan, int fpbcount ) {
+    std::string function = "Camera::AstroCamInterface::write_frame";
+    std::stringstream message;
+    long error=NO_ERROR;
+
+    // This is the PCI image buffer that holds the image.
+    //
+    // Use devnum to identify which device has the frame,
+    // and fpbcount to index the frameinfo STL map on that devnum,
+    // and assign the pointer to that buffer to a local variable.
+    //
+    void* imbuf = this->controller[devnum].frameinfo[fpbcount].buf;
+
+    message << this->controller[devnum].devname << " received exposure "
+            << this->controller[devnum].frameinfo[fpbcount].framenum << " into image buffer "
+            << std::hex << this->controller[devnum].frameinfo[fpbcount].buf;
+    logwrite(function, message.str());
+
+    // Call the class' deinterlace and write functions.
+    //
+    // The .deinterlace() function is called with the PCI image buffer pointer cast to the appropriate type.
+    // The .write() function writes the deinterlaced (work) buffer, which is a class member, so
+    // that buffer is already known.
+    //
+    try {
+      switch (this->controller[devnum].info.datatype) {
+        case USHORT_IMG: {
+          this->controller[devnum].deinterlace( expbuf, (uint16_t *)imbuf );
+message.str(""); message << this->controller[devnum].devname << " exposure buffer " << expbuf << " deinterlaced " << std::hex << imbuf;
+logwrite(function, message.str());
+message.str(""); message << "about to write section size " << this->controller[devnum].expinfo[expbuf].section_size ; // << " to file \"" << this->pFits[expbuf]->fits_name << "\"";
+logwrite(function, message.str());
+
+          // Call write_image(),
+          // passing a pointer to the workbuf for this controller (which has the deinterlaced image), and
+          // a pointer for the info class for this exposure buf on this controller.
+          //
+          error = this->pFits[ expbuf ]->write_image( (uint16_t *)this->controller[ devnum ].workbuf, this->controller[ devnum ].expinfo[expbuf], chan );
+
+          this->pFits[ expbuf ]->extension++;
+
+message.str(""); message << this->controller[devnum].devname << " exposure buffer " << expbuf << " wrote " << std::hex << this->controller[devnum].workbuf;
+logwrite(function, message.str());
+
+//        error = this->controller[devnum].write( );  10/30/23 BOB -- the write is above. .write() called ->write_image(), skip that extra function
+          break;
+        }
+/*******
+        case SHORT_IMG: {
+          this->controller[devnum].deinterlace( expbuf, (int16_t *)imbuf );
+          error = this->controller[devnum].write( );
+          break;
+        }
+        case FLOAT_IMG: {
+          this->controller[devnum].deinterlace( expbuf, (uint32_t *)imbuf );
+          error = this->controller[devnum].write( );
+          break;
+        }
+********/
+        default:
+          message.str("");
+          message << "ERROR: unknown datatype: " << this->controller[devnum].info.datatype;
+          logwrite(function, message.str());
+          error = ERROR;
+          break;
+      }
+      // A frame has been written for this device,
+      // so increment the framecounter for devnum.
+      //
+      if (error == NO_ERROR) this->controller[devnum].increment_framecount();
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] framecount(" << devnum << ")="
+                               << this->controller[devnum].get_framecount() << " written";
+      logwrite( function, message.str() );
+#endif
+    }
+    catch (std::out_of_range &) {
+      message.str(""); message << "ERROR: unable to find device " << devnum << " in list: { ";
+      for (const auto &check : this->devnums) message << check << " ";
+      message << "}";
+      logwrite(function, message.str());
+      error = ERROR;
+    }
+
+#ifdef LOGLEVEL_DEBUG
+    message.str("");
+    message << "[DEBUG] completed " << (error != NO_ERROR ? "with error. " : "ok. ")
+            << "devnum=" << devnum << " " << "fpbcount=" << fpbcount << " "
+            << this->controller[devnum].devname << " received exposure "
+            << this->controller[devnum].frameinfo[fpbcount].framenum << " into buffer "
+            << std::hex << std::uppercase << this->controller[devnum].frameinfo[fpbcount].buf;
+    logwrite(function, message.str());
+#endif
+    return( error );
+  }
+  /***** Camera::AstroCamInterface::write_frame *******************************/
+
+
+  /***** Camera::AstroCamInterface::write_pending *****************************/
+  /**
+   * @brief      Set or clear the write pending state for a given exposure
+   * @param[in]  expbuf  exposure buffer number
+   * @param[in]  devnum  device number
+   * @param[in]  add     bool true to add, false to remove from pending vector
+   *
+   * This function is overloaded with an inline version that returns a bool
+   * to indicate if there are any controllers with a pending write.
+   *
+   */
+  void AstroCamInterface::write_pending( int expbuf, int devnum, bool add ) {
+
+    try {
+      std::lock_guard<std::mutex> lock(this->write_lock);               // protect writes_pending vector
+      auto it = std::find( this->writes_pending.at( expbuf ).begin(),
+                           this->writes_pending.at( expbuf ).end(),
+                           devnum );                                    // iterator of devnum in writes_pending[expbuf] vector
+      bool found  = ( it != this->writes_pending.at( expbuf ).end() );  // was expbuf found in vector?
+      bool remove = !add;                                               // do I remove it?
+
+      if ( add && !found )   { this->writes_pending.at( expbuf ).push_back( devnum ); }
+      else
+      if ( found && remove ) { this->writes_pending.at( expbuf ).erase( it ); }
+
+    }                                                                   // lock_guard releases when it goes out of scope
+    catch ( std::out_of_range & ) { return; }
+
+    this->write_condition.notify_all();
+
+#ifdef LOGLEVEL_DEBUG
+    std::stringstream message;
+    message << "[DEBUG]";
+    for (const auto &dev : this->writes_pending[expbuf]) message << " " << dev;
+    logwrite("Camera::AstroCamInterface:::write_pending", message.str());
+#endif
+    return;
+  }
+  /***** Camera::AstroCamInterface::write_pending *****************************/
 
 
   /***** Camera::AstroCamInterface::configure_camera **************************/
