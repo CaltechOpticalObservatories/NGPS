@@ -46,6 +46,26 @@
 namespace Sequencer {
 
   /**
+   * @enum  ErrorCodes
+   * @brief
+   */
+  enum class ErrorCode {
+    ERROR_ACAM_CAMERA,
+    ERROR_ACAM_FILTER,
+    ERROR_ACAM_COVER
+  };
+
+  class AcamException : public std::runtime_error {
+    public:
+      ErrorCode code;
+      AcamException(ErrorCode c, const std::string &msg) : std::runtime_error(msg), code(c) {}
+  };
+
+  struct SlicecamException : public std::runtime_error {
+    using std::runtime_error::runtime_error;
+  };
+
+  /**
    * @enum  PowerState
    * @brief state for controlling network power switch
    */

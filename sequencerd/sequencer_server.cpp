@@ -833,6 +833,15 @@ namespace Sequencer {
         }
       }
 
+      // POWER_ACAM_CAM
+      if (config.param[entry].compare( 0, POWER_ACAM_CAM.length(), POWER_ACAM_CAM )==0) {
+        if ( this->sequence.power_switch[POWER_ACAM_CAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
+      }
+
       // POWER_SLICECAM
       if (config.param[entry].compare( 0, POWER_SLICECAM.length(), POWER_SLICECAM )==0) {
         if ( this->sequence.power_switch[POWER_SLICECAM].configure( this->config.arg[entry] ) == NO_ERROR ) {

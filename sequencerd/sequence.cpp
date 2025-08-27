@@ -1007,6 +1007,7 @@ namespace Sequencer {
    * @brief      initializes the slicecam system for control from the Sequencer
    * @return     NO_ERROR
    * @throws     std::runtime_error
+   * @throws     SlicecamException
    *
    */
   long Sequence::slicecam_init() {
@@ -1030,7 +1031,7 @@ namespace Sequencer {
     //
     if ( this->open_hardware(this->slicecamd, SLICECAMD_OPEN, SLICECAMD_OPEN_TIMEOUT) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR starting slicecam" );
-      throw std::runtime_error("could not start slicecam");
+      throw SlicecamException("could not start slicecam");
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_SLICECAM );    // slicecamd ready
@@ -1046,6 +1047,7 @@ namespace Sequencer {
    * @brief      initializes the slicecam system for control from the Sequencer
    * @return     NO_ERROR
    * @throws     std::runtime_error
+   * @throws     AcamException
    *
    */
   long Sequence::acam_init() {
@@ -1069,8 +1071,8 @@ namespace Sequencer {
     //
     bool was_opened=false;
     if ( this->open_hardware(this->acamd, ACAMD_OPEN, ACAMD_OPEN_TIMEOUT, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR starting acam" );
-      throw std::runtime_error("could not start acam");
+      this->async.enqueue_and_log( function, "ERROR opening acam camera" );
+      throw AcamException(ErrorCode::ERROR_ACAM_CAMERA, "could not open acam camera");
     }
 
     // send init values only if connection was just opened now
@@ -2674,6 +2676,7 @@ namespace Sequencer {
           logwrite( function, "ERROR from "+Sequencer::thread_names.at(thr));
           error = ERROR;
         }
+        else logwrite(function, Sequencer::thread_names.at(thr)+" success");
       }
       catch (const std::exception& e) {
         logwrite( function, "ERROR worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
@@ -2683,56 +2686,93 @@ namespace Sequencer {
     }
 
     // Now the Andor cameras must be done individually, first slicecam,
-    try {
+    // then the acam, try each twice if necessary.
+    //
+    const int maxattempts=2;
 
-      // if slicecam_init returns error, it's worth power cycling and trying again
-      if ( std::async(std::launch::async, &Sequence::slicecam_init, this).get() != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR from slicecam_init, will try power cycle, standby" );
+    // slicecam
+    int attempt=0;
+    while (attempt < maxattempts) {
+      try {
+        // launch slicecam_init async task and wait for result
+        std::async(std::launch::async, &Sequence::slicecam_init, this).get();
+        logwrite(function, Sequencer::thread_names.at(THR_SLICECAM_INIT)+" success");
+        break;
+      }
+      catch (const SlicecamException &e) {
+        logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
 
-        // power off slicecams
-        if ( std::async(std::launch::async, &Sequence::slicecam_shutdown, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR shutting down slicecam, giving up" );
-          error = ERROR;
+        // turn off slicecams then loop to try again.
+        if ( set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(5)) != NO_ERROR ) {
+          async.enqueue_and_log( function, "ERROR switching off slicecams" );
+          error=ERROR;
+          break;
         }
-        else
-        // try again to initialize slicecams
-        if ( std::async(std::launch::async, &Sequence::slicecam_init, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR starting slicecam, giving up" );
-          error = ERROR;
+        logwrite(function, "slicecams powered off");
+
+        if (++attempt == maxattempts) {
+          async.enqueue_and_log( function, "ERROR exceeded max attempts starting slicecam" );
+          error=ERROR;
+          break;
         }
-        else
-        this->async.enqueue_and_log( function, "NOTICE: slicecam power cycle success" );
+
+        logwrite(function, "retrying slicecam_init");
+        continue;
+      }
+      catch (const std::exception &e) {
+        logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
+        error=ERROR;
+        break;
+      }
+      catch (...) {
+        logwrite(function, "ERROR unknown slicecam_init exception");
+        error=ERROR;
+        break;
       }
     }
-    catch (const std::exception& e) {
-      logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
-      error = ERROR;
-    }
 
-    // then the acam
-    try {
-      // if acam_init returns error, it's worth power cycling and trying again
-      if ( std::async(std::launch::async, &Sequence::acam_init, this).get() != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR from acam_init, will try power cycle, standby" );
-
-        // power off acam
-        if ( std::async(std::launch::async, &Sequence::acam_shutdown, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR shutting down acam, giving up" );
-          error = ERROR;
-        }
-        else
-        // try again to initialize acams
-        if ( std::async(std::launch::async, &Sequence::acam_init, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR starting acam, giving up" );
-          error = ERROR;
-        }
-        else
-        this->async.enqueue_and_log( function, "NOTICE: acam power cycle success" );
+    // acam
+    attempt=0;
+    while (attempt < maxattempts) {
+      try {
+        // launch acam_init async task and wait for result
+        std::async(std::launch::async, &Sequence::acam_init, this).get();
+        logwrite(function, Sequencer::thread_names.at(THR_ACAM_INIT)+" success");
+        break;
       }
-    }
-    catch (const std::exception& e) {
-      logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
-      error = ERROR;
+      catch (const AcamException &e) {
+        logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
+
+        // If there was an error with the ACAM camera, turn it off,
+        // then loop to try again.
+        if (e.code == ErrorCode::ERROR_ACAM_CAMERA) {
+          if ( set_power_switch(OFF, POWER_ACAM_CAM, std::chrono::seconds(5)) != NO_ERROR ) {
+            async.enqueue_and_log( function, "ERROR switching off acam camera" );
+            error=ERROR;
+            break;
+          }
+          logwrite(function, "acam camera powered off");
+
+          if (++attempt == maxattempts) {
+            async.enqueue_and_log( function, "ERROR exceeded max attempts starting acam" );
+            error=ERROR;
+            break;
+          }
+
+          logwrite(function, "retrying acam_init");
+          continue;
+        }
+      }
+      catch (const std::exception &e) {
+        logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
+        error=ERROR;
+        break;
+      }
+      catch (...) {
+        logwrite(function, "ERROR unknown acam_init exception");
+        error=ERROR;
+        break;
+      }
     }
 
     // change state to READY if all daemons ready w/o error
