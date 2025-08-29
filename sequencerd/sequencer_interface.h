@@ -62,6 +62,7 @@ namespace Sequencer {
   const std::string POWER_TELEM="POWER_TELEM";       ///< parameter name which defines NPS_PLUG names required for telem hardware
   const std::string POWER_THERMAL="POWER_THERMAL";   ///< parameter name which defines NPS_PLUG names required for thermal hardware
   const std::string POWER_ACAM="POWER_ACAM";         ///< parameter name which defines NPS_PLUG names required for ACAM (A&G) hardware
+  const std::string POWER_ACAM_CAM="POWER_ACAM_CAM"; ///< parameter name which defines NPS_PLUG names required for ACAM camera-only
   const std::string POWER_SLICECAM="POWER_SLICECAM"; ///< parameter name which defines NPS_PLUG names required for SLICECAM hardware
 
   const std::string ACQUIRE_OFFSET_THRESHOLD="ACQUIRE_OFFSET_THRESHOLD";    ///< below this in arcsec defines successful acquisition
