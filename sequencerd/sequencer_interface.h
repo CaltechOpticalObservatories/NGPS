@@ -245,7 +245,16 @@ namespace Sequencer {
           // field is not empty
           //
           if ( !row[col].isNull() ) {
-            return row.get(col).get<T>();
+            T value = row.get(col).get<T>();                              // extract the value from the field
+
+            // if this is a string, find and replace emdash with minus sign
+            if constexpr (std::is_same_v<T,std::string> || std::is_same_v<T,mysqlx::string>) {
+              std::string svalue = value;
+              size_t pos = svalue.find("−");                              // U+2212 unicode minus sign
+              if (pos != std::string::npos) svalue.replace(pos, 3, "-");  // replace with ASCII minus sign
+              return static_cast<T>(svalue);
+            }
+            return value;
           }
 
           // If the field is empty and a default value was specified,
