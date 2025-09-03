@@ -1064,10 +1064,7 @@ namespace Slicecam {
       // has stopped (or timeout).
       //
       bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
-      if ( was_framegrab_running ) {
-        std::string dontcare;
-        error = this->framegrab( "stop", dontcare );
-      }
+      if ( was_framegrab_running ) error = this->framegrab("stop");
 
       // Set the binning parameters now
       //
@@ -1075,10 +1072,7 @@ namespace Slicecam {
 
       // If framegrab was previously running then restart it
       //
-      if ( was_framegrab_running ) {
-        std::string dontcare;
-        error |= this->framegrab( "start", dontcare );
-      }
+      if ( was_framegrab_running ) error |= this->framegrab("start");
     }
 
     // return the current binning parameters
@@ -1726,10 +1720,35 @@ namespace Slicecam {
   /***** Slicecam::Interface::framegrab_fix ***********************************/
 
 
+  void Interface::alert_framegrabbing_stopped(const int &waitms) {
+    // Wait 1 s longer than the length of time allowed for framegrabbing to stop.
+    //
+    std::this_thread::sleep_for(std::chrono::milliseconds(waitms+1000));
+
+    // If still not running again then alert the user
+    //
+    if (!this->is_framegrab_running.load(std::memory_order_acquire)) {
+      this->gui_manager.send_warning("framegrabbing stopped");
+    }
+  }
+
+
   /***** Slicecam::Interface::framegrab ***************************************/
   /**
    * @brief      wrapper to control Andor frame grabbing
-   * @param[in]  args       optional filename as source for header info
+   * @details    Use this overloaded version when the return string isn't needed.
+   * @param[in]  args  stop|start|status|one <filename>|saveone <filename>
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::framegrab( std::string args ) {
+    std::string dontcare;
+    return framegrab(args, dontcare);
+  }
+  /***** Slicecam::Interface::framegrab ***************************************/
+  /**
+   * @brief      wrapper to control Andor frame grabbing
+   * @param[in]  args       stop|start|status|one <filename>|saveone <filename>
    * @param[out] retstring  return string
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -1785,10 +1804,12 @@ namespace Slicecam {
     if ( whattodo == "stop" ) {
       this->should_framegrab_run.store( false, std::memory_order_release );  // tells framegrab loop to stop
       if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {    // wait for it to stop
-        int waittime = std::max( static_cast<int>(3000*(this->camera.andor.begin()->second->camera_info.exptime+1)), 5000 );
+        int wait_ms = std::max( static_cast<int>(3000*(this->camera.andor.begin()->second->camera_info.exptime+1)), 5000 );
+        // alert user that framegrabbing has stopped
+        std::thread( &Slicecam::Interface::alert_framegrabbing_stopped, this, wait_ms ).detach();
         if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {
           std::unique_lock<std::mutex> lock(framegrab_mtx);
-          if ( !cv.wait_for(lock, std::chrono::milliseconds(waittime), [this]() {
+          if ( !cv.wait_for(lock, std::chrono::milliseconds(wait_ms), [this]() {
                 return !this->is_framegrab_running.load(std::memory_order_acquire); }) ) {
             logwrite( function, "ERROR timeout waiting for framegrab loop to stop" );
             return ERROR;
@@ -2081,19 +2102,16 @@ namespace Slicecam {
     // exposure time, gain, and binning.
     //
     if ( !tokens.empty() ) {
+      // If framegrab is running then stop it. This won't return until framegrabbing
+      // has stopped (or timeout).
+      //
+      bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
+      if ( was_framegrab_running ) error = this->framegrab("stop");
+
       try {
         float exptime = std::stof( tokens.at(0) );
         int gain = std::stoi( tokens.at(1) );
         int bin  = std::stoi( tokens.at(2) );
-
-        // If framegrab is running then stop it. This won't return until framegrabbing
-        // has stopped (or timeout).
-        //
-        bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
-        if ( was_framegrab_running ) {
-          std::string dontcare;
-          error = this->framegrab( "stop", dontcare );
-        }
 
         error |= camera.set_exptime( exptime );
         error |= camera.set_gain( gain );
@@ -2113,14 +2131,11 @@ namespace Slicecam {
 
         // If framegrab was previously running then restart it
         //
-        if ( was_framegrab_running ) {
-          std::string dontcare;
-          error = this->framegrab( "start", dontcare );
-        }
+        if ( was_framegrab_running ) error = this->framegrab("start");
       }
       catch( const std::exception &e ) {
-        message.str(""); message << "ERROR parsing args \"" << args << "\": " << e.what();
-        logwrite( function, message.str() );
+        logwrite( function, "ERROR parsing args \"" + args + "\": " + e.what() );
+        if ( was_framegrab_running ) error = this->framegrab("start");
         return ERROR;
       }
     }
@@ -2828,19 +2843,13 @@ namespace Slicecam {
     //
     long error = NO_ERROR;
     bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
-    if ( was_framegrab_running ) {
-      std::string dontcare;
-      error = this->framegrab( "stop", dontcare );
-    }
+    if ( was_framegrab_running ) error = this->framegrab("stop");
 
     this->camera.set_exptime( fval );
 
     // If framegrab was previously running then restart it
     //
-    if ( was_framegrab_running ) {
-      std::string dontcare;
-      error = this->framegrab( "start", dontcare );
-    }
+    if ( was_framegrab_running ) error = this->framegrab("start");
 
     retstring = std::to_string(fval);
     message.str(""); message << fval << " sec";
@@ -3017,10 +3026,7 @@ namespace Slicecam {
       // has stopped (or timeout).
       //
       bool was_framegrab_running = this->is_framegrab_running.load(std::memory_order_acquire);
-      if ( was_framegrab_running ) {
-        std::string dontcare;
-        error = this->framegrab( "stop", dontcare );
-      }
+      if ( was_framegrab_running ) error = this->framegrab("stop");
 
       // Parse the gain from the token
       //
@@ -3037,10 +3043,7 @@ namespace Slicecam {
 
       // If framegrab was previously running then restart it
       //
-      if ( was_framegrab_running ) {
-        std::string dontcare;
-        error |= this->framegrab( "start", dontcare );
-      }
+      if ( was_framegrab_running ) error |= this->framegrab("start");
 
     }
 

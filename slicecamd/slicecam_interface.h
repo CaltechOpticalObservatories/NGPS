@@ -185,6 +185,13 @@ namespace Slicecam {
         return;
       }
 
+      void send_warning(const std::string &message) {
+        std::stringstream cmd;
+        cmd << "/bin/sh -c '/home/developer/dhale/show_warning.sh \"" << message << "\"'";
+        std::system(cmd.str().c_str());
+        logwrite("*****", cmd.str());
+      }
+
       /**
        * @brief      calls the push_image script with the formatted message string
        * @details    the script pushes the indicated file to the Guider GUI display
@@ -343,6 +350,8 @@ namespace Slicecam {
       long close( std::string args, std::string &retstring );
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long saveframes( std::string args, std::string &retstring );
+      void alert_framegrabbing_stopped(const int &waitms);
+      long framegrab( std::string args );                            /// wrapper to control Andor frame grabbing
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
