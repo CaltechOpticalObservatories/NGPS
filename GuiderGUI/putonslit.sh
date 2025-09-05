@@ -5,12 +5,13 @@
 # Send both to scam daemon in units of deg
 # Daemon computes offsets (account for spherical geometry) in arcsec
 
-camera=${1:-slicev}  # slicev or guider --> determines who's crosshairs to use
-reverse=${2:-false}  # move target from slit to crosshairs
-
-id_slicev=SLICEVIEW  ### HARDCODE
-
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+source $SCRIPT_DIR/gui.config slicev
+id_slicev=$id
+
+# Set $camera after sourcing config file, which has a parameter called $camera
+camera="${1:-slicev}"  # slicev or guider --> determines who's crosshairs to use
+reverse="${2:-false}"  # move target from slit to crosshairs
 source $SCRIPT_DIR/gui.config $camera
 
 # If going SLIT to ACAM crosshairs, reset the crosshairs to middle
@@ -20,23 +21,14 @@ if $reverse ; then
   xpaset -p $id crosshair $(($width / 2)) $(($height / 2)) image # set crosshair in image coords
 fi
 
-# Get the slit region and crosshair coordinates from ds9
+# Get crosshair coordinates from ds9
 crosscenter=`xpaget $id crosshair wcs degrees`
-
-slitcenter=`xpaget $id_slicev region -format xy -system wcs -group slitcenter -skyformat degrees`  ### JUST USE HEADERS
-
-# If the slit region is missing, give up
-if [ -z "$slitcenter" ]; then
-  echo No slit! ;
-  exit 1
-fi
-
-# Parse the returned (RA, DEC), formatted as "123.45 678.90" in decimal degrees
-slitRA_deg=$(echo $slitcenter | cut -f1 -d ' ')
-slitDEC_deg=$(echo $slitcenter | cut -f2 -d ' ')
-
 crossRA_deg=$(echo $crosscenter | cut -f1 -d ' ')
 crossDEC_deg=$(echo $crosscenter | cut -f2 -d ' ')
+
+# Get slit center from FITS header
+slitRA_deg=`xpaget $id_slicev fits header 1 keyword CRVAL1`
+slitDEC_deg=`xpaget $id_slicev fits header 1 keyword CRVAL2`
 
 echo "(slitRA, slitDEC, crossRA, crossDEC)"
 echo $slitRA_deg $slitDEC_deg $crossRA_deg $crossDEC_deg

@@ -50,6 +50,8 @@ PATH="/usr/pgsql-15/bin:$PATH"  # pg_config should be used from here, not anacon
 
 export PATH
 
+export XPA_NSUSERS="*"  # Allow this user's XPA to access DS9 windows from any other user
+
 #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/anaconda3/lib  # breaks psql
 
 PYTHONPATH="$HOME/Software/Python"
@@ -73,6 +75,7 @@ alias ls="ls -h --color=auto"
 alias vimacro="vi ~/.bashrc"
 alias sourcemacro="source ~/.bashrc"
 alias noresize='gsettings set org.gnome.mutter edge-tiling false'
+noresize  # Stop desktop windows from resizing
 
 # Chaz workspace
 alias chaz="cd ~/Software/Python"

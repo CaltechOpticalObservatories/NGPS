@@ -1,19 +1,22 @@
 # commands to prepare for I- and R-channel exposures
- camera close
- camera open
- camera load
- camera native CSH
- camera native PON 
- camera native ERS 1000 1000
- camera imsize I 1220 4114 0 100 1 1 
- camera imsize R 1220 4114 0 100 1 1 
- camera native WRM 0x400004 2040
- camera exptime 0
- camera readout I U2
- camera readout R U1
- camera useframes false
- camera mex true
- camera shutter enable
- camera basename ngps_$1
- camera fitsnaming number
- camera native EPG 500
+camera close
+camera open
+#camera load
+camera load 0 /home/developer/Software/DSP/lod/____sg2.lod
+camera load 1 /home/developer/Software/DSP/lod/____engg.lod
+camera native CSH
+camera native PON
+camera native ERS 1000 1000
+camera imsize I 1220 4114 0 100 1 1
+camera imsize R 1220 4114 0 100 1 1
+camera bin row 2
+camera native WRM 0x400004 2040
+camera exptime 0
+camera readout I U2
+camera readout R U1
+camera useframes false
+camera mex true
+camera shutter enable
+camera native EPG 500
+camera fitsnaming number
+camera basename ngps
