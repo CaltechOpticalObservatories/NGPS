@@ -28,12 +28,12 @@ class LayoutService:
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
-        screen = self.parent.screen()
-        screen_size = screen.geometry()
+        #screen = self.parent.screen()
+        #screen_size = screen.geometry()
         
         # Use the screen width and height to calculate dynamic ratio (you can adjust these ratios)
-        screen_width = screen_size.width()
-        screen_height = screen_size.height()
+        screen_width = 650 
+        screen_height = 600 
 
         # Define dynamic ratio logic based on the screen size
         # For example, adjust the layout ratio based on screen size
