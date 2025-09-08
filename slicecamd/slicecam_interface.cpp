@@ -1728,7 +1728,7 @@ namespace Slicecam {
     // If still not running again then alert the user
     //
     if (!this->is_framegrab_running.load(std::memory_order_acquire)) {
-      this->gui_manager.send_warning("framegrabbing stopped");
+      this->gui_manager.send_fifo_warning("framegrabbing stopped");
     }
   }
 

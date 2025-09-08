@@ -81,16 +81,16 @@ button
 cat $dir/help_slicev.txt | $text
 #############
 endbuttonbar
-hmenu Stuff
+hmenu NGPS commands
   startsync
   *
   menu
   sleep 2 | $dir/sync_display.sh slicev # | $text
 
-  world
+  Start Framegrab
   *
   menu
-  echo "World" | $text
+  scam framegrab start | $text
 
   hmenu More Stuff
     hello world

@@ -185,11 +185,16 @@ namespace Slicecam {
         return;
       }
 
-      void send_warning(const std::string &message) {
-        std::stringstream cmd;
-        cmd << "/bin/sh -c '/home/developer/dhale/show_warning.sh \"" << message << "\"'";
-        std::system(cmd.str().c_str());
-        logwrite("*****", cmd.str());
+      void send_fifo_warning(const std::string &message) {
+        const std::string fifo_name("/tmp/.slicev_warning.fifo");
+        std::ofstream fifo(fifo_name);
+        if (!fifo.is_open()) {
+          logwrite("Slicecam::GUIManager::send_fifo_warning", "failed to open " + fifo_name + " for writing");
+        }
+        else {
+          fifo << message << std::endl;
+          fifo.close();
+        }
       }
 
       /**
