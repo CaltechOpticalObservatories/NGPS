@@ -2073,6 +2073,17 @@ namespace Slicecam {
       return HELP;
     }
 
+    // all configured Andors must be connected because exptime and gain
+    // come from the Andor::Information class
+    //
+    for ( const auto &pair : this->camera.andor ) {
+      if ( ! pair.second->is_open() ) {
+        logwrite(function, "ERROR Andor connection not open");
+        retstring="andor_not_connected";
+        return ERROR;
+      }
+    }
+
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
