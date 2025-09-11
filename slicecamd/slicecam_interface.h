@@ -185,6 +185,18 @@ namespace Slicecam {
         return;
       }
 
+      void send_fifo_warning(const std::string &message) {
+        const std::string fifo_name("/tmp/.slicev_warning.fifo");
+        std::ofstream fifo(fifo_name);
+        if (!fifo.is_open()) {
+          logwrite("Slicecam::GUIManager::send_fifo_warning", "failed to open " + fifo_name + " for writing");
+        }
+        else {
+          fifo << message << std::endl;
+          fifo.close();
+        }
+      }
+
       /**
        * @brief      calls the push_image script with the formatted message string
        * @details    the script pushes the indicated file to the Guider GUI display
@@ -343,6 +355,8 @@ namespace Slicecam {
       long close( std::string args, std::string &retstring );
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
       long saveframes( std::string args, std::string &retstring );
+      void alert_framegrabbing_stopped(const int &waitms);
+      long framegrab( std::string args );                            /// wrapper to control Andor frame grabbing
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
