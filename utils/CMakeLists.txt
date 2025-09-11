@@ -10,7 +10,7 @@ set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/utils)
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -ansi -Og -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -Wextra -Wconversion -Wshadow -ansi -Og -Wno-variadic-macros -ggdb )
 
 add_library(utilities STATIC
         ${PROJECT_UTILS_DIR}/utilities.cpp
@@ -66,17 +66,3 @@ target_link_libraries( listener PRIVATE utilities )
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
-add_executable(subscriber
-        ${PROJECT_UTILS_DIR}/subscriber.cpp
-        )
-target_link_libraries(subscriber
-        ${ZMQPP_LIB}
-        ${ZMQ_LIB}
-        )
-add_executable(pubtest
-        ${PROJECT_UTILS_DIR}/pubtest.cpp
-        )
-target_link_libraries(pubtest
-        ${ZMQPP_LIB}
-        ${ZMQ_LIB}
-        )

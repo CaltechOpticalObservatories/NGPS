@@ -7,5 +7,10 @@
 Config/*.py
 ._*
 .DS_Store
+*sublime*
+*.swp
 
 /GuiderGUI/jog.ini
+/GuiderGUI/buttons_guider.ans
+/GuiderGUI/buttons_slicev.ans
+
