@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QTableWidgetItem,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
 import re
@@ -699,66 +699,97 @@ class LayoutService:
             self.parent.logic_service.update_target_information(selected_row)
 
     def add_new_row(self):
-        # Create the dialog for input
+        # Dialog
         dialog = QDialog(self.parent)
         dialog.setWindowTitle("Add New Target")
+        layout = QVBoxLayout(dialog)
 
-        # Create a layout for the dialog
-        dialog_layout = QVBoxLayout()
+        form = QFormLayout()
+        layout.addLayout(form)
 
-        # Create fields for the dialog (Name, RA, Decl, and optional fields)
-        fields = {
-            "Name": QLineEdit(),
-            "RA": QLineEdit(),
-            "Decl": QLineEdit(),
-            "Offset RA": QLineEdit(),
-            "Offset Dec": QLineEdit(),
-            "EXPTime": QLineEdit(),
-            "Slitwidth": QLineEdit(),
-            "Magnitude": QLineEdit(),
-        }
+        # Fields
+        name_le      = QLineEdit()
+        ra_le        = QLineEdit()
+        decl_le      = QLineEdit()
+        off_ra_le    = QLineEdit()
+        off_dec_le   = QLineEdit()
+        exptime_le   = QLineEdit()
+        slitwidth_le = QLineEdit()
+        mag_le       = QLineEdit()
 
-        # Add labels and corresponding fields to the layout
-        for field_name, field_widget in fields.items():
-            label = QLabel(field_name)
-            dialog_layout.addWidget(label)
-            dialog_layout.addWidget(field_widget)
+        # Placeholders
+        name_le.setPlaceholderText("e.g. NGC 1234")
+        ra_le.setPlaceholderText("e.g. 12 34 56.7  or  188.736 (deg)")
+        decl_le.setPlaceholderText("e.g. +12 34 56  or  +12.582 (deg)")
+        off_ra_le.setPlaceholderText("arcsec (optional)")
+        off_dec_le.setPlaceholderText("arcsec (optional)")
+        exptime_le.setPlaceholderText("seconds (optional)")
+        slitwidth_le.setPlaceholderText("arcsec (optional)")
+        mag_le.setPlaceholderText("e.g. 17.2 (optional)")
 
-        # Create the OK and Cancel buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        dialog_layout.addWidget(button_box)
+        # Numeric validators (optional, allow blanks)
+        dv = QDoubleValidator()
+        for w in (off_ra_le, off_dec_le, exptime_le, slitwidth_le, mag_le):
+            w.setValidator(dv)
 
-        # Handle the OK and Cancel actions
-        button_box.accepted.connect(dialog.accept)
-        button_box.rejected.connect(dialog.reject)
+        # Required labels
+        form.addRow(QLabel("<b>Name*</b>"), name_le)
+        form.addRow(QLabel("<b>RA*</b>"), ra_le)
+        form.addRow(QLabel("<b>Decl*</b>"), decl_le)
+        form.addRow("Offset RA", off_ra_le)
+        form.addRow("Offset Dec", off_dec_le)
+        form.addRow("EXPTime", exptime_le)
+        form.addRow("Slitwidth", slitwidth_le)
+        form.addRow("Magnitude", mag_le)
 
-        dialog.setLayout(dialog_layout)
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
 
-        # Show the dialog and wait for the result
-        if dialog.exec_() == QDialog.Accepted:
-            # Get the data from the fields after the dialog is accepted
-            target_name = fields["Name"].text()
-            ra = fields["RA"].text()
-            decl = fields["Decl"].text()
-            offset_ra = fields["Offset RA"].text() or None
-            offset_dec = fields["Offset Dec"].text() or None
-            exptime = fields["EXPTime"].text() or None
-            slitwidth = fields["Slitwidth"].text() or None
-            magnitude = fields["Magnitude"].text() or None
+        if dialog.exec_() != QDialog.Accepted:
+            return
 
-            # Validate the required fields: Name, RA, Decl
-            if not target_name or not ra or not decl:
-                print("Error: Name, RA, and Decl are required fields.")
-                return
+        # Read & basic validate
+        target_name = name_le.text().strip()
+        ra          = ra_le.text().strip()
+        decl        = decl_le.text().strip()
 
-            # Fetch the current set_id
-            set_id = self.fetch_set_id()
-            if set_id is None:
-                print("Error: Unable to fetch set_id. No matching target list found.")
-                return
+        if not target_name or not ra or not decl:
+            QMessageBox.warning(self.parent, "Missing fields", "Name, RA, and Decl are required.")
+            return
 
-            # Call the insert function to insert the target into the database
-            self.logic_service.insert_target_to_db(target_name, ra, decl, offset_ra, offset_dec, exptime, slitwidth, magnitude)
+        # Convert numeric optionals (blank -> None)
+        def _num(txt):
+            txt = txt.strip()
+            return float(txt) if txt else None
+
+        try:
+            offset_ra  = _num(off_ra_le.text())
+            offset_dec = _num(off_dec_le.text())
+            exptime    = _num(exptime_le.text())
+            slitwidth  = _num(slitwidth_le.text())
+            magnitude  = _num(mag_le.text())
+        except ValueError:
+            QMessageBox.warning(self.parent, "Invalid number", "One or more numeric fields are invalid.")
+            return
+
+        # Ensure we have a current SET_ID
+        set_id = self.logic_service.fetch_set_id(getattr(self.parent, "current_target_list_name", None))
+        if set_id is None:
+            QMessageBox.warning(self.parent, "No target list selected", "Please select a valid target list first.")
+            return
+
+        # Insert into DB
+        self.logic_service.insert_target_to_db(
+            target_name, ra, decl, offset_ra, offset_dec, exptime, slitwidth, magnitude
+        )
+
+        # Refresh the table for the currently selected set (DB-backed fetch)
+        if hasattr(self.logic_service, "filter_target_list"):
+            self.logic_service.filter_target_list()
+
     
 
     def update_target_info(self):
@@ -900,7 +931,7 @@ class LayoutService:
             
             slit_angle = "0"
             if self.parent.current_ra != '' and self.parent.current_dec != '':
-                slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+                 slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             self.control_tab.slit_angle_box.setText(slit_angle)
 
         else:
@@ -1233,7 +1264,7 @@ class LayoutService:
         left_planning_column.addLayout(target_list_type_layout)
         left_planning_column.addLayout(target_list_layout)
 
-        # Optional: Load target lists when first created
+        # Load target lists when first created
         self.load_target_lists()
 
         return left_planning_column
@@ -1279,52 +1310,99 @@ class LayoutService:
             for set_name in target_lists:
                 self.target_list_name.addItem(set_name)
 
-            self.target_list_name.addItem("Create a new target list")
+            # Sentinels at the end
+            self.target_list_name.addItem("Upload new target list")
+            self.target_list_name.addItem("Create empty target list")
 
-            # Select the most recently added item (last in the list)
-            self.target_list_name.setCurrentIndex(len(target_lists) - 1)
+            # Prefer selecting what LogicService marked as current
+            preferred = getattr(self.parent, "current_target_list_name", None)
+            if preferred:
+                idx = self.target_list_name.findText(str(preferred))
+                if idx >= 0:
+                    self.target_list_name.setCurrentIndex(idx)
+                else:
+                    self.target_list_name.setCurrentIndex(0 if target_lists else -1)
+            else:
+                self.target_list_name.setCurrentIndex(0 if target_lists else -1)
 
             self.target_list_name.blockSignals(False)
-            self.target_list_name.currentIndexChanged.connect(self.on_target_set_changed)
 
-    def create_new_target_list(self):
+            # Rewire handler safely and trigger once
+            try:
+                self.target_list_name.currentIndexChanged.disconnect()
+            except TypeError:
+                pass
+            self.target_list_name.currentIndexChanged.connect(
+                lambda *_: self.on_target_set_changed()
+            )
+            self.on_target_set_changed()
+
+
+    def upload_new_target_list(self):
         """Handle creating a new target list, uploading CSV, and creating a new target set."""
-        # Step 1: Open the file dialog to allow the user to select a CSV file
-        file_dialog = QFileDialog(self.parent)  # Assuming `self.parent` is the parent widget
-        file_dialog.setFileMode(QFileDialog.ExistingFiles)
+        # remember where we were, so we can revert on cancel
+        prev_idx = self.target_list_name.currentIndex()
+
+        # 1) File dialog (single file is enough)
+        file_dialog = QFileDialog(self.parent)
+        file_dialog.setFileMode(QFileDialog.ExistingFile)   # was ExistingFiles
         file_dialog.setNameFilter("CSV Files (*.csv)")
 
         if file_dialog.exec_() == QFileDialog.Accepted:
-            file_path = file_dialog.selectedFiles()[0]  # Get the selected file path
+            file_path = file_dialog.selectedFiles()[0]
 
-            # Step 2: Let the user provide a new target set name
+            # 2) Ask for a name
             target_set_name, ok = QInputDialog.getText(self.parent, "Enter Target Set Name", "Target Set Name:")
             if ok and target_set_name:
-                # Step 3: Call the logic service to upload the CSV and associate it with a new target set
-                self.target_list_name.clear()
+                # Avoid cascaded signals while we clear/update the combo
+                with QSignalBlocker(self.target_list_name):
+                    self.target_list_name.clear()
+                # 3) Do the upload (your upload already refreshes + rebuilds lists)
                 self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
-                self.target_list_name.setCurrentText(target_set_name)  # Set the newly created target list as selected
+                # (Optional) set the selection to the new name without firing handler
+                with QSignalBlocker(self.target_list_name):
+                    self.target_list_name.setCurrentText(target_set_name)
                 self.parent.reload_table()
             else:
-                # If the user cancels the input dialog or doesn't provide a name, handle cancellation
+                # Cancelled name → put the combo back to a normal item
+                with QSignalBlocker(self.target_list_name):
+                    self.target_list_name.setCurrentIndex(max(0, min(prev_idx, self.target_list_name.count() - 2)))
                 print("Target set creation cancelled or no name provided.")
         else:
-            # If the user cancels the file selection, handle cancellation
+            # Cancelled file → put the combo back to a normal item
+            with QSignalBlocker(self.target_list_name):
+                self.target_list_name.setCurrentIndex(max(0, min(prev_idx, self.target_list_name.count() - 2)))
             print("File selection cancelled.")
 
-    def on_target_set_changed(self):
-        """Handle the target set change in the ComboBox."""
-        # Get the selected SET_NAME (not the entire list of target sets)
-        selected_set_name = self.target_list_name.currentText()
-        self.parent.current_target_list_name = self.target_list_name.currentText()
-        self.add_row_button.setEnabled(True)
 
-        if selected_set_name == "Create a new target list":
-            # Trigger the CSV upload process
-            self.create_new_target_list()
-        else:
-            print(f"Selected SET_NAME: {selected_set_name}")
-            self.logic_service.update_target_table_with_list(selected_set_name)
+    def on_target_set_changed(self, *_):
+        combo = self.target_list_name
+        idx   = combo.currentIndex()
+        text  = combo.currentText().strip()
+
+        # enable Add Row only on real sets
+        self.add_row_button.setEnabled(text not in ("Upload new target list", "Create empty target list", "No Target Lists Available", ""))
+
+        last_real = max(0, combo.count() - 3)
+
+        if text == "Upload new target list":
+            with QSignalBlocker(combo):
+                combo.setCurrentIndex(last_real)
+            self.upload_new_target_list()
+            return
+
+        if text == "Create empty target list":
+            with QSignalBlocker(combo):
+                combo.setCurrentIndex(last_real)
+            name, ok = QInputDialog.getText(self.parent, "Create empty target list", "Target list name:")
+            if ok and name.strip():
+                # create empty set; UI refreshes to show the newest (empty) set
+                self.logic_service.create_empty_target_set(name.strip())
+            return
+
+        # Real selection → remember name and filter from DB
+        self.parent.current_target_list_name = text
+        self.logic_service.filter_target_list()
 
 
     def create_right_planning_column(self):
@@ -1588,7 +1666,7 @@ class LayoutService:
 
         # Create the toggle button
         self.target_list_mode_toggle = QPushButton("Mode: Science")
-        self.target_list_mode_toggle.setCheckable(True)
+        self.target_list_mode_toggle.setCheckable(False)
         self.target_list_mode_toggle.setMaximumWidth(200)
 
         # Set toggle styles (optional)

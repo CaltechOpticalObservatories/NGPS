@@ -229,3 +229,8 @@ QHeaderView::section {
     border: 1px solid #888888;
     background-color: #555555;
 }
+
+#DaemonStatusBar {
+  border-top: 1px solid #3a3a3a;
+  background: #1e1f22;
+}

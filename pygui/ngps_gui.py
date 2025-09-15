@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog, QStatusBar, QSizePolicy
 from PyQt5.QtCore import Qt, pyqtSlot
 from menu_service import MenuService
 from logic_service import LogicService
@@ -12,6 +12,29 @@ from status_service import StatusService
 from calib.calibration import CalibrationGUI
 from etc_popup import EtcPopup
 from control_tab import ControlTab 
+from daemon_status_bar import DaemonStatusBar, DaemonState
+
+
+DAEMONS = [
+    "acamd",
+    "calibd",
+    "camerad",
+    "flexured",
+    "focusd",
+    "powerd",
+    "sequencerd",
+    "slicecamd",
+    "slitd",
+    "tcsd",
+    "thermald",
+]
+
+PER_DAEMON_COMMANDS = {
+    # Defaults are ["Ping", "Restart", "Open Logs"] if not specified:
+    "powerd":  ["Ping", "Restart", "Power Cycle", "Open Logs"],
+    "camerad": ["Ping", "Restart", "Resync UDP", "Open Logs"],
+    "tcsd":    ["Ping", "Restart", "Reconnect TCS", "Open Logs"],
+}
 
 class NgpsGUI(QMainWindow):
     def __init__(self):
@@ -68,6 +91,41 @@ class NgpsGUI(QMainWindow):
         self.initialize_services()
      
         # self.on_login()
+        
+        # Status bar with daemon chips
+        self._statusbar = QStatusBar(self)
+        self._statusbar.setSizeGripEnabled(False)                     # remove bottom-right resize grip
+        self._statusbar.setContentsMargins(0, 0, 0, 0)                # no outer margins
+        self._statusbar.setStyleSheet(                                # no padding/borders around items
+            "QStatusBar{padding:0;margin:0;} QStatusBar::item{border:0;}"
+        )
+        self.setStatusBar(self._statusbar)
+
+        self.daemon_row = DaemonStatusBar(DAEMONS, per_daemon_commands=PER_DAEMON_COMMANDS, parent=self)
+        self.daemon_row.commandRequested.connect(self.on_daemon_command)
+        self.daemon_row.detailsRequested.connect(self.on_daemon_details)
+
+        # ✨ Make it expand to full width
+        self.daemon_row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        # Use addWidget with stretch, not addPermanentWidget
+        self._statusbar.addWidget(self.daemon_row, 1)
+
+        # Optional: seed initial states so the UI isn't empty
+        self.daemon_row.bulk_update({
+            "acamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "calibd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "camerad": (DaemonState.UNKNOWN, "Awaiting first UDP packet..."),
+            "flexured": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "focusd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "powerd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "sequencerd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "slicecamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "slitd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "tcsd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            "thermald": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+        })
+
 
     def init_ui(self):
         # Set up Menu
@@ -194,7 +252,7 @@ class NgpsGUI(QMainWindow):
         self.sequencer_service.send_command(command)
 
     def reload_table(self):
-        self.logic_service.fetch_and_update_target_list()
+        self.logic_service.filter_target_list()
 
     def is_sequencer_ready(self):
         """Check if the sequencer state is READY."""
@@ -325,6 +383,30 @@ class NgpsGUI(QMainWindow):
         except Exception as e:
             print(f"Exception during target list deletion: {e}")
             QMessageBox.critical(self, "Error", f"An error occurred while deleting the target list:\n{str(e)}")
+            
+    def on_daemon_details(self, name: str):
+        # DaemonChip already shows a QMessageBox with details.
+        # Keep this slot for a future richer dialog (logs, metrics, traces).
+        pass
+
+    def on_daemon_command(self, name: str, command: str):
+        # TODO: route to your ZMQ/UDP send logic
+        # For now, just log/print. Replace with sequencer/logic service hooks as needed.
+        print(f"[daemon-cmd] {name}: {command}")
+
+    def apply_status_update(self, update: dict):
+        """
+        Expected dict shape:
+        {"name": "acamd", "state": "ok|warn|error|unknown", "issue": "..."}
+        Call this from ZMQ status feed or camerad UDP listener.
+        """
+        name = update.get("name")
+        state = update.get("state", DaemonState.UNKNOWN)
+        issue = update.get("issue", "")
+        if name:
+            self.daemon_row.set_daemon_state(name, state, issue)
+
+
 
 
 if __name__ == '__main__':

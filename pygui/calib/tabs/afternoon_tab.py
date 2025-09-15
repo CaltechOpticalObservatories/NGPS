@@ -50,16 +50,46 @@ class AfternoonTab(QWidget):
         form_layout.addRow("", QLabel())  # Empty row for spacing
 
         # Getcalib Command Section (./getcalib)
-        getcalib_button = QPushButton("Get Calibration", self)
-        getcalib_button.clicked.connect(self.run_getcalib)
-        getcalib_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
-        form_layout.addRow("", getcalib_button)  # Place button below the input
+        self.getcalib_button = QPushButton("Get Calibration", self)
+        self.getcalib_button.setStyleSheet("""
+        QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+        """)   
+        self.getcalib_button.clicked.connect(self.run_getcalib)
+        self.getcalib_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", self.getcalib_button)  # Place button below the input
 
         # Getcalib_flat Command Section (./getcalib_flat)
-        getcalib_flat_button = QPushButton("Get Calibration Flats", self)
-        getcalib_flat_button.clicked.connect(self.run_getcalib_flat)
-        getcalib_flat_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
-        form_layout.addRow("", getcalib_flat_button)  # Place button below the input
+        self.getcalib_flat_button = QPushButton("Get Calibration Flats", self)
+        self.getcalib_flat_button.setStyleSheet("""
+        QPushButton {
+                 background-color: #4CAF50;  /* Green color */
+                 color: white;
+                 border-radius: 8px;
+                 padding: 10px;
+                 border: none;
+             }
+             QPushButton:hover {
+                 background-color: #45a049;  /* Slightly darker green on hover */
+             }
+             QPushButton:pressed {
+                 background-color: #3e8e41;  /* Darker green when pressed */
+             }
+        """)  
+        self.getcalib_flat_button.clicked.connect(self.run_getcalib_flat)
+        self.getcalib_flat_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # Button expands horizontally
+        form_layout.addRow("", self.getcalib_flat_button)  # Place button below the input
 
         # Add vertical spacing between sections
         form_layout.addRow("", QLabel())  # Empty row for spacing
@@ -189,33 +219,43 @@ class AfternoonTab(QWidget):
             self.log_message("Please provide a spectral binning value.")
 
     def run_thrufocus_script(self):
+        # disable + gray while running
         self.thrufocus_button.setEnabled(False)
         self.thrufocus_button.setStyleSheet("""
-                 QPushButton {
-                     background-color: lightgray;
-                 }
-         """)    
- 
- 
-        command = f"bash calib/thrufocus"
-        self.run_command_in_background(command)
- 
-        self.thrufocus_button.setEnabled(True)
-        self.thrufocus_button.setStyleSheet("""
-             QPushButton {
-                 background-color: #4CAF50;  /* Green color */
-                 color: white;
-                 border-radius: 8px;
-                 padding: 10px;
-                 border: none;
-             }
-             QPushButton:hover {
-                 background-color: #45a049;  /* Slightly darker green on hover */
-             }
-             QPushButton:pressed {
-                 background-color: #3e8e41;  /* Darker green when pressed */
-             }
-        """)  
+            QPushButton { background-color: lightgray;
+                          color: black;
+            }
+        """)
+
+        command = "bash calib/thrufocus"
+
+        # start the async command and re-enable only when done
+        self.thread = AsyncCommandThread(command, self.log_message_callback)
+        self.thread.output_signal.connect(self.log_message_callback)
+
+        # restore UI when the background task ends (success or error)
+        def _restore_button():
+            self.thrufocus_button.setEnabled(True)
+            self.thrufocus_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green */
+                    color: white;
+                    border-radius: 8px;
+                    padding: 10px;
+                    border: none;
+                }
+                QPushButton:hover   { background-color: #45a049; }
+                QPushButton:pressed { background-color: #3e8e41; }
+            """)
+
+        self.thread.finished.connect(_restore_button)
+        # if the thread class emits terminated, hook it too (safe to try)
+        try:
+            self.thread.terminated.connect(_restore_button)
+        except Exception:
+            pass
+
+        self.thread.start()
 
     def set_focus_r(self):
         if self.value_r_input.placeholderText():
@@ -240,12 +280,68 @@ class AfternoonTab(QWidget):
             self.log_message("Please provide both band and value for the focus set command.")
 
     def run_getcalib(self):
+        # disable button + gray while running
+        self.getcalib_button.setEnabled(False)
+        self.getcalib_button.setStyleSheet("QPushButton { background-color: lightgray; color: black;}")
+
         command = "bash calib/getcalib"
-        self.run_command_in_background(command)
+        self.thread_getcalib = AsyncCommandThread(command, self.log_message_callback)
+        self.thread_getcalib.output_signal.connect(self.log_message_callback)
+
+        # restore when background task ends
+        def _restore_getcalib():
+            self.getcalib_button.setEnabled(True)
+            self.getcalib_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green */
+                    color: white;
+                    border-radius: 8px;
+                    padding: 10px;
+                    border: none;
+                }
+                QPushButton:hover   { background-color: #45a049; }
+                QPushButton:pressed { background-color: #3e8e41; }
+            """)
+
+        self.thread_getcalib.finished.connect(_restore_getcalib)
+        try:
+            self.thread_getcalib.terminated.connect(_restore_getcalib)
+        except Exception:
+            pass
+
+        self.thread_getcalib.start()
 
     def run_getcalib_flat(self):
+        # disable button + gray while running
+        self.getcalib_flat_button.setEnabled(False)
+        self.getcalib_flat_button.setStyleSheet("QPushButton { background-color: lightgray; color: black;}")
+
         command = "bash calib/getcalib_flats"
-        self.run_command_in_background(command)
+        self.thread_getcalib_flats = AsyncCommandThread(command, self.log_message_callback)
+        self.thread_getcalib_flats.output_signal.connect(self.log_message_callback)
+
+        # restore when background task ends
+        def _restore_getcalib_flats():
+            self.getcalib_flat_button.setEnabled(True)
+            self.getcalib_flat_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green */
+                    color: white;
+                    border-radius: 8px;
+                    padding: 10px;
+                    border: none;
+                }
+                QPushButton:hover   { background-color: #45a049; }
+                QPushButton:pressed { background-color: #3e8e41; }
+            """)
+
+        self.thread_getcalib_flats.finished.connect(_restore_getcalib_flats)
+        try:
+            self.thread_getcalib_flats.terminated.connect(_restore_getcalib_flats)
+        except Exception:
+            pass
+
+        self.thread_getcalib_flats.start()
 
     def run_command_in_background(self, command):
         """Run the command in a background thread."""

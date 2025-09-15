@@ -1,7 +1,7 @@
 import mysql.connector
 import configparser
 from PyQt5.QtWidgets import QTableWidgetItem
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSignalBlocker
 from PyQt5.QtGui import QColor, QFont
 import os
 import csv
@@ -11,6 +11,7 @@ from astropy.time import Time
 from astroplan import Observer
 import astropy.units as u
 import datetime
+from contextlib import contextmanager  
 
 class LogicService:
     def __init__(self, parent):
@@ -19,6 +20,34 @@ class LogicService:
         self.all_targets = []
         self.target_list_set = {}
         self.target_list_display = None
+
+    def _connect_unique(self, signal, slot):
+        """Disconnect slot if already connected, then connect once."""
+        try:
+            signal.disconnect(slot)
+        except TypeError:
+            pass
+        signal.connect(slot)
+
+    def _get_target_combo(self):
+        """
+        Return the QComboBox used for target list selection, whether it lives on
+        the main window or inside layout_service. Returns None if not found.
+        """
+        return getattr(self.parent, "current_target_list_name", None)
+
+    @contextmanager
+    def _maybe_block(self, widget):
+        """Context manager to block signals if widget is not None."""
+        blocker = None
+        if widget is not None:
+            blocker = QSignalBlocker(widget)
+        try:
+            yield
+        finally:
+            if blocker is not None:
+                del blocker
+
 
     @staticmethod
     def convert_pst_to_utc(datetime):
@@ -343,78 +372,85 @@ class LogicService:
     def load_mysql_and_update_target_list(self, config_file):
         """
         Loads target data from MySQL and updates the target list table.
-        This method is now a high-level function that combines both connecting to MySQL and loading data.
+        Prevents duplicate signal connections and cascading refreshes.
         """
-        # Step 1: Connect to MySQL using the config file
         connection = self.connect_to_mysql(config_file)
-        
         if connection is None:
             print("Failed to connect to MySQL. Cannot load target data.")
             return
-        
-        # Step 2: Load data from the MySQL database (target_table)
-        db_config = self.read_config(config_file)  # We need to read config again for the table name
-        target_table = db_config["TARGET_TABLE"]
+
+        db_config = self.read_config(config_file)
+        target_table = db_config.get("TARGET_TABLE")
         rows = self.load_data_from_mysql(connection, target_table)
-        
-        if rows:
-            # Step 3: Update the target list table with the data
-            self.update_target_list_table(rows)
-
-            # Populate the target_list_name dropdown with available target lists (e.g., based on SET_ID)
-            target_list_names = sorted(set(row['SET_ID'] for row in rows))  # Unique SET_IDs or Target List names
-            print("SET IDSSSS: ", target_list_names)
-            self.parent.target_list_name.clear()  # Clear existing items
-            self.parent.target_list_name.addItem("All")  # Option to select all target lists
-            self.parent.target_list_name.addItems([str(name) for name in target_list_names])  # Add each SET_ID to the dropdown
-
-            # Connect the combo box selection change to filtering function
-            self.parent.target_list_name.currentIndexChanged.connect(self.filter_target_list)
-        else:
+        if not rows:
             print(f"No data found in the {target_table} table.")
+            return
+
+        # Update table (idempotent + signal-safe)
+        self.update_target_list_table(rows)
+
+        # Build / refresh the combo quietly, then wire the filter once
+        combo = self._get_target_combo()
+        with self._maybe_block(combo):
+            if combo is not None:
+                target_list_names = sorted({str(row.get('SET_ID')) for row in rows if 'SET_ID' in row})
+                combo.clear()
+                combo.addItem("All")
+                combo.addItems(target_list_names)
+
+        if combo is not None:
+            self._connect_unique(combo.currentIndexChanged, self.filter_target_list)
 
 
     def load_mysql_and_fetch_target_sets(self, config_file):
         """
-        Loads all target sets for the current user from the 'target_sets' table.
-        Returns a list of SET_NAMEs for UI population.
+        Load ALL target sets for current user (newest first), but auto-select the most recent.
+        Returns a list of SET_NAMEs for the combo; stores {SET_ID: SET_NAME} mapping on parent.
         """
         username = getattr(self.parent, "current_owner", None)
         if not username:
             print("No owner information found. Cannot load target sets.")
             return []
 
-        connection = self.connect_to_mysql(config_file)
-        if connection is None:
+        conn = self.connect_to_mysql(config_file)
+        if conn is None:
             print("Failed to connect to MySQL.")
             return []
 
         try:
-            cursor = connection.cursor(dictionary=True)
-            cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (username,))
-            set_data = cursor.fetchall()
+            cur = conn.cursor(dictionary=True)
+            cur.execute("""
+                SELECT SET_ID, SET_NAME,
+                    COALESCE(SET_CREATION_TIMESTAMP,'1970-01-01 00:00:00') AS ts
+                FROM target_sets
+                WHERE OWNER = %s
+                ORDER BY ts DESC, SET_ID DESC
+            """, (username,))
+            sets = cur.fetchall()
+            cur.close()
 
-            if not set_data:
+            if not sets:
                 print(f"No target sets found for user '{username}'.")
+                self.set_data = {}
+                self.set_name = []
+                setattr(self.parent, "user_set_data", {})
                 return []
 
-            self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in set_data}
-            self.set_name = [row["SET_NAME"] for row in set_data]
+            # Map + list of names
+            self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in sets}
+            self.set_name = [row["SET_NAME"] for row in sets]
+            self.parent.user_set_data = self.set_data
 
-            self.all_targets = []
-            for row in set_data:
-                cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (row["SET_ID"],))
-                targets = cursor.fetchall()
-                self.all_targets.extend(targets)
+            # Auto-select the newest by name (the first row)
+            self.parent.current_target_list_name = sets[0]["SET_NAME"]
 
-            print(f"Fetched {len(self.set_name)} target sets for user '{username}'.")
             return self.set_name
 
         except mysql.connector.Error as err:
             print(f"Database error: {err}")
             return []
         finally:
-            connection.close()
+            conn.close()
 
 
     def load_calibration_target_sets(self, config_file):
@@ -464,285 +500,379 @@ class LogicService:
 
         
     def fetch_set_id(self, target_list=None):
-        self.target_list_display = self.parent.layout_service.target_list_display
+        """
+        Resolve the current target list to a SET_ID using parent.current_target_list_name
+        (or an explicit target_list arg). Handles numeric IDs or names.
+        """
+        # Use explicit arg if provided; otherwise read the string you store on the parent
+        name_or_id = target_list
+        if name_or_id is None:
+            name_or_id = getattr(self.parent, "current_target_list_name", None)
 
-        # Find the set_id that corresponds to the target_list
-        set_id = None
-        for key, val in self.parent.user_set_data.items():
-            if val == target_list:
-                set_id = key
-        return set_id
+        if name_or_id is None:
+            return None
+
+        s = str(name_or_id).strip()
+
+        # Ignore non-real selections/sentinels
+        if s in ("All", "Create a new target list", "No Target Lists Available", ""):
+            return None
+
+        # If it's already an ID (string of digits or int), return it
+        if isinstance(name_or_id, int) or s.isdigit():
+            try:
+                return int(name_or_id)
+            except Exception:
+                return int(s)
+
+        # Try in-memory mapping first: {SET_ID: SET_NAME}
+        mapping = getattr(self.parent, "user_set_data", {}) or {}
+        for sid, name in mapping.items():
+            if str(name).strip().lower() == s.lower():
+                try:
+                    return int(sid)
+                except Exception:
+                    return sid  # sid may already be int
+
+        # Last resort: DB lookup by (OWNER, SET_NAME)
+        owner = getattr(self.parent, "current_owner", None)
+        if not owner:
+            return None
+
+        conn = self.connect_to_mysql("config/db_config.ini")
+        if not conn:
+            return None
+
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT SET_ID FROM target_sets WHERE OWNER = %s AND SET_NAME = %s LIMIT 1",
+                (owner, s)
+            )
+            row = cur.fetchone()
+            cur.close()
+            if row:
+                return int(row[0])
+        except Exception as e:
+            print("fetch_set_id DB lookup failed:", e)
+
+        return None
+
 
     def fetch_and_update_target_list(self):
-        """Fetch target data and update the table in the parent window."""
-        self.connection = self.connect_to_mysql("config/db_config.ini")
-        if self.connection:
-            try:
-                cursor = self.connection.cursor(dictionary=True)
+        """After creating/uploading a set: refresh ALL sets, select newest, and show its rows."""
+        username = getattr(self.parent, "current_owner", None)
+        if not username:
+            print("No owner information found. Cannot fetch target list.")
+            return
 
-                # Step 1: Get the SET_IDs from target_sets for the logged-in user
-                cursor.execute("SELECT SET_ID FROM target_sets WHERE OWNER = %s", (self.parent.current_owner,))
-                set_ids = cursor.fetchall()
-                cursor.execute("SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s", (self.parent.current_owner,))
-                set_data = cursor.fetchall()
+        conn = self.connect_to_mysql("config/db_config.ini")
+        if not conn:
+            print("Failed to connect to MySQL. Cannot fetch target list.")
+            return
 
-                # Step 2: Convert set_data to a dictionary and store it in self.set_data
-                self.set_data = {set_item["SET_ID"]: set_item["SET_NAME"] for set_item in set_data}
+        try:
+            cur = conn.cursor(dictionary=True)
+            cur.execute("""
+                SELECT SET_ID, SET_NAME,
+                    COALESCE(SET_CREATION_TIMESTAMP,'1970-01-01 00:00:00') AS ts
+                FROM target_sets
+                WHERE OWNER = %s
+                ORDER BY ts DESC, SET_ID DESC
+            """, (username,))
+            sets = cur.fetchall()
 
-                # Step 3: Extract all SET_NAME values and store them in self.set_name
-                self.set_name = [set_item["SET_NAME"] for set_item in set_data]
+            if not sets:
+                self.set_data = {}
+                self.set_name = []
+                self.parent.user_set_data = {}
+                if hasattr(self.parent, "layout_service"):
+                    self.parent.layout_service.load_target_lists([])
+                self.update_target_list_table([])
+                return
 
-                # Step 4: For each SET_ID, fetch the associated rows from the 'targets' table
-                self.parent.all_targets = []
-                for set_id in set_ids:
-                    cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (set_id["SET_ID"],))
-                    targets = cursor.fetchall()
-                    self.parent.all_targets.extend(targets)
+            # Update mapping + names (ALL sets)
+            self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in sets}
+            self.set_name = [row["SET_NAME"] for row in sets]
+            self.parent.user_set_data = self.set_data
 
+            # Select newest
+            latest = sets[0]
+            self.parent.current_target_list_name = latest["SET_NAME"]
+
+            # Update combo with ALL sets
+            if hasattr(self.parent, "layout_service"):
                 self.parent.layout_service.load_target_lists(self.set_name)
-                self.parent.user_set_data = self.set_data
-                self.update_target_list_table(self.parent.all_targets)
-                
-            except mysql.connector.Error as err:
-                print(f"Database error: {err}")
 
-    def insert_target_to_db(self, target_name, ra, decl, offset_ra=None, offset_dec=None, exptime=None, slitwidth=None, magnitude=None):
+            # Show rows for newest set
+            cur2 = conn.cursor(dictionary=True)
+            cur2.execute("SELECT * FROM targets WHERE SET_ID = %s", (latest["SET_ID"],))
+            rows = cur2.fetchall()
+            cur2.close()
+            self.update_target_list_table(rows)
+
+            print(f"Showing latest set '{latest['SET_NAME']}' with {len(rows)} rows; {len(self.set_name)} sets in combo.")
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
+        finally:
+            conn.close()
+
+
+    def insert_target_to_db(self, target_name, ra, decl,
+                            offset_ra=None, offset_dec=None,
+                            exptime=None, slitwidth=None, magnitude=None):
         """
-        Insert a new target into the targets table for the specific SET_ID.
+        Insert or update a target in ngps.targets for the current SET_ID.
+        Uses an UPSERT to avoid duplicates if called multiple times.
+        Requires a UNIQUE key (e.g., (SET_ID, Name, RA, Decl)).
         """
-        # Step 1: Ensure that required fields are provided
         if not target_name or not ra or not decl:
             print("Error: Name, RA, and Decl are required fields.")
             return
 
-        # Step 2: Fetch the current set_id
-        set_id = self.fetch_set_id()  # Assuming target_list is already selected
+        set_id = self.fetch_set_id()
         if set_id is None:
             print("Error: Unable to fetch set_id. No matching target list found.")
             return
 
-        try:
-            # Step 3: Connect to MySQL using the config file
-            connection = self.connect_to_mysql("config/db_config.ini")
-            
-            if connection is None:
+        # Reuse an existing connection if possible
+        conn = getattr(self, "connection", None)
+        if conn is None or not conn.is_connected():
+            conn = self.connect_to_mysql("config/db_config.ini")
+            if conn is None:
                 print("Failed to connect to MySQL. Cannot insert target data.")
                 return
-            cursor = connection.cursor()  # Create a cursor for executing the query
+            close_after = True
+        else:
+            close_after = False
 
-            # Step 4: Prepare the SQL insert query
+        try:
+            cursor = conn.cursor()
             query = """
-            INSERT INTO ngps.targets (SET_ID, Name, RA, Decl, Offset_RA, Offset_Dec, EXPTime, Slitwidth, Magnitude)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO ngps.targets
+                (SET_ID, Name, RA, Decl, Offset_RA, Offset_Dec, EXPTime, Slitwidth, Magnitude)
+            VALUES
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                Offset_RA = VALUES(Offset_RA),
+                Offset_Dec = VALUES(Offset_Dec),
+                EXPTime    = VALUES(EXPTime),
+                Slitwidth  = VALUES(Slitwidth),
+                Magnitude  = VALUES(Magnitude)
             """
-
-            # Step 5: Prepare the data to insert into the table (use NULL for optional fields if not provided)
             data = (
-                set_id, 
-                target_name, 
-                ra, 
-                decl, 
-                offset_ra if offset_ra is not None else None, 
-                offset_dec if offset_dec is not None else None, 
-                exptime if exptime is not None else None, 
-                slitwidth if slitwidth is not None else None, 
+                set_id, target_name, ra, decl,
+                offset_ra if offset_ra is not None else None,
+                offset_dec if offset_dec is not None else None,
+                exptime if exptime is not None else None,
+                slitwidth if slitwidth is not None else None,
                 magnitude if magnitude is not None else None
             )
-
-            # Step 6: Execute the query with the provided values
             cursor.execute(query, data)
-
-            # Step 7: Commit the transaction to apply the changes
-            connection.commit()
-
-            cursor.close()
-            print(f"Successfully inserted target '{target_name}' with SET_ID {set_id} into the database.")
+            conn.commit()
+            print(f"Upserted target '{target_name}' in SET_ID {set_id}.")
+        except mysql.connector.IntegrityError as err:
+            # Fires if the UNIQUE key is different from the values you expect
+            print(f"Integrity error on upsert: {err}")
         except mysql.connector.Error as err:
-            print(f"Error executing insert query: {err}")
+            print(f"Error executing insert/upsert query: {err}")
+        finally:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+            if close_after:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
 
     def filter_target_list(self):
         """
-        Filters the target list table based on the selected SET_ID from the target_list_name combo box.
-        If "All" is selected, it shows all targets.
+        On set selection, fetch targets for that set (or all sets) for the current user.
+        Works whether the combo shows SET_IDs or SET_NAMEs.
         """
-        selected_set_id = self.parent.target_list_name.currentText()
-        
-        # If the user selects "All", display all targets
-        if selected_set_id == "All":
-            self.update_target_list_table(self.all_target_data)  # Assuming all_target_data holds all rows
-        else:
-            # Filter the rows based on the selected SET_ID
-            filtered_data = [row for row in self.all_target_data if str(row['SET_ID']) == selected_set_id]
-            self.update_target_list_table(filtered_data)
+        combo = self.parent.current_target_list_name
+        selected = combo if combo is not None else "All"
+        owner = getattr(self.parent, "current_owner", None)
+
+        if not owner:
+            print("No current_owner set; cannot fetch targets.")
+            return
+
+        conn = self.connect_to_mysql("config/db_config.ini")
+        if conn is None:
+            print("Failed to connect to MySQL. Cannot fetch targets for selected set.")
+            return
+
+        try:
+            if selected == "All":
+                print("WHAT!?")
+                sql = """
+                    SELECT t.*
+                    FROM targets t
+                    INNER JOIN target_sets s ON s.SET_ID = t.SET_ID
+                    WHERE s.OWNER = %s
+                    ORDER BY t.SET_ID, t.NAME
+                """
+                params = (owner,)
+                cur = conn.cursor(dictionary=True)
+                print("Executing filter query:", sql, params)
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                cur.close()
+                self.update_target_list_table(rows)
+                return
+
+            set_id = None
+
+            # 1) prefer itemData if you stored it
+            try:
+                idx = combo.currentIndex()
+                data = combo.itemData(idx)
+                if isinstance(data, (int, str)) and str(data).isdigit():
+                    set_id = int(data)
+            except Exception:
+                pass
+
+            # 2) if the visible text is an ID
+            if set_id is None and selected.isdigit():
+                set_id = int(selected)
+
+            # 3) try the in-memory mapping {SET_ID: SET_NAME}
+            if set_id is None:
+                mapping = getattr(self.parent, "user_set_data", {}) or {}
+                for k, v in mapping.items():
+                    if str(v).strip() == selected:
+                        set_id = k
+                        break
+
+            # 4) last-resort: DB lookup by name for this owner
+            if set_id is None:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT SET_ID FROM target_sets WHERE OWNER = %s AND SET_NAME = %s",
+                    (owner, selected)
+                )
+                r = cur.fetchone()
+                cur.close()
+                if r:
+                    set_id = r[0]
+
+            if set_id is None:
+                print(f"Could not resolve selection '{selected}' to a SET_ID; leaving table unchanged.")
+                return
+
+            sql = """
+                SELECT t.*
+                FROM targets t
+                INNER JOIN target_sets s ON s.SET_ID = t.SET_ID
+                WHERE t.SET_ID = %s AND s.OWNER = %s
+                ORDER BY t.NAME
+            """
+            params = (set_id, owner)
+            cur = conn.cursor(dictionary=True)
+            print("Executing filter query:", sql, params)
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            cur.close()
+
+            self.update_target_list_table(rows)
+
+        except mysql.connector.Error as err:
+            print(f"Database error during filter: {err}")
 
     def update_target_list_table(self, data):
         """
-        Populates the UI table with data from the MySQL database.
-        The columns and rows will be dynamically created based on the data.
-        It hides the specified columns.s 
+        Idempotently repopulates the UI table with 'data'.
+        Clears first, blocks internal signals during rebuild, and restores sorting after.
         """
+        # Access widgets safely
+        ls = getattr(self.parent, "layout_service", None)
+        if ls is None or not hasattr(ls, "target_list_display"):
+            print("layout_service or target_list_display not available yet.")
+            return
 
-        self.target_list_display = self.parent.layout_service.target_list_display
-        self.parent.all_targets = data
+        table = ls.target_list_display
+        self.parent.all_targets = data  # canonical cache for filtering
 
-        # Step 1: Clear existing rows in the target list
-        self.target_list_display.setRowCount(0)
+        columns_to_hide = {
+            "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER", "SEQUENCE_NUMBER",
+            "SLITOFFSET", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW", "WRANGE_HIGH",
+            "SRCMODEL", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
+            "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start",
+            "OTMexp_end", "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew",
+            "OTMmoon", "OTMSNR", "OTMres", "OTMseeing", "OTMslitangle",
+            "NOTE", "COMMENT", "OWNER", "NOTBEFORE", "POINTMODE"
+        }
 
-        # List of columns to hide
-        columns_to_hide = [
-            "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER",
-            "SEQUENCE_NUMBER", "SLITOFFSET", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW",  "WRANGE_HIGH", "SRCMODEL", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
-            "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start", "OTMexp_end",
-            "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew", "OTMmoon", "OTMSNR",
-            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "COMMENT", "OWNER", "NOTBEFORE", "POINTMODE"
-        ]
+        rows = data if isinstance(data, list) else [data]
+        filtered_rows = []
+        for r in rows:
+            if isinstance(r, dict):
+                filtered_rows.append({k: v for k, v in r.items() if k not in columns_to_hide})
 
-        # Step 2: Check if the data is a list (entire dataset) or a single row (selected row)
-        if isinstance(data, list):  # If data is a list (entire dataset)
-            # Filter out unwanted columns and their data
-            filtered_data = []
-            for row_data in data:
-                # Create a new row data dictionary that excludes the unwanted columns
-                filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
-                filtered_data.append(filtered_row)
+        table_blocker = QSignalBlocker(table)
+        try:
+            table.setSortingEnabled(False)
+            table.clear()             # headers + contents
+            table.setRowCount(0)
+            table.setColumnCount(0)
 
-            # Step 3: Set the number of columns dynamically based on the filtered data
-            if filtered_data:
-                # Extract the column names from the first row (assuming all rows have the same structure)
-                filtered_column_names = filtered_data[0].keys()
+            if not filtered_rows:
+                return
 
-                # Set the column count
-                self.target_list_display.setColumnCount(len(filtered_column_names))
+            headers = list(filtered_rows[0].keys())
+            table.setColumnCount(len(headers))
+            table.setHorizontalHeaderLabels(headers)
 
-                # Set the header labels based on the filtered column names
-                self.target_list_display.setHorizontalHeaderLabels(filtered_column_names)
+            header_view = table.horizontalHeader()
+            header_view.setFont(QFont("Arial", 10, QFont.Normal))
 
-                # Remove the bold font from headers
-                header = self.target_list_display.horizontalHeader()
-                header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
+            for row in filtered_rows:
+                row_idx = table.rowCount()
+                table.insertRow(row_idx)
+                for col_idx, key in enumerate(headers):
+                    table.setItem(row_idx, col_idx, QTableWidgetItem(str(row.get(key, ""))))
 
-                # Step 4: Add new rows based on the filtered data
-                for row_data in filtered_data:
-                    row_position = self.target_list_display.rowCount()
-                    self.target_list_display.insertRow(row_position)
+            table.sortItems(0, Qt.AscendingOrder)
+        finally:
+            table.setSortingEnabled(True)
+            del table_blocker
 
-                    # Dynamically populate the table with the filtered data
-                    for col_index, (col_name, value) in enumerate(row_data.items()):
-                        self.target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
 
-                # Step 5: Optionally, sort the table if you want to auto-sort after loading
-                self.target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
+        ls.load_target_button.setVisible(False)
+        table.setVisible(True)
+        ls.set_column_widths()
+        ls.add_row_button.setEnabled(True)
 
-        else:  # If data is a single row (selected row)
-            # Create a new row data dictionary that excludes the unwanted columns
-            filtered_row = {key: value for key, value in data.items() if key not in columns_to_hide}
-            filtered_data = [filtered_row]  # Treat the single row as a list for consistency
+        try:
+            self.apply_active_highlight()
+        except Exception as _e:
+            pass
 
-            # Step 3: Set the number of columns dynamically based on the filtered data
-            if filtered_data:
-                filtered_column_names = filtered_data[0].keys()
-
-                # Set the column count
-                self.target_list_display.setColumnCount(len(filtered_column_names))
-
-                # Set the header labels based on the filtered column names
-                self.target_list_display.setHorizontalHeaderLabels(filtered_column_names)
-
-                # Remove the bold font from headers
-                header = self.target_list_display.horizontalHeader()
-                header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
-
-                # Step 4: Add the row based on the filtered data
-                row_data = filtered_data[0]
-                row_position = self.target_list_display.rowCount()
-                self.target_list_display.insertRow(row_position)
-
-                # Dynamically populate the table with the filtered data
-                for col_index, (col_name, value) in enumerate(row_data.items()):
-                    self.target_list_display.setItem(row_position, col_index, QTableWidgetItem(str(value)))
-
-            # No need to sort the table since it's just one row
-
-        # Step 6: Optionally, hide the button and show the table once the data is loaded
-        self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
-        self.target_list_display.setVisible(True)  # Show the table
-        self.parent.layout_service.set_column_widths()
-        self.parent.layout_service.add_row_button.setEnabled(True)
 
     def update_target_table_with_list(self, target_list=None):
-        """
-        Populates the UI table with data from the MySQL database.
-        The columns and rows will be dynamically created based on the data.
-        It hides the specified columns.
-        """
-        self.target_list_display = self.parent.layout_service.target_list_display
+        """Rebuild table for the selected target list using the same safe path."""
+        ls = getattr(self.parent, "layout_service", None)
+        if ls is None:
+            print("layout_service not available.")
+            return
 
-        # Step 1: Find the set_id that corresponds to the target_list
+        # Find set_id for target_list
         set_id = None
-        for key, val in self.parent.user_set_data.items():
+        for key, val in getattr(self.parent, "user_set_data", {}).items():
             if val == target_list:
                 set_id = key
-                break  # Stop once we've found the matching set_id
-
+                break
         if set_id is None:
             print("set_id not found for the given target_list")
-            return  # Exit if no matching set_id is found
+            return
 
-        # List of columns to hide
-        columns_to_hide = [
-            "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER",
-            "SEQUENCE_NUMBER", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW", "WRANGE_HIGH", "SRCMODEL", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
-            "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start", "OTMexp_end",
-            "OTMpa", "OTMwait", "OTMflag", "OTMlast", "OTMslew", "OTMmoon", "OTMSNR",
-            "OTMres", "OTMseeing", "OTMslitangle", "NOTE", "COMMENT", "OWNER", "NOTBEFORE", "POINTMODE"
-        ]
-
-        # Step 2: Filter the data by set_id (SET_ID column)
-        filtered_data = []
-        if isinstance(self.parent.all_targets, list):  # If data is a list (entire dataset)
-            for row_data in self.parent.all_targets:
-                # Filter rows where 'SET_ID' matches the set_id
-                if row_data.get('SET_ID') == set_id:
-                    # Create a new row data dictionary that excludes the unwanted columns
-                    filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
-                    filtered_data.append(filtered_row)
-
-        else:  # If data is a single row (selected row)
-            row_data = self.parent.all_targets
-            if row_data.get('SET_ID') == set_id:
-                # Filter the single row
-                filtered_row = {key: value for key, value in row_data.items() if key not in columns_to_hide}
-                filtered_data = [filtered_row]  # Treat the single row as a list for consistency
-    
-        # Step 3: Clear the existing content of the QTableWidget
-        self.target_list_display.setRowCount(0)  # Clear all items in the table
-
-        # Step 4: Dynamically create the table based on filtered data
-        if filtered_data:
-            # Extract column names from the first row
-            filtered_column_names = list(filtered_data[0].keys())
-            # Set the column count first to avoid any mismatch
-            self.target_list_display.setColumnCount(len(filtered_column_names))
-            self.target_list_display.setHorizontalHeaderLabels(filtered_column_names)
-
-            # Add rows
-            for row_data in filtered_data:
-                row_position = self.target_list_display.rowCount()
-                self.target_list_display.insertRow(row_position)
-
-                # Insert data into columns
-                for col_index, (col_name, value) in enumerate(row_data.items()):
-                    item = QTableWidgetItem(str(value))
-                    self.target_list_display.setItem(row_position, col_index, item)
-
-            # Step 6: Optionally, sort the table if you want to auto-sort after loading
-            self.target_list_display.sortItems(0, Qt.AscendingOrder)  # Example: sort by first column (name)
-
-        # Step 7: Optionally, hide the button and show the table once the data is loaded
-        self.parent.layout_service.load_target_button.setVisible(False)  # Hide the load button
-        self.target_list_display.setVisible(True)  # Show the table
-
+        src = getattr(self.parent, "all_targets", [])
+        filtered = [row for row in src if row.get('SET_ID') == set_id]
+        self.update_target_list_table(filtered)
 
     def update_target_information(self, target_data):
         # Pass the dictionary of target data to LayoutService to update the list
@@ -815,73 +945,67 @@ class LogicService:
             
     def compute_parallactic_angle_astroplan(self, ra, dec, location=None, time=None):
         """
-        Calculate the parallactic angle for a given RA and Dec using Astroplan.
-        @param ra: Right Ascension as a space-separated string (e.g., "23 08 44.55").
-        @param dec: Declination as a space-separated string (e.g., "+36 22 12.90").
-        @param location: Observatory location (Astropy EarthLocation). Defaults to Palomar Observatory.
-        @param time: Observation time (Astropy Time). Defaults to current UTC time.
-        @return: Parallactic Angle (Astropy Quantity, angle with unit)
+        Calculate the parallactic angle for a given RA/Dec using Astroplan.
+
+        ra, dec: strings like "01 15 56.19", "+36 00 06.53" (sexagesimal)
+                Also tolerates colon-separated; no manual unit suffixes needed.
+        location: astropy.coordinates.EarthLocation (defaults to Palomar)
+        time: astropy.time.Time (defaults to current UTC)
+
+        Returns: string degrees with 2 decimals (e.g., "123.45")
         """
-        
-        # Check if location is None and set default location
+
+        # Location (respect provided, else Palomar)
         if location is None:
             print("No location provided, using default Palomar Observatory location.")
             location = EarthLocation(lat=33.3563 * u.deg, lon=-116.8648 * u.deg, height=1706 * u.m)
-        else:
-            print(f"Location provided: {location}")
-        
-        # Debugging: Check if location is an instance of EarthLocation
+
         print(f"Type of location: {type(location)}")
         if not isinstance(location, EarthLocation):
-            raise TypeError(f"Expected location to be an instance of EarthLocation, but got {type(location)}")
-        
-        # Create an Observer instance with the location
+            raise TypeError(f"Expected EarthLocation, got {type(location)}")
+
+        # Observer
         try:
             observer = Observer(location=location, name="Observer", timezone="UTC")
             print(f"Observer created with location: {observer.location}")
         except Exception as e:
             print(f"Error creating observer: {e}")
             raise
-        
-        # Default time: current UTC time if not provided
+
+        # Time (respect provided)
         if time is None:
             print("No time provided, using current UTC time.")
             time = Time.now()
-        else:
-            print(f"Time provided: {time}")
-        
-        # Debugging: Check if time is an instance of astropy.time.Time
         print(f"Type of time: {type(time)}")
         if not isinstance(time, Time):
-            raise TypeError(f"Expected time to be an instance of astropy.time.Time, but got {type(time)}")
-        
-        # Format RA and Dec properly (e.g., "23 08 44.55" -> "23h 08m 44.55s")
+            raise TypeError(f"Expected astropy.time.Time, got {type(time)}")
+
+        # RA/Dec parsing (no manual string surgery)
         print(f"Original RA: {ra}")
         print(f"Original Dec: {dec}")
-        
-        ra = ra.replace(" ", "h", 1).replace(" ", "m", 1) + "h"
-        dec = dec.replace(" ", "d", 1).replace(" ", "m", 1) + "d"
-        
-        print(f"Formatted RA: {ra}")
-        print(f"Formatted Dec: {dec}")
-        
-        # Convert RA and Dec to SkyCoord
         try:
-            target_coords = SkyCoord(ra=ra, dec=dec, frame='icrs')
-            print(f"SkyCoord for target: {target_coords}")
-        except Exception as e:
-            print(f"Error creating SkyCoord: {e}")
-            raise
-        
-        # Calculate the parallactic angle
+            # Primary: treat RA as hourangle, Dec as degrees (handles 'HH MM SS', 'HH:MM:SS', etc.)
+            target_coords = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame='icrs')
+        except Exception as e1:
+            # Fallback: if RA was given in decimal degrees instead of hours
+            try:
+                target_coords = SkyCoord(ra, dec, unit=(u.deg, u.deg), frame='icrs')
+            except Exception as e2:
+                print(f"Error creating SkyCoord (hourangle/deg): {e1}\nAlso failed deg/deg: {e2}")
+                raise
+        print(f"SkyCoord for target: {target_coords.to_string('hmsdms')}")
+
+        # Parallactic angle
         try:
-            parallactic_angle = observer.parallactic_angle(time, target_coords)
-            print(f"Parallactic angle: {parallactic_angle}")
+            pa = observer.parallactic_angle(time, target_coords)  # Angle
+            pa_deg = pa.to(u.deg).value
+            print(f"Parallactic angle: {pa_deg:.2f} deg")
         except Exception as e:
             print(f"Error calculating parallactic angle: {e}")
             raise
-        
-        return f"{parallactic_angle.to(u.deg).value:.2f}"
+
+        # Return as string with two decimals to match your existing usage
+        return f"{pa_deg:.2f}"
     
     def delete_target_list_by_name(self, target_list_name):
         """
@@ -900,3 +1024,109 @@ class LogicService:
         self.connection.close()
 
         return deleted_count
+
+    def create_empty_target_set(self, set_name: str):
+        """
+        Create a new empty target set for the current user, then refresh UI to show it.
+        """
+        set_name = (set_name or "").strip()
+        if not set_name:
+            print("Empty set name; aborting.")
+            return
+
+        owner = getattr(self.parent, "current_owner", None)
+        if not owner:
+            print("No owner; cannot create target set.")
+            return
+
+        conn = self.connect_to_mysql("config/db_config.ini")
+        if conn is None:
+            print("DB connect failed; cannot create target set.")
+            return
+
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
+                (set_name, owner),
+            )
+            conn.commit()
+            cur.close()
+            print(f"Created empty target set '{set_name}' for owner '{owner}'.")
+            # Show only the most recent set (this will be the one we just created)
+            self.fetch_and_update_target_list()
+            # Keep the name around for fetch_set_id callers that read it
+            setattr(self.parent, "current_target_list_name", set_name)
+        except Exception as e:
+            print("create_empty_target_set failed:", e)
+
+    def set_active_target(self, observation_id):
+        """Remember the active obs_id and update row highlight."""
+        prev = getattr(self.parent, "active_observation_id", None)
+        if prev != observation_id:
+            setattr(self.parent, "prev_active_observation_id", prev)
+        setattr(self.parent, "active_observation_id", observation_id)
+
+        # Update UI highlight now
+        self.clear_previous_active_highlight()
+        self.apply_active_highlight()
+
+    def _obs_id_column_index(self, table):
+        """Find the Observation ID column (case-insensitive)."""
+        cols = table.columnCount()
+        for i in range(cols):
+            item = table.horizontalHeaderItem(i)
+            if not item:
+                continue
+            name = item.text().strip().lower()
+            if name in ("observation_id", "obs_id", "observationid"):
+                return i
+        return None
+
+    def _find_row_by_obs_id(self, table, obs_id):
+        """Return the row index with matching observation_id (string compare)."""
+        col = self._obs_id_column_index(table)
+        if col is None:
+            return None
+        target = str(obs_id)
+        for r in range(table.rowCount()):
+            cell = table.item(r, col)
+            if cell and cell.text().strip() == target:
+                return r
+        return None
+
+    def clear_previous_active_highlight(self):
+        """Remove yellow highlight from the previously active row, if any."""
+        table = getattr(self.parent.layout_service, "target_list_display", None)
+        if table is None:
+            return
+        prev_id = getattr(self.parent, "prev_active_observation_id", None)
+        if prev_id is None:
+            return
+        row = self._find_row_by_obs_id(table, prev_id)
+        if row is None:
+            return
+        for c in range(table.columnCount()):
+            item = table.item(row, c)
+            if item:
+                # reset to default background
+                item.setBackground(Qt.white)
+                item.setForeground(Qt.black)
+
+    def apply_active_highlight(self):
+        """Paint the active row yellow (soft) if visible."""
+        table = getattr(self.parent.layout_service, "target_list_display", None)
+        if table is None:
+            return
+        active_id = getattr(self.parent, "active_observation_id", None)
+        if active_id is None:
+            return
+        row = self._find_row_by_obs_id(table, active_id)
+        if row is None:
+            return
+        yellow = QColor(255, 204, 64)
+        for c in range(table.columnCount()):
+            item = table.item(row, c)
+            if item:
+                item.setBackground(yellow)
+                item.setForeground(Qt.black)
