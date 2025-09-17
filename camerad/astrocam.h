@@ -564,7 +564,7 @@ namespace AstroCam {
       int FITS_BPP32;
 
       std::atomic<int> pci_cmd_num;
-      int nexp;
+      std::atomic<int> nexp;       //!< number of exposures (repeat calls to do_expose)
       int nfilmstrip;              //!< number of filmstrip frames (for enhanced-clocking dual-exposure mode)
       int deltarows;               //!< number of delta rows (for enhanced-clocking dual-exposure mode)
       int nfpseq;                  //!< number of frames per sequence
