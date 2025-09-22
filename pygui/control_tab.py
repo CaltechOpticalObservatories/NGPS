@@ -450,8 +450,6 @@ class ControlTab(QDialog):
         bin_spect = self.bin_spect_box.text()
         bin_spat = self.bin_spat_box.text()
 
-        self._style_enabled_green(self.go_button)
-
         if exposure_time and slit_width and slit_angle and num_of_exposures and bin_spect and bin_spat:
             print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, "
                   f"Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")
@@ -493,6 +491,8 @@ class ControlTab(QDialog):
         if getattr(self.parent, "current_target_list_name", None):
             print(f"Current target list: {self.parent.current_target_list_name}")
             self.logic_service.update_target_table_with_list(self.parent.current_target_list_name)
+
+        self._style_enabled_green(self.go_button)
 
     def on_exposure_time_changed(self):
         exposure_time = self.exposure_time_box.text()
