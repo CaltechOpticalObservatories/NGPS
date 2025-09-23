@@ -88,11 +88,13 @@ alias commitchaz='GIT_COMMITTER_NAME="Chaz Shapiro" GIT_COMMITTER_EMAIL="charles
 
 # FITS files
 alias lastfits='ls *.fits -Art | tail -n 1'
-alias lastfits2='ls *.fits -Art | tail -n 2 | head -n 1'  # next to last
-alias ds9lastGo='/home/developer/Software/Python/FITS_tools/ds9-script.py `lastfits`'
-alias ds9last2='/home/developer/Software/Python/FITS_tools/ds9-script.py `lastfits2`'
-
-alias ds9last='lf=`lastfits`; busy=`lsof -w -c camerad | grep $lf | wc -l` ; if [[ $busy -gt 0 ]]; then echo FILE NOT READY!!!  SO IMPATIENT!  Try ds9last2; fi; ds9lastGo'
+#alias lastfits2='ls *.fits -Art | tail -n 2 | head -n 1'  # next to last
+alias ds9last='/home/developer/Software/Python/FITS_tools/ds9last.sh 1'
+alias ds9last1='/home/developer/Software/Python/FITS_tools/ds9last.sh 1'
+alias ds9last2='/home/developer/Software/Python/FITS_tools/ds9last.sh 2'
+#alias ds9lastGo='/home/developer/Software/Python/FITS_tools/ds9-script.py `lastfits`'
+#alias ds9last2='/home/developer/Software/Python/FITS_tools/ds9-script.py `lastfits2`'
+#alias ds9last='lf=`lastfits`; busy=`lsof -w -c camerad | grep $lf | wc -l` ; if [[ $busy -gt 0 ]]; then echo FILE NOT READY!!!  SO IMPATIENT!  Try ds9last2; fi; ds9lastGo'
 
 #alias ngps-observe-devel='/home/developer/Software/java/ngps/ngps/bin/ngps observe'
 alias ngps-observe-devel='cd /home/developer/Software/java/ngps/ngps; java14 -jar ./dist/ngps.jar OBSERVE'
