@@ -4,7 +4,7 @@
 #
 if [ "$#" == "1" ]; then
   DATE=$1
-# otherwise use the current UTC date
+# otherwise use the latest date found on disk
 #
 else
   DATE=$(ls -1 /data | grep -E '^[0-9]{8}$' | sort -r | head -n 1)
@@ -27,10 +27,6 @@ FILES="-f $DIR/acamd_$DATE.log \
        -f $DIR/tcsd_$DATE.log \
        -f $DIR/thermald_$DATE.log \
        -f $DIR/sequencerd_$DATE.log "
-
-# temporarily change the umask and touch the log files
-#
-( umask 0002; touch $FILES )
 
 # tail them all here
 # look for various key words to set various colors

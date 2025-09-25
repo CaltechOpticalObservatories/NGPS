@@ -7,10 +7,8 @@
 # one or more images from the acam and/or slicecam at each postion.
 #
 
-acampath="/data/acam/"$(date -u +%Y%m%d)
-if [ ! -d $acampath ]; then $(mkdir $acampath); fi
-slicecampath="/data/slicecam/"$(date -u +%Y%m%d)
-if [ ! -d $slicecampath ]; then $(mkdir $slicecampath); fi
+acampath="/data/latest/acam"
+slicecampath="/data/latest/slicecam/"
 
 # @fn     usage
 # @brief  display usage
@@ -39,8 +37,8 @@ function usage {
         echo "  Sign of the step is not needed, it's inferred."
         echo "  Integral number of steps need not fit in range of start/stop."
         echo "  "
-        echo "  All images saved in /data/acam/YYYYMMDD and /data/slicecam/YYYYMMDD"
-        echo "  A logfile is written to /data/logs/____out-YYYY-MM-DDTHHMM.txt"
+        echo "  All images saved in /data/latest/acam/ and /data/latest/slicecam/"
+        echo "  A logfile is written to /data/latest/logs/____out-YYYY-MM-DDTHHMM.txt"
         echo "  where ____ is either focus or cass, e.g. focusout-2025-01-01T0800.txt"
         echo "  "
         echo "  All daemons (acamd, slicecamd, camerad, tcsd) must already be running and"
@@ -135,7 +133,7 @@ else
 fi
 
 datetime=$(date +"%Y-%m-%dT%H%M")
-axisout="/data/logs/"$axis"out-"$datetime".txt"
+axisout="/data/latest/logs/"$axis"out-"$datetime".txt"
 
 # optional 8th arg. If not included then nexp=1
 #

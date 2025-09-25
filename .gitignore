@@ -1,11 +1,15 @@
 /java/ngps/ngps/build/
 /java/ngps/ngps/dist/
 /java/ngps/ngps/nbproject/private/
-/DSP/
 /Python/
 *__pycache__*
 Config/*.py
 ._*
 .DS_Store
+*sublime*
+*.swp
 
 /GuiderGUI/jog.ini
+/GuiderGUI/buttons_guider.ans
+/GuiderGUI/buttons_slicev.ans
+

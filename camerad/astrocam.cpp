@@ -196,7 +196,7 @@ namespace AstroCam {
     this->state_monitor_thread_running = false;
     this->modeselected = false;
     this->pci_cmd_num.store(0);
-    this->nexp=1;
+    this->nexp.store(1);
     this->numdev = 0;
     this->nframes = 1;
     this->nfpseq = 1;
@@ -2426,7 +2426,8 @@ namespace AstroCam {
    * @brief      block on exposure_condition, notifies when ready for exposure
    * @details    This thread is spawned with each new exposure and broadcasts
    *             an async message announcing the state of exposure_pending.
-   *             This is also where the exposure number gets incremented.
+   *             This is where the exposure number gets incremented, and where
+   *             do_expose() is repeatedly called when nexp > 1.
    * @param[in]  interface  reference to this->interface
    *
    */
@@ -2458,7 +2459,11 @@ namespace AstroCam {
     message.str(""); message << "[DEBUG] incremented expbuf buffer to " << interface.get_expbuf(); logwrite( function, message.str() );
 #endif
 
-    if ( --interface.nexp > 0 ) {
+    // Atomically decrement nexp and
+    // if greater than zero then start another exposure.
+    //
+    interface.nexp.fetch_sub(1);
+    if ( interface.nexp.load() > 0 ) {
       message.str(""); message << "NOTICE:starting next exposure, " << interface.nexp << " remaining";
       interface.camera.async.enqueue_and_log( function, message.str() );
       interface.do_expose(interface.nexp);
@@ -2486,7 +2491,7 @@ namespace AstroCam {
     std::string _start_time;
     long error;
 
-    this->nexp = nexp_in;
+    this->nexp.store(nexp_in);
 
     // Different controllers may have different rules about when to set and clear their
     // exposure_pending flag (depending on whether or not they support frame transfer), but
@@ -4320,6 +4325,10 @@ logwrite(function, message.str());
       retstring="too_late";
       return BUSY;
     }
+
+    // reset nexp to always make this the last exposure
+    //
+    this->nexp.store(1);
 
     // The PreciseTimer object .stop(&ms) function modifies remaining_time
     // to reflect the remaining time of the timer.
