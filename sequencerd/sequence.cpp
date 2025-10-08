@@ -793,7 +793,12 @@ namespace Sequencer {
         modestr = "EXPOSE";
         break;
       case Sequencer::VSM_ACQUIRE:
-        // uses virtual-mode width and offset for acquire
+        // uses virtual-mode width and offset for acquire,
+        // but only for new targets
+        if ( this->target.ra_hms == this->last_ra_hms &&
+             this->target.dec_dms == this->last_dec_dms ) {
+          return NO_ERROR;
+        }
         slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
@@ -806,7 +811,7 @@ namespace Sequencer {
 
     this->async.enqueue( "NOTICE: moving slit to "+modestr+" position" );
 
-    logwrite( function, " sending: "+slitcmd.str() );
+    logwrite( function, "moving slit to "+slitcmd.str()+" for "+modestr+"position" );
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR setting slit" );
