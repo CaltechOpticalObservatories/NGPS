@@ -184,6 +184,13 @@ namespace Sequencer {
         applied++;
       }
 
+      // DAEMON_CONTROL_SCRIPT
+      if (config.param[entry] == "DAEMON_CONTROL_SCRIPT") {
+        this->sequence.daemon_control = config.arg[entry];
+        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        applied++;
+      }
+
       // ACAMD_PORT
       if (config.param[entry] == "ACAMD_PORT") {
         try {

@@ -31,6 +31,11 @@ SLITD_PORT=@SLITD_BLK_PORT@
 TCSD_PORT=@TCSD_BLK_PORT@
 FITERD_PORT=@FILTERD_BLK_PORT@
 
+# Daemon Control Script
+# Fully qualified path to the shell script used to start/stop daemons.
+#
+DAEMON_CONTROL_SCRIPT=/home/developer/Software/run/ngps
+
 # Camera prologue
 #
 # These commands are sent to the camera daemon on startup.
