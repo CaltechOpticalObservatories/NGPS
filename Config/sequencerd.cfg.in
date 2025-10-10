@@ -33,8 +33,10 @@ FITERD_PORT=@FILTERD_BLK_PORT@
 
 # Daemon Control Script
 # Fully qualified path to the shell script used to start/stop daemons.
+# Since sequencerd is run as user=dataowner, the script entered here
+# needs to be the actual script run as dataowner, not the wrapper.
 #
-DAEMON_CONTROL_SCRIPT=/home/developer/Software/run/ngps
+DAEMON_CONTROL_SCRIPT=/home/developer/Software/run/_ngps
 
 # Camera prologue
 #

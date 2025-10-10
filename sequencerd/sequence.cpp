@@ -3799,7 +3799,7 @@ namespace Sequencer {
    *
    */
   long Sequence::daemon_restart(Common::DaemonClient &daemon) {
-    const std::string function("Sequencer::Sequence::acam_daemon_restart");
+    const std::string function("Sequencer::Sequence::daemon_restart");
     std::string command;
 
     // the daemon control script must have been specified in the config file
