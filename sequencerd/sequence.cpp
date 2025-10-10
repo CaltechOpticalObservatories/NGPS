@@ -2696,7 +2696,7 @@ namespace Sequencer {
     // recovery seems to be power-cycling the Andor and restarting the
     // daemon. Try up to maxattempts times if necessary.
     //
-    const int maxattempts=2;
+    const int maxattempts=3;
 
     // slicecam_init
     {
@@ -3712,7 +3712,7 @@ namespace Sequencer {
                                 const std::string opencmd, const int opentimeout,
                                 bool &was_opened, bool forceopen ) {
     const std::string function("Sequencer::Sequence::open_hardware");
-    const int maxattempts=2;  ///< allow retries connecting to daemon
+    const int maxattempts=3;  ///< allow retries connecting to daemon
     bool isopen=false;
     std::string reply;
     long error=NO_ERROR;
@@ -3726,7 +3726,7 @@ namespace Sequencer {
       if (this->connect_to_daemon(daemon) != ERROR) break;
       // if connection fails then restart daemon and loop
       logwrite(function, "ERROR could not connect to "+daemon.name);
-      if (attempt < maxattempts) this->daemon_restart(this->acamd);
+      if (attempt < maxattempts) this->daemon_restart(daemon);
     }
     // connection failed too many times
     if (attempt > maxattempts) {
@@ -3819,7 +3819,7 @@ namespace Sequencer {
     }
     else logwrite(function, "killed "+daemon.name);
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     // start daemon using ngps script
     command = this->daemon_control + std::string(" start ") + daemon.name;
@@ -3829,7 +3829,7 @@ namespace Sequencer {
     }
     else logwrite(function, "started "+daemon.name);
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
     return NO_ERROR;
   }
