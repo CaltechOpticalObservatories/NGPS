@@ -97,17 +97,20 @@ namespace Camera {
        *             This opens a connection to the USB device for the USB-RS232
        *             serial converter. This requires a proper udev rule to assign
        *             the appropriate USB device to /dev/shutter
+       * @param[in]  enable  optional arg can override is_enabled, default=true
        * @return     ERROR or NO_ERROR
        *
        */
-      long init()  {
-        std::string function = "Camera::Shutter::init";
+      long init(bool enable=true)  {
+        const std::string function("Camera::Shutter::init");
         long error = ERROR;
         int state = -1;
 
-	// NOP if shutter is diabled
+	this->is_enabled=enable;
+
+	// if shutter is diabled then initialize closed
 	//
-	if (!this->is_enabled) return NO_ERROR;
+	if (!this->is_enabled) return this->set_close();
 
         // close any open fd
         //
