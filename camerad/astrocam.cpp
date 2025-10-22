@@ -1157,11 +1157,9 @@ namespace AstroCam {
     // As the last step to opening the controller, this is where I've chosen
     // to initialize the Shutter class, required before using the shutter.
     //
-    if ( this->camera.bonn_shutter ) {
-      if ( this->camera.shutter.init() != NO_ERROR ) {
-        retstring="shutter_error";
-        error = ERROR;
-      }
+    if ( this->camera.shutter.init(this->camera.bonn_shutter) != NO_ERROR ) {
+      retstring="shutter_error";
+      error = ERROR;
     }
 
     return( error );
@@ -1822,7 +1820,10 @@ namespace AstroCam {
     // to introduce any delay in the real shutter timing (and will
     // be closed after the real shutter has closed).
     //
-    if ( interface.camera.ext_shutter ) interface.do_native( "OSH" );
+    if ( interface.camera.ext_shutter ) {
+      interface.do_native( "OSH" );
+      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter opened at "+timestring );
+    }
 
     // open the Bonn shutter if enabled
     //
@@ -1863,7 +1864,10 @@ namespace AstroCam {
 
     // Send external close shutter command, if configured.
     //
-    if ( interface.camera.ext_shutter ) interface.do_native( "CSH" );
+    if ( interface.camera.ext_shutter ) {
+      interface.do_native( "CSH" );
+      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter closed at "+timestring );
+    }
 
     // get the airmass again
     //
@@ -5712,6 +5716,7 @@ logwrite(function,message.str() );
       retstring.append( "   shdelay ? | <delay> | test\n" );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
+      retstring.append( "   isreadout\n" );
       return HELP;
     }
 
@@ -6052,6 +6057,10 @@ logwrite(function,message.str() );
         error = HELP;
       }
 
+      message.str(""); message << "camera.shutter.isclosed=" << (this->camera.shutter.isclosed()?"true":"false");
+      logwrite( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
       message.str(""); message << "this_expbuf=" << this->get_expbuf();
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
@@ -6271,6 +6280,23 @@ logwrite(function,message.str() );
         jclient.disconnect();
       }
       this->handle_json_message( retstring );
+    }
+    else
+    // ----------------------------------------------------
+    // isreadout
+    // ----------------------------------------------------
+    // call ARC API isReadout() function directly
+    //
+    if ( testname == "isreadout" ) {
+      retstring.clear();
+      for ( auto &con : this->controller ) {
+	if ( con.second.pArcDev != nullptr && con.second.connected ) {
+	  bool isreadout = con.second.pArcDev->isReadout();
+	  retstring += (isreadout ? "T " : "F ");
+          message.str(""); message << con.second.devname << " isReadout = " << (isreadout ? "true":"false");
+          logwrite(function, message.str());
+	}
+      }
     }
     else {
     // ----------------------------------------------------
