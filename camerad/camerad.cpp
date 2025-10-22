@@ -500,53 +500,38 @@ void doit(Network::TcpSocket &sock) {
     if ( cmd == CAMERAD_LOAD ) {
                     if (args.empty()) ret = server.load_firmware(retstring);
                     else              ret = server.load_firmware(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_BASENAME ) {
                     ret = server.camera.basename(args, retstring);
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_IMNUM ) {
                     ret = server.camera.imnum(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_IMDIR ) {
                     ret = server.camera.imdir(args, retstring);
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_AUTODIR ) {
                     ret = server.camera.autodir(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_MEX ) {
                     ret = server.camera.mex(args, retstring);
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_LONGERROR ) {
                     ret = server.camera.longerror(args, retstring);
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_PREEXPOSURES ) {
                     ret = server.camera_info.pre_exposures( args, retstring );
-                    sock.Write( retstring );
-                    sock.Write( " " );
                     }
     else
     if ( cmd == CAMERAD_MEXAMPS ) {
                     ret = server.camera.mexamps(args, retstring);
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_FITSNAME ) {
@@ -672,13 +657,10 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == "roi" ) {
                     ret = server.region_of_interest( args, retstring );
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "isloaded" ) {
                     retstring = server.firmwareloaded ? "true" : "false";
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     ret = NO_ERROR;
                     }
     else
@@ -695,7 +677,6 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == "getp" ) {
                     ret = server.get_parameter(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "setp" ) {
@@ -705,7 +686,6 @@ void doit(Network::TcpSocket &sock) {
     if ( cmd == "loadtiming" ) {
                     if (args.empty()) ret = server.load_timing(retstring);
                     else              ret = server.load_timing(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "inreg" ) {
@@ -727,27 +707,22 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == "cds" ) {
                     ret = server.cds(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "heater" ) {
                     ret = server.heater(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "sensor" ) {
                     ret = server.sensor(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "longexposure" ) {
                     ret = server.longexposure(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "hdrshift" ) {
                     ret = server.hdrshift(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == "trigin" ) {
@@ -772,17 +747,14 @@ void doit(Network::TcpSocket &sock) {
                       server.exptime(args, retstring);
                     }
                     else { ret = server.exptime(args, retstring); }
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_BIAS ) {
                     ret = server.bias(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_BIN ) {
                     ret = server.bin( args, retstring );
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     else
     if ( cmd == CAMERAD_ECHO ) {
@@ -792,13 +764,10 @@ void doit(Network::TcpSocket &sock) {
     else
     if ( cmd == CAMERAD_INTERFACE ) {
                     ret = server.interface(retstring);
-                    sock.Write(retstring);
-                    sock.Write(" ");
                     }
     else
     if ( cmd == CAMERAD_TEST ) {
                     ret = server.test(args, retstring);
-                    if (!retstring.empty()) { sock.Write(retstring); sock.Write(" "); }
                     }
     // Unknown commands generate an error
     //

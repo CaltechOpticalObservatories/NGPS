@@ -6288,10 +6288,14 @@ logwrite(function,message.str() );
     // call ARC API isReadout() function directly
     //
     if ( testname == "isreadout" ) {
+      retstring.clear();
       for ( auto &con : this->controller ) {
-        message.str("");
-	message << con.second.devname << " isReadout = " << (con.second.pArcDev->isReadout() ? "true":"false");
-        logwrite(function, message.str());
+	if ( con.second.pArcDev != nullptr && con.second.connected ) {
+	  bool isreadout = con.second.pArcDev->isReadout();
+	  retstring += (isreadout ? "T " : "F ");
+          message.str(""); message << con.second.devname << " isReadout = " << (isreadout ? "true":"false");
+          logwrite(function, message.str());
+	}
       }
     }
     else {
