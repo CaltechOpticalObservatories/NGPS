@@ -1,11 +1,45 @@
 #!/bin/sh
-# if supplied with an argument then that argument is the date
+# parse options
 #
-if [ "$#" == "1" ]; then
-  DATE=$1
-# otherwise use the current UTC date
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -d|--date)
+      DATE="$2"
+      shift 2
+      ;;
+    -n|--name)
+      NAME="$2"
+      shift 2
+      ;;
+    *)
+      echo "unrecognized option: $1" >&2
+      echo "usage: $0 [ --date YYYYMMDD ] [ --name <daemon> ]"
+      exit 1
+      ;;
+  esac
+done
+
+# if date not supplied use the current UTC date
 #
+if [ -z "$DATE" ]; then
+  TITLE=`date --utc +"%Y-%m-%d"`
+  DATE=`date --utc +"%Y%m%d"`
 else
-  DATE=`date --utc +"%Y-%m-%d"`
+  TITLE=`date --date "$DATE" +"%Y-%m-%d"`
+  DATE=`date --date "$DATE" +"%Y%m%d"`
 fi
-xterm -geometry 200x50 -T "colorlog for UTC: "$DATE -e colorlog $1 &
+
+# build args for colorlog
+#
+ARGS="--date "$DATE
+
+# add --name to args if supplied
+#
+if [ -n "$NAME" ]; then
+  ARGS="$ARGS --name "$NAME
+  WHICH="$NAME"
+else
+  WHICH="all"
+fi
+
+xterm -geometry 200x50 -T "colorlog ("$WHICH") UTC: "$TITLE -e colorlog $ARGS &
