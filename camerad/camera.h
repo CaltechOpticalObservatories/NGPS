@@ -105,6 +105,10 @@ namespace Camera {
         long error = ERROR;
         int state = -1;
 
+	// NOP if shutter is diabled
+	//
+	if (!this->is_enabled) return NO_ERROR;
+
         // close any open fd
         //
         if ( this->fd>=0 ) { close( this->fd ); this->fd=-1; }
@@ -241,6 +245,14 @@ namespace Camera {
         std::string function = "Camera::Shutter::get_state";
         std::stringstream message;
         int serial;
+
+	// When shutter is disabled then return the class state variable
+	// without attempting to read the shutter.
+	//
+	if (!this->is_enabled) {
+	  state=this->state;
+	  return NO_ERROR;
+	}
 
         // get all modem status bits (TIOCMGET) and store in serial
         //
