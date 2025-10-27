@@ -14,7 +14,7 @@ class LayoutService:
         self.target_list_display = None 
         self.target_list_name = QComboBox()
         self.target_list_name.setView(QListView())
-        self.target_list_name.setMaxVisibleItems(9)
+        self.target_list_name.setMaxVisibleItems(16)
         self.target_list_name.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
