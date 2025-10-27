@@ -242,3 +242,7 @@ QComboBox QAbstractItemView {
     selection-background-color: rgb(54, 122, 56);
     selection-color: white;
 }
+
+QComboBox {
+    combobox-popup: 0;   /* force non-native Qt popup so QSS + maxVisibleItems apply */
+}
