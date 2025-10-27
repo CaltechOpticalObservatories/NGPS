@@ -234,3 +234,11 @@ QHeaderView::section {
   border-top: 1px solid #3a3a3a;
   background: #1e1f22;
 }
+
+QComboBox QAbstractItemView {
+    background-color: #555555;
+    color: #e0e0e0;
+    border: 1px solid #777777;
+    selection-background-color: rgb(54, 122, 56);
+    selection-color: white;
+}
