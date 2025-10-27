@@ -410,11 +410,12 @@ class LayoutService:
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
         self.parent.exposure_progress.setMaximumWidth(300)
+        self.parent.exposure_progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.exposure_progress.setTextVisible(True)  # Enable text display
         self.parent.exposure_progress.setFormat("0% (0 sec remaining)")  # Initial display
 
-        exposure_layout.setSpacing(0)
-        exposure_layout.addWidget(QLabel("Exposure Progress"))
+        exposure_layout.setSpacing(5)
+        exposure_layout.addWidget(QLabel("Exposure Progress:"))
         exposure_layout.addWidget(self.parent.exposure_progress)
 
         # --- Readout/Overhead Progress ---
@@ -427,7 +428,8 @@ class LayoutService:
         self.parent.overhead_progress.setTextVisible(True)  # Optional: show % on readout bar
 
         overhead_layout.setSpacing(0)
-        overhead_layout.addWidget(QLabel("Readout Progress"))
+        overhead_layout.addWidget(QLabel("Readout Progress:"))
+        overhead_layout.addSpacing(6) 
         overhead_layout.addWidget(self.parent.overhead_progress)
 
         self.parent.shutter_label = QLabel("Shutter:")
@@ -442,6 +444,7 @@ class LayoutService:
 
         overhead_layout.addSpacing(12)
         overhead_layout.addWidget(self.parent.shutter_label)
+        overhead_layout.addSpacing(6) 
         overhead_layout.addWidget(self.parent.shutter_box)
 
         # Stack both layouts
