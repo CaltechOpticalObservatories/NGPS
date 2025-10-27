@@ -225,9 +225,10 @@ QHeaderView {
 }
 
 QHeaderView::section {
-    padding: 8px;
+    padding: 6px;
     border: 1px solid #888888;
     background-color: #555555;
+    font-size: 14pt; 
 }
 
 #DaemonStatusBar {

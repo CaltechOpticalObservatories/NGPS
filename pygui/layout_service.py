@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QStyle, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -111,18 +111,6 @@ class LayoutService:
 
     def create_third_column(self):
         third_column_layout = QVBoxLayout()
-        third_column_layout.setObjectName("column-sidebar")
-        third_column_layout.setSpacing(10)
-
-        # Add widgets to the third column, e.g., tabs, buttons, etc.
-        # For simplicity, let's assume it's a placeholder widget:
-        sidebar_widget = QWidget()
-        third_column_layout.addWidget(sidebar_widget)
-
-        return third_column_layout
-
-    def create_third_column(self):
-        third_column_layout = QVBoxLayout()
 
         # Create the QTabWidget and the Control tab
         self.parent.tabs = QTabWidget()
@@ -137,17 +125,17 @@ class LayoutService:
         # Add the QTabWidget to the third column layout
         third_column_layout.addWidget(self.parent.tabs)
 
-        # Now, create and set up the layout for the Control tab
-        # Create a layout for the Control tab using the ControlTab class
-        self.control_tab = ControlTab(self.parent)  # Create the control tab instance
-        control_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
-        control_layout.addWidget(self.control_tab)  # Add the ControlTab widget to the layout
-        self.parent.control_tab.setLayout(control_layout)  # Set the layout for the control tab widget
+        # Set up the layout for the Control tab
+        self.control_tab = ControlTab(self.parent)
+        control_layout = QVBoxLayout()
+        control_layout.addWidget(self.control_tab)
+        self.parent.control_tab.setLayout(control_layout)
 
-        self.status_tab = InstrumentStatusTab(self.parent)  # Create the control tab instance
-        status_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
-        status_layout.addWidget(self.status_tab)  # Add the ControlTab widget to the layout
-        self.parent.status_tab.setLayout(status_layout)  # Set the layout for the control tab widget
+         # Create the Instrument tab
+        self.status_tab = InstrumentStatusTab(self.parent) 
+        status_layout = QVBoxLayout()
+        status_layout.addWidget(self.status_tab)
+        self.parent.status_tab.setLayout(status_layout)
         return third_column_layout
 
     def create_top_section(self):
@@ -406,31 +394,31 @@ class LayoutService:
         return progress_and_image_group
 
     def create_progress_layout(self):
-        progress_layout = QVBoxLayout()  # Use QVBoxLayout for vertical stacking
+        progress_layout = QVBoxLayout()
 
-        # --- Exposure Progress ---
-        exposure_layout = QHBoxLayout()  # Horizontal layout for exposure row
+        # Exposure Progress
+        exposure_layout = QHBoxLayout()
 
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
         self.parent.exposure_progress.setMaximumWidth(600)
         self.parent.exposure_progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.parent.exposure_progress.setTextVisible(True)  # Enable text display
-        self.parent.exposure_progress.setFormat("0% (0 sec remaining)")  # Initial display
+        self.parent.exposure_progress.setTextVisible(True)
+        self.parent.exposure_progress.setFormat("0%")
 
         exposure_layout.setSpacing(5)
         exposure_layout.addWidget(QLabel("Exposure Progress:"))
         exposure_layout.addWidget(self.parent.exposure_progress)
 
-        # --- Readout/Overhead Progress ---
+        # Readout/Overhead Progress
         overhead_layout = QHBoxLayout()  # Horizontal layout for overhead row
 
         self.parent.overhead_progress = QProgressBar()
         self.parent.overhead_progress.setValue(0)
         self.parent.overhead_progress.setRange(0, 100)
         self.parent.overhead_progress.setMaximumWidth(300)
-        self.parent.overhead_progress.setTextVisible(True)  # Optional: show % on readout bar
+        self.parent.overhead_progress.setTextVisible(True)
 
         overhead_layout.setSpacing(0)
         overhead_layout.addWidget(QLabel("Readout Progress:"))
@@ -443,9 +431,13 @@ class LayoutService:
         self.parent.shutter_box = QLabel("CLOSED")
         self.parent.shutter_box.setAlignment(Qt.AlignCenter)
         self.parent.shutter_box.setFixedWidth(90)
-        self.parent.shutter_box.setStyleSheet(
-            "border: 1px solid gray; padding: 2px; background-color: #ccc; color: black;"
-        )
+        self.parent.shutter_box.setStyleSheet("""
+            border: 1px solid gray;
+            border-radius: 6px;
+            padding: 2px 6px;
+            background-color: #ccc;
+            color: black;
+        """)
 
         overhead_layout.addSpacing(12)
         overhead_layout.addWidget(self.parent.shutter_label)
@@ -499,7 +491,7 @@ class LayoutService:
         self.parent.image_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # Set the image_number widget to be smaller
-        self.parent.image_number.setFixedWidth(80)  # You can adjust the width as needed
+        self.parent.image_number.setFixedWidth(80)
 
         image_info_layout.addWidget(QLabel("Image Dir:"))
         image_info_layout.addWidget(self.parent.image_name)
@@ -610,6 +602,23 @@ class LayoutService:
         # Add the (+) button next to the label
         header_layout.addWidget(self.add_row_button)
 
+        self.column_toggle_button = QPushButton("⚙")
+        self.column_toggle_button.setToolTip("Show / hide target list fields")
+        self.column_toggle_button.setFixedSize(22, 22)
+        self.column_toggle_button.setStyleSheet("""
+            QPushButton {
+                border: 1px solid #888;
+                border-radius: 3px;
+                padding: 0px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        self.column_toggle_button.clicked.connect(self.show_column_toggle_dialog)
+        header_layout.addWidget(self.column_toggle_button)
+            
         # Add the header layout to the main layout
         bottom_section_layout.addLayout(header_layout)
 
@@ -660,15 +669,15 @@ class LayoutService:
             }
 
             QHeaderView::section {
-                padding: 4px;
+                padding: 2px;
                 border: 1px solid #888888;
                 background-color: #555555;
             }
             QScrollBar:vertical, QScrollBar:horizontal {
                 border: 2px solid grey;
                 background: #F0F0F0;
-                width: 20px;
-                height: 20px;
+                width: 16px;
+                height: 16px;
             }
             QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
                 background: #FFCC40;
@@ -697,19 +706,7 @@ class LayoutService:
 
         # Remove the bold font from headers
         header = self.target_list_display.horizontalHeader()
-        header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
-
-        fm = self.target_list_display.fontMetrics()
-        row_h = fm.height() + 12  # padding for bigger font
-        vh = self.target_list_display.verticalHeader()
-        vh.setDefaultSectionSize(row_h)
-        vh.setMinimumSectionSize(row_h)
-
-        hh = self.target_list_display.horizontalHeader()
-        hh.setSectionResizeMode(QHeaderView.Interactive)                 # user resizable
-        hh.setDefaultSectionSize(int(fm.averageCharWidth() * 12 + 24))   # roomy cols
-        hh.setMinimumSectionSize(int(fm.averageCharWidth() * 8 + 16))
-        hh.setStretchLastSection(True)
+        header.setFont(QFont("Arial", 9, QFont.Normal))  # Set font to normal (non-bold)
 
         # Enable sorting on column headers
         self.target_list_display.setSortingEnabled(True)
@@ -721,11 +718,8 @@ class LayoutService:
         # Allow manual resizing of the columns (on the horizontal header)
         header.setSectionResizeMode(QHeaderView.Interactive)
 
-        self.target_list_display.setEditTriggers(
-            QAbstractItemView.DoubleClicked
-            | QAbstractItemView.SelectedClicked
-            | QAbstractItemView.EditKeyPressed
-        )
+        # Disable editing of table cells
+        self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Set selection mode to select entire rows when a cell is clicked
         self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -747,6 +741,73 @@ class LayoutService:
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
+
+    def show_column_toggle_dialog(self):
+        table = self.target_list_display
+
+        # If there are no columns yet, bail out nicely
+        if table.columnCount() == 0:
+            QMessageBox.information(
+                self.parent,
+                "No columns",
+                "There are no target list columns to toggle yet."
+            )
+            return
+
+        dialog = QDialog(self.parent)
+        dialog.setWindowTitle("Show / hide target list fields")
+
+        layout = QVBoxLayout(dialog)
+
+        # Build a checkbox for each column, based on header text
+        checkboxes = []
+        for col in range(table.columnCount()):
+            header_item = table.horizontalHeaderItem(col)
+            header_text = header_item.text() if header_item else f"Column {col + 1}"
+
+            cb = QCheckBox(header_text)
+            # Checked == visible
+            cb.setChecked(not table.isColumnHidden(col))
+            layout.addWidget(cb)
+            checkboxes.append((col, cb))
+
+        # OK/Cancel buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return  # user cancelled
+
+        # Apply the chosen visibility
+        for col, cb in checkboxes:
+            table.setColumnHidden(col, not cb.isChecked())
+
+        # Optionally re-apply your column widths (visible ones keep their widths)
+        self.set_column_widths()
+
+    def hide_default_columns(self):
+        """Hide noisy / advanced columns in the target list by default."""
+        # Make this safe if called before the table is created
+        table = getattr(self, "target_list_display", None)
+        if table is None:
+            return
+
+        if table.columnCount() == 0:
+            return
+
+        # Column names to hide by default
+        to_hide = {"OBSERVATION_ID", "CHANNEL", "MAGNITUDE", "MAGSYSTEM", "MAGFILTER"}
+
+        for col in range(table.columnCount()):
+            header_item = table.horizontalHeaderItem(col)
+            if header_item is None:
+                continue
+
+            header_text = header_item.text().strip().upper()
+            if header_text in to_hide:
+                table.setColumnHidden(col, True)
 
     def on_row_selected(self):
         # Get the selected row's index
@@ -794,10 +855,10 @@ class LayoutService:
         form.addRow(QLabel("<b>Name*</b>"), name_le)
         form.addRow(QLabel("<b>RA*</b>"), ra_le)
         form.addRow(QLabel("<b>Decl*</b>"), decl_le)
+        form.addRow(QLabel("<b>EXPTime*</b>"), exptime_le)
+        form.addRow(QLabel("<b>Slitwidth*</b>"), slitwidth_le)
         form.addRow("Offset RA", off_ra_le)
         form.addRow("Offset Dec", off_dec_le)
-        form.addRow("EXPTime", exptime_le)
-        form.addRow("Slitwidth", slitwidth_le)
         form.addRow("Magnitude", mag_le)
 
         # Buttons
@@ -828,8 +889,8 @@ class LayoutService:
         try:
             offset_ra  = _num(off_ra_le.text())
             offset_dec = _num(off_dec_le.text())
-            exptime    = _num(exptime_le.text())
-            slitwidth  = _num(slitwidth_le.text())
+            exptime    = "SET " + exptime_le.text()
+            slitwidth  = "SET " + slitwidth_le.text()
             magnitude  = _num(mag_le.text())
         except ValueError:
             QMessageBox.warning(self.parent, "Invalid number", "One or more numeric fields are invalid.")
@@ -850,7 +911,6 @@ class LayoutService:
         if hasattr(self.logic_service, "filter_target_list"):
             self.logic_service.filter_target_list()
 
-    
 
     def update_target_info(self):
         # Get the selected row's index
@@ -990,8 +1050,8 @@ class LayoutService:
             self.target_list_display.selectRow(selected_row)
             
             slit_angle = "0"
-            if self.parent.current_ra != '' and self.parent.current_dec != '':
-                slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            # if self.parent.current_ra != '' and self.parent.current_dec != '':
+            #     slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             self.control_tab.slit_angle_box.setText(slit_angle)
 
         else:
@@ -1076,6 +1136,7 @@ class LayoutService:
         # Create the "Status" section
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout()
+        status_layout.setSpacing(10)
 
         # Create Calibration Lamps section
         calibration_lamps_group = QGroupBox("Calibration Lamps")
@@ -1136,10 +1197,6 @@ class LayoutService:
         calibration_lamps_group.setLayout(calibration_lamps_layout)
         status_layout.addWidget(calibration_lamps_group)
 
-        # ----------------------------
-        # Add the Seeing and Airmass status fields in the first row
-        # ----------------------------
-
         # Create a horizontal layout to arrange Seeing and Airmass side by side
         first_row_layout = QHBoxLayout()
 
@@ -1169,10 +1226,6 @@ class LayoutService:
 
         # Add the first row layout to the status layout
         status_layout.addLayout(first_row_layout)
-
-        # ----------------------------
-        # Add the Binning and Slit Width Offset status fields in the second row
-        # ----------------------------
 
         # Create a second row layout for Binning and Slit Width Offset
         second_row_layout = QHBoxLayout()
@@ -1395,7 +1448,7 @@ class LayoutService:
                 lambda *_: self.on_target_set_changed()
             )
             self.on_target_set_changed()
-
+            self.hide_default_columns()
 
     def upload_new_target_list(self):
         """Handle creating a new target list, uploading CSV, and creating a new target set."""
@@ -1462,7 +1515,7 @@ class LayoutService:
         # Real selection → remember name and filter from DB
         self.parent.current_target_list_name = text
         self.logic_service.filter_target_list()
-
+        self.hide_default_columns()
 
     def on_target_set_changed(self, *_):
         combo = self.target_list_name

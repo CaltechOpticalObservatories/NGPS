@@ -677,59 +677,86 @@ class FocusTab(QWidget):
         """)  
 
     def run_focus_acam(self):
-        # This method will run all the other buttons when clicked
-        print("Running Focus ACAM...")
+        """Run the full ACAM focus sequence in the background (like thrufocus)."""
+
+        # Disable + gray the button while running
         self.run_acam_focus_button.setEnabled(False)
         self.run_acam_focus_button.setStyleSheet("""
-                 QPushButton {
-                     background-color: lightgray;
-                 }
-             """)         
+            QPushButton {
+                background-color: lightgray;
+                color: black;
+                border-radius: 8px;
+                padding: 10px;
+                border: none;
+            }
+        """)
 
-        command = f"camera basename focus"
-        self.run_command(command)
-        
-        # Set CAM focus ACAM
+        self.log_message_callback("Running ACAM focus sequence...\n")
+
+        # Read parameters (use placeholder if field is empty)
         value = self.focus_value_input.text() or self.focus_value_input.placeholderText()
         upper = self.focus_upper_input.text() or self.focus_upper_input.placeholderText()
         lower = self.focus_lower_input.text() or self.focus_lower_input.placeholderText()
-        step = self.focus_step_input.text() or self.focus_step_input.placeholderText()
+        step  = self.focus_step_input.text()  or self.focus_step_input.placeholderText()
 
+        if not (value and upper and lower and step):
+            self.log_message_callback("Please provide valid input for ACAM focus loop parameters.\n")
+            # restore button immediately since we didn't start anything
+            self.run_acam_focus_button.setEnabled(True)
+            self.run_acam_focus_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green */
+                    color: white;
+                    border-radius: 8px;
+                    padding: 10px;
+                    border: none;
+                }
+                QPushButton:hover   { background-color: #45a049; }
+                QPushButton:pressed { background-color: #3e8e41; }
+            """)
+            return
+
+        # Build label and combined shell command (all steps in one go)
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         label = f"focusloop_{timestamp}"
 
-        if value and upper and lower and step:
-            command = f"camstep focus acam {label} {value} {upper} {lower} {step}"
-            self.run_command(command)
-        else:
-            print("Please provide valid input for ACAM focus loop parameters.")
+        command = (
+            f"camera basename focus && "
+            f"camstep focus acam {label} {value} {upper} {lower} {step} && "
+            f"camera basename ngps && "
+            f"bash calib/andor.sh {label}"
+        )
 
+        # Start async command, logging output to the calibration GUI
+        self.thread_acam_focus = AsyncCommandThread(command, self.log_message_callback)
+        self.thread_acam_focus.output_signal.connect(self.log_message_callback)
 
-        command = f"camera basename ngps"
-        self.run_command(command)
+        # Restore UI + open image when the background task ends
+        def _restore_acam_focus():
+            self.run_acam_focus_button.setEnabled(True)
+            self.run_acam_focus_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;  /* Green */
+                    color: white;
+                    border-radius: 8px;
+                    padding: 10px;
+                    border: none;
+                }
+                QPushButton:hover   { background-color: #45a049; }
+                QPushButton:pressed { background-color: #3e8e41; }
+            """)
+            # Show the resulting ACAM focus plot (still uses eog)
+            self.open_focus_acam_images()
 
-        # Run the focus_andor.py script with specified arguments. 
-        command = f"bash calib/andor.sh {label}"
-        self.run_command(command)
+        self.thread_acam_focus.finished.connect(_restore_acam_focus)
+        try:
+            # If AsyncCommandThread also emits terminated, hook that too (like afternoon_tab)
+            self.thread_acam_focus.terminated.connect(_restore_acam_focus)
+        except Exception:
+            pass
 
-        self.open_focus_acam_images()
+        self.thread_acam_focus.start()
 
-        self.run_acam_focus_button.setEnabled(True)
-        self.run_acam_focus_button.setStyleSheet("""
-             QPushButton {
-                 background-color: #4CAF50;  /* Green color */
-                 color: white;
-                 border-radius: 8px;
-                 padding: 10px;
-                 border: none;
-             }
-             QPushButton:hover {
-                 background-color: #45a049;  /* Slightly darker green on hover */
-             }
-             QPushButton:pressed {
-                 background-color: #3e8e41;  /* Darker green when pressed */
-             }
-         """)  
 
     def run_command_in_background(self, command):
         """Run the command in a background thread."""
@@ -738,14 +765,42 @@ class FocusTab(QWidget):
         self.thread.start()
 
     def run_command(self, command):
-         """Run command."""
-         self.output_signal.connect(self.log_message_callback)
-         
-         try:
-             # Run the command exactly as it is
-             result = subprocess.run(command, shell=True, check=True)
-             #self.output_signal.emit(result)
-             print("Command executed successfully.")
-         except subprocess.CalledProcessError as e:
-             print(f"Error occurred: {e.stderr}")
-             #self.output_signal.emit(e.stderr)
+        """Run a command synchronously, sending all output to the GUI log."""
+        # Make sure the signal is connected once
+        try:
+            self.output_signal.disconnect()
+        except TypeError:
+            # Wasn't connected yet – that's fine
+            pass
+
+        self.output_signal.connect(self.log_message_callback)
+
+        try:
+            self.output_signal.emit(f"$ {command}\n")
+
+            result = subprocess.run(
+                command,
+                shell=True,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+            if result.stdout:
+                self.output_signal.emit(result.stdout)
+            if result.stderr:
+                self.output_signal.emit(result.stderr)
+
+            self.output_signal.emit("Command executed successfully.\n")
+
+        except subprocess.CalledProcessError as e:
+            msg = ""
+            if e.stdout:
+                msg += e.stdout
+            if e.stderr:
+                msg += e.stderr
+            if not msg:
+                msg = f"Error occurred while running: {command}\n"
+            self.output_signal.emit(msg)
+

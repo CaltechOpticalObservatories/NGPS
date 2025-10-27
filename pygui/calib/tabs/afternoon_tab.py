@@ -205,7 +205,7 @@ class AfternoonTab(QWidget):
     def set_spatial_binning(self):
         spatial_binning = self.spatial_binning_input.text()
         if spatial_binning:
-            command_row = f"camera bin row {spatial_binning}"
+            command_row = f"camera bin spat {spatial_binning}"
             self.run_command_in_background(command_row)
         else:
             self.log_message("Please provide a spatial binning value.")
@@ -213,7 +213,7 @@ class AfternoonTab(QWidget):
     def set_spectral_binning(self):
         spectral_binning = self.spectral_binning_input.text()
         if spectral_binning:
-            command_col = f"camera bin col {spectral_binning}"
+            command_col = f"camera bin spec {spectral_binning}"
             self.run_command_in_background(command_col)
         else:
             self.log_message("Please provide a spectral binning value.")
