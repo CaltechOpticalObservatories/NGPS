@@ -754,7 +754,7 @@ class LayoutService:
         # 2) Row height based on a real QLineEdit (respects your QSS padding/border)
         dummy = QLineEdit()
         dummy.setFont(table.font())
-        row_h = dummy.sizeHint().height() + 4
+        row_h = dummy.sizeHint().height() + 14
         vh = table.verticalHeader()
         vh.setDefaultSectionSize(row_h)
         vh.setMinimumSectionSize(row_h)
