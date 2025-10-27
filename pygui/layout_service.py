@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QListView, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -13,6 +13,9 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
+        self.target_list_name.setMaxVisibleItems(15) 
+        self.target_list_name.setView(QListView()) 
+        self.target_list_name.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
@@ -111,7 +114,6 @@ class LayoutService:
         third_column_layout.setSpacing(10)
 
         # Add widgets to the third column, e.g., tabs, buttons, etc.
-        # For simplicity, let's assume it's a placeholder widget:
         sidebar_widget = QWidget()
         third_column_layout.addWidget(sidebar_widget)
 
@@ -133,16 +135,15 @@ class LayoutService:
         # Add the QTabWidget to the third column layout
         third_column_layout.addWidget(self.parent.tabs)
 
-        # Now, create and set up the layout for the Control tab
         # Create a layout for the Control tab using the ControlTab class
-        self.control_tab = ControlTab(self.parent)  # Create the control tab instance
-        control_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
-        control_layout.addWidget(self.control_tab)  # Add the ControlTab widget to the layout
-        self.parent.control_tab.setLayout(control_layout)  # Set the layout for the control tab widget
+        self.control_tab = ControlTab(self.parent)
+        control_layout = QVBoxLayout()
+        control_layout.addWidget(self.control_tab)
+        self.parent.control_tab.setLayout(control_layout)
 
-        self.status_tab = InstrumentStatusTab(self.parent)  # Create the control tab instance
-        status_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
-        status_layout.addWidget(self.status_tab)  # Add the ControlTab widget to the layout
+        self.status_tab = InstrumentStatusTab(self.parent)
+        status_layout = QVBoxLayout()
+        status_layout.addWidget(self.status_tab)
         self.parent.status_tab.setLayout(status_layout)  # Set the layout for the control tab widget
         return third_column_layout
 
@@ -931,7 +932,7 @@ class LayoutService:
             
             slit_angle = "0"
             if self.parent.current_ra != '' and self.parent.current_dec != '':
-                 slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+                slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             self.control_tab.slit_angle_box.setText(slit_angle)
 
         else:
