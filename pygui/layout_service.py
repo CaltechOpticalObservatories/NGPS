@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -13,6 +13,7 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
+        self.target_list_name.setView(QListView())
         self.target_list_name.setMaxVisibleItems(6)
         self.target_list_name.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.add_row_button = QPushButton()
