@@ -186,7 +186,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("calibd")
         self.zmq_status_service.subscribe_to_topic("tcsd")
         self.zmq_status_service.subscribe_to_topic("acamd")
-        self.zmq_status_service.subscribe_to_topic("seq_daemonstate")
+        self.zmq_status_service.subscribe_to_topic("seq_waitstate")
 
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
@@ -194,7 +194,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
         self.zmq_status_service.airmass_signal.connect(self.layout_service.update_airmass)
         self.zmq_status_service.slit_info_signal.connect(self.layout_service.update_slit_info_fields)
-
+        self.zmq_status_service.system_status_signal.connect(self.layout_service.update_system_status)
 
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)

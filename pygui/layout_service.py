@@ -204,6 +204,11 @@ class LayoutService:
             "idle": QColor(255, 255, 0),       # Yellow
             "paused": QColor(255, 165, 0),     # Orange
             "exposing": QColor(0, 255, 0),     # Green
+            "readout": QColor(0, 255, 0),      # Green
+            "acquire": QColor(255, 255, 0),    # Yellow           
+            "focus": QColor(255, 255, 0),      # Yellow     
+            "calib": QColor(255, 255, 0),      # Yellow     
+            "user": QColor(255, 255, 0),      # Yellow     
         }
 
         # Create a dictionary to hold the status widgets, which we will enable/disable

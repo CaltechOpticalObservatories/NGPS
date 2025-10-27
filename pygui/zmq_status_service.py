@@ -3,6 +3,7 @@ import os
 import logging
 import json
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
+from typing import Dict
 
 class ZmqStatusService(QObject):
     # Signal to send a new message
@@ -17,6 +18,8 @@ class ZmqStatusService(QObject):
     airmass_signal = pyqtSignal(float) 
     
     slit_info_signal = pyqtSignal(float, float)
+    
+    system_status_signal = pyqtSignal(str)
 
     def __init__(self, parent, broker_publish_endpoint="tcp://127.0.0.1:5556"):
         super().__init__()
@@ -127,8 +130,9 @@ class ZmqStatusService(QObject):
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
                         # If the topic is "seq_daemonstate"
-                        if topic == "seq_daemonstate":
-                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+                        if topic == "seq_waitstate":
+                            status = self._status_from_seq_waitstate(data)
+                            self.system_status_signal.emit(status) 
                         
                         # If the topic is "slitd"
                         if topic == "slitd":
@@ -237,6 +241,16 @@ class ZmqStatusService(QObject):
         else:
             self.logger.warning("AIRMASS data is not available.")
 
+    def _status_from_seq_waitstate(self, flags: Dict[str, bool]) -> str:
+        f = {k: bool(v) for k, v in (flags or {}).items()}
+
+        if f.get("READOUT"):  return "readout"
+        if f.get("EXPOSE"):   return "exposing"
+        if f.get("ACQUIRE"):  return "acquire"
+        if f.get("FOCUS"):    return "focus"
+        if f.get("CALIB"):    return "calib" 
+        if f.get("USER"):     return "user" 
+        return "idle"
 
 
 class ZmqStatusServiceThread(QThread):
