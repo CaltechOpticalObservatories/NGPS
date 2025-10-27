@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -12,8 +12,7 @@ class LayoutService:
         self.parent = parent
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
-        self.target_list_name = QComboBox()
-        self._init_target_list_combo()
+        self.target_list_name = QListWidget()
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
@@ -25,25 +24,6 @@ class LayoutService:
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
 
-    def _init_target_list_combo(self):
-        if getattr(self, "_target_combo_inited", False):
-            return
-        combo = self.target_list_name
-
-        # 1) Force a Qt view (not native) so QSS + scrolling work
-        view = QListView(combo)
-        view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        view.setVerticalScrollMode(QListView.ScrollPerPixel)
-        view.setUniformItemSizes(True)
-        combo.setView(view)
-
-        # 2) Limit visible items so a scrollbar appears when count exceeds this
-        combo.setMaxVisibleItems(9)
-
-        # 3) Let it size text sensibly without forcing huge popups
-        combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
-
-        self._target_combo_inited = True
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
