@@ -430,6 +430,20 @@ class LayoutService:
         overhead_layout.addWidget(QLabel("Readout Progress"))
         overhead_layout.addWidget(self.parent.overhead_progress)
 
+        self.parent.shutter_label = QLabel("Shutter:")
+        self.parent.shutter_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+
+        self.parent.shutter_box = QLabel("CLOSED")
+        self.parent.shutter_box.setAlignment(Qt.AlignCenter)
+        self.parent.shutter_box.setFixedWidth(90)
+        self.parent.shutter_box.setStyleSheet(
+            "border: 1px solid gray; padding: 2px; background-color: #ccc; color: black;"
+        )
+
+        overhead_layout.addSpacing(12)
+        overhead_layout.addWidget(self.parent.shutter_label)
+        overhead_layout.addWidget(self.parent.shutter_box)
+
         # Stack both layouts
         progress_layout.addLayout(exposure_layout)
         progress_layout.addLayout(overhead_layout)
@@ -445,6 +459,23 @@ class LayoutService:
     def update_readout_progress(self, progress_percentage):
         """Update the readout progress bar based on the received percentage."""
         self.parent.overhead_progress.setValue(progress_percentage)
+
+    def update_shutter_status(self, is_open):
+        if isinstance(is_open, str):
+            up = is_open.strip().upper()
+            is_open = True if up in ("OPEN", "OPENED", "O") else False if up in ("CLOSE","CLOSED","C") else False
+
+        if is_open:
+            self.parent.shutter_box.setText("OPEN")
+            self.parent.shutter_box.setStyleSheet(
+                "border: 1px solid gray; padding: 2px; background-color: #cccccc; color: black;"
+            )
+        else:
+            self.parent.shutter_box.setText("CLOSED")
+            self.parent.shutter_box.setStyleSheet(
+                "border: 1px solid gray; padding: 2px; background-color: #cccccc; color: black;"
+            )
+
 
     def create_image_info_layout(self):
         image_info_layout = QHBoxLayout()
