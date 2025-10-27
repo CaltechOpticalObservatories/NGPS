@@ -738,7 +738,10 @@ class LayoutService:
         """
         Make the target list table editable only for:
         EXPTIME, SLITWIDTH, SLITANGLE, BINSPAT, BINSPECT, NEXP
-        and size rows/columns so 14pt bold fits without clipping.
+        Size rows/columns so 14pt bold fits, and on edit push to DB via:
+            self.logic_service.send_update_to_db(observation_id, field_name, value)
+        Assumes there's an OBSERVATION_ID column (visible or hidden),
+        or you set self._row_to_obsid[row] during population.
         """
         table = self.target_list_display
         if table is None:
@@ -751,7 +754,7 @@ class LayoutService:
             | QAbstractItemView.EditKeyPressed
         )
 
-        # 2) Row height based on a real QLineEdit (respects your QSS padding/border)
+        # 2) Row height from a real QLineEdit (fits CentOS7 + your QSS)
         dummy = QLineEdit()
         dummy.setFont(table.font())
         row_h = dummy.sizeHint().height() + 14
@@ -759,7 +762,7 @@ class LayoutService:
         vh.setDefaultSectionSize(row_h)
         vh.setMinimumSectionSize(row_h)
 
-        # 3) Column sizing that plays nicely with your 14pt bold
+        # 3) Column sizing to match 14pt bold comfortably
         fm = table.fontMetrics()
         hh = table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
@@ -770,7 +773,7 @@ class LayoutService:
         # 4) Only specific columns editable
         editable_names = {"EXPTIME", "SLITWIDTH", "SLITANGLE", "BINSPAT", "BINSPECT", "NEXP"}
 
-        # Map header text -> column index (case-insensitive)
+        # Build header map (case-insensitive)
         name_to_col = {}
         for c in range(table.columnCount()):
             hitem = table.horizontalHeaderItem(c)
@@ -785,19 +788,70 @@ class LayoutService:
                 it = table.item(r, c)
                 if it is None:
                     continue
-                flags = it.flags()
+                f = it.flags()
                 if c in editable_cols:
-                    it.setFlags((flags | Qt.ItemIsEditable | Qt.ItemIsEnabled | Qt.ItemIsSelectable))
+                    it.setFlags((f | Qt.ItemIsEditable | Qt.ItemIsEnabled | Qt.ItemIsSelectable))
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 else:
-                    it.setFlags((flags | Qt.ItemIsEnabled | Qt.ItemIsSelectable) & ~Qt.ItemIsEditable)
+                    it.setFlags((f | Qt.ItemIsEnabled | Qt.ItemIsSelectable) & ~Qt.ItemIsEditable)
 
-        # 5) Widen editable columns a touch after content is in
+        # Widen editable columns a touch after content is in
         for name in editable_names:
             col = name_to_col.get(name)
             if col is not None:
                 table.resizeColumnToContents(col)
                 hh.resizeSection(col, max(hh.sectionSize(col), int(fm.averageCharWidth() * 10 + 24)))
+
+        # 5) Connect a minimal itemChanged -> DB updater (connect once)
+        if getattr(self, "_simple_db_hook_connected", False):
+            return
+
+        oid_col = name_to_col.get("OBSERVATION_ID")
+        row_to_oid = getattr(self, "_row_to_obsid", None)  # optional fallback
+
+        def on_cell_changed(item):
+            h = table.horizontalHeaderItem(item.column())
+            if not h:
+                return
+            col_name = h.text().strip().upper()
+            if col_name not in editable_names:
+                return
+
+            # Resolve observation_id (prefer OBSERVATION_ID column)
+            obs_id = None
+            if oid_col is not None:
+                oid_item = table.item(item.row(), oid_col)
+                if oid_item:
+                    t = (oid_item.text() or "").strip()
+                    if t.isdigit():
+                        obs_id = int(t)
+            elif row_to_oid:
+                obs_id = row_to_oid.get(item.row())
+
+            if not obs_id:
+                return
+
+            # Parse new value to correct type
+            txt = (item.text() or "").strip()
+            try:
+                if col_name in {"BINSPAT", "BINSPECT", "NEXP"}:
+                    value = int(txt)
+                elif col_name in {"EXPTIME", "SLITWIDTH", "SLITANGLE"}:
+                    value = float(txt)
+                else:
+                    value = txt
+            except ValueError:
+                return  # keep it simple; ignore invalid input
+
+            # Push to DB using your LogicService method
+            try:
+                self.logic_service.send_update_to_db(obs_id, col_name, value)
+            except Exception as e:
+                print("DB update failed:", e)
+
+        table.itemChanged.connect(on_cell_changed)
+        self._simple_db_hook_connected = True
+
 
 
     def on_row_selected(self):
