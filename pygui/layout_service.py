@@ -409,7 +409,7 @@ class LayoutService:
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
-        self.parent.exposure_progress.setMaximumWidth(300)
+        self.parent.exposure_progress.setMaximumWidth(600)
         self.parent.exposure_progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.exposure_progress.setTextVisible(True)  # Enable text display
         self.parent.exposure_progress.setFormat("0% (0 sec remaining)")  # Initial display
