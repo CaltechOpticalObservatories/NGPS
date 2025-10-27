@@ -699,6 +699,13 @@ class LayoutService:
         header = self.target_list_display.horizontalHeader()
         header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
+        dummy = QLineEdit()                                   # inherits app QSS (14pt bold, padding, borders)
+        dummy.setFont(self.target_list_display.font())
+        row_h = dummy.sizeHint().height() + 4                 # a little breathing room
+        vh = self.target_list_display.verticalHeader()
+        vh.setDefaultSectionSize(row_h)
+        vh.setMinimumSectionSize(row_h)
+
         fm = self.target_list_display.fontMetrics()
         row_h = fm.height() + 12  # padding for bigger font
         vh = self.target_list_display.verticalHeader()
