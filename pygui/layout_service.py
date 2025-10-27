@@ -13,9 +13,7 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
-        self.target_list_name.setMaxVisibleItems(15) 
-        self.target_list_name.setView(QListView()) 
-        self.target_list_name.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._init_target_list_combo()
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
@@ -26,7 +24,25 @@ class LayoutService:
         
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
-        
+
+    def _init_target_list_combo(self):
+        if getattr(self, "_target_combo_inited", False):
+            return
+        combo = self.target_list_name
+        combo.setMaxVisibleItems(15)                                 # forces a scrollbar once >15
+        combo.setView(QListView())                                   # ensure a Qt list view (not native)
+        combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Nice-to-have: better sizing + type-to-filter
+        combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        combo.setMinimumContentsLength(24)                           # tweak to taste
+        combo.setEditable(True)
+        c = combo.completer()
+        c.setFilterMode(Qt.MatchContains)
+        c.setCaseSensitivity(Qt.CaseInsensitive)
+
+        self._target_combo_inited = True
+     
     def get_screen_size_ratio(self):
         # Get the user's screen size
         # screen = self.parent.screen()
