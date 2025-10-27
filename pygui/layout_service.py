@@ -641,6 +641,7 @@ class LayoutService:
 
         # Create the QTableWidget for the target list
         self.target_list_display = QTableWidget()
+        self.configure_target_list_table()
         self.target_list_display.setStyleSheet("""
             /* PyQt Table Styling */
             QTableWidget, QTableView {
@@ -699,25 +700,6 @@ class LayoutService:
         header = self.target_list_display.horizontalHeader()
         header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
-        dummy = QLineEdit()                                   # inherits app QSS (14pt bold, padding, borders)
-        dummy.setFont(self.target_list_display.font())
-        row_h = dummy.sizeHint().height() + 4                 # a little breathing room
-        vh = self.target_list_display.verticalHeader()
-        vh.setDefaultSectionSize(row_h)
-        vh.setMinimumSectionSize(row_h)
-
-        fm = self.target_list_display.fontMetrics()
-        row_h = fm.height() + 12  # padding for bigger font
-        vh = self.target_list_display.verticalHeader()
-        vh.setDefaultSectionSize(row_h)
-        vh.setMinimumSectionSize(row_h)
-
-        hh = self.target_list_display.horizontalHeader()
-        hh.setSectionResizeMode(QHeaderView.Interactive)                 # user resizable
-        hh.setDefaultSectionSize(int(fm.averageCharWidth() * 12 + 24))   # roomy cols
-        hh.setMinimumSectionSize(int(fm.averageCharWidth() * 8 + 16))
-        hh.setStretchLastSection(True)
-
         # Enable sorting on column headers
         self.target_list_display.setSortingEnabled(True)
 
@@ -728,11 +710,8 @@ class LayoutService:
         # Allow manual resizing of the columns (on the horizontal header)
         header.setSectionResizeMode(QHeaderView.Interactive)
 
-        self.target_list_display.setEditTriggers(
-            QAbstractItemView.DoubleClicked
-            | QAbstractItemView.SelectedClicked
-            | QAbstractItemView.EditKeyPressed
-        )
+        # # Disable editing of table cells
+        # self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Set selection mode to select entire rows when a cell is clicked
         self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -754,6 +733,72 @@ class LayoutService:
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
+
+    def configure_target_list_table(self):
+        """
+        Make the target list table editable only for:
+        EXPTIME, SLITWIDTH, SLITANGLE, BINSPAT, BINSPECT, NEXP
+        and size rows/columns so 14pt bold fits without clipping.
+        """
+        table = self.target_list_display
+        if table is None:
+            return
+
+        # 1) Normal edit behavior
+        table.setEditTriggers(
+            QAbstractItemView.DoubleClicked
+            | QAbstractItemView.SelectedClicked
+            | QAbstractItemView.EditKeyPressed
+        )
+
+        # 2) Row height based on a real QLineEdit (respects your QSS padding/border)
+        dummy = QLineEdit()
+        dummy.setFont(table.font())
+        row_h = dummy.sizeHint().height() + 4
+        vh = table.verticalHeader()
+        vh.setDefaultSectionSize(row_h)
+        vh.setMinimumSectionSize(row_h)
+
+        # 3) Column sizing that plays nicely with your 14pt bold
+        fm = table.fontMetrics()
+        hh = table.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Interactive)
+        hh.setDefaultSectionSize(int(fm.averageCharWidth() * 12 + 24))
+        hh.setMinimumSectionSize(int(fm.averageCharWidth() * 8 + 16))
+        hh.setStretchLastSection(True)
+
+        # 4) Only specific columns editable
+        editable_names = {"EXPTIME", "SLITWIDTH", "SLITANGLE", "BINSPAT", "BINSPECT", "NEXP"}
+
+        # Map header text -> column index (case-insensitive)
+        name_to_col = {}
+        for c in range(table.columnCount()):
+            hitem = table.horizontalHeaderItem(c)
+            if hitem:
+                name_to_col[hitem.text().strip().upper()] = c
+
+        editable_cols = {name_to_col[n] for n in editable_names if n in name_to_col}
+
+        # Flip flags per cell; align numeric right
+        for r in range(table.rowCount()):
+            for c in range(table.columnCount()):
+                it = table.item(r, c)
+                if it is None:
+                    continue
+                flags = it.flags()
+                if c in editable_cols:
+                    it.setFlags((flags | Qt.ItemIsEditable | Qt.ItemIsEnabled | Qt.ItemIsSelectable))
+                    it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                else:
+                    it.setFlags((flags | Qt.ItemIsEnabled | Qt.ItemIsSelectable) & ~Qt.ItemIsEditable)
+
+        # 5) Widen editable columns a touch after content is in
+        for name in editable_names:
+            col = name_to_col.get(name)
+            if col is not None:
+                table.resizeColumnToContents(col)
+                hh.resizeSection(col, max(hh.sectionSize(col), int(fm.averageCharWidth() * 10 + 24)))
+
 
     def on_row_selected(self):
         # Get the selected row's index
