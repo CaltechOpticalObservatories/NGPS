@@ -709,8 +709,8 @@ class LayoutService:
         # Allow manual resizing of the columns (on the horizontal header)
         header.setSectionResizeMode(QHeaderView.Interactive)
 
-        # Disable editing of table cells
-        self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # # Disable editing of table cells
+        # self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # Set selection mode to select entire rows when a cell is clicked
         self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
