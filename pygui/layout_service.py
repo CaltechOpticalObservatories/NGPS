@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy, QListView
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -13,7 +13,7 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
-        self._init_target_list_combo() 
+        self._init_target_list_combo()
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
@@ -29,13 +29,21 @@ class LayoutService:
         if getattr(self, "_target_combo_inited", False):
             return
         combo = self.target_list_name
-        combo.setMaxVisibleItems(9)                 # threshold that triggers a popup scrollbar
-        combo.setView(QListView())                  # ensure Qt view, not native
-        combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        combo.view().setVerticalScrollMode(QListView.ScrollPerPixel)
-        combo.view().setUniformItemSizes(True)
-        self._target_combo_inited = True
 
+        # 1) Force a Qt view (not native) so QSS + scrolling work
+        view = QListView(combo)
+        view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        view.setVerticalScrollMode(QListView.ScrollPerPixel)
+        view.setUniformItemSizes(True)
+        combo.setView(view)
+
+        # 2) Limit visible items so a scrollbar appears when count exceeds this
+        combo.setMaxVisibleItems(9)
+
+        # 3) Let it size text sensibly without forcing huge popups
+        combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+
+        self._target_combo_inited = True
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
@@ -1325,7 +1333,6 @@ class LayoutService:
     
     def load_target_lists(self, target_lists=None):
         """Populate the ComboBox with target lists, switching between Science and Calibration modes."""
-        self._init_target_list_combo()
         try:
             if self.target_list_mode_toggle.isChecked():
                 # Calibration mode
@@ -1381,14 +1388,7 @@ class LayoutService:
                 self.target_list_name.setCurrentIndex(0 if target_lists else -1)
 
             self.target_list_name.blockSignals(False)
-            combo = self.target_list_name
-            if combo.view() is None or not isinstance(combo.view(), QListView):
-                combo.setView(QListView())
 
-            need_scroll = combo.count() > combo.maxVisibleItems()
-            combo.view().setVerticalScrollBarPolicy(
-                Qt.ScrollBarAsNeeded if need_scroll else Qt.ScrollBarAlwaysOff
-            )
             # Rewire handler safely and trigger once
             try:
                 self.target_list_name.currentIndexChanged.disconnect()
@@ -1753,7 +1753,6 @@ class LayoutService:
 
         # Add the target list name combo box
         self.target_list_name = QComboBox()
-        self._init_target_list_combo()
         self.target_list_name.setMaximumWidth(250)
         target_dropdown_layout.addWidget(self.target_list_name)
 
