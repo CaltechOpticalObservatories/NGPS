@@ -12,7 +12,8 @@ class LayoutService:
         self.parent = parent
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
-        self.target_list_name = QListWidget()
+        self.target_list_name = QComboBox()
+        self.target_list_name.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
