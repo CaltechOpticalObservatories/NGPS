@@ -28,7 +28,7 @@ class LayoutService:
         if getattr(self, "_target_combo_inited", False):
             return
         combo = self.target_list_name
-        combo.setMaxVisibleItems(15)                 # show fewer -> adds scrollbar
+        combo.setMaxVisibleItems(9)                 # show fewer -> adds scrollbar
         combo.setView(QListView())                   # force Qt view (not native)
         combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._target_combo_inited = True
