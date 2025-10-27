@@ -13,6 +13,7 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
+        self._init_target_list_combo() 
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
@@ -1321,6 +1322,7 @@ class LayoutService:
     
     def load_target_lists(self, target_lists=None):
         """Populate the ComboBox with target lists, switching between Science and Calibration modes."""
+        self._init_target_list_combo()
         try:
             if self.target_list_mode_toggle.isChecked():
                 # Calibration mode
@@ -1377,15 +1379,14 @@ class LayoutService:
 
             self.target_list_name.blockSignals(False)
             combo = self.target_list_name
+            # if a style recreated the view, re-force QListView
             if combo.view() is None or not isinstance(combo.view(), QListView):
                 combo.setView(QListView())
 
-            count = combo.count()
-            need_scroll = count > combo.maxVisibleItems()
+            need_scroll = combo.count() > combo.maxVisibleItems()
             combo.view().setVerticalScrollBarPolicy(
                 Qt.ScrollBarAsNeeded if need_scroll else Qt.ScrollBarAlwaysOff
             )
-
             # Rewire handler safely and trigger once
             try:
                 self.target_list_name.currentIndexChanged.disconnect()
