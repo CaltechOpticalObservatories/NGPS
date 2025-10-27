@@ -1376,6 +1376,15 @@ class LayoutService:
                 self.target_list_name.setCurrentIndex(0 if target_lists else -1)
 
             self.target_list_name.blockSignals(False)
+            combo = self.target_list_name
+            if combo.view() is None or not isinstance(combo.view(), QListView):
+                combo.setView(QListView())
+
+            count = combo.count()
+            need_scroll = count > combo.maxVisibleItems()
+            combo.view().setVerticalScrollBarPolicy(
+                Qt.ScrollBarAsNeeded if need_scroll else Qt.ScrollBarAlwaysOff
+            )
 
             # Rewire handler safely and trigger once
             try:
