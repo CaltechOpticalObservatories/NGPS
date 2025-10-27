@@ -699,6 +699,18 @@ class LayoutService:
         header = self.target_list_display.horizontalHeader()
         header.setFont(QFont("Arial", 10, QFont.Normal))  # Set font to normal (non-bold)
 
+        fm = self.target_list_display.fontMetrics()
+        row_h = fm.height() + 12  # padding for bigger font
+        vh = self.target_list_display.verticalHeader()
+        vh.setDefaultSectionSize(row_h)
+        vh.setMinimumSectionSize(row_h)
+
+        hh = self.target_list_display.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Interactive)                 # user resizable
+        hh.setDefaultSectionSize(int(fm.averageCharWidth() * 12 + 24))   # roomy cols
+        hh.setMinimumSectionSize(int(fm.averageCharWidth() * 8 + 16))
+        hh.setStretchLastSection(True)
+
         # Enable sorting on column headers
         self.target_list_display.setSortingEnabled(True)
 
@@ -709,8 +721,11 @@ class LayoutService:
         # Allow manual resizing of the columns (on the horizontal header)
         header.setSectionResizeMode(QHeaderView.Interactive)
 
-        # Disable editing of table cells
-        self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.target_list_display.setEditTriggers(
+            QAbstractItemView.DoubleClicked
+            | QAbstractItemView.SelectedClicked
+            | QAbstractItemView.EditKeyPressed
+        )
 
         # Set selection mode to select entire rows when a cell is clicked
         self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
