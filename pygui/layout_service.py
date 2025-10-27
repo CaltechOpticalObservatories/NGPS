@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy, QListView
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -23,6 +23,16 @@ class LayoutService:
         
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
+
+    def _init_target_list_combo(self):
+        if getattr(self, "_target_combo_inited", False):
+            return
+        combo = self.target_list_name
+        combo.setMaxVisibleItems(15)                 # show fewer -> adds scrollbar
+        combo.setView(QListView())                   # force Qt view (not native)
+        combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        combo.setStyleSheet("QComboBox QAbstractItemView { max-height: 420px; }")
+        self._target_combo_inited = True
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
@@ -429,7 +439,7 @@ class LayoutService:
 
         overhead_layout.setSpacing(0)
         overhead_layout.addWidget(QLabel("Readout Progress:"))
-        overhead_layout.addSpacing(6) 
+        overhead_layout.addSpacing(8) 
         overhead_layout.addWidget(self.parent.overhead_progress)
 
         self.parent.shutter_label = QLabel("Shutter:")
@@ -1732,6 +1742,7 @@ class LayoutService:
 
         # Add the target list name combo box
         self.target_list_name = QComboBox()
+        self._init_target_list_combo()
         self.target_list_name.setMaximumWidth(250)
         target_dropdown_layout.addWidget(self.target_list_name)
 
