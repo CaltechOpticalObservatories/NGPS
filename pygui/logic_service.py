@@ -1014,7 +1014,7 @@ class LogicService:
         self.connection = self.connect_to_mysql("config/db_config.ini")
         cursor = self.connection.cursor()
 
-        query = "DELETE FROM target_list_table WHERE NAME = %s"
+        query = "DELETE FROM target_sets WHERE NAME = %s"
         cursor.execute(query, (target_list_name,))
         self.connection.commit()
 
