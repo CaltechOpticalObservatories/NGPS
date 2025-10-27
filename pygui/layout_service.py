@@ -29,10 +29,13 @@ class LayoutService:
         if getattr(self, "_target_combo_inited", False):
             return
         combo = self.target_list_name
-        combo.setMaxVisibleItems(9)                 # show fewer -> adds scrollbar
-        combo.setView(QListView())                   # force Qt view (not native)
+        combo.setMaxVisibleItems(9)                 # threshold that triggers a popup scrollbar
+        combo.setView(QListView())                  # ensure Qt view, not native
         combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        combo.view().setVerticalScrollMode(QListView.ScrollPerPixel)
+        combo.view().setUniformItemSizes(True)
         self._target_combo_inited = True
+
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
@@ -1379,7 +1382,6 @@ class LayoutService:
 
             self.target_list_name.blockSignals(False)
             combo = self.target_list_name
-            # if a style recreated the view, re-force QListView
             if combo.view() is None or not isinstance(combo.view(), QListView):
                 combo.setView(QListView())
 
