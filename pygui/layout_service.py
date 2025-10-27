@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QListView, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QFrame, QDialog, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
@@ -13,7 +13,6 @@ class LayoutService:
         self.logic_service = LogicService(self.parent)
         self.target_list_display = None 
         self.target_list_name = QComboBox()
-        self._init_target_list_combo()
         self.add_row_button = QPushButton()
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
@@ -24,25 +23,7 @@ class LayoutService:
         
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
-
-    def _init_target_list_combo(self):
-        if getattr(self, "_target_combo_inited", False):
-            return
-        combo = self.target_list_name
-        combo.setMaxVisibleItems(15)                                 # forces a scrollbar once >15
-        combo.setView(QListView())                                   # ensure a Qt list view (not native)
-        combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        # Nice-to-have: better sizing + type-to-filter
-        combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        combo.setMinimumContentsLength(24)                           # tweak to taste
-        combo.setEditable(True)
-        c = combo.completer()
-        c.setFilterMode(Qt.MatchContains)
-        c.setCaseSensitivity(Qt.CaseInsensitive)
-
-        self._target_combo_inited = True
-     
+        
     def get_screen_size_ratio(self):
         # Get the user's screen size
         # screen = self.parent.screen()
@@ -130,6 +111,7 @@ class LayoutService:
         third_column_layout.setSpacing(10)
 
         # Add widgets to the third column, e.g., tabs, buttons, etc.
+        # For simplicity, let's assume it's a placeholder widget:
         sidebar_widget = QWidget()
         third_column_layout.addWidget(sidebar_widget)
 
@@ -151,15 +133,16 @@ class LayoutService:
         # Add the QTabWidget to the third column layout
         third_column_layout.addWidget(self.parent.tabs)
 
+        # Now, create and set up the layout for the Control tab
         # Create a layout for the Control tab using the ControlTab class
-        self.control_tab = ControlTab(self.parent)
-        control_layout = QVBoxLayout()
-        control_layout.addWidget(self.control_tab)
-        self.parent.control_tab.setLayout(control_layout)
+        self.control_tab = ControlTab(self.parent)  # Create the control tab instance
+        control_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
+        control_layout.addWidget(self.control_tab)  # Add the ControlTab widget to the layout
+        self.parent.control_tab.setLayout(control_layout)  # Set the layout for the control tab widget
 
-        self.status_tab = InstrumentStatusTab(self.parent)
-        status_layout = QVBoxLayout()
-        status_layout.addWidget(self.status_tab)
+        self.status_tab = InstrumentStatusTab(self.parent)  # Create the control tab instance
+        status_layout = QVBoxLayout()  # You can define a custom layout for the control tab here if needed
+        status_layout.addWidget(self.status_tab)  # Add the ControlTab widget to the layout
         self.parent.status_tab.setLayout(status_layout)  # Set the layout for the control tab widget
         return third_column_layout
 
@@ -740,8 +723,8 @@ class LayoutService:
         decl_le.setPlaceholderText("e.g. +12 34 56  or  +12.582 (deg)")
         off_ra_le.setPlaceholderText("arcsec (optional)")
         off_dec_le.setPlaceholderText("arcsec (optional)")
-        exptime_le.setPlaceholderText("seconds (optional)")
-        slitwidth_le.setPlaceholderText("arcsec (optional)")
+        exptime_le.setPlaceholderText("seconds")
+        slitwidth_le.setPlaceholderText("arcsec")
         mag_le.setPlaceholderText("e.g. 17.2 (optional)")
 
         # Numeric validators (optional, allow blanks)
@@ -772,9 +755,11 @@ class LayoutService:
         target_name = name_le.text().strip()
         ra          = ra_le.text().strip()
         decl        = decl_le.text().strip()
+        exp        = exptime_le.text().strip()
+        slitwidth        = slitwidth_le.text().strip()
 
-        if not target_name or not ra or not decl:
-            QMessageBox.warning(self.parent, "Missing fields", "Name, RA, and Decl are required.")
+        if not target_name or not ra or not decl or not exp or not slitwidth:
+            QMessageBox.warning(self.parent, "Missing fields", "Name, RA, Decl, Exptime, Slitwidth are required.")
             return
 
         # Convert numeric optionals (blank -> None)

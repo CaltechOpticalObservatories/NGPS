@@ -122,11 +122,15 @@ class ZmqStatusService(QObject):
                         data = json.loads(payload)
                         # Emit the message to the UI thread
                         
-                        # If the topic is "sequencerd"
+                        # If the topic is "acamd"
                         if topic == "acamd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
+
+                        # If the topic is "seq_daemonstate"
+                        if topic == "seq_daemonstate":
+                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
                         
-                        # If the topic is "sequencerd"
+                        # If the topic is "slitd"
                         if topic == "slitd":
                             slit_width = data.get("SLITW", None)
                             slit_offset = data.get("SLITO", None)
