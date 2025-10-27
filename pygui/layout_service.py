@@ -31,7 +31,6 @@ class LayoutService:
         combo.setMaxVisibleItems(15)                 # show fewer -> adds scrollbar
         combo.setView(QListView())                   # force Qt view (not native)
         combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        combo.setStyleSheet("QComboBox QAbstractItemView { max-height: 420px; }")
         self._target_combo_inited = True
         
     def get_screen_size_ratio(self):
