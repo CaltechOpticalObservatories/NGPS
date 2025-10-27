@@ -1711,7 +1711,7 @@ class LayoutService:
 
         # Create the toggle button
         self.target_list_mode_toggle = QPushButton("Mode: Science")
-        self.target_list_mode_toggle.setCheckable(False)
+        self.target_list_mode_toggle.setCheckable(True)
         self.target_list_mode_toggle.setMaximumWidth(200)
 
         # Set toggle styles (optional)
