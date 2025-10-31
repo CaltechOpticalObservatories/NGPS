@@ -3888,6 +3888,7 @@ namespace Sequencer {
       retstring.append( "   expose [ ? ]\n" );
       retstring.append( "   fpoffset ? | <from> <to>\n" );
       retstring.append( "   getnext [ ? ]\n" );
+      retstring.append( "   getobsid [ ? ]\n" );
       retstring.append( "   gettelem [ ? ]\n" );
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
@@ -4183,6 +4184,27 @@ namespace Sequencer {
       if ( ret == TargetInfo::TargetState::TARGET_ERROR )     { error = ERROR; }
 
       retstring = rts.str();
+    }
+    else
+
+    // ----------------------------------------------------
+    // getobsid -- get target by OBSID
+    // ----------------------------------------------------
+    //
+    if ( testname == "getobsid" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test getobsid\n";
+        retstring.append( "  Read target from database using OBSID\n" );
+        return HELP;
+      }
+
+      if (tokens.size() != 2) {
+        retstring = "invalid";
+        logwrite(function, "ERROR expected getobsid <OBSID>");
+        return ERROR;
+      }
+
+      this->target.get_specified_target( tokens[1], retstring );
     }
     else
 
