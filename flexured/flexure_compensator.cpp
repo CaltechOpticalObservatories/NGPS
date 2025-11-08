@@ -9,6 +9,19 @@
 
 namespace Flexure {
 
+  Compensator::Compensator() {
+    for (const auto &chan : { "U", "G", "R", "I" }) {
+      for (const auto &axis : { "X", "Y" }) {
+        position_coefficients[{chan,axis}] = std::vector<double>();
+        flexure_polynomials[{chan,axis}] = std::vector<double>();
+      }
+    }
+
+    this->trigfunction["R"] = TrigFunction::Sine;
+    this->trigfunction["I"] = TrigFunction::Cosine;
+
+  }
+
   /***** Flexure::Compensator::datavec_name ***********************************/
   /**
    * @brief  returns the name of a vector type
@@ -31,70 +44,70 @@ namespace Flexure {
   /***** Flexure::Compensator::datavec_name ***********************************/
 
 
-  /***** Flexure::Compensator::load_vector_from_config ************************/
+  /***** Flexure::Compensator::load_position_coefficients *********************/
   /**
-   * @brief      loads data from Config file into the appropriate vector
-   * @param[in]  config   configuration line
-   * @param[in]  vectype  DataVectorType specifies which vector to load
-   * @param[in]  vecsize  number of elements in this vector
-   *
+   * @brief      loads position coefficients from configuration file
+   * @param[in]  config  configuration line
+   * @param[in]  type    one of VectorType enum to specify which vector map to load
+   * @return     ERROR|NO_ERROR
    */
-  long Compensator::load_vector_from_config(std::string &config, DataVectorType vectype, size_t vecsize) {
-    const std::string function("Flexure::Compensator::load_vector_from_config");
-
-    if (vecsize<1) {
-      logwrite(function, "ERROR requested zero vector size for "+datavec_name(vectype));
-      return ERROR;
-    }
-
-    std::vector<double>* vec=nullptr;  // reference to specified class vector
-
-    // select which vector to load
-    switch (vectype) {
-      case DataVectorType::RXE: vec = &this->rxe;
-                                break;
-      case DataVectorType::RYE: vec = &this->rye;
-                                break;
-      case DataVectorType::IXE: vec = &this->ixe;
-                                break;
-      case DataVectorType::IYE: vec = &this->iye;
-                                break;
-      case DataVectorType::PIX: vec = &this->pix;
-                                break;
-      case DataVectorType::PIY: vec = &this->piy;
-                                break;
-      case DataVectorType::PRX: vec = &this->prx;
-                                break;
-      case DataVectorType::PRY: vec = &this->pry;
-                                break;
-      default:
-        logwrite(function, "ERROR invalid vector type");
-        return ERROR;
-    }
-
+  long Compensator::load_vector_from_config(std::string &config, VectorType type) {
+    const std::string function("Flexure::Compensator::load_position_coefficients");
     std::vector<std::string> tokens;
     Tokenize(config, tokens, " ");
 
-    if (tokens.size() != vecsize) {
-      logwrite(function, "ERROR "+std::to_string(tokens.size())
-                        +" tokens do not match vector size "+std::to_string(vecsize)
-                        +" for "+datavec_name(vectype));
+    size_t vecsize;
+    vector_map_t* vecmap;
+
+    if (type==VectorType::POSITION_COEFFICIENTS) {
+      vecmap  = &this->position_coefficients;
+      vecsize = 3;
+    }
+    else
+    if (type==VectorType::FLEXURE_POLYNOMIALS) {
+      vecmap  = &this->flexure_polynomials;
+      vecsize = 20;
+    }
+    else {
+      logwrite(function, "ERROR invalid vector type");
       return ERROR;
     }
 
-    // erase and load vector
+    // expect <CHAN> <AXIS> <COEFF> <COEFF> <COEFF> ...
+    //
+    if (tokens.size() != vecsize ) {
+      std::ostringstream oss;
+      oss << "ERROR got \"" << config << "\" but expected <chan> <axis> ... (" << vecsize << " values)";
+      logwrite(function, oss.str());
+      return ERROR;
+    }
+
+    // the vector is in a map indexed by channel and axis
+    //
+    std::string chan = tokens[0];
+    std::string axis = tokens[1];
+
+    if (vecmap->find({chan,axis}) == vecmap->end()) {
+      logwrite(function, "ERROR invalid chan,axis: "+chan+","+axis);
+      return ERROR;
+    }
+
+    // erase the vector and load it with all of the provided values
+    //
     try {
-      vec->clear();
-      for (const auto &tok : tokens) vec->push_back( std::stod(tok) );
+      (*vecmap)[{chan,axis}].clear();
+      for (int tok=2; tok<vecsize; tok++) {
+        (*vecmap)[{chan,axis}].push_back(std::stod(tokens[tok]));
+      }
     }
     catch (const std::exception &e) {
-      logwrite(function, "ERROR parsing data from "+datavec_name(vectype)+" data: "+std::string(e.what()));
+      logwrite(function, "ERROR parsing \""+config+"\"");
       return ERROR;
     }
 
     return NO_ERROR;
   }
-  /***** Flexure::Compensator::load_vector_from_config ************************/
+  /***** Flexure::Compensator::load_position_coefficients *********************/
 
 
   /***** Flexure::Compensator::flexure_polynomial_fit *************************/
@@ -115,6 +128,12 @@ namespace Flexure {
       logwrite(function, "ERROR not enough coefficients in vector for requested offset");
       throw std::out_of_range("not enough coefficients in vector");
     }
+
+    return this->flexure_polynomials.at(which)[offset + 0]
+         + this->flexure_polynomials.at(which)[offset + 1] * inputvar
+         + this->flexure_polynomials.at(which)[offset + 2] * std::pow(inputvar, 2.0)
+         + this->flexure_polynomials.at(which)[offset + 3] * std::pow(inputvar, 3.0)
+         + this->flexure_polynomials.at(which)[offset + 4] * std::pow(inputvar, 4.0);
     return vec[offset + 0]
          + vec[offset + 1] * inputvar
          + vec[offset + 2] * std::pow(inputvar, 2.0)
@@ -124,24 +143,33 @@ namespace Flexure {
   /***** Flexure::Compensator::flexure_polynomial_fit *************************/
 
 
-  /***** Flexure::Compensator::flexure_fit ************************************/
+  /***** Flexure::Compensator::calculate_shift ********************************/
   /**
-   * @brief      calculates fit
+   * @brief      calculates the shift(chan,axis) of the spectrum on the detector
    * @details    C + A1 * sin(cass-theta) + A2 * sin(2*(cass-theta)) or
    *             C + A1 * cos(cass-theta) + A2 * cos(2*(cass-theta))
-   * @param[in]  poly  vector of polynomial data
+   *             Input coefficients are a function of (chan,axis) so the output
+   *             shift will also be a function of (chan,axis).
+   * @param[in]  coefficients  vector of coefficients data
    * @param[in]  func  type of trig function to use, Sine or Cosine
    * @return     fitted value
    * @throws     std::exception
    *
    */
-  double Compensator::flexure_fit(double poly, TrigFunction func) {
-    const std::string function("Flexure::Compensator::flexure_fit");
+  /**
+   * @brief      calculates the shift of the spectrum on the detector
+   * @details    shift is function of (chan, axis)
+   *             needs cass, alt, and coefficients(chan,axis)
+   *
+   */
+  double Compensator::calculate_shift(std::pair<std::string,std::string> which) {
+//double Compensator::calculate_shift(double coefficients, TrigFunction func) {
+    const std::string function("Flexure::Compensator::calculate_shift");
     try {
-      double c     = flexure_polynomial_fit(poly, zenith,  0);
-      double a1    = flexure_polynomial_fit(poly, zenith,  5);
-      double theta = flexure_polynomial_fit(poly, zenith, 10);
-      double a2    = flexure_polynomial_fit(poly, zenith, 15);
+      double c     = flexure_polynomial_fit(coefficients, zenith,  0);
+      double a1    = flexure_polynomial_fit(coefficients, zenith,  5);
+      double theta = flexure_polynomial_fit(coefficients, zenith, 10);
+      double a2    = flexure_polynomial_fit(coefficients, zenith, 15);
 
       switch (func) {
         case TrigFunction::Sine:
@@ -158,7 +186,7 @@ namespace Flexure {
       throw;
     }
   }
-  /***** Flexure::Compensator::flexure_fit ************************************/
+  /***** Flexure::Compensator::calculate_shift ********************************/
 
 
   /***** Flexure::Compensator::compute_flexure_compensation ******************/
@@ -195,10 +223,10 @@ namespace Flexure {
     double equivalent_cass     = (-(pa + cassring) + 180) % 360 - 180;
 
     // calculate flexure of each axis
-    srx = flexure_fit(this->prx, Sine);
-    sry = flexure_fit(this->pry, Sine);
-    six = flexure_fit(this->pix, Cosine);
-    siy = flexure_fit(this->piy, Cosine);
+    srx = calculate_shift(this->prx, Sine);
+    sry = calculate_shift(this->pry, Sine);
+    six = calculate_shift(this->pix, Cosine);
+    siy = calculate_shift(this->piy, Cosine);
 
 
     collimator_position(srx, sry, &drx, &dry, &tx, &ty);
@@ -211,5 +239,24 @@ namespace Flexure {
     aiy = -diy + niy;
   }
   /***** Flexure::Compensator::compute_flexure_compensation ******************/
+
+
+
+  /**
+   * @brief      calculates the adjustments needed to compensate for a shift
+   * @details    input is output of calculate_shift()
+   *             output is correction to apply to flexure actuator position
+   *
+   */
+  void Compensator::calculate_compensation(std::pair<std::string,std::string> which) {
+
+    calculate_shift
+  }
+
+
+  long test() {
+    this->calculate_shift( { "R", "X" } );
+    return NO_ERROR;
+  }
 
 }

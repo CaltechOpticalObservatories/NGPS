@@ -157,10 +157,10 @@ namespace Flexure {
       }
       else
 
-      // COLLIMATOR_POSITION_RXE
+      // POSITION_COEFFICIENTS
       //
-      if ( config.param[entry] == "COLLIMATOR_POSITION_RXE" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RXE, 3 );
+      if ( config.param[entry] == "POSITION_COEFFICIENTS" ) {
+        error=interface.compensator.load_vector_from_config(config.arg[entry], VectorType::POSITION_COEFFICIENTS);
         if (error==NO_ERROR) {
           numapplied++;
         }
@@ -168,76 +168,10 @@ namespace Flexure {
       }
       else
 
-      // COLLIMATOR_POSITION_RYE
+      // FLEXURE_POLYNOMIALS
       //
-      if ( config.param[entry] == "COLLIMATOR_POSITION_RYE" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::RYE, 3 );
-        if (error==NO_ERROR) {
-          numapplied++;
-        }
-        else return ERROR;
-      }
-      else
-
-      // COLLIMATOR_POSITION_IXE
-      //
-      if ( config.param[entry] == "COLLIMATOR_POSITION_IXE" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IXE, 3 );
-        if (error==NO_ERROR) {
-          numapplied++;
-        }
-        else return ERROR;
-      }
-      else
-
-      // COLLIMATOR_POSITION_IYE
-      //
-      if ( config.param[entry] == "COLLIMATOR_POSITION_IYE" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::IYE, 3 );
-        if (error==NO_ERROR) {
-          numapplied++;
-        }
-        else return ERROR;
-      }
-      else
-
-      // FLEXURE_POLY_IX
-      //
-      if ( config.param[entry] == "FLEXURE_POLY_IX" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PIX, 20 );
-        if (error==NO_ERROR) {
-          numapplied++;
-        }
-        else return ERROR;
-      }
-      else
-
-      // FLEXURE_POLY_IY
-      //
-      if ( config.param[entry] == "FLEXURE_POLY_IY" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PIY, 20 );
-        if (error==NO_ERROR) {
-          numapplied++;
-        }
-        else return ERROR;
-      }
-      else
-
-      // FLEXURE_POLY_RX
-      //
-      if ( config.param[entry] == "FLEXURE_POLY_RX" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PRX, 20 );
-        if (error==NO_ERROR) {
-          numapplied++;
-        }
-        else return ERROR;
-      }
-      else
-
-      // FLEXURE_POLY_RY
-      //
-      if ( config.param[entry] == "FLEXURE_POLY_RY" ) {
-        error=interface.compensator.load_vector_from_config( config.arg[entry], DataVectorType::PRY, 20 );
+      if ( config.param[entry] == "FLEXURE_POLYNOMIALS" ) {
+        error=interface.compensator.load_vector_from_config(config.arg[entry], VectorType::FLEXURE_POLYNOMIALS);
         if (error==NO_ERROR) {
           numapplied++;
         }

@@ -461,19 +461,19 @@ namespace Flexure {
     // their telemetry which is returned as a serialized json string
     // held in retstring.
     //
-    // handle_json_message() will parse the serialized json string.
+    // parse_incoming_telemetry() will parse the serialized json string.
     //
     std::string retstring;
     for ( const auto &provider : this->telemetry_providers ) {
       Common::collect_telemetry( provider, retstring );
-      handle_json_message(retstring);
+      parse_incoming_telemetry(retstring);
     }
     return;
   }
   /***** Flexure::Interface::get_external_telemetry ***************************/
 
 
-  /***** Flexure::Interface::handle_json_message ******************************/
+  /***** Flexure::Interface::parse_incoming_telemetry *************************/
   /**
    * @brief      parses incoming telemetry messages
    * @details    Requesting telemetry from another daemon returns a serialized
@@ -482,8 +482,8 @@ namespace Flexure {
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::handle_json_message( std::string message_in ) {
-    const std::string function="Flexure::Interface::handle_json_message";
+  long Interface::parse_incoming_telemetry( std::string message_in ) {
+    const std::string function="Flexure::Interface::parse_incoming_telemetry";
     std::stringstream message;
 
     try {
@@ -519,10 +519,11 @@ namespace Flexure {
       }
       else
       if ( messagetype == "tcsinfo" ) {
-        double casangle=NAN, alt=NAN;
+        double casangle=NAN, alt=NAN, pa=NAN;
         Common::extract_telemetry_value( message_in, "CASANGLE", casangle );
         Common::extract_telemetry_value( message_in, "ALT", alt );
-        message.str(""); message << "casangle=" << casangle << " alt=" << alt;
+        Common::extract_telemetry_value( message_in, "PA", pa );
+        message.str(""); message << "casangle=" << casangle << " alt=" << alt << " PA=" << pa;
         logwrite( function, message.str() );
       }
       else
@@ -547,7 +548,7 @@ namespace Flexure {
 
     return NO_ERROR;
   }
-  /***** Flexure::Interface::handle_json_message ******************************/
+  /***** Flexure::Interface::parse_incoming_telemetry *************************/
 
 
   /***** Flexure::Interface::test *********************************************/
@@ -614,6 +615,11 @@ namespace Flexure {
         retstring.append( message.str() );
       }
       retstring.append("\n");
+    }
+    else
+
+    if (testname == "calcshift") {
+      this->compensator.test();
     }
 
     else {

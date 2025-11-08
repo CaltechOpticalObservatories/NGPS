@@ -73,7 +73,7 @@ namespace Flexure {
       long send_command( const std::string &name, std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
       void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message
       void get_external_telemetry();                          ///< collect telemetry from other daemon(s)
-      long handle_json_message( std::string message_in );     ///< parses incoming telemetry messages
+      long parse_incoming_telemetry( std::string message_in );     ///< parses incoming telemetry messages
       long test( std::string args, std::string &retstring );                 ///< test routines
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
