@@ -619,7 +619,15 @@ namespace Flexure {
     else
 
     if (testname == "calcshift") {
-      this->compensator.test();
+      if (tokens.size() != 3) {
+        logwrite(function, "ERROR expected <chan> <axis>");
+        return ERROR;
+      }
+      double shift;
+      this->compensator.test({tokens[1], tokens[2]}, shift);
+      message.str(""); message << shift;
+      retstring = message.str();
+      return NO_ERROR;
     }
 
     else {

@@ -15,6 +15,9 @@ namespace Flexure {
   constexpr double PI = 3.14159265358979323846;
   constexpr double DEGTORAD = PI/180.0;
 
+  constexpr const char* X = "X";
+  constexpr const char* Y = "Y";
+
   namespace Channel {
     constexpr const char* U = "U";
     constexpr const char* G = "G";
@@ -27,24 +30,30 @@ namespace Flexure {
     Cosine
   };
 
-  /**
-   * @brief 
-   */
-  enum DataVectorType : size_t {
-    RXE,
-    RYE,
-    IXE,
-    IYE,
-    PIX,
-    PIY,
-    PRX,
-    PRY
-  };
-
   enum VectorType : size_t {
     POSITION_COEFFICIENTS,
     FLEXURE_POLYNOMIALS
   };
+
+
+  /***** Flexure::TcsInfo *****************************************************/
+  /**
+   * @brief    contains TCS telemetry
+   *
+   */
+  class TcsInfo {
+    public:
+      double zenith;
+      double equivalent_cass;
+      double pa;
+      double cassring;
+      TcsInfo()
+        : zenith(1), equivalent_cass(3), pa(5), cassring(7) {
+//        this->equivalent_cass=(-(this->pa + this->cassring) + 180) % 360 - 180;
+        }
+  };
+  /***** Flexure::TcsInfo *****************************************************/
+
 
   /***** Flexure::Compensator *************************************************/
   /**
@@ -61,30 +70,21 @@ namespace Flexure {
 
       std::map<std::string, TrigFunction> trigfunction;
 
-      std::vector<double> rxe, rye, ixe, iye, pix, prx, piy, pry;
-
-      void calculate_compensation();
-
-      // From Matt Matuszewski
-      //
-      void collimator_position(double x, double y, double *rx, double *ry, double *ix, double *iy);
-      double flexure_polynomial_fit(double vec, double inputvar, size_t offset);
-      double calculate_shift(std::pair<std::string,std::string> which);
-//    double calculate_shift(double modified_cass, double elevation,  double *p);
-      void compute_flexure_compensation(double ha, double dec, double cassring, double exptime,
-                                        double *prx, double *pry, double *pix, double *piy,
-                                        double nrx, double nry, double nix, double niy,
-                                        double *arx, double *ary, double *aix, double *aiy);
+      double flexure_polynomial_fit(const std::pair<std::string,std::string> &which, double inputvar, size_t offset);
+      double calculate_shift(const std::pair<std::string,std::string> &which);
+      void compensate_shift_to_delta(const std::string &channel,
+                                     const std::pair<double,double> &shift, std::pair<double,double> delta);
 
     public:
       Compensator();
 
-      static std::string datavec_name(DataVectorType vectype);
+      TcsInfo tcs_info;
+
       long load_vector_from_config(std::string &config, VectorType type);
 
-      long test();
+      void calculate_compensation(const std::string &channel, std::pair<double,double> &delta);
 
-      long calculate(/* TBD */);  // presumably the equivalent of Matt's main()
+      long test(const std::pair<std::string,std::string> which, double &shift);
   };
   /***** Flexure::Compensator *************************************************/
 
