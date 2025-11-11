@@ -222,6 +222,13 @@ namespace Common {
           iface.subscriber_topics.push_back(topic);
         }
 
+        // check subscriber initialization (this would be a programming error)
+        //
+        if (!iface.subscriber) {
+          logwrite(function, "ERROR subscriber object is not initialized");
+          return ERROR;
+        }
+
         try {
           // connect to the message broker and wait for connection to establish
           //

@@ -6,7 +6,11 @@ BLKPORT=@FLEXURED_BLK_PORT@       # slitd server blocking port
 NBPORT=@FLEXURED_NB_PORT@         # slitd server non-blocking port
 ASYNCPORT=@MESSAGEPORT@           # asynchronous message port
 ASYNCGROUP=239.1.1.234            # asynchronous message broadcast group
-PUBLISHER_PORT="tcp://127.0.0.1:@FLEXURED_PUB_PORT@"  # my zeromq pub port
+
+# Message pub/sub
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 
 # this is the port number that the emulator listens to
 #

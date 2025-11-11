@@ -43,6 +43,54 @@ namespace Flexure {
   /***** Flexure::Interface::initialize_class *********************************/
 
 
+  /***** Flexure::Interface::handletopic_snapshot *****************************/
+  /**
+   * @brief      publishes a snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the "_snapshot"
+   *             topic and the payload contains my daemon name.
+   * @param[in]  jmessage  subscribed-received JSON message
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  void Interface::handletopic_snapshot(const nlohmann::json &jmessage) {
+    // If my name is in the jmessage then publish my snapshot
+    //
+    if (jmessage.contains(Flexure::DAEMON_NAME)) {
+      this->publish_snapshot();
+    }
+    else
+    if (jmessage.contains("test")) {
+      logwrite("Flexure::Interface::handletopic_snapshot", jmessage.dump());
+    }
+  }
+  /***** Flexure::Interface::handletopic_snapshot *****************************/
+
+
+  void Interface::handletopic_tcsd(const nlohmann::json &jmessage) {
+    logwrite("Flexure::Interface::handletopic_tcsd", "will process tcsinfo here");
+  }
+
+
+  void Interface::publish_snapshot() {
+    std::string dontcare;
+    this->publish_snapshot(dontcare);
+  }
+  void Interface::publish_snapshot(std::string &retstring) {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = "flexured";
+    retstring=jmessage_out.dump();
+    retstring.append(JEOF);
+
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch (const std::exception &e) {
+      logwrite("Flexure::Interface::publish_snapshot", "ERROR: "+std::string(e.what()));
+    }
+  }
+
+
   /***** Flexure::Interface::open *********************************************/
   /**
    * @brief      opens the PI socket connection

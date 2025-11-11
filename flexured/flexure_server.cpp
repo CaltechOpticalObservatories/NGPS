@@ -124,6 +124,22 @@ namespace Flexure {
       }
       else
 
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
+        numapplied++;
+      }
+      else
+
+      // SUB_ENDPOINT
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        numapplied++;
+      }
+
       // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
       //
       if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
@@ -207,6 +223,9 @@ namespace Flexure {
         this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
       }
     } // end loop through the entries in the configuration file
+
+//logwrite(function, "will start subscriber thread");
+//    this->interface.start_subscriber_thread();
 
     message.str("");
     if (numapplied==0) {

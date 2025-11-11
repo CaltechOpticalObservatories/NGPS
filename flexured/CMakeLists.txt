@@ -4,6 +4,8 @@
 # @author  David Hale <dhale@caltech.edu>
 # ----------------------------------------------------------------------------
 
+# add_compile_options( -O0 -g -march=native -DNDEBUG)
+
 cmake_minimum_required( VERSION 3.12 )
 
 set( FLEXURED_DIR ${PROJECT_BASE_DIR}/flexured )
@@ -15,6 +17,11 @@ include_directories( ${PROJECT_BASE_DIR}/PI )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
+
+# ZeroMQ
+#
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
 add_executable(flexured 
         ${FLEXURED_DIR}/flexured.cpp 
@@ -30,6 +37,8 @@ target_link_libraries(flexured
         logentry
         utilities
         ${CMAKE_THREAD_LIBS_INIT}
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         )
 
 # -- Port Definitions ----------------------------------------------------------
