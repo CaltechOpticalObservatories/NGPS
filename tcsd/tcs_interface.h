@@ -72,6 +72,7 @@ namespace TCS {
       double offsetdec;
       double offsetrate;
       double cassangle;
+      double pa;
 
       int domeshutters;
 
@@ -105,6 +106,7 @@ namespace TCS {
       void parse_weather( std::string &input );  ///< parse retstring from native ?WEATHER
       void parse_reqstat( std::string &input );  ///< parse retstring from native REQSTAT
       void parse_reqpos( std::string &input );   ///< parse retstring from native REQPOS
+      void parse_pa( std::string &input );       ///< parse retstring from native ?PARALLACTIC
   };
   /***** TCS::TcsInfo *********************************************************/
 
@@ -507,6 +509,7 @@ logwrite(function,message.str());
       long get_focus( const std::string &arg, std::string &retstring );
       long get_offsets( const std::string &arg, std::string &retstring );
       long get_offsets( double &raoff, double &decoff );
+      long get_pa(const std::string &arg, std::string &retstring);
       long pt_offsetrate( const std::string &arg, std::string &retstring );
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );

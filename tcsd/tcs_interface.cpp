@@ -47,6 +47,7 @@ namespace TCS {
     jmessage_out["ISOPEN"]     = this->tcs_info.isopen;
     jmessage_out["TCSNAME"]    = this->tcs_info.tcsname;
 
+    jmessage_out["PA"]         = this->tcs_info.pa;         // double
     jmessage_out["CASANGLE"]   = this->tcs_info.cassangle;  // double
     jmessage_out["HA"]         = this->tcs_info.ha;         // string
     jmessage_out["RAOFFSET"]   = this->tcs_info.offsetra;   // double
@@ -113,6 +114,10 @@ namespace TCS {
     error |= this->send_command( "?WEATHER", retstring, TCS::FAST_RESPONSE );
     std::replace( retstring.begin(), retstring.end(), '\n', ',');
     this->tcs_info.parse_weather( retstring );
+
+    error |= this->send_command( "?PARALLACTIC", retstring, TCS::FAST_RESPONSE );
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
+    this->tcs_info.parse_pa( retstring );
 
     error |= this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE );
     std::replace( retstring.begin(), retstring.end(), '\n', ',');
@@ -1095,6 +1100,60 @@ namespace TCS {
   /***** TCS::Interface::get_offsets ******************************************/
 
 
+  /***** TCS::Interface::get_pa ***********************************************/
+  /**
+   * @brief      get the current parallactic angle
+   * @details    uses the ?PARALLACTIC native command
+   * @param[in]  arg        used only to request help
+   * @param[out] retstring  contains parallactic angle
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::get_pa( const std::string &arg, std::string &retstring ) {
+    std::string function = "TCS::Interface::get_pa";
+
+    // Help
+    //
+    if ( arg == "?" ) {
+      retstring = TCSD_GET_PA;
+      retstring.append( " \n" );
+      retstring.append( "  Return the current parallactic angle\n" );
+      return HELP;
+    }
+
+    bool silent = false;                 // logging enabled by default
+
+    if ( arg == "poll" ) silent = true;  // logging is suppressed for polling
+
+    // Send the ?PARALLACTIC command to the TCS. This returns a string that looks like:
+    //
+    // tcsreply = "PARALLACTIC = xx.xx"
+    //
+    std::string tcsreply;
+    if ( this->send_command( "?PARALLACTIC", tcsreply, TCS::FAST_RESPONSE ) != NO_ERROR ) {
+      logwrite( function, "ERROR getting PA from TCS" );
+      return ERROR;
+    }
+
+    // parse the reply which stores it in the TcsInfo class
+    //
+    this->tcs_info.parse_pa(tcsreply);
+
+    std::ostringstream oss;
+    oss << this->tcs_info.pa;
+    retstring = oss.str();
+
+    if ( !retstring.empty() && !silent ) logwrite( function, retstring );
+
+    std::stringstream asyncmsg;
+    asyncmsg << "TCSD:parallactic:" << ( !retstring.empty() ? retstring : "ERROR" );
+    this->async.enqueue( asyncmsg.str() );
+
+    return NO_ERROR;
+  }
+  /***** TCS::Interface::get_pa ***********************************************/
+
+
   /***** TCS::Interface::pt_offsetrate ****************************************/
   /**
    * @brief      set the offset tracking rates
@@ -1707,6 +1766,31 @@ logwrite(function,"[DEBUG] back from cmd="+cmd+" with reply="+reply);
     }
   }
   /***** TCS::Interface::parse_motion_code ************************************/
+
+
+  /***** TCS::TcsInfo::parse_pa ***********************************************/
+  void TcsInfo::parse_pa( std::string &input ) {
+    const std::string function("TCS::TcsInfo::parse_pa");
+
+    // input string is expected to be: "PARALLACTIC = xx.xx"
+    //
+    auto pos = input.find('=');
+
+    if (pos == std::string::npos) {
+      logwrite(function, "ERROR expected \"PARALLACTIC = xx.xx\" but got \""+input+"\"");
+      return;
+    }
+
+    // convert value to double and store in the class
+    //
+    try {
+      this->pa = std::stod(input.substr(pos+1));
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR: "+std::string(e.what()));
+    }
+  }
+  /***** TCS::TcsInfo::parse_pa ***********************************************/
 
 
   /***** TCS::TcsInfo::parse_weather ******************************************/
