@@ -45,12 +45,11 @@ namespace Flexure {
 
   /***** Flexure::Interface::handletopic_snapshot *****************************/
   /**
-   * @brief      publishes a snapshot of my telemetry
+   * @brief      handler when subscriber receives a message with topic "_snapshot"
    * @details    This publishes a JSON message containing a snapshot of my
    *             telemetry info when the subscriber receives the "_snapshot"
    *             topic and the payload contains my daemon name.
    * @param[in]  jmessage  subscribed-received JSON message
-   * @return     ERROR or NO_ERROR
    *
    */
   void Interface::handletopic_snapshot(const nlohmann::json &jmessage) {
@@ -67,28 +66,97 @@ namespace Flexure {
   /***** Flexure::Interface::handletopic_snapshot *****************************/
 
 
+  /***** Flexure::Interface::handletopic_tcsd *********************************/
+  /**
+   * @brief      handler when subscriber receives a message with topic "tcsd"
+   * @details    This loads the tcs_info class with values published by tcsd.
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
   void Interface::handletopic_tcsd(const nlohmann::json &jmessage) {
-    logwrite("Flexure::Interface::handletopic_tcsd", "will process tcsinfo here");
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mutex);
+    this->tcs_snapshot_status = true;
+    }
+    // extract and store values in the class
+    Common::extract_telemetry_value(jmessage, "CASANGLE", this->tcs_info.casangle);
+    Common::extract_telemetry_value(jmessage, "ZENANGLE", this->tcs_info.zenangle);
+    Common::extract_telemetry_value(jmessage, "PA", this->tcs_info.pa);
+    this->tcs_info.set();
   }
+  /***** Flexure::Interface::handletopic_tcsd *********************************/
 
 
+  /***** Flexure::Interface::publish_snapshot *********************************/
+  /**
+   * @brief      publishes a snapshot of my telemetry
+   * @details    This loads the tcs_info class with values published by tcsd.
+   *
+   */
   void Interface::publish_snapshot() {
-    std::string dontcare;
-    this->publish_snapshot(dontcare);
-  }
-  void Interface::publish_snapshot(std::string &retstring) {
     nlohmann::json jmessage_out;
-    jmessage_out["source"] = "flexured";
-    retstring=jmessage_out.dump();
-    retstring.append(JEOF);
+    jmessage_out["source"] = "flexured";  // informs subscriber of the source of this telemetry
 
     try {
-      this->publisher->publish( jmessage_out );
+      this->publisher->publish(jmessage_out);
     }
     catch (const std::exception &e) {
       logwrite("Flexure::Interface::publish_snapshot", "ERROR: "+std::string(e.what()));
     }
   }
+  /***** Flexure::Interface::publish_snapshot *********************************/
+
+
+  /***** Flexure::Interface::request_tcs_snapshot *****************************/
+  /**
+   * @brief      requests tcsd to publish a snapshot of its telemetry
+   * @details    This publishes a "_snapshot" message with "tcsd" topic, which
+   *             will cause tcsd to publish its snapshot.
+   * @throws     std::exception
+   *
+   */
+  void Interface::request_tcs_snapshot() {
+    nlohmann::json jmessage;
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mutex);
+    this->tcs_snapshot_status = false;
+    jmessage["tcsd"] = false;
+    }
+    try {
+      this->publisher->publish(jmessage, "_snapshot");
+    }
+    catch (const std::exception &e) {
+      throw;
+    }
+  }
+  /***** Flexure::Interface::request_tcs_snapshot *****************************/
+
+
+  /***** Flexure::Interface::wait_for_tcs_snapshot ****************************/
+  /**
+   * @brief      wait for tcs snapshot data to be published
+   * @details    This is used after request_tcs_snapshot to wait for that to be received.
+   * @return     true when subscriber receives snapshot data
+   * @throws     std::runtime_error on timeout
+   *
+   */
+  bool Interface::wait_for_tcs_snapshot() {
+    auto start_time = std::chrono::steady_clock::now();
+    auto timeout = std::chrono::seconds(3);
+
+    while (true) {
+      {
+      std::lock_guard<std::mutex> lock(snapshot_mutex);
+      if (this->tcs_snapshot_status) return true;
+      }
+
+      if (std::chrono::steady_clock::now() - start_time > timeout) {
+        throw std::runtime_error("timeout waiting for TCS telemetry");
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+  /***** Flexure::Interface::wait_for_tcs_snapshot ****************************/
 
 
   /***** Flexure::Interface::open *********************************************/
@@ -363,24 +431,97 @@ namespace Flexure {
 
     if ( args == "?" || args == "help" ) {
       retstring = FLEXURED_COMPENSATE;
-      retstring.append( " [ dryrun ]\n" );
-      retstring.append( "   Performs the flexure compensation. If the optional dryrun argument\n" );
-      retstring.append( "   is supplied then perform the calcuations and show the actions that\n" );
-      retstring.append( "   would be taken without actually moving anything.\n" );
+      retstring.append( " <chan> [ <chan> ...] [ --dryrun ]\n" );
+      retstring.append( "   Performs the flexure compensation on one or more specified channels.\n" );
+      retstring.append( "   If the optional --dryrun argument is supplied then perform the calcuations\n" );
+      retstring.append( "   and show the actions that would be taken without actually moving anything.\n" );
       return HELP;
     }
 
-    // get the needed telemetry (telescope position and temperatures)
+    // check for --dryrun
     //
-    this->get_external_telemetry();
+    bool is_dryrun = false;
+    auto pos = args.find("--dryrun");
+    if (pos != std::string::npos) {  // if switch in the args
+      args.erase(pos, 8);            // then remove it
+      is_dryrun = true;              // and set is_dryrun
+    }
 
-    // perform the calculations
+    // args can contain a space-delimited list of channels
     //
-    retstring="not_yet_implemented";
+    std::vector<std::string> channels;
+    Tokenize(args, channels, " ");
+    if (channels.empty()) {
+      logwrite(function, "ERROR no channel specified");
+      return ERROR;
+    }
 
-    return ERROR;
+    std::pair<double,double> delta;
+    auto motormap = this->motorinterface.get_motormap();
+
+    // loop through list of specified channel(s)
+    //
+    for (const auto &chan : channels) {
+      try {
+        if (motormap.find(chan) == motormap.end()) throw std::runtime_error("unrecognized channel: "+chan);
+        this->validate_tcs_telemetry();
+        this->compensator.calculate_compensation(chan, delta);
+        this->offset_tiptilt(chan, delta, is_dryrun);
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
+      }
+    }
+
+    return NO_ERROR;
   }
   /***** Flexure::Interface::compensate ***************************************/
+
+
+  /***** Flexure::Interface::offset_tiptilt ***********************************/
+  /**
+   * @brief      offsets the X, Y axes for the specified channel by specified delta
+   * @param[in]  chan       string channel
+   * @param[in]  delta      double pair { X, Y } of calculated offsets
+   * @param[in]  is_dryrun  if true then no motion is commanded
+   * @throws     std::runtime_error
+   *
+   */
+  void Interface::offset_tiptilt(const std::string &chan, const std::pair<double,double> &delta, bool is_dryrun) {
+
+    auto addr=this->motorinterface.get_motormap()[chan].addr;
+    float position_x=NAN, position_y=NAN;
+    std::string posname, retstring;
+
+    // get the current positions
+    if ( this->motorinterface.get_pos( chan, 2, addr, position_x, posname ) != NO_ERROR ||
+         this->motorinterface.get_pos( chan, 3, addr, position_y, posname ) != NO_ERROR ) {
+      throw std::runtime_error("reading positions for channel "+chan);
+    }
+
+    float newposition_x = position_x + delta.first;
+    float newposition_y = position_y + delta.second;
+
+    if ( is_dryrun ) {
+      std::ostringstream oss;
+      oss << "dry run: would move chan " << chan << " by " << delta.first << ", " << delta.second
+          << " to X=" << newposition_x << " Y=" << newposition_y;
+      logwrite("Flexure::Interface::offset_tiptilt", oss.str());
+      return;
+    }
+
+    // move X-axis
+    if (this->motorinterface.moveto( chan, 2, newposition_x, retstring ) != NO_ERROR) {
+      throw std::runtime_error("moving X axis for channel "+chan);
+    }
+
+    // move Y-axis
+    if (this->motorinterface.moveto( chan, 3, newposition_y, retstring ) != NO_ERROR) {
+      throw std::runtime_error("moving Y axis for channel "+chan);
+    }
+  }
+  /***** Flexure::Interface::offset_tiptilt ***********************************/
 
 
   /***** Flexure::Interface::stop *********************************************/
@@ -675,6 +816,25 @@ namespace Flexure {
       this->compensator.test({tokens[1], tokens[2]}, shift);
       message.str(""); message << shift;
       retstring = message.str();
+      return NO_ERROR;
+    }
+    else
+
+    if (testname == "compensate") {
+      if (tokens.size() != 2) {
+        logwrite(function, "ERROR expected <chan>");
+        return ERROR;
+      }
+
+      try {
+        std::pair<double,double> delta;
+        this->compensator.calculate_compensation(tokens[1], delta);
+        this->offset_tiptilt(tokens[1], delta, true); // true = dry run
+      }
+      catch (const std::exception &e) {
+        logwrite(function, std::string(e.what()));
+        return ERROR;
+      }
       return NO_ERROR;
     }
 

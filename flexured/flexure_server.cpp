@@ -9,6 +9,7 @@
 
 namespace Flexure {
 
+  Server* Server::instance = nullptr;
 
   /***** Flexure::Server::exit_cleanly ****************************************/
   /**
@@ -22,6 +23,41 @@ namespace Flexure {
     exit(EXIT_SUCCESS);
   }
   /***** Flexure::Server::exit_cleanly ****************************************/
+
+
+  /***** Flexure::Server::handle_signal ***************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  signo
+   *
+   */
+  void Server::handle_signal(int signo) {
+    const std::string function("Flexure::Server::handle_signal");
+    std::ostringstream message;
+
+    switch (signo) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite(function, "received termination signal");
+        message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        Server::instance->exit_cleanly();                      // shutdown the daemon
+        break;
+      case SIGHUP:
+        logwrite(function, "ignored SIGHUP");
+        break;
+      case SIGPIPE:
+        logwrite(function, "ignored SIGPIPE");
+        break;
+      default:
+        message << "received unknown signal " << strsignal(signo);
+        logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        break;
+    }
+  }
+  /***** Flexure::Server::handle_signal ***************************************/
 
 
   /***** Flexure::Server::configure_flexured **********************************/

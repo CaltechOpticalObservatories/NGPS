@@ -2,18 +2,26 @@
  * @file    flexure_compensator.cpp
  * @brief   this contains the flexure compensator code
  * @author  David Hale <dhale@astro.caltech.edu> & Matt
+ *          Algorithms by Matt Matuszewski
  *
  */
 
+#include "tcs_info.h"
 #include "flexure_compensator.h"
 
 namespace Flexure {
 
-  Compensator::Compensator() {
-    // Initialize the map indices.
+  /***** Flexure::Compensator::Compensator ************************************/
+  /**
+   * @brief      class constructor
+   * @param[in]  info  constructed with a reference to the TcsInfo object
+   *                   owned by Interface.
+   *
+   */
+  Compensator::Compensator(TcsInfo &info) : tcs_info(info) {
     // position_coefficients and flexure_polynomials are maps
-    // indexed by a pair<chan,axis>
-    // These maps will be loaded by Compensator::load_position_coefficients
+    // indexed by a pair<chan,axis>. This initializes their indices.
+    // Values will be loaded by Compensator::load_position_coefficients().
     //
     for (const auto &chan : { "U", "G", "R", "I" }) {
       for (const auto &axis : { X, Y }) {
@@ -26,6 +34,7 @@ namespace Flexure {
     this->trigfunction["I"] = TrigFunction::Cosine;
 
   }
+  /***** Flexure::Compensator::Compensator ************************************/
 
 
   /***** Flexure::Compensator::load_vector_from_config ************************/
@@ -38,6 +47,7 @@ namespace Flexure {
    * @param[in]  config  configuration line
    * @param[in]  type    one of VectorType enum to specify which vector map to load
    * @return     ERROR|NO_ERROR
+   *
    */
   long Compensator::load_vector_from_config(std::string &config, VectorType type) {
     const std::string function("Flexure::Compensator::load_vector_from_config");
@@ -114,7 +124,6 @@ namespace Flexure {
    */
   double Compensator::flexure_polynomial_fit(const std::pair<std::string,std::string> &which, double inputvar, size_t offset) {
 
-    std::cerr << "flexure_polynomial_fit size=" << this->flexure_polynomials.at(which).size() << "\n";
     if (offset+5 > this->flexure_polynomials.at(which).size()) {
       throw std::out_of_range("not enough flexure polynomial coefficients");
     }
@@ -145,10 +154,10 @@ namespace Flexure {
   double Compensator::calculate_shift(const std::pair<std::string,std::string> &which) {
     const std::string function("Flexure::Compensator::calculate_shift");
     try {
-      double c     = flexure_polynomial_fit(which, this->tcs_info.zenith,  0);
-      double a1    = flexure_polynomial_fit(which, this->tcs_info.zenith,  5);
-      double theta = flexure_polynomial_fit(which, this->tcs_info.zenith, 10);
-      double a2    = flexure_polynomial_fit(which, this->tcs_info.zenith, 15);
+      double c     = flexure_polynomial_fit(which, this->tcs_info.zenangle,  0);
+      double a1    = flexure_polynomial_fit(which, this->tcs_info.zenangle,  5);
+      double theta = flexure_polynomial_fit(which, this->tcs_info.zenangle, 10);
+      double a2    = flexure_polynomial_fit(which, this->tcs_info.zenangle, 15);
 
       auto [ chan, axis ] = which;
 
@@ -167,6 +176,7 @@ namespace Flexure {
       }
     }
     catch (const std::exception &e) {
+      logwrite("Flexure::Compensator::calculate_shift", "ERROR: "+std::string(e.what()));
       throw;
     }
   }
@@ -274,6 +284,7 @@ namespace Flexure {
       this->compensate_shift_to_delta(channel, shift, delta);
     }
     catch (const std::exception &e) {
+      logwrite("Flexure::Compensator::calculate_compensation", "ERROR: "+std::string(e.what()));
       delta = { NAN, NAN };
       throw;
     }

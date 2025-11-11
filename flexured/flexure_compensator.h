@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common.h"
+#include "tcs_info.h"
 
 namespace Flexure {
 
@@ -35,35 +36,17 @@ namespace Flexure {
     FLEXURE_POLYNOMIALS
   };
 
-
-  /***** Flexure::TcsInfo *****************************************************/
-  /**
-   * @brief    contains TCS telemetry
-   *
-   */
-  class TcsInfo {
-    public:
-      double zenith;
-      double equivalent_cass;
-      double pa;
-      double cassring;
-      TcsInfo()
-        : zenith(1), equivalent_cass(3), pa(5), cassring(7) {
-//        this->equivalent_cass=(-(this->pa + this->cassring) + 180) % 360 - 180;
-        }
-  };
-  /***** Flexure::TcsInfo *****************************************************/
-
-
   /***** Flexure::Compensator *************************************************/
   /**
-   * @brief    contains functions and data for performing compensation
+   * @brief    contains functions and data for calculating compensation
    * @details  this does not compensate anything, just informs how to compensate
    *
    */
   class Compensator {
     private:
       using vector_map_t = std::map<std::pair<std::string, std::string>, std::vector<double>>;
+
+      TcsInfo &tcs_info;  ///< reference to Interface's TcsInfo
 
       vector_map_t position_coefficients;
       vector_map_t flexure_polynomials;
@@ -76,9 +59,7 @@ namespace Flexure {
                                      const std::pair<double,double> &shift, std::pair<double,double> delta);
 
     public:
-      Compensator();
-
-      TcsInfo tcs_info;
+      Compensator(TcsInfo &info);
 
       long load_vector_from_config(std::string &config, VectorType type);
 

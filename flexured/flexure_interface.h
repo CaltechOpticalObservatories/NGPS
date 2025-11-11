@@ -12,6 +12,7 @@
 #include "pi.h"
 #include "logentry.h"
 #include "common.h"
+#include "tcs_info.h"
 #include "flexured_commands.h"
 #include "flexure_compensator.h"
 #include <sys/stat.h>
@@ -54,7 +55,10 @@ namespace Flexure {
         motorinterface(FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE),
         subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
         is_subscriber_thread_running(false),
-        should_subscriber_thread_run(false)
+        should_subscriber_thread_run(false),
+        tcs_snapshot_status(false),
+        tcs_info(),
+        compensator(tcs_info)
       {
         topic_handlers = {
           { "_snapshot", std::function<void(const nlohmann::json&)>(
@@ -80,6 +84,9 @@ namespace Flexure {
                          std::function<void(const nlohmann::json&)>> topic_handlers;
                                                        ///< maps a handler function to each topic
 
+      bool tcs_snapshot_status;
+      std::mutex snapshot_mutex;
+
       // publish/subscribe functions
       //
       long init_pubsub(const std::initializer_list<std::string> &topics={}) {
@@ -92,11 +99,14 @@ namespace Flexure {
       void handletopic_tcsd( const nlohmann::json &jmessage );
 
       void publish_snapshot();
-      void publish_snapshot(std::string &retstring);
+      void request_tcs_snapshot();
+      bool wait_for_tcs_snapshot();
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
 
       Common::Queue async;
+
+      TcsInfo tcs_info;                          ///< defined in tcs_info.h
 
       Compensator compensator;
 
@@ -108,6 +118,7 @@ namespace Flexure {
       long set( std::string args, std::string &retstring ); ///< set the slit width and offset
       long get( std::string args, std::string &retstring ); ///< get the current width and offset
       long compensate( std::string args, std::string &retstring );  ///< perform flexure compensation
+      void offset_tiptilt(const std::string &chan, const std::pair<double,double> &delta, bool is_dryrun);
 
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
@@ -124,6 +135,18 @@ namespace Flexure {
       std::mutex wait_mtx;                       ///< mutex object for waiting for threads
       std::condition_variable cv;                ///< condition variable for waiting for threads
 
+
+      void validate_tcs_telemetry() {
+        // if TCS telemetry is old then ask it to publish
+        //
+        if (this->tcs_info.is_older_than(std::chrono::seconds(10))) {
+          try {
+            this->request_tcs_snapshot();
+            this->wait_for_tcs_snapshot();
+          }
+          catch (const std::exception &e) { throw; }
+        }
+      }
   };
   /***** Flexure::Interface ***************************************************/
 
