@@ -184,6 +184,13 @@ namespace Sequencer {
         applied++;
       }
 
+      // DAEMON_CONTROL_SCRIPT
+      if (config.param[entry] == "DAEMON_CONTROL_SCRIPT") {
+        this->sequence.daemon_control = config.arg[entry];
+        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        applied++;
+      }
+
       // ACAMD_PORT
       if (config.param[entry] == "ACAMD_PORT") {
         try {
@@ -827,6 +834,15 @@ namespace Sequencer {
       // POWER_ACAM
       if (config.param[entry].compare( 0, POWER_ACAM.length(), POWER_ACAM )==0) {
         if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
+          applied++;
+          message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->sequence.async.enqueue_and_log( function, message.str() );
+        }
+      }
+
+      // POWER_ACAM_CAM
+      if (config.param[entry].compare( 0, POWER_ACAM_CAM.length(), POWER_ACAM_CAM )==0) {
+        if ( this->sequence.power_switch[POWER_ACAM_CAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->sequence.async.enqueue_and_log( function, message.str() );

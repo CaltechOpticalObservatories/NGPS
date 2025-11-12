@@ -131,7 +131,7 @@ namespace Sequencer {
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
     std::string active_states( this->daemon_manager.get_set_states() );
-    for ( const auto &[bit,state] : Sequencer::daemon_names ) {
+    for ( const auto &[bit,state] : Sequencer::daemon_name ) {
       jmessage_out[state] = ( active_states.find(state)!=std::string::npos ? true : false);
     }
 
@@ -756,6 +756,13 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
+    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
+    if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      throw std::runtime_error( "camera returned "+reply );
+    }
+
+    this->thread_error_manager.clear( THR_CAMERA_SET );  // success
 
     this->thread_error_manager.clear( THR_CAMERA_SET );  // success
 
@@ -793,7 +800,12 @@ namespace Sequencer {
         modestr = "EXPOSE";
         break;
       case Sequencer::VSM_ACQUIRE:
-        // uses virtual-mode width and offset for acquire
+        // uses virtual-mode width and offset for acquire,
+        // but only for new targets
+        if ( this->target.ra_hms == this->last_ra_hms &&
+             this->target.dec_dms == this->last_dec_dms ) {
+          return NO_ERROR;
+        }
         slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
@@ -806,7 +818,7 @@ namespace Sequencer {
 
     this->async.enqueue( "NOTICE: moving slit to "+modestr+" position" );
 
-    logwrite( function, " sending: "+slitcmd.str() );
+    logwrite( function, "moving slit to "+slitcmd.str()+" for "+modestr+"position" );
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR setting slit" );
@@ -1007,6 +1019,7 @@ namespace Sequencer {
    * @brief      initializes the slicecam system for control from the Sequencer
    * @return     NO_ERROR
    * @throws     std::runtime_error
+   * @throws     SlicecamException
    *
    */
   long Sequence::slicecam_init() {
@@ -1030,7 +1043,7 @@ namespace Sequencer {
     //
     if ( this->open_hardware(this->slicecamd, SLICECAMD_OPEN, SLICECAMD_OPEN_TIMEOUT) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR starting slicecam" );
-      throw std::runtime_error("could not start slicecam");
+      throw SlicecamException("could not start slicecam");
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_SLICECAM );    // slicecamd ready
@@ -1046,6 +1059,7 @@ namespace Sequencer {
    * @brief      initializes the slicecam system for control from the Sequencer
    * @return     NO_ERROR
    * @throws     std::runtime_error
+   * @throws     AcamException
    *
    */
   long Sequence::acam_init() {
@@ -1069,8 +1083,8 @@ namespace Sequencer {
     //
     bool was_opened=false;
     if ( this->open_hardware(this->acamd, ACAMD_OPEN, ACAMD_OPEN_TIMEOUT, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR starting acam" );
-      throw std::runtime_error("could not start acam");
+      this->async.enqueue_and_log( function, "ERROR opening acam camera" );
+      throw AcamException(ErrorCode::ERROR_ACAM_CAMERA, "could not open acam camera");
     }
 
     // send init values only if connection was just opened now
@@ -1895,17 +1909,6 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, message.str() );
     }
 
-    // Send casangle using tcsd wrapper for RINGGO command
-    // do not wait for reply
-    //
-    {
-    std::stringstream ringgo_cmd;
-    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
-    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
-    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
-    error = this->tcsd.send( ringgo_cmd.str(), noreply );
-    }
-
     // Send coordinates using TCS-native COORDS command.
     // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
     // so convert that as it's being sent here.
@@ -1919,20 +1922,13 @@ namespace Sequencer {
                             <<   "0 0"  << " "                                     // RA,DEC proper motion not used
                             << "\"" << this->target.name << "\"";                  // target name in quotes
 
-    {
     std::string rastr, decstr;
     double _ra = ra_out * TO_HOURS;
     decimal_to_sexa( _ra, rastr );
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
-    }
-
     error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
-
-    // waiting for TCS Operator input (or cancel)
-    {
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
     // if not success then wait 1s and try again
     if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
@@ -1946,6 +1942,21 @@ namespace Sequencer {
         throw std::runtime_error("sending COORDS to TCS: "+coords_reply);
       }
     }
+
+    // Send casangle using tcsd wrapper for RINGGO command
+    // do not wait for reply
+    //
+    {
+    std::stringstream ringgo_cmd;
+    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
+    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
+    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
+    error = this->tcsd.send( ringgo_cmd.str(), noreply );
+    }
+
+    // waiting for TCS Operator input (or cancel)
+    {
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
     this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
@@ -2677,6 +2688,7 @@ namespace Sequencer {
           logwrite( function, "ERROR from "+Sequencer::thread_names.at(thr));
           error = ERROR;
         }
+        else logwrite(function, Sequencer::thread_names.at(thr)+" success");
       }
       catch (const std::exception& e) {
         logwrite( function, "ERROR worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
@@ -2686,56 +2698,119 @@ namespace Sequencer {
     }
 
     // Now the Andor cameras must be done individually, first slicecam,
-    try {
+    // then the acam.
+    // Sometimes the Andors lose connection with the driver and the only
+    // recovery seems to be power-cycling the Andor and restarting the
+    // daemon. Try up to maxattempts times if necessary.
+    //
+    const int maxattempts=3;
 
-      // if slicecam_init returns error, it's worth power cycling and trying again
-      if ( std::async(std::launch::async, &Sequence::slicecam_init, this).get() != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR from slicecam_init, will try power cycle, standby" );
-
-        // power off slicecams
-        if ( std::async(std::launch::async, &Sequence::slicecam_shutdown, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR shutting down slicecam, giving up" );
-          error = ERROR;
-        }
-        else
-        // try again to initialize slicecams
-        if ( std::async(std::launch::async, &Sequence::slicecam_init, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR starting slicecam, giving up" );
-          error = ERROR;
-        }
-        else
-        this->async.enqueue_and_log( function, "NOTICE: slicecam power cycle success" );
+    // slicecam_init
+    {
+    long __error=NO_ERROR;  // keep track of the error just for this scope
+    int attempt=1;
+    while (attempt <= maxattempts) {
+      try {
+        // launch slicecam_init async task and wait for result
+        std::async(std::launch::async, &Sequence::slicecam_init, this).get();
+        logwrite(function, Sequencer::thread_names.at(THR_SLICECAM_INIT)+" success");
+        break;
       }
-    }
-    catch (const std::exception& e) {
-      logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
-      error = ERROR;
-    }
+      catch (const SlicecamException &e) {
+        logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
 
-    // then the acam
-    try {
-      // if acam_init returns error, it's worth power cycling and trying again
-      if ( std::async(std::launch::async, &Sequence::acam_init, this).get() != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR from acam_init, will try power cycle, standby" );
+        // If there was an error with the SLICECAM cameras, turn them off,
+        // restart the slicecam daemon, then loop to try again.
+        if (attempt < maxattempts) {
+          if ( set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(5)) != NO_ERROR ) {
+            async.enqueue_and_log( function, "ERROR switching off slicecams" );
+            __error=ERROR;
+            break;
+          }
+          logwrite(function, "slicecams powered off");
 
-        // power off acam
-        if ( std::async(std::launch::async, &Sequence::acam_shutdown, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR shutting down acam, giving up" );
-          error = ERROR;
+          // restart slicecamd
+          __error=this->daemon_restart(this->slicecamd);
+
+          logwrite(function, "retrying slicecam_init");
+          ++attempt;
+          continue;
         }
-        else
-        // try again to initialize acams
-        if ( std::async(std::launch::async, &Sequence::acam_init, this).get() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR starting acam, giving up" );
-          error = ERROR;
+        else {
+          async.enqueue_and_log( function, "ERROR exceeded max attempts starting slicecam" );
+          __error=ERROR;
         }
-        else
-        this->async.enqueue_and_log( function, "NOTICE: acam power cycle success" );
       }
+      catch (const std::exception &e) {
+        logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
+        __error=ERROR;
+        break;
+      }
+      catch (...) {
+        logwrite(function, "ERROR unknown slicecam_init exception");
+        __error=ERROR;
+        break;
+      }
+    }  // end while
+    if (__error == ERROR) {
+      async.enqueue_and_log( function, "ERROR slicecam not initialized" );
+      error=ERROR;
     }
-    catch (const std::exception& e) {
-      logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
-      error = ERROR;
+    }
+
+    // acam_init
+    {
+    long __error=NO_ERROR;  // keep track of the error just for this scope
+    int attempt=1;
+    while (attempt <= maxattempts) {
+      try {
+        // launch acam_init async task and wait for result
+        std::async(std::launch::async, &Sequence::acam_init, this).get();
+        logwrite(function, Sequencer::thread_names.at(THR_ACAM_INIT)+" success");
+        break;
+      }
+      catch (const AcamException &e) {
+        logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
+
+        // If there was an error with the ACAM camera, turn it off,
+        // restart the acam daemon, then loop to try again.
+        if (e.code == ErrorCode::ERROR_ACAM_CAMERA) {
+          if (attempt < maxattempts) {
+            if ( set_power_switch(OFF, POWER_ACAM_CAM, std::chrono::seconds(5)) != NO_ERROR ) {
+              async.enqueue_and_log( function, "ERROR switching off acam camera" );
+              __error=ERROR;
+              break;
+            }
+            logwrite(function, "acam camera powered off");
+
+            // restart acamd
+            __error=this->daemon_restart(this->acamd);
+
+            logwrite(function, "retrying acam_init");
+            attempt++;
+            continue;
+          }
+          else {
+            async.enqueue_and_log( function, "ERROR exceeded max attempts starting acam" );
+            __error=ERROR;
+          }
+        }
+      }
+      catch (const std::exception &e) {
+        logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
+        __error=ERROR;
+        break;
+      }
+      catch (...) {
+        logwrite(function, "ERROR unknown acam_init exception");
+        __error=ERROR;
+        break;
+      }
+    }  // end while
+    if (__error == ERROR) {
+      async.enqueue_and_log( function, "ERROR acam not initialized" );
+      error=ERROR;
+    }
     }
 
     // change state to READY if all daemons ready w/o error
@@ -3644,17 +3719,31 @@ namespace Sequencer {
                                 const std::string opencmd, const int opentimeout,
                                 bool &was_opened, bool forceopen ) {
     const std::string function("Sequencer::Sequence::open_hardware");
+    const int maxattempts=3;  ///< allow retries connecting to daemon
     bool isopen=false;
     std::string reply;
-    long error;
+    long error=NO_ERROR;
 
-    // if not connected to the daemon then connect
+    // If not connected to the daemon then connect.
+    // Retry up to maxattempts.
     //
-    if ( this->connect_to_daemon(daemon)==ERROR ) return ERROR;
+    int attempt;
+    for (attempt=1; attempt <= maxattempts; ++attempt) {
+      // if connection succeeds then exit loop
+      if (this->connect_to_daemon(daemon) != ERROR) break;
+      // if connection fails then restart daemon and loop
+      logwrite(function, "ERROR could not connect to "+daemon.name);
+      if (attempt < maxattempts) this->daemon_restart(daemon);
+    }
+    // connection failed too many times
+    if (attempt > maxattempts) {
+      async.enqueue_and_log(function, "ERROR exceeded max attempts connecting to " + daemon.name);
+      return ERROR;
+    }
 
     // Ask if hardware connection is open
     //
-    error  = daemon.send( "isopen", reply );
+    error |= daemon.send( "isopen", reply );
     error |= this->parse_state( function, reply, isopen );
     if ( error != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR opening "+daemon.name+" hardware" );
@@ -3705,6 +3794,53 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::connect_to_daemon *******************************/
+
+
+  /***** Sequencer::Sequence::daemon_restart **********************************/
+  /**
+   * @brief      kill, then start acamd
+   * @details    Uses the ngps daemon control script (specified in config file)
+   *             to stop and restart the daemon specified by daemonbit.
+   * @param      daemonbit  accepts a Sequencer::DaemonBit
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Sequence::daemon_restart(Common::DaemonClient &daemon) {
+    const std::string function("Sequencer::Sequence::daemon_restart");
+    std::string command;
+
+    // the daemon control script must have been specified in the config file
+    if (this->daemon_control.empty()) {
+      logwrite(function, "ERROR killing "+daemon.name+": daemon_control undefined");
+      return ERROR;
+    }
+
+    // disconnect from the daemon
+    daemon.disconnect();
+
+    // kill daemon using ngps script
+    command = this->daemon_control + std::string(" kill ") + daemon.name;
+    if ( std::system( command.c_str() ) && errno!=ECHILD ) {
+      logwrite(function, "ERROR killing "+daemon.name);
+      return ERROR;
+    }
+    else logwrite(function, "killed "+daemon.name);
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // start daemon using ngps script
+    command = this->daemon_control + std::string(" start ") + daemon.name;
+    if ( std::system( command.c_str() ) && errno!=ECHILD ) {
+      logwrite(function, "ERROR starting "+daemon.name);
+      return ERROR;
+    }
+    else logwrite(function, "started "+daemon.name);
+
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::daemon_restart **********************************/
 
 
   /***** Sequencer::Sequence::test ********************************************/
@@ -3759,6 +3895,7 @@ namespace Sequencer {
       retstring.append( "   expose [ ? ]\n" );
       retstring.append( "   fpoffset ? | <from> <to>\n" );
       retstring.append( "   getnext [ ? ]\n" );
+      retstring.append( "   getobsid [ ? ]\n" );
       retstring.append( "   gettelem [ ? ]\n" );
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
@@ -4054,6 +4191,27 @@ namespace Sequencer {
       if ( ret == TargetInfo::TargetState::TARGET_ERROR )     { error = ERROR; }
 
       retstring = rts.str();
+    }
+    else
+
+    // ----------------------------------------------------
+    // getobsid -- get target by OBSID
+    // ----------------------------------------------------
+    //
+    if ( testname == "getobsid" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = "test getobsid\n";
+        retstring.append( "  Read target from database using OBSID\n" );
+        return HELP;
+      }
+
+      if (tokens.size() != 2) {
+        retstring = "invalid";
+        logwrite(function, "ERROR expected getobsid <OBSID>");
+        return ERROR;
+      }
+
+      this->target.get_specified_target( tokens[1], retstring );
     }
     else
 

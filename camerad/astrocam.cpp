@@ -196,7 +196,7 @@ namespace AstroCam {
     this->state_monitor_thread_running = false;
     this->modeselected = false;
     this->pci_cmd_num.store(0);
-    this->nexp=1;
+    this->nexp.store(1);
     this->numdev = 0;
     this->nframes = 1;
     this->nfpseq = 1;
@@ -1157,11 +1157,9 @@ namespace AstroCam {
     // As the last step to opening the controller, this is where I've chosen
     // to initialize the Shutter class, required before using the shutter.
     //
-    if ( this->camera.bonn_shutter ) {
-      if ( this->camera.shutter.init() != NO_ERROR ) {
-        retstring="shutter_error";
-        error = ERROR;
-      }
+    if ( this->camera.shutter.init(this->camera.bonn_shutter) != NO_ERROR ) {
+      retstring="shutter_error";
+      error = ERROR;
     }
 
     return( error );
@@ -1822,7 +1820,10 @@ namespace AstroCam {
     // to introduce any delay in the real shutter timing (and will
     // be closed after the real shutter has closed).
     //
-    if ( interface.camera.ext_shutter ) interface.do_native( "OSH" );
+    if ( interface.camera.ext_shutter ) {
+      interface.do_native( "OSH" );
+      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter opened at "+timestring );
+    }
 
     // open the Bonn shutter if enabled
     //
@@ -1863,7 +1864,10 @@ namespace AstroCam {
 
     // Send external close shutter command, if configured.
     //
-    if ( interface.camera.ext_shutter ) interface.do_native( "CSH" );
+    if ( interface.camera.ext_shutter ) {
+      interface.do_native( "CSH" );
+      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter closed at "+timestring );
+    }
 
     // get the airmass again
     //
@@ -2426,7 +2430,8 @@ namespace AstroCam {
    * @brief      block on exposure_condition, notifies when ready for exposure
    * @details    This thread is spawned with each new exposure and broadcasts
    *             an async message announcing the state of exposure_pending.
-   *             This is also where the exposure number gets incremented.
+   *             This is where the exposure number gets incremented, and where
+   *             do_expose() is repeatedly called when nexp > 1.
    * @param[in]  interface  reference to this->interface
    *
    */
@@ -2458,7 +2463,11 @@ namespace AstroCam {
     message.str(""); message << "[DEBUG] incremented expbuf buffer to " << interface.get_expbuf(); logwrite( function, message.str() );
 #endif
 
-    if ( --interface.nexp > 0 ) {
+    // Atomically decrement nexp and
+    // if greater than zero then start another exposure.
+    //
+    interface.nexp.fetch_sub(1);
+    if ( interface.nexp.load() > 0 ) {
       message.str(""); message << "NOTICE:starting next exposure, " << interface.nexp << " remaining";
       interface.camera.async.enqueue_and_log( function, message.str() );
       interface.do_expose(interface.nexp);
@@ -2486,7 +2495,7 @@ namespace AstroCam {
     std::string _start_time;
     long error;
 
-    this->nexp = nexp_in;
+    this->nexp.store(nexp_in);
 
     // Different controllers may have different rules about when to set and clear their
     // exposure_pending flag (depending on whether or not they support frame transfer), but
@@ -4321,6 +4330,10 @@ logwrite(function, message.str());
       return BUSY;
     }
 
+    // reset nexp to always make this the last exposure
+    //
+    this->nexp.store(1);
+
     // The PreciseTimer object .stop(&ms) function modifies remaining_time
     // to reflect the remaining time of the timer.
     //
@@ -5703,6 +5716,7 @@ logwrite(function,message.str() );
       retstring.append( "   shdelay ? | <delay> | test\n" );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
+      retstring.append( "   isreadout\n" );
       return HELP;
     }
 
@@ -6043,6 +6057,10 @@ logwrite(function,message.str() );
         error = HELP;
       }
 
+      message.str(""); message << "camera.shutter.isclosed=" << (this->camera.shutter.isclosed()?"true":"false");
+      logwrite( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
       message.str(""); message << "this_expbuf=" << this->get_expbuf();
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
@@ -6262,6 +6280,23 @@ logwrite(function,message.str() );
         jclient.disconnect();
       }
       this->handle_json_message( retstring );
+    }
+    else
+    // ----------------------------------------------------
+    // isreadout
+    // ----------------------------------------------------
+    // call ARC API isReadout() function directly
+    //
+    if ( testname == "isreadout" ) {
+      retstring.clear();
+      for ( auto &con : this->controller ) {
+	if ( con.second.pArcDev != nullptr && con.second.connected ) {
+	  bool isreadout = con.second.pArcDev->isReadout();
+	  retstring += (isreadout ? "T " : "F ");
+          message.str(""); message << con.second.devname << " isReadout = " << (isreadout ? "true":"false");
+          logwrite(function, message.str());
+	}
+      }
     }
     else {
     // ----------------------------------------------------

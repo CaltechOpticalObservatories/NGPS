@@ -14,6 +14,13 @@ camera=slicev
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/gui.config $camera
 
+# Parse inputs for error string
+if [[ "$*" == *"ERR"*  ]]
+then
+  echo "ERROR in input arguments, settings will not be pushed to GUI"
+  exit 1
+fi
+
 # settings from daemon or DS9 menu
 update_menu=$1
 exptime=${2:-1}  # ${argN:-default}

@@ -62,6 +62,7 @@ namespace Sequencer {
   const std::string POWER_TELEM="POWER_TELEM";       ///< parameter name which defines NPS_PLUG names required for telem hardware
   const std::string POWER_THERMAL="POWER_THERMAL";   ///< parameter name which defines NPS_PLUG names required for thermal hardware
   const std::string POWER_ACAM="POWER_ACAM";         ///< parameter name which defines NPS_PLUG names required for ACAM (A&G) hardware
+  const std::string POWER_ACAM_CAM="POWER_ACAM_CAM"; ///< parameter name which defines NPS_PLUG names required for ACAM camera-only
   const std::string POWER_SLICECAM="POWER_SLICECAM"; ///< parameter name which defines NPS_PLUG names required for SLICECAM hardware
 
   const std::string ACQUIRE_OFFSET_THRESHOLD="ACQUIRE_OFFSET_THRESHOLD";    ///< below this in arcsec defines successful acquisition
@@ -244,7 +245,16 @@ namespace Sequencer {
           // field is not empty
           //
           if ( !row[col].isNull() ) {
-            return row.get(col).get<T>();
+            T value = row.get(col).get<T>();                              // extract the value from the field
+
+            // if this is a string, find and replace emdash with minus sign
+            if constexpr (std::is_same_v<T,std::string> || std::is_same_v<T,mysqlx::string>) {
+              std::string svalue = value;
+              size_t pos = svalue.find("−");                              // U+2212 unicode minus sign
+              if (pos != std::string::npos) svalue.replace(pos, 3, "-");  // replace with ASCII minus sign
+              return static_cast<T>(svalue);
+            }
+            return value;
           }
 
           // If the field is empty and a default value was specified,

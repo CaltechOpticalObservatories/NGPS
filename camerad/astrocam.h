@@ -564,7 +564,7 @@ namespace AstroCam {
       int FITS_BPP32;
 
       std::atomic<int> pci_cmd_num;
-      int nexp;
+      std::atomic<int> nexp;       //!< number of exposures (repeat calls to do_expose)
       int nfilmstrip;              //!< number of filmstrip frames (for enhanced-clocking dual-exposure mode)
       int deltarows;               //!< number of delta rows (for enhanced-clocking dual-exposure mode)
       int nfpseq;                  //!< number of frames per sequence
@@ -822,6 +822,12 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
         this->write_condition.notify_all();
 
+#ifdef LOGLEVEL_DEBUG
+        std::stringstream message;
+        message << "[DEBUG]";
+        for (const auto &dev : this->writes_pending[expbuf]) message << " " << dev;
+        logwrite("Interface::write_pending", message.str());
+#endif
         return;
       }
       /***** Interface::write_pending *****************************************/

@@ -10,6 +10,8 @@ camera=$1   # guider or slicev
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/gui.config $camera
 
+# "$id" is set in $SCRIPT_DIR/gui.config $camera to GUIDER or SLICEVIEW
+#
 process_running=`ps aux | grep ds9 | grep " $id "`  # should be empty string if no matches
 
 # If the ds9 window exists, show ds9 message
@@ -22,13 +24,14 @@ if xpaget $id xpa connect; then
 elif [ -n "$process_running" ]; then
 
   echo "PROCESS RUNNING"
-  zenity --notification --text "$id GUI (ds9) is launching.  Please wait longer..."  # Pop-up on linux OS
+  notify-send --urgency=normal -t 3000 "$id" "GUI (ds9) is launching.  Please wait longer..."
 
 # Launch it
 else
 
   echo LAUNCHING...
-  zenity --notification --text "$id GUI (ds9) is launching.  Please wait..."  # Pop-up on linux OS
+  notify-send --urgency=normal -t 3000 "$id" "GUI (ds9) is launching.  Please wait..."
+
 
   ds9 -png $startfile -title $id \
     -zoom to fit -cmap $cmap -scale linear -scale mode zscale -scale datasec yes \
@@ -72,3 +75,7 @@ elif [ "$camera" = "slicev" ]; then
   sleep 0.5
   wmctrl -r "SAOImage SLICEVIEW" -e 0,770,50,625,880
 fi
+
+# launch FIFO script
+#
+$SCRIPT_DIR/make_"$camera"_fifo.sh &

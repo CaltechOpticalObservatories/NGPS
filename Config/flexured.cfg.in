@@ -46,7 +46,7 @@ MOTOR_CONTROLLER="R @IP_FLEXURE_R@ 50000 1 3"
 MOTOR_CONTROLLER="I @IP_FLEXURE_I@ 50000 1 3"
 
 # For each actuator's controller specify:
-# MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref>"
+# MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref> [ <default> ]"
 # valid <ref> types are { neg pos ref na }
 #       (use "na" if axis does not support referencing)
 #

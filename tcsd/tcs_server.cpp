@@ -694,6 +694,11 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       }
       else
 
+      if ( cmd.compare( TCSD_GET_PA ) == 0 ) {
+                      ret = this->interface.get_pa( args, retstring );
+      }
+      else
+
       if ( cmd.compare( TCSD_GET_COORDS ) == 0 ) {
                       ret = this->interface.get_coords( args, retstring );
       }

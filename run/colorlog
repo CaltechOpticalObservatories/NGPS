@@ -1,12 +1,27 @@
 #!/bin/bash
 
-# if supplied with an argument then that argument is the date
+# parse options
 #
-if [ "$#" == "1" ]; then
-  DATE=$1
-# otherwise use the current UTC date
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -d|--date)
+      DATE="$2"
+      shift 2
+      ;;
+    -n|--name)
+      NAME="$2"
+      shift 2
+      ;;
+    *)
+      echo "unrecognized option: $1"
+      echo "usage: $0 [ --date YYYYMMDD ] [ --name <daemon> ]"
+      exit 1
+  esac
+done
+
+# if no date provided use the latest date found on disk
 #
-else
+if [[ -z "$DATE" ]]; then
   DATE=$(ls -1 /data | grep -E '^[0-9]{8}$' | sort -r | head -n 1)
 fi
 
@@ -15,22 +30,23 @@ fi
 DIR="/data/$DATE/logs"
 
 # these are all of the log files
+# if no name provided then use all
 #
-FILES="-f $DIR/acamd_$DATE.log \
-       -f $DIR/slicecamd_$DATE.log \
-       -f $DIR/calibd_$DATE.log \
-       -f $DIR/camerad_$DATE.log \
-       -f $DIR/flexured_$DATE.log \
-       -f $DIR/focusd_$DATE.log \
-       -f $DIR/powerd_$DATE.log \
-       -f $DIR/slitd_$DATE.log \
-       -f $DIR/tcsd_$DATE.log \
-       -f $DIR/thermald_$DATE.log \
-       -f $DIR/sequencerd_$DATE.log "
-
-# temporarily change the umask and touch the log files
-#
-( umask 0002; touch $FILES )
+if [[ -z "$NAME" ]]; then
+  FILES="-f $DIR/acamd_$DATE.log \
+         -f $DIR/slicecamd_$DATE.log \
+         -f $DIR/calibd_$DATE.log \
+         -f $DIR/camerad_$DATE.log \
+         -f $DIR/flexured_$DATE.log \
+         -f $DIR/focusd_$DATE.log \
+         -f $DIR/powerd_$DATE.log \
+         -f $DIR/slitd_$DATE.log \
+         -f $DIR/tcsd_$DATE.log \
+         -f $DIR/thermald_$DATE.log \
+         -f $DIR/sequencerd_$DATE.log "
+else
+  FILES="-f "$DIR"/"$NAME"_"$DATE".log"
+fi
 
 # tail them all here
 # look for various key words to set various colors

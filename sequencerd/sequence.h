@@ -46,6 +46,26 @@
 namespace Sequencer {
 
   /**
+   * @enum  ErrorCodes
+   * @brief
+   */
+  enum class ErrorCode {
+    ERROR_ACAM_CAMERA,
+    ERROR_ACAM_FILTER,
+    ERROR_ACAM_COVER
+  };
+
+  class AcamException : public std::runtime_error {
+    public:
+      ErrorCode code;
+      AcamException(ErrorCode c, const std::string &msg) : std::runtime_error(msg), code(c) {}
+  };
+
+  struct SlicecamException : public std::runtime_error {
+    using std::runtime_error::runtime_error;
+  };
+
+  /**
    * @enum  PowerState
    * @brief state for controlling network power switch
    */
@@ -65,10 +85,10 @@ namespace Sequencer {
   };
 
   /**
-   * @enum  DaemonBits
+   * @enum  DaemonBit
    * @brief set when the associated daemon is ready
    */
-  enum DaemonBits : size_t {
+  enum DaemonBit : size_t {
     DAEMON_ACAM=0,           ///< set when acamd is ready
     DAEMON_CALIB,            ///< set when calibd is ready
     DAEMON_CAMERA,           ///< set when camerad is ready
@@ -81,7 +101,7 @@ namespace Sequencer {
     NUM_DAEMONS
   };
 
-  const std::map<size_t, std::string> daemon_names = {
+  const std::map<size_t, std::string> daemon_name = {
     {DAEMON_ACAM,      "acamd"},
     {DAEMON_CALIB,     "calibd"},
     {DAEMON_CAMERA,    "camerad"},
@@ -376,7 +396,7 @@ namespace Sequencer {
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state_manager{Sequencer::seq_state_names};
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_WAIT_STATES)>   wait_state_manager{Sequencer::wait_state_names};
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state_manager{ Sequencer::thread_names };
-      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_manager{ Sequencer::daemon_names };
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_manager{ Sequencer::daemon_name };
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
@@ -395,6 +415,8 @@ namespace Sequencer {
       std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown
 
       std::string test_solver_args;   ///< optional solver args that can be passed in with a test command
+
+      std::string daemon_control;     ///< daemon control script
 
       Common::Queue async;            ///< asynchronous message queue
 
@@ -508,6 +530,7 @@ namespace Sequencer {
       long open_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout, bool &was_opened, bool forceopen );
       long reopen_hardware( Common::DaemonClient &daemon, const std::string opencmd, const int opentimeout );
       long connect_to_daemon( Common::DaemonClient &daemon );
+      long daemon_restart(Common::DaemonClient &daemon);
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
