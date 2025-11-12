@@ -782,6 +782,9 @@ namespace Flexure {
       retstring.clear();
       retstring.append( "  motormap  return definition of motormap\n" );
       retstring.append( "  posmap    return definition of posmap\n" );
+      retstring.append( "  shift     calculate shift(chan,axis) of spectrum on detector\n" );
+      retstring.append( "  comp      calculates adjustments needed to compensate for shift\n" );
+      retstring.append( "  tcsinfo   <zenangle> <pa> <casangle> [ <equivcass> ] overrides tcsinfo\n" );
       return HELP;
     }
     else
@@ -807,20 +810,18 @@ namespace Flexure {
     }
     else
 
-    if (testname == "calcshift") {
+    if (testname == "shift") {
       if (tokens.size() != 3) {
         logwrite(function, "ERROR expected <chan> <axis>");
         return ERROR;
       }
-      double shift;
-      this->compensator.test({tokens[1], tokens[2]}, shift);
-      message.str(""); message << shift;
+      message.str("");
+      message << this->compensator.calculate_shift({tokens[1], tokens[2]});
       retstring = message.str();
-      return NO_ERROR;
     }
     else
 
-    if (testname == "compensate") {
+    if (testname == "comp") {
       if (tokens.size() != 2) {
         logwrite(function, "ERROR expected <chan>");
         return ERROR;
@@ -829,13 +830,39 @@ namespace Flexure {
       try {
         std::pair<double,double> delta;
         this->compensator.calculate_compensation(tokens[1], delta);
+        message.str(""); message << "delta X=" << delta.first << " Y=" << delta.second;
+        logwrite(function, message.str());
         this->offset_tiptilt(tokens[1], delta, true); // true = dry run
       }
       catch (const std::exception &e) {
         logwrite(function, std::string(e.what()));
         return ERROR;
       }
-      return NO_ERROR;
+    }
+    else
+
+    if (testname=="tcsinfo") {
+      if (tokens.size()>=4) {
+      try {
+        this->tcs_info.zenangle = std::stod(tokens[1]);
+        this->tcs_info.pa       = std::stod(tokens[2]);
+        this->tcs_info.casangle = std::stod(tokens[3]);
+        if (tokens.size()==5) {
+          this->tcs_info.equivalent_cass = std::stod(tokens[4]);
+        }
+        else this->tcs_info.set();
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
+      }
+      }
+      message.str("");
+      message << "zenangle        = " << this->tcs_info.zenangle << "\n"
+              << "pa              = " << this->tcs_info.pa << "\n"
+              << "casangle        = " << this->tcs_info.casangle << "\n"
+              << "equivalent_cass = " << this->tcs_info.equivalent_cass << "\n";
+      retstring=message.str();
     }
 
     else {

@@ -54,18 +54,15 @@ namespace Flexure {
       std::map<std::string, TrigFunction> trigfunction;
 
       double flexure_polynomial_fit(const std::pair<std::string,std::string> &which, double inputvar, size_t offset);
-      double calculate_shift(const std::pair<std::string,std::string> &which);
       void compensate_shift_to_delta(const std::string &channel,
-                                     const std::pair<double,double> &shift, std::pair<double,double> delta);
+                                     const std::pair<double,double> &shift, std::pair<double,double> &delta);
 
     public:
       Compensator(TcsInfo &info);
 
       long load_vector_from_config(std::string &config, VectorType type);
-
+      double calculate_shift(const std::pair<std::string,std::string> &which);
       void calculate_compensation(const std::string &channel, std::pair<double,double> &delta);
-
-      long test(const std::pair<std::string,std::string> which, double &shift);
   };
   /***** Flexure::Compensator *************************************************/
 
