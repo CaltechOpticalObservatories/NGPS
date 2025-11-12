@@ -153,22 +153,25 @@ namespace Flexure {
    */
   double Compensator::calculate_shift(const std::pair<std::string,std::string> &which) {
     const std::string function("Flexure::Compensator::calculate_shift");
+    double zenangle = this->tcs_info.get_zenangle();
+    double equivalentcass = this->tcs_info.get_equivalentcass();
+
     try {
-      double c     = this->flexure_polynomial_fit(which, this->tcs_info.zenangle,  0);
-      double a1    = this->flexure_polynomial_fit(which, this->tcs_info.zenangle,  5);
-      double theta = this->flexure_polynomial_fit(which, this->tcs_info.zenangle, 10);
-      double a2    = this->flexure_polynomial_fit(which, this->tcs_info.zenangle, 15);
+      double c     = this->flexure_polynomial_fit(which, zenangle,  0);
+      double a1    = this->flexure_polynomial_fit(which, zenangle,  5);
+      double theta = this->flexure_polynomial_fit(which, zenangle, 10);
+      double a2    = this->flexure_polynomial_fit(which, zenangle, 15);
 
       auto [ chan, axis ] = which;
 
       if (this->trigfunction[chan] == TrigFunction::Sine) {
-        return c + a1 * std::sin(  (this->tcs_info.equivalent_cass * DEGTORAD - theta))
-                 + a2 * std::sin(2*(this->tcs_info.equivalent_cass * DEGTORAD - theta));
+        return c + a1 * std::sin(  (equivalentcass * DEGTORAD - theta))
+                 + a2 * std::sin(2*(equivalentcass * DEGTORAD - theta));
       }
       else
       if (this->trigfunction[chan] == TrigFunction::Cosine) {
-        return c + a1 * std::cos(  (this->tcs_info.equivalent_cass * DEGTORAD - theta))
-                 + a2 * std::cos(2*(this->tcs_info.equivalent_cass * DEGTORAD - theta));
+        return c + a1 * std::cos(  (equivalentcass * DEGTORAD - theta))
+                 + a2 * std::cos(2*(equivalentcass * DEGTORAD - theta));
       }
       else {
         logwrite(function, "ERROR undefined trig function for channel "+chan);
@@ -176,7 +179,7 @@ namespace Flexure {
       }
     }
     catch (const std::exception &e) {
-      logwrite("Flexure::Compensator::calculate_shift", "ERROR: "+std::string(e.what()));
+      logwrite(function, "ERROR: "+std::string(e.what()));
       throw;
     }
   }

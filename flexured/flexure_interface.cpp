@@ -79,10 +79,11 @@ namespace Flexure {
     this->tcs_snapshot_status = true;
     }
     // extract and store values in the class
-    Common::extract_telemetry_value(jmessage, "CASANGLE", this->tcs_info.casangle);
-    Common::extract_telemetry_value(jmessage, "ZENANGLE", this->tcs_info.zenangle);
-    Common::extract_telemetry_value(jmessage, "PA", this->tcs_info.pa);
-    this->tcs_info.set();
+    double zenangle, casangle, pa;
+    Common::extract_telemetry_value(jmessage, "CASANGLE", casangle);
+    Common::extract_telemetry_value(jmessage, "ZENANGLE", zenangle);
+    Common::extract_telemetry_value(jmessage, "PA", pa);
+    this->tcs_info.store(zenangle, casangle, pa);
   }
   /***** Flexure::Interface::handletopic_tcsd *********************************/
 
@@ -90,7 +91,6 @@ namespace Flexure {
   /***** Flexure::Interface::publish_snapshot *********************************/
   /**
    * @brief      publishes a snapshot of my telemetry
-   * @details    This loads the tcs_info class with values published by tcsd.
    *
    */
   void Interface::publish_snapshot() {
@@ -810,6 +810,9 @@ namespace Flexure {
     }
     else
 
+    // shift <chan> <axis>
+    // calculate shift of spectrum on detector
+    //
     if (testname == "shift") {
       if (tokens.size() != 3) {
         logwrite(function, "ERROR expected <chan> <axis>");
@@ -821,6 +824,9 @@ namespace Flexure {
     }
     else
 
+    // comp <chan>
+    // calculate adjustments needed to compensate for shift
+    //
     if (testname == "comp") {
       if (tokens.size() != 2) {
         logwrite(function, "ERROR expected <chan>");
@@ -841,16 +847,21 @@ namespace Flexure {
     }
     else
 
+    // tcsinfo [ <zenangle> <casangle> <pa> [ <equivalentcass> ] ]
+    // get (no args) or optionally override tcsinfo, with equivcass optional
+    //
     if (testname=="tcsinfo") {
       if (tokens.size()>=4) {
       try {
-        this->tcs_info.zenangle = std::stod(tokens[1]);
-        this->tcs_info.pa       = std::stod(tokens[2]);
-        this->tcs_info.casangle = std::stod(tokens[3]);
+        double zenangle = std::stod(tokens[1]);
+        double casangle = std::stod(tokens[2]);
+        double pa       = std::stod(tokens[3]);
+        // equivalent cass is normally calculated but can be overridden
         if (tokens.size()==5) {
-          this->tcs_info.equivalent_cass = std::stod(tokens[4]);
+          double equivalentcass = std::stod(tokens[4]);
+          this->tcs_info.store(zenangle, casangle, pa, equivalentcass);
         }
-        else this->tcs_info.set();
+        else this->tcs_info.store(zenangle, casangle, pa);
       }
       catch (const std::exception &e) {
         logwrite(function, "ERROR: "+std::string(e.what()));
@@ -858,10 +869,10 @@ namespace Flexure {
       }
       }
       message.str("");
-      message << "zenangle        = " << this->tcs_info.zenangle << "\n"
-              << "pa              = " << this->tcs_info.pa << "\n"
-              << "casangle        = " << this->tcs_info.casangle << "\n"
-              << "equivalent_cass = " << this->tcs_info.equivalent_cass << "\n";
+      message << "zenangle        = " << this->tcs_info.get_zenangle() << "\n"
+              << "casangle        = " << this->tcs_info.get_casangle() << "\n"
+              << "pa              = " << this->tcs_info.get_pa() << "\n"
+              << "equivalent_cass = " << this->tcs_info.get_equivalentcass() << "\n";
       retstring=message.str();
     }
 
