@@ -92,6 +92,7 @@ namespace Slicecam {
 
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
+      std::atomic<bool> is_targetacquire_running;  ///< set if target acquisition is running
 
       /** these are set by Interface::saveframes()
        */
@@ -129,6 +130,7 @@ namespace Slicecam {
           should_subscriber_thread_run(false),
           should_framegrab_run(false),
           is_framegrab_running(false),
+          is_targetacquire_running(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
           snapshot_status { { "slitd", false }, {"tcsd", false} }
@@ -182,6 +184,12 @@ namespace Slicecam {
       void request_snapshot();
       bool wait_for_snapshots();
 
+      long acquire_target(std::string args, std::string &retstring);
+      void calculate_centroid(const std::string &which,
+                                     std::pair<double, double> &centroid);
+      void calculate_acquisition_offsets(const std::pair<double, double> &centroid,
+                                                std::pair<double, double> &offsets);
+
       long avg_frames( std::string args, std::string &retstring );
       long bin( std::string args, std::string &retstring );
       long test_image();                       ///
@@ -208,6 +216,8 @@ namespace Slicecam {
       long gain( std::string args, std::string &retstring );
 
       long get_acam_guide_state( bool &is_guiding );
+
+      long offset_acam_goal(const std::pair<double, double> &offsets);
 
       long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 
