@@ -24,6 +24,7 @@
 #include "acamd_commands.h"
 #include "tcsd_client.h"
 #include "skyinfo.h"
+#include "slicecam_camera.h"
 
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
@@ -36,6 +37,8 @@
 #else
 #include "andor.h"
 #endif
+
+#include "guimanager.h"
 
 /***** Slicecam ***************************************************************/
 /**
@@ -52,172 +55,6 @@ namespace Slicecam {
   constexpr double PI = 3.14159265358979323846;
 
   class Interface;  // forward declaration
-
-  /***** Slicecam::Camera *****************************************************/
-  /**
-   * @class  Camera
-   * @brief  Camera class
-   *
-   * This class is used for communicating with the slicecam camera directly (which is an Andor)
-   *
-   */
-  class Camera {
-    private:
-      uint16_t* image_data;
-      int simsize;      /// for the sky simulator
-      std::map<at_32, at_32> handlemap;
-
-    public:
-      Camera() : image_data( nullptr ), simsize(1024) { };
-
-      FITS_file fits_file;        /// instantiate a FITS container object
-      FitsInfo  fitsinfo;
-
-      std::mutex framegrab_mutex;
-
-      std::map<std::string, std::unique_ptr<Andor::Interface>> andor;     ///< container for Andor::Interface objects
-
-      std::map<std::string, Andor::DefaultValues> default_config;         ///< container to hold defaults for each camera
-
-      inline void copy_info() { fits_file.copy_info( fitsinfo ); }
-      inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
-
-      inline long init_handlemap() {
-        this->handlemap.clear();
-        return this->andor.begin()->second->get_handlemap( this->handlemap );
-      }
-
-      long emulator( std::string args, std::string &retstring );
-      long open( std::string which, std::string args );
-      long close();
-      long get_frame();
-      long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
-      long bin( const int hbin, const int vbin );
-      long set_fan( std::string which, int mode );
-      long imflip( std::string args, std::string &retstring );
-      long imrot( std::string args, std::string &retstring );
-      long set_gain( int &gain );
-      long set_gain( std::string which, int &gain );
-      long set_gain( int &&gain );
-      long set_gain( std::string which, int &&gain );
-      long set_exptime( float &val );
-      long set_exptime( std::string which, float &val );
-      long set_exptime( float &&val );
-      long set_exptime( std::string which, float &&val );
-      long speed( std::string args, std::string &retstring );
-      long temperature( std::string args, std::string &retstring );
-  };
-  /***** Slicecam::Camera *****************************************************/
-
-
-  /***** Slicecam::GUIManager *************************************************/
-  /**
-   * @class  GUIManager
-   * @brief  defines functions and settings for the display GUI
-   *
-   */
-  class GUIManager {
-    private:
-      const std::string camera_name = "slicev";
-      std::atomic<bool> update;  ///<! set if the menus need to be updated
-      std::string push_settings; ///<! name of script to push settings to GUI
-      std::string push_image;    ///<! name of script to push an image to GUI
-
-    public:
-      GUIManager() : update(false), exptime(NAN), gain(-1), bin(-1), navg(NAN) { }
-
-      // These are the GUIDER GUI settings
-      //
-      float exptime;
-      int gain;
-      int bin;
-      float navg;
-
-      // sets the private variable push_settings, call on config
-      inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
-
-      // sets the private variable push_image, call on config
-      inline void set_push_image( std::string sh ) { this->push_image=sh; }
-
-      // sets the update flag true
-      inline void set_update() { this->update.store( true ); return; }
-
-      /**
-       * @fn         get_update
-       * @brief      returns the update flag then clears it
-       * @return     boolean true|false
-       */
-      inline bool get_update() { return this->update.exchange( false ); }
-
-      /**
-       * @fn         get_message_string
-       * @brief      returns a formatted message of all gui settings
-       * @details    This message is the return string to guideset command.
-       * @return     string in form of <exptime> <gain> <bin>
-       */
-      std::string get_message_string() {
-        std::stringstream message;
-        if ( this->exptime < 0 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->exptime; }
-        message << " ";
-        if ( this->gain < 1 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->gain; }
-        message << " ";
-        if ( this->bin < 1 ) message << "x"; else { message << std::fixed << std::setprecision(3) << this->bin; }
-        message << " ";
-        if ( std::isnan(this->navg) ) message << "NaN"; else { message << std::fixed << std::setprecision(2) << this->navg; }
-        return message.str();
-      }
-
-      /**
-       * @brief      calls the push_settings script with the formatted message string
-       * @details    the script pushes the settings to the Guider GUI
-       */
-      void push_gui_settings() {
-        std::string function = "Slicecam::GUIManager::push_gui_settings";
-        std::stringstream cmd;
-        cmd << push_settings << " "
-            << ( get_update() ? "true" : "false" ) << " "
-            << get_message_string();
-
-        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
-          logwrite( function, "ERROR updating GUI" );
-        }
-
-        return;
-      }
-
-      void send_fifo_warning(const std::string &message) {
-        const std::string fifo_name("/tmp/.slicev_warning.fifo");
-        std::ofstream fifo(fifo_name);
-        if (!fifo.is_open()) {
-          logwrite("Slicecam::GUIManager::send_fifo_warning", "failed to open " + fifo_name + " for writing");
-        }
-        else {
-          fifo << message << std::endl;
-          fifo.close();
-        }
-      }
-
-      /**
-       * @brief      calls the push_image script with the formatted message string
-       * @details    the script pushes the indicated file to the Guider GUI display
-       * @param[in]  filename  fits file to send
-       */
-      void push_gui_image( std::string_view filename ) {
-        std::string function = "Slicecam::GUIManager::push_gui_image";
-        std::stringstream cmd;
-        cmd << push_image << " "
-            << camera_name << " "
-            << filename;
-
-        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
-          logwrite( function, "ERROR pushing image to GUI" );
-        }
-
-        return;
-      }
-  };
-  /***** Slicecam::GUIManager *************************************************/
-
 
   /***** Slicecam::Interface **************************************************/
   /**
