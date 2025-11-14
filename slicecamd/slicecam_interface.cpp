@@ -16,6 +16,108 @@ namespace Slicecam {
 
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
+  /***** Slicecam::Interface::acquire_target **********************************/
+  /**
+   * @brief      
+   * @param[in]  
+   * @param[out] 
+   * @return     
+   *
+   */
+  long Interface::acquire_target(std::string args, std::string &retstring) {
+    const std::string function("Slicecam::Interface::acquire_target");
+    std::stringstream message;
+
+    // Help
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_ACQUIRETARGET;
+      retstring.append( " <ra> <dec> <size>\n" );
+      retstring.append( "   where <ra> <dec> are the coordinates of the destination\n" );
+      retstring.append( "   and <size> is the size of a box centered on <ra> <dec>\n" );
+      return HELP;
+    }
+
+    if (args.empty()) {
+      logwrite(function, "ERROR missing args.... TBD");
+      return ERROR;
+    }
+
+    // don't allow someone to run this if already running
+    if (this->is_targetacquire_running.load(std::memory_order_acquire)) {
+      logwrite(function, "ERROR target acquisition already running");
+      return ERROR;
+    }
+
+    // sets the is_targetacquire_running state true, clears automatically
+    BoolState targetacquire_running(this->is_targetacquire_running);
+
+    // framegrabbing must be running
+    if (!this->is_framegrab_running.load(std::memory_order_acquire)) {
+      logwrite(function, "ERROR framegrabbing is not running");
+      return ERROR;
+    }
+
+    std::pair<double,double> centroid;  // { RA, DEC } of centroid
+    std::pair<double,double> offsets;   // { dRA, dDEC } puts centroid on target
+
+    std::string camera("L");            // somehow need to determine camera name!
+
+    this->calculate_centroid(camera, centroid);
+
+    this->calculate_acquisition_offsets(centroid, offsets);
+
+    this->offset_acam_goal(offsets);
+
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::acquire_target **********************************/
+
+
+  /***** Slicecam::Interface::calculate_centroid ******************************/
+  /**
+   * @brief      calculate offsets required to move centroid on target
+   * @param[in]  which     "L" or "R" indicates which camera
+   * @param[out] centroid  pair { RA, DEC } coordinates of centroid
+   *
+   * CHAZ
+   *
+   */
+  void Interface::calculate_centroid(const std::string &which,
+                                     std::pair<double, double> &centroid) {
+
+    // pointer to the selected camera
+    //
+    auto* cam = this->camera.andor[which].get();
+
+    // pointer to a buffer containing the image
+    //
+    float* data = cam->get_avg_data();
+
+    // In case you want it, the size of the image can be gotten from:
+    //
+    long cols = cam->camera_info.axes[0];
+    long rows = cam->camera_info.axes[1];
+    unsigned long imsize = cam->camera_info.section_size;  // rows*cols
+  }
+  /***** Slicecam::Interface::calculate_centroid ******************************/
+
+
+  /***** Slicecam::Interface::calculate_acquisition_offsets *******************/
+  /**
+   * @brief      calculate offsets required to move centroid on target
+   * @param[in]  centroid  pair { RA, DEC } coordinates of centroid
+   * @param[out] offsets   pair { dRA, dDEC } offsets to put centroid on target
+   *
+   * CHAZ
+   *
+   */
+  void Interface::calculate_acquisition_offsets(const std::pair<double, double> &centroid,
+                                                std::pair<double, double> &offsets) {
+
+  }
+  /***** Slicecam::Interface::calculate_acquisition_offsets *******************/
+
+
   /***** Slicecam::Interface::bin *********************************************/
   /**
    * @brief      set or get camera binning
@@ -1346,6 +1448,73 @@ namespace Slicecam {
   /***** Slicecam::Interface::get_acam_guide_state ****************************/
 
 
+  /***** Slicecam::Interface::offset_acam_goal ********************************/
+  /**
+   * @brief      applies offset to ACAM goal, or move telescope directly
+   * @details    When guiding is enabled, the offsets will be applied to the ACAM
+   *             goal so that the ACAM will guide on the offset position. When
+   *             not guiding, the offsets are sent directly to the TCS as PT offsets.
+   * @param[in]  offsets  pair { dRA, dDEC }
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::offset_acam_goal(const std::pair<double, double> &offsets) {
+    const std::string function("Slicecam::Interface::offset_acam_goal");
+
+    auto [ra_off, dec_off] = offsets;  // local copy
+
+    // If ACAM is guiding then slicecam must not move the telescope,
+    // but must allow ACAM to perform the offset.
+    //
+    bool is_guiding;
+    long error = this->get_acam_guide_state( is_guiding );
+
+    if ( error != NO_ERROR ) {
+      logwrite( function, "ERROR getting guide state" );
+      return ERROR;
+    }
+
+    // send the offsets now
+    //
+    if ( is_guiding ) {
+      // Send to acamd if guiding
+      //
+      std::stringstream cmd;
+      cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << ra_off << " " << dec_off;
+      error = this->acamd.command( cmd.str() );
+      if ( error != NO_ERROR ) {
+        logwrite( function, "ERROR adding offset to acam goal" );
+        return ERROR;
+      }
+    }
+    else
+    if ( !is_guiding && this->tcs_online.load(std::memory_order_acquire) && this->tcsd.client.is_open() ) {
+      // offsets are in degrees, convert to arcsec (required for PT command)
+      //
+      ra_off  *= 3600.;
+      dec_off *= 3600.;
+
+      // Send them directly to the TCS when not guiding
+      //
+      if ( this->tcsd.pt_offset( ra_off, dec_off, OFFSETRATE ) != NO_ERROR ) {
+        logwrite( function, "ERROR offsetting telescope" );
+        return ERROR;
+      }
+    }
+    else if ( !is_guiding ) {
+      logwrite( function, "ERROR not connected to tcsd" );
+      return ERROR;
+    }
+
+    std::ostringstream message;
+    message << "requested offsets dRA=" << ra_off << " dDEC=" << dec_off << " arcsec";
+    logwrite(function, message.str());
+
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::offset_acam_goal ********************************/
+
+
   /***** Slicecam::Interface::put_on_slit *************************************/
   /**
    * @brief      put target on slit
@@ -1422,42 +1591,7 @@ namespace Slicecam {
 
     // send the offsets now
     //
-    if ( is_guiding ) {
-      // Send to acamd if guiding
-      //
-      std::stringstream cmd;
-      cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << ra_off << " " << dec_off;
-      error = this->acamd.command( cmd.str() );
-      if ( error != NO_ERROR ) {
-        logwrite( function, "ERROR adding offset to acam goal" );
-        return ERROR;
-      }
-    }
-    else
-    if ( !is_guiding && this->tcs_online.load(std::memory_order_acquire) && this->tcsd.client.is_open() ) {
-      // offsets are in degrees, convert to arcsec (required for PT command)
-      //
-      ra_off  *= 3600.;
-      dec_off *= 3600.;
-
-      // Send them directly to the TCS when not guiding
-      //
-      if ( this->tcsd.pt_offset( ra_off, dec_off, OFFSETRATE ) != NO_ERROR ) {
-        logwrite( function, "ERROR offsetting telescope" );
-        retstring="tcs_error";
-        return ERROR;
-      }
-    }
-    else if ( !is_guiding ) {
-      logwrite( function, "ERROR not connected to tcsd" );
-      retstring="tcs_not_connected";
-      return ERROR;
-    }
-
-    message.str(""); message << "requested offsets dRA=" << ra_off << " dDEC=" << dec_off << " arcsec";
-    logwrite( function, message.str() );
-
-    return NO_ERROR;
+    return this->offset_acam_goal( { ra_off, dec_off } );
   }
   /***** Slicecam::Interface::put_on_slit *************************************/
 
