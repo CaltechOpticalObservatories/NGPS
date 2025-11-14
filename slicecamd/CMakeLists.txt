@@ -34,9 +34,10 @@ include_directories( ${PROJECT_BASE_DIR}/tcsd )
 include_directories( ${PYTHON_DEV} )
 
 add_executable(slicecamd 
-        ${SLICECAMD_DIR}/slicecamd.cpp 
-        ${SLICECAMD_DIR}/slicecam_server.cpp 
-        ${SLICECAMD_DIR}/slicecam_interface.cpp 
+        ${SLICECAMD_DIR}/slicecamd.cpp
+        ${SLICECAMD_DIR}/slicecam_server.cpp
+        ${SLICECAMD_DIR}/slicecam_interface.cpp
+        ${SLICECAMD_DIR}/slicecam_camera.cpp
         ${SLICECAMD_DIR}/slicecam_fits.cpp
         ${PYTHON_DEV}
         )

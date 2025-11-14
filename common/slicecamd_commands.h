@@ -9,6 +9,7 @@
 
 #pragma once
 
+const std::string SLICECAMD_ACQUIRETARGET= "targetacquire"; ///< target acquisition
 const std::string SLICECAMD_AVGFRAMES= "avgframes"; ///< set/get camera binning
 const std::string SLICECAMD_BIN      = "bin";       ///< set/get camera binning
 const std::string SLICECAMD_CLOSE    = "close";     ///< *** close connection to all devices
@@ -53,6 +54,7 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_TCSISCONNECTED+" [ ? ]",
                                                 SLICECAMD_TCSISOPEN+" [ ? ]",
                                                 "  CAMERA COMMANDS:",
+                                                SLICECAMD_ACQUIRETARGET+" [ ? ]",
                                                 SLICECAMD_AVGFRAMES+" [ ? | <num> ]",
                                                 SLICECAMD_FRAMEGRAB+" [ ? | start | stop | one [ <filename> ] | status ]",
                                                 SLICECAMD_FRAMEGRABFIX+" [ ? ]",
