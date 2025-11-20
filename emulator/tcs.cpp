@@ -707,6 +707,19 @@ namespace TcsEmulator {
   /***** TcsEmulator::Telescope::mrates ***************************************/
 
 
+  /***** TcsEmulator::Telescope::parallactic **********************************/
+  /**
+   * @brief      perform the ?PARALLACTIC command, which returns a string
+   * @param[out] retstring  reference to string contains the return string
+   *
+   */
+  void Telescope::parallactic( std::string &retstring ) {
+    std::string function = "  (TcsEmulator::Telescope::parallactic) ";
+    retstring="PARALLACTIC = 0.00";
+  }
+  /***** TcsEmulator::Telescope::parallactic **********************************/
+
+
   /***** TcsEmulator::Telescope::weather **************************************/
   /**
    * @brief      perform the ?WEATHER command, which returns a long string
@@ -1138,6 +1151,11 @@ namespace TcsEmulator {
     else
     if ( mycmd == "?NAME" ) {
       retstring = this->telescope.name;
+      check_retval = false;
+    }
+    else
+    if ( mycmd == "?PARALLACTIC" ) {
+      this->telescope.parallactic(retstring);
       check_retval = false;
     }
     else
