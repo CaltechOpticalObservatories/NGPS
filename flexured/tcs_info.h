@@ -78,7 +78,7 @@ namespace Flexure {
         }
         // otherwise calculate it
         else {
-          double angle = this->pa + this->casangle;
+          double angle = this->casangle - this->pa;
           if (angle < -180.0) angle += 360.0;
           if (angle >  180.0) angle -= 360.0;
           this->equivalentcass = angle;

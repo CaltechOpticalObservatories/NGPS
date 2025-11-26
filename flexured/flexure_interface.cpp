@@ -784,7 +784,9 @@ namespace Flexure {
       retstring.append( "  posmap    return definition of posmap\n" );
       retstring.append( "  shift     calculate shift(chan,axis) of spectrum on detector\n" );
       retstring.append( "  comp      calculates adjustments needed to compensate for shift\n" );
-      retstring.append( "  tcsinfo   <zenangle> <pa> <casangle> [ <equivcass> ] overrides tcsinfo\n" );
+      retstring.append( "  tcsinfo   print current tcsinfo\n" );
+      retstring.append( "  ishift    calculate shift for <zenangle> <pa> <casangle> <chan> <axis>\n" );
+      retstring.append( "  icomp     calculate adjustments for <zenangle> <pa> <casangle> <chan>\n" );
       return HELP;
     }
     else
@@ -847,33 +849,71 @@ namespace Flexure {
     }
     else
 
-    // tcsinfo [ <zenangle> <casangle> <pa> [ <equivalentcass> ] ]
-    // get (no args) or optionally override tcsinfo, with equivcass optional
+    // get tcsinfo
     //
     if (testname=="tcsinfo") {
-      if (tokens.size()>=4) {
-      try {
-        double zenangle = std::stod(tokens[1]);
-        double casangle = std::stod(tokens[2]);
-        double pa       = std::stod(tokens[3]);
-        // equivalent cass is normally calculated but can be overridden
-        if (tokens.size()==5) {
-          double equivalentcass = std::stod(tokens[4]);
-          this->tcs_info.store(zenangle, casangle, pa, equivalentcass);
-        }
-        else this->tcs_info.store(zenangle, casangle, pa);
-      }
-      catch (const std::exception &e) {
-        logwrite(function, "ERROR: "+std::string(e.what()));
-        return ERROR;
-      }
-      }
       message.str("");
       message << "zenangle        = " << this->tcs_info.get_zenangle() << "\n"
               << "casangle        = " << this->tcs_info.get_casangle() << "\n"
               << "pa              = " << this->tcs_info.get_pa() << "\n"
               << "equivalent_cass = " << this->tcs_info.get_equivalentcass() << "\n";
       retstring=message.str();
+    }
+    else
+
+    // interactive shift
+    // calculate shift for specified tcsinfo
+    //
+    if (testname=="ishift") {
+      if (tokens.size()!=6) {
+        logwrite(function, "ERROR expected <zenangle> <casangle> <pa> <chan> <axis>");
+        return ERROR;
+      }
+      try {
+        double zenangle = std::stod(tokens[1]);
+        double casangle = std::stod(tokens[2]);
+        double pa       = std::stod(tokens[3]);
+        {
+        std::lock_guard<std::mutex> lock(snapshot_mutex);
+        this->tcs_info.store(zenangle, casangle, pa);
+        message.str("");
+        message << this->compensator.calculate_shift({tokens[4], tokens[5]});
+        }
+        retstring=message.str();
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
+      }
+    }
+    else
+
+    // interactive comp
+    // calculate compensation adjustments for specified tcsinfo
+    //
+    if (testname=="icomp") {
+      if (tokens.size()!=5) {
+        logwrite(function, "ERROR expected <zenangle> <casangle> <pa> <chan>");
+        return ERROR;
+      }
+      try {
+        double zenangle = std::stod(tokens[1]);
+        double casangle = std::stod(tokens[2]);
+        double pa       = std::stod(tokens[3]);
+        std::pair<double,double> delta;
+        {
+        std::lock_guard<std::mutex> lock(snapshot_mutex);
+        this->tcs_info.store(zenangle, casangle, pa);
+        this->compensator.calculate_compensation(tokens[4], delta);
+        message.str(""); message << "delta X=" << delta.first << " Y=" << delta.second;
+        }
+        retstring=message.str();
+        this->offset_tiptilt(tokens[4], delta, true); // true = dry run
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
+      }
     }
 
     else {
