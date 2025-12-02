@@ -482,27 +482,29 @@ namespace Flexure {
   /***** Flexure::Interface::offset_tiptilt ***********************************/
   /**
    * @brief      offsets the X, Y axes for the specified channel by specified delta
+   * @details    The compensation offsets (delta) must be calculated first, with
+   *             a call to this->compensator.calculate_compensation() for a given
+   *             channel. That returns a delta pair which this function adds to
+   *             the nominal positions and then sends the modified position to the
+   *             actuators.
    * @param[in]  chan       string channel
-   * @param[in]  delta      double pair { X, Y } of calculated offsets
+   * @param[in]  delta      double pair { X, Y } of calculated compensation offsets
    * @param[in]  is_dryrun  if true then no motion is commanded
    * @throws     std::runtime_error
    *
    */
   void Interface::offset_tiptilt(const std::string &chan, const std::pair<double,double> &delta, bool is_dryrun) {
 
-    auto addr=this->motorinterface.get_motormap()[chan].addr;
-    float position_x=NAN, position_y=NAN;
-    std::string posname, retstring;
+    // nominal positions
+    auto motormap=this->motorinterface.get_motormap()[chan];
+    float nominal_x=motormap.axes[AXIS_X].defpos;
+    float nominal_y=motormap.axes[AXIS_Y].defpos;
 
-    // get the current positions
-    if ( this->motorinterface.get_pos( chan, 2, addr, position_x, posname ) != NO_ERROR ||
-         this->motorinterface.get_pos( chan, 3, addr, position_y, posname ) != NO_ERROR ) {
-      throw std::runtime_error("reading positions for channel "+chan);
-    }
+    // new positions
+    float newposition_x = nominal_x + delta.first;
+    float newposition_y = nominal_y - delta.second;
 
-    float newposition_x = position_x + delta.first;
-    float newposition_y = position_y + delta.second;
-
+    // dryrun only logs what it would have done
     if ( is_dryrun ) {
       std::ostringstream oss;
       oss << "dry run: would move chan " << chan << " by " << delta.first << ", " << delta.second
@@ -512,12 +514,13 @@ namespace Flexure {
     }
 
     // move X-axis
-    if (this->motorinterface.moveto( chan, 2, newposition_x, retstring ) != NO_ERROR) {
+    std::string retstring;
+    if (this->motorinterface.moveto( chan, AXIS_X, newposition_x, retstring ) != NO_ERROR) {
       throw std::runtime_error("moving X axis for channel "+chan);
     }
 
     // move Y-axis
-    if (this->motorinterface.moveto( chan, 3, newposition_y, retstring ) != NO_ERROR) {
+    if (this->motorinterface.moveto( chan, AXIS_Y, newposition_y, retstring ) != NO_ERROR) {
       throw std::runtime_error("moving Y axis for channel "+chan);
     }
   }
@@ -612,9 +615,9 @@ namespace Flexure {
         std::string key;
         this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
         switch ( axis.second.axisnum ) {
-          case 1 : key = "FLXPIS_" + chan; break;
-          case 2:  key = "FLXSPE_" + chan; break;
-          case 3:  key = "FLXSPA_" + chan; break;
+          case AXIS_Z : key = "FLXPIS_" + chan; break;
+          case AXIS_X:  key = "FLXSPE_" + chan; break;
+          case AXIS_Y:  key = "FLXSPA_" + chan; break;
           default: key = "error";
                    message.str(""); message << "ERROR unknown axis " << axis.second.axisnum;
                    logwrite( function, message.str() );
@@ -767,7 +770,7 @@ namespace Flexure {
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto motormap = this->motorinterface.get_motormap();
 
     Tokenize( args, tokens, " " );
 
@@ -795,7 +798,7 @@ namespace Flexure {
     //
     if ( testname == "motormap" ) {
       retstring="name host:port addr naxes \n      axisnum min max reftype defpos";
-      for ( const auto &mot : _motormap ) {
+      for ( const auto &mot : motormap ) {
         retstring.append("\n");
         message.str(""); message << mot.first << " "
                                  << mot.second.host << ":"

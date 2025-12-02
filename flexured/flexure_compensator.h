@@ -16,6 +16,12 @@ namespace Flexure {
   constexpr double PI = 3.14159265358979323846;
   constexpr double DEGTORAD = PI/180.0;
 
+  // PI actuator axis numbers
+  //
+  constexpr int AXIS_Z = 1;  ///< piston
+  constexpr int AXIS_X = 2;  ///< spectral
+  constexpr int AXIS_Y = 3;  ///< spatial
+
   constexpr const char* X = "X";
   constexpr const char* Y = "Y";
 

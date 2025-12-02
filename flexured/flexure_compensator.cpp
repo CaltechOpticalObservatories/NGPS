@@ -199,10 +199,12 @@ namespace Flexure {
   void Compensator::compensate_shift_to_delta(const std::string &channel,
                                               const std::pair<double,double> &shift, std::pair<double,double> &delta) {
 
+    // delta.first is delta-X = [0]*x + [1]*y + [2]
     delta.first  = this->position_coefficients.at({channel,X})[0] * shift.first  +
                    this->position_coefficients.at({channel,X})[1] * shift.second +
                    this->position_coefficients.at({channel,X})[2];
 
+    // delta.second is delta-Y = [0]*x + [1]*y + [2]
     delta.second = this->position_coefficients.at({channel,Y})[0] * shift.first  +
                    this->position_coefficients.at({channel,Y})[1] * shift.second +
                    this->position_coefficients.at({channel,Y})[2];
