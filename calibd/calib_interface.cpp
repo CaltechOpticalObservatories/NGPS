@@ -9,6 +9,42 @@
 
 namespace Calib {
 
+  /***** Calib::BlueLamp::configure *******************************************/
+  /**
+   * @brief      BlueLamp class constructor
+   * @param[in]  input  line from config file expected "<host> <port> <addr>"
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long BlueLamp::configure(const std::string &input) {
+    const std::string function("Calib::BlueLamp::configure");
+
+    // tokenize the input config line
+    std::vector<std::string> tokens;
+    Tokenize(input, tokens, " ");
+
+    if (tokens.size() != 3) {
+      logwrite(function, "ERROR exepected <host> <port> <address>");
+      return ERROR;
+    }
+
+    try {
+      std::string host = tokens.at(0);
+      int port         = std::stoi(tokens.at(1));
+      int address      = std::stoi(tokens.at(2));
+
+      // construct the lamp controller interface
+      this->controller.emplace(host, port, address);
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR parsing <host> <port> <addr> : "+std::string(e.what()));
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Calib::BlueLamp::configure *******************************************/
+
 
   /***** Calib::Motion::Motion ************************************************/
   /**

@@ -68,14 +68,16 @@ namespace Calib {
    *
    */
   long Server::configure_calibd() {
-    std::string function = "Calib::Server::configure_calibd";
-    std::stringstream message;
-    int applied=0;
-    long error;
+    const std::string function("Calib::Server::configure_calibd");
+    std::ostringstream message;
+    int lastapplied=0, numapplied=0;
+    long error=NO_ERROR;
 
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      lastapplied = numapplied;
 
       // NBPORT -- nonblocking listening port for the calib daemon
       //
@@ -84,20 +86,14 @@ namespace Calib {
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad NBPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "NBPORT number out of integer range");
-          return(ERROR);
+        catch (const std::exception &e) {
+          logwrite(function, "ERROR parsing NBPORT: "+std::string(e.what()));
+          return ERROR;
         }
         this->nbport = port;
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // BLKPORT -- blocking listening port for the calib daemon
       //
@@ -106,20 +102,14 @@ namespace Calib {
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad BLKPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "BLKPORT number out of integer range");
-          return(ERROR);
+        catch (const std::exception &e) {
+          logwrite(function, "ERROR parsing BLKPORT: "+std::string(e.what()));
+          return ERROR;
         }
         this->blkport = port;
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // ASYNCPORT -- asynchronous broadcast message port for the calib daemon
       //
@@ -128,58 +118,49 @@ namespace Calib {
         try {
           port = std::stoi( config.arg[entry] );
         }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad ASYNCPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "ASYNCPORT number out of integer range");
-          return(ERROR);
+        catch (const std::exception &e) {
+          logwrite(function, "ERROR parsing ASYNCPORT: "+std::string(e.what()));
+          return ERROR;
         }
         this->asyncport = port;
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // ASYNCGROUP -- asynchronous broadcast group for the calib daemon
       //
       if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        this->interface.async.enqueue( message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
       //
       if ( config.param[entry] == "PUB_ENDPOINT" ) {
         this->interface.publisher_address = config.arg[entry];
         this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
-        this->interface.async.enqueue_and_log( function, "CALIBD:config:"+config.param[entry]+"="+config.arg[entry] );
-        applied++;
+        numapplied++;
       }
+      else
 
       // SUB_ENDPOINT
       //
       if ( config.param[entry] == "SUB_ENDPOINT" ) {
         this->interface.subscriber_address = config.arg[entry];
-        this->interface.async.enqueue_and_log( function, "CALIBD:config:"+config.param[entry]+"="+config.arg[entry] );
-        applied++;
+        numapplied++;
       }
+      else
 
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //                     Each controller is stored in STL map indexed by motorname
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
         if ( this->interface.motion.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
-          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
       }
+      else
 
       // MOTOR_AXIS -- axis infor for specified MOTOR_CONTROLLER
       //
@@ -187,7 +168,7 @@ namespace Calib {
 
         Physik_Instrumente::AxisInfo AXIS;
 
-        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) error=ERROR;
 
         // Each AXIS is associated with a CONTROLLER by name, so a controller
         // of this name must have already been configured.
@@ -198,9 +179,7 @@ namespace Calib {
         auto loc = _motormap.find( AXIS.motorname );
         if ( loc != _motormap.end() ) {
           this->interface.motion.motorinterface.add_axis( AXIS );
-          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
         else {
           message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
@@ -210,9 +189,9 @@ namespace Calib {
           for ( const auto &mot : _motormap ) { message << " " << mot.first; }
           logwrite( function, message.str() );
           error = ERROR;
-          break;
         }
       }
+      else
 
       // MOTOR_POS -- detailed position info for each named motor controller
       //
@@ -222,7 +201,7 @@ namespace Calib {
         //
         Physik_Instrumente::PosInfo POS;
 
-        if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) break;
+        if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) error=ERROR;
 
         // Check that motorname associated with position has already been defined
         // in the motormap and if so, add PosInfo to the motorinterface.
@@ -232,9 +211,7 @@ namespace Calib {
 
         if ( loc != _motormap.end() ) {
           this->interface.motion.motorinterface.add_posmap( POS );  // add the PosInfo to the class herre
-          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
         else {
           message.str(""); message << "ERROR: MOTOR_POS name \"" << POS.posname << "\" "
@@ -244,39 +221,51 @@ namespace Calib {
           for ( const auto &mot : _motormap ) { message << " " << mot.first; }
           logwrite( function, message.str() );
           error = ERROR;
-          break;
         }
       }
+      else
 
       // LAMPMOD_HOST -- lamp modulator host info ( host port )
       //
       if ( config.param[entry].find( "LAMPMOD_HOST" ) == 0 ) {
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        this->interface.modulator.configure_host( config.arg[entry] );
-        applied++;
+        error = this->interface.modulator.configure_host( config.arg[entry] );
+        if (error==NO_ERROR) numapplied++;
       }
+      else
 
       // LAMPMOD_MOD -- lamp modulator modulator info
       //
       if ( config.param[entry].find( "LAMPMOD_MOD" ) == 0 ) {
-        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        this->interface.modulator.configure_mod( config.arg[entry] );
-        applied++;
+        error = this->interface.modulator.configure_mod( config.arg[entry] );
+        if (error==NO_ERROR) numapplied++;
+      }
+      else
+
+      // BLUE_LAMP_CONTROL
+      //
+      if (this->config.param[entry]=="BLUE_LAMP_CONTROL") {
+        error = this->interface.bluelamp.configure(this->config.arg[entry]);
+        if (error==NO_ERROR) numapplied++;
+      }
+
+      // log applied configuration
+      if (numapplied > lastapplied) {
+        std::ostringstream oss;
+        oss << "CALIBD:config:" << this->config.param[entry] << "=" << this->config.arg[entry];
+        this->interface.async.enqueue_and_log(function, oss.str());
       }
 
     } // end loop through the entries in the configuration file
 
+
     message.str("");
-    if (applied==0) {
+
+    if (numapplied==0) {
       message << "ERROR: ";
       error = ERROR;
     }
-    else {
-      error = NO_ERROR;
-    }
-    message << "applied " << applied << " configuration lines to calibd";
+
+    message << "applied " << numapplied << " configuration lines to calibd";
     logwrite(function, message.str());
 
     if ( error == NO_ERROR ) error = this->interface.motion.configure_class();
