@@ -33,6 +33,8 @@ ARCSIM_NUMDEV=0
 #CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
 CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/28-1458/sg2.lod U2)
 CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/28-1458/engg.lod U1)
+CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/tbd.lod U1)
+CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/lod/tbd.lod L1)
 
 # -----------------------------------------------------------------------------
 # This defines the default image size and binning for each controller.
@@ -51,11 +53,11 @@ IMAGE_SIZE=(I 1220 4114 0 100 1 1)
 IMAGE_SIZE=(R 1220 4114 0 100 1 1)
 
 # -----------------------------------------------------------------------------
-# Detector orientation of ROWS/COLS with respect to X,Y axes
-# DET_ORIENTATION=(CHAN X Y)
+# Detector orientation: which physical axis corresponds with spectral|spatial
+# DET_ORIENTATION=(CHAN SPEC SPAT)
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       X         is {ROW,COL} for the x-axis
-#       Y         is {ROW,COL} for the y-axis
+#       SPEC      is {ROW,COL} for the spectral-axis
+#       SPAT      is {ROW,COL} for the spatial-axis
 #
 DET_ORIENTATION=(I COL ROW)
 DET_ORIENTATION=(R COL ROW)
@@ -67,12 +69,12 @@ DET_ORIENTATION=(U ROW COL)
 # These configuration keys must follow CONTROLLER which must have an
 # associated CHAN.
 #
-# SPECT_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
+# SPEC_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
 #
-SPECT_INFO=(I 0.69 7560)
-SPECT_INFO=(R 0.57 5610)
-SPECT_INFO=(G 0.42 4170)
-SPECT_INFO=(U 0.31 3200)
+SPEC_INFO=(I 0.69 7560)
+SPEC_INFO=(R 0.57 5610)
+SPEC_INFO=(G 0.42 4170)
+SPEC_INFO=(U 0.31 3200)
 
 # -----------------------------------------------------------------------------
 # Optional axis labels. If not specified then the x-axis is named "X"
