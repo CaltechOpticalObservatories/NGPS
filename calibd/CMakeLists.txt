@@ -12,6 +12,7 @@ set( CMAKE_CXX_STANDARD 17 )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/PI )
+include_directories( ${PROJECT_BASE_DIR}/BrainBox )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
@@ -28,6 +29,7 @@ add_executable(calibd
         )
 
 target_link_libraries(calibd
+        brainbox
         physik_instrumente
         network
         common

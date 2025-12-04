@@ -5,12 +5,12 @@
  *
  */
 
-#ifndef CALIB_INTERFACE_H
-#define CALIB_INTERFACE_H
+#pragma once
 
 #include <map>
 
 #include "network.h"
+#include "brainbox.h"
 #include "pi.h"
 #include "logentry.h"
 #include "common.h"
@@ -19,6 +19,7 @@
 #include <map>
 #include <condition_variable>
 #include <atomic>
+#include <optional>
 
 #define MOVE_TIMEOUT 25000  ///< number of milliseconds before a move fails
 #define MOD_MAX          8  ///< largest allowed modulator number <n>
@@ -32,6 +33,32 @@
 namespace Calib {
 
   const std::string DAEMON_NAME = "calibd";      ///< when run as a daemon, this is my name
+
+  /***** Calib::BlueLamp ******************************************************/
+  /**
+   * @class  BlueLamp
+   * @brief  blue continuum lamp control
+   *
+   */
+  class BlueLamp {
+    private:
+      std::atomic<bool> is_lampon{false};                 ///< is the lamp on now?
+      std::atomic<bool> is_laseron{false};                ///< is the laser on now?
+      std::atomic<bool> is_lampfault{false};              ///< is there a lamp fault now?
+      std::atomic<bool> is_conntrollerfault{false};       ///< is there a lamp controller fault?
+
+      std::chrono::steady_clock::time_point lampon_time;  ///< timepoint when lamp was powered
+
+      std::optional<BrainBox::Interface> controller;      ///< interface to BrainBox DIO Controller
+
+    public:
+      BlueLamp();
+      long configure(const std::string &input);
+      long power(const std::string &args, std::string &retstring);
+      bool get_status();
+  };
+  /***** Calib::BlueLamp ******************************************************/
+
 
   /***** Calib::Modulator *****************************************************/
   /**
@@ -178,6 +205,8 @@ namespace Calib {
 
       Modulator modulator;                       ///< lamp modulator object
 
+      BlueLamp bluelamp;
+
       // publish/subscribe functions
       //
       long init_pubsub(const std::initializer_list<std::string> &topics={}) {
@@ -199,4 +228,3 @@ namespace Calib {
 
 }
 /***** Calib ******************************************************************/
-#endif

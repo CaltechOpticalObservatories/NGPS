@@ -22,6 +22,15 @@ SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 #
 EMULATOR=@CALIBD_EMULATOR@
 
+# BLUE_LAMP_CONTROL="<host> <port> <address>"
+#
+# This defines access to the blue continuumm lamp controller.
+# <host>    = host name of controller
+# <port>    = port on hostname
+# <address> = address of controller (BrainBox supports multiple addresses)
+#
+BLUE_LAMP_CONTROL="@IP_CALIB_BRANIBOX@ @CALIB_BRAINBOX_PORT@ 1"
+
 # MOTION CONTROL
 #
 # For each actuator's controller specify:
