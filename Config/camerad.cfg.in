@@ -37,32 +37,26 @@ CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/tbd.lod U1)
 CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/lod/tbd.lod L1)
 
 # -----------------------------------------------------------------------------
-# This defines the default image size and binning for each controller.
+# This defines the detector geometry for each controller.
 #
-# IMAGE_SIZE=(CHAN ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
+# DETECTOR_GEOMETRY=(CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
 #
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       ROWS      number of rows in image
-#       COLS      number of columns in image
-#       OSROWS    number of overscan rows
-#       OSCOLS    number of overscan columns
-#       BINROWS   bin factor rows
-#       BINCOLS   bin factor cols
+#       PHYSSPAT  physical spatial axis {ROW|COL}
+#       PHYSSPEC  physical spectral axis {ROW|COL}
+#       SPAT      size in spatial dimension
+#       SPEC      size in spectral dimension
+#       OSSPAT    number of spatial overscans
+#       OSSPEC    number of spectral overscans
+#       BINSPAT   spatial bin factor
+#       BINSPEC   spectral bin factor
+# For the PHYSSPAT and PHYSSPEC parameters, ROW|COL refers to the spatial and
+# spectral alignment with the physical readout, I.E. ROW=parallel, COL=serial
 #
-IMAGE_SIZE=(I 1220 4114 0 100 1 1)
-IMAGE_SIZE=(R 1220 4114 0 100 1 1)
-
-# -----------------------------------------------------------------------------
-# Detector orientation: which physical axis corresponds with spectral|spatial
-# DET_ORIENTATION=(CHAN SPEC SPAT)
-# where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       SPEC      is {ROW,COL} for the spectral-axis
-#       SPAT      is {ROW,COL} for the spatial-axis
-#
-DET_ORIENTATION=(I COL ROW)
-DET_ORIENTATION=(R COL ROW)
-DET_ORIENTATION=(G COL ROW)
-DET_ORIENTATION=(U ROW COL)
+DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 
 # -----------------------------------------------------------------------------
 # Spectral Information configuration

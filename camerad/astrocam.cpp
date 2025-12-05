@@ -406,6 +406,12 @@ namespace AstroCam {
 
 
   /***** AstroCam::Interface::parse_spec_info *********************************/
+  /**
+   * @brief      parse the SPEC_INFO config line
+   * @param[in]  args  line from config file, expected "<chan> <disp> <wavel>"
+   * @return     ERROR|NO_ERROR
+   *
+   */
   long Interface::parse_spec_info( std::string args ) {
     const std::string function("AstroCam::Interface::parse_spec_info");
     std::vector<std::string> tokens;
@@ -432,42 +438,60 @@ namespace AstroCam {
   /***** AstroCam::Interface::parse_spec_info *********************************/
 
 
-  /***** AstroCam::Interface::parse_det_orientation ***************************/
-  long Interface::parse_det_orientation( std::string args ) {
-    const std::string function("AstroCam::Interface::parse_det_orientation");
+  /***** AstroCam::Interface::parse_det_geometry ******************************/
+  /**
+   * @brief      parse the DETECTOR_GEOMETRY config line
+   * @details    Expected "CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS"
+   * @param[in]  args  line from config file
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Interface::parse_det_geometry( std::string args ) {
+    const std::string function("AstroCam::Interface::parse_det_geometry");
     std::ostringstream message;
     std::vector<std::string> tokens;
 
     Tokenize( args, tokens, " " );
 
-    if ( tokens.size() != 3 ) {
-      logwrite(function, "ERROR invalid number of args. expected DET_ORIENTATION={CHAN SPEC SPAT}");
+    if ( tokens.size() != 9 ) {
+      logwrite(function, "ERROR invalid number of args. expected CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS");
       return ERROR;
     }
 
     try {
       // validate channel
       int dev = devnum_from_chan(tokens.at(0));
-      std::string spec = to_uppercase(tokens.at(1));
-      std::string spat = to_uppercase(tokens.at(2));
+      std::string spat = to_uppercase(tokens.at(1));
+      std::string spec = to_uppercase(tokens.at(2));
 
-      // require axis args be "ROW" or "COL" and unique
-      if ( ((spec != "ROW") && (spec != "COL")) || ((spat != "ROW") && (spat != "COL")) ) {
+      // require physical axis args be "ROW" or "COL" and unique
+      if ( ((spat != "ROW") && (spat != "COL")) || ((spec != "ROW") && (spec != "COL")) ) {
         throw std::runtime_error("expected ROW|COL");
       }
-      if (spec==spat) throw std::runtime_error("SPEC/SPAT not unique");
+      if (spec==spat) throw std::runtime_error("PHYSSPAT/PHYSSPEC must be unique");
 
-      this->controller[dev].spec_axis = (spec=="ROW" ? Controller::ROW : Controller::COL);
       this->controller[dev].spat_axis = (spat=="ROW" ? Controller::ROW : Controller::COL);
+      this->controller[dev].spec_axis = (spec=="ROW" ? Controller::ROW : Controller::COL);
     }
     catch(const std::exception &e) {
-      logwrite(function, "ERROR parsing DET_ORIENTATION config: "+std::string(e.what()));
+      logwrite(function, "ERROR parsing DETECTOR_GEOMETRY config: "+std::string(e.what()));
       return ERROR;
     }
 
-    return NO_ERROR;
+    // make a new string that removes the orientation arguments
+    // this will become the config line to pass to image_size
+    std::string line, retstring;
+    for (size_t i=0; i<9; i++) {
+      if (i==1||i==2) continue;
+      if (!line.empty()) line += ' ';
+      line += tokens[i];
+    }
+    bool save_as_default = true;
+    long error = this->image_size(line, retstring, save_as_default);
+
+    return error;
   }
-  /***** AstroCam::Interface::parse_det_orientation ***************************/
+  /***** AstroCam::Interface::parse_det_geometry ******************************/
 
 
   /***** AstroCam::Interface::parse_controller_config *************************/
@@ -1346,6 +1370,8 @@ namespace AstroCam {
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
 
+      lastapplied=numapplied;
+
       if ( this->config.param[entry].find( "CONTROLLER" ) == 0 ) {
         if ( this->parse_controller_config( this->config.arg[entry] ) != ERROR ) {
           numapplied++;
@@ -1353,10 +1379,9 @@ namespace AstroCam {
       }
       else
 
-      if ( this->config.param[entry] == "IMAGE_SIZE" ) {
-        std::string retstring;
-        bool save_as_default = true;
-        if ( this->image_size( this->config.arg[entry], retstring, save_as_default ) != ERROR ) {
+      // DETECTOR_GEOMETRY
+      if ( this->config.param[entry] == "DETECTOR_GEOMETRY" ) {
+        if ( this->parse_det_geometry(this->config.arg[entry]) != ERROR ) {
           numapplied++;
         }
       }
@@ -1447,14 +1472,6 @@ namespace AstroCam {
 
       if ( this->config.param[entry] == "SPEC_INFO" ) {
         if ( this->parse_spec_info( this->config.arg[entry] ) != ERROR ) {
-          numapplied++;
-        }
-      }
-      else
-
-      // DET_ORIENTATION
-      if (this->config.param[entry]=="DET_ORIENTATION") {
-        if ( this->parse_det_orientation(this->config.arg[entry]) != ERROR ) {
           numapplied++;
         }
       }
@@ -4682,7 +4699,6 @@ logwrite(function, message.str());
    * @details    Sets/gets ROWS COLS OSROWS OSCOLS BINROWS BINCOLS for a
    *             given device|channel. This calls geometry() and buffer() to
    *             set the image geometry on the controller and allocate a PCI buffer.
-   * @param[in]  args       contains DEV|CHAN [ [ ROWS COLS OSROWS OSCOLS BINROWS BINCOLS ]
    * @param[in]  args       contains DEV|CHAN [ [ SPAT SPEC OSSPAT OSSPEC BINSPAT BINSPEC ]
    * @param[out] retstring  reference to string for return value
    * @return     ERROR | NO_ERROR | HELP
@@ -4747,7 +4763,7 @@ logwrite(function, message.str());
     std::vector<std::string> tokens;
     Tokenize( retstring, tokens, " " );
 
-    Controller* pcontroller = nullptr;
+    Controller* pcontroller = &this->controller[dev];
 
     if ( ! tokens.empty() ) {
 
@@ -4785,8 +4801,6 @@ logwrite(function, message.str());
         retstring="invalid_argument";
         return( ERROR );
       }
-
-      pcontroller = &this->controller[dev];
 
       // Translate to physical coordinates
       int rows, cols, osrows, oscols, binrows, bincols;
@@ -4957,7 +4971,7 @@ logwrite(function, message.str());
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
     pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
     pcontroller->physical_to_logical( this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
-                                     binspat, binspec );
+                                      binspat, binspec );
 
     message.str(""); message << "spat spec osspat osspec binspat binspec = ";
     message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec

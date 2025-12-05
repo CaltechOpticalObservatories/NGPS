@@ -981,7 +981,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       void make_image_keywords( int dev );
       long handle_json_message( std::string message_in );
       long parse_spec_info( std::string args );
-      long parse_det_orientation( std::string args );
+      long parse_det_geometry( std::string args );
       long parse_controller_config( std::string args );
       int  devnum_from_chan( const std::string &chan );
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
