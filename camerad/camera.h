@@ -366,7 +366,6 @@ namespace Camera {
 
       std::string   axis_x, axis_y;          //!< labels for axes
       int32_t       exposure_time;           //!< exposure time in exposure_unit
-//    int           binning[2];              //!< bin factor. element 0=cols (serial), element 1=rows (parallel)
 
       bool          is_userkeys_persist;     //!< should userkeys persist or be cleared after each exposure?
       bool          autodir_state;           //!< if true then images are saved in a date subdir below image_dir, i.e. image_dir/YYYYMMDD/
@@ -532,8 +531,8 @@ namespace Camera {
           exposure_unit(""),                 // default is exposure unit undefined
           exposure_factor(-1),               // default undefined
           num_pre_exposures(0),              // default no pre-exposures
-          dispersion(0),
-          minwavel(0)
+          dispersion(NAN),
+          minwavel(NAN)
           { }
       /***** Camera::Information:Information **********************************/
 

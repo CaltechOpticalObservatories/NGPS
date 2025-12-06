@@ -847,14 +847,14 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
         private:
           uint32_t bufsize;
           int framecount;               //!< keep track of the number of frames received per expose
-//        void* workbuf;                //!< pointer to workspace for performing deinterlacing
           long workbuf_size;
 
         public:
           Controller();                 //!< class constructor
           ~Controller() { };            //!< no deconstructor
+
           Camera::Information info;     //!< camera info object for this controller
-//        FITS_file *pFits;             //!< FITS container object has to be a pointer here (OBSOLETE)
+
           void* workbuf;                //!< pointer to workspace for performing deinterlacing
 
           /**
@@ -874,6 +874,19 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
           int cols;                        //!< total number of columns read (includes overscan)
           int rows;                        //!< total number of rows read (includes overscan)
+
+          enum Axis { ROW, COL };
+
+          Axis spec_axis;                  ///< which physical axis {ROW,COL} is spectral
+          Axis spat_axis;                  ///< which physical axis {ROW,COL} is spatial
+
+          // translate dimensions, logical-to-physical and physical-to-logical
+          void logical_to_physical(int spat, int spec, int &rows, int &cols) const;
+          void physical_to_logical(int rows, int cols, int &spat, int &spec) const;
+
+          // get the physical axis that corresponds to a logical axis
+          int spat_physical_axis() const { return spat_axis == ROW ? _ROW_ : _COL_; }
+          int spec_physical_axis() const { return spec_axis == ROW ? _ROW_ : _COL_; }
 
           // These are detector image geometry values for each device,
           // unaffected by binning.
@@ -898,6 +911,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
           bool connected;                  //!< true if controller connected (requires successful TDL command)
           bool inactive;                   //!< set true to skip future use of controllers when unable to connect
+          bool is_imsize_set;              //!< has image_size been called after controller connected?
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
           std::string firmware;            //!< name of firmware (.lod) file
           std::string channel;             //!< name of spectrographic channel
@@ -967,7 +981,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       void exposure_progress();
       void make_image_keywords( int dev );
       long handle_json_message( std::string message_in );
-      long parse_spect_config( std::string args );
+      long parse_spec_info( std::string args );
+      long parse_det_geometry( std::string args );
       long parse_controller_config( std::string args );
       int  devnum_from_chan( const std::string &chan );
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
