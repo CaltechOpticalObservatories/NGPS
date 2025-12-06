@@ -610,6 +610,7 @@ namespace AstroCam {
     this->controller[dev].pCallback = ( new Callback() );          // set the pointer to this object in the public vector
     this->controller[dev].devname = "";             // device name
     this->controller[dev].connected = false;        // not yet connected
+    this->controller[dev].is_imsize_set = false;    // need to set image_size
     this->controller[dev].firmwareloaded = false;   // no firmware loaded
     this->controller[dev].inactive = false;         // assume active unless shown otherwise
 
@@ -900,7 +901,6 @@ namespace AstroCam {
                                            osspat, osspec);
           pcontroller->physical_to_logical(_binning[_ROW_], _binning[_COL_],
                                            binspat, binspec);
-
           message.str("");
           message << dev     << " "
                   << spat    << " "
@@ -2541,6 +2541,23 @@ namespace AstroCam {
     std::string _start_time;
     long error;
 
+    if (this->devnums.empty()) {
+      logwrite(function, "ERROR no connected controllers");
+      return ERROR;
+    }
+
+    for (const auto &dev : this->devnums) {
+      std::string naughtylist;
+      if (!this->controller[dev].is_imsize_set) {
+        if (!naughtylist.empty()) naughtylist += ' ';
+        naughtylist += this->controller[dev].channel;
+      }
+      if (!naughtylist.empty()) {
+        logwrite(function, "ERROR image_size not set for channel(s): "+naughtylist);
+        return ERROR;
+      }
+    }
+
     this->nexp.store(nexp_in);
 
     // Different controllers may have different rules about when to set and clear their
@@ -3533,6 +3550,12 @@ for ( const auto &dev : selectdev ) {
 }
 ***/
 
+    for (const auto &dev: selectdev) {
+      std::string init=this->controller[dev].channel+" init";
+      std::string retstring;
+      this->image_size(init, retstring);
+    }
+
     return( error );
   }
   /***** AstroCam::Interface::do_load_firmware ********************************/
@@ -3559,6 +3582,7 @@ for ( const auto &dev : selectdev ) {
 
     try {
       con.pArcDev->loadControllerFile( timlodfile );        // Do the load here
+      con.is_imsize_set = false;                            // need to call image_size now
 
       if ( !con.info.readout_name.empty() ) {  // Set readout amplifier if defined
         con.pArcDev->selectOutputSource( con.readout_arg );
@@ -3954,14 +3978,25 @@ for ( const auto &dev : selectdev ) {
       // restore the image size from the config file, which was stored in the class
       // when the config file was read
       //
+      int spat_default, spec_default,
+          osspat_default, osspec_default,
+          binspat_default, binspec_default;
+
+      pcontroller->physical_to_logical(pcontroller->defrows, pcontroller->defcols,
+                                       spat_default, spec_default);
+      pcontroller->physical_to_logical(pcontroller->defosrows, pcontroller->defoscols,
+                                       osspat_default, osspec_default);
+      pcontroller->physical_to_logical(this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
+                                       binspat_default, binspec_default);
+
       cmd.str("");
       cmd << chan << " "
-          << pcontroller->defrows << " "
-          << pcontroller->defcols << " "
-          << pcontroller->defosrows << " "
-          << pcontroller->defoscols << " "
-          << this->camera_info.binning[_ROW_] << " "
-          << this->camera_info.binning[_COL_];
+          << spat_default << " "
+          << spec_default << " "
+          << osspat_default << " "
+          << osspec_default << " "
+          << binspat_default << " "
+          << binspec_default;
       if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
     }
     // if the only thing passed-in is the chan, then extract_dev_chan will
@@ -4765,19 +4800,33 @@ logwrite(function, message.str());
 
     Controller* pcontroller = &this->controller[dev];
 
-    if ( ! tokens.empty() ) {
+    int spat=-1, spec=-1, osspat=-1, osspec=-1, binspat=-1, binspec=-1;
+    // start by loading the values in the class
+    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
+    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
+    pcontroller->physical_to_logical( this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
+                                      binspat, binspec );
 
-      // Having other than 6 tokens is automatic disqualification so get out now
-      //
-      if ( tokens.size() != 6 ) {
-        logwrite(function,
-            "ERROR invalid number of arguments. expected <rows> <cols> <osrows> <oscols> <binrows> <bincols>");
-        retstring="invalid_argument";
-        return( ERROR );
-      }
+    // no args returns current settings only
+    //
+    if (tokens.empty()) {
+      message.str(""); message << "spat spec osspat osspec binspat binspec = ";
+      message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
+              << ( pcontroller->connected ? "" : " [inactive]" );
+      logwrite( function, message.str() );
+      retstring = message.str();
+      return NO_ERROR;
+    }
+    else
 
-      int spat=-1, spec=-1, osspat=-1, osspec=-1, binspat=-1, binspec=-1;
+    // tokens not empty, first tok is "init" will use the values in the class
+    if (tokens[0]=="init") {
+      // use the values from the class gotten above
+    }
+    else
 
+    // check for complete set of args
+    if (tokens.size()==6) {
       try {
         spat    = std::stoi( tokens.at(0) );
         spec    = std::stoi( tokens.at(1) );
@@ -4786,188 +4835,200 @@ logwrite(function, message.str());
         binspat = std::stoi( tokens.at(4) );
         binspec = std::stoi( tokens.at(5) );
       }
-      catch ( std::exception &e ) {
+      catch (const std::exception &e ) {
         logwrite(function, "ERROR parsing \"" + retstring + "\": " + std::string(e.what()));
         retstring="invalid_argument";
-        return( ERROR );
+        return ERROR;
       }
+    }
+    else {
+      logwrite(function,
+          "ERROR invalid number of arguments. expected <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
+      retstring="invalid_argument";
+      return ERROR;
+    }
 
-      // Check image size
+    // If we got here then spat,spec,etc. have been set,
+    // either from the class or the supplied arg list
+
+    // Check image size
+    //
+    if ( spat<1 || spec<1 || osspat<0 || osspec<0 || binspat<1 || binspec<1 ) {
+      message.str(""); message << "ERROR invalid image size " << spat << " " << spec << " "
+                               << osspat << " " << osspec << " " << binspat << " " << binspec;
+      logwrite( function, message.str() );
+      retstring="invalid_argument";
+      return( ERROR );
+    }
+
+    // Translate supplied (logical) to physical coordinates
+    int rows, cols, osrows, oscols, binrows, bincols;
+    pcontroller->logical_to_physical(spat, spec, rows, cols);
+    pcontroller->logical_to_physical(osspat, osspec, osrows, oscols);
+    pcontroller->logical_to_physical(binspat, binspec, binrows, bincols);
+
+//  message.str(""); message << "[DEBUG] input imsize: " << rows << " " << cols << " "
+//                           << osrows << " " << oscols << " " << binrows << " " << bincols;
+//  logwrite( function, message.str() );
+
+    // Store the geometry in the class. This is the new detector geometry,
+    // unchanged by binning, so that when reverting to binning=1 from some
+    // binnnig factor, this is the default image size to revert to.
+    //
+    pcontroller->detrows = rows;
+    pcontroller->detcols = cols;
+    pcontroller->osrows0 = osrows;
+    pcontroller->oscols0 = oscols;
+
+    // Binning is the same for all devices so it's stored in the camera info class.
+    //
+    this->camera_info.binning[_ROW_] = binrows;
+    this->camera_info.binning[_COL_] = bincols;
+
+    // Assign the binning also to the controller info
+    //
+    pcontroller->info.binning[_ROW_] = this->camera_info.binning[_ROW_];
+    pcontroller->info.binning[_COL_] = this->camera_info.binning[_COL_];
+
+    // If binned by a non-evenly-divisible factor then skip modulo that
+    // many at the start. These will be removed from the image.
+    //
+    pcontroller->skipcols = cols % bincols;
+    pcontroller->skiprows = rows % binrows;
+
+//  message.str(""); message << "[DEBUG] skipcols=" << this->controller[dev].skipcols << " skiprows=" << this->controller[dev].skiprows;
+//  logwrite( function, message.str() );
+
+    cols -= pcontroller->skipcols;
+    rows -= pcontroller->skiprows;
+
+//  message.str(""); message << "[DEBUG] cols=" << cols << " rows=" << rows;
+//  logwrite( function, message.str() );
+
+    // Adjust the number of overscans to make them evenly divisible
+    // by the binning factor.
+    //
+    oscols -= ( oscols % bincols );
+    osrows -= ( osrows % binrows );
+
+//  message.str(""); message << "[DEBUG] oscols=" << oscols << " osrows=" << osrows;
+//  logwrite( function, message.str() );
+
+    // Now that the rows/cols and osrows/oscols have been adjusted for
+    // binning, store them in the class as detector_pixels for this controller.
+    //
+    pcontroller->info.detector_pixels[_COL_] = cols + oscols;
+    pcontroller->info.detector_pixels[_ROW_] = rows + osrows;
+
+    // ROI is the full detector
+    pcontroller->info.region_of_interest[0] = 1;
+    pcontroller->info.region_of_interest[1] = pcontroller->info.detector_pixels[0];
+    pcontroller->info.region_of_interest[2] = 1;
+    pcontroller->info.region_of_interest[3] = pcontroller->info.detector_pixels[1];
+
+    pcontroller->info.ismex = true;
+    pcontroller->info.bitpix = 16;
+    pcontroller->info.frame_type = Camera::FRAME_RAW;
+
+//  message.str("");
+//  message << "[DEBUG] new binned values before set_axes() to re-calculate:"
+//          << " detector_pixels[" << _COL_ << "]=" << this->controller[dev].info.detector_pixels[_COL_]
+//          << " detector_pixels[" << _ROW_ << "]=" << this->controller[dev].info.detector_pixels[_ROW_];
+//  logwrite(function, message.str());
+
+    // *** This is where the binned-image dimensions are re-calculated ***
+    //
+    // A call to set_axes() will store the binned image dimensions
+    // in controller[dev].info.axes[*]. Those dimensions will
+    // be used to set the image geometry with do_geometry() and
+    // the PCI buffer with buffer().
+    //
+    if ( pcontroller->info.set_axes() != NO_ERROR ) {
+      message.str(""); message << "ERROR setting axes for device " << dev;
+      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      return( ERROR );
+    }
+
+    // because set_axes() doesn't scale overscan
+    //
+    oscols /= bincols;
+    osrows /= binrows;
+
+    // save the binning-adjusted overscans to the class
+    //
+    pcontroller->osrows = osrows;
+    pcontroller->oscols = oscols;
+
+    // if requested, store the imsize values as a string in the class for default recovery
+    //
+    if ( save_as_default ) {
+      message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
+      pcontroller->imsize_args = message.str();
+      pcontroller->defrows = rows;
+      pcontroller->defcols = cols;
+      pcontroller->defosrows = osrows;
+      pcontroller->defoscols = oscols;
+      logwrite( function, "saved as default for chan "+chan+": "+message.str() );
+    }
+
+    // This is as far as we can get without a connected controller.
+    // If not connected then all we've done is save this info to the class,
+    // which will be used after the controller is connected.
+    //
+    if ( pcontroller->connected && pcontroller->firmwareloaded ) {
+
+      // allocate PCI buffer and set geometry now
       //
-      if ( spat<1 || spec<1 || osspat<0 || osspec<0 || binspat<1 || binspec<1 ) {
-        message.str(""); message << "ERROR invalid image size " << spat << " " << spec << " "
-                                 << osspat << " " << osspec << " " << binspat << " " << binspec;
-        logwrite( function, message.str() );
-        retstring="invalid_argument";
-        return( ERROR );
-      }
-
-      // Translate to physical coordinates
-      int rows, cols, osrows, oscols, binrows, bincols;
-      pcontroller->logical_to_physical(spat, spec, rows, cols);
-      pcontroller->logical_to_physical(osspat, osspec, osrows, oscols);
-      pcontroller->logical_to_physical(binspat, binspec, binrows, bincols);
-
-//    message.str(""); message << "[DEBUG] input imsize: " << rows << " " << cols << " "
-//                             << osrows << " " << oscols << " " << binrows << " " << bincols;
-//    logwrite( function, message.str() );
-
-      // Store the geometry in the class. This is the new detector geometry,
-      // unchanged by binning, so that when reverting to binning=1 from some
-      // binnnig factor, this is the default image size to revert to.
-      //
-      pcontroller->detrows = rows;
-      pcontroller->detcols = cols;
-      pcontroller->osrows0 = osrows;
-      pcontroller->oscols0 = oscols;
-
-      // Binning is the same for all devices so it's stored in the camera info class.
-      //
-      this->camera_info.binning[_ROW_] = binrows;
-      this->camera_info.binning[_COL_] = bincols;
-
-      // Assign the binning also to the controller info
-      //
-      pcontroller->info.binning[_ROW_] = this->camera_info.binning[_ROW_];
-      pcontroller->info.binning[_COL_] = this->camera_info.binning[_COL_];
-
-      // If binned by a non-evenly-divisible factor then skip modulo that
-      // many at the start. These will be removed from the image.
-      //
-      pcontroller->skipcols = cols % bincols;
-      pcontroller->skiprows = rows % binrows;
-
-//    message.str(""); message << "[DEBUG] skipcols=" << this->controller[dev].skipcols << " skiprows=" << this->controller[dev].skiprows;
-//    logwrite( function, message.str() );
-
-      cols -= pcontroller->skipcols;
-      rows -= pcontroller->skiprows;
-
-//    message.str(""); message << "[DEBUG] cols=" << cols << " rows=" << rows;
-//    logwrite( function, message.str() );
-
-      // Adjust the number of overscans to make them evenly divisible
-      // by the binning factor.
-      //
-      oscols -= ( oscols % bincols );
-      osrows -= ( osrows % binrows );
-
-//    message.str(""); message << "[DEBUG] oscols=" << oscols << " osrows=" << osrows;
-//    logwrite( function, message.str() );
-
-      // Now that the rows/cols and osrows/oscols have been adjusted for
-      // binning, store them in the class as detector_pixels for this controller.
-      //
-      pcontroller->info.detector_pixels[_COL_] = cols + oscols;
-      pcontroller->info.detector_pixels[_ROW_] = rows + osrows;
-
-      // ROI is the full detector
-      pcontroller->info.region_of_interest[0] = 1;
-      pcontroller->info.region_of_interest[1] = pcontroller->info.detector_pixels[0];
-      pcontroller->info.region_of_interest[2] = 1;
-      pcontroller->info.region_of_interest[3] = pcontroller->info.detector_pixels[1];
-
-      pcontroller->info.ismex = true;
-      pcontroller->info.bitpix = 16;
-      pcontroller->info.frame_type = Camera::FRAME_RAW;
+      std::stringstream geostring;
+      std::string retstring;
+      geostring << dev << " "
+                << pcontroller->info.axes[_ROW_] << " "
+                << pcontroller->info.axes[_COL_];
 
 //    message.str("");
-//    message << "[DEBUG] new binned values before set_axes() to re-calculate:"
-//            << " detector_pixels[" << _COL_ << "]=" << this->controller[dev].info.detector_pixels[_COL_]
-//            << " detector_pixels[" << _ROW_ << "]=" << this->controller[dev].info.detector_pixels[_ROW_];
+//    message << "[DEBUG] allocating buffer for " << pcontroller->info.axes[_ROW_] << " x "
+//                                                << pcontroller->info.axes[_COL_];
+//    logwrite( function, message.str() );
+
+      if ( this->buffer( geostring.str(), retstring ) != NO_ERROR ) {
+        message.str(""); message << "ERROR: allocating buffer for chan " << pcontroller->channel
+                                 << " " << pcontroller->devname;
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+
+//    message.str(""); message << "[DEBUG] calling do_geometry( " << geostring.str() << " )";
 //    logwrite(function, message.str());
 
-      // *** This is where the binned-image dimensions are re-calculated ***
-      //
-      // A call to set_axes() will store the binned image dimensions
-      // in controller[dev].info.axes[*]. Those dimensions will
-      // be used to set the image geometry with do_geometry() and
-      // the PCI buffer with buffer().
-      //
-      if ( pcontroller->info.set_axes() != NO_ERROR ) {
-        message.str(""); message << "ERROR setting axes for device " << dev;
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
-        return( ERROR );
-      }
-
-      // if requested, store the imsize values as a string in the class for default recovery
-      //
-      if ( save_as_default ) {
-        message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
-        pcontroller->imsize_args = message.str();
-        pcontroller->defrows = rows;
-        pcontroller->defcols = cols;
-        pcontroller->defosrows = osrows;
-        pcontroller->defoscols = oscols;
-        logwrite( function, "saved as default for chan "+chan+": "+message.str() );
-      }
-
-      // This is as far as we can get without a connected controller.
-      // If not connected then all we've done is save this info to the class,
-      // which will be used after the controller is connected.
-      //
-      if ( pcontroller->connected ) {
-
-        // because set_axes() doesn't scale overscan
-        //
-        oscols /= bincols;
-        osrows /= binrows;
-
-        // save the binning-adjusted overscans to the class
-        //
-        pcontroller->osrows = osrows;
-        pcontroller->oscols = oscols;
-
-        // allocate PCI buffer and set geometry now
-        //
-        std::stringstream geostring;
-        std::string retstring;
-        geostring << dev << " "
-                  << pcontroller->info.axes[_ROW_] << " "
-                  << pcontroller->info.axes[_COL_];
-
-//      message.str("");
-//      message << "[DEBUG] allocating buffer for " << pcontroller->info.axes[_ROW_] << " x "
-//                                                  << pcontroller->info.axes[_COL_];
-//      logwrite( function, message.str() );
-
-        if ( this->buffer( geostring.str(), retstring ) != NO_ERROR ) {
-          message.str(""); message << "ERROR: allocating buffer for chan " << pcontroller->channel
-                                   << " " << pcontroller->devname;
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-
-//      message.str(""); message << "[DEBUG] calling do_geometry( " << geostring.str() << " )";
-//      logwrite(function, message.str());
-
-        if ( this->do_geometry( geostring.str(), retstring ) != NO_ERROR ) {
-          message.str(""); message << "ERROR: setting geometry for chan " << pcontroller->channel;
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-
-        // Set the Bin Parameters to the controller using the 3-letter command,
-        // "SBP <NPBIN> <NP_SKIP> <NSBIN> <NS_SKIP>"
-        //
-        std::stringstream cmd;
-        cmd << "SBP "
-            << this->camera_info.binning[_ROW_] << " "
-            << pcontroller->skiprows << " "
-            << this->camera_info.binning[_COL_] << " "
-            << pcontroller->skipcols;
-        if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
-      }
-      else {
-        message.str(""); message << "saved but not sent to controller because chan " << pcontroller->channel << " is not connected";
+      if ( this->do_geometry( geostring.str(), retstring ) != NO_ERROR ) {
+        message.str(""); message << "ERROR: setting geometry for chan " << pcontroller->channel;
         logwrite( function, message.str() );
+        return ERROR;
       }
 
-    }  // end if !tokens.empty()
+      // Set the Bin Parameters to the controller using the 3-letter command,
+      // "SBP <NPBIN> <NP_SKIP> <NSBIN> <NS_SKIP>"
+      //
+      std::stringstream cmd;
+      cmd << "SBP "
+          << this->camera_info.binning[_ROW_] << " "
+          << pcontroller->skiprows << " "
+          << this->camera_info.binning[_COL_] << " "
+          << pcontroller->skipcols;
+      if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+
+      // finally can set this
+      pcontroller->is_imsize_set = true;
+    }
+    else {
+      message.str(""); message << "saved but not sent to controller because chan " << pcontroller->channel
+                               << (!pcontroller->connected ? " not connected ":"")
+                               << (!pcontroller->firmwareloaded ? " firmware not loaded" :"");
+      logwrite( function, message.str() );
+    }
 
     // Return the values stored in the class
     //
-    int spat, spec, osspat, osspec, binspat, binspec;
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
     pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
     pcontroller->physical_to_logical( this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
@@ -4980,7 +5041,7 @@ logwrite(function, message.str());
 
     retstring = message.str();
 
-    message.str(""); message << "[DEBUG] rows=" << pcontroller->detrows
+    message.str(""); message << "[DEBUG] physical rows=" << pcontroller->detrows
                              << " cols=" << pcontroller->detcols;
     logwrite( function, message.str() );
 
@@ -5445,6 +5506,7 @@ logwrite(function, message.str());
     this->pArcDev = NULL;
     this->pCallback = NULL;
     this->connected = false;
+    this->is_imsize_set = false;
     this->firmwareloaded = false;
     this->firmware = "";
     this->info.readout_name = "";

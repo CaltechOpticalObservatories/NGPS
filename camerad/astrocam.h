@@ -885,8 +885,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           void physical_to_logical(int rows, int cols, int &spat, int &spec) const;
 
           // get the physical axis that corresponds to a logical axis
-          int spat_physical_axis() const { return spat_axis; }
-          int spec_physical_axis() const { return spec_axis; }
+          int spat_physical_axis() const { return spat_axis == ROW ? _ROW_ : _COL_; }
+          int spec_physical_axis() const { return spec_axis == ROW ? _ROW_ : _COL_; }
 
           // These are detector image geometry values for each device,
           // unaffected by binning.
@@ -911,6 +911,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           Callback* pCallback;             //!< Callback class object must be pointer because the API functions are virtual
           bool connected;                  //!< true if controller connected (requires successful TDL command)
           bool inactive;                   //!< set true to skip future use of controllers when unable to connect
+          bool is_imsize_set;              //!< has image_size been called after controller connected?
           bool firmwareloaded;             //!< true if firmware is loaded, false otherwise
           std::string firmware;            //!< name of firmware (.lod) file
           std::string channel;             //!< name of spectrographic channel
