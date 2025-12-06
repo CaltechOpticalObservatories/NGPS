@@ -893,7 +893,7 @@ namespace AstroCam {
           // then override only the axis requested here.
           _binning[physical_axis] = binfactor;
 
-          // call imeage_size() with logical coordinates
+          // call image_size() with logical coordinates
           int spat, spec, osspat, osspec, binspat, binspec;
           pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
                                            spat, spec);
@@ -4072,8 +4072,9 @@ for ( const auto &dev : selectdev ) {
           spat_total += nread;
         }
 
-        // Before updating the image size, translate the current dimensions
-        // to logical.
+        // Before updating the image size, translate the current dimensions (rows/cols)
+        // to logical (spat/spec).
+        //
         int spec_current, spat_current;
         pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
                                          spat_current, spec_current);
@@ -4861,7 +4862,7 @@ logwrite(function, message.str());
       return( ERROR );
     }
 
-    // Translate supplied (logical) to physical coordinates
+    // Translate supplied (logical) to physical (row/col) coordinates
     int rows, cols, osrows, oscols, binrows, bincols;
     pcontroller->logical_to_physical(spat, spec, rows, cols);
     pcontroller->logical_to_physical(osspat, osspec, osrows, oscols);
@@ -5027,7 +5028,7 @@ logwrite(function, message.str());
       logwrite( function, message.str() );
     }
 
-    // Return the values stored in the class
+    // Return the physical values stored in the class as logical (spat/spec)
     //
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
     pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
