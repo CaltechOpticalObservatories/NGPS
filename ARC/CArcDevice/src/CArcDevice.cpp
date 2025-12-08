@@ -1720,14 +1720,33 @@ namespace arc
 				THROW( "(arc::gen3::CArcDevice::readout) Start readout command failed. Reply: 0x%X", uiRetVal );
 			}
 
-			uiPixelCount     = getPixelCount();
+      // U channel (dev#3) cannot make any IOCTL calls to the PCI board
+			if (devnum != 3) uiPixelCount     = getPixelCount();
+      auto time_start = std::chrono::steady_clock::now();
 
       // reduce the number of PixelCount callbacks by this factor
       //
       const int throttle_pixelcount_callbacks=10;
       int callback_count = throttle_pixelcount_callbacks;
 
-			while ( uiPixelCount < ( uiRows * uiCols ) )
+      bool condition=true;
+
+      // U channel (dev#3) wait for readout to start (with timeout)
+      if (devnum==3) {
+        while (!isReadout()) {
+          auto time_now = std::chrono::steady_clock::now();
+          auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(time_now-time_start).count();
+          if (timeout>1000) {
+            std::cerr << "(arc::gen3::CArcDevice::readout) timeout waiting for readout to start\n";
+            THROW( "(arc::gen3::CArcDevice::readout) timeout waiting for readout to start\n" );
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        condition=isReadout();
+      }
+      else condition=( uiPixelCount < ( uiRows * uiCols ) );
+
+			while ( condition )
 			{
 				if ( isReadout() )
 				{
@@ -1740,7 +1759,8 @@ namespace arc
 
 				// Save the last pixel count for use by the timeout counter.
 				uiLastPixelCount = uiPixelCount;
-				uiPixelCount     = getPixelCount();
+				if (devnum==3) { uiPixelCount+=2000; }    // U channel increments a fake pixel counter
+        else { uiPixelCount = getPixelCount(); }  // all others have a real pixel counter
 
 				if ( containsError( uiPixelCount ) )
 				{
@@ -1782,6 +1802,15 @@ namespace arc
 				}
 
 				std::this_thread::sleep_for( std::chrono::milliseconds( 25 ) );
+        // U channel (pci#3) doesn't have a real pixel counter
+        // so his condition is to wait until not readout, which is accurate
+			  if (devnum==3) {
+          condition = ( !isReadout() );
+        }
+        else {
+          // other channels have an accurate pixel counter so this condition works
+          condition=( uiPixelCount < ( uiRows * uiCols ) );
+        }
 			}
 
 			pCooExpIFace->readCallback( expbuf, devnum, uiPixelCount, uiRows*uiCols );

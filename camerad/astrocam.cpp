@@ -5717,6 +5717,8 @@ logwrite(function,message.str() );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
       retstring.append( "   isreadout\n" );
+      retstring.append( "   framecount\n" );
+      retstring.append( "   pixelcount\n" );
       return HELP;
     }
 
@@ -6289,13 +6291,64 @@ logwrite(function,message.str() );
     //
     if ( testname == "isreadout" ) {
       retstring.clear();
-      for ( auto &con : this->controller ) {
-	if ( con.second.pArcDev != nullptr && con.second.connected ) {
-	  bool isreadout = con.second.pArcDev->isReadout();
-	  retstring += (isreadout ? "T " : "F ");
-          message.str(""); message << con.second.devname << " isReadout = " << (isreadout ? "true":"false");
-          logwrite(function, message.str());
-	}
+      try {
+        for ( auto &con : this->controller ) {
+          if ( con.second.pArcDev != nullptr && con.second.connected ) {
+            bool isreadout = con.second.pArcDev->isReadout();
+            retstring += (isreadout ? "T " : "F ");
+            message.str(""); message << con.second.devname << " isReadout = " << (isreadout ? "true":"false");
+            logwrite(function, message.str());
+          }
+        }
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        error=ERROR;
+      }
+    }
+    else
+    // ----------------------------------------------------
+    // framecount
+    // ----------------------------------------------------
+    // call ARC API getPixelCount() function directly
+    //
+    if ( testname == "isreadout" ) {
+      retstring.clear();
+      try {
+        for ( auto &con : this->controller ) {
+          if ( con.second.pArcDev != nullptr && con.second.connected ) {
+            uint32_t framecount = con.second.pArcDev->getFrameCount();
+            message.str(""); message << con.second.devname << " getFrameCount = " << framecount;
+            logwrite(function, message.str());
+            retstring=message.str();
+          }
+        }
+      }
+      catch (const std::exception &e) {
+       logwrite(function, "ERROR: "+std::string(e.what()));
+       error=ERROR;
+      }
+    }
+    // ----------------------------------------------------
+    // pixelcount
+    // ----------------------------------------------------
+    // call ARC API getPixelCount() function directly
+    //
+    if ( testname == "pixelcount" ) {
+      retstring.clear();
+      try {
+        for ( auto &con : this->controller ) {
+          if ( con.second.pArcDev != nullptr && con.second.connected ) {
+            uint32_t pixelcount = con.second.pArcDev->getPixelCount();
+            message.str(""); message << con.second.devname << " getPixelCount = " << pixelcount;
+            logwrite(function, message.str());
+            retstring=message.str();
+          }
+        }
+      }
+      catch (const std::exception &e) {
+       logwrite(function, "ERROR: "+std::string(e.what()));
+       error=ERROR;
       }
     }
     else {
