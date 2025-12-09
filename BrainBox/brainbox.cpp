@@ -207,11 +207,36 @@ namespace BrainBox {
   /***** BrainBox::Interface::send_command ************************************/
 
 
+  bool Interface::is_bit_set(uint8_t bit) {
+    if (bit<0 || bit>7) throw std::runtime_error("bit number out of range 0:7");
+    return ( ((this->raw >> bit) && 0x0F) == 1u );
+  }
+
+
+  bool Interface::is_bit_set(uint8_t raw, uint8_t bit) {
+    if (bit<0 || bit>7) throw std::runtime_error("bit number out of range 0:7");
+    return ( ((raw >> bit) && 0x0F) == 1u );
+  }
+
+
   /***** BrainBox::Interface::read_digio **************************************/
   /**
    * @brief      read digital IO lines
    */
-  long Interface::read_digio() {
+  long Interface::read_digio(uint8_t &ret) {
+    std::string retstring;
+    std::ostringstream cmd;
+
+    cmd << "@" << this->address;
+
+    this->send_command(cmd.str(), retstring);
+
+    try {
+      ret=this->raw = static_cast<uint8_t>(std::stoul(retstring, nullptr, 16));
+    }
+    catch(const std::exception &e) {
+    }
+
   }
   /***** BrainBox::Interface::read_digio **************************************/
 

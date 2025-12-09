@@ -15,3 +15,12 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 add_library( brainbox STATIC
         ${BRAINBOX_DIR}/brainbox.cpp
         )
+
+add_executable(brainbox_test ${BRAINBOX_DIR}/brainbox_test.cpp)
+target_link_libraries(brainbox_test
+        brainbox
+        network
+        common
+        logentry
+        utilities
+        )
