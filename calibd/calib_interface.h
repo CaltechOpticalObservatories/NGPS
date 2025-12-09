@@ -42,20 +42,27 @@ namespace Calib {
    */
   class BlueLamp {
     private:
+      // these are all possible lamp status indicators
+      std::atomic<bool> is_interlock{false};              ///< lamp cannot be turned on unless true
       std::atomic<bool> is_lampon{false};                 ///< is the lamp on now?
       std::atomic<bool> is_laseron{false};                ///< is the laser on now?
       std::atomic<bool> is_lampfault{false};              ///< is there a lamp fault now?
-      std::atomic<bool> is_conntrollerfault{false};       ///< is there a lamp controller fault?
+      std::atomic<bool> is_controllerfault{false};        ///< is there a lamp controller fault?
 
       std::chrono::steady_clock::time_point lampon_time;  ///< timepoint when lamp was powered
 
       std::optional<BrainBox::Interface> controller;      ///< interface to BrainBox DIO Controller
 
     public:
-      BlueLamp();
       long configure(const std::string &input);
-      long power(const std::string &args, std::string &retstring);
-      bool get_status();
+      long power(bool &lampstate, bool &laserstate);
+      long interlock(bool &interlockstate);
+      void get_status(bool &_is_interlock,
+                      bool &_is_lampon,
+                      bool &_is_laseron,
+                      bool &_is_lampfault,
+                      bool &_is_controllerfault);
+
   };
   /***** Calib::BlueLamp ******************************************************/
 

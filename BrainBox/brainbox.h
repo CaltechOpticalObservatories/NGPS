@@ -40,6 +40,7 @@ namespace BrainBox {
       int address;                ///< device address
       bool is_initialized;        ///< has the class been initialized?
       std::mutex mtx;
+      uint8_t raw{0};
 
     public:
       Interface(const std::string &host, const int port, const int address);
@@ -59,6 +60,8 @@ namespace BrainBox {
       long send_command(std::string cmd, std::string &retstring);
       long read_digio();
       long write_digio();
+      bool is_bit_set(uint8_t bit);
+      bool is_bit_set(uint8_t raw, uint8_t bit);
   };
   /***** BrainBox::Interface **************************************************/
 

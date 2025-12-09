@@ -46,6 +46,27 @@ namespace Calib {
   /***** Calib::BlueLamp::configure *******************************************/
 
 
+  long BlueLamp::power(bool &lampstate, bool &laserstate) {
+  }
+
+
+  long BlueLamp::interlock(bool &interlockstate) {
+  }
+
+
+  void BlueLamp::get_status(bool &_is_interlock,
+                            bool &_is_lampon,
+			    bool &_is_laseron,
+			    bool &_is_lampfault,
+			    bool &_is_controllerfault) {
+    _is_interlock       = this->is_interlock;
+    _is_lampon          = this->is_lampon;
+    _is_laseron         = this->is_laseron;
+    _is_lampfault       = this->is_lampfault;
+    _is_controllerfault = this->is_controllerfault;
+  }
+
+
   /***** Calib::Motion::Motion ************************************************/
   /**
    * @brief      Motion class constructor
