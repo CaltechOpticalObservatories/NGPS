@@ -1797,7 +1797,7 @@ namespace AstroCam {
    *
    */
   void Interface::dothread_shutter( int expbuf, Interface &interface ) {
-    std::string function = "AstroCam::Interface::dothread_shutter";
+    const std::string function("AstroCam::Interface::dothread_shutter");
     std::stringstream message;
     std::string timestring;
     timespec timenow;
@@ -1911,7 +1911,7 @@ namespace AstroCam {
    *
    */
   void Interface::dothread_read( Camera::Camera &cam, Controller &con, int expbuf ) {
-    std::string function = "AstroCam::Interface::dothread_read";
+    const std::string function("AstroCam::Interface::dothread_read");
     std::stringstream message;
     std::string which_waveforms;
 
@@ -4190,26 +4190,14 @@ logwrite(function, message.str());
       }
 
       try {
-        exptime_try = std::stoi( exptime_in );
+        this->camera.exposure_time = std::stoi( exptime_in );
+        this->camera_info.systemkeys.primary().addkey( "EXPTIME", exptime_try, "exposure time in msec" );
       }
-      catch ( std::exception &e ) {
+      catch ( const std::exception &e ) {
         message.str(""); message << "ERROR: parsing exposure time \"" << exptime_in << "\": " << e.what();
         logwrite( function, message.str() );
         retstring="invalid_argument";
         return( ERROR );
-      }
-
-      // Send it to the controller via the SET command.
-      //
-      std::stringstream cmd;
-      cmd << "SET " << exptime_try;
-      error = this->do_native( cmd.str() );
-
-      // Set the class variable if SET was successful
-      //
-      if ( error == NO_ERROR ) {
-        this->camera.exposure_time = exptime_try;
-        this->camera_info.systemkeys.primary().addkey( "EXPTIME", exptime_try, "exposure time in msec" );
       }
     }
 
@@ -5717,6 +5705,7 @@ logwrite(function,message.str() );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
       retstring.append( "   isreadout\n" );
+      retstring.append( "   pixelcount\n" );
       return HELP;
     }
 
@@ -6288,14 +6277,48 @@ logwrite(function,message.str() );
     // call ARC API isReadout() function directly
     //
     if ( testname == "isreadout" ) {
+      error=ERROR;
       retstring.clear();
+      try {
       for ( auto &con : this->controller ) {
-	if ( con.second.pArcDev != nullptr && con.second.connected ) {
-	  bool isreadout = con.second.pArcDev->isReadout();
-	  retstring += (isreadout ? "T " : "F ");
+        if ( con.second.pArcDev != nullptr && con.second.connected ) {
+          bool isreadout = con.second.pArcDev->isReadout();
+          error=NO_ERROR;
+          retstring += (isreadout ? "T " : "F ");
           message.str(""); message << con.second.devname << " isReadout = " << (isreadout ? "true":"false");
           logwrite(function, message.str());
-	}
+        }
+      }
+      if (error==ERROR) retstring="no_controllers";
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
+      }
+    }
+    else
+    // ----------------------------------------------------
+    // pixelcount
+    // ----------------------------------------------------
+    // call ARC API getPixelCount() function directly
+    //
+    if ( testname == "pixelcount" ) {
+      error=ERROR;
+      retstring="no_controllers";
+      try {
+      for ( auto &con : this->controller ) {
+        if ( con.second.pArcDev != nullptr && con.second.connected ) {
+          uint32_t pixelcount = con.second.pArcDev->getPixelCount();
+          error=NO_ERROR;
+          retstring = std::to_string(pixelcount);
+          message.str(""); message << con.second.devname << " PixelCount = " << pixelcount;
+          logwrite(function, message.str());
+        }
+      }
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
       }
     }
     else {
