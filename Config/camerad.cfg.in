@@ -37,46 +37,38 @@ CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/51209-1651/dbspr.lod 
 CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 
 # -----------------------------------------------------------------------------
-# This defines the default image size and binning for each controller.
+# This defines the detector geometry for each controller.
 #
-# IMAGE_SIZE=(CHAN ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
+# DETECTOR_GEOMETRY=(CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
 #
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       ROWS      number of rows in image
-#       COLS      number of columns in image
-#       OSROWS    number of overscan rows
-#       OSCOLS    number of overscan columns
-#       BINROWS   bin factor rows
-#       BINCOLS   bin factor cols
+#       PHYSSPAT  physical spatial axis {ROW|COL}
+#       PHYSSPEC  physical spectral axis {ROW|COL}
+#       SPAT      size in spatial dimension
+#       SPEC      size in spectral dimension
+#       OSSPAT    number of spatial overscans
+#       OSSPEC    number of spectral overscans
+#       BINSPAT   spatial bin factor
+#       BINSPEC   spectral bin factor
+# For the PHYSSPAT and PHYSSPEC parameters, ROW|COL refers to the spatial and
+# spectral alignment with the physical readout, I.E. ROW=parallel, COL=serial
 #
-IMAGE_SIZE=(I 1220 4114 0 100 1 1)
-IMAGE_SIZE=(R 1220 4114 0 100 1 1)
-IMAGE_SIZE=(G 1220 4114 0 100 1 1)
-IMAGE_SIZE=(U 4201 2148 0 0 1 1)
-
-# -----------------------------------------------------------------------------
-# Detector orientation of ROWS/COLS with respect to X,Y axes
-# DET_ORIENTATION=(CHAN X Y)
-# where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       X         is {ROW,COL} for the x-axis
-#       Y         is {ROW,COL} for the y-axis
-#
-DET_ORIENTATION=(I COL ROW)
-DET_ORIENTATION=(R COL ROW)
-DET_ORIENTATION=(G COL ROW)
-DET_ORIENTATION=(U ROW COL)
+DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 
 # -----------------------------------------------------------------------------
 # Spectral Information configuration
 # These configuration keys must follow CONTROLLER which must have an
 # associated CHAN.
 #
-# SPECT_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
+# SPEC_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
 #
-SPECT_INFO=(I 0.69 7560)
-SPECT_INFO=(R 0.57 5610)
-SPECT_INFO=(G 0.42 4170)
-SPECT_INFO=(U 0.31 3200)
+SPEC_INFO=(I 0.69 7560)
+SPEC_INFO=(R 0.57 5610)
+SPEC_INFO=(G 0.42 4170)
+SPEC_INFO=(U 0.31 3200)
 
 # -----------------------------------------------------------------------------
 # Optional axis labels. If not specified then the x-axis is named "X"
