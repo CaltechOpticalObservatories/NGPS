@@ -51,12 +51,12 @@ echo "Current slit width =  $slitwidth arcsec"
 ### This binning stuff below should be replaced 
 
 ### Get spectral binning
-xbin=(`camera bin col`[1])
+xbin=(`camera bin spec`[1])
 
 
 
 ### Get spatial binning
-ybin=(`camera bin row`[1])
+ybin=(`camera bin spat`[1])
 
 
 arcmultiplier=`echo "scale=3; 1.00/($xbin*$ybin)" | bc`
