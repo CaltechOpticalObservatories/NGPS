@@ -31,10 +31,10 @@ ARCSIM_NUMDEV=0
 #
 #CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2-20241115.lod U2)
 #CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/28-1458/sg2.lod U2)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/28-1458/engg.lod U1)
+#CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/28-1458/sg2.lod U2)
+#CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/28-1458/engg.lod U1)
 CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/51209-1651/dbspr.lod U2)
-CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
+#CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 
 # -----------------------------------------------------------------------------
 # This defines the detector geometry for each controller.
@@ -53,10 +53,10 @@ CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 # For the PHYSSPAT and PHYSSPEC parameters, ROW|COL refers to the spatial and
 # spectral alignment with the physical readout, I.E. ROW=parallel, COL=serial
 #
-DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
-DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
+#DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
+#DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
 DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
-DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
+#DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 
 # -----------------------------------------------------------------------------
 # Spectral Information configuration
@@ -65,10 +65,10 @@ DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 #
 # SPEC_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
 #
-SPEC_INFO=(I 0.69 7560)
-SPEC_INFO=(R 0.57 5610)
+#SPEC_INFO=(I 0.69 7560)
+#SPEC_INFO=(R 0.57 5610)
 SPEC_INFO=(G 0.42 4170)
-SPEC_INFO=(U 0.31 3200)
+#SPEC_INFO=(U 0.31 3200)
 
 # -----------------------------------------------------------------------------
 # Optional axis labels. If not specified then the x-axis is named "X"
@@ -85,7 +85,7 @@ DET_AXIS_LABEL_Y=spat
 # Under normal operations this should be set to yes.  When set to no then no
 # attempt will be made to initialize or communicate with the shutter.
 #
-BONN_SHUTTER=yes
+BONN_SHUTTER=no
 
 # -----------------------------------------------------------------------------
 # SHUTTER_DELAY is a whole number in milliseconds to wait after closing the
@@ -99,7 +99,7 @@ SHUTTER_DELAY=0
 # at the start/stop of each exposure to operate the controller's shutter
 # trigger. This works independently of the state of BONN_SHUTTER.
 #
-EXT_SHUTTER=no
+EXT_SHUTTER=yes
 
 # -----------------------------------------------------------------------------
 # Constant FITS header keywords, added to every FITS file, grouped
