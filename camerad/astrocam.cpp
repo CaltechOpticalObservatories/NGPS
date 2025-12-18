@@ -896,14 +896,40 @@ namespace AstroCam {
           // then override only the axis requested here.
           _binning[physical_axis] = binfactor;
 
-          // call image_size() with logical coordinates
-          int spat, spec, osspat, osspec, binspat, binspec;
-          pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
-                                           spat, spec);
-          pcontroller->physical_to_logical(pcontroller->osrows0, pcontroller->oscols0,
-                                           osspat, osspec);
-          pcontroller->physical_to_logical(_binning[_ROW_], _binning[_COL_],
-                                           binspat, binspec);
+          //
+          // Prepare to call image_size() with logical coordinates
+          //
+
+          int spat, spec, osspat, osspec, binspat, binspec;  // logical
+          int rows, cols, osrows, oscols, binrows, bincols;  // physical
+
+          // If there are bands of interest defined and spatial binning is not 1,
+          // then you have to reset the bands of interest because those are given
+          // in binned coordinates.
+          //
+          if ( this->camera_info.binspat != 1 &&
+              !pcontroller->info.interest_bands.empty() ) {
+            rows    = pcontroller->defrows;
+            cols    = pcontroller->defcols;
+            osrows  = pcontroller->defosrows;
+            oscols  = pcontroller->defoscols;
+            binrows = pcontroller->info.binning[_ROW_];
+            bincols = pcontroller->info.binning[_COL_];
+            error = this->do_native( dev, "BOI 0 0 0", retstring );
+          }
+          else {
+            rows    = pcontroller->detrows;
+            cols    = pcontroller->detcols;
+            osrows  = pcontroller->osrows0;
+            oscols  = pcontroller->oscols0;
+            binrows = _binning[_ROW_];
+            bincols = _binning[_COL_];
+          }
+
+          pcontroller->physical_to_logical(rows, cols, spat, spec);
+          pcontroller->physical_to_logical(osrows, oscols, osspat, osspec);
+          pcontroller->physical_to_logical(binrows, bincols, binspat, binspec);
+
           message.str("");
           message << dev     << " "
                   << spat    << " "
@@ -4042,6 +4068,11 @@ for ( const auto &dev : selectdev ) {
           int nskip = std::stoi( tokens.at(i) );
           int nread = std::stoi( tokens.at(i+1) );
 
+          // Divide by binning factor in the spatial axis.
+          // This is the value given to the controller.
+          nskip /= this->camera_info.binspat;
+          nread /= this->camera_info.binspat;
+
           // must read at least 1 spatial line
           //
           if ( nread<=0 ) {
@@ -4066,13 +4097,16 @@ for ( const auto &dev : selectdev ) {
           if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
           logwrite( function, "chan "+chan+": "+cmd.str() );
 
-          // add this spatial line to the interest_bands table for this controller
-          //
-          pcontroller->info.interest_bands.emplace_back( nskip, nread );
-
           // running summation of spatial lines of each band in the table
           //
           spat_total += nread;
+
+          // Before saving my copy of this spatial line to the interest_bands table
+          // for this controller, multiply again by the binning factor.
+          // This is the actual number of pixels skipped and read.
+          // The divide-then-multiply will account for bands which are a non-integral number of bins.
+          //
+          pcontroller->info.interest_bands.emplace_back( nskip, nread );
         }
 
         // Before updating the image size, translate the current dimensions (rows/cols)
