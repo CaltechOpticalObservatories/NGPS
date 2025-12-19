@@ -9,6 +9,63 @@
 
 namespace Calib {
 
+  /***** Calib::BlueLamp::configure *******************************************/
+  /**
+   * @brief      BlueLamp class constructor
+   * @param[in]  input  line from config file expected "<host> <port> <addr>"
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long BlueLamp::configure(const std::string &input) {
+    const std::string function("Calib::BlueLamp::configure");
+
+    // tokenize the input config line
+    std::vector<std::string> tokens;
+    Tokenize(input, tokens, " ");
+
+    if (tokens.size() != 3) {
+      logwrite(function, "ERROR exepected <host> <port> <address>");
+      return ERROR;
+    }
+
+    try {
+      std::string host = tokens.at(0);
+      int port         = std::stoi(tokens.at(1));
+      int address      = std::stoi(tokens.at(2));
+
+      // construct the lamp controller interface
+      this->controller.emplace(host, port, address);
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR parsing <host> <port> <addr> : "+std::string(e.what()));
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Calib::BlueLamp::configure *******************************************/
+
+
+  long BlueLamp::power(bool &lampstate, bool &laserstate) {
+  }
+
+
+  long BlueLamp::interlock(bool &interlockstate) {
+  }
+
+
+  void BlueLamp::get_status(bool &_is_interlock,
+                            bool &_is_lampon,
+			    bool &_is_laseron,
+			    bool &_is_lampfault,
+			    bool &_is_controllerfault) {
+    _is_interlock       = this->is_interlock;
+    _is_lampon          = this->is_lampon;
+    _is_laseron         = this->is_laseron;
+    _is_lampfault       = this->is_lampfault;
+    _is_controllerfault = this->is_controllerfault;
+  }
+
 
   /***** Calib::Motion::Motion ************************************************/
   /**

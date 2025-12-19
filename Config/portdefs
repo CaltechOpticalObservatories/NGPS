@@ -44,6 +44,8 @@ set( TELEMD_NB_PORT              9110 )
 set( THERMALD_NB_PORT            9111 )
 set( SLICECAMD_NB_PORT           9112 )
 
+set( CALIB_BRAINBOX_PORT         9500 )
+
 set( CALIBD_EMULATOR            30001 )
 set( CAMERAD_EMULATOR           30002 )
 set( FLEXURED_EMULATOR          30003 )
