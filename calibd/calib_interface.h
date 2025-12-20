@@ -54,7 +54,8 @@ namespace Calib {
       std::optional<BrainBox::Interface> controller;      ///< interface to BrainBox DIO Controller
 
     public:
-      long configure(const std::string &input);
+      long configure_interface(const std::string &input);
+      long configure_dio(const std::vector<std::string> &input);
       long power(bool &lampstate, bool &laserstate);
       long interlock(bool &interlockstate);
       void get_status(bool &_is_interlock,

@@ -29,7 +29,22 @@ EMULATOR=@CALIBD_EMULATOR@
 # <port>    = port on hostname
 # <address> = address of controller (BrainBox supports multiple addresses)
 #
-BLUE_LAMP_CONTROL="@IP_CALIB_BRANIBOX@ @CALIB_BRAINBOX_PORT@ 1"
+BLUE_LAMP_CONTROL="@IP_CALIB_BRAINBOX@ @CALIB_BRAINBOX_PORT@ 1"
+
+# BLUE_LAMP_DIO = ( <pin#> <pindirection> <pinname> )
+#
+# <pin#>          pin number is in range {0:7}
+# <pindirection>  pin direction must be "intput" or "output"
+# <pinname>       pin name can be any string
+#
+BLUE_LAMP_DIO=(0 output interlock)
+BLUE_LAMP_DIO=(1 output lampcontrol)
+#BLUE_LAMP_DIO=(2 output notused)
+#BLUE_LAMP_DIO=(3 output notused)
+BLUE_LAMP_DIO=(4 input  lampstatus)
+BLUE_LAMP_DIO=(5 input  laserstatus)
+BLUE_LAMP_DIO=(6 input  lampfault)
+BLUE_LAMP_DIO=(7 input  controllerfault)
 
 # MOTION CONTROL
 #
@@ -43,9 +58,9 @@ BLUE_LAMP_CONTROL="@IP_CALIB_BRANIBOX@ @CALIB_BRAINBOX_PORT@ 1"
 #
 # For calibd, one controller must be named "cover" and the other must be "door"
 #
-MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
+#MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
 MOTOR_CONTROLLER="door  @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
-#MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
+MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
 #MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
 
 # For each actuator's controller specify:
