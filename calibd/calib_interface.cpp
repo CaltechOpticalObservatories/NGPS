@@ -9,15 +9,15 @@
 
 namespace Calib {
 
-  /***** Calib::BlueLamp::configure *******************************************/
+  /***** Calib::BlueLamp::configure_interface *********************************/
   /**
-   * @brief      BlueLamp class constructor
+   * @brief      configure tcp interface for blue lamp controller
    * @param[in]  input  line from config file expected "<host> <port> <addr>"
    * @return     ERROR|NO_ERROR
    *
    */
-  long BlueLamp::configure(const std::string &input) {
-    const std::string function("Calib::BlueLamp::configure");
+  long BlueLamp::configure_interface(const std::string &input) {
+    const std::string function("Calib::BlueLamp::configure_interface");
 
     // tokenize the input config line
     std::vector<std::string> tokens;
@@ -43,7 +43,27 @@ namespace Calib {
 
     return NO_ERROR;
   }
-  /***** Calib::BlueLamp::configure *******************************************/
+  /***** Calib::BlueLamp::configure_interface *********************************/
+
+
+  /***** Calib::BlueLamp::configure_dio ***************************************/
+  /**
+   * @brief      configure digital I/O pins for blue lamp controller
+   * @param[in]  input  line from config file expected "<pin#> <direction> <name>"
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long BlueLamp::configure_dio(const std::vector<std::string> &input) {
+    const std::string function("Calib::BlueLamp::configure_dio");
+
+    if (!this->controller) {
+      logwrite(function, "ERROR no lamp controller has been configured");
+      return ERROR;
+    }
+
+    return this->controller->configure_dio(input);
+  }
+  /***** Calib::BlueLamp::configure_dio ***************************************/
 
 
   long BlueLamp::power(bool &lampstate, bool &laserstate) {

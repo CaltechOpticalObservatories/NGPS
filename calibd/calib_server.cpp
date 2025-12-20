@@ -73,6 +73,8 @@ namespace Calib {
     int lastapplied=0, numapplied=0;
     long error=NO_ERROR;
 
+    std::vector<std::string> lampdio_config;
+
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
@@ -244,8 +246,22 @@ namespace Calib {
       // BLUE_LAMP_CONTROL
       //
       if (this->config.param[entry]=="BLUE_LAMP_CONTROL") {
-        error = this->interface.bluelamp.configure(this->config.arg[entry]);
+        error = this->interface.bluelamp.configure_interface(this->config.arg[entry]);
         if (error==NO_ERROR) numapplied++;
+      }
+      else
+
+      // BLUE_LAMP_DIO
+      //
+      if (this->config.param[entry]=="BLUE_LAMP_DIO") {
+	if (std::count(this->config.arg[entry].begin(),
+	               this->config.arg[entry].end(), ' ') != 2) {
+	  logwrite(function, "ERROR invalid args: '"+this->config.arg[entry]+"' expected <pin> <direction> <name>");
+	}
+	else {
+	  lampdio_config.push_back(this->config.arg[entry]);
+          numapplied++;
+	}
       }
 
       // log applied configuration
@@ -257,6 +273,8 @@ namespace Calib {
 
     } // end loop through the entries in the configuration file
 
+
+    error = this->interface.bluelamp.configure_dio(lampdio_config);
 
     message.str("");
 
