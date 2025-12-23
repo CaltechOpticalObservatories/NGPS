@@ -13,14 +13,15 @@ int main(int argc, char** argv) {
 
   BrainBox::Interface controller(host, port, address);
 
-  std::vector<std::string> dioconfig {"0 output interlock",
-                                      "1 output lampcontrol",
-                                      "4 input  lampstatus",
-                                      "5 input  laserstatus",
-                                      "6 input  lampfault",
-                                      "7 input  controllerfault"};
+  std::vector<std::string> dioconfig {"interlock 0 output ",
+                                      "lampcontrol 1 output ",
+                                      "lampstatus 4 input  ",
+                                      "laserstatus 5 input  ",
+                                      "lampfault 6 input  ",
+                                      "controllerfault 7 input  "};
 
   controller.configure_dio(dioconfig);
+  /***
 
   bool isinit = controller.get_initialized();
 
@@ -99,6 +100,7 @@ int main(int argc, char** argv) {
   }
 
   controller.close();
+  ***/
 
   return 0;
 }

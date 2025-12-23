@@ -15,6 +15,7 @@
 #include <vector>
 #include <regex>
 #include <mutex>
+#include <optional>
 
 /***** BrainBox ***************************************************************/
 /**
@@ -23,6 +24,41 @@
  *
  */
 namespace BrainBox {
+
+  class Interface;
+
+  enum class PinDirection { Input, Output };
+
+  static constexpr std::array<std::pair<std::string_view, PinDirection>, 2>
+  direction_table{ {
+    { "INPUT",  PinDirection::Input },
+    { "OUTPUT", PinDirection::Output }
+  }};
+
+  struct ConfigLine {
+    std::string name;
+    int pin;
+    PinDirection direction;
+  };
+
+  inline ConfigLine parse_config_line(std::string line) {
+    ConfigLine config;
+    std::istringstream iss;
+    std::string dirname;
+
+    if (!(iss >> config.name >> config.pin >> dirname)) {
+      throw std::runtime_error("invalid config: '"+line+"'");
+    }
+
+    make_uppercase(dirname);
+
+    auto direction = direction_from_string(dirname);
+    if (!direction) throw std::runtime_error("invalid direction: '"+dirname+"'");
+    config.direction = direction;
+
+    return config;
+  }
+
 
   /***** BrainBox::Interface **************************************************/
   /**
@@ -36,15 +72,9 @@ namespace BrainBox {
       Interface();
       ~Interface();
 
-      enum class PinDirection {
-	Input,
-	Output
-      };
-
       struct PinConfig {
 	int          number;
 	PinDirection direction;
-	std::string  name;
       };
 
       Network::TcpSocket sock;    ///< provides the network communication
@@ -54,16 +84,25 @@ namespace BrainBox {
       std::string get_model() { return this->model; };
       std::string get_location() { return this->location; };
 
-      long configure_dio(const std::vector<std::string> &input);
       long open();
       long close();
+
+      long configure_pins(const std::vector<PinConfig> &pins);
+      void set_pin(int pin, bool state);
+      std::optional<bool> get_pin(int pin) const;
+
+      PinDirection direction_of(int pin) const;
+
+      std::optional<std::string_view> string_from_direction(PinDirection dirin);
+      std::optional<PinDirection> direction_from_string(std::string_view namein);
+
+      long configure_dio(const std::vector<std::string> &input);
       long send_command(std::string cmd);
       long send_command(std::string cmd, std::string &retstring);
       void read_digio();
       void write_digio(const uint8_t &byte);
 
-      std::optional<int> validate_pin(const std::string &name) const;
-      std::optional<PinConfig> validate_pinconfig(const int pin) const;
+      const PinConfig* validate_pin(const int pin) const;
       void set_bit(const std::string &name, bool state);
       std::optional<bool> get_diostate(int pin);
       std::optional<bool> get_diostate(const std::string &name);
@@ -77,11 +116,11 @@ namespace BrainBox {
       int port;                   ///< port number for device on host
       int address;                ///< device address
       bool is_initialized;        ///< has the class been initialized?
-      std::mutex mtx;
       uint8_t diginstate;
       uint8_t digoutstate;
       std::unordered_map<int, PinConfig> pinmap;
       std::unordered_map<std::string, int> namemap;
+      mutable std::mutex mtx;
   };
   /***** BrainBox::Interface **************************************************/
 

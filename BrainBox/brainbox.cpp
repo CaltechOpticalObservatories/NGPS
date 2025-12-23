@@ -61,54 +61,28 @@ namespace BrainBox {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::configure_dio(const std::vector<std::string> &input) {
-    const std::string function("BrainBox::Interface::configure_dio");
+  long Interface::configure_pins(const std::vector<PinConfig> &pins) {
+    const std::string function("BrainBox::Interface::configure_pins");
     std::ostringstream message;
-
-    this->pinmap.clear();
-    this->namemap.clear();
-
-    // each vector element is a line from the config file
-    for (const auto &line : input) {
-      // tokenize the input config line
-      std::vector<std::string> tokens;
-      Tokenize(line, tokens, " ");
-
-      if (tokens.size() != 3) {
-        logwrite(function, "ERROR exepected <pin#> <direction> <name>");
-        return ERROR;
-      }
-
-      try {
-        int pin           = std::stoi(tokens.at(0));
-        std::string dirin = to_uppercase(tokens.at(1));
-        std::string name  = tokens.at(2);
-
-	if (pin < 0 || pin > 7) {
-          logwrite(function, "ERROR invalid pin '"+tokens.at(0)+"' must be in range {0:7}");
-          return ERROR;
-        }
-
-	if (dirin != "INPUT" && dirin != "OUTPUT") {
-          logwrite(function, "ERROR invalid direction '"+tokens.at(1)+"' must be input|output");
-          return ERROR;
-        }
-	auto dir = (dirin=="INPUT") ? PinDirection::Input : PinDirection::Output;
-
-	// insert this row into the maps
-	this->pinmap[pin]   = {pin, dir, name};
-	this->namemap[name] = pin;
-      }
-      catch (const std::exception &e) {
-        logwrite(function, "ERROR parsing <pin#> <direction> <name> : "+std::string(e.what()));
-        return ERROR;
-      }
-    }
 
     return NO_ERROR;
   }
   /***** BrainBox::Interface::configure_dio ****************************************/
 
+
+  std::optional<std::string_view> Interface::string_from_direction(PinDirection dirin) {
+    for (auto &[name, dir] : direction_table) {
+      if (dir==dirin) return name;
+    }
+    return std::nullopt;
+  }
+
+  std::optional<PinDirection> Interface::direction_from_string(std::string_view namein) {
+    for (auto &[name, direction] : direction_table) {
+      if (name==namein) return direction;
+    }
+    return std::nullopt;
+  }
 
   /***** BrainBox::Interface::open *************************************************/
   /**
@@ -258,67 +232,33 @@ namespace BrainBox {
   /***** BrainBox::Interface::send_command ************************************/
 
 
-  /***** BrainBox::Interface::get_dionames ************************************/
-  /**
-   * @brief      returns a vector of names of all configured dio pins
-   * @return     vector<string>
-   */
-  std::vector<std::string> Interface::get_dionames() const {
-    std::vector<std::string> names;
-    for (const auto &[name,pin] : this->namemap) {
-      names.push_back(name);
-    }
-    return names;
-  }
-  /***** BrainBox::Interface::get_dionames ************************************/
-
-
   /***** BrainBox::Interface::validate_pin ************************************/
-  /**
-   * @brief      returns a pin for specified name if valid
-   * @param[in]  name  name of pin
-   * @return     pin number or nullopt
-   */
-  std::optional<int> Interface::validate_pin(const std::string &name) const {
-    auto it = this->namemap.find(name);
-    if (it == this->namemap.end()) return std::nullopt;
-    return it->second;
-  }
-  /***** BrainBox::Interface::validate_pin ************************************/
-
-
-  /***** BrainBox::Interface::validate_pinconfig ******************************/
   /**
    * @brief      returns a pin config struct if the pin is valid
    * @param[in]  pin  pin number
    * @return     PinConfig or nullopt
    */
-  std::optional<Interface::PinConfig> Interface::validate_pinconfig(const int pin) const {
-    auto pinmap_it = this->pinmap.find(pin);
-    if (pinmap_it == this->pinmap.end()) return std::nullopt;
-    return pinmap_it->second;
+  const Interface::PinConfig* Interface::validate_pin(const int pin) const {
+    auto it = this->pinmap.find(pin);
+    if (it == this->pinmap.end()) return nullptr;
+    return &it->second;
   }
-  /***** BrainBox::Interface::validate_pinconfig ******************************/
+  /***** BrainBox::Interface::validate_pin ************************************/
 
 
   /***** BrainBox::Interface::set_bit *****************************************/
-  void Interface::set_bit(const std::string &name, bool state) {
-    const std::string function("BrainBox::Interface::set_bit");
+  void Interface::set_pin(int pin, bool state) {
+    const std::string function("BrainBox::Interface::set_pin");
 
-    auto goodpin = this->validate_pin(name);
-    if (!goodpin) throw std::runtime_error(function+": invalid name '"+name+"'");
-
-    int pin = *goodpin;
-
-    auto goodpinconfig = this->validate_pinconfig(pin);
-    if (!goodpinconfig) throw std::runtime_error(function+": invalid pin");
-
-    const auto &config = *goodpinconfig;
+    auto config = this->validate_pin(pin);
+    if (!config) throw std::runtime_error(function+": invalid pin");
 
     // Pin direction must be configured for Output
-    if (config.direction != PinDirection::Output) {
+    if (config->direction != PinDirection::Output) {
       throw std::runtime_error(function+" pin '"+name+"' is not an output pin");
     }
+
+    std::lock_guard<std::mutex> lock(this->mtx);
 
     if (state) {
       // set bit
@@ -343,16 +283,9 @@ namespace BrainBox {
    * @return     true|false|null
    *
    */
-  std::optional<bool> Interface::get_diostate(const std::string &name) {
-    auto goodpin = this->validate_pin(name);
-    if (!goodpin) return std::nullopt;
-
-    int pin = *goodpin;
-
-    auto goodpinconfig = this->validate_pinconfig(pin);
-    if (!goodpinconfig) return std::nullopt;
-
-    const auto &config = *goodpinconfig;
+  std::optional<bool> Interface::get_diostate(int pin) {
+    auto config = this->validate_pin(pin);
+    if (!config) return std::nullopt;
 
     try {
       this->read_digio();
@@ -365,7 +298,7 @@ namespace BrainBox {
     // mask the desired pin in the state byte
     uint8_t mask = (uint8_t)(1u << pin);
 
-    if (config.direction == PinDirection::Input) {
+    if (config->direction == PinDirection::Input) {
       return (this->diginstate & mask) != 0;
     }
     else {
@@ -383,6 +316,7 @@ namespace BrainBox {
    * @param[in]  pin  pin number to check
    * @return     true|false|null
    */
+  /***
   std::optional<bool> Interface::get_diostate(int pin) {
     if (pin<0 || pin>7) return std::nullopt;
     auto it = this->pinmap.find(pin);
@@ -405,6 +339,7 @@ namespace BrainBox {
       return (this->digoutstate & mask) != 0;
     }
   }
+  ***/
   /***** BrainBox::Interface::get_diostate ************************************/
 
 

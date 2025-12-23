@@ -41,19 +41,23 @@ namespace Calib {
    *
    */
   class BlueLamp {
-    private:
-      // these are all possible lamp status indicators
-      std::atomic<bool> is_interlock{false};              ///< lamp cannot be turned on unless true
-      std::atomic<bool> is_lampon{false};                 ///< is the lamp on now?
-      std::atomic<bool> is_laseron{false};                ///< is the laser on now?
-      std::atomic<bool> is_lampfault{false};              ///< is there a lamp fault now?
-      std::atomic<bool> is_controllerfault{false};        ///< is there a lamp controller fault?
-
-      std::chrono::steady_clock::time_point lampon_time;  ///< timepoint when lamp was powered
-
-      std::optional<BrainBox::Interface> controller;      ///< interface to BrainBox DIO Controller
-
     public:
+      enum class Signal {
+        Interlock,
+        LampControl,
+        LampStatus,
+        LaserStatus,
+        LampFault,
+        ControllerFault
+      };
+
+      static std::optional<Signal> signal_from_string(std::string_view name);
+      static std::string_view string_from_signal(Signal signal);
+      std::vector<std::string_view> list_signals() const;
+
+      void set(Signal signal, bool state);
+      bool get(Signal signal) const;
+
       long configure_interface(const std::string &input);
       long configure_dio(const std::vector<std::string> &input);
       long power(bool &lampstate, bool &laserstate);
@@ -63,6 +67,30 @@ namespace Calib {
                       bool &_is_laseron,
                       bool &_is_lampfault,
                       bool &_is_controllerfault);
+
+    private:
+      static constexpr std::array<std::pair<std::string_view, Signal>, 6>
+        signal_table{ {
+          { "interlock",       Signal::Interlock },
+          { "lampcontrol",     Signal::LampControl },
+          { "lampstatus",      Signal::LampStatus },
+          { "laserstatus",     Signal::LaserStatus },
+          { "lampfault",       Signal::LampFault },
+          { "controllerfault", Signal::ControllerFault }
+        } };
+
+      // these are all possible lamp status indicators
+      std::atomic<bool> is_interlock{false};              ///< lamp cannot be turned on unless true
+      std::atomic<bool> is_lampon{false};                 ///< is the lamp on now?
+      std::atomic<bool> is_laseron{false};                ///< is the laser on now?
+      std::atomic<bool> is_lampfault{false};              ///< is there a lamp fault now?
+      std::atomic<bool> is_controllerfault{false};        ///< is there a lamp controller fault?
+
+      std::unordered_map<Signal, int> signal_to_pin;
+
+      std::chrono::steady_clock::time_point lampon_time;  ///< timepoint when lamp was powered
+
+      std::optional<BrainBox::Interface> controller;      ///< interface to BrainBox DIO Controller
 
   };
   /***** Calib::BlueLamp ******************************************************/

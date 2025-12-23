@@ -45,6 +45,29 @@ namespace Calib {
   }
   /***** Calib::BlueLamp::configure_interface *********************************/
 
+  std::optional<BlueLamp::Signal> BlueLamp::signal_from_string(std::string_view namein) {
+    for (auto &[name, sig] : signal_table) {
+      if (name==namein) return sig;
+    }
+    return std::nullopt;
+  }
+
+  std::string_view BlueLamp::string_from_signal(Signal signalin) {
+    for (auto &[name, sig] : signal_table) {
+      if (signalin==sig) return name;
+    }
+    throw std::logic_error("Calib::BlueLamp::string_from_signal: unknown signal");
+  }
+
+  std::vector<std::string_view> BlueLamp::list_signals() const {
+    std::vector<std::string_view> names;
+    names.reserve(signal_table.size());
+    for (auto &[name, _] : signal_table) {
+      names.push_back(name);
+    }
+    return names;
+  }
+
 
   /***** Calib::BlueLamp::configure_dio ***************************************/
   /**
@@ -61,7 +84,49 @@ namespace Calib {
       return ERROR;
     }
 
-    return this->controller->configure_dio(input);
+    std::vector<BrainBox::Interface::PinConfig> pins;
+
+    // each vector element is a line from the config file
+    for (const auto &line : input) {
+      // tokenize the input config line
+      std::vector<std::string> tokens;
+      Tokenize(line, tokens, " ");
+
+      if (tokens.size() != 3) {
+        logwrite(function, "ERROR exepected <name> <pin#> <direction>");
+        return ERROR;
+      }
+
+      try {
+        int pinin          = std::stoi(tokens.at(0));
+        std::string dirin  = to_uppercase(tokens.at(1));
+        std::string namein = tokens.at(2);
+
+        if (pinin < 0 || pinin > 7) {
+          logwrite(function, "ERROR invalid pin '"+tokens.at(0)+"' must be in range {0:7}");
+          return ERROR;
+        }
+
+        if (dirin != "INPUT" && dirin != "OUTPUT") {
+          logwrite(function, "ERROR invalid direction '"+tokens.at(1)+"' must be input|output");
+          return ERROR;
+        }
+
+        auto dir = this->controller->direction_from_string(dirin);
+        if (!dir) throw std::runtime_error("unknown direction: '"+dirin+"'");
+
+        auto signal = this->signal_from_string(namein);
+        if (!signal) throw std::runtime_error("unknown signal: '"+namein);
+
+        pins.push_back( { pinin, *dir } );
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR parsing <pin#> <direction> <name> : "+std::string(e.what()));
+        return ERROR;
+      }
+    }
+
+    return this->controller->configure_pins(pins);
   }
   /***** Calib::BlueLamp::configure_dio ***************************************/
 
