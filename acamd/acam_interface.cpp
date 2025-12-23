@@ -1570,7 +1570,7 @@ namespace Acam {
     Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
     Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
     Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
-    Common::extract_telemetry_value( jmessage, "DECLOFFSET", telem.offsetdec );
+    Common::extract_telemetry_value( jmessage, "DECLOFFS",   telem.offsetdec );
     Common::extract_telemetry_value( jmessage, "AZ",         telem.az );
     Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
     Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
