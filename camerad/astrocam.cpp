@@ -3256,7 +3256,7 @@ namespace AstroCam {
           {"CASANGLE",   "", "TCS reported Cassegrain angle in deg", "FLOAT"},
           {"HA",         "", "hour angle"},
           {"RAOFFSET",   "", "offset Right Ascension"},
-          {"DECLOFFSET", "", "offset Declination"},
+          {"DECLOFFS",   "", "offset Declination"},
           {"TELRA",      "", "TCS reported Right Ascension"},
           {"TELDEC",     "", "TCS reported Declination"},
           {"AZ",         "", "TCS reported azimuth"},
