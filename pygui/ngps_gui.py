@@ -1,7 +1,7 @@
 import sys
 import subprocess
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog, QStatusBar, QSizePolicy
-from PyQt5.QtCore import Qt, pyqtSlot
+from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
@@ -111,7 +111,6 @@ class NgpsGUI(QMainWindow):
         # Use addWidget with stretch, not addPermanentWidget
         self._statusbar.addWidget(self.daemon_row, 1)
 
-        # Optional: seed initial states so the UI isn't empty
         self.daemon_row.bulk_update({
             "acamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
             "calibd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
@@ -126,6 +125,8 @@ class NgpsGUI(QMainWindow):
             "thermald": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
         })
 
+        # Start polling local processes to update daemon states
+        self._init_daemon_polling()
 
     def init_ui(self):
         # Set up Menu
@@ -408,7 +409,56 @@ class NgpsGUI(QMainWindow):
         if name:
             self.daemon_row.set_daemon_state(name, state, issue)
 
+    def _daemon_process_running(self, name: str) -> bool:
+        """
+        Return True if a process with this name appears to be running
+        on the local machine.
 
+        Adjust the pgrep pattern if your daemon binary names differ.
+        """
+        try:
+            # -f: match against full command line; easier if daemons are Python scripts
+            result = subprocess.run(
+                ["pgrep", "-f", name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return result.returncode == 0
+        except Exception as e:
+            print(f"[daemon-check] Failed to check {name!r}: {e}")
+            return False
+
+    def refresh_daemon_states_from_ps(self):
+        """
+        Check each known daemon with pgrep and push an update into the
+        DaemonStatusBar.
+
+        Convention:
+          - 'ok'      => green pill
+          - 'unknown' => grey pill
+        """
+        updates = {}
+
+        for name in DAEMONS:
+            if self._daemon_process_running(name):
+                updates[name] = ("ok", f"{name} process is running.")
+            else:
+                updates[name] = ("unknown", f"{name} not found in process list.")
+
+        # bulk_update expects {name: (state, tooltip)} just like the seed above
+        self.daemon_row.bulk_update(updates)
+
+    def _init_daemon_polling(self):
+        """
+        Set up a QTimer to periodically refresh daemon states.
+        """
+        self._daemon_timer = QTimer(self)
+        self._daemon_timer.setInterval(5000)  # ms; tweak if you want slower/faster
+        self._daemon_timer.timeout.connect(self.refresh_daemon_states_from_ps)
+
+        # Do one immediate check so the row isn't stale on startup
+        self.refresh_daemon_states_from_ps()
+        self._daemon_timer.start()
 
 
 if __name__ == '__main__':
