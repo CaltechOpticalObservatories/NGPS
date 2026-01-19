@@ -6,12 +6,12 @@ class SequencerService:
         self.parent = parent
         
         # Hardcoded values for the server connection
-        self.server_name = 'localhost'  # Hardcoded value
-        self.command_server_port = 9000  # Hardcoded value
-        self.async_host = '239.1.1.234'  # Hardcoded value
-        self.async_server_port = 1300  # Hardcoded value
-        self.basename = 'ngps_image'  # Hardcoded value
-        self.log_directory = '/data/logs'  # Hardcoded value
+        self.server_name = 'localhost'
+        self.command_server_port = 9000
+        self.async_host = '239.1.1.234'
+        self.async_server_port = 1300
+        self.basename = 'ngps_image'
+        self.log_directory = '/data/logs'
         
         #self.setup_logging()
 
