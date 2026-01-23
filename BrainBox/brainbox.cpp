@@ -77,12 +77,6 @@ namespace BrainBox {
     return std::nullopt;
   }
 
-  std::optional<PinDirection> Interface::direction_from_string(std::string_view namein) {
-    for (auto &[name, direction] : direction_table) {
-      if (name==namein) return direction;
-    }
-    return std::nullopt;
-  }
 
   /***** BrainBox::Interface::open *************************************************/
   /**

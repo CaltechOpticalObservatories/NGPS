@@ -27,19 +27,29 @@ namespace BrainBox {
 
   class Interface;
 
+  /** @brief  pins can be inputs or outputs */
   enum class PinDirection { Input, Output };
 
+  /** @brief  this table associates a text string with the PinDirection enum */
   static constexpr std::array<std::pair<std::string_view, PinDirection>, 2>
   direction_table{ {
     { "INPUT",  PinDirection::Input },
     { "OUTPUT", PinDirection::Output }
   }};
 
+  /** @brief  structure to define a row in the config file */
   struct ConfigLine {
-    std::string name;
-    int pin;
-    PinDirection direction;
+    std::string name;        ///< pin name
+    int pin;                 ///< pin number
+    PinDirection direction;  ///< input or output
   };
+
+  inline std::optional<PinDirection> direction_from_string(const std::string &namein) {
+    for (auto &[name, direction] : direction_table) {
+      if (name==namein) return direction;
+    }
+    return std::nullopt;
+  }
 
   inline ConfigLine parse_config_line(std::string line) {
     ConfigLine config;
@@ -49,12 +59,11 @@ namespace BrainBox {
     if (!(iss >> config.name >> config.pin >> dirname)) {
       throw std::runtime_error("invalid config: '"+line+"'");
     }
-
     make_uppercase(dirname);
 
     auto direction = direction_from_string(dirname);
     if (!direction) throw std::runtime_error("invalid direction: '"+dirname+"'");
-    config.direction = direction;
+    config.direction = *direction;
 
     return config;
   }
@@ -94,7 +103,6 @@ namespace BrainBox {
       PinDirection direction_of(int pin) const;
 
       std::optional<std::string_view> string_from_direction(PinDirection dirin);
-      std::optional<PinDirection> direction_from_string(std::string_view namein);
 
       long configure_dio(const std::vector<std::string> &input);
       long send_command(std::string cmd);

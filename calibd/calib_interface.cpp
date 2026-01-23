@@ -84,10 +84,13 @@ namespace Calib {
       return ERROR;
     }
 
-    std::vector<BrainBox::Interface::PinConfig> pins;
+//  std::vector<BrainBox::Interface::PinConfig> pins;
+    std::vector<BrainBox::ConfigLine> pins;
 
     // each vector element is a line from the config file
     for (const auto &line : input) {
+      pins.push_back( BrainBox::parse_config_line(line) );
+/***
       // tokenize the input config line
       std::vector<std::string> tokens;
       Tokenize(line, tokens, " ");
@@ -112,7 +115,7 @@ namespace Calib {
           return ERROR;
         }
 
-        auto dir = this->controller->direction_from_string(dirin);
+        auto dir = BrainBox::direction_from_string(dirin);
         if (!dir) throw std::runtime_error("unknown direction: '"+dirin+"'");
 
         auto signal = this->signal_from_string(namein);
@@ -124,6 +127,7 @@ namespace Calib {
         logwrite(function, "ERROR parsing <pin#> <direction> <name> : "+std::string(e.what()));
         return ERROR;
       }
+***/
     }
 
     return this->controller->configure_pins(pins);

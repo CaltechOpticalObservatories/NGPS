@@ -37,14 +37,14 @@ BLUE_LAMP_CONTROL="@IP_CALIB_BRAINBOX@ @CALIB_BRAINBOX_PORT@ 1"
 # <pindirection>  pin direction must be "intput" or "output"
 # <pinname>       pin name can be any string
 #
-BLUE_LAMP_DIO=(0 output interlock)
-BLUE_LAMP_DIO=(1 output lampcontrol)
-#BLUE_LAMP_DIO=(2 output notused)
-#BLUE_LAMP_DIO=(3 output notused)
-BLUE_LAMP_DIO=(4 input  lampstatus)
-BLUE_LAMP_DIO=(5 input  laserstatus)
-BLUE_LAMP_DIO=(6 input  lampfault)
-BLUE_LAMP_DIO=(7 input  controllerfault)
+BLUE_LAMP_DIO=(interlock 0 output)
+BLUE_LAMP_DIO=(lampcontrol 1 output)
+#BLUE_LAMP_DIO=(notused 2 output)
+#BLUE_LAMP_DIO=(notused 3 output)
+BLUE_LAMP_DIO=(lampstatus 4 input)
+BLUE_LAMP_DIO=(laserstatus 5 input)
+BLUE_LAMP_DIO=(lampfault 6 input)
+BLUE_LAMP_DIO=(controllerfault 7 input)
 
 # MOTION CONTROL
 #
