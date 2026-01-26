@@ -81,12 +81,14 @@ GROUPBY_SLICE = not args.groupby_feature  # Group plots by slice (true) or spect
 df = all_headers_to_df(args.flist)
 focuskey = args.focuskey
 imnumkey = 'IMNUM'
-datekey = 'DATE'
 
-# Make a timestamp from the first file
-timestamp = df.iloc[0][datekey]
-timestamp = timestamp.split(':')[:-1] # E.g. 2025-01-02T22:30:13.455 --> take day, hour, minutes
-timestamp = ''.join(timestamp)  # join with no colons, 2025-01-02T2230
+# Loop through channels and verify if SPEC_ID and images are found
+if 'SPEC_ID' in df.columns:
+    df = df[df['SPEC_ID'].isin(['R', 'I', 'G'])]
+    if df.empty:
+        sys.exit('No R or I channel images found in input files.')
+else:
+    sys.exit('SPEC_ID column not found in headers.')
 
 # Check which channels are used and whether they have region files
 channels_detected = [s for s in df['SPEC_ID'].unique() if isinstance(s, str)]
@@ -99,9 +101,25 @@ for k in channels_detected:
 # image number is before the dot, after the last '_': basename_00000.fits
 df['IMNUM_HACK'] = [int(fname.split('.')[0].split('_')[-1]) for fname in df['FILENAME']]
 
-if focuskey not in df.columns: sys.exit('Focus keyword not found: '+focuskey)
-if not is_numeric_dtype(df[focuskey]): sys.exit('Focus keyword has missing/non-numeric values: '+focuskey)
-if df[focuskey].isnull().values.any(): sys.exit('Focus keyword has missing/non-numeric values: '+focuskey)
+# Column must exist at all
+if focuskey not in df.columns:
+    sys.exit('Focus keyword not found: ' + focuskey)
+
+# Column must be numeric dtype overall
+if not is_numeric_dtype(df[focuskey]):
+    sys.exit('Focus keyword has non-numeric values: ' + focuskey)
+
+# Instead of exiting if *any* missing, drop just those rows
+n_before = len(df)
+df = df[~df[focuskey].isnull()]
+n_after = len(df)
+n_skipped = n_before - n_after
+
+if n_skipped > 0:
+    print(f"Warning: skipped {n_skipped} file(s) with missing {focuskey}")
+
+if df.empty:
+    sys.exit('No usable files: all values for focus keyword are missing: ' + focuskey)
 
 # Filter by image number
 if args.range:
@@ -143,7 +161,7 @@ for ch in regdict:
 
     plt.figure()
         
-    df_ch = df[df['SPEC_ID']==ch].copy()
+    df_ch = df[df['SPEC_ID']==ch]
     ROInames = list(regdict[ch].keys())
     sliceTags = np.unique([rn.split('_')[0] for rn in ROInames])
     featureTags = np.unique([rn.split('_')[1] for rn in ROInames])
@@ -182,21 +200,6 @@ for ch in regdict:
     axes_g[0].legend(bbox_to_anchor=(1.02, 1.02), loc='upper left', borderaxespad=0, prop={'size': 10}, title=legendTitle)
     plt.tight_layout()
 
-    # Save time-tagged (for archive) and non-tagged version (for display)
-    for tag in ('_'+timestamp, ''):
-
-        basename = 'focus_spec_'+ch+tag
-
-        outname = basename+'.png'
-        plt.savefig(outname)
-        print(outname)
-
-        # Save the data as CSV file
-        outkeys = df_ch.iloc[0]['std_dict'].keys() 
-        for k in outkeys: 
-            df_ch[k] = df_ch.apply(lambda row: row['std_dict'][k], axis=1)
-
-        outname = basename+'.csv'
-        df_ch[[focuskey]+[*outkeys]].to_csv(outname, index=False)
-        print(outname)
-
+    outname = 'focus_spec_%s.png'%ch
+    plt.savefig(outname)
+    print(outname)

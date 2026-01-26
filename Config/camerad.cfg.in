@@ -33,7 +33,7 @@ ARCSIM_NUMDEV=0
 #CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
 CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/28-1458/sg2.lod U2)
 CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/28-1458/engg.lod U1)
-#CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/51209-1651/dbspr.lod U2)
+CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/51209-1651/dbspr.lod U2)
 CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 
 # -----------------------------------------------------------------------------
@@ -55,7 +55,7 @@ CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 #
 DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
 DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
-#DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
 DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 
 # -----------------------------------------------------------------------------
@@ -67,7 +67,7 @@ DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 #
 SPEC_INFO=(I 0.69 7560)
 SPEC_INFO=(R 0.57 5610)
-#SPEC_INFO=(G 0.42 4170)
+SPEC_INFO=(G 0.42 4170)
 SPEC_INFO=(U 0.31 3200)
 
 # -----------------------------------------------------------------------------
