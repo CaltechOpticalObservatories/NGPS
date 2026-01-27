@@ -27,6 +27,7 @@ add_executable(slitd
 
 target_link_libraries(slitd
         physik_instrumente
+        motioncontroller
         network
         common
         logentry

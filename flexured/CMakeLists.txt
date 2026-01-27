@@ -24,6 +24,7 @@ add_executable(flexured
 
 target_link_libraries(flexured
         physik_instrumente
+        motioncontroller
         network
         common
         logentry

@@ -27,6 +27,7 @@ add_executable(focusd
 
 target_link_libraries(focusd
         physik_instrumente
+        motioncontroller
         network
         common
         logentry

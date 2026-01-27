@@ -10,146 +10,9 @@
 
 namespace Physik_Instrumente {
 
-  /***** Physik_Instrumente::Interface::is_connected **************************/
-  /**
-   * @brief      is the socket connected for the specified motor controller?
-   * @param[in]  motorname  name of motor controller
-   * @return     true or false
-   *
-   */
   template <typename ControllerType>
-  bool Interface<ControllerType>::is_connected( const std::string &motorname ) {
-    try {
-      // get a copy of the socket object for this motor and return its connected status
-      //
-      Network::TcpSocket &socket = get_socket( motorname );
-      return ( socket.isconnected() ? true : false );
-    }
-    catch ( std::runtime_error &e ) {
-      std::string function = "Physik_Instrumente::Interface::is_connected";
-      std::stringstream message;
-      message.str(""); message << "ERROR: " << e.what();
-      logwrite( function, message.str() );
-      return false;
-    }
+  void Interface<ControllerType>::test() {
   }
-  /***** Physik_Instrumente::Interface::is_connected **************************/
-
-
-  /***** Physik_Instrumente::Interface::open **********************************/
-  /**
-   * @brief      open a connection to all controllers
-   * @details    this is the outside-callable function for open
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::open() {
-    long error=NO_ERROR;
-    // loop through motoromap, opening each motor if not already open
-    // store a collective error so any one failure returns an error
-    //
-    for ( const auto &pair : this->motormap ) {
-      const std::string &motorname = pair.first;
-      if ( !is_connected( motorname ) ) { error |= this->_open( motorname ); }
-    }
-    return error;
-  }
-  /***** Physik_Instrumente::Interface::open **********************************/
-
-
-  /***** Physik_Instrumente::Interface::_open *********************************/
-  /**
-   * @brief      open a connection to the specified controller (private)
-   * @param[in]  motorname  reference to motor to find in map
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::_open( const std::string &motorname ) {
-    std::string function = "Physik_Instrumente::Interface::_open";
-    std::stringstream message;
-
-    try {
-      Network::TcpSocket &socket = get_socket( motorname );
-
-      if ( socket.isconnected() ) {
-        message.str(""); message << "connection open for " << motorname
-                                 << " on " << socket.gethost() << ":" << socket.getport()
-                                 << " with fd " << socket.getfd();
-        logwrite( function, message.str() );
-        return NO_ERROR;
-      }
-
-      if ( socket.Connect() != 0 ) {
-        message.str(""); message << "ERROR connecting to " << motorname
-                                 << " on " << socket.gethost() << ":" << socket.getport();
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-
-      message.str(""); message << "connection to " << motorname
-                               << " established on host " << socket.gethost() << ":" << socket.getport()
-                               << " with fd " << socket.getfd();
-      logwrite( function, message.str() );
-    }
-    catch ( std::runtime_error &e ) {
-      message.str(""); message << "ERROR: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Physik_Instrumente::Interface::_open *********************************/
-
-
-  /***** Physik_Instrumente::Interface::close *********************************/
-  /**
-   * @brief      close the connection to all controllers
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::close() {
-    std::string function = "Physik_Instrumente::Interface::close";
-    long error=NO_ERROR;
-    for ( const auto &pair : this->motormap ) {
-      const std::string &motorname = pair.first;
-      error |= this->close( motorname );
-    }
-    return error;
-  }
-  template <typename ControllerType>
-  long Interface<ControllerType>::close( const std::string &motorname ) {
-    std::string function = "Physik_Instrumente::Interface::close";
-    std::stringstream message;
-
-    try {
-      Network::TcpSocket &socket = get_socket( motorname );
-
-      if ( !socket.isconnected() ) return NO_ERROR;
-
-      long error = socket.Close();
-
-      if ( error == NO_ERROR ) {
-        message.str(""); message << "socket connection to " << motorname << " closed";
-        logwrite( function, message.str() );
-      }
-      else {
-        message.str(""); message << "ERROR close socket connection to " << motorname
-                                 << " on host " << socket.gethost() << ":" << socket.getport();
-        logwrite( function, message.str() );
-      }
-      return error;
-    }
-    catch ( std::runtime_error &e ) {
-      message.str(""); message << "ERROR: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-  }
-  /***** Physik_Instrumente::Interface::close *********************************/
 
 
   /***** Physik_Instrumente::Interface::clear_errors **************************/
@@ -1523,10 +1386,10 @@ namespace Physik_Instrumente {
     std::string function = "Physik_Instrumente::Interface::send_command";
     std::stringstream message;
 
-    std::unique_lock<std::mutex> lock( *this->pi_mutex );
+    std::unique_lock<std::mutex> lock( *this->controller_mutex );
 
     try {
-      Network::TcpSocket &socket = get_socket( motorname );  // includes check of motorname
+      Network::TcpSocket &socket = this->get_socket( motorname );  // includes check of motorname
 
       if ( !socket.isconnected() ) {
         message.str(""); message << "ERROR no socket connection to motor " << motorname;
@@ -1581,10 +1444,10 @@ namespace Physik_Instrumente {
 
     Network::TcpSocket socket;
 
-    std::unique_lock<std::mutex> lock( *this->pi_mutex );
+    std::unique_lock<std::mutex> lock( *this->controller_mutex );
 
     try {
-      socket = get_socket( motorname );   // includes check of motorname
+      socket = this->get_socket( motorname );   // includes check of motorname
     }
     catch ( const std::runtime_error &e ) {
       message.str(""); message << "ERROR: " << e.what();

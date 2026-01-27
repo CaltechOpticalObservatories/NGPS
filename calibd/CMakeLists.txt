@@ -29,6 +29,7 @@ add_executable(calibd
 
 target_link_libraries(calibd
         physik_instrumente
+        motioncontroller
         network
         common
         logentry
