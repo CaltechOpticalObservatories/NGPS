@@ -25,6 +25,7 @@ set( CMAKE_CXX_COMPILER /usr/bin/g++ )
 
 find_package( Threads )
 
+message( STATUS "PROJECT_BASE_DIR" ${PROJECT_BASE_DIR} )
 message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
 
 # Define the output file for the git commit hash, and
@@ -75,3 +76,4 @@ add_subdirectory( ${PROJECT_BASE_DIR}/PI )
 add_subdirectory( ${PROJECT_BASE_DIR}/WTI )
 add_subdirectory( ${PROJECT_BASE_DIR}/ARC )
 add_subdirectory( ${PROJECT_BASE_DIR}/LKS )
+add_subdirectory( ${PROJECT_BASE_DIR}/Galil )

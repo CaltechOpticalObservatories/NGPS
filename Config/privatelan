@@ -38,6 +38,10 @@ set( IP_FLEXURE_G       10.0.0.41  )
 set( IP_FLEXURE_R       10.0.0.42  )
 set( IP_FLEXURE_I       10.0.0.43  )
 
+# U-channel focus controller
+#
+set( IP_UFOCUS          10.0.0.50  )
+
 set( IP_CR1000X         10.0.0.100 )
 
 # Lakeshores

@@ -19,18 +19,20 @@ SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 #
 EMULATOR_PORT=@FOCUSD_EMULATOR@
 
-# For each actuator's controller specify:
+# I, R, G channels use a PI controller
+# For each PI actuator's controller specify:
 # MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
 #   <name>  name of controller
+#   <type>  PI or GALIL
 #   <host>  hostname of controller
 #   <port>  port on hostname
 #   <addr>  address is DIP-switch assigned PI address.
 #   <axes>  number of axes for this controller's actuator
 #
-MOTOR_CONTROLLER="I @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
-MOTOR_CONTROLLER="R @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
-MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
-MOTOR_CONTROLLER="U @IP_ETS8P@ @ETS8P_FOCUS@ 4 1"
+MOTOR_CONTROLLER="I PI @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
+MOTOR_CONTROLLER="R PI @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
+MOTOR_CONTROLLER="G PI @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
+MOTOR_CONTROLLER="U GALIL @IP_UFOCUS@ 1111 0 1"  # U-channel has no addr
 #MOTOR_CONTROLLER="I localhost @FOCUSD_EMULATOR@ 1 1"  # emulator
 #MOTOR_CONTROLLER="R localhost @FOCUSD_EMULATOR@ 2 1"  # emulator
 #MOTOR_CONTROLLER="G localhost @FOCUSD_EMULATOR@ 3 1"  # emulator
@@ -43,7 +45,7 @@ MOTOR_CONTROLLER="U @IP_ETS8P@ @ETS8P_FOCUS@ 4 1"
 MOTOR_AXIS="I 1 0 7.6 0 ref 4.75"
 MOTOR_AXIS="R 1 0 6.7 0 ref 2.45"
 MOTOR_AXIS="G 1 0 7.8 0 ref 0.00"
-MOTOR_AXIS="U 1 0 7.8 0 ref 0.00"
+MOTOR_AXIS="U 1 0 7.8 0 na  0.00"  # U-channel axis 1=A
 
 # Specify nominal focus positions for each actuator
 # MOTOR_POS="<name> <ID> <pos> <posname>"
