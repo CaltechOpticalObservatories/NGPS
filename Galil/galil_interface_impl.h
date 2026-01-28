@@ -1,14 +1,16 @@
 /**
- * @file    galil.cpp
- * @brief   this file contains the code for interfacing with Galil hardware
+ * @file    galil_interface_impl.h
+ * @brief   this file contains the implementation for the Galil Interface class
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
 
-#include "galil.h"
-#include "logentry.h"
 
 namespace Galil {
+
+  template <typename Type>
+  void Interface<Type>::test() {
+  }
 
   /***** Galil::Interface::send_command ***************************************/
   /**

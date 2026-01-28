@@ -12,6 +12,5 @@ set( CMAKE_CXX_STANDARD 17 )
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
-add_library( galil STATIC
-        ${GALIL_DIR}/galil.cpp
-        )
+add_library( galil INTERFACE )
+target_include_directories( galil INTERFACE ${GALIL_DIR} )

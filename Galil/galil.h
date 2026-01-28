@@ -61,10 +61,13 @@ namespace Galil {
     public:
       using MotionController::Interface<Type>::Interface;
 
+      void test() override;
+
       long send_command(const std::string &motorname, std::string cmd, std::string* retstring=nullptr);
 
   };
   /***** Galil::Interface *****************************************************/
 
 }
+#include "galil_interface_impl.h"  ///< implementations for Interface template
 /***** Galil ******************************************************************/
