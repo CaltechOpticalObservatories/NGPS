@@ -9,6 +9,7 @@
 #pragma once
 
 #include "network.h"
+#include "galil.h"
 #include "pi.h"
 #include "logentry.h"
 #include "common.h"
@@ -50,7 +51,8 @@ namespace Focus {
       Interface()
         : context(),
           numdev(-1),
-          motorinterface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ),
+          pi_interface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ),
+          galil_interface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false)
@@ -77,7 +79,11 @@ namespace Focus {
 
       // PI Interface class for the Stepper type
       //
-      Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo> motorinterface;
+      Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo> pi_interface;
+
+      // Galil Interface class for the U-channel controller
+      //
+      Galil::Interface<Galil::SingleAxisInfo> galil_interface;
 
       // publish/subscribe functions
       //

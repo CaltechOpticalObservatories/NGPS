@@ -11,6 +11,7 @@ set( FOCUSD_DIR ${PROJECT_BASE_DIR}/focusd )
 set( CMAKE_CXX_STANDARD 17 )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
+include_directories( ${PROJECT_BASE_DIR}/Galil )
 include_directories( ${PROJECT_BASE_DIR}/PI )
 include_directories( ${PROJECT_BASE_DIR}/common )
 

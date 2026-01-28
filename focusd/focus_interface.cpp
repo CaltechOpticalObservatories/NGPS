@@ -25,7 +25,7 @@ namespace Focus {
     std::string function = "Focus::Interface::initialize_class";
     std::stringstream message;
 
-    this->numdev = this->motorinterface.get_motormap().size();
+    this->numdev = this->pi_interface.get_motormap().size();
 
     // I don't want to prevent the system from working with a subset of controllers,
     // but the user should be warned, in case it wasn't intentional.
@@ -54,10 +54,10 @@ namespace Focus {
     // clear any error codes on startup, and
     // enable the servo for each address in controller_info.
     //
-    error |= this->motorinterface.open();
-    error |= this->motorinterface.clear_errors();
-    error |= this->motorinterface.set_servo( true );
-    error |= this->motorinterface.move_to_default();
+    error |= this->pi_interface.open();
+    error |= this->pi_interface.clear_errors();
+    error |= this->pi_interface.set_servo( true );
+    error |= this->pi_interface.move_to_default();
 
     // Focus controllers interface via a terminal server, so it's possible to
     // have open a socket connection and not actually be connected to the motor
@@ -79,7 +79,7 @@ namespace Focus {
    *
    */
   long Interface::close( ) {
-    return this->motorinterface.close();
+    return this->pi_interface.close();
   }
   /***** Focus::Interface::close **********************************************/
 
@@ -99,7 +99,7 @@ namespace Focus {
     std::stringstream message;
     long error = NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
 
     // Help
     //
@@ -118,7 +118,7 @@ namespace Focus {
 
     for ( const auto &mot : _motormap ) {
 
-      bool _isopen = this->motorinterface.is_connected( mot.second.name );
+      bool _isopen = this->pi_interface.is_connected( mot.second.name );
 
       num_open += ( _isopen ? 1 : 0 );
 
@@ -159,7 +159,7 @@ namespace Focus {
     std::stringstream message;
     std::string chan, cmd;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
 
     // Help
     //
@@ -205,7 +205,7 @@ namespace Focus {
 
     // requires an open connection
     //
-    if ( ! this->motorinterface.is_connected( chan ) ) {
+    if ( ! this->pi_interface.is_connected( chan ) ) {
       logwrite( function, "ERROR not connected to motor controller" );
       retstring="not_connected";
       return( ERROR );
@@ -239,7 +239,7 @@ namespace Focus {
       retstring.append( "  Home all focus motors or single motor indicated by optional <axis>.\n" );
       retstring.append( "  If no argument is supplied then all axes are homed simultaneously,\n" );
       retstring.append( "  or a single axis may be supplied from { " );
-      auto _motormap = this->motorinterface.get_motormap();
+      auto _motormap = this->pi_interface.get_motormap();
       for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}.\n" );
       return HELP;
@@ -247,7 +247,7 @@ namespace Focus {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motorinterface.home( name_in, retstring );
+    return this->pi_interface.home( name_in, retstring );
   }
   /***** Focus::Interface::home ***********************************************/
 
@@ -269,7 +269,7 @@ namespace Focus {
     if ( name_in == "?" ) {
       retstring = FOCUSD_ISHOME;
       retstring.append( " [ " );
-      auto _motormap = this->motorinterface.get_motormap();
+      auto _motormap = this->pi_interface.get_motormap();
       for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
       retstring.append( "]\n" );
       retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
@@ -280,7 +280,7 @@ namespace Focus {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motorinterface.is_home( name_in, retstring );
+    return this->pi_interface.is_home( name_in, retstring );
   }
   /***** Focus::Interface::is_home ********************************************/
 
@@ -298,7 +298,7 @@ namespace Focus {
     std::stringstream message;
     int axis=1;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
 
     // Help
     //
@@ -347,7 +347,7 @@ namespace Focus {
     std::string chan   = tokens[0];
     std::string posstr = tokens[1];
 
-    long error = this->motorinterface.moveto( chan, axis, posstr, retstring );
+    long error = this->pi_interface.moveto( chan, axis, posstr, retstring );
 
     message.str("");
     message << ( error==NO_ERROR ? "success" : "failed" )
@@ -379,7 +379,7 @@ namespace Focus {
       retstring.append( " <chan>\n" );
       retstring.append( "  Get the focus position of the indicated channel\n" );
       retstring.append( "  where <chan> is one of { " );
-      auto _motormap = this->motorinterface.get_motormap();
+      auto _motormap = this->pi_interface.get_motormap();
       for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}.\n" );
       return HELP;
@@ -397,10 +397,10 @@ namespace Focus {
     //
     std::string posstring;
     int axis=1;
-    auto addr=this->motorinterface.get_motormap()[name].addr;
+    auto addr=this->pi_interface.get_motormap()[name].addr;
     float position=NAN;
     std::string posname;
-    error = this->motorinterface.get_pos( name, axis, addr, position, posname );
+    error = this->pi_interface.get_pos( name, axis, addr, position, posname );
 
     // form the return value
     //
@@ -433,7 +433,7 @@ namespace Focus {
     std::stringstream message;
     long error=NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
 
     int axis=1;
 
@@ -454,7 +454,7 @@ namespace Focus {
 
     // send the move command
     //
-//  error = this->motorinterface.move_abs( name, addr, axis, pos );
+//  error = this->pi_interface.move_abs( name, addr, axis, pos );
 
     if ( error != NO_ERROR ) {
       message.str(""); message << "ERROR moving " << name << " to " << pos;
@@ -466,7 +466,7 @@ namespace Focus {
     //
     message.str(""); message << "waiting for " << name;
     logwrite( function, message.str() );
-//  error = this->motorinterface.move_axis_wait( name, addr, axis );
+//  error = this->pi_interface.move_axis_wait( name, addr, axis );
 
     return( error );
   }
@@ -485,10 +485,10 @@ namespace Focus {
 
     // send the stop_motion command for each address in controller_info
     //
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
 
     for ( const auto &mot : _motormap ) {
-      this->motorinterface.stop_motion( mot.second.name, mot.second.addr );
+      this->pi_interface.stop_motion( mot.second.name, mot.second.addr );
     }
 
     return( NO_ERROR );
@@ -508,7 +508,7 @@ namespace Focus {
    *
    */
   long Interface::send_command( const std::string &name, std::string cmd ) {
-    return( this->motorinterface.send_command( name, cmd ) );
+    return( this->pi_interface.send_command( name, cmd ) );
   }
   /***** Focus::Interface::send_command ***************************************/
 
@@ -528,10 +528,10 @@ namespace Focus {
    */
   long Interface::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
     if ( cmd.find( "?" ) != std::string::npos ) {
-      return( this->motorinterface.send_command( name, cmd, retstring ) );
+      return( this->pi_interface.send_command( name, cmd, retstring ) );
     }
     else {
-      return( this->motorinterface.send_command( name, cmd ) );
+      return( this->pi_interface.send_command( name, cmd ) );
     }
   }
   /***** Focus::Interface::send_command ***************************************/
@@ -556,14 +556,14 @@ namespace Focus {
 
     // get focus position for each motor
     //
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
     for ( const auto &mot : _motormap ) {
       auto name = mot.second.name;
       int axis=1;
       auto addr = mot.second.addr;
       float position = NAN;
       std::string posname;
-      this->motorinterface.get_pos( name, axis, addr, position, posname );
+      this->pi_interface.get_pos( name, axis, addr, position, posname );
 
       std::string key = "FOCUS" + mot.first;
 
@@ -621,7 +621,7 @@ namespace Focus {
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto _motormap = this->pi_interface.get_motormap();
 
     Tokenize( args, tokens, " " );
 
