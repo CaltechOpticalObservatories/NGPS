@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "motion_controller.h"
 #include "common.h"
 #include "network.h"
 #include "utilities.h"
@@ -28,6 +29,26 @@
  */
 namespace Galil {
 
+  // Use common classes directly
+  using AxisInfo = MotionController::AxisInfo;  ///< information for a motor axis
+  using PosInfo = MotionController::PosInfo;    ///< information for position maps
+
+  template <typename T>
+  using ControllerInfo = MotionController::ControllerInfo<T>;
+
+  /***** Galil::SingleAxisInfo ************************************************/
+  /**
+   * @class    StepperInfo
+   * @brief    Derived class containing information specific to single-axis controllers
+   *
+   */
+  class SingleAxisInfo : public MotionController::ControllerInfoBase {
+    public:
+      SingleAxisInfo() { }
+      long load_controller_info();
+  };
+  /***** Galil::SingleAxisInfo ************************************************/
+
 
   /***** Galil::Interface *****************************************************/
   /**
@@ -35,32 +56,12 @@ namespace Galil {
    * @brief  interface class is generic interfacing to Galil hardware via sockets
    *
    */
-  class Interface {
-    private:
-      std::string name;           ///< a name for info purposes
-      std::string host;           ///< host name for the device
-      int port;                   ///< port number for device on host
-      bool is_initialized;        ///< has the class been initialized?
-      std::mutex mtx;
-
+  template <typename Type>
+  class Interface : public MotionController::Interface<Type> {
     public:
-      /// has the class been initialized?
-      bool get_initialized() const { return this->is_initialized; };
-      /// what is the name of the device?
-      std::string get_name() const { return this->name; };
+      using MotionController::Interface<Type>::Interface;
 
-      long open();                ///< open a connection to Galil device
-      long close();               ///< close the connection to the Galil device
-      long send_command( std::string cmd );
-      long send_command( std::string cmd, std::string &retstring );
-
-      inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
-
-      Interface(const std::string &name, const std::string &host, const int port);
-      Interface();
-      ~Interface();
-
-      Network::TcpSocket sock;    ///< provides the network communication
+      long send_command(const std::string &motorname, std::string cmd, std::string* retstring=nullptr);
 
   };
   /***** Galil::Interface *****************************************************/
