@@ -743,15 +743,13 @@ namespace Sequencer {
     }
 
     // send binning parameters
-    // this is only good for I/R and will have to change to be more general
-    // because not all detectors will be oriented the same!
     //
-    camcmd.str(""); camcmd << CAMERAD_BIN << " row " << this->target.binspat;
+    camcmd.str(""); camcmd << CAMERAD_BIN << " spat " << this->target.binspat;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
       this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
-    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
+    camcmd.str(""); camcmd << CAMERAD_BIN << " spec " << this->target.binspect;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
       this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
@@ -2402,7 +2400,7 @@ namespace Sequencer {
     message.str(""); message << CAMERAD_EXPOSE << " " << this->target.nexp;
 //  if ( this->camerad.async( message.str() ) != NO_ERROR ) {
 //  if ( this->camerad.send( message.str(), reply ) != NO_ERROR ) {
-    if ( this->camerad.command_timeout( message.str(), reply, 12000 ) != NO_ERROR ) {
+    if ( this->camerad.command_timeout( message.str(), reply, 30000 ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR sending camera "+message.str() );
       this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
@@ -2772,7 +2770,6 @@ namespace Sequencer {
             if ( set_power_switch(OFF, POWER_ACAM_CAM, std::chrono::seconds(5)) != NO_ERROR ) {
               async.enqueue_and_log( function, "ERROR switching off acam camera" );
               __error=ERROR;
-              break;
             }
             logwrite(function, "acam camera powered off");
 
@@ -2788,6 +2785,7 @@ namespace Sequencer {
             __error=ERROR;
           }
         }
+	break;
       }
       catch (const std::exception &e) {
         logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );

@@ -316,8 +316,11 @@ namespace AstroCam {
     auto oscols = this->controller[dev].oscols;
     auto skiprows = this->controller[dev].skiprows;
     auto skipcols = this->controller[dev].skipcols;
-    auto binspec = this->camera_info.binning[_COL_];
-    auto binspat = this->camera_info.binning[_ROW_];
+    int binspec, binspat;
+    this->controller[dev].physical_to_logical(this->controller[dev].info.binning[_ROW_],
+                                              this->controller[dev].info.binning[_COL_],
+                                              binspat,
+                                              binspec);
 
     this->controller[dev].info.systemkeys.add_key( "AMP_ID", this->controller[dev].info.readout_name, "readout amplifier", EXT, chan  );
     this->controller[dev].info.systemkeys.add_key( "FT", this->controller[dev].have_ft, "frame transfer used", EXT, chan );
@@ -353,8 +356,8 @@ namespace AstroCam {
     this->controller[dev].info.systemkeys.add_key( "CRPIX1A", ltv1+1, "", EXT, chan );
     this->controller[dev].info.systemkeys.add_key( "CRPIX2A", ltv2+1, "", EXT, chan );
 
-    this->controller[dev].info.systemkeys.add_key( "BINSPEC", binspec, "binning in spectral direction", EXT, chan );  // TODO
-    this->controller[dev].info.systemkeys.add_key( "BINSPAT", binspat, "binning in spatial direction", EXT, chan );  // TODO
+    this->controller[dev].info.systemkeys.add_key( "BINSPEC", binspec, "binning in spectral direction", EXT, chan );
+    this->controller[dev].info.systemkeys.add_key( "BINSPAT", binspat, "binning in spatial direction", EXT, chan );
 
     this->controller[dev].info.systemkeys.add_key( "CDELT1A",
                                                    this->controller[dev].info.dispersion*binspec,
@@ -888,8 +891,8 @@ namespace AstroCam {
           // Make a local copy of the class' binning for both (physical) axes
           //
           int _binning[2];
-          _binning[_ROW_] = this->camera_info.binning[_ROW_];
-          _binning[_COL_] = this->camera_info.binning[_COL_];
+          _binning[_ROW_] = pcontroller->info.binning[_ROW_];
+          _binning[_COL_] = pcontroller->info.binning[_COL_];
           // then override only the axis requested here.
           _binning[physical_axis] = binfactor;
 
@@ -925,7 +928,7 @@ namespace AstroCam {
         int dev = this->devnums[0];
         int physical_axis = (logical_axis=="spec") ? this->controller[dev].spec_physical_axis() :
                                                      this->controller[dev].spat_physical_axis();
-        message.str(""); message << this->camera_info.binning[physical_axis];
+        message.str(""); message << this->controller[dev].info.binning[physical_axis];
         if ( error == NO_ERROR ) retstring = message.str();
       }
     }
@@ -2806,7 +2809,7 @@ namespace AstroCam {
     this->camera_info.systemkeys.add_key("WCSNAMEA", "SPECTRUM", "", EXT, "all");
     this->camera_info.systemkeys.add_key("CUNIT1A",  "Angstrom", "", EXT, "all");
     this->camera_info.systemkeys.add_key("CUNIT2A",  "arcsec",   "", EXT, "all");
-    this->camera_info.systemkeys.add_key("CDELT2A",  0.25*this->camera_info.binning[_ROW_], "Spatial scale in arcsec/pixel", EXT, "all");
+    this->camera_info.systemkeys.add_key("CDELT2A",  0.25*this->camera_info.binspat, "Spatial scale in arcsec/pixel", EXT, "all");
     this->camera_info.systemkeys.add_key("CRVAL2A",  0.0, "Reference value in arcsec", EXT, "all");
 
     for (const auto &dev : this->devnums) {        // spawn a thread for each device in devnums
@@ -2938,7 +2941,7 @@ namespace AstroCam {
               << " readout_type=" << this->controller[dev].info.readout_type
               << " axes[]=" << this->controller[dev].info.axes[0] << " " << this->controller[dev].info.axes[1] << " " << this->controller[dev].info.axes[2]
               << " cubedepth=" << this->controller[dev].info.cubedepth << " fitscubed=" << this->controller[dev].info.fitscubed
-              << " binning=" << this->controller[dev].info.binning[0] << " " << this->controller[dev].info.binning[1]
+              << " phys binning=" << this->controller[dev].info.binning[0] << " " << this->controller[dev].info.binning[1]
               << " axis_pixels[]=" << this->controller[dev].info.axis_pixels[0] << " " << this->controller[dev].info.axis_pixels[1]
               << " ismex=" << this->controller[dev].info.ismex << " extension=" << this->controller[dev].info.extension;
       logwrite( function, message.str() );
@@ -2954,7 +2957,7 @@ namespace AstroCam {
                 << " readout_name=" << this->controller[dev].expinfo.at(ii).readout_name << " readout_type=" << this->controller[dev].expinfo.at(ii).readout_type
                 << " axes[]=" << this->controller[dev].expinfo.at(ii).axes[0] << " " << this->controller[dev].expinfo.at(ii).axes[1] << " " << this->controller[dev].expinfo.at(ii).axes[2]
                 << " cubedepth=" << this->controller[dev].expinfo.at(ii).cubedepth << " fitscubed=" << this->controller[dev].expinfo.at(ii).fitscubed
-                << " binning=" << this->controller[dev].expinfo.at(ii).binning[0] << " " << this->controller[dev].expinfo.at(ii).binning[1]
+                << " phys binning=" << this->controller[dev].expinfo.at(ii).binning[0] << " " << this->controller[dev].expinfo.at(ii).binning[1]
                 << " axis_pixels[]=" << this->controller[dev].expinfo.at(ii).axis_pixels[0] << " " << this->controller[dev].expinfo.at(ii).axis_pixels[1]
                 << " ismex=" << this->controller[dev].expinfo.at(ii).ismex << " extension=" << this->controller[dev].expinfo.at(ii).extension;
         logwrite( function, message.str() );
@@ -3253,7 +3256,7 @@ namespace AstroCam {
           {"CASANGLE",   "", "TCS reported Cassegrain angle in deg", "FLOAT"},
           {"HA",         "", "hour angle"},
           {"RAOFFSET",   "", "offset Right Ascension"},
-          {"DECLOFFSET", "", "offset Declination"},
+          {"DECLOFFS",   "", "offset Declination"},
           {"TELRA",      "", "TCS reported Right Ascension"},
           {"TELDEC",     "", "TCS reported Declination"},
           {"AZ",         "", "TCS reported azimuth"},
@@ -3986,7 +3989,7 @@ for ( const auto &dev : selectdev ) {
                                        spat_default, spec_default);
       pcontroller->physical_to_logical(pcontroller->defosrows, pcontroller->defoscols,
                                        osspat_default, osspec_default);
-      pcontroller->physical_to_logical(this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
+      pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                        binspat_default, binspec_default);
 
       cmd.str("");
@@ -4084,7 +4087,7 @@ for ( const auto &dev : selectdev ) {
                                          osspat_current, osspec_current);
 
         int binspat_current, binspec_current;
-        pcontroller->physical_to_logical(this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
+        pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                          binspat_current, binspec_current);
 
         // Now update the image size
@@ -4264,7 +4267,6 @@ logwrite(function, message.str());
     std::string function = "AstroCam::Interface::do_exptime";
     std::stringstream message;
     long error = NO_ERROR;
-    int exptime_try=0;
 
     if (this->controller.size() < 1) {
       logwrite(function, "ERROR: controller not configured");
@@ -4291,7 +4293,7 @@ logwrite(function, message.str());
 
       try {
         this->camera.exposure_time = std::stoi( exptime_in );
-        this->camera_info.systemkeys.primary().addkey( "EXPTIME", exptime_try, "exposure time in msec" );
+        this->camera_info.systemkeys.primary().addkey( "EXPTIME", this->camera.exposure_time, "exposure time in msec" );
       }
       catch ( const std::exception &e ) {
         message.str(""); message << "ERROR: parsing exposure time \"" << exptime_in << "\": " << e.what();
@@ -4793,7 +4795,7 @@ logwrite(function, message.str());
     // start by loading the values in the class
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
     pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
-    pcontroller->physical_to_logical( this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
+    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                       binspat, binspec );
 
     // no args returns current settings only
@@ -4871,13 +4873,13 @@ logwrite(function, message.str());
 
     // Binning is the same for all devices so it's stored in the camera info class.
     //
-    this->camera_info.binning[_ROW_] = binrows;
-    this->camera_info.binning[_COL_] = bincols;
+    this->camera_info.binspat = binspat;
+    this->camera_info.binspec = binspec;
 
     // Assign the binning also to the controller info
     //
-    pcontroller->info.binning[_ROW_] = this->camera_info.binning[_ROW_];
-    pcontroller->info.binning[_COL_] = this->camera_info.binning[_COL_];
+    pcontroller->info.binning[_ROW_] = binrows;
+    pcontroller->info.binning[_COL_] = bincols;
 
     // If binned by a non-evenly-divisible factor then skip modulo that
     // many at the start. These will be removed from the image.
@@ -5000,9 +5002,9 @@ logwrite(function, message.str());
       //
       std::stringstream cmd;
       cmd << "SBP "
-          << this->camera_info.binning[_ROW_] << " "
+          << pcontroller->info.binning[_ROW_] << " "
           << pcontroller->skiprows << " "
-          << this->camera_info.binning[_COL_] << " "
+          << pcontroller->info.binning[_COL_] << " "
           << pcontroller->skipcols;
       if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
@@ -5020,7 +5022,7 @@ logwrite(function, message.str());
     //
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
     pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
-    pcontroller->physical_to_logical( this->camera_info.binning[_ROW_], this->camera_info.binning[_COL_],
+    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                       binspat, binspec );
 
     message.str(""); message << "spat spec osspat osspec binspat binspec = ";
@@ -6256,7 +6258,7 @@ logwrite(function, message.str());
         // try to convert to integer
         //
         try { dev = std::stoi( tokens.at(1) ); }
-	catch ( std::invalid_argument & ) { logwrite( function, "ERROR: invalid argument" ); retstring="invalid_argument"; return ERROR; }
+        catch ( std::invalid_argument & ) { logwrite( function, "ERROR: invalid argument" ); retstring="invalid_argument"; return ERROR; }
         catch ( std::out_of_range & ) { logwrite( function, "ERROR: out of range" ); retstring="exception"; return ERROR; }
 
         if ( this->controller.find(dev) == this->controller.end() ) {

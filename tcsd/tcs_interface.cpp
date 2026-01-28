@@ -51,7 +51,7 @@ namespace TCS {
     jmessage_out["CASANGLE"]   = this->tcs_info.cassangle;  // double
     jmessage_out["HA"]         = this->tcs_info.ha;         // string
     jmessage_out["RAOFFSET"]   = this->tcs_info.offsetra;   // double
-    jmessage_out["DECLOFFSET"] = this->tcs_info.offsetdec;  // double
+    jmessage_out["DECLOFFS"]   = this->tcs_info.offsetdec;  // double
     jmessage_out["TELRA"]      = this->tcs_info.ra_hms;     // string "hh:mm:ss.s"
     jmessage_out["TELDEC"]     = this->tcs_info.dec_dms;    // string "dd:mm:ss.s"
     jmessage_out["RA"]         = radec_to_decimal( this->tcs_info.ra_hms );

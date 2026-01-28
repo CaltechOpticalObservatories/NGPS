@@ -475,6 +475,8 @@ namespace Camera {
        */
       long          fitscubed;
 
+      int           binspat;
+      int           binspec;
       int           binning[2];
       long          axis_pixels[2];
       long          region_of_interest[4];
@@ -517,6 +519,8 @@ namespace Camera {
           axes{1,1,1},
           cubedepth(1),
           fitscubed(1),
+          binspat(1),
+          binspec(1),
           binning{1,1},
           region_of_interest{1,1,1,1},
           image_center{1,1},
@@ -557,6 +561,8 @@ namespace Camera {
           axes{other.axes[0], other.axes[1], other.axes[2]},
           cubedepth(other.cubedepth),
           fitscubed(other.fitscubed),
+          binspat(other.binspat),
+          binspec(other.binspec),
           binning{other.binning[0], other.binning[1]},
           axis_pixels{other.axis_pixels[0], other.axis_pixels[1]},
           region_of_interest{other.region_of_interest[0], other.region_of_interest[1],
@@ -610,6 +616,8 @@ namespace Camera {
           axes[2] = other.axes[2];
           cubedepth = other.cubedepth;
           fitscubed = other.fitscubed;
+          binspat = other.binspat;
+          binspec = other.binspec;
           binning[0] = other.binning[0];
           binning[1] = other.binning[1];
           axis_pixels[0] = other.axis_pixels[0];

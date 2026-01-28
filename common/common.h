@@ -644,15 +644,24 @@ namespace Common {
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment, int prec ) {
         return do_addkey( key, tval, comment, prec, "" );
       }
-      template <class T> long do_addkey( const std::string &key,
+      template <class T> long do_addkey( const std::string &keyin,
                                          T tval,
                                          const std::string &comment,
                                          int prec,
                                          std::string type_in ) {
+        const std::string function("Common::FitsKeys::do_addkey");
         std::stringstream val;
-        std::string type, value;
+        std::string key, type, value;
 
-        if ( key.empty() || ( key.find(" ") != std::string::npos ) ) return NO_ERROR;
+        if ( keyin.empty() || ( keyin.find(" ") != std::string::npos ) ) return NO_ERROR;
+
+        // truncate keywords to max allowed 8 characters
+        //
+        if (keyin.length() > 8) {
+          key = keyin.substr(0,8);
+          logwrite(function, "NOTICE: keyword '"+keyin+"' truncated to '"+key+"'");
+        }
+        else key = keyin;
 
         // this determines the type based on the templated tval
         // and formats the value if needed (for floating point precision)
