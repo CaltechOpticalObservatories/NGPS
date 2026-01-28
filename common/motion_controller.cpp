@@ -10,7 +10,15 @@
 
 namespace MotionController {
 
-  long AxisInfo::load_axis_info( std::string input ) {
+  /***** MotionController::AxisInfo::load_axis_info ***************************/
+  /**
+   * @brief      send a command string to the controller
+   * @details    parses the config file MOTOR_AXIS key and loads into class
+   * @param[in]  input  single row from config file for key "MOTOR_AXIS"
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long AxisInfo::load_axis_info(const std::string &input) {
     std::string function = "MotionController::AxisInfo::load_axis_info";
 
     std::string tryname, tryreftype;
@@ -19,6 +27,8 @@ namespace MotionController {
 
     std::istringstream iss(input);
 
+    // get the required parameters
+    //
     if ( !(iss >> tryname
                >> trynum
                >> trymin
@@ -28,6 +38,9 @@ namespace MotionController {
       logwrite(function, "ERROR: bad config input. Expected { <motorname> <axis> <min> <max> <zero> <ref> [ <defpos> ]}");
       return ERROR;
     }
+
+    // the default position is optional
+    //
     if ( !(iss >> trydefpos) ) {
       trydefpos=NAN;
     }
@@ -72,13 +85,13 @@ namespace MotionController {
 
     return NO_ERROR;
   }
+  /***** MotionController::AxisInfo::load_axis_info ***************************/
 
 
   /***** MotionController::PosInfo::load_pos_info *****************************/
   /**
    * @brief      Loads MOTOR_POS information from config file into the 
-   * @details    This is the template class version which will parse the
-   *             input string for common parameters.
+   * @details    parses the config file MOTOR_POS key and loads into the class
    * @param[in]  input  string specifies: "<motorname> <ID> <pos> <posname>"
    * @return     ERROR or NO_ERROR
    *
@@ -86,11 +99,8 @@ namespace MotionController {
    * in the configuration file, to parse and load all of the information
    * assigned by that key into the appropriate class variables.
    *
-   * Currently all motors use the same MOTOR_POS format, but if that changes
-   * then a template class function call could be made here.
-   *
    */
-  long PosInfo::load_pos_info( std::string input ) {
+  long PosInfo::load_pos_info(const std::string &input) {
     std::string function = "MotionController::PosInfo::load_pos_info";
 
     int axis, posid;

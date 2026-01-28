@@ -1,6 +1,6 @@
 /**
  * @file    motion_controller_impl.h
- * @brief   this file contains implementations for template class functions
+ * @brief   implementations for MotionController::ControllerInfo template class functions
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  */
@@ -9,123 +9,74 @@
 
 namespace MotionController {
 
-  /***** MotionController::Interface::open ************************************/
+  /***** ControllerInfo::load_controller_info *********************************/
   /**
-   * @brief      open a connection to all controllers
-   * @details    this is the outside-callable function for open
+   * @brief      Loads information from the config file into the class
+   * @details    This is the template class version which can parse the
+   *             input string for common parameters, then call the
+   *             specialized version which will extract parameters specific
+   *             to that type of controller. OBSOLETE
+   * @param[in]  input  string containing line from config file
    * @return     ERROR or NO_ERROR
    *
    */
-  template <typename ControllerType>
-  long Interface<ControllerType>::open() {
-    long error=NO_ERROR;
-    // loop through motoromap, opening each motor if not already open
-    // store a collective error so any one failure returns an error
-    //
-    for ( const auto &pair : this->motormap ) {
-      const std::string &motorname = pair.first;
-      if ( !is_connected( motorname ) ) { error |= this->_open( motorname ); }
-    }
-    return error;
+  template <typename T>
+  long ControllerInfo<T>::load_controller_info( std::string input ) {
+    return T::load_controller_info( input );
   }
-  /***** MotionController::Interface::open ************************************/
+  /***** ControllerInfo::load_controller_info *********************************/
 
 
-  /***** MotionController::Interface::_open ***********************************/
+  /***** ControllerInfo::load_pos_info ****************************************/
   /**
-   * @brief      open a connection to the specified controller (private)
-   * @param[in]  motorname  reference to motor to find in map
+   * @brief      Loads MOTOR_POS information from config file into the 
+   * @details    This is the template class version which will parse the
+   *             input string for common parameters.
+   * @param[in]  input  string specifies: "<name> <ID> <pos> <posname>"
    * @return     ERROR or NO_ERROR
    *
+   * This function is called whenever the MOTOR_POS key is found
+   * in the configuration file, to parse and load all of the information
+   * assigned by that key into the appropriate class variables.
+   *
+   * Currently all motors use the same MOTOR_POS format, but if that changes
+   * then a template class function call could be made here.
+   *
    */
-  template <typename ControllerType>
-  long Interface<ControllerType>::_open( const std::string &motorname ) {
-    std::string function = "MotionController::Interface::_open";
-    std::ostringstream message;
+  template <typename T>
+  long ControllerInfo<T>::load_pos_info( std::string input ) {
+    std::string function = "MotionController::ControllerInfo::load_pos_info";
+    int id;
+    float position;
+    std::string name, posname;
 
-    try {
-      Network::TcpSocket &socket = this->get_socket( motorname );
+    std::istringstream iss(input);
 
-      if ( socket.isconnected() ) {
-        message.str(""); message << "connection open for " << motorname
-                                 << " on " << socket.gethost() << ":" << socket.getport()
-                                 << " with fd " << socket.getfd();
-        logwrite( function, message.str() );
-        return NO_ERROR;
-      }
-
-      if ( socket.Connect() != 0 ) {
-        message.str(""); message << "ERROR connecting to " << motorname
-                                 << " on " << socket.gethost() << ":" << socket.getport();
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-
-      message.str(""); message << "connection to " << motorname
-                               << " established on host " << socket.gethost() << ":" << socket.getport()
-                               << " with fd " << socket.getfd();
-      logwrite( function, message.str() );
-    }
-    catch ( std::runtime_error &e ) {
-      logwrite(function, "ERROR: "+std::string(e.what()));
+    if (!(iss >> name
+              >> id
+              >> position
+              >> posname)) {
+      logwrite(function, "ERROR bad config input. expected { <name> <ID> <pos> <posname> }");
       return ERROR;
     }
+
+    // ID starts at 0 (can't be negative)
+    //
+    if ( id < 0 ) {
+      std::ostringstream oss;
+      oss << "ERROR: id " << id << " for \"" << name << "\" " << "must be >= 0";
+      logwrite(function, oss.str());
+      return ERROR;
+    }
+
+    this->name = name;
+    this->posmap[ posname ].id       = id;
+    this->posmap[ posname ].position = position;
+    this->posmap[ posname ].posname  = posname;
 
     return NO_ERROR;
   }
-  /***** MotionController::Interface::_open ***********************************/
-
-
-  /***** MotionController::Interface::close ***********************************/
-  /**
-   * @brief      close the connection to all controllers
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::close() {
-    std::string function = "MotionController::Interface::close";
-    long error=NO_ERROR;
-    for ( const auto &pair : this->motormap ) {
-      const std::string &motorname = pair.first;
-      error |= this->close( motorname );
-    }
-    return error;
-  }
-  /***** MotionController::Interface::close ***********************************/
-  /**
-   * @brief      close the connection to all controllers
-   * @param[in]  motorname  reference to motor name to close
-   * @return     ERROR or NO_ERROR
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::close(const std::string &motorname) {
-    std::string function = "MotionController::Interface::close";
-
-    try {
-      Network::TcpSocket &socket = this->get_socket( motorname );
-
-      if ( !socket.isconnected() ) return NO_ERROR;
-
-      long error = socket.Close();
-
-      if ( error == NO_ERROR ) {
-        logwrite(function, "socket connection to "+motorname+" closed");
-      }
-      else {
-        std::ostringstream message;
-        message << "ERROR close socket connection to " << motorname
-                << " on host " << socket.gethost() << ":" << socket.getport();
-        logwrite(function, message.str());
-      }
-      return error;
-    }
-    catch ( std::runtime_error &e ) {
-      logwrite(function, "ERROR: "+std::string(e.what()));
-      return ERROR;
-    }
-  }
-  /***** MotionController::Interface::close ***********************************/
+  /***** ControllerInfo::load_pos_info ****************************************/
 
 }
+

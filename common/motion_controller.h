@@ -32,6 +32,8 @@ namespace MotionController {
   /**
    * @class    AxisInfo
    * @brief    information for a motor axis
+   * @details  This class contains motor axis info and function for parsing
+   *           the MOTOR_AXIS key from a config file.
    *
    */
   class AxisInfo {
@@ -49,7 +51,7 @@ namespace MotionController {
 
       AxisInfo() : axisnum(0), pos(NAN), ishome(false), ontarget(false), min(NAN), max(NAN), zeropos(NAN) { }
 
-      long load_axis_info( std::string input );
+      long load_axis_info(const std::string &input);
   };
   /***** MotionController::AxisInfo *******************************************/
 
@@ -68,7 +70,7 @@ namespace MotionController {
       float position;
       std::string posname;
 
-      long load_pos_info( std::string input );
+      long load_pos_info(const std::string &input);
   };
   /***** MotionController::PosInfo ********************************************/
 
@@ -117,73 +119,8 @@ namespace MotionController {
 
       ControllerInfo() : host(""), port(-1) { }      ///< constructor
 
-      /***** ControllerInfo::load_controller_info *****************************/
-      /**
-       * @brief      Loads information from the config file into the class
-       * @details    This is the template class version which can parse the
-       *             input string for common parameters, then call the
-       *             specialized version which will extract parameters specific
-       *             to that type of controller. OBSOLETE
-       * @param[in]  input  string containing line from config file
-       * @return     ERROR or NO_ERROR
-       *
-       */
-      long load_controller_info( std::string input ) {
-        return T::load_controller_info( input );
-      }
-      /***** ControllerInfo::load_controller_info *****************************/
-
-
-      /***** ControllerInfo::load_pos_info ************************************/
-      /**
-       * @brief      Loads MOTOR_POS information from config file into the 
-       * @details    This is the template class version which will parse the
-       *             input string for common parameters.
-       * @param[in]  input  string specifies: "<name> <ID> <pos> <posname>"
-       * @return     ERROR or NO_ERROR
-       *
-       * This function is called whenever the MOTOR_POS key is found
-       * in the configuration file, to parse and load all of the information
-       * assigned by that key into the appropriate class variables.
-       *
-       * Currently all motors use the same MOTOR_POS format, but if that changes
-       * then a template class function call could be made here.
-       *
-       */
-      long load_pos_info( std::string input ) {
-        std::string function = "MotionController::ControllerInfo::load_pos_info";
-        int id;
-        float position;
-        std::string name, posname;
-
-        std::istringstream iss(input);
-
-        if (!(iss >> name
-                  >> id
-                  >> position
-                  >> posname)) {
-          logwrite(function, "ERROR bad config input. expected { <name> <ID> <pos> <posname> }");
-          return ERROR;
-        }
-
-        // ID starts at 0 (can't be negative)
-        //
-        if ( id < 0 ) {
-          std::ostringstream oss;
-          oss << "ERROR: id " << id << " for \"" << name << "\" " << "must be >= 0";
-          logwrite(function, oss.str());
-          return ERROR;
-        }
-
-        this->name = name;
-        this->posmap[ posname ].id       = id;
-        this->posmap[ posname ].position = position;
-        this->posmap[ posname ].posname  = posname;
-
-        return NO_ERROR;
-      }
-      /***** ControllerInfo::load_pos_info ************************************/
-
+      long load_controller_info(std::string input);
+      long load_pos_info(std::string input);
   };
   /***** MotionController::ControllerInfo *************************************/
 
@@ -205,7 +142,11 @@ namespace MotionController {
       float tolerance;
       volatile std::atomic<int> motors_running;
       volatile std::atomic<long> thread_error;
+
+      // map of sockets allows use of multiple socket connections, indexed by {host,port}
       std::map<std::pair<std::string, int>, Network::TcpSocket> socketmap;
+
+      // map of motors allows use of multiple motors, indexed by motor name
       std::map<std::string, ControllerInfo<ControllerType>> motormap;
 
     private:
@@ -226,93 +167,12 @@ namespace MotionController {
       long open();
       long close();
       long close(const std::string &name);
+      bool is_connected(const std::string &motorname);
+      long add_posmap(const PosInfo &posinfo);
+      long add_axis(const AxisInfo &axis);
+      long load_controller_config(const std::string &input);
 
-      /***** MotionController::Interface::is_connected ************************/
-      /**
-       * @brief      is the socket connected for the specified motor controller?
-       * @param[in]  motorname  name of motor controller
-       * @return     true or false
-       *
-       */
-      bool is_connected(const std::string &motorname) {
-        try {
-          // get a copy of the socket object for this motor and return its connected status
-          //
-          Network::TcpSocket &socket = this->get_socket( motorname );
-          return ( socket.isconnected() ? true : false );
-        }
-        catch ( std::runtime_error &e ) {
-          std::string function = "MotionController::Interface::is_connected";
-          std::stringstream message;
-          message.str(""); message << "ERROR: " << e.what();
-          logwrite( function, message.str() );
-          return false;
-        }
-      }
-      /***** MotionController::Interface::is_connected ************************/
-
-
-      /***** MotionController::Interface::add_posmap **************************/
-      /**
-       * @brief      add the supplied posinfo to the motormap's posmap
-       * @param[in]  posinfo  reference to PosInfo object
-       * @return     ERROR or NO_ERROR
-       *
-       * This function is called whenever the MOTOR_POS key is found
-       * in the configuration file. A temporary PosInfo object can be
-       * created and loaded with the PosInfo::load_pos_info() function,
-       * and then that object can be passed here to store it in
-       * the controller class.
-       *
-       */
-      long add_posmap( const PosInfo &posinfo ) {
-        auto it = motormap.find( posinfo.motorname );
-        if ( it != motormap.end() ) {
-          it->second.posmap[posinfo.posname] = posinfo;  // posmap indexed by position name
-        }
-        else {
-          std::string function = "MotionController::Interface::add_posmap";
-          std::stringstream message;
-          message << "ERROR can't add position " << posinfo.posname << " because motor "
-                  << posinfo.motorname << " has not been configured";
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        return NO_ERROR;
-      }
-      /***** MotionController::Interface::add_posmap **************************/
-
-
-      /***** MotionController::Interface::add_axis ****************************/
-      /**
-       * @brief      add the supplied axis info to the motormap's axes vector
-       * @param[in]  axis  reference to AxisInfo object
-       * @return     ERROR or NO_ERROR
-       *
-       */
-      long add_axis( const AxisInfo &axis ) {
-        // Make sure the motor associated with this axis is already defined
-        // in the motormap.
-        //
-        auto it = motormap.find( axis.motorname );
-
-        // If it is, then push it onto the axes vector for this motor.
-        //
-        if ( it != motormap.end() ) {
-          it->second.axes[axis.axisnum] = axis;
-        }
-        else {
-          std::string function = "MotionController::Interface::add_axis";
-          std::stringstream message;
-          message << "ERROR can't add axis " << axis.axisnum << " to because motor "
-                  << axis.motorname << " has not been configured";
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        return NO_ERROR;
-      }
-      /***** MotionController::Interface::add_axis ****************************/
-
+      Network::TcpSocket &get_socket(const std::string &motorname);
 
       // Default constructor
       //
@@ -395,109 +255,10 @@ namespace MotionController {
         return *this;
       }
 
-      /***** MotionController::Interface::load_controller_config **************/
-      /**
-       * @brief      loads information from the config file into the class
-       * @param[in]  input  config file line (the args, not the key)
-       * @return     ERROR or NO_ERROR
-       *
-       * Expected format of input string is:
-       * "<motorname> <host> <port> <addr> <naxes>"
-       */
-      long load_controller_config( const std::string &input ) {
-        std::string function = "MotionController::Interface::load_controller_config";
-
-        std::istringstream iss(input);
-        std::string tryname, tryhost;
-        int tryport, tryaddr, trynaxes;
-
-        if (!(iss >> tryname
-                  >> tryhost
-                  >> tryport
-                  >> tryaddr
-                  >> trynaxes)) {
-          logwrite(function, "ERROR: bad config input. Expected { <motorname> <host> <port> <addr> <naxes> }" );
-          return ERROR;
-        }
-
-        // Create a local (temporary) ControllerInfo object for this ControllerType,
-        //
-        ControllerInfo<ControllerType> controller;
-
-        // and initialize it with the values just parsed from the config line.
-        //
-        controller.name  = tryname;
-        controller.host  = tryhost;
-        controller.port  = tryport;
-        controller.addr  = tryaddr;
-        controller.naxes = trynaxes;
-
-        // Copy this to the motormap, indexed by motorname.
-        //
-        this->motormap[tryname] = controller;
-
-        return NO_ERROR;
-      }
-      /***** MotionController::Interface::load_controller_config **************/
-
-
-      /***** MotionController::Interface::get_socket **************************/
-      /**
-       * @brief      return a copy of the socket object for the specified motor
-       * @details    This can also be used to create a new entry in the socketmap
-       *             because if a socket object doesn't exist for the {host,port}
-       *             then it will be created and added to the socketmap.
-       * @param[in]  motorname  name of motor controller
-       * @return     reference to Network::TcpSocket object
-       *
-       * On error, this function throws std::runtime_error exception; it does
-       * not return an error, so it should be used in a try/catch block. It
-       * fails only if the requested motorname is not in the motormap.
-       *
-       */
-      Network::TcpSocket &get_socket( const std::string &motorname ) {
-        std::string function = "MotionController::Interface::get_socket";
-        std::stringstream message;
-
-        // Find the ControllerInfo for the requested motorname
-        //
-        auto it = this->motormap.find( motorname );
-
-        if ( it == this->motormap.end() ) {
-          message.str(""); message << "motorname \"" << motorname << "\" not found (get_socket)";
-          throw std::runtime_error( message.str() );
-        }
-
-        // Get the host:port for this motor
-        //
-        const std::string &host = it->second.host;
-        int port = it->second.port;
-
-        // Use this host:port as a key to index the socketmap
-        //
-        std::pair<std::string, int> key = { host, port };
-
-        // Find the Network::TcpSocket for this motor
-        //
-        auto socket_it = this->socketmap.find( key );
-
-        // If socket not found in map then create it and add to the socketmap
-        //
-        if ( socket_it == this->socketmap.end() ) {
-          message.str(""); message << "socket not found for motor " << motorname
-                                   << " on " << host << ":" << port << " (get_socket)";
-          Network::TcpSocket new_socket( host, port );
-          this->socketmap[key] = new_socket;
-          socket_it = this->socketmap.find( key );  // update the iterator
-        }
-
-        return socket_it->second;
-      }
-      /***** MotionController::Interface::get_socket **************************/
-
   };
   /***** MotionController::Interface ******************************************/
 
 }
-#include "motion_controller_impl.h"  ///< implementations for template code
+#include "motion_controller_impl.h"  ///< implementations for ControllerInfo template
+#include "motion_interface_impl.h"   ///< implementations for Interface template
 /***** MotionController *******************************************************/
