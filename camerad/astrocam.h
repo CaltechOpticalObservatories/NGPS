@@ -667,8 +667,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
        */
       inline bool is_camera_idle( int dev ) {
         int num=0;
-        num += ( this->controller[dev].in_readout ? 1 : 0 );
-        num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+        num += ( this->controller.at(dev).in_readout ? 1 : 0 );
+        num += ( this->controller.at(dev).in_frametransfer ? 1 : 0 );
         std::lock_guard<std::mutex> lock( this->epend_mutex );
         num += this->exposures_pending.size();
         return ( num>0 ? false : true );
@@ -677,8 +677,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       inline bool is_camera_idle() {
         int num=0;
         for ( auto dev : this->connected_devnums ) {
-          num += ( this->controller[dev].in_readout ? 1 : 0 );
-          num += ( this->controller[dev].in_frametransfer ? 1 : 0 );
+          num += ( this->controller.at(dev).in_readout ? 1 : 0 );
+          num += ( this->controller.at(dev).in_frametransfer ? 1 : 0 );
         }
         std::lock_guard<std::mutex> lock( this->epend_mutex );
         num += this->exposures_pending.size();
@@ -867,7 +867,28 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           long workbuf_size;
 
         public:
-          Controller();                 //!< class constructor
+          Controller()
+            : bufsize(0),
+              framecount(0),
+              workbuf_size(0),
+              info(),
+              workbuf(nullptr),
+              cols(0),
+              rows(0),
+              pArcDev(nullptr),
+              pCallback(nullptr),
+              connected(false),
+              configured(false),
+              active(false),
+              is_imsize_set(false),
+              firmwareloaded(false)
+              {
+                info.readout_type = -1;
+                readout_arg = 0xBAD;
+                expinfo.resize( NUM_EXPBUF );  // vector of Camera::Information, one for each exposure buffer
+                info.exposure_unit = "msec";   // chaning unit not currently supported in ARC
+              }
+
           ~Controller() { };            //!< no deconstructor
 
           Camera::Information info;     //!< camera info object for this controller

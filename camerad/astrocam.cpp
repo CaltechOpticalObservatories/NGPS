@@ -518,55 +518,44 @@ namespace AstroCam {
    *
    */
   long Interface::parse_controller_config( std::string args ) {
-    std::string function = "AstroCam::Interface::parse_controller_config";
-    std::stringstream message;
-    std::vector<std::string> tokens;
+    const std::string function("AstroCam::Interface::parse_controller_config");
+    std::ostringstream message;
 
     logwrite( function, args );
 
-    int dev, readout_type=-1;
+    std::istringstream iss(args);
+
+    int readout_type=-1;
     uint32_t readout_arg=0xBAD;
-    std::string chan, id, firm, amp;
-    bool ft, readout_valid=false;
+    bool readout_valid=false;
 
-    Tokenize( args, tokens, " " );
+    int dev;
+    std::string chan, id, firm, amp, ft;
+    bool have_ft;
 
-    if ( tokens.size() != 6 ) {
-      message.str(""); message << "ERROR: bad value \"" << args << "\". expected { PCIDEV CHAN ID FT FIRMWARE READOUT }";
-      logwrite( function, message.str() );
-      return( ERROR );
+    if (!(iss >> dev
+              >> chan
+              >> id
+              >> firm
+              >> amp
+              >> ft)) {
+      logwrite(function, "ERROR bad config. expected  { PCIDEV CHAN ID FT FIRMWARE READOUT }");
+      return ERROR;
     }
 
-    try {
-      dev  = std::stoi( tokens.at(0) );
-      chan = tokens.at(1);
-      id   = tokens.at(2);
-      firm = tokens.at(4);
-      amp  = tokens.at(5);
-      if ( tokens.at(3) == "yes" ) ft = true;
-      else
-      if ( tokens.at(3) == "no" )  ft = false;
-      else {
-        message.str(""); message << "unrecognized value for FT: " << tokens.at(2) << ". Expected { yes | no }";
-        this->camera.log_error( function, message.str() );
-        return( ERROR );
-      }
-    }
-    catch (std::invalid_argument &) {
-      this->camera.log_error( function, "invalid number: unable to convert to integer" );
-      return(ERROR);
-    }
-    catch (std::out_of_range &) {
-      this->camera.log_error( function, "value out of integer range" );
-      return(ERROR);
+    if (ft=="yes") have_ft=true;
+    else if (ft=="no") have_ft=false;
+    else {
+      logwrite(function, "ERROR. FT expected { yes | no }");
+      return ERROR;
     }
 
     // Check the PCIDEV number is in expected range
     //
     if ( dev < 0 || dev > 3 ) {
-      message.str(""); message << "ERROR: bad PCIDEV " << dev << ". Expected {0,1,2,3}";
+      message << "ERROR: bad PCIDEV " << dev << ". Expected {0,1,2,3}";
       this->camera.log_error( function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // Check that READOUT has a match in the list of known readout amps.
@@ -595,50 +584,54 @@ namespace AstroCam {
     //
     // The first four come from the config file, the rest are defaults
     //
-    this->controller.at(dev).devnum = dev;             // device number
-    this->controller.at(dev).channel = chan;           // spectrographic channel
-    this->controller.at(dev).ccd_id  = id;             // CCD identifier
-    this->controller.at(dev).have_ft = ft;             // frame transfer supported?
-    this->controller.at(dev).firmware = firm;          // firmware file
+
+    // create a local reference indexed by dev
+    Controller &con = this->controller[dev];
+
+    con.devnum   = dev;           // device number
+    con.channel  = chan;          // spectrographic channel
+    con.ccd_id   = id;            // CCD identifier
+    con.have_ft  = have_ft;       // frame transfer supported?
+    con.firmware = firm;          // firmware file
 
 /*
     arc::gen3::CArcDevice* pArcDev = NULL;          // create a generic CArcDevice pointer
     pArcDev = new arc::gen3::CArcPCI();             // point this at a new CArcPCI() object  ///< TODO @todo implement PCIe option
     Callback* pCB = new Callback();                 // create a pointer to a Callback() class object
 
-    this->controller.at(dev).pArcDev = pArcDev;        // set the pointer to this object in the public vector
-    this->controller.at(dev).pCallback = pCB;          // set the pointer to this object in the public vector
+    this->controller[dev].pArcDev = pArcDev;        // set the pointer to this object in the public vector
+    this->controller[dev].pCallback = pCB;          // set the pointer to this object in the public vector
 */
-    this->controller.at(dev).pArcDev = ( new arc::gen3::CArcPCI() );        // set the pointer to this object in the public vector
-    this->controller.at(dev).pCallback = ( new Callback() );          // set the pointer to this object in the public vector
-    this->controller.at(dev).devname = "";             // device name
-    this->controller.at(dev).connected = false;        // not yet connected
-    this->controller.at(dev).is_imsize_set = false;    // need to set image_size
-    this->controller.at(dev).firmwareloaded = false;   // no firmware loaded
+    con.pArcDev = ( new arc::gen3::CArcPCI() );        // set the pointer to this object in the public vector
+    con.pCallback = ( new Callback() );          // set the pointer to this object in the public vector
+    con.devname = "";             // device name
+    con.connected = false;        // not yet connected
+    con.is_imsize_set  = false;   // need to set image_size
+    con.firmwareloaded = false;   // no firmware loaded
 
-    this->controller.at(dev).info.readout_name = amp;
-    this->controller.at(dev).info.readout_type = readout_type;
-    this->controller.at(dev).readout_arg = readout_arg;
+    con.info.readout_name = amp;
+    con.info.readout_type = readout_type;
+    con.readout_arg = readout_arg;
 
     this->exposure_pending( dev, false );
-    this->controller.at(dev).in_readout = false;
-    this->controller.at(dev).in_frametransfer = false;
+    con.in_readout = false;
+    con.in_frametransfer = false;
     this->state_monitor_condition.notify_all();
 
     // configured by config file, can never be reversed unless it is removed from the config file
-    this->controller.at(dev).configured = true;
+    con.configured = true;
 
     // configured and active. this state can be reversed on command or failure to connect
     // active alone isn't connected, but if not connected then it's not active
-    this->controller.at(dev).active = true;
+    con.active = true;
 
     // Header keys specific to this controller are stored in the controller's extension
     //
-    this->controller.at(dev).info.systemkeys.add_key( "CCD_ID", id, "CCD identifier parse", EXT, chan );
-    this->controller.at(dev).info.systemkeys.add_key( "FT", ft, "frame transfer used", EXT, chan );
-    this->controller.at(dev).info.systemkeys.add_key( "AMP_ID", amp, "CCD readout amplifier ID", EXT, chan );
-    this->controller.at(dev).info.systemkeys.add_key( "SPEC_ID", chan, "spectrograph channel", EXT, chan );
-    this->controller.at(dev).info.systemkeys.add_key( "DEV_ID", dev, "detector controller PCI device ID", EXT, chan );
+    con.info.systemkeys.add_key( "CCD_ID", id, "CCD identifier parse", EXT, chan );
+    con.info.systemkeys.add_key( "FT", ft, "frame transfer used", EXT, chan );
+    con.info.systemkeys.add_key( "AMP_ID", amp, "CCD readout amplifier ID", EXT, chan );
+    con.info.systemkeys.add_key( "SPEC_ID", chan, "spectrograph channel", EXT, chan );
+    con.info.systemkeys.add_key( "DEV_ID", dev, "detector controller PCI device ID", EXT, chan );
 
 //  FITS_file* pFits = new FITS_file();             // create a pointer to a FITS_file class object
 //  this->controller.at(dev).pFits = pFits;            // set the pointer to this object in the public vector
@@ -1368,6 +1361,10 @@ namespace AstroCam {
     this->configured_devnums.clear();
     this->active_devnums.clear();
     this->connected_devnums.clear();
+
+    // initialize the controller map
+    //
+    this->controller.clear();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -5648,36 +5645,6 @@ logwrite(function, message.str());
     this->framethreadcount = 0;
   }
   /***** AstroCam::Interface::init_framethread_count **************************/
-
-
-  /***** AstroCam::Interface::Controller::Controller **************************/
-  /**
-   * @brief      class constructor
-   *
-   */
-  Interface::Controller::Controller() {
-    this->workbuf = NULL;
-    this->workbuf_size = 0;
-    this->bufsize = 0;
-    this->rows=0;
-    this->cols=0;
-    this->devnum = 0;
-    this->framecount = 0;
-    this->pArcDev = NULL;
-    this->pCallback = NULL;
-    this->connected = false;
-    this->configured = false;
-    this->active = false;
-    this->is_imsize_set = false;
-    this->firmwareloaded = false;
-    this->firmware = "";
-    this->info.readout_name = "";
-    this->info.readout_type = -1;
-    this->readout_arg = 0xBAD;
-    this->expinfo.resize( NUM_EXPBUF );  // vector of Camera::Information, one for each exposure buffer
-    this->info.exposure_unit = "msec";   // chaning unit not currently supported in ARC
-  }
-  /***** AstroCam::Interface::Controller::Controller **************************/
 
 
   /***** AstroCam::Interface::Controller::logical_to_physical *****************/
