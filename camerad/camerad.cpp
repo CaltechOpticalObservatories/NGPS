@@ -598,6 +598,18 @@ void doit(Network::TcpSocket &sock) {
                     }
 #ifdef ASTROCAM
     else
+    if ( cmd == CAMERAD_ACTIVATE ) {
+                    ret=server.camera_active_state(args, retstring, AstroCam::ActiveState::Activate);
+                    }
+    else
+    if ( cmd == CAMERAD_DEACTIVATE ) {
+                    ret=server.camera_active_state(args, retstring, AstroCam::ActiveState::DeActivate);
+                    }
+    else
+    if ( cmd == CAMERAD_ISACTIVE ) {
+                    ret=server.camera_active_state(args, retstring, AstroCam::ActiveState::Query);
+                    }
+    else
     if ( cmd == CAMERAD_MODEXPTIME ) {
                     ret = server.modify_exptime(args, retstring);
                     }
