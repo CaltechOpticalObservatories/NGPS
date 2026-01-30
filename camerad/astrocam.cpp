@@ -4793,7 +4793,12 @@ logwrite(function, message.str());
     std::vector<std::string> tokens;
     Tokenize( retstring, tokens, " " );
 
-    Controller* pcontroller = this->get_active_controller(dev);
+    // Just need to get a configured controller here,
+    // it doesn't need to be active or connected at this stage.
+    // This allows setting up image size prior to connecting, which is done
+    // when the config file is read.
+    //
+    Controller* pcontroller = this->get_controller(dev);
 
     if (!pcontroller) {
       logwrite(function, "ERROR: controller not available for channel "+chan);
