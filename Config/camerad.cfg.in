@@ -31,9 +31,9 @@ ARCSIM_NUMDEV=0
 #
 #CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2-20241115.lod U2)
 #CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/28-1458/sg2.lod U2)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/28-1458/engg.lod U1)
-CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/51209-1651/dbspr.lod U2)
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/260127-1318/sg2.lod U2)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/260127-1318/engg.lod U1)
+CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/260127-1318/dbspr.lod L1)
 CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 
 # -----------------------------------------------------------------------------
