@@ -744,8 +744,11 @@ namespace AstroCam {
     //
     for ( const auto &con : this->controller ) {
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] con.first=" << con.first << " con.second.channel=" << con.second.channel
-                               << " .devnum=" << con.second.devnum << " .configured=" << (con.second.configured?"T":"F") << " .active=" << (con.second.active?"T":"F");
+      message.str(""); message << "[DEBUG] con.first=" << con.first
+                               << " con.second.channel=" << con.second.channel
+                               << " .devnum=" << con.second.devnum
+                               << " .configured=" << (con.second.configured?"T":"F")
+                               << " .active=" << (con.second.active?"T":"F");
       logwrite( function, message.str() );
 #endif
       if (!con.second.configured) continue;  // skip controllers not configured
@@ -1284,7 +1287,7 @@ namespace AstroCam {
       return( ERROR );
     }
 
-    // close all of the PCI devices
+    // close all of the PCI devices regardless of active status
     //
     for ( auto &con : this->controller ) {
       message.str(""); message << "closing " << con.second.devname;
@@ -3365,9 +3368,9 @@ namespace AstroCam {
     //
     for ( const auto &con : this->controller ) {
       if (!con.second.configured) continue;  // skip controllers not configured
-      // But only use it if the device is open
+      // But only use it if the device is open and active
       //
-      if ( con.second.connected ) {
+      if ( con.second.connected && con.second.active ) {
         std::stringstream lodfilestream;
         lodfilestream << con.second.devnum << " " << con.second.firmware;
 
@@ -3668,7 +3671,8 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -3676,7 +3680,8 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -3798,7 +3803,8 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -3806,7 +3812,8 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -3918,7 +3925,8 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -3926,7 +3934,8 @@ for ( const auto &dev : selectdev ) {
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -4289,6 +4298,7 @@ logwrite(function, message.str());
       if ( this->in_readout() ) {
         message.str(""); message << "ERROR: cannot change exposure time while reading out chan ";
         for ( const auto &con : this->controller ) {
+          if (!con.second.active) continue;  // skip inactive controllers
           if ( con.second.in_readout || con.second.in_frametransfer ) message << con.second.channel << " ";
         }
         this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
@@ -4656,7 +4666,8 @@ logwrite(function, message.str());
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -4664,7 +4675,8 @@ logwrite(function, message.str());
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -4755,7 +4767,8 @@ logwrite(function, message.str());
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -4763,7 +4776,8 @@ logwrite(function, message.str());
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -5082,7 +5096,8 @@ logwrite(function, message.str());
       retstring.append( "  Specify <chan> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.channel << " ";
       }
       message << "}\n";
@@ -5090,7 +5105,8 @@ logwrite(function, message.str());
       retstring.append( "       or <dev#> from { " );
       message.str("");
       for ( const auto &con : this->controller ) {
-        if (!con.second.configured) continue;  // skip controllers not configured
+        // skip unconfigured and inactive controllers
+        if (!con.second.configured || !con.second.active) continue;
         message << con.second.devnum << " ";
       }
       message << "}\n";
@@ -6434,7 +6450,9 @@ logwrite(function, message.str());
 
       for ( auto &con : this->controller ) {
         if (!con.second.configured) continue;  // skip controllers not configured
-        message.str(""); message << "controller[" << con.second.devnum << "] connected:" << ( con.second.connected ? "T" : "F" )
+        message.str(""); message << "controller[" << con.second.devnum << "]"
+                                 << " connected:" << ( con.second.connected ? "T" : "F" )
+                                 << " active:" << ( con.second.active ? "T" : "F" )
                                  << " bufsize:" << con.second.get_bufsize()
                                  << " rows:" << con.second.rows << " cols:" << con.second.cols
                                  << " in_readout:" << ( con.second.in_readout ? "T" : "F" )
@@ -6541,7 +6559,7 @@ logwrite(function, message.str());
       retstring.clear();
       try {
       for ( auto &con : this->controller ) {
-        if ( con.second.pArcDev != nullptr && con.second.connected ) {
+        if ( con.second.pArcDev != nullptr && con.second.connected && con.second.active ) {
           bool isreadout = con.second.pArcDev->isReadout();
           error=NO_ERROR;
           retstring += (isreadout ? "T " : "F ");
@@ -6567,7 +6585,7 @@ logwrite(function, message.str());
       retstring="no_controllers";
       try {
       for ( auto &con : this->controller ) {
-        if ( con.second.pArcDev != nullptr && con.second.connected ) {
+        if ( con.second.pArcDev != nullptr && con.second.connected && con.second.active ) {
           uint32_t pixelcount = con.second.pArcDev->getPixelCount();
           error=NO_ERROR;
           retstring = std::to_string(pixelcount);
