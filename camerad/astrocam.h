@@ -965,6 +965,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           std::atomic<bool> in_readout;    //!< Is the controller currently reading out/transmitting pixels?
           std::atomic<bool> in_frametransfer;  //!< Is the controller currently performing a frame transfer?
 
+          std::vector<std::string> activate_commands;
+
           // Functions
           //
           inline uint32_t get_bufsize() { return this->bufsize; };
@@ -1026,6 +1028,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long parse_spec_info( std::string args );
       long parse_det_geometry( std::string args );
       long parse_controller_config( std::string args );
+      long parse_activate_commands(std::string args);
       int  devnum_from_chan( const std::string &chan );
       long extract_dev_chan( std::string args, int &dev, std::string &chan, std::string &retstring );
       long test(std::string args, std::string &retstring);                 ///< test routines

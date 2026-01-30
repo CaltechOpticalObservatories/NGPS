@@ -648,6 +648,57 @@ namespace AstroCam {
   /***** AstroCam::Interface::parse_controller_config *************************/
 
 
+  /***** AstroCam::Interface::parse_activate_commands *************************/
+  /**
+   * @brief      parses the ACTIVATE_COMMANDS keywords from config file
+   * @param[in]  args  expected format is "CHAN CMD [, CMD, CMD, ...]"
+   *
+   */
+  long Interface::parse_activate_commands(std::string args) {
+    const std::string function("AstroCam::Interface::parse_activate_commands");
+    logwrite(function, args);
+
+    std::istringstream iss(args);
+
+    // get the channel
+    std::string chan;
+    if (!std::getline(iss, chan, ' ')) {
+      logwrite(function, "ERROR bad config. expected <chan> <cmd>, <cmd>, ...");
+      return ERROR;
+    }
+
+    // get device number for that channel
+    int dev;
+    try {
+      dev = devnum_from_chan(chan);
+    }
+    catch(const std::exception &e) {
+      logwrite(function, "ERROR: "+std::string(e.what()));
+      return ERROR;
+    }
+
+    // get the list of commands
+    std::string cmdlist;
+    if (!std::getline(iss, cmdlist)) {
+      logwrite(function, "ERROR bad config. expected <chan> <cmd>, <cmd>, ...");
+      return ERROR;
+    }
+
+    // get a pointer to this configured controller
+    auto pcontroller = this->get_controller(dev);
+    if (!pcontroller) {
+      logwrite(function, "ERROR bad controller for channel "+chan);
+      return ERROR;
+    }
+
+    // tokenize inserts each command into a vector element
+    Tokenize(cmdlist, pcontroller->activate_commands, ",");
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::parse_activestate_commands **********************/
+
+
   /***** AstroCam::Interface::devnum_from_chan ********************************/
   /**
    * @brief      return the devnum associated with a channel name
@@ -1385,6 +1436,14 @@ namespace AstroCam {
       // DETECTOR_GEOMETRY
       if ( this->config.param[entry] == "DETECTOR_GEOMETRY" ) {
         if ( this->parse_det_geometry(this->config.arg[entry]) != ERROR ) {
+          numapplied++;
+        }
+      }
+      else
+
+      // ACTIVATE_COMMANDS
+      if (this->config.param[entry]=="ACTIVATE_COMMANDS") {
+        if (this->parse_activate_commands(this->config.arg[entry]) != ERROR) {
           numapplied++;
         }
       }
@@ -5513,12 +5572,16 @@ logwrite(function, message.str());
     //
     switch (cmd) {
 
-      // first set active flag, then turn on power
+      // first set active flag, then send activation commands
       case AstroCam::ActiveState::Activate:
         pcontroller->active = true;
         // add this devnum to the active_devnums list
         add_dev(dev, this->active_devnums);
-        error=this->do_native( dev, std::string("PON"), retstring );
+        // send the activation commands
+        for (const auto &cmd : pcontroller->activate_commands) {
+          error |= this->do_native(dev, std::string(cmd), retstring);
+          std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
         break;
 
       // first turn off power, then clear active flag
@@ -5554,19 +5617,15 @@ logwrite(function, message.str());
    */
   Interface::Controller* Interface::get_controller(const int dev) {
     const std::string function("AstroCam::Interface::get_controller");
-    std::ostringstream oss;
 
     auto it = this->controller.find(dev);
 
     if (it==this->controller.end()) {
-      oss << "controller for dev " << dev << " not found";
-      logwrite(function, oss.str());
+      logwrite(function, "controller for dev "+std::to_string(dev)+" not found");
       return nullptr;
     }
 
-    Controller &con = it->second;
-
-    return &con;
+    return &it->second;
   }
   /***** AstroCam::Interface::get_controller **********************************/
 
