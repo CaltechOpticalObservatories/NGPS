@@ -689,7 +689,7 @@ namespace Sequencer {
     //
     if ( (   this->ra_hms.empty() && ! this->dec_dms.empty() ) ||
          ( ! this->ra_hms.empty() &&   this->dec_dms.empty() ) ) {
-      message.str(""); message << "ERROR cannot have only RA or only DEC empty. both must be empty or filled";
+      message << "ERROR cannot have only RA or only DEC empty. both must be empty or filled";
       status = message.str();
       logwrite( function, message.str() );
       return ERROR;
@@ -700,7 +700,7 @@ namespace Sequencer {
     if ( ! this->ra_hms.empty() ) {
       double _rah = radec_to_decimal( this->ra_hms );  // convert RA from HH:MM:SS.s to decimal hours
       if ( _rah < 0 ) {
-        message.str(""); message << "ERROR cannot have negative RA " << this->ra_hms;
+        message << "ERROR cannot have negative RA " << this->ra_hms;
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
@@ -712,7 +712,7 @@ namespace Sequencer {
     if ( ! this->dec_dms.empty() ) {
       double _dec = radec_to_decimal( this->dec_dms );  // convert DEC from DD:MM:SS.s to decimal degrees
       if ( _dec < -90.0 || _dec > 90.0 ) {
-        message.str(""); message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
+        message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
@@ -727,13 +727,17 @@ namespace Sequencer {
     else {
       if ( ! caseCompareString( this->pointmode, Acam::POINTMODE_ACAM ) &&
            ! caseCompareString( this->pointmode, Acam::POINTMODE_SLIT ) ) {
-        message.str(""); message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
-                                 << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
+        message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
+                << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
       }
     }
+
+    // number of exposures must be >= 1
+    //
+    if (this->nexp <= 0) this->nexp=1;
 
     return NO_ERROR;
   }
