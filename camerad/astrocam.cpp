@@ -536,9 +536,9 @@ namespace AstroCam {
     if (!(iss >> dev
               >> chan
               >> id
+              >> ft
               >> firm
-              >> amp
-              >> ft)) {
+              >> amp)) {
       logwrite(function, "ERROR bad config. expected  { PCIDEV CHAN ID FT FIRMWARE READOUT }");
       return ERROR;
     }
