@@ -132,12 +132,14 @@ namespace Sequencer {
   class CalibrationTarget {
     public:
       CalibrationTarget() :
+        chans { "U", "G", "R", "I" },
         lampnames { "LAMPTHAR", "LAMPFEAR", "LAMPBLUC", "LAMPREDC" },
         domelampnames { "LOLAMP", "HILAMP" } { }
 
       ///< struct holds all calibration parameters not in the target database
       typedef struct {
         std::string name;                  // calibration target name
+        std::map<std::string, bool> channel_active;  // true=on
         bool caldoor;                      // true=open
         bool calcover;                     // true=open
         std::map<std::string, bool> lamp;  // true=on
@@ -160,6 +162,7 @@ namespace Sequencer {
 
     private:
       std::unordered_map<std::string, calinfo_t> calmap;
+      std::vector<std::string> chans;
       std::vector<std::string> lampnames;
       std::vector<std::string> domelampnames;
   };
