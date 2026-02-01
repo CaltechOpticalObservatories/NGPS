@@ -13,6 +13,11 @@
 
 #include "sequence.h"
 
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 namespace Sequencer {
 
   constexpr long CAMERA_PROLOG_TIMEOUT = 6000;  ///< timeout msec to send camera prolog command
@@ -560,40 +565,160 @@ namespace Sequencer {
  *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
  ***/
 
-      // If not a calibration target then introduce a pause for the user
-      // to make adjustments, send offsets, etc.
+      // If not a calibration target then handle acquisition automation
       //
       if ( !this->target.iscal ) {
-
-        // waiting for user signal (or cancel)
-        //
-        // The sequencer is effectively paused waiting for user input. This
-        // gives the user a chance to ensure the correct target is on the slit,
-        // select offset stars, etc.
-        //
         {
-        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
-
-        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
-
-        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        std::stringstream mode_msg;
+        mode_msg << "NOTICE: acquisition automation mode " << this->acq_automatic_mode;
+        this->async.enqueue_and_log( function, mode_msg.str() );
         }
 
-        this->async.enqueue_and_log( function, "NOTICE: received "
-                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                               +" signal!" );
-        }  // end scope for wait_state = WAIT_USER
+        auto wait_for_user = [&](const std::string &notice) -> bool {
+          this->is_usercontinue.store(false);
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+          this->async.enqueue_and_log( function, "NOTICE: "+notice );
+          while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+            std::unique_lock<std::mutex> lock(cv_mutex);
+            this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+          }
+          this->async.enqueue_and_log( function, "NOTICE: received "
+                                                 +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                                 +" signal!" );
+          if ( this->cancel_flag.load() ) return false;
+          this->is_usercontinue.store(false);
+          return true;
+        };
 
-        if ( this->cancel_flag.load() ) {
-          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-          return;
+        auto wait_for_guiding = [&]() -> long {
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE );
+          this->async.enqueue_and_log( function, "NOTICE: waiting for ACAM guiding" );
+          auto start_time = std::chrono::steady_clock::now();
+          const bool use_timeout = ( this->acquisition_timeout > 0 );
+          const auto timeout = std::chrono::duration<double>( this->acquisition_timeout );
+          while ( !this->cancel_flag.load() ) {
+            std::string reply;
+            if ( this->acamd.command( ACAMD_ACQUIRE, reply ) != NO_ERROR ) {
+              logwrite( function, "ERROR reading ACAM acquire state" );
+              return ERROR;
+            }
+            if ( reply.find( "guiding" ) != std::string::npos ) return NO_ERROR;
+            if ( reply.find( "stopped" ) != std::string::npos ) return ERROR;
+            if ( use_timeout && std::chrono::steady_clock::now() > ( start_time + timeout ) ) return TIMEOUT;
+            std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+          }
+          return ERROR;
+        };
+
+        auto run_fine_tune = [&]() -> long {
+          if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
+          this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
+
+          pid_t pid = fork();
+          if ( pid == 0 ) {
+            execl( "/bin/sh", "sh", "-c", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
+            _exit(127);
+          }
+          if ( pid < 0 ) {
+            logwrite( function, "ERROR starting fine tune command: "+this->acq_fine_tune_cmd );
+            return ERROR;
+          }
+
+          int status = 0;
+          while ( true ) {
+            pid_t result = waitpid( pid, &status, WNOHANG );
+            if ( result == pid ) break;
+            if ( result < 0 ) {
+              logwrite( function, "ERROR waiting on fine tune command" );
+              return ERROR;
+            }
+            if ( this->cancel_flag.load() ) {
+              this->async.enqueue_and_log( function, "NOTICE: abort requested; terminating fine tune" );
+              kill( pid, SIGTERM );
+              auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+              while ( std::chrono::steady_clock::now() < deadline ) {
+                result = waitpid( pid, &status, WNOHANG );
+                if ( result == pid ) break;
+                std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+              }
+              if ( result != pid ) {
+                kill( pid, SIGKILL );
+                waitpid( pid, &status, 0 );
+              }
+              return ERROR;
+            }
+            std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+          }
+
+          if ( WIFEXITED( status ) && WEXITSTATUS( status ) == 0 ) {
+            this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+            return NO_ERROR;
+          }
+
+          logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
+          return ERROR;
+        };
+
+        if ( this->acq_automatic_mode == 1 ) {
+          if ( !wait_for_user( "waiting for USER to send \"continue\" signal" ) ) {
+            this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+            return;
+          }
         }
+        else {
+          if ( this->acq_automatic_mode == 2 ) {
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition" ) ) {
+              this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              return;
+            }
+          }
 
-        this->is_usercontinue.store(false);
+          this->async.enqueue_and_log( function, "NOTICE: starting acquisition" );
+          std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
 
-        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+          long acqerr = wait_for_guiding();
+          if ( acqerr != NO_ERROR ) {
+            std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
+            this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (guiding failed)" ) ) {
+              this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              return;
+            }
+          }
+          else {
+            bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
+            if ( !fine_tune_ok ) {
+              this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
+                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                return;
+              }
+            }
+
+            if ( fine_tune_ok ) {
+              if ( this->acq_automatic_mode == 2 ) {
+                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose" ) ) {
+                  this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                  return;
+                }
+              }
+              else if ( this->acq_automatic_mode == 3 ) {
+                if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+                  this->async.enqueue_and_log( function, "NOTICE: applying target offset automatically" );
+                  error |= this->target_offset();
+                  if ( error != NO_ERROR ) {
+                    this->thread_error_manager.set( THR_ACQUISITION );
+                    return;
+                  }
+                  if ( this->acq_offset_settle > 0 ) {
+                    this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                    std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+                  }
+                }
+              }
+            }
+          }
+        }
 
         // Ensure slit offset is in "expose" position
         //

@@ -160,6 +160,9 @@ ACQUIRE_RETRYS=5                     # max number of retrys before acquisition f
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
+ACQ_AUTOMATIC_MODE=1                 # 1=legacy, 2=semi-auto, 3=auto
+ACQ_FINE_TUNE_CMD=ngps_acq           # command to run after guiding for final fine tune
+ACQ_OFFSET_SETTLE=0                  # seconds to wait after automatic offset
 
 # Calibration Settings
 # CAL_TARGET=(name caldoor calcover lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)

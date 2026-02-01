@@ -312,6 +312,9 @@ namespace Sequencer {
           arm_readout_flag(false),
           acquisition_timeout(0),
           acquisition_max_retrys(-1),
+          acq_automatic_mode(1),
+          acq_fine_tune_cmd("ngps_acq"),
+          acq_offset_settle(0),
           tcs_offsetrate_ra(45),
           tcs_offsetrate_dec(45),
           tcs_settle_timeout(10),
@@ -369,6 +372,9 @@ namespace Sequencer {
 
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
+      int acq_automatic_mode;     ///< acquisition automation mode (1=legacy, 2=semi-auto, 3=auto)
+      std::string acq_fine_tune_cmd; ///< fine-tune command to run after guiding
+      double acq_offset_settle;   ///< seconds to wait after automatic offset
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
       double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
       double tcs_settle_timeout;  ///< timeout for telescope to settle (in sec) set by configuration parameter TCS_SETTLE_TIMEOUT

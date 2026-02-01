@@ -392,6 +392,58 @@ namespace Sequencer {
         applied++;
       }
 
+      // ACQ_AUTOMATIC_MODE
+      if (config.param[entry] == "ACQ_AUTOMATIC_MODE") {
+        int mode=1;
+        try {
+          mode = std::stoi( config.arg[entry] );
+          if ( mode < 1 || mode > 3 ) {
+            message.str(""); message << "ERROR: ACQ_AUTOMATIC_MODE " << mode << " out of range {1:3}";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ACQ_AUTOMATIC_MODE: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        this->sequence.acq_automatic_mode = mode;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // ACQ_FINE_TUNE_CMD
+      if (config.param[entry] == "ACQ_FINE_TUNE_CMD") {
+        this->sequence.acq_fine_tune_cmd = config.arg[entry];
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // ACQ_OFFSET_SETTLE
+      if (config.param[entry] == "ACQ_OFFSET_SETTLE") {
+        double settle=0;
+        try {
+          settle = std::stod( config.arg[entry] );
+          if ( settle < 0 ) {
+            message.str(""); message << "ERROR: ACQ_OFFSET_SETTLE " << settle << " out of range (>=0)";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ACQ_OFFSET_SETTLE: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        this->sequence.acq_offset_settle = settle;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
       // TCS_WHICH -- which TCS to connect to, defults to real if not specified
       if ( config.param[entry] == "TCS_WHICH" ) {
         if ( config.arg[entry] != "sim" && config.arg[entry] != "real" ) {
@@ -1440,6 +1492,41 @@ namespace Sequencer {
                   this->sequence.usercontinue();
                   std::thread( &Sequencer::Sequence::reset_usercontinue, std::ref(this->sequence) ).detach();
                   ret = NO_ERROR;
+      }
+      else
+
+      // Set/Get acquisition automation mode
+      //
+      if ( cmd == SEQUENCERD_ACQMODE ) {
+                  if ( args.empty() || args == "?" || args == "help" ) {
+                    retstring = SEQUENCERD_ACQMODE + " [ <mode> ]\n";
+                    retstring.append( "  Set or get acquisition automation mode.\n" );
+                    retstring.append( "  <mode> = { 1 (legacy), 2 (semi-auto), 3 (auto) }\n" );
+                    if ( args.empty() ) {
+                      retstring.append( "  current mode = " + std::to_string(this->sequence.acq_automatic_mode) + "\n" );
+                    }
+                    ret = HELP;
+                  }
+                  else {
+                    try {
+                      int mode = std::stoi( args );
+                      if ( mode < 1 || mode > 3 ) {
+                        this->sequence.async.enqueue_and_log( function, "ERROR: acqmode out of range {1:3}" );
+                        ret = ERROR;
+                      }
+                      else {
+                        this->sequence.acq_automatic_mode = mode;
+                        message.str(""); message << "NOTICE: acqmode set to " << mode;
+                        this->sequence.async.enqueue_and_log( function, message.str() );
+                        retstring = std::to_string( mode );
+                        ret = NO_ERROR;
+                      }
+                    }
+                    catch ( const std::exception & ) {
+                      this->sequence.async.enqueue_and_log( function, "ERROR: invalid acqmode argument" );
+                      ret = ERROR;
+                    }
+                  }
       }
       else
 
