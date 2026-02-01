@@ -3445,6 +3445,26 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::target_offset");
     long error=NO_ERROR;
 
+    bool is_guiding = false;
+    std::string reply;
+    if ( this->acamd.command( ACAMD_ACQUIRE, reply ) == NO_ERROR ) {
+      if ( reply.find( "guiding" ) != std::string::npos ) is_guiding = true;
+    }
+    else {
+      logwrite( function, "ERROR reading ACAM guide state, falling back to TCS offset" );
+    }
+
+    if ( is_guiding ) {
+      // ACAMD_OFFSETGOAL expects degrees; target offsets are arcsec
+      const double dra_deg = this->target.offset_ra / 3600.0;
+      const double ddec_deg = this->target.offset_dec / 3600.0;
+      std::stringstream cmd;
+      cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << dra_deg << " " << ddec_deg;
+      error = this->acamd.command( cmd.str() );
+      logwrite( function, "sent "+cmd.str()+" (guiding)" );
+      return error;
+    }
+
     error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
 
     std::stringstream cmd;
