@@ -2,8 +2,8 @@
 camera close
 camera open
 #camera load
-camera load 0 /home/developer/Software/DSP/lod/____sg2.lod
-camera load 1 /home/developer/Software/DSP/lod/____engg.lod
+camera load 0 /Users/cfremling/Projects/NGPS_codebase/NGPS/DSP/lod/____sg2.lod
+camera load 1 /Users/cfremling/Projects/NGPS_codebase/NGPS/DSP/lod/____engg.lod
 camera native CSH
 camera native PON
 camera native ERS 1000 1000

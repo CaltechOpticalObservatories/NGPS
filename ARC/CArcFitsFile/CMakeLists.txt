@@ -24,7 +24,8 @@ add_library( CArcFitsFile SHARED
         ${CARC_FITS_DIR}/src/CArcFitsFileDllMain.cpp
         )
 
-target_link_libraries( CArcFitsFile stdc++fs )
+if ( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+  target_link_libraries( CArcFitsFile stdc++fs )
+endif()
 target_link_libraries( CArcFitsFile CArcBase )
 target_link_libraries( CArcFitsFile ${CFITS_LIB} )
-

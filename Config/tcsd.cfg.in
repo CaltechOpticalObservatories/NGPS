@@ -28,7 +28,7 @@ TCS_HOST="sim localhost @TCS_PORT@"          # simulated TCS: name address port
 
 # Which of the above TCS_HOSTs to use by default
 #
-DEFAULT_TCS=real
+DEFAULT_TCS=sim
 
 TCS_OFFSET_RATE=45               # TCS offset rate in arcsec per second
 
@@ -41,4 +41,3 @@ EMULATOR_SLEWRATE_CASANGLE=2     # emulator slew rate in deg/s for CASANGLE
 EMULATOR_SETTLE_RA=12            # emulator settling time in s for RA
 EMULATOR_SETTLE_DEC=12           # emulator settling time in s for DEC
 EMULATOR_SETTLE_CASANLGE=0.5     # emulator settling time in s for CASANGLE
-

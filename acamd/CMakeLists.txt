@@ -12,19 +12,29 @@ set( CMAKE_CXX_STANDARD 17 )
 
 # C-Python API Development libraries and headers
 #
-find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
+find_package( Python3 COMPONENTS Development )
+if ( Python3_FOUND )
+  list( GET Python3_INCLUDE_DIRS 0 PYTHON_DEV )
+  list( GET Python3_LIBRARIES 0 PYTHON_LIB )
+else()
+  find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
+  find_library( PYTHON_LIB NAMES python3.9 libpython3.9 PATHS /usr/lib64 )
+endif()
+if ( UNIX AND NOT APPLE )
+  add_link_options( -lcrypt -lpthread -ldl -lutil -lm -lm )
+endif()
 
 # ZeroMQ
 #
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
 
 # CFITSIO, CCfits
 #
-find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib )
-find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib )
+find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib /opt/homebrew/lib )
+find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib /opt/homebrew/lib )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/PI )
@@ -37,9 +47,13 @@ include_directories( ${PYTHON_DEV} )
 # -- MySQL database ------------------------------------------------------------
 #
 set ( MYSQL_DIR "/usr/local/mysql/connector" )
-find_path( MYSQL_API "mysqlx/xdevapi.h" PATHS ${MYSQL_DIR}/include )
+find_path( MYSQL_API "mysqlx/xdevapi.h"
+           PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++
+           PATH_SUFFIXES include )
 set( MYSQL_INCLUDES "${MYSQL_API}" )
-find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64 )
+find_library( MYSQL_LIB NAMES mysqlcppconnx mysqlcppconn8 mysqlcppconn
+              PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++
+              PATH_SUFFIXES lib lib64 )
 include_directories( ${MYSQL_INCLUDES} )
 
 set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
@@ -62,7 +76,6 @@ add_executable(acamd
 
 target_link_libraries(acamd
         andor
-        python3.9
         physik_instrumente
         network
         common
@@ -88,7 +101,6 @@ add_executable( newpytest
         )
 
 target_link_libraries( newpytest
-        python3.9
         ${PYTHON_LIB}
         )
 
@@ -98,7 +110,6 @@ add_executable( pytest
         )
 
 target_link_libraries( pytest
-        python3.9
         ${PYTHON_LIB}
         )
 

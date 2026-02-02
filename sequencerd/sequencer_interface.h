@@ -10,6 +10,8 @@
 #include <map>
 #include <string>
 #include <atomic>
+#include <cstdint>
+#include <type_traits>
 #include "skyinfo.h"
 
 #include "network.h"
@@ -245,7 +247,9 @@ namespace Sequencer {
           // field is not empty
           //
           if ( !row[col].isNull() ) {
-            T value = row.get(col).get<T>();                              // extract the value from the field
+            using DbT = std::conditional_t<std::is_same_v<T, long>, int64_t,
+                         std::conditional_t<std::is_same_v<T, unsigned long>, uint64_t, T>>;
+            DbT value = row.get(col).get<DbT>();                          // extract the value from the field
 
             // if this is a string, find and replace emdash with minus sign
             if constexpr (std::is_same_v<T,std::string> || std::is_same_v<T,mysqlx::string>) {
@@ -254,7 +258,7 @@ namespace Sequencer {
               if (pos != std::string::npos) svalue.replace(pos, 3, "-");  // replace with ASCII minus sign
               return static_cast<T>(svalue);
             }
-            return value;
+            return static_cast<T>(value);
           }
 
           // If the field is empty and a default value was specified,

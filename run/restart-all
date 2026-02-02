@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: restart-all [--all-logs] [--no-start] [--gui]
+
+  --all-logs  Remove logs for all dates (default: only today's logs)
+  --no-start  Only stop/clean; do not restart emulators/daemons
+  --gui       Launch DS9 GUIs after restart
+EOF
+}
+
+ALL_LOGS=0
+NO_START=0
+DO_GUI=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --all-logs) ALL_LOGS=1 ;;
+    --no-start) NO_START=1 ;;
+    --gui) DO_GUI=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $arg" >&2; usage; exit 1 ;;
+  esac
+done
+
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+NGPS_ROOT="${NGPS_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
+
+if [ -f "${NGPS_ROOT}/env.sh" ]; then
+  # shellcheck source=/dev/null
+  source "${NGPS_ROOT}/env.sh"
+fi
+
+NGPS_DATA_DIR="${NGPS_DATA_DIR:-${NGPS_ROOT}/data}"
+
+echo "Stopping NGPS daemons and emulators..."
+"${NGPS_ROOT}/run/ngps" stop || true
+"${NGPS_ROOT}/run/ngps" kill || true
+"${NGPS_ROOT}/run/emulator" stop all || true
+
+echo "Killing lingering GUI helpers and DS9/XPA..."
+pkill -f "GuiderGUI/make_guider_fifo.sh" 2>/dev/null || true
+pkill -f "GuiderGUI/make_slicev_fifo.sh" 2>/dev/null || true
+pkill -f "SAOImageDS9|ds9|xpaset|xpaget|xpaaccess" 2>/dev/null || true
+
+echo "Removing stale FIFOs and temp files..."
+rm -f /tmp/.guider_warning.fifo /tmp/.slicev_warning.fifo
+rm -f /tmp/acam.fits /tmp/slicecam.fits /tmp/skysim*
+rm -f /tmp/*d.stderr /tmp/ngps_*.ds9.log
+
+echo "Cleaning logs..."
+if [ "$ALL_LOGS" -eq 1 ]; then
+  find "$NGPS_DATA_DIR" -maxdepth 2 -type d -name logs -exec rm -f {}/* \; 2>/dev/null || true
+else
+  today="$(date +%Y%m%d)"
+  rm -f "$NGPS_DATA_DIR/$today/logs/"* 2>/dev/null || true
+fi
+
+if [ "$NO_START" -eq 1 ]; then
+  echo "Clean slate done (no restart requested)."
+  exit 0
+fi
+
+echo "Starting emulators..."
+"${NGPS_ROOT}/run/emulator" start all
+
+echo "Starting NGPS daemons..."
+"${NGPS_ROOT}/run/ngps" start
+
+if [ "$DO_GUI" -eq 1 ]; then
+  echo "Launching GUIs..."
+  "${NGPS_ROOT}/GuiderGUI/launch_gui.sh" guider
+  "${NGPS_ROOT}/GuiderGUI/launch_gui.sh" slicev
+fi
+
+echo "Done."

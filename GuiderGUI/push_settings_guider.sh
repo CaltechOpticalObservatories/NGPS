@@ -35,6 +35,7 @@ sed -e "s/DEFexptime/$exptime/" \
     $anstemplate > $ansfile
 
 # load analysis file
-if ${update_menu,,}; then  # bool must be lowercase
+update_menu_lc=$(printf '%s' "$update_menu" | tr '[:upper:]' '[:lower:]')
+if [ "$update_menu_lc" = "true" ] || [ "$update_menu_lc" = "1" ] || [ "$update_menu_lc" = "yes" ]; then
     xpaset -p $id analysis clear load $ansfile
 fi

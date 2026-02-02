@@ -12,19 +12,29 @@ set( CMAKE_CXX_STANDARD 17 )
 
 # C-Python API Development libraries and headers
 #
-find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
+find_package( Python3 COMPONENTS Development )
+if ( Python3_FOUND )
+  list( GET Python3_INCLUDE_DIRS 0 PYTHON_DEV )
+  list( GET Python3_LIBRARIES 0 PYTHON_LIB )
+else()
+  find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
+  find_library( PYTHON_LIB NAMES python3.9 libpython3.9 PATHS /usr/lib64 )
+endif()
+if ( UNIX AND NOT APPLE )
+  add_link_options( -lcrypt -lpthread -ldl -lutil -lm -lm )
+endif()
 
 # ZeroMQ
 #
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
 
 # CFITSIO, CCfits
 #
-find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib )
-find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib )
+find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib /opt/homebrew/lib )
+find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib /opt/homebrew/lib )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/Andor )
@@ -43,7 +53,6 @@ add_executable(slicecamd
 
 target_link_libraries(slicecamd
         andor
-        python3.9
         network
         common
         tcsd_client

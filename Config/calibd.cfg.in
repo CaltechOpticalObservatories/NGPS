@@ -34,10 +34,10 @@ EMULATOR=@CALIBD_EMULATOR@
 #
 # For calibd, one controller must be named "cover" and the other must be "door"
 #
-MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
-MOTOR_CONTROLLER="door  @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
-#MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
-#MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
+#MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
+#MOTOR_CONTROLLER="door  @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
+MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emulator
+MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"
@@ -67,8 +67,8 @@ MOTOR_POS="door  1 1  0.0 close"
 # Lamp modulator arduino host:
 # LAMPMOD_HOST="<host> <port>"
 #
-LAMPMOD_HOST="@IP_LAMP_MODULATOR@ 23"
-#LAMPMOD_HOST="localhost @CALIBD_EMULATOR@"  # emulator
+#LAMPMOD_HOST="@IP_LAMP_MODULATOR@ 23"
+LAMPMOD_HOST="localhost @CALIBD_EMULATOR@"  # emulator
 
 # Lamp modulators:
 # LAMPMOD_MOD="<num> <name> <D> <T>"

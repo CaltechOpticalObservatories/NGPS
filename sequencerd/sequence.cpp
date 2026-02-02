@@ -14,6 +14,7 @@
 #include "sequence.h"
 
 #include <signal.h>
+#include <cstdlib>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -591,7 +592,7 @@ namespace Sequencer {
         };
 
         auto wait_for_guiding = [&]() -> long {
-          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE );
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_GUIDE );
           this->async.enqueue_and_log( function, "NOTICE: waiting for ACAM guiding" );
           auto start_time = std::chrono::steady_clock::now();
           const bool use_timeout = ( this->acquisition_timeout > 0 );
@@ -614,8 +615,39 @@ namespace Sequencer {
           if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
           this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
 
+          std::string xterm_bin;
+          if ( this->acq_fine_tune_xterm ) {
+            const char *env_xterm = std::getenv( "NGPS_XTERM" );
+            if ( env_xterm && *env_xterm && access( env_xterm, X_OK ) == 0 ) {
+              xterm_bin = env_xterm;
+            }
+            else if ( access( "/opt/X11/bin/xterm", X_OK ) == 0 ) {
+              xterm_bin = "/opt/X11/bin/xterm";
+            }
+            else if ( access( "/usr/X11/bin/xterm", X_OK ) == 0 ) {
+              xterm_bin = "/usr/X11/bin/xterm";
+            }
+            else if ( access( "/opt/homebrew/bin/xterm", X_OK ) == 0 ) {
+              xterm_bin = "/opt/homebrew/bin/xterm";
+            }
+
+            if ( xterm_bin.empty() ) {
+              this->async.enqueue_and_log( function, "WARNING: ACQ_FINE_TUNE_XTERM enabled but xterm not found; running without xterm" );
+            }
+            else {
+              this->async.enqueue_and_log( function, "NOTICE: launching fine tune in xterm: "+xterm_bin );
+            }
+          }
+
           pid_t pid = fork();
           if ( pid == 0 ) {
+            // make a dedicated process group so we can signal the whole tree
+            setpgid( 0, 0 );
+            if ( this->acq_fine_tune_xterm && !xterm_bin.empty() ) {
+              execl( xterm_bin.c_str(), "xterm", "-T", "NGPS Fine Tune", "-e",
+                     "sh", "-lc", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
+              // If xterm is not available, fall back to running directly.
+            }
             execl( "/bin/sh", "sh", "-c", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
             _exit(127);
           }
@@ -623,6 +655,9 @@ namespace Sequencer {
             logwrite( function, "ERROR starting fine tune command: "+this->acq_fine_tune_cmd );
             return ERROR;
           }
+          // Ensure the child is its own process group (best effort).
+          setpgid( pid, pid );
+          this->fine_tune_pid.store( pid );
 
           int status = 0;
           while ( true ) {
@@ -634,7 +669,8 @@ namespace Sequencer {
             }
             if ( this->cancel_flag.load() ) {
               this->async.enqueue_and_log( function, "NOTICE: abort requested; terminating fine tune" );
-              kill( pid, SIGTERM );
+              // terminate the whole fine-tune process group
+              kill( -pid, SIGTERM );
               auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
               while ( std::chrono::steady_clock::now() < deadline ) {
                 result = waitpid( pid, &status, WNOHANG );
@@ -642,14 +678,16 @@ namespace Sequencer {
                 std::this_thread::sleep_for( std::chrono::milliseconds(100) );
               }
               if ( result != pid ) {
-                kill( pid, SIGKILL );
+                kill( -pid, SIGKILL );
                 waitpid( pid, &status, 0 );
               }
+              this->fine_tune_pid.store( 0 );
               return ERROR;
             }
             std::this_thread::sleep_for( std::chrono::milliseconds(100) );
           }
 
+          this->fine_tune_pid.store( 0 );
           if ( WIFEXITED( status ) && WEXITSTATUS( status ) == 0 ) {
             this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
             return NO_ERROR;
@@ -2236,6 +2274,13 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
+    // For simulator runs, skip calibrator control for science targets.
+    if ( !this->target.iscal && this->tcs_which == "sim" ) {
+      this->async.enqueue_and_log( function, "NOTICE: skipping calibrator set for science target in sim mode" );
+      this->thread_error_manager.clear( THR_CALIBRATOR_SET );
+      return NO_ERROR;
+    }
+
     // name will index the caltarget map
     //
     std::string name(this->target.name);
@@ -2346,6 +2391,26 @@ namespace Sequencer {
     //
     this->cancel_flag.store(true);
     this->cv.notify_all();
+
+    // terminate fine tune process if running
+    //
+    pid_t ftpid = this->fine_tune_pid.load();
+    if ( ftpid > 0 ) {
+      logwrite( function, "NOTICE: terminating fine tune process" );
+      kill( -ftpid, SIGTERM );
+      auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      int status = 0;
+      while ( std::chrono::steady_clock::now() < deadline ) {
+        pid_t result = waitpid( ftpid, &status, WNOHANG );
+        if ( result == ftpid ) break;
+        std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+      }
+      if ( waitpid( ftpid, &status, WNOHANG ) == 0 ) {
+        kill( -ftpid, SIGKILL );
+        waitpid( ftpid, &status, 0 );
+      }
+      this->fine_tune_pid.store( 0 );
+    }
 
     // drop into do-one to prevent auto increment to next target
     //

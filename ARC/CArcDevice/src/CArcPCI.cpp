@@ -388,7 +388,7 @@ namespace arc
 					std::ostringstream oss;
 
 		#ifdef __APPLE__
-					oss << "PCI Device " << i << m_vDevList->at( i ).sName << ends;
+					oss << "PCI Device " << i << m_vDevList->at( i ).sName << std::ends;
 		#else
 					oss << "PCI Device " << i << std::ends;
 		#endif
@@ -1812,7 +1812,13 @@ namespace arc
 
 			std::uint64_t uiRetVal = uiArg;
 
+#ifdef __APPLE__
+			ulong uiRetValArg = static_cast<ulong>( uiRetVal );
+			auto iSuccess = Arc_IOCtl( m_hDevice, uiIoctlCmd, &uiRetValArg, sizeof( uiRetValArg ) );
+			uiRetVal = static_cast<std::uint64_t>( uiRetValArg );
+#else
 			auto iSuccess = Arc_IOCtl( m_hDevice, uiIoctlCmd, &uiRetVal, sizeof( uiRetVal ) );
+#endif
 
 			if ( !iSuccess )
 			{

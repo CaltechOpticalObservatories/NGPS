@@ -40,27 +40,27 @@ ACAMD_PORT=@ACAMD_BLK_PORT@
 #
 # Include "emulate" to emulate the Andor and use a serial number in {1001,1002,...,1008}.
 #
-#ANDOR=(L emulate 1002 0.06 1 1 none 0 4 4)
-#ANDOR=(R emulate 1003 0.06 1 1 none 0 4 4)
-ANDOR=(L 14223 0.06 1 1 none -60 4 4)
-ANDOR=(R 10333 0.06 0 0 none -60 4 4)  # from DBSP
+ANDOR=(L emulate 1002 0.06 1 1 none 0 4 4)
+ANDOR=(R emulate 1003 0.06 1 1 none 0 4 4)
+#ANDOR=(L 14223 0.06 1 1 none -60 4 4)
+#ANDOR=(R 10333 0.06 0 0 none -60 4 4)  # from DBSP
 #ANDOR=(R 13452 0.06 0 0 none -60 4 4) # s/n for ACAM
 
 # PUSH_GUI_SETTINGS=<file>
 # This defines the shell script which pushes settings to the
 # SAOimage GUI display.
 #
-PUSH_GUI_SETTINGS=/home/developer/Software/GuiderGUI/push_settings_slicev.sh
+PUSH_GUI_SETTINGS=/Users/cfremling/Projects/NGPS_codebase/NGPS/GuiderGUI/push_settings_slicev.sh
 
 # PUSH_GUI_IMAGE=<file>
 # This defines the shell script which pushes images to the
 # SAOimage GUI display.
 #
-PUSH_GUI_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
+PUSH_GUI_IMAGE=/Users/cfremling/Projects/NGPS_codebase/NGPS/GuiderGUI/push_image.sh
 
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
 # Sets the keyword argument "IMAGE_SIZE=<is>"
 # used for the Python skysim module.
 #
-SKYSIM_IMAGE_SIZE=1024
+SKYSIM_IMAGE_SIZE=256

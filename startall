@@ -1,0 +1,4 @@
+ run/ngps stop
+  run/emulator stop all
+  run/emulator start all
+  run/ngps start

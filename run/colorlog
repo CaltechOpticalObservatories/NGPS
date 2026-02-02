@@ -22,12 +22,14 @@ done
 # if no date provided use the latest date found on disk
 #
 if [[ -z "$DATE" ]]; then
-  DATE=$(ls -1 /data | grep -E '^[0-9]{8}$' | sort -r | head -n 1)
+  DATA_ROOT="${NGPS_DATA_DIR:-/data}"
+  DATE=$(ls -1 "$DATA_ROOT" 2>/dev/null | grep -E '^[0-9]{8}$' | sort -r | head -n 1)
 fi
 
 # log files are located in this directory
 #
-DIR="/data/$DATE/logs"
+DATA_ROOT="${NGPS_DATA_DIR:-/data}"
+DIR="${DATA_ROOT}/${DATE}/logs"
 
 # these are all of the log files
 # if no name provided then use all

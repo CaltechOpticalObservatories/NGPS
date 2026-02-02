@@ -56,26 +56,26 @@ PIXSCALE=0.26
 #
 # Include "emulate" to emulate the Andor and use a serial number in {1001,1002,...,1008}.
 #
-ANDOR=("acam" 13452 0.06 0 0 ccw -60 1 1)
-#ANDOR=("acam" emulate 1001 0.06 0 0 ccw 0 1 1)
+#ANDOR=("acam" 13452 0.06 0 0 ccw -60 1 1)
+ANDOR=("acam" emulate 1001 0.06 0 0 ccw 0 1 1)
 
 # PUSH_GUIDER_SETTINGS
 # This defines the shell script which pushes guider settings to the
 # SAOimage GUIDER display.
 #
-PUSH_GUIDER_SETTINGS=/home/developer/Software/GuiderGUI/push_settings_guider.sh
+PUSH_GUIDER_SETTINGS=/Users/cfremling/Projects/NGPS_codebase/NGPS/GuiderGUI/push_settings_guider.sh
 
 # PUSH_GUIDER_IMAGE
 # This defines the shell script which pushes guider images to the
 # SAOimage GUIDER display.
 #
-PUSH_GUIDER_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
+PUSH_GUIDER_IMAGE=/Users/cfremling/Projects/NGPS_codebase/NGPS/GuiderGUI/push_image.sh
 
 # PUSH_GUIDER_MESSAGE
 # This defines the shell script which pushes guider message to the
 # SAOimage GUIDER display.
 #
-PUSH_GUIDER_MESSAGE=/home/developer/Software/GuiderGUI/message.sh
+PUSH_GUIDER_MESSAGE=/Users/cfremling/Projects/NGPS_codebase/NGPS/GuiderGUI/message.sh
 
 # ASTRONOMY SOLVER
 #
@@ -99,9 +99,9 @@ PUSH_GUIDER_MESSAGE=/home/developer/Software/GuiderGUI/message.sh
 #
 # For acamd, one controller must be named "filter" and the other must be named "cover"
 #
-MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
+#MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
 #MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
-#MOTOR_CONTROLLER="filter localhost @ACAMD_EMULATOR@ 1 1"     # emulator
+MOTOR_CONTROLLER="filter localhost @ACAMD_EMULATOR@ 1 1"     # emulator
 MOTOR_CONTROLLER="cover  localhost @ACAMD_EMULATOR@ 2 1"     # emulator
 
 # For each actuator's controller specify:

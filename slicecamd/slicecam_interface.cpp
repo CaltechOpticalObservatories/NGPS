@@ -10,6 +10,8 @@
 
 #include "slicecam_interface.h"
 
+#include <filesystem>
+
 namespace Slicecam {
 
   constexpr int OFFSETRATE=20;
@@ -943,7 +945,9 @@ namespace Slicecam {
 
     long error = NO_ERROR;
 
-    fitsinfo.fits_name = outfile;
+    const std::string final_out = outfile;
+    const std::string tmp_out = final_out + ".tmp";
+    fitsinfo.fits_name = tmp_out;
 //  fitsinfo.datatype = USHORT_IMG;
     fitsinfo.datatype = FLOAT_IMG;
 
@@ -990,7 +994,28 @@ namespace Slicecam {
       }
     }
 
-    outfile = fitsinfo.fits_name;
+    // Atomically replace the output FITS so readers never see partial data
+    try {
+      if ( std::filesystem::exists( final_out ) ) {
+        std::filesystem::remove( final_out );
+      }
+      std::filesystem::rename( fitsinfo.fits_name, final_out );
+    }
+    catch ( const std::filesystem::filesystem_error & ) {
+      // Fallback to copy if rename fails for any reason
+      try {
+        std::filesystem::copy_file( fitsinfo.fits_name, final_out,
+                                    std::filesystem::copy_options::overwrite_existing );
+        std::filesystem::remove( fitsinfo.fits_name );
+      }
+      catch ( const std::filesystem::filesystem_error &e ) {
+        message.str(""); message << "ERROR updating output FITS: " << e.what();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+
+    outfile = final_out;
 
     return error;
   }
@@ -1069,6 +1094,26 @@ namespace Slicecam {
       // Set the binning parameters now
       //
       if (error!=ERROR ) error = this->camera.bin( hbin, vbin );
+
+      // Keep skysim IMAGE_SIZE aligned with current binned axes
+      //
+      if ( error == NO_ERROR ) {
+        int simsize = 0;
+        for ( auto &[name, cam] : this->camera.andor ) {
+          if ( !cam ) continue;
+          int ax0 = cam->camera_info.axes[0];
+          int ax1 = cam->camera_info.axes[1];
+          if ( ax0 > 0 && ax1 > 0 ) {
+            int s = ( ax0 < ax1 ? ax0 : ax1 );
+            if ( simsize == 0 || s < simsize ) simsize = s;
+          }
+        }
+        if ( simsize > 0 ) {
+          this->camera.set_simsize( simsize );
+          message.str(""); message << "updated SKYSIM_IMAGE_SIZE to " << simsize;
+          logwrite( function, message.str() );
+        }
+      }
 
       // If framegrab was previously running then restart it
       //
@@ -2003,7 +2048,27 @@ namespace Slicecam {
 
       // build the filename
       std::string basename = filename.substr(0, loc);
-      std::string path = "/data/" + get_latest_datedir("/data") + "/slicecam/";
+      const char* env_root = std::getenv("NGPS_DATA_DIR");
+      std::string data_root = (env_root && *env_root) ? env_root : "/data";
+      std::string datedir = get_latest_datedir( data_root );
+      if ( datedir.empty() ) {
+        int year, mon, mday, hour, min, sec, usec;
+        if ( get_time( year, mon, mday, hour, min, sec, usec ) == 0 ) {
+          std::ostringstream fallback;
+          fallback << std::setw(4) << std::setfill('0') << year
+                   << std::setw(2) << std::setfill('0') << mon
+                   << std::setw(2) << std::setfill('0') << mday;
+          datedir = fallback.str();
+        }
+      }
+      std::string path = data_root + "/" + datedir + "/slicecam/";
+      try {
+        std::filesystem::create_directories( path );
+      }
+      catch ( const std::exception &e ) {
+        logwrite( "Slicecam::Interface::preserve_framegrab", "ERROR creating "+path+": "+std::string(e.what()) );
+        return;
+      }
 
       // make sure the path exists and is writable
       if ( !validate_path( path ) ) {

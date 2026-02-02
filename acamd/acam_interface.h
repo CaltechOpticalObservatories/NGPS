@@ -45,11 +45,29 @@ namespace Acam {
 
   constexpr std::string_view DEFAULT_IMAGENAME = "/tmp/acam.fits";
 
-  constexpr const char* PYTHON_PATH = "/home/developer/Software/Python";
   constexpr const char* PYTHON_ASTROMETRY_MODULE = "astrometry";
   constexpr const char* PYTHON_ASTROMETRY_FUNCTION = "astrometry_cwrap";
   constexpr const char* PYTHON_IMAGEQUALITY_MODULE = "image_quality";
   constexpr const char* PYTHON_IMAGEQUALITY_FUNCTION = "image_quality_cwrap";
+
+  inline const char* python_path() {
+    static std::string path;
+    if ( path.empty() ) {
+      const char* root = std::getenv( "NGPS_ROOT" );
+      if ( root && *root ) {
+        path = std::string( root ) + "/Python";
+      }
+      else {
+        path = "/home/developer/Software/Python";
+      }
+      const char* envpath = std::getenv( "PYTHONPATH" );
+      if ( envpath && *envpath ) {
+        path.append( ":" );
+        path.append( envpath );
+      }
+    }
+    return path.c_str();
+  }
 
   constexpr double PI = 3.14159265358979323846;
 
@@ -160,7 +178,7 @@ namespace Acam {
       inline bool is_initialized() { return this->python_initialized; };
       std::vector<std::string> solver_args;              /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
 
-      CPython::CPyInstance py_instance { PYTHON_PATH };  /// initialize the Python interpreter
+      CPython::CPyInstance py_instance { python_path() };  /// initialize the Python interpreter
 
       PyObject* pAstrometryModule;                       /// astrometry
       PyObject* pQualityModule;                          /// image quality
@@ -482,6 +500,7 @@ namespace Acam {
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
                  dRA(0), dDEC(0),
+                 acam_goal{NAN, NAN, NAN},
                  putonslit_offset(0), last_putonslit_offset(0) { }
   };
   /***** Acam::Target *********************************************************/

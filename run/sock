@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 # name:   sock
 # brief:  shell script to send commands to a server
 # author: David Hale
@@ -19,5 +19,7 @@ do
 done
 
 # send the command string
-/home/developer/Software/bin/socksend -h localhost -p $port "$command" -t 5000
-
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+NGPS_ROOT="${NGPS_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
+HOST="${NGPS_HOST:-127.0.0.1}"
+"${NGPS_ROOT}/bin/socksend" -h "$HOST" -p "$port" "$command" -t 5000

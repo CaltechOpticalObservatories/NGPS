@@ -10,7 +10,7 @@ set( THERMALD_DIR ${PROJECT_BASE_DIR}/thermald )
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -O1 -Wno-variadic-macros -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/LKS )
@@ -21,9 +21,13 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 # -- MySQL database ------------------------------------------------------------
 #
 set ( MYSQL_DIR "/usr/local/mysql/connector" )
-find_path( MYSQL_API "mysqlx/xdevapi.h" PATHS ${MYSQL_DIR}/include )
+find_path( MYSQL_API "mysqlx/xdevapi.h"
+           PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++
+           PATH_SUFFIXES include )
 set( MYSQL_INCLUDES "${MYSQL_API}" )
-find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64 )
+find_library( MYSQL_LIB NAMES mysqlcppconnx mysqlcppconn8 mysqlcppconn
+              PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++
+              PATH_SUFFIXES lib lib64 )
 include_directories( ${MYSQL_INCLUDES} )
 
 add_executable(thermald 

@@ -1,2 +1,16 @@
-#!/bin/sh
-xterm -geometry 75x60 -bg LemonChiffon -fg black -e listen $1 &
+#!/bin/bash
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+
+if command -v xterm >/dev/null 2>&1; then
+  xterm -geometry 75x60 -bg LemonChiffon -fg black -e "${SCRIPT_DIR}/listen" "$@" &
+elif [ "$(uname -s)" = "Darwin" ] && command -v osascript >/dev/null 2>&1; then
+  osascript <<EOF
+tell application "Terminal"
+  do script "cd ${SCRIPT_DIR}; ./listen $*"
+  activate
+end tell
+EOF
+else
+  echo "xterm not found; running listen in this terminal"
+  "${SCRIPT_DIR}/listen" "$@"
+fi

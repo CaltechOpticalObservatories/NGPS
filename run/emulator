@@ -1,3 +1,13 @@
 #!/bin/bash
-source /etc/environment
-sudo -u dataowner -g datawriters /home/developer/Software/run/_emulator "$@"
+if [ -f /etc/environment ]; then
+  source /etc/environment
+fi
+
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+RUNNER="${SCRIPT_DIR}/_emulator"
+
+if id -u dataowner >/dev/null 2>&1; then
+  sudo -u dataowner -g datawriters "${RUNNER}" "$@"
+else
+  "${RUNNER}" "$@"
+fi

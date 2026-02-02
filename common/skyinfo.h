@@ -9,10 +9,10 @@
 
 #include "cpython.h"
 #include <string>
+#include <cstdlib>
 #include <sstream>
 #include "common.h"
 
-#define PYTHON_SKYINFO_PATH "/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_FPOFFSETS_MODULE "FPoffsets"
 #define PYTHON_FPOFFSETS_FUNCTION "compute_offset"
 #define PYTHON_SOLVEOFFSETDEG_FUNCTION "solve_offset_deg"
@@ -22,6 +22,25 @@
 #define PYTHON_LOADCALIBRATION_FUNCTION "load_calibration"
 
 namespace SkyInfo {
+
+  inline const char* python_skyinfo_path() {
+    static std::string path;
+    if ( path.empty() ) {
+      const char* root = std::getenv( "NGPS_ROOT" );
+      if ( root && *root ) {
+        path = std::string( root ) + "/Python/acam_skyinfo";
+      }
+      else {
+        path = "/home/developer/Software/Python/acam_skyinfo";
+      }
+      const char* envpath = std::getenv( "PYTHONPATH" );
+      if ( envpath && *envpath ) {
+        path.append( ":" );
+        path.append( envpath );
+      }
+    }
+    return path.c_str();
+  }
 
   /***** SkyInfo::FPOffsets ***************************************************/
   /**
@@ -35,7 +54,7 @@ namespace SkyInfo {
       char* restore_path;       /// if the PYTHONPATH env variable is changed then remember the original
       bool python_initialized;  /// set true when the Python interpreter has been initialized
 
-      CPython::CPyInstance py_instance { PYTHON_SKYINFO_PATH };  /// initialize the Python interpreter
+      CPython::CPyInstance py_instance { python_skyinfo_path() };  /// initialize the Python interpreter
       PyObject* pModuleName;
       PyObject* pModule;
 

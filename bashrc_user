@@ -10,13 +10,18 @@ if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]
 then
     PATH="$HOME/.local/bin:$HOME/bin:$PATH"
 fi
-PATH="/home/developer/bin:/home/developer/Software/run:/home/developer/Software/bin:/usr/local/bin:$PATH"
+PATH="/usr/local/bin:$PATH"
 export PATH
+
+# NGPS local environment (preferred)
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+if [ -f "${SCRIPT_DIR}/env.sh" ]; then
+    source "${SCRIPT_DIR}/env.sh"
+fi
 
 alias python="/usr/bin/python3.9"
 
-PYTHONPATH="/home/developer/Software/Python:/home/developer/.local/lib/python3.9/site-packages:/usr/local/lib64/python3.9/site-packages"
-export PYTHONPATH
+# PYTHONPATH is set in env.sh
 
 # Data for sky background calculator used by rubin_sim package used by ETC
 export RUBIN_SIM_DATA_DIR="/data/rubin_sim/"
@@ -39,9 +44,11 @@ fi
 # FITS files
 alias lastfits='ls *.fits -Art | tail -n 1'
 #alias lastfits2='ls *.fits -Art | tail -n 2 | head -n 1'  # next to last
-alias ds9last='/home/developer/Software/Python/FITS_tools/ds9last.sh 1'
-alias ds9last1='/home/developer/Software/Python/FITS_tools/ds9last.sh 1'
-alias ds9last2='/home/developer/Software/Python/FITS_tools/ds9last.sh 2'
+if [ -n "${NGPS_ROOT}" ] && [ -d "${NGPS_ROOT}/Python/FITS_tools" ]; then
+    alias ds9last="${NGPS_ROOT}/Python/FITS_tools/ds9last.sh 1"
+    alias ds9last1="${NGPS_ROOT}/Python/FITS_tools/ds9last.sh 1"
+    alias ds9last2="${NGPS_ROOT}/Python/FITS_tools/ds9last.sh 2"
+fi
 #alias ds9lastGo='/home/developer/Software/Python/FITS_tools/ds9-script.py `lastfits`'
 #alias ds9last2='/home/developer/Software/Python/FITS_tools/ds9-script.py `lastfits2`'
 #alias ds9last='lf=`lastfits`; busy=`lsof -w -c camerad | grep $lf | wc -l` ; if [[ $busy -gt 0 ]]; then echo FILE NOT READY!!!  SO IMPATIENT!  Try ds9last2; fi; ds9lastGo'

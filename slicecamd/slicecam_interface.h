@@ -18,6 +18,7 @@
 #include "atmcdLXd.h"
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include "slicecam_fits.h"
 #include "config.h"
 #include "tcsd_commands.h"
@@ -25,11 +26,29 @@
 #include "tcsd_client.h"
 #include "skyinfo.h"
 
-#define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
 #define PYTHON_ASTROMETRY_FUNCTION "astrometry_cwrap"
 #define PYTHON_IMAGEQUALITY_MODULE "image_quality"
 #define PYTHON_IMAGEQUALITY_FUNCTION "image_quality_cwrap"
+
+inline const char* python_path() {
+  static std::string path;
+  if ( path.empty() ) {
+    const char* root = std::getenv( "NGPS_ROOT" );
+    if ( root && *root ) {
+      path = std::string( root ) + "/Python:" + std::string( root ) + "/Python/acam_skyinfo";
+    }
+    else {
+      path = "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo";
+    }
+    const char* envpath = std::getenv( "PYTHONPATH" );
+    if ( envpath && *envpath ) {
+      path.append( ":" );
+      path.append( envpath );
+    }
+  }
+  return path.c_str();
+}
 
 #ifdef ANDORSIM
 #include "andorsim.h"

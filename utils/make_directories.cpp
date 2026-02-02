@@ -8,9 +8,11 @@
 #include <filesystem>
 #include <chrono>
 #include <ctime>
+#include <cstdlib>
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 namespace fs = std::filesystem;
 
@@ -38,8 +40,9 @@ std::string get_date() {
 
 int main() {
 
-  // base directory
-  const std::string base("/data");
+  // base directory (allow override for local sims)
+  const char* env_root = std::getenv("NGPS_DATA_DIR");
+  const std::string base = (env_root && *env_root) ? env_root : "/data";
 
   // get local time as YYYYMMDD
   std::string date = get_date();

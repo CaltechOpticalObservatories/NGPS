@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # parse options
 #
 while [ $# -gt 0 ]; do
@@ -22,11 +22,16 @@ done
 # if date not supplied use the current UTC date
 #
 if [ -z "$DATE" ]; then
-  TITLE=`date --utc +"%Y-%m-%d"`
-  DATE=`date --utc +"%Y%m%d"`
+  TITLE=$(date -u +"%Y-%m-%d")
+  DATE=$(date -u +"%Y%m%d")
 else
-  TITLE=`date --date "$DATE" +"%Y-%m-%d"`
-  DATE=`date --date "$DATE" +"%Y%m%d"`
+  if date --version >/dev/null 2>&1; then
+    TITLE=$(date --date "$DATE" +"%Y-%m-%d")
+    DATE=$(date --date "$DATE" +"%Y%m%d")
+  else
+    TITLE=$(date -j -f "%Y%m%d" "$DATE" +"%Y-%m-%d" 2>/dev/null)
+    DATE=$(date -j -f "%Y%m%d" "$DATE" +"%Y%m%d" 2>/dev/null)
+  fi
 fi
 
 # build args for colorlog
@@ -42,4 +47,17 @@ else
   WHICH="all"
 fi
 
-xterm -geometry 200x50 -T "colorlog ("$WHICH") UTC: "$TITLE -e colorlog $ARGS &
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+if command -v xterm >/dev/null 2>&1; then
+  xterm -geometry 200x50 -T "colorlog (${WHICH}) UTC: ${TITLE}" -e colorlog $ARGS &
+elif [ "$(uname -s)" = "Darwin" ] && command -v osascript >/dev/null 2>&1; then
+  osascript <<EOF
+tell application "Terminal"
+  do script "cd ${SCRIPT_DIR}; ./colorlog ${ARGS}"
+  activate
+end tell
+EOF
+else
+  echo "xterm not found; running colorlog in this terminal"
+  "${SCRIPT_DIR}/colorlog" ${ARGS}
+fi

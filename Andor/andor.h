@@ -454,8 +454,13 @@ namespace Andor {
        * @brief      default Interface constructor
        *
        */
+#ifdef NGPS_NO_ANDOR_SDK
+      Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( true ),
+                    andor( &emulator ), image_data( nullptr ), avg_data(nullptr), num_avg_frames(1), weight(1.0f), err( false ), _handle(-1), shutter_state("unknown"), emulator( -1 ) { }
+#else
       Interface() : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( -1 ), andor_emulated( false ),
                     andor( &sdk ), image_data( nullptr ), avg_data(nullptr), num_avg_frames(1), weight(1.0f), err( false ), _handle(-1), shutter_state("unknown"), emulator( -1 ) { }
+#endif
       /***** Andor::Interface::Interface **************************************/
 
       /***** Andor::Interface::Interface **************************************/
@@ -463,8 +468,13 @@ namespace Andor {
        * @brief      Interface constructor accepts serial number
        *
        */
+#ifdef NGPS_NO_ANDOR_SDK
+      Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( true ),
+                            andor( &emulator ), image_data( nullptr ), avg_data(nullptr), num_avg_frames(1), weight(1.0f), err( false ), _handle(-1), shutter_state("unknown"), emulator( sn ) { }
+#else
       Interface( int sn ) : is_sdk_initialized( false ), is_andor_open( false ), is_acquiring( false ), serial( sn ), andor_emulated( false ),
                             andor( &sdk ), image_data( nullptr ), avg_data(nullptr), num_avg_frames(1), weight(1.0f), err( false ), _handle(-1), shutter_state("unknown"), emulator( sn ) { }
+#endif
       /***** Andor::Interface::Interface **************************************/
 
       /**
@@ -488,6 +498,14 @@ namespace Andor {
        *
        */
       void andor_emulator( bool emulate ) {
+
+#ifdef NGPS_NO_ANDOR_SDK
+        (void)emulate;
+        this->andor = static_cast<Andor::AndorBase*>(&emulator);
+        this->andor_emulated = true;
+        if ( ! this->emulator.skysim.is_initialized() ) this->emulator.skysim.initialize_python();
+        return;
+#endif
 
         // Point the andor pointer to the appropriate object
         //

@@ -36,7 +36,7 @@
 #include "time.h"
 #include <dirent.h>
 #include <map>
-#include <json.hpp>
+#include "json.hpp"
 #include <condition_variable>
 #include <initializer_list>
 #include <bitset>
@@ -405,7 +405,11 @@ class PreciseTimer {
 
         // Sleep for the remaining time
         //
+#ifdef __APPLE__
+        nanosleep(&ts, NULL);
+#else
         clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+#endif
 
         // check current time and calculate elapsed and remaining time
         //

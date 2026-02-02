@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 #
 # @file     camstep
 # @brief    script for taking Andor images while stepping focus or cass

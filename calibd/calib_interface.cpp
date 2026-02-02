@@ -6,6 +6,7 @@
  */
 
 #include "calib_interface.h"
+#include <cstdlib>
 
 namespace Calib {
 
@@ -453,6 +454,7 @@ namespace Calib {
   long Interface::open( std::string args, std::string &retstring ) {
     const std::string function="Calib::Interface::open";
     std::string which;
+    const bool skip_lampmod = ( std::getenv("NGPS_SKIP_LAMPMOD") != nullptr );
 
     // No args opens everything (motion and camera)...
     //
@@ -511,12 +513,15 @@ namespace Calib {
 
     // open lamp modulator
     //
-    if ( which == "all" || which == "lampmod" ) {
+    if ( ( which == "all" || which == "lampmod" ) && !skip_lampmod ) {
       long error = this->modulator.control("open", retstring);
       if (error!=NO_ERROR) {
         logwrite( function, "ERROR initializing lampmod component" );
         return ERROR;
       }
+    }
+    else if ( skip_lampmod && ( which == "all" || which == "lampmod" ) ) {
+      logwrite( function, "NOTICE skipping lampmod open (NGPS_SKIP_LAMPMOD set)" );
     }
 
     retstring.clear();
@@ -538,12 +543,13 @@ namespace Calib {
     const std::string function="Calib::Interface::is_open";
     std::string which;
     int ccount=0;  // component count (number of components requested)
+    const bool skip_lampmod = ( std::getenv("NGPS_SKIP_LAMPMOD") != nullptr );
 
     // No args checks everything (motion and camera)...
     //
     if ( args.empty() ) {
       which = "all";
-      ccount=2;
+      ccount = ( skip_lampmod ? 1 : 2 );
     }
     else if ( args == "?" || args=="-h" || args=="help" ) {
       retstring = CALIBD_CLOSE;
@@ -591,9 +597,12 @@ namespace Calib {
 
     // check lamp modulator
     //
-    if ( which == "all" || which == "lampmod" ) {
+    if ( ( which == "all" || which == "lampmod" ) && !skip_lampmod ) {
       this->modulator.control("isopen", retstring);
       if ( retstring=="true" ) opencount++;
+    }
+    else if ( skip_lampmod && ( which == "all" || which == "lampmod" ) ) {
+      opencount++;
     }
 
     // return true only if all requested components return true (open)
@@ -616,6 +625,7 @@ namespace Calib {
   long Interface::close( std::string args, std::string &retstring ) {
     const std::string function="Calib::Interface::close";
     std::string which;
+    const bool skip_lampmod = ( std::getenv("NGPS_SKIP_LAMPMOD") != nullptr );
 
     // No args closes everything (motion and camera)...
     //
@@ -672,12 +682,15 @@ namespace Calib {
 
     // close lamp modulator
     //
-    if ( which == "all" || which == "lampmod" ) {
+    if ( ( which == "all" || which == "lampmod" ) && !skip_lampmod ) {
       long ret = this->modulator.control("close", retstring);
       if (ret!=NO_ERROR) {
         logwrite( function, "ERROR closing lampmod component" );
         error=ERROR;
       }
+    }
+    else if ( skip_lampmod && ( which == "all" || which == "lampmod" ) ) {
+      logwrite( function, "NOTICE skipping lampmod close (NGPS_SKIP_LAMPMOD set)" );
     }
 
     retstring.clear();

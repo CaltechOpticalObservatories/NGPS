@@ -27,13 +27,13 @@ EMULATOR_PORT=@FOCUSD_EMULATOR@
 #   <addr>  address is DIP-switch assigned PI address.
 #   <axes>  number of axes for this controller's actuator
 #
-MOTOR_CONTROLLER="I @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
-MOTOR_CONTROLLER="R @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
-MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
+#MOTOR_CONTROLLER="I @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
+#MOTOR_CONTROLLER="R @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
+#MOTOR_CONTROLLER="G @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
 #MOTOR_CONTROLLER="U @IP_ETS8P@ @ETS8P_FOCUS@ 4 1"
-#MOTOR_CONTROLLER="I localhost @FOCUSD_EMULATOR@ 1 1"  # emulator
-#MOTOR_CONTROLLER="R localhost @FOCUSD_EMULATOR@ 2 1"  # emulator
-#MOTOR_CONTROLLER="G localhost @FOCUSD_EMULATOR@ 3 1"  # emulator
+MOTOR_CONTROLLER="I localhost @FOCUSD_EMULATOR@ 1 1"  # emulator
+MOTOR_CONTROLLER="R localhost @FOCUSD_EMULATOR@ 2 1"  # emulator
+MOTOR_CONTROLLER="G localhost @FOCUSD_EMULATOR@ 3 1"  # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref> [ <default> ]"

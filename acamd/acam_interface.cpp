@@ -10,6 +10,8 @@
 
 #include "acam_interface.h"
 
+#include <filesystem>
+
 namespace Acam {
 
   constexpr int OFFSETRATE=40;
@@ -792,7 +794,9 @@ namespace Acam {
       return ERROR;
     }
 
-    fitsinfo.fits_name = outfile;
+    const std::string final_out = outfile;
+    const std::string tmp_out = final_out + ".tmp";
+    fitsinfo.fits_name = tmp_out;
 //  fitsinfo.datatype = USHORT_IMG;
     fitsinfo.datatype = FLOAT_IMG;
     fitsinfo.section_size = andor.camera_info.axes[0] * andor.camera_info.axes[1];
@@ -836,7 +840,28 @@ namespace Acam {
                                                                     false, // not multi-extension
                                                                     this->simsize );
 
-    outfile = fitsinfo.fits_name;
+    // Atomically replace the output FITS so readers never see partial data
+    try {
+      if ( std::filesystem::exists( final_out ) ) {
+        std::filesystem::remove( final_out );
+      }
+      std::filesystem::rename( fitsinfo.fits_name, final_out );
+    }
+    catch ( const std::filesystem::filesystem_error & ) {
+      // Fallback to copy if rename fails for any reason
+      try {
+        std::filesystem::copy_file( fitsinfo.fits_name, final_out,
+                                    std::filesystem::copy_options::overwrite_existing );
+        std::filesystem::remove( fitsinfo.fits_name );
+      }
+      catch ( const std::filesystem::filesystem_error &e ) {
+        message.str(""); message << "ERROR updating output FITS: " << e.what();
+        logwrite( function, message.str() );
+        return ERROR;
+      }
+    }
+
+    outfile = final_out;
 
     return error;
   }
@@ -2755,9 +2780,12 @@ namespace Acam {
 
       iface.newframe_ready.store(false);                              // while writing, the frame cannot be ready
 
+      {
+      std::lock_guard<std::mutex> lock(iface.framegrab_mutex);
       error = iface.camera.write_frame( sourcefile,
                                         iface.imagename,
                                         iface.tcs_online.load(std::memory_order_acquire) );    // write to FITS file
+      }
       if (error==ERROR) {
         logwrite(function,"ERROR writing frame");
         continue;
@@ -3184,6 +3212,22 @@ namespace Acam {
       double timeout = this->target.get_timeout();             // from config ACAM_ACQUIRE_TIMEOUT
       retstring=std::to_string( timeout );                     // return the timeout in seconds
 
+      // Ensure framegrab is running so we can get a fresh frame to solve.
+      if ( !this->is_framegrab_running.load(std::memory_order_acquire) ) {
+        logwrite( function, "starting frame grabber for acquire here" );
+        std::string dontcare;
+        this->framegrab( "start", dontcare );
+        auto start = std::chrono::steady_clock::now();
+        while ( !this->is_framegrab_running.load(std::memory_order_acquire) ) {
+          if ( std::chrono::steady_clock::now() - start > std::chrono::milliseconds(100) ) break;
+          std::this_thread::sleep_for( std::chrono::microseconds(10) );
+        }
+        if ( !this->is_framegrab_running.load(std::memory_order_acquire) ) {
+          logwrite( function, "ERROR: failed to start frame grabber for acquire here" );
+          return ERROR;
+        }
+      }
+
       //calculate goal
       //
 logwrite( function, "[DEBUG] acquire here" );
@@ -3224,7 +3268,21 @@ logwrite( function, "[DEBUG] acquire here" );
         }
       }
 
-      this->astrometry.solve( last_imagename, this->target.ext_solver_args );
+      // Copy the latest frame to a stable temp file so the solver doesn't
+      // read while the framegrab thread is writing.
+      std::string solve_imagename = last_imagename;
+      try {
+        std::lock_guard<std::mutex> lock(this->framegrab_mutex);
+        std::string tmpname = "/tmp/acam_here.fits";
+        std::filesystem::copy_file( last_imagename, tmpname,
+                                    std::filesystem::copy_options::overwrite_existing );
+        solve_imagename = tmpname;
+      }
+      catch ( const std::exception &e ) {
+        logwrite( function, std::string("WARNING unable to copy frame for solve: ") + e.what() );
+      }
+
+      this->astrometry.solve( solve_imagename, this->target.ext_solver_args );
       this->astrometry.get_solution( result, this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle, matches, rmsarcsec );
 
       if ( result=="NOISY" || result=="GOOD" ) {
@@ -3575,6 +3633,18 @@ logwrite( function, message.str() );
       // get out in any case if no match found
       //
       if ( !match_found ) break;
+
+      // If acquire-here was requested but no goal was ever set,
+      // use the current solve as the goal so we don't apply an initial offset.
+      if ( this->acquire_mode == Acam::TARGET_ACQUIRE_HERE &&
+           ( std::isnan( this->acam_goal.ra ) ||
+             std::isnan( this->acam_goal.dec ) ||
+             std::isnan( this->acam_goal.angle ) ) ) {
+        this->acam_goal.ra    = acam_ra;
+        this->acam_goal.dec   = acam_dec;
+        this->acam_goal.angle = acam_angle;
+        logwrite( function, "NOTICE: guide goal unset; using current solve as goal" );
+      }
 
       // Continue only if there was a match
 
@@ -5651,7 +5721,27 @@ logwrite( function, message.str() );
 
       // build the filename
       std::string basename = filename.substr(0, loc);
-      std::string path = "/data/" + get_latest_datedir("/data") + "/acam/";
+      const char* env_root = std::getenv("NGPS_DATA_DIR");
+      std::string data_root = (env_root && *env_root) ? env_root : "/data";
+      std::string datedir = get_latest_datedir( data_root );
+      if ( datedir.empty() ) {
+        int year, mon, mday, hour, min, sec, usec;
+        if ( get_time( year, mon, mday, hour, min, sec, usec ) == 0 ) {
+          std::ostringstream fallback;
+          fallback << std::setw(4) << std::setfill('0') << year
+                   << std::setw(2) << std::setfill('0') << mon
+                   << std::setw(2) << std::setfill('0') << mday;
+          datedir = fallback.str();
+        }
+      }
+      std::string path = data_root + "/" + datedir + "/acam/";
+      try {
+        std::filesystem::create_directories( path );
+      }
+      catch ( const std::exception &e ) {
+        logwrite( "Acam::Interface::preserve_framegrab", "ERROR creating "+path+": "+std::string(e.what()) );
+        return;
+      }
 
       // make sure the path exists and is writable
       if ( !validate_path( path ) ) {

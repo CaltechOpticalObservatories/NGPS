@@ -6,7 +6,8 @@ import tkinter as tk
 import os
 
 def button_clicked():
-    cmd = "/home/developer/Software/run/seq ontarget"
+    ngps_root = os.environ.get("NGPS_ROOT", "/home/developer/Software")
+    cmd = f"{ngps_root}/run/seq ontarget"
     print(cmd)
     os.system(cmd)
 

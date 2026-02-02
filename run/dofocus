@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 #
 # @file     dofocus
 # @brief    script for taking focus images

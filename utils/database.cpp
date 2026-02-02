@@ -62,6 +62,7 @@ namespace Database {
                                                mysqlx::SessionOption::PWD,  _dbpass);
     }
     catch (const mysqlx::Error& err) {
+      logwrite("SessionPool::_create_session", "ERROR creating session: "+std::string(err.what()));
       return nullptr;
     }
   }
@@ -76,6 +77,7 @@ namespace Database {
    *
    */
   bool SessionPool::_test_session(std::shared_ptr<mysqlx::Session> db) {
+    if (!db) return false;
     // pass-fail
     try {
       db->sql("SELECT 1").execute();
@@ -102,8 +104,13 @@ namespace Database {
     auto db = _queue.front();
     _queue.pop();
 
-    // make a new session if this one is bad
+    // If this entry is empty or bad, try to create a new session
     if (!_test_session(db)) db = _create_session();
+    if (!db) throw std::runtime_error("no database session available");
+    if (!_test_session(db)) {
+      db = _create_session();
+      if (!db || !_test_session(db)) throw std::runtime_error("no database session available");
+    }
 
     return db;
   }
@@ -117,6 +124,7 @@ namespace Database {
    *
    */
   void SessionPool::_return_session(std::shared_ptr<mysqlx::Session> db) {
+    if (!db) return;
     {
     std::lock_guard<std::mutex> lock(_mtx);
     _queue.push(db);

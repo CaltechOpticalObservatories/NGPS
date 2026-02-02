@@ -178,7 +178,10 @@ namespace CalibEmulator {
     //
     if ( mycmd == "FRF?" ) {
       this->pos_mutex.lock();
-      retstring = this->controller_info.at( mydev ).homed ? "1" : "0";
+      std::stringstream ss;
+      ss << "0 " << myaddr << " " << myaxis << "="
+         << ( this->controller_info.at( mydev ).homed ? "1" : "0" );
+      retstring = ss.str();
       this->pos_mutex.unlock();
       std::cout << get_timestamp() << function << "homed = " << retstring << "\n";
     }
@@ -189,7 +192,9 @@ namespace CalibEmulator {
     if ( mycmd == "POS?" ) {
       std::cout << get_timestamp() << function << "got POS? command. mydev=" << mydev << "\n";
       this->pos_mutex.lock();
-      retstring = std::to_string( this->controller_info.at( mydev ).pos );
+      std::stringstream ss;
+      ss << "0 " << myaddr << " " << myaxis << "=" << this->controller_info.at( mydev ).pos;
+      retstring = ss.str();
       this->pos_mutex.unlock();
       std::cout << get_timestamp() << function << "pos = " << retstring << "\n";
     }
@@ -217,7 +222,10 @@ namespace CalibEmulator {
     //
     if ( mycmd == "ONT?" ) {
       this->pos_mutex.lock();
-      retstring = this->controller_info.at( mydev ).ontarget ? "1" : "0";
+      std::stringstream ss;
+      ss << "0 " << myaddr << " " << myaxis << "="
+         << ( this->controller_info.at( mydev ).ontarget ? "1" : "0" );
+      retstring = ss.str();
       this->pos_mutex.unlock();
       std::cout << get_timestamp() << function << "ontarget = " << retstring << "\n";
     }
@@ -235,7 +243,7 @@ namespace CalibEmulator {
     if ( mycmd == "ERR?" ) {
       this->pos_mutex.lock();
       std::stringstream ss;
-      ss << "0 " << myaddr << " " << myaxis << "=0";  // always return no error
+      ss << "0 " << myaddr << " 0";  // always return no error
       retstring = ss.str();
       this->pos_mutex.unlock();
       std::cout << get_timestamp() << function << retstring << "\n";

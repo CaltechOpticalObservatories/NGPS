@@ -14,10 +14,18 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 include_directories( ${PROJECT_BASE_DIR}/common )
 include_directories( ${PROJECT_BASE_DIR}/utils )    # needed for logentry
 
-find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_package( Python3 COMPONENTS Development )
+if ( Python3_FOUND )
+  list( GET Python3_INCLUDE_DIRS 0 PYTHON_DEV )
+  list( GET Python3_LIBRARIES 0 PYTHON_LIB )
+else()
+  find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
+  find_library( PYTHON_LIB NAMES python3.9 libpython3.9 PATHS /usr/lib64 )
+endif()
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
 
 include_directories( ${PYTHON_DEV} )
 

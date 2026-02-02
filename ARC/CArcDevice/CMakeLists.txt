@@ -24,4 +24,8 @@ add_library( CArcDevice SHARED
         ${CARC_DEVICE_DIR}/src/TempCtrl.cpp
         )
 
-target_link_libraries( CArcDevice CArcBase )
+target_link_libraries( CArcDevice PUBLIC CArcBase )
+
+if ( APPLE )
+  target_link_libraries( CArcDevice PUBLIC "-framework IOKit" "-framework CoreFoundation" "-framework ApplicationServices" )
+endif()

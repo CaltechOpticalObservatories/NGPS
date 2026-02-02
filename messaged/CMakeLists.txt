@@ -13,8 +13,10 @@ set( CMAKE_CXX_STANDARD 17 )
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
 
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 

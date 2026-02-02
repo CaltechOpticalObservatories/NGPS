@@ -10,7 +10,7 @@ set( SEQUENCER_DIR ${PROJECT_BASE_DIR}/sequencerd )
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -O1 -Wno-variadic-macros -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
@@ -18,19 +18,32 @@ include_directories( ${PROJECT_BASE_DIR}/acamd )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
-find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
+find_package( Python3 COMPONENTS Development )
+if ( Python3_FOUND )
+  list( GET Python3_INCLUDE_DIRS 0 PYTHON_DEV )
+  list( GET Python3_LIBRARIES 0 PYTHON_LIB )
+else()
+  find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
+  find_library( PYTHON_LIB NAMES python3.9 libpython3.9 PATHS /usr/lib64 )
+endif()
 include_directories( ${PYTHON_DEV} )
 
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
+find_library( CFITS_LIB cfitsio NAMES libcfitsio PATHS /usr/local/lib /opt/homebrew/lib )
 
 # -- MySQL database ------------------------------------------------------------
 #
 set( MYSQL_DIR "/usr/local/mysql/connector" )
-find_path( MYSQL_API "mysqlx/xdevapi.h" PATHS ${MYSQL_DIR}/include )
+find_path( MYSQL_API "mysqlx/xdevapi.h"
+           PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++
+           PATH_SUFFIXES include )
 set( MYSQL_INCLUDES "${MYSQL_API}" )
-find_library( MYSQL_LIB "mysqlcppconn8" NAMES "mysqlcppconn8" PATHS ${MYSQL_DIR}/lib64 )
+find_library( MYSQL_LIB NAMES mysqlcppconnx mysqlcppconn8 mysqlcppconn
+              PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++
+              PATH_SUFFIXES lib lib64 )
 include_directories( ${MYSQL_INCLUDES} )
 
 add_executable(sequencerd
@@ -50,7 +63,6 @@ target_link_libraries(sequencerd
         skyinfo
         database
         ${CMAKE_THREAD_LIBS_INIT}
-        ${CCFITS_LIB}
         ${CFITS_LIB}
         ${MYSQL_LIB}
         ${PYTHON_LIB}

@@ -9,7 +9,12 @@ fi
 
 # Create the FIFO if it doesn't exist
 if [ ! -p "$FIFO" ]; then
-    mkfifo --mode=a=rw "$FIFO" || { echo "Failed to create FIFO"; exit 1; }
+    if mkfifo -m 666 "$FIFO" 2>/dev/null; then
+        :
+    else
+        mkfifo "$FIFO" || { echo "Failed to create FIFO"; exit 1; }
+        chmod 666 "$FIFO" || { echo "Failed to chmod FIFO"; exit 1; }
+    fi
 fi
 
 
@@ -20,7 +25,8 @@ while true; do
         ESCAPED_MESSAGE=$(printf '%s' "$MESSAGE" | sed 's/"/\\"/g')
 
         # Show Zenity warning on the current session
-        /usr/bin/zenity --warning --title="SliceCam" --text="$ESCAPED_MESSAGE" >/dev/null 2>&1 &
+        if command -v zenity >/dev/null 2>&1; then
+            zenity --warning --title="SliceCam" --text="$ESCAPED_MESSAGE" >/dev/null 2>&1 &
+        fi
     fi
 done
-

@@ -1,6 +1,7 @@
 #!/usr/bin/python3.9
 
 import json
+import os
 import sys
 import subprocess
 import zmq
@@ -15,6 +16,8 @@ from kivy.graphics import Color, Rectangle
 
 Config.set('graphics', 'width', '220')
 Config.set('graphics', 'height', '220')
+
+NGPS_ROOT = os.environ.get("NGPS_ROOT", "/home/developer/Software")
 
 class MyBoxLayout(BoxLayout):
     def __init__(self, **kwargs):
@@ -45,7 +48,7 @@ class TargetControlApp(App):
                                    background_color=[0.5, 0.5, 0.5, 1],
                                    height=25,
                                    opacity=0)
-        self.command = "/home/developer/Software/run/seq ontarget"
+        self.command = f\"{NGPS_ROOT}/run/seq ontarget\"
         self.button.bind(on_press=self.on_button_click)
         self.cancelbutton.bind(on_press=self.on_button_cancel_wait)
         self.button.bind(disabled=self.on_button_disabled)
@@ -171,7 +174,7 @@ class TargetControlApp(App):
             self.status_label_bottom.color = [1, 0, 0, 1]  # Red text on black background
 
         # Send the shell command and check the response
-        process = subprocess.Popen("/home/developer/Software/run/tcs getmotion", shell=True, stdout=subprocess.PIPE)
+        process = subprocess.Popen(f\"{NGPS_ROOT}/run/tcs getmotion\", shell=True, stdout=subprocess.PIPE)
         output, _ = process.communicate()
         output = output.decode().strip()
 
@@ -196,4 +199,3 @@ class TargetControlApp(App):
 
 if __name__ == '__main__':
     TargetControlApp().run()
-

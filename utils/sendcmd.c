@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 #endif
 
    while ((nread = write (sock, message, len)) < 0) {
-           if (errno != EAGAIN) {
+           if (errno != EAGAIN && errno != EWOULDBLOCK && errno != ENOTCONN && errno != EINPROGRESS) {
                    printf ("ERROR %d writing_message\n", errno);
                    close (sock);
                    return (-errno);

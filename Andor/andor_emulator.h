@@ -8,6 +8,8 @@
 #pragma once
 
 #include <cpython.h>
+#include <cstdlib>
+#include <string>
 
 /***** Andor ******************************************************************/
 /**
@@ -17,10 +19,28 @@
  */
 namespace Andor {
 
-  constexpr const char* PYTHON_PATH = "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo";
   constexpr const char* PYTHON_SKYSIM_MODULE = "skysim";
   constexpr const char* PYTHON_SKYSIM_FUNCTION = "simFromHeader";
   constexpr const char* PYTHON_SKYSIM_MULTI_FUNCTION = "simFromHeaderMulti";
+
+  inline const char* python_path() {
+    static std::string path;
+    if ( path.empty() ) {
+      const char* root = std::getenv( "NGPS_ROOT" );
+      if ( root && *root ) {
+        path = std::string( root ) + "/Python:" + std::string( root ) + "/Python/acam_skyinfo";
+      }
+      else {
+        path = "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo";
+      }
+      const char* envpath = std::getenv( "PYTHONPATH" );
+      if ( envpath && *envpath ) {
+        path.append( ":" );
+        path.append( envpath );
+      }
+    }
+    return path.c_str();
+  }
 
   /***** Andor::SkySim ********************************************************/
   /**
@@ -37,7 +57,7 @@ namespace Andor {
 
       void initialize_python();
 
-      CPython::CPyInstance py_instance { PYTHON_PATH };
+      CPython::CPyInstance py_instance { python_path() };
 
       PyObject* pSkySimModule;
 

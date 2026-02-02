@@ -408,9 +408,9 @@ namespace arc
 					THROW( "IOServiceGetMatchingServices failed: 0x%X",	kernResult );
 				}
 
-				while ( ( service = IOIteratorNext( iterator ) ) != IO_OBJECT_nullptr )
+				while ( ( service = IOIteratorNext( iterator ) ) != IO_OBJECT_NULL )
 				{
-					ArcDev_t tArcDev;
+					arc::gen3::device::ArcDev_t tArcDev;
 
 					tArcDev.sName			= kAstroPCIeClassName;
 					tArcDev.tService		= service;
@@ -1303,7 +1303,8 @@ namespace arc
 				THROW_NO_DEVICE_ERROR();
 			}
 
-			auto iSuccess = Arc_IOCtl( m_hDevice, ARC_BUFFER_PROP, uiProps, ( sizeof( std::uint64_t ) * ( sizeof( uiProps ) / sizeof( std::uint64_t ) ) ) );
+			auto iSuccess = Arc_IOCtl( m_hDevice, ARC_BUFFER_PROP, reinterpret_cast<ulong*>( uiProps ),
+			                           ( sizeof( std::uint64_t ) * ( sizeof( uiProps ) / sizeof( std::uint64_t ) ) ) );
 
 			if ( !iSuccess )
 			{

@@ -1,10 +1,11 @@
-#!/usr/bin/bash
+#!/bin/bash
 #
 # @file     tcs
 # @brief    provides a command line interface for tcsd
 #
 
-source /home/developer/Software/run/ngps-config
+SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+source "${SCRIPT_DIR}/ngps-config"
 source $TCSD_CONFIG
 
 command=""

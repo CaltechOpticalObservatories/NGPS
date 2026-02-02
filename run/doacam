@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 #
 # @file     doacam
 # @brief    provides a scripting interface for acamd

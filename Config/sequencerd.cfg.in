@@ -36,7 +36,7 @@ FITERD_PORT=@FILTERD_BLK_PORT@
 # Since sequencerd is run as user=dataowner, the script entered here
 # needs to be the actual script run as dataowner, not the wrapper.
 #
-DAEMON_CONTROL_SCRIPT=/home/developer/Software/run/_ngps
+DAEMON_CONTROL_SCRIPT=/Users/cfremling/Projects/NGPS_codebase/NGPS/run/_ngps
 
 # Camera prologue
 #
@@ -145,7 +145,7 @@ DB_SETS=target_sets                  # table of target sets
 
 # TCS-related configuration
 #
-TCS_WHICH=real                       # override which TCS to connect to {real sim} - defaults to real
+TCS_WHICH=sim                        # override which TCS to connect to {real sim} - defaults to real
 TCS_OFFSET_RATE_RA=45                # TCS offset rate for RA ("MRATE") in arcsec per second
 TCS_OFFSET_RATE_DEC=45               # TCS offset rate for DEC ("MRATE") in arcsec per second
 TCS_SETTLE_TIMEOUT=20                # seconds to wait for telescope to settle (for "TRACKING_STABLY")
@@ -162,6 +162,7 @@ ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful a
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 ACQ_AUTOMATIC_MODE=1                 # 1=legacy, 2=semi-auto, 3=auto
 ACQ_FINE_TUNE_CMD=ngps_acq           # command to run after guiding for final fine tune
+ACQ_FINE_TUNE_XTERM=0                # run fine tune in xterm (0/1)
 ACQ_OFFSET_SETTLE=0                  # seconds to wait after automatic offset
 
 # Calibration Settings

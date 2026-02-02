@@ -10,12 +10,24 @@ fname=$2
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/gui.config $camera
 
+# Preserve crosshair position before loading new image (DS9 resets it on load)
+crosshair_img=""
+crosshair_img=$(xpaget $id crosshair image 2>/dev/null)
+if [ $? -ne 0 ]; then
+	crosshair_img=""
+fi
+
 # Push the image to frame 1
 xpaset -p $id frame 1
 cat $fname | xpaset $id $fitstype
 
 # Force crosshair mode
 xpaset -p $id mode crosshair;
+
+# Restore crosshair position if we were able to capture it
+if [ -n "$crosshair_img" ]; then
+	xpaset -p $id crosshair $crosshair_img image 2>/dev/null
+fi
 
 # parameters to prevent editing the regions; need delete to refresh them
 notouch="edit=0 move=0 rotate=0 delete=1" 
@@ -40,6 +52,10 @@ if [[ "$camera" == "guider" ]]; then
 
 	NAXIS1=`xpaget $id fits header keyword NAXIS1`
 	NAXIS2=`xpaget $id fits header keyword NAXIS2`
+	if ! [[ "$NAXIS1" =~ ^[0-9]+$ && "$NAXIS2" =~ ^[0-9]+$ ]]; then
+		echo "WARN: missing/invalid NAXIS in FITS ($NAXIS1,$NAXIS2)" >&2
+		exit 0
+	fi
 	XCENTER=$(($NAXIS1 / 2))
 	pixscale=`xpaget $id fits header keyword PIXSCALE`
 
@@ -82,6 +98,10 @@ if [[ "$camera" == "slicev" ]]; then
 
 	# Get info from FITS headers
 	vbin=`xpaget $id fits header 1 keyword VBIN`
+	if ! [[ "$vbin" =~ ^[0-9]+$ && "$vbin" -gt 0 ]]; then
+		echo "WARN: missing/invalid VBIN in FITS ($vbin)" >&2
+		exit 0
+	fi
 	gain=`xpaget $id fits header 1 keyword CCDGAIN`
 	exptime=`xpaget $id fits header 1 keyword EXPTIME`
 	exptime=`printf "%'.3f\n" $exptime`
@@ -93,7 +113,18 @@ if [[ "$camera" == "slicev" ]]; then
 	xslit=`xpaget $id fits header 1 keyword CRPIX1`  # DS9 coordinate origin is on Left camera?
 	yslit=`xpaget $id fits header 1 keyword CRPIX2`
 	pixscale=`xpaget $id fits header keyword PIXSCALE`
-	NAXIS2=`xpaget $id fits header 1 keyword NAXIS2`
+	# Use DS9-reported display size when available (mosaic coords can differ from ext header)
+	NAXIS2=""
+	ds9_size=$(xpaget $id fits size 2>/dev/null)
+	if [[ "$ds9_size" =~ ^[0-9]+[[:space:]]+[0-9]+$ ]]; then
+		NAXIS2=${ds9_size##* }
+	else
+		NAXIS2=`xpaget $id fits header 1 keyword NAXIS2`
+	fi
+	if ! [[ "$NAXIS2" =~ ^[0-9]+$ && "$NAXIS2" -gt 0 ]]; then
+		echo "WARN: missing/invalid NAXIS2 in FITS ($NAXIS2)" >&2
+		exit 0
+	fi
 
 	# Camera settings
 	YCENTER=$((40/$vbin))

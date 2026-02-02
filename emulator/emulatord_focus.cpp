@@ -317,10 +317,10 @@ void doit( Network::TcpSocket sock ) {
     std::cerr << get_timestamp() << function << "[DEBUG] ret=" << ret << " retstring=" << retstring << "\n";
 #endif
 
-//  if ( ret != NOTHING && !retstring.empty() ) {
+    if ( !retstring.empty() ) {
       retstring.append( term );          // terminate my reply
       if ( sock.Write( retstring ) <0 ) connection_open=false;
-//  }
+    }
 
     if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                          // Keep blocking connection open for interactive session.
@@ -332,4 +332,3 @@ void doit( Network::TcpSocket sock ) {
   return;
 }
 /** doit *********************************************************************/
-

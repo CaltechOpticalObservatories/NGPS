@@ -11,6 +11,8 @@
  */
 
 #include "logentry.h"
+#include <cstdlib>
+#include <iomanip>
 
 std::mutex loglock;            /// mutex to protect from multiple access
 std::ofstream filestream;      /// IO stream class
@@ -60,13 +62,45 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
 
   if ( ( error = get_time( year, mon, mday, hour, min, sec, usec ) ) ) return error;
 
-  // get the latest date directory under /data
+  // Determine the base data directory. Env overrides config default.
   //
-  std::string datedir = get_latest_datedir( "/data" );
+  std::string data_root = "/data";
+  if ( !logpath.empty() ) {
+    std::filesystem::path lp(logpath);
+    if ( lp.filename().empty() ) lp = lp.parent_path();
+    if ( lp.filename() == "logs" ) data_root = lp.parent_path().string();
+    else data_root = lp.string();
+  }
+  if ( const char* env_root = std::getenv("NGPS_DATA_DIR"); env_root && *env_root ) {
+    data_root = env_root;
+  }
+
+  // get the latest date directory under base data dir
+  //
+  std::string datedir = get_latest_datedir( data_root );
+  if ( datedir.empty() ) {
+    std::ostringstream fallback;
+    fallback << std::setw(4) << std::setfill('0') << year
+             << std::setw(2) << std::setfill('0') << mon
+             << std::setw(2) << std::setfill('0') << mday;
+    datedir = fallback.str();
+  }
+
+  // ensure log directory exists
+  //
+  std::filesystem::path logdir = std::filesystem::path(data_root) / datedir / "logs";
+  try {
+    std::filesystem::create_directories( logdir );
+  }
+  catch ( const std::filesystem::filesystem_error& e ) {
+    message.str(""); message << "ERROR creating log dir " << logdir.string() << ": " << e.what();
+    logwrite(function, message.str());
+    return 1;
+  }
 
   // assemble log file name from the passed-in arguments and current date
   //
-  filename << "/data/" << datedir << "/logs/" << name << "_" << datedir << ".log";
+  filename << (logdir / (name + "_" + datedir + ".log")).string();
 
   // number of seconds until noon tomorrow
   //
@@ -190,4 +224,3 @@ void logwrite( const std::string &function, std::string message ) {
   if ( to_stderr ) std::cerr << logmsg.str();    // send to standard error if requested
 }
 /***** logwrite ***************************************************************/
-
