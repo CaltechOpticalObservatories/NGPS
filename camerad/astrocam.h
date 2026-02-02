@@ -21,6 +21,7 @@
 #include <initializer_list>
 #include <condition_variable>
 #include <memory>
+#include <json.hpp>
 
 #include "utilities.h"
 #include "common.h"
@@ -632,6 +633,7 @@ namespace AstroCam {
           should_subscriber_thread_run(false),
           framethreadcount(0),
           state_monitor_thread_running(false),
+          is_exposure_ready(true),                  // am I ready for the next exposure?
           modeselected(false),
           useframes(true) {
         this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
@@ -656,7 +658,7 @@ namespace AstroCam {
         this->readout_source.insert( { "QUAD",   { QUAD,   0x414c4c } } );  // "ALL"
         this->readout_source.insert( { "FT2",    { FT2,    0x465432 } } );  // "FT2" -- frame transfer from 1->2, read split2
         this->readout_source.insert( { "FT1",    { FT1,    0x465431 } } );  // "FT1" -- frame transfer from 2->1, read split1
-      } ;
+      };
 
       // Class Objects
       //
@@ -684,7 +686,7 @@ namespace AstroCam {
       }
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
-      void publish_snapshot();
+      void publish_snapshot(std::string* retstring=nullptr);
 
 // vector of pointers to Camera Information containers, one for each exposure number
 //
@@ -783,6 +785,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
        * exposure pending stuff
        *
        */
+      std::atomic<bool> is_exposure_ready;
       std::condition_variable exposure_condition;
       std::mutex exposure_lock;
       static void dothread_monitor_exposure_pending( Interface &interface );

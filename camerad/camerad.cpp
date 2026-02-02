@@ -789,6 +789,21 @@ void doit(Network::TcpSocket &sock) {
     if ( cmd == CAMERAD_TEST ) {
                     ret = server.test(args, retstring);
                     }
+    else
+    if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
+                    if ( args=="?" || args=="help" ) {
+                      retstring=TELEMREQUEST+"\n";
+                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                      ret=HELP;
+                    }
+                    else {
+                      server.publish_snapshot( &retstring );
+                      if (retstring.empty()) retstring="(empty)";
+                      ret = JSON;
+                    }
+    }
+
     // Unknown commands generate an error
     //
     else {

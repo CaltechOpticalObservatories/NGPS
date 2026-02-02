@@ -12,12 +12,42 @@
  */
 
 #include "camerad.h"
+#include "message_keys.h"
+
 extern Camera::Server server;
 
 namespace AstroCam {
 
-  void Interface::publish_snapshot() {
+  /**** AstroCam::Interface::publish_snapshot *********************************/
+  /**
+   * @brief      publish a snapshot of my telemetry
+   * @param[out] retstring  optional pointer to buffer for return string
+   *
+   */
+  void Interface::publish_snapshot(std::string *retstring) {
+    const std::string function("AstroCam::Interface::publish_snapshot");
+    nlohmann::json jmessage_out;
+
+    // build JSON message with my telemetry
+    jmessage_out[Key::SOURCE] = "camerad";
+    jmessage_out[Key::Camerad::READY] = this->is_exposure_ready.load();
+
+    // publish JSON message
+    try {
+      this->publisher->publish(jmessage_out);
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR: "+std::string(e.what()));
+      return;
+    }
+
+    // if a retstring buffer was supplied then return the JSON message
+    if (retstring) {
+      *retstring=jmessage_out.dump();
+      retstring->append(JEOF);
+    }
   }
+  /**** AstroCam::Interface::publish_snapshot *********************************/
 
 
   long NewAstroCam::new_expose( std::string nseq_in ) {
@@ -2518,6 +2548,7 @@ namespace AstroCam {
     // Log this message once only
     //
     if ( interface.exposure_pending() ) {
+      interface.is_exposure_ready.store(false);
       interface.camera.async.enqueue_and_log( function, "NOTICE:exposure pending" );
       interface.camera.async.enqueue( "CAMERAD:READY:false" );
     }
@@ -2549,6 +2580,8 @@ namespace AstroCam {
       interface.do_expose(interface.nexp);
     }
     else {
+      interface.is_exposure_ready.store(true);
+      interface.publish_snapshot();
       interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
       interface.camera.async.enqueue( "CAMERAD:READY:true" );
     }

@@ -12,6 +12,7 @@
  */
 
 #include "sequence.h"
+#include "message_keys.h"
 
 namespace Sequencer {
 
@@ -38,6 +39,23 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
+
+
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+  /**
+   * @brief      handles camerad telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
+    if (jmessage.contains(Key::Camerad::READY)) {
+      int isready = jmessage[Key::Camerad::READY].get<bool>();
+      this->is_camera_ready.store(isready, std::memory_order_relaxed);
+      std::lock_guard<std::mutex> lock(camerad_mtx);
+      this->camerad_cv.notify_all();
+    }
+  }
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -416,6 +434,26 @@ namespace Sequencer {
     while ( true ) {
 
       logwrite( function, "sequencer running" );
+
+      // wait until camera is ready to expose
+      //
+      if (!this->is_camera_ready.load()) {
+
+        this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
+
+        std::unique_lock<std::mutex> lock(this->camerad_mtx);
+        this->camerad_cv.wait( lock, [this]() {
+          return( this->is_camera_ready.load() || this->cancel_flag.load() );
+        } );
+
+        if (this->cancel_flag.load()) {
+          logwrite(function, "sequence cancelled");
+          return;
+        }
+        else {
+          logwrite(function, "camera ready to expose");
+        }
+      }
 
       // Get the next target from the database when single_obsid is empty
       //
