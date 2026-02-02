@@ -19,6 +19,8 @@
 #include <iostream>
 #include <vector>
 #include <initializer_list>
+#include <condition_variable>
+#include <memory>
 
 #include "utilities.h"
 #include "common.h"
@@ -562,6 +564,7 @@ namespace AstroCam {
    */
   class Interface : public Camera::InterfaceBase {
     private:
+      zmqpp::context context;
 //    int bufsize;
       int FITS_STRING_KEY;
       int FITS_DOUBLE_KEY;
@@ -618,13 +621,67 @@ namespace AstroCam {
       }
 
     public:
-      Interface();
+      Interface()
+        : context(),
+          pci_cmd_num(0),
+          nexp(1),
+          nfpseq(1),
+          nframes(1),
+          numdev(0),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false),
+          framethreadcount(0),
+          state_monitor_thread_running(false),
+          modeselected(false),
+          useframes(true) {
+        this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
+        this->fitsinfo.resize( NUM_EXPBUF );        // pre-allocate Camera Information object pointers for each exposure buffer
+        this->writes_pending.resize( NUM_EXPBUF );  // pre-allocate writes_pending vector for each exposure buffer
+
+        // Initialize STL map of Readout Amplifiers
+        // Indexed by amplifier name.
+        // The number is the argument for the Arc command to set this amplifier in the firmware.
+        //
+        // Format here is: { AMP_NAME, { ENUM_TYPE, ARC_ARG } }
+        // where AMP_NAME  is the name of the readout amplifier, the index for this map
+        //       ENUM_TYPE is an enum of type ReadoutType
+        //       ARC_ARG   is the ARC argument for the SOS command to select this readout source
+        //
+        this->readout_source.insert( { "U1",     { U1,     0x5f5531 } } );  // "_U1"
+        this->readout_source.insert( { "L1",     { L1,     0x5f4c31 } } );  // "_L1"
+        this->readout_source.insert( { "U2",     { U2,     0x5f5532 } } );  // "_U2"
+        this->readout_source.insert( { "L2",     { L2,     0x5f4c32 } } );  // "_L2"
+        this->readout_source.insert( { "SPLIT1", { SPLIT1, 0x5f5f31 } } );  // "__1"
+        this->readout_source.insert( { "SPLIT2", { SPLIT2, 0x5f5f32 } } );  // "__2"
+        this->readout_source.insert( { "QUAD",   { QUAD,   0x414c4c } } );  // "ALL"
+        this->readout_source.insert( { "FT2",    { FT2,    0x465432 } } );  // "FT2" -- frame transfer from 1->2, read split2
+        this->readout_source.insert( { "FT1",    { FT1,    0x465431 } } );  // "FT1" -- frame transfer from 2->1, read split1
+      } ;
 
       // Class Objects
       //
       Config config;
       Camera::Camera camera;            /// instantiate a Camera object
       Camera::Information camera_info;  /// this is the main camera_info object
+
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
+
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
+      void publish_snapshot();
 
 // vector of pointers to Camera Information containers, one for each exposure number
 //

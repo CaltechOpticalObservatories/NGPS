@@ -16,6 +16,10 @@ extern Camera::Server server;
 
 namespace AstroCam {
 
+  void Interface::publish_snapshot() {
+  }
+
+
   long NewAstroCam::new_expose( std::string nseq_in ) {
     logwrite( "NewAstroCam::new_expose", nseq_in );
     return( NO_ERROR );
@@ -185,52 +189,6 @@ namespace AstroCam {
     return;
   }
   /***** AstroCam::Callback::ftCallback ***************************************/
-
-
-  /***** AstroCam::Interface::Interface ***************************************/
-  /**
-   * @brief      AstroCam Interface class constructor
-   *
-   */
-  Interface::Interface() {
-    this->state_monitor_thread_running = false;
-    this->modeselected = false;
-    this->pci_cmd_num.store(0);
-    this->nexp.store(1);
-    this->numdev = 0;
-    this->nframes = 1;
-    this->nfpseq = 1;
-    this->useframes = true;
-    this->framethreadcount = 0;
-
-    this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
-    this->fitsinfo.resize( NUM_EXPBUF );        // pre-allocate Camera Information object pointers for each exposure buffer
-
-    this->writes_pending.resize( NUM_EXPBUF );  // pre-allocate writes_pending vector for each exposure buffer
-
-    // Initialize STL map of Readout Amplifiers
-    // Indexed by amplifier name.
-    // The number is the argument for the Arc command to set this amplifier in the firmware.
-    //
-    // Format here is: { AMP_NAME, { ENUM_TYPE, ARC_ARG } }
-    // where AMP_NAME  is the name of the readout amplifier, the index for this map
-    //       ENUM_TYPE is an enum of type ReadoutType
-    //       ARC_ARG   is the ARC argument for the SOS command to select this readout source
-    //
-    this->readout_source.insert( { "U1",          { U1,             0x5f5531 } } );  // "_U1"
-    this->readout_source.insert( { "L1",          { L1,             0x5f4c31 } } );  // "_L1"
-    this->readout_source.insert( { "U2",          { U2,             0x5f5532 } } );  // "_U2"
-    this->readout_source.insert( { "L2",          { L2,             0x5f4c32 } } );  // "_L2"
-    this->readout_source.insert( { "SPLIT1",      { SPLIT1,         0x5f5f31 } } );  // "__1"
-    this->readout_source.insert( { "SPLIT2",      { SPLIT2,         0x5f5f32 } } );  // "__2"
-    this->readout_source.insert( { "QUAD",        { QUAD,           0x414c4c } } );  // "ALL"
-    this->readout_source.insert( { "FT2",         { FT2,            0x465432 } } );  // "FT2" -- frame transfer from 1->2, read split2
-    this->readout_source.insert( { "FT1",         { FT1,            0x465431 } } );  // "FT1" -- frame transfer from 2->1, read split1
-//  this->readout_source.insert( { "hawaii1",     { HAWAII_1CH,     0xffffff } } );  ///< TODO @todo implement HxRG  1 channel deinterlacing
-//  this->readout_source.insert( { "hawaii32",    { HAWAII_32CH,    0xffffff } } );  ///< TODO @todo implement HxRG 32 channel deinterlacing
-//  this->readout_source.insert( { "hawaii32lr",  { HAWAII_32CH_LR, 0xffffff } } );  ///< TODO @todo implement HxRG 32 channel alternate left/right deinterlacing
-  }
-  /***** AstroCam::Interface::Interface ***************************************/
 
 
   /***** AstroCam::Interface::interface ***************************************/

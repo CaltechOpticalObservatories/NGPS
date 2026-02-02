@@ -178,6 +178,14 @@ int main(int argc, char **argv) {
     server.exit_cleanly();
   }
 
+  if (server.init_pubsub()==ERROR) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    server.exit_cleanly();
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  server.publish_snapshot();
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.

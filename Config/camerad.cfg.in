@@ -15,6 +15,13 @@ ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
 DAEMON=no                        # run as a daemon? {yes,no}
 PUBLISHER_PORT="tcp://127.0.0.1:@CAMERAD_PUB_PORT@"  # my zeromq pub port
 
+# Message pub/sub
+# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
+
 # -----------------------------------------------------------------------------
 # The following are for simulated ARC controllers
 ARCSIM_NUMDEV=0
