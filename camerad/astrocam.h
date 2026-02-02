@@ -677,6 +677,9 @@ namespace AstroCam {
                                                        ///< maps a handler function to each topic
 
       long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        if (!subscriber) {
+          subscriber = std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB);
+        }
         return Common::PubSubHandler::init_pubsub(context, *this, topics);
       }
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
