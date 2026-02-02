@@ -422,6 +422,22 @@ namespace Sequencer {
         applied++;
       }
 
+      // ACQ_FINE_TUNE_XTERM
+      if (config.param[entry] == "ACQ_FINE_TUNE_XTERM") {
+        try {
+          int val = std::stoi( config.arg[entry] );
+          this->sequence.acq_fine_tune_xterm = ( val != 0 );
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing ACQ_FINE_TUNE_XTERM: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
       // ACQ_OFFSET_SETTLE
       if (config.param[entry] == "ACQ_OFFSET_SETTLE") {
         double settle=0;
