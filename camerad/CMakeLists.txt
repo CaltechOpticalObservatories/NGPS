@@ -99,6 +99,11 @@ target_include_directories(${INTERFACE_TARGET} PUBLIC ${INTERFACE_INCLUDES})
 find_library(CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib)
 find_library(CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib)
 
+# ZeroMQ
+#
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
 find_package(Threads)
 
 add_library(camera STATIC
@@ -124,6 +129,8 @@ target_link_libraries(camerad
         ${CMAKE_THREAD_LIBS_INIT}
         ${CCFITS_LIB}
         ${CFITS_LIB}
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         )
 
 # ----------------------------------------------------------------------------
