@@ -997,12 +997,12 @@ namespace Sequencer {
 
       // tokens 11-12 are dome lamps
       for (size_t i=0; i < 2; i++) {
-        info.domelamp.at(i) = on_off(tokens.at(11+i));
+        info.domelamp[i] = on_off(tokens.at(11+i));
       }
 
       // tokens 13-19
       for (size_t i=0; i<6; i++) {
-        info.lampmod[i] = on_off(tokens.at(13+1));
+        info.lampmod[i] = on_off(tokens.at(13+i));
       }
     }
     catch (const std::exception &e) {
