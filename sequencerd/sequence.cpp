@@ -435,26 +435,6 @@ namespace Sequencer {
 
       logwrite( function, "sequencer running" );
 
-      // wait until camera is ready to expose
-      //
-      if (!this->is_camera_ready.load()) {
-
-        this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
-
-        std::unique_lock<std::mutex> lock(this->camerad_mtx);
-        this->camerad_cv.wait( lock, [this]() {
-          return( this->is_camera_ready.load() || this->cancel_flag.load() );
-        } );
-
-        if (this->cancel_flag.load()) {
-          logwrite(function, "sequence cancelled");
-          return;
-        }
-        else {
-          logwrite(function, "camera ready to expose");
-        }
-      }
-
       // Get the next target from the database when single_obsid is empty
       //
       if ( this->single_obsid.empty() ) {
@@ -760,6 +740,23 @@ namespace Sequencer {
     std::string reply;
     std::stringstream camcmd;
     long error=NO_ERROR;
+
+    // wait until camera is ready to expose
+    //
+    std::unique_lock<std::mutex> lock(this->camerad_mtx);
+    if (!this->is_camera_ready.load()) {
+
+      this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
+
+      this->camerad_cv.wait( lock, [this]() {
+        return( this->is_camera_ready.load() || this->cancel_flag.load() );
+      } );
+
+      if (this->cancel_flag.load()) {
+        logwrite(function, "sequence cancelled");
+        return NO_ERROR;
+      }
+    }
 
     logwrite( function, "setting camera parameters");
 
@@ -4013,6 +4010,10 @@ namespace Sequencer {
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
+      this->async.enqueue_and_log( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
+      message.str(""); message << "NOTICE: camera ready to expose: " << (this->is_camera_ready.load() ? "yes" : "no");
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 

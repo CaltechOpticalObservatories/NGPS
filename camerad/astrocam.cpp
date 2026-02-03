@@ -1251,6 +1251,8 @@ namespace AstroCam {
       error = ERROR;
     }
 
+    this->publish_snapshot();
+
     return( error );
   }
   /***** AstroCam::Interface::do_connect_controller ***************************/
@@ -2549,6 +2551,7 @@ namespace AstroCam {
     //
     if ( interface.exposure_pending() ) {
       interface.is_exposure_ready.store(false);
+      interface.publish_snapshot();
       interface.camera.async.enqueue_and_log( function, "NOTICE:exposure pending" );
       interface.camera.async.enqueue( "CAMERAD:READY:false" );
     }
@@ -6029,6 +6032,7 @@ logwrite(function, message.str());
       retstring.append( "   shdelay ? | <delay> | test\n" );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
+      retstring.append( "   isready\n" );
       retstring.append( "   isreadout\n" );
       retstring.append( "   pixelcount\n" );
       retstring.append( "   devnums\n" );
@@ -6384,6 +6388,10 @@ logwrite(function, message.str());
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
+      message.str(""); message << "is_exposure_ready=" << ( this->is_exposure_ready.load() ? "true" : "false" );
+      logwrite( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
       // this shows which channels have an exposure pending
       {
       std::vector<int> pending = this->exposure_pending_list();
@@ -6597,6 +6605,16 @@ logwrite(function, message.str());
         jclient.disconnect();
       }
       this->handle_json_message( retstring );
+    }
+    else
+    // ----------------------------------------------------
+    // isready
+    // ----------------------------------------------------
+    // am I ready for an exposure?
+    if (testname=="isready") {
+      retstring=(this->is_exposure_ready?"yes":"no");
+      logwrite(function, retstring);
+      return NO_ERROR;
     }
     else
     // ----------------------------------------------------
