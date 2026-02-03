@@ -30,7 +30,7 @@ namespace AstroCam {
 
     // build JSON message with my telemetry
     jmessage_out[Key::SOURCE] = "camerad";
-    jmessage_out[Key::Camerad::READY] = this->is_exposure_ready.load();
+    jmessage_out[Key::Camerad::READY] = this->can_expose.load();
 
     // publish JSON message
     try {
@@ -2550,7 +2550,7 @@ namespace AstroCam {
     // Log this message once only
     //
     if ( interface.exposure_pending() ) {
-      interface.is_exposure_ready.store(false);
+      interface.can_expose.store(false);
       interface.publish_snapshot();
       interface.camera.async.enqueue_and_log( function, "NOTICE:exposure pending" );
       interface.camera.async.enqueue( "CAMERAD:READY:false" );
@@ -2583,7 +2583,7 @@ namespace AstroCam {
       interface.do_expose(interface.nexp);
     }
     else {
-      interface.is_exposure_ready.store(true);
+      interface.can_expose.store(true);
       interface.publish_snapshot();
       interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
       interface.camera.async.enqueue( "CAMERAD:READY:true" );
@@ -6032,7 +6032,7 @@ logwrite(function, message.str());
       retstring.append( "   shdelay ? | <delay> | test\n" );
       retstring.append( "   shutter ? | init | open | close | get | time | expose <msec>\n" );
       retstring.append( "   telem ? | collect | test | calibd | flexured | focusd | tcsd\n" );
-      retstring.append( "   isready\n" );
+      retstring.append( "   canexpose\n" );
       retstring.append( "   isreadout\n" );
       retstring.append( "   pixelcount\n" );
       retstring.append( "   devnums\n" );
@@ -6388,7 +6388,7 @@ logwrite(function, message.str());
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "is_exposure_ready=" << ( this->is_exposure_ready.load() ? "true" : "false" );
+      message.str(""); message << "can_expose=" << ( this->can_expose.load() ? "true" : "false" );
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
@@ -6611,8 +6611,8 @@ logwrite(function, message.str());
     // isready
     // ----------------------------------------------------
     // am I ready for an exposure?
-    if (testname=="isready") {
-      retstring=(this->is_exposure_ready?"yes":"no");
+    if (testname=="canexpose") {
+      retstring=(this->can_expose?"yes":"no");
       logwrite(function, retstring);
       return NO_ERROR;
     }

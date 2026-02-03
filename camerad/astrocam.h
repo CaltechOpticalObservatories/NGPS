@@ -633,7 +633,7 @@ namespace AstroCam {
           should_subscriber_thread_run(false),
           framethreadcount(0),
           state_monitor_thread_running(false),
-          is_exposure_ready(true),                  // am I ready for the next exposure?
+          can_expose(true),                         // am I ready for the next exposure?
           modeselected(false),
           useframes(true) {
         this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
@@ -785,7 +785,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
        * exposure pending stuff
        *
        */
-      std::atomic<bool> is_exposure_ready;
+      std::atomic<bool> can_expose;
       std::condition_variable exposure_condition;
       std::mutex exposure_lock;
       static void dothread_monitor_exposure_pending( Interface &interface );

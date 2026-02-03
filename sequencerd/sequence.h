@@ -281,7 +281,7 @@ namespace Sequencer {
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
-      std::atomic<bool> is_camera_ready;
+      std::atomic<bool> can_expose;
       std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
@@ -309,7 +309,7 @@ namespace Sequencer {
       Sequence() :
           context(),
           ready_to_start(false),
-          is_camera_ready(false),
+          can_expose(false),
           is_science_frame_transfer(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),

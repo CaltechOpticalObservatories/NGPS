@@ -50,7 +50,7 @@ namespace Sequencer {
   void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
     if (jmessage.contains(Key::Camerad::READY)) {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
-      this->is_camera_ready.store(isready, std::memory_order_relaxed);
+      this->can_expose.store(isready, std::memory_order_relaxed);
       std::lock_guard<std::mutex> lock(camerad_mtx);
       this->camerad_cv.notify_all();
     }
@@ -744,12 +744,12 @@ namespace Sequencer {
     // wait until camera is ready to expose
     //
     std::unique_lock<std::mutex> lock(this->camerad_mtx);
-    if (!this->is_camera_ready.load()) {
+    if (!this->can_expose.load()) {
 
       this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
 
       this->camerad_cv.wait( lock, [this]() {
-        return( this->is_camera_ready.load() || this->cancel_flag.load() );
+        return( this->can_expose.load() || this->cancel_flag.load() );
       } );
 
       if (this->cancel_flag.load()) {
@@ -4013,7 +4013,7 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "NOTICE: camera ready to expose: " << (this->is_camera_ready.load() ? "yes" : "no");
+      message.str(""); message << "NOTICE: camera ready to expose: " << (this->can_expose.load() ? "yes" : "no");
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 
