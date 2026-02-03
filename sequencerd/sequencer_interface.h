@@ -154,10 +154,12 @@ namespace Sequencer {
       const std::unordered_map<std::string, calinfo_t> &getmap() const { return calmap; };
 
       ///< returns just the map contents for specified targetname key
-      const calinfo_t* get_info( const std::string &_name ) const {
+      const calinfo_t &get_info( const std::string &_name ) const {
         auto it = calmap.find(_name);
-        if ( it != calmap.end() ) return &it->second;
-        return nullptr;
+        if ( it == calmap.end() ) {
+          throw std::runtime_error("calinfo not found for: "+_name);
+        }
+        return it->second;
       }
 
     private:

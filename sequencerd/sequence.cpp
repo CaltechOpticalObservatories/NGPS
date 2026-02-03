@@ -765,6 +765,35 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
 
+    // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
+    // indexed by name. Calibration targets use target.name for the index, or
+    // use "SCIENCE" index for all science targets.
+    //
+    std::ostringstream activechans, deactivechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    // build up lists of (de)activate chans
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      (active ? activechans : deactivechans) << " " << chan;
+    }
+
+    // send two commands, one for each
+    if (!activechans.str().empty()) {
+      std::string cmd = CAMERAD_ACTIVATE + activechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
+    if (!deactivechans.str().empty()) {
+      std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
+
     // send the EXPTIME command to camerad
     //
     // Everywhere is maintained that exptime is specified in sec except
@@ -2146,34 +2175,21 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
-    // name will index the caltarget map
-    //
-    std::string name(this->target.name);
-
-    if ( this->target.iscal ) {
-      name = this->target.name;
-      this->async.enqueue_and_log( function, "NOTICE: configuring calibrator for "+name );
-    }
-    else {
-      this->async.enqueue_and_log( function, "NOTICE: disabling calibrator for science target "+name );
-      name="SCIENCE";  // override for indexing the map
-    }
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
 
     // Get the calibration target map.
     // This contains a map of all the required settings, indexed by target name.
     //
-    auto calinfo = this->caltarget.get_info(name);
-    if (!calinfo) {
-      logwrite( function, "ERROR unrecognized calibration target: "+name );
-      throw std::runtime_error("unrecognized calibration target: "+name);
-    }
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    this->async.enqueue_and_log(function, "NOTICE: configuring calibrator for "+calname);
 
     // set the calib door and cover
     //
     std::stringstream cmd;
     cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo->caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo->calcover ? "open" : "close" );
+                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
+                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
     if ( !this->cancel_flag.load() &&
@@ -2184,7 +2200,7 @@ namespace Sequencer {
 
     // set the internal calibration lamps
     //
-    for ( const auto &[lamp,state] : calinfo->lamp ) {
+    for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
@@ -2200,7 +2216,7 @@ namespace Sequencer {
 //
 //  // set the dome lamps
 //  //
-//  for ( const auto &[lamp,state] : calinfo->domelamp ) {
+//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
 //    if ( this->cancel_flag.load() ) break;
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
@@ -2211,7 +2227,7 @@ namespace Sequencer {
 
     // set the lamp modulators
     //
-    for ( const auto &[mod,state] : calinfo->lampmod ) {
+    for ( const auto &[mod,state] : calinfo.lampmod ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {

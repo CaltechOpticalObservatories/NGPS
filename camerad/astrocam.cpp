@@ -639,6 +639,8 @@ namespace AstroCam {
   /***** AstroCam::Interface::parse_activate_commands *************************/
   /**
    * @brief      parses the ACTIVATE_COMMANDS keywords from config file
+   * @details    This gets the list of native commands needed to send when
+   *             (de)activating a controller channel.
    * @param[in]  args  expected format is "CHAN CMD [, CMD, CMD, ...]"
    *
    */
@@ -5516,84 +5518,97 @@ logwrite(function, message.str());
   /***** AstroCam::Interface::camera_active_state *****************************/
   /**
    * @brief      set/get camera active state
+   * @details    De-activating a configured channel turns off the biases and
+   *             flagging it for non-use. This allows keeping a controller in
+   *             a sort of standby condition, without having to reload waveforms
+   *             and reconfigure.
+   * @param[in]  args       space-delimited list of one or more channel names {U G R I}
+   * @param[out] retstring  activated|deactivated|error
+   * @param[in]  cmd        AstroCam::ActiveState:: {Activate|DeActivate|Query}
+   * @return     ERROR|NO_ERROR
    *
    */
   long Interface::camera_active_state(const std::string &args, std::string &retstring,
                                       AstroCam::ActiveState cmd) {
     const std::string function("AstroCam::Interface::camera_active_state");
-    std::string chan;
+    std::vector<int> _devnums;     // local list of devnum(s) associated with chan(s)
+    std::string chan;              // current channel
     std::istringstream iss(args);
 
-    // get channel name from args
+    // get channel name(s) from args and
+    // convert to a vector of devnum(s)
     //
-    if (!(iss >> chan)) {
-      logwrite(function, "ERROR parsing args. expected <chan>");
-      retstring="bad_argument";
-      return ERROR;
-    }
-
-    // get device number for that channel
-    //
-    int dev;
-    try {
-      dev = devnum_from_chan(chan);
-    }
-    catch(const std::exception &e) {
-      logwrite(function, "ERROR: "+std::string(e.what()));
-      retstring="bad_channel";
-      return ERROR;
-    }
-
-    // get pointer to the Controller object for this device
-    // it only needs to exist and be connected
-    //
-    auto pcontroller = this->get_controller(dev);
-
-    if (!pcontroller) {
-      logwrite(function, "ERROR: channel "+chan+" not configured");
-      retstring="missing_device";
-      return ERROR;
-    }
-    if (!pcontroller->configured || !pcontroller->connected) {
-      logwrite(function, "ERROR: channel "+chan+" not connected");
-      retstring="not_connected";
-      return ERROR;
+    while (iss >> chan) {
+      // validate device number for that channel
+      int dev;
+      try {
+        dev = devnum_from_chan(chan);
+      }
+      // exceptions are not fatal, just don't add dev to the vector
+      catch(const std::exception &e) {
+        logwrite(function, "channel "+chan+": "+std::string(e.what()));
+        continue;
+      }
+      // push it into a vector
+      _devnums.push_back(dev);
     }
 
     long error = NO_ERROR;
 
-    // set or get active state as specified by cmd
+    retstring.clear();
+
+    // activate/deactivate each dev
     //
-    switch (cmd) {
+    for (const auto &dev : _devnums) {
+      // get pointer to the Controller object for this device
+      // it only needs to exist and be connected
+      auto pcontroller = this->get_controller(dev);
 
-      // first set active flag, then send activation commands
-      case AstroCam::ActiveState::Activate:
-        pcontroller->active = true;
-        // add this devnum to the active_devnums list
-        add_dev(dev, this->active_devnums);
-        // send the activation commands
-        for (const auto &cmd : pcontroller->activate_commands) {
-          error |= this->do_native(dev, std::string(cmd), retstring);
-          std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-        break;
+      // unavailable channels are not fatal, they just don't get used
+      if (!pcontroller) {
+        logwrite(function, "channel "+pcontroller->channel+" not configured");
+        continue;
+      }
+      if (!pcontroller->configured || !pcontroller->connected) {
+        logwrite(function, "channel "+pcontroller->channel+" not connected");
+        continue;
+      }
 
-      // first turn off power, then clear active flag
-      case AstroCam::ActiveState::DeActivate:
-        if ( (error=this->do_native(dev, std::string("POF"), retstring))==NO_ERROR ) {
-          pcontroller->active = false;
-          // remove this devnum from the active_devnums list
-          remove_dev(dev, this->active_devnums);
-        }
-        break;
+      // set or get active state as specified by cmd
+      switch (cmd) {
 
-      // do nothing
-      case AstroCam::ActiveState::Query:
-      default:
-        break;
+        // first set active flag, then send activation commands
+        case AstroCam::ActiveState::Activate:
+          if (pcontroller->active) break;   // nothing to do if already activated
+          pcontroller->active = true;
+          // add this devnum to the active_devnums list
+          add_dev(dev, this->active_devnums);
+          // send the activation commands
+          for (const auto &cmd : pcontroller->activate_commands) {
+            error |= this->do_native(dev, std::string(cmd), retstring);
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+          }
+          break;
+
+        // first turn off power, then clear active flag
+        case AstroCam::ActiveState::DeActivate:
+          if (!pcontroller->active) break;  // nothing to do if already deactivated
+          if ( (error=this->do_native(dev, std::string("POF"), retstring))==NO_ERROR ) {
+            pcontroller->active = false;
+            // remove this devnum from the active_devnums list
+            remove_dev(dev, this->active_devnums);
+          }
+          break;
+
+        // do nothing
+        case AstroCam::ActiveState::Query:
+        default:
+          break;
+      }
+
+      // build up return string
+      retstring += (pcontroller->channel+":"+(pcontroller->active ? "activated " : "deactivated "));
     }
-
-    retstring = pcontroller->active ? "activated" : "deactivated";
 
     return error;
   }
