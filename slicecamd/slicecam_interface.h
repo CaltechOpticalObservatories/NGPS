@@ -10,6 +10,7 @@
 
 #include <future>
 #include <cmath>
+#include <map>
 #include <cpython.h>
 #include "network.h"
 #include "logentry.h"
@@ -85,6 +86,7 @@ namespace Slicecam {
       uint16_t* image_data;
       int simsize;      /// for the sky simulator
       std::map<at_32, at_32> handlemap;
+      std::map<std::string, std::string> skysim_args;
 
     public:
       Camera() : image_data( nullptr ), simsize(1024) { };
@@ -100,6 +102,26 @@ namespace Slicecam {
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
+      inline void set_skysim_arg( const std::string &key, const std::string &value ) {
+        this->skysim_args[key] = value;
+        for ( auto &entry : this->andor ) {
+          entry.second->emulator.skysim.set_kwarg( key, value );
+        }
+      }
+      inline void clear_skysim_args() {
+        this->skysim_args.clear();
+        for ( auto &entry : this->andor ) {
+          entry.second->emulator.skysim.clear_kwargs();
+        }
+      }
+      inline void apply_skysim_args() {
+        if ( this->skysim_args.empty() ) return;
+        for ( auto &entry : this->andor ) {
+          for ( const auto &kv : this->skysim_args ) {
+            entry.second->emulator.skysim.set_kwarg( kv.first, kv.second );
+          }
+        }
+      }
 
       inline long init_handlemap() {
         this->handlemap.clear();

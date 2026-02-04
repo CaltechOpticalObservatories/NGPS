@@ -103,6 +103,16 @@ int main(int argc, char *argv[]) {
         std::cerr << "Reusing ADDR: " << std::strerror(errno) << "\n";
         return 1;
     }
+#ifdef SO_REUSEPORT
+    if (
+        setsockopt(
+            fd, SOL_SOCKET, SO_REUSEPORT, (char *) &yes, sizeof(yes)
+        ) < 0
+    ) {
+        std::cerr << "Reusing PORT: " << std::strerror(errno) << "\n";
+        return 1;
+    }
+#endif
 
     // set up destination address
     //

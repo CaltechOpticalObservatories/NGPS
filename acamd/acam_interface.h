@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <cmath>
+#include <map>
 #include <cpython.h>
 #include "motion_interface.h"
 #include "network.h"
@@ -108,6 +110,7 @@ namespace Acam {
       uint16_t* image_data;
       int simsize;      /// for the sky simulator
       std::map<at_32, at_32> handlemap;
+      std::map<std::string, std::string> skysim_args;
 
     public:
       Camera() : image_data( nullptr ), simsize(1024) { };
@@ -121,6 +124,14 @@ namespace Acam {
 
       inline void copy_info() { fits_file.copy_info( fitsinfo ); }
       inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
+      inline void set_skysim_arg( const std::string &key, const std::string &value ) {
+        this->skysim_args[key] = value;
+        this->andor.emulator.skysim.set_kwarg( key, value );
+      }
+      inline void clear_skysim_args() {
+        this->skysim_args.clear();
+        this->andor.emulator.skysim.clear_kwargs();
+      }
 
       long emulator( std::string args, std::string &retstring );
       long open( int sn );
@@ -170,11 +181,14 @@ namespace Acam {
           matches(-1), seeing(NAN), seeing_std(NAN), seeing_zen(NAN),
           extinction(NAN), extinction_std(NAN),
           background(NAN), background_std(NAN),
-          python_initialized(false), isacquire(true), pAstrometryModule(nullptr), pQualityModule(nullptr) { }
+          python_initialized(false), isacquire(true), catalog_session(0),
+          pAstrometryModule(nullptr), pQualityModule(nullptr) { }
 
       long initialize_python();                          /// initializes the Python module
 
       bool isacquire;
+      std::atomic<uint64_t> catalog_session;
+      void bump_catalog_session();
       inline bool is_initialized() { return this->python_initialized; };
       std::vector<std::string> solver_args;              /// contains list of optional solver args, "key1=val key2=val ... keyN=val"
 
@@ -384,6 +398,7 @@ namespace Acam {
         double angle;
       };                                   ///< a structure to hold target coordinates, always decimal degrees
 
+
       coords_t coords_slit;                ///< slit coordinates
 
       double tcs_casangle;                 ///< the cass angle from the TCS, must be supplied
@@ -446,6 +461,8 @@ namespace Acam {
         else return "unknown";
       }
 
+      void set_acquire_mode( Acam::TargetAcquisitionModes mode );
+
       inline void set_interface_instance( Acam::Interface* iface_in ) { iface = iface_in; }
 
       long acquire( Acam::TargetAcquisitionModes requested_mode );
@@ -483,11 +500,7 @@ namespace Acam {
 
       double dRA, dDEC;  /// offsets from put_on_slit will be applied to goal while guiding
 
-      struct {
-        double ra;
-        double dec;
-        double angle;
-      } acam_goal;
+      coords_t acam_goal;
 
       double putonslit_offset, last_putonslit_offset;
 
@@ -539,6 +552,7 @@ namespace Acam {
       std::atomic<bool> is_shutting_down;      ///< set during shutdown
 
       std::atomic<int> nskip_before_acquire;   ///< number of frame grabs to skip before using for target acquisition
+      std::atomic<int> nskip_after_offset;     ///< number of frame grabs to skip after a PT offset
 
       /** these are set by Interface::saveframes()
        */
@@ -582,6 +596,7 @@ namespace Acam {
           is_framegrab_running(false),
           is_shutting_down(false),
           nskip_before_acquire(0),
+          nskip_after_offset(0),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
           newframe_ready(false),
@@ -664,6 +679,7 @@ namespace Acam {
 
       long bin( std::string args, std::string &retstring );
       void publish_snapshot();
+      void publish_acquire_state();
       void request_snapshot();
       bool wait_for_snapshots();
       long handle_json_message( std::string message_in );

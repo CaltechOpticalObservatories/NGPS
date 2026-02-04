@@ -15,6 +15,7 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
+#include <cstdint>
 #include <map>
 #include <cmath>
 #include <mysqlx/xdevapi.h>
@@ -289,6 +290,10 @@ namespace Sequencer {
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
       std::atomic<pid_t> fine_tune_pid{0};       ///< fine tune process pid (process group leader)
+      std::atomic<bool> progress_ontarget{false};
+      std::atomic<bool> progress_fine_tune{false};
+      std::atomic<bool> progress_offset{false};
+      std::atomic<bool> progress_offset_settle{false};
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
@@ -352,6 +357,8 @@ namespace Sequencer {
       inline void ontarget() {
         this->cancel_flag.store(false);
         this->is_ontarget.store(true);
+        this->progress_ontarget.store(true);
+        this->publish_progress("ontarget");
         this->cv.notify_all();
       }
       void reset_ontarget() {
@@ -465,6 +472,7 @@ namespace Sequencer {
       void publish_waitstate();
       void publish_daemonstate();
       void publish_threadstate();
+      void publish_progress(const std::string &event="");
 
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint

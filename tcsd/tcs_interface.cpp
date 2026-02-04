@@ -526,8 +526,10 @@ namespace TCS {
 
     retstring = message.str();
 
-    asyncmsg << "TCSD:weathercoords:" << ( error==NO_ERROR ? message.str() : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
+    if ( !silent ) {
+      asyncmsg << "TCSD:weathercoords:" << ( error==NO_ERROR ? message.str() : "ERROR" );
+      this->async.enqueue( asyncmsg.str() );
+    }
 
     return error;
   }
@@ -1235,6 +1237,7 @@ namespace TCS {
     std::string function = "TCS::Interface::get_motion";
     std::stringstream message, asyncmsg;
     long error = NO_ERROR;
+    bool silent = false;
 
     // Help
     //
@@ -1244,6 +1247,7 @@ namespace TCS {
       retstring.append( "  Return the current motion state of the TCS\n" );
       return HELP;
     }
+    if ( arg == "poll" ) silent = true;
 
     // Send the command
     //
@@ -1252,8 +1256,10 @@ namespace TCS {
       error = ERROR;
     }
 
-    asyncmsg << "TCSD:motion:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
+    if ( !silent ) {
+      asyncmsg << "TCSD:motion:" << ( !retstring.empty() ? retstring : "ERROR" );
+      this->async.enqueue( asyncmsg.str() );
+    }
 
     return error;
   }
@@ -1473,6 +1479,11 @@ namespace TCS {
 
     std::stringstream cmd;
     cmd << "PT " << std::fixed << std::setprecision(3) << raoff << " " << decoff << " " << rate;
+    message.str("");
+    message << "NOTICE: PT offset ra=" << std::fixed << std::setprecision(3) << raoff
+            << " dec=" << decoff << " arcsec rate=" << rate
+            << " timeout=" << max_t << "ms";
+    logwrite( function, message.str() );
 
     long error = this->send_command( cmd.str(), retstring, TCS::SLOW_RESPONSE, max_t );  // perform the offset here
 

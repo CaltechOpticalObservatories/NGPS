@@ -33,7 +33,7 @@ namespace TCS {
   const std::string DAEMON_NAME = "tcsd";        ///< when run as a daemon, this is my name
 
   constexpr bool BLOCK=true;
-  constexpr int  PTOFFSET_MIN_TIMEOUT=3000;      ///< minimum timeout [ms] for PT offset
+  constexpr int  PTOFFSET_MIN_TIMEOUT=5000;      ///< minimum timeout [ms] for PT offset
 
   enum ConnectionType {
     FAST_RESPONSE,

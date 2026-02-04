@@ -159,6 +159,7 @@ inline void make_uppercase( std::string &in ) {
 inline std::string to_uppercase( std::string in ) {
   try { std::transform( in.begin(), in.end(), in.begin(), ::toupper ); return in; }
   catch( std::exception &e ) { std::cerr << "ERROR transforming string \"" << in << "\": " << e.what() << "\n"; }
+  return in;
 }
 
 

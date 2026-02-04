@@ -8,8 +8,10 @@ Config/*.py
 .DS_Store
 *sublime*
 *.swp
+*.ppm
+/data/
+/tools/ngps_db_gui/build/
 
 /GuiderGUI/jog.ini
 /GuiderGUI/buttons_guider.ans
 /GuiderGUI/buttons_slicev.ans
-

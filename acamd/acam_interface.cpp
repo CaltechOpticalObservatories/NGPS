@@ -10,6 +10,7 @@
 
 #include "acam_interface.h"
 
+#include <algorithm>
 #include <filesystem>
 
 namespace Acam {
@@ -785,6 +786,7 @@ namespace Acam {
     std::string function = "Acam::Camera::write_frame";
     std::stringstream message;
     long error = NO_ERROR;
+    auto t0 = std::chrono::steady_clock::now();
 
     // Nothing to do if not Andor image data
     //
@@ -804,14 +806,15 @@ namespace Acam {
     fits_file.copy_info( fitsinfo );      // copy from fitsinfo to the fits_file
 
     error = fits_file.open_file();        // open the fits file for writing
+    auto t_open = std::chrono::steady_clock::now();
 
     if ( !source_file.empty() ) {
-      message.str(""); message << "[DEBUG] copy header from " << source_file; logwrite(function,message.str());
       if (error==NO_ERROR) error = fits_file.copy_header_from( source_file );
     }
     else {
       if (error==NO_ERROR) error = fits_file.create_header();  // create basic header
     }
+    auto t_header = std::chrono::steady_clock::now();
 
 //  fits_file.copy_header( wcs_in );      // if supplied, copy the header from the input file
 //  fits_file.copy_header( "/home/developer/cshapiro/acam_skyinfo/skyheader.fits" );
@@ -827,8 +830,10 @@ namespace Acam {
 
 //  if (error==NO_ERROR) fits_file.write_image( andor.get_image_data() );  // write the image data
     if (error==NO_ERROR) fits_file.write_image( andor.get_avg_data() );    // write the image data
+    auto t_write = std::chrono::steady_clock::now();
 
     fits_file.close_file();                           // close the file
+    auto t_close = std::chrono::steady_clock::now();
 
     // This is the one extra call that is outside the normal workflow.
     // If emulator is enabled then the skysim generator will create a simulated
@@ -836,11 +841,17 @@ namespace Acam {
     // input to skysim because it contains the correct WCS headers, but will
     // ultimately be overwritten by the simulated image.
     //
-    if ( andor.is_emulated() && _tcs_online ) andor.simulate_frame( fitsinfo.fits_name,
-                                                                    false, // not multi-extension
-                                                                    this->simsize );
+    bool did_sim = false;
+    if ( andor.is_emulated() && _tcs_online ) {
+      did_sim = true;
+      andor.simulate_frame( fitsinfo.fits_name,
+                            false, // not multi-extension
+                            this->simsize );
+    }
+    auto t_sim = std::chrono::steady_clock::now();
 
     // Atomically replace the output FITS so readers never see partial data
+    bool used_copy = false;
     try {
       if ( std::filesystem::exists( final_out ) ) {
         std::filesystem::remove( final_out );
@@ -850,6 +861,7 @@ namespace Acam {
     catch ( const std::filesystem::filesystem_error & ) {
       // Fallback to copy if rename fails for any reason
       try {
+        used_copy = true;
         std::filesystem::copy_file( fitsinfo.fits_name, final_out,
                                     std::filesystem::copy_options::overwrite_existing );
         std::filesystem::remove( fitsinfo.fits_name );
@@ -862,6 +874,25 @@ namespace Acam {
     }
 
     outfile = final_out;
+
+    auto t_end = std::chrono::steady_clock::now();
+    int exptime_ms = static_cast<int>(andor.camera_info.exptime * 1000.0);
+    int threshold_ms = std::max(2000, exptime_ms + 1000);
+    auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t0).count();
+    if ( total_ms > threshold_ms ) {
+      std::stringstream dbg;
+      dbg << "[DEBUG] write_frame slow total=" << total_ms << "ms"
+          << " exp=" << andor.camera_info.exptime << "s"
+          << " open=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_open - t0).count()
+          << " header=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_header - t_open).count()
+          << " write=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_write - t_header).count()
+          << " close=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_close - t_write).count()
+          << " sim=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_sim - t_close).count()
+          << " rename=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_sim).count()
+          << " sim_on=" << (did_sim ? "yes" : "no")
+          << " copy_fallback=" << (used_copy ? "yes" : "no");
+      logwrite(function, dbg.str());
+    }
 
     return error;
   }
@@ -941,6 +972,16 @@ namespace Acam {
     return NO_ERROR;
   }
   /***** Acam::Astrometry::initialize_python **********************************/
+
+
+  /***** Acam::Astrometry::bump_catalog_session *******************************/
+  /**
+   * @brief      increments the catalog session used by the Python solver cache
+   */
+  void Astrometry::bump_catalog_session() {
+    this->catalog_session.fetch_add( 1, std::memory_order_relaxed );
+  }
+  /***** Acam::Astrometry::bump_catalog_session *******************************/
 
 
   /***** Acam::Astrometry::image_quality **************************************/
@@ -1130,6 +1171,13 @@ namespace Acam {
     // and other optional key=val pairs can be added to a space-delimited string.
     //
     PyObject* pKeywords = PyDict_New();
+    if ( pKeywords ) {
+      PyObject* pSession = PyLong_FromUnsignedLongLong( this->catalog_session.load( std::memory_order_relaxed ) );
+      if ( pSession ) {
+        PyDict_SetItemString( pKeywords, "catalog_session", pSession );
+        Py_DECREF( pSession );
+      }
+    }
     //  acquire key = false calculates faster but requires the latest WCS headers
     //  which are not being sent right now. on-sky tests indicate this is not
     //  required to fix acquire=true always, even while guiding.
@@ -1478,6 +1526,11 @@ namespace Acam {
                                     this->motion.get_current_coverpos() :
                                     "not_connected" );
 
+    std::string mode = this->target.acquire_mode_string();
+    jmessage_out["ACAM_ACQUIRE_MODE"] = mode;
+    jmessage_out["ACAM_GUIDING"] = ( mode == "guiding" );
+    jmessage_out["ACAM_ACQUIRING"] = ( mode == "acquiring" );
+
     try {
       this->publisher->publish( jmessage_out );
     }
@@ -1488,6 +1541,32 @@ namespace Acam {
     }
   }
   /***** Acam::Interface::publish_snapshot ************************************/
+
+
+  /***** Acam::Interface::publish_acquire_state *******************************/
+  /**
+   * @brief      publishes acquisition/guiding state
+   *
+   */
+  void Interface::publish_acquire_state() {
+    if ( !this->publisher ) return;
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = "acamd";
+    std::string mode = this->target.acquire_mode_string();
+    jmessage_out["ACAM_ACQUIRE_MODE"] = mode;
+    jmessage_out["ACAM_GUIDING"] = ( mode == "guiding" );
+    jmessage_out["ACAM_ACQUIRING"] = ( mode == "acquiring" );
+
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_acquire_state",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Acam::Interface::publish_acquire_state *******************************/
 
 
   /***** Acam::Interface::request_snapshot ************************************/
@@ -1763,6 +1842,7 @@ namespace Acam {
     }
 
     this->astrometry.solver_args.clear();
+    this->camera.clear_skysim_args();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -1792,6 +1872,31 @@ namespace Acam {
             logwrite(function, "ERROR configuring SOLVER_ARGS: requested tokens out of range");
             error |= ERROR;
           }
+        }
+      }
+
+      if ( starts_with( config.param[entry], "SKYSIM_ARGS" ) ) {
+        std::vector<std::string> tokens;
+        int size = Tokenize( config.arg[entry], tokens, "=" );
+        if ( size==0 ) continue;
+        if ( size != 2 ) {
+          message.str(""); message << "ERROR: bad entry for SKYSIM_ARGS: " << config.arg[entry]
+                                   << ": expected (key=value)";
+          logwrite(function, message.str());
+          error |= ERROR;
+          continue;
+        }
+        try {
+          this->camera.set_skysim_arg( tokens.at(0), tokens.at(1) );
+          message.str(""); message << "CONFIG:" << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          this->async.enqueue( message.str() );
+          applied++;
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR configuring SKYSIM_ARGS: " << e.what();
+          logwrite( function, message.str() );
+          error |= ERROR;
         }
       }
 
@@ -2765,11 +2870,15 @@ namespace Acam {
 
     do {
       if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
+      const double exptime_sec = iface.camera.andor.camera_info.exptime;
+      const int exptime_ms = static_cast<int>(exptime_sec * 1000.0);
+      auto t0 = std::chrono::steady_clock::now();
 
       if ( iface.collect_header_info() == ERROR ) {                   // collect header information
         logwrite(function,"ERROR collecting header info");
         continue;
       }
+      auto t_collect = std::chrono::steady_clock::now();
 
 //logwrite(function, "[DEBUG] start acquire");
       if ( iface.camera.andor.acquire_one() == ERROR ) {              // acquire and get single scan single frame
@@ -2777,6 +2886,7 @@ namespace Acam {
         continue;
       }
 //logwrite(function, "[DEBUG] acquire complete");
+      auto t_acquire = std::chrono::steady_clock::now();
 
       iface.newframe_ready.store(false);                              // while writing, the frame cannot be ready
 
@@ -2786,6 +2896,7 @@ namespace Acam {
                                         iface.imagename,
                                         iface.tcs_online.load(std::memory_order_acquire) );    // write to FITS file
       }
+      auto t_write = std::chrono::steady_clock::now();
       if (error==ERROR) {
         logwrite(function,"ERROR writing frame");
         continue;
@@ -2801,6 +2912,7 @@ namespace Acam {
 
       iface.guide_manager.push_guider_image( iface.imagename );       // send frame to Guider GUI
 //logwrite(function, "[DEBUG] pushed to GUI");
+      auto t_gui = std::chrono::steady_clock::now();
 
       // Normally, framegrabs are overwritten to the same file.
       // This optionally saves them at the requested cadence by
@@ -2808,21 +2920,44 @@ namespace Acam {
       //
       // Save a number of frames in a row
       //
+      bool preserved = false;
       if ( _nsave-- > 0 ) {
         iface.preserve_framegrab();
+        preserved = true;
       }
+      auto t_preserve = std::chrono::steady_clock::now();
       // skip the next _nskip number of frames before saving _nsave again
       if ( _nsave<1 && _nskip--<1 ) {
         _nsave = iface.nsave_preserve_frames.load();
         _nskip = iface.nskip_preserve_frames.load();
       }
 
+      // If an offset was just sent, skip at least one subsequent frame
+      int extra_skip = iface.nskip_after_offset.exchange(0);
+      if ( extra_skip > 0 ) _skipframes = std::max(_skipframes, extra_skip);
+
       // don't use this frame for target acquisition
       //
       if ( _skipframes-- > 0 ) {
+        auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_preserve - t0).count();
+        int threshold_ms = std::max(2000, exptime_ms + 1000);
+        if ( total_ms > threshold_ms ) {
+          std::stringstream dbg;
+          dbg << "[DEBUG] framegrab slow total=" << total_ms << "ms"
+              << " exp=" << exptime_sec << "s"
+              << " collect=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_collect - t0).count()
+              << " acquire=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_acquire - t_collect).count()
+              << " write=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_write - t_acquire).count()
+              << " gui=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_gui - t_write).count()
+              << " preserve=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_preserve - t_gui).count()
+              << " preserved=" << (preserved ? "yes" : "no")
+              << " skipframes=yes";
+          logwrite(function, dbg.str());
+        }
         continue;
       }
       else {
+        auto t_acq_start = std::chrono::steady_clock::now();
         // acquire target if needed
         //
         // get currently displayed guide status
@@ -2845,6 +2980,23 @@ namespace Acam {
         }
 
         _skipframes = iface.nskip_before_acquire.load();              // reset _skipframes
+        auto t_acq_end = std::chrono::steady_clock::now();
+        auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_acq_end - t0).count();
+        int threshold_ms = std::max(2000, exptime_ms + 1000);
+        if ( total_ms > threshold_ms ) {
+          std::stringstream dbg;
+          dbg << "[DEBUG] framegrab slow total=" << total_ms << "ms"
+              << " exp=" << exptime_sec << "s"
+              << " collect=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_collect - t0).count()
+              << " acquire=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_acquire - t_collect).count()
+              << " write=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_write - t_acquire).count()
+              << " gui=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_gui - t_write).count()
+              << " preserve=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_preserve - t_gui).count()
+              << " do_acquire=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_acq_end - t_acq_start).count()
+              << " preserved=" << (preserved ? "yes" : "no")
+              << " skipframes=no";
+          logwrite(function, dbg.str());
+        }
       }
 
       std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );  // don't use too much CPU
@@ -3240,6 +3392,8 @@ logwrite( function, "[DEBUG] acquire here" );
       bool goodsolution=false;
       int solveretries=0;
 
+      this->astrometry.bump_catalog_session();
+
       do {
       // before calling solve, wait for a new framegrab
       logwrite(function,"NOTICE: waiting for newframe");
@@ -3388,6 +3542,21 @@ logwrite( function, message.str() );
   /***** Acam::Interface::acquire *********************************************/
 
 
+  /***** Acam::Target::set_acquire_mode ****************************************/
+  /**
+   * @brief      set acquisition mode and publish state
+   *
+   */
+  void Target::set_acquire_mode( Acam::TargetAcquisitionModes mode ) {
+    auto prev = this->acquire_mode.load();
+    this->acquire_mode = mode;
+    if ( prev != mode && this->iface ) {
+      this->iface->publish_acquire_state();
+    }
+  }
+  /***** Acam::Target::set_acquire_mode ****************************************/
+
+
   /***** Acam::Target::acquire ************************************************/
   /**
    * @brief      controls target acquisition
@@ -3404,6 +3573,13 @@ logwrite( function, message.str() );
     // reset guide offset filtering parameters
     //
     this->reset_offset_params();
+
+    auto prev_mode = this->acquire_mode.load( std::memory_order_acquire );
+    if ( prev_mode == Acam::TARGET_NOP &&
+         ( requested_mode == Acam::TARGET_ACQUIRE ||
+           requested_mode == Acam::TARGET_GUIDE ) ) {
+      if ( this->iface ) this->iface->astrometry.bump_catalog_session();
+    }
 
     // If the frame grab thread isn't running then try to start it
     //
@@ -3468,7 +3644,7 @@ logwrite( function, message.str() );
       logwrite( function, "acquisition initialized" );
     }
 
-    this->acquire_mode = requested_mode;
+    this->set_acquire_mode( requested_mode );
 
     return NO_ERROR;
   }
@@ -3497,6 +3673,7 @@ logwrite( function, message.str() );
   long Target::do_acquire() {
     std::string function = "Acam::Target::do_acquire";
     std::stringstream message;
+    
 
     // Do nothing, return immediately if no acquisition mode selected
     // or if stop_acquisition is set.
@@ -3524,6 +3701,7 @@ logwrite( function, message.str() );
     if ( this->acquire_mode == Acam::TARGET_ACQUIRE ||
          this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ||
          this->acquire_mode == Acam::TARGET_GUIDE ) {
+    
     do {
       // ACQUIRE mode can time out so check that here (GUIDE never times out).
       //
@@ -3771,9 +3949,17 @@ logwrite( function, message.str() );
         else should_offset = true;  // always send the offsets when not guiding
 
         if ( should_offset ) {
+          message.str("");
+          message << "NOTICE: sending PT offset ra=" << std::fixed << std::setprecision(3) << (ra_off*3600.)
+                  << " dec=" << (dec_off*3600.) << " arcsec"
+                  << " mode=" << this->acquire_mode_string()
+                  << " offset=" << std::setprecision(3) << offset
+                  << " rate=" << OFFSETRATE;
+          logwrite( function, message.str() );
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
           std::this_thread::sleep_for( std::chrono::seconds(1) );
+          iface->nskip_after_offset.store(1);
         }
 
         // reset retry counter if match found and offset < max and no errors
@@ -3824,7 +4010,7 @@ logwrite( function, message.str() );
          this->nacquired >= this->min_repeat ) {
       logwrite( function, "NOTICE: target acquired" );
       this->is_acquired.store( true, std::memory_order_release );                   // Target Acquired!
-      this->acquire_mode = Acam::TARGET_GUIDE;
+      this->set_acquire_mode( Acam::TARGET_GUIDE );
     }
 
     // In guide mode, just silently keep the is_acquired flag set
@@ -5592,12 +5778,11 @@ logwrite( function, message.str() );
     retstring = message.str();
 
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      this->target.acquire_mode = Acam::TARGET_ACQUIRE;
+      // Keep GUIDE mode; just reset filtering so the new goal takes effect quickly.
+      this->target.reset_offset_params();
       this->target.nacquired = 0;
       this->target.attempts = 0;
       this->target.sequential_failures = 0;
-      this->target.timeout_time = std::chrono::steady_clock::now()
-                                + std::chrono::duration<double>(this->target.timeout);
     }
 
     return NO_ERROR;
@@ -5686,7 +5871,13 @@ logwrite( function, message.str() );
     if (error==NO_ERROR) error = this->fpoffsets.solve_offset( cross_ra, cross_dec,
                                                                slit_ra,  slit_dec,
                                                                dRA,      dDEC );
-    if (error==NO_ERROR) error = this->tcsd.pt_offset( dRA*3600., dDEC*3600., OFFSETRATE );
+    if (error==NO_ERROR) {
+      message.str("");
+      message << "NOTICE: sending PT offset (putonslit) ra=" << std::fixed << std::setprecision(3) << (dRA*3600.)
+              << " dec=" << (dDEC*3600.) << " arcsec rate=" << OFFSETRATE;
+      logwrite( function, message.str() );
+      error = this->tcsd.pt_offset( dRA*3600., dDEC*3600., OFFSETRATE );
+    }
     std::this_thread::sleep_for( std::chrono::seconds(1) );
 
     message.str(""); message << ( error==ERROR ? "ERROR moving " : "moved " )

@@ -10,6 +10,7 @@
 
 #include "slicecam_interface.h"
 
+#include <algorithm>
 #include <filesystem>
 
 namespace Slicecam {
@@ -944,6 +945,7 @@ namespace Slicecam {
     std::stringstream message;
 
     long error = NO_ERROR;
+    auto t0 = std::chrono::steady_clock::now();
 
     const std::string final_out = outfile;
     const std::string tmp_out = final_out + ".tmp";
@@ -954,6 +956,7 @@ namespace Slicecam {
     fits_file.copy_info( fitsinfo );      // copy from fitsinfo to the fits_file class
 
     error = fits_file.open_file();        // open the fits file for writing
+    auto t_open = std::chrono::steady_clock::now();
 
     if ( !source_file.empty() ) {
       if (error==NO_ERROR) error = fits_file.copy_header_from( source_file );
@@ -961,6 +964,7 @@ namespace Slicecam {
     else {
       if (error==NO_ERROR) error = fits_file.create_header();                  // create basic header
     }
+    auto t_header = std::chrono::steady_clock::now();
 
     for ( auto &[name, cam] : this->andor ) {
       cam->camera_info.section_size = cam->camera_info.axes[0] * cam->camera_info.axes[1];
@@ -974,8 +978,10 @@ namespace Slicecam {
       //
       fits_file.write_image( cam );                            // write the image data
     }
+    auto t_write = std::chrono::steady_clock::now();
 
     fits_file.close_file();               // close the file
+    auto t_close = std::chrono::steady_clock::now();
 
     // This is the one extra call that is outside the normal workflow.
     // If emulator is enabled then the skysim generator will create a simulated
@@ -986,15 +992,19 @@ namespace Slicecam {
     // Need only to make one call since it will generate a multi-extension
     // image.
     //
+    bool did_sim = false;
     if ( !this->andor.empty() ) {
       if ( this->andor.begin()->second->is_emulated() && _tcs_online ) {
+        did_sim = true;
         this->andor.begin()->second->simulate_frame( fitsinfo.fits_name,
                                                      true,  // multi-extension
                                                      this->simsize );
       }
     }
+    auto t_sim = std::chrono::steady_clock::now();
 
     // Atomically replace the output FITS so readers never see partial data
+    bool used_copy = false;
     try {
       if ( std::filesystem::exists( final_out ) ) {
         std::filesystem::remove( final_out );
@@ -1004,6 +1014,7 @@ namespace Slicecam {
     catch ( const std::filesystem::filesystem_error & ) {
       // Fallback to copy if rename fails for any reason
       try {
+        used_copy = true;
         std::filesystem::copy_file( fitsinfo.fits_name, final_out,
                                     std::filesystem::copy_options::overwrite_existing );
         std::filesystem::remove( fitsinfo.fits_name );
@@ -1016,6 +1027,29 @@ namespace Slicecam {
     }
 
     outfile = final_out;
+
+    auto t_end = std::chrono::steady_clock::now();
+    double exptime = 0.0;
+    if ( !this->andor.empty() ) {
+      exptime = this->andor.begin()->second->camera_info.exptime;
+    }
+    int exptime_ms = static_cast<int>(exptime * 1000.0);
+    int threshold_ms = std::max(2000, exptime_ms + 1000);
+    auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t0).count();
+    if ( total_ms > threshold_ms ) {
+      std::stringstream dbg;
+      dbg << "[DEBUG] write_frame slow total=" << total_ms << "ms"
+          << " exp=" << exptime << "s"
+          << " open=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_open - t0).count()
+          << " header=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_header - t_open).count()
+          << " write=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_write - t_header).count()
+          << " close=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_close - t_write).count()
+          << " sim=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_sim - t_close).count()
+          << " rename=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_sim).count()
+          << " sim_on=" << (did_sim ? "yes" : "no")
+          << " copy_fallback=" << (used_copy ? "yes" : "no");
+      logwrite(function, dbg.str());
+    }
 
     return error;
   }
@@ -1301,6 +1335,7 @@ namespace Slicecam {
     }
 
     this->camera.andor.clear();
+    this->camera.clear_skysim_args();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -1423,7 +1458,32 @@ namespace Slicecam {
         applied++;
       }
 
+      if ( starts_with( config.param[entry], "SKYSIM_ARGS" ) ) {
+        std::vector<std::string> tokens;
+        int size = Tokenize( config.arg[entry], tokens, "=" );
+        if ( size==0 ) continue;
+        if ( size != 2 ) {
+          message.str(""); message << "ERROR: bad entry for SKYSIM_ARGS: " << config.arg[entry]
+                                   << ": expected (key=value)";
+          logwrite(function, message.str());
+          error |= ERROR;
+          continue;
+        }
+        try {
+          this->camera.set_skysim_arg( tokens.at(0), tokens.at(1) );
+          message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          applied++;
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR configuring SKYSIM_ARGS: " << e.what();
+          logwrite( function, message.str() );
+          error |= ERROR;
+        }
+      }
+
     }
+    this->camera.apply_skysim_args();
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
     logwrite(function, message.str());
 
@@ -1967,32 +2027,46 @@ namespace Slicecam {
         exptime = this->camera.andor.begin()->second->camera_info.exptime;
       }
       if ( exptime == 0 ) continue;                                       // wait for non-zero exposure time
+      const int exptime_ms = static_cast<int>(exptime * 1000.0);
+      auto t0 = std::chrono::steady_clock::now();
 
       // Trigger and wait for acquisition on each camera sequentially.
       // Unfortunately the SDK can only do this one at a time within the same process.
       //
+      auto t_acq_start = std::chrono::steady_clock::now();
+      long long acq_ms = 0;
       for ( auto &[name, cam] : this->camera.andor ) {
+        auto t_cam_start = std::chrono::steady_clock::now();
         cam->acquire_one();
+        auto t_cam_end = std::chrono::steady_clock::now();
+        acq_ms += std::chrono::duration_cast<std::chrono::milliseconds>(t_cam_end - t_cam_start).count();
       }
+      auto t_acq_end = std::chrono::steady_clock::now();
 
       if (error==NO_ERROR) error = this->fpoffsets.get_slicecam_params(); // get slicecam params for both cameras before building header
+      auto t_params = std::chrono::steady_clock::now();
 
       // request external telemetry once for both cameras, results in struct telem.
       //
       this->request_snapshot();
+      auto t_req = std::chrono::steady_clock::now();
       this->wait_for_snapshots();
+      auto t_wait = std::chrono::steady_clock::now();
 
       for ( auto &[name, cam] : this->camera.andor ) {
         collect_header_info( cam );
       }
+      auto t_header = std::chrono::steady_clock::now();
 
       if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                              this->imagename,
                                                              this->tcs_online.load(std::memory_order_acquire) );    // write to FITS file
+      auto t_write = std::chrono::steady_clock::now();
 
       this->framegrab_time = std::chrono::steady_clock::time_point::min();
 
       this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
+      auto t_gui = std::chrono::steady_clock::now();
 
       // Normally, framegrabs are overwritten to the same file.
       // This optionally saves them at the requested cadence by
@@ -2000,13 +2074,34 @@ namespace Slicecam {
       //
       // Save a number of frames in a row
       //
+      bool preserved = false;
       if ( _nsave-- > 0 ) {
         this->preserve_framegrab();
+        preserved = true;
       }
+      auto t_preserve = std::chrono::steady_clock::now();
       // skip the next _nskip number of frames before saving _nsave again
       if ( _nsave<1 && _nskip--<1 ) {
         _nsave = this->nsave_preserve_frames.load();
         _nskip = this->nskip_preserve_frames.load();
+      }
+
+      auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_preserve - t0).count();
+      int threshold_ms = std::max(2000, exptime_ms + 1000);
+      if ( total_ms > threshold_ms ) {
+        std::stringstream dbg;
+        dbg << "[DEBUG] framegrab slow total=" << total_ms << "ms"
+            << " exp=" << exptime << "s"
+            << " acquire=" << acq_ms
+            << " params=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_params - t_acq_end).count()
+            << " snapshot_req=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_req - t_params).count()
+            << " snapshot_wait=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_wait - t_req).count()
+            << " header=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_header - t_wait).count()
+            << " write=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_write - t_header).count()
+            << " gui=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_gui - t_write).count()
+            << " preserve=" << std::chrono::duration_cast<std::chrono::milliseconds>(t_preserve - t_gui).count()
+            << " preserved=" << (preserved ? "yes" : "no");
+        logwrite(function, dbg.str());
       }
 
     } while ( this->should_framegrab_run.load(std::memory_order_acquire) );

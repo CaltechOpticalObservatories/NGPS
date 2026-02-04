@@ -254,6 +254,12 @@ namespace Network {
       logwrite( function, message.str() );
       return -1;
     }
+#ifdef SO_REUSEPORT
+    if ( setsockopt( fd, SOL_SOCKET, SO_REUSEPORT, (char*) &yes, sizeof(yes) ) < 0 ) {
+      message << "WARN: reusing PORT failed: " << strerror( errno );
+      logwrite( function, message.str() );
+    }
+#endif
 
     // set up the source address
     //

@@ -9,6 +9,7 @@
 
 #include <cpython.h>
 #include <cstdlib>
+#include <map>
 #include <string>
 
 /***** Andor ******************************************************************/
@@ -51,6 +52,7 @@ namespace Andor {
   class SkySim {
     private:
       bool python_initialized;
+      std::map<std::string, std::string> sim_kwargs;
 
     public:
       SkySim() : python_initialized(false) { }
@@ -64,7 +66,8 @@ namespace Andor {
       long generate_image( const std::string_view &headerfile, const std::string_view &outputfile,
                            const float exptime, const bool ismex, const int simsize );
 
-      void log_python_arguments(PyObject* pFunction, PyObject* pArgs, PyObject* pKwArgs);
+      inline void set_kwarg( const std::string &key, const std::string &value ) { this->sim_kwargs[key] = value; }
+      inline void clear_kwargs() { this->sim_kwargs.clear(); }
 
       inline bool is_initialized() { return this->python_initialized; }
   };

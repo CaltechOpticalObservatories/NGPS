@@ -218,11 +218,35 @@ namespace Sequencer {
                                        "AIRMASS_MAX" },
                      targetset_cols  { "SET_ID",
                                        "SET_NAME" },
-                     offset_threshold(0), max_tcs_offset(0) { init_record(); }
+                     offset_threshold(0), max_tcs_offset(0),
+                     sim_target_has_true(false),
+                     sim_target_perturb_arcsec(0.0),
+                     sim_target_perturb_min_arcsec(0.0),
+                     sim_target_perturb_seed(0),
+                     sim_target_perturb_counter(0),
+                     sim_post_slew_target_arcsec(0.0),
+                     sim_post_slew_target_min_arcsec(0.0),
+                     sim_post_slew_target_seed(0),
+                     sim_post_slew_target_counter(0),
+                     sim_post_slew_applied(false) { init_record(); }
 
       std::unique_ptr<Database::Database> database;
 
       SkyInfo::FPOffsets fpoffsets;       ///< for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
+      std::string sim_target_ra_hms_true;  ///< unperturbed target RA (from DB)
+      std::string sim_target_dec_dms_true; ///< unperturbed target DEC (from DB)
+      bool sim_target_has_true;            ///< true if unperturbed coords are available
+      double sim_target_perturb_arcsec;    ///< random RA/DEC perturbation max applied when targets are read (arcsec)
+      double sim_target_perturb_min_arcsec; ///< optional minimum perturbation radius (arcsec)
+      std::uint64_t sim_target_perturb_seed; ///< optional seed for perturbations (0=random)
+      std::atomic<std::uint64_t> sim_target_perturb_counter; ///< sequence counter for deterministic seeds
+      double sim_post_slew_target_arcsec;   ///< random RA/DEC perturbation max applied after ontarget (arcsec)
+      double sim_post_slew_target_min_arcsec; ///< optional minimum perturbation radius (arcsec)
+      std::uint64_t sim_post_slew_target_seed; ///< optional seed for post-slew perturbations (0=random)
+      std::atomic<std::uint64_t> sim_post_slew_target_counter; ///< sequence counter for post-slew seeds
+      bool sim_post_slew_applied;          ///< true once post-slew adjust applied for current target
+
+      void apply_sim_post_slew_adjust();
 
       /***** Sequencer::TargetInfo::extract_column_from_row *******************/
       /**

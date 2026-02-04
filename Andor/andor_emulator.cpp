@@ -10,8 +10,53 @@
 #include "andor.h"
 #include "logentry.h"
 #include <Python.h>
+#include <cctype>
 
 namespace Andor {
+
+  static PyObject* pyobj_from_string( const std::string &str_in ) {
+    std::size_t pos(0);
+
+    if ( str_in=="true"  || str_in=="True"  ) { Py_INCREF(Py_True);  return Py_True; }
+    if ( str_in=="false" || str_in=="False" ) { Py_INCREF(Py_False); return Py_False; }
+
+    pos = str_in.find_first_not_of(' ');
+    if ( pos == std::string::npos ) {
+      return PyUnicode_FromString( str_in.c_str() );
+    }
+
+    if ( str_in[pos] == '+' || str_in[pos] == '-' ) ++pos;
+
+    int n_nm=0, n_pt=0;
+    for ( ; pos < str_in.size() && (std::isdigit(str_in[pos]) || str_in[pos] == '.'); ++pos ) {
+      str_in[pos] == '.' ? ++n_pt : ++n_nm;
+    }
+    if ( n_pt > 1 || n_nm < 1 || pos < str_in.size() ) {
+      return PyUnicode_FromString( str_in.c_str() );
+    }
+
+    while ( pos < str_in.size() && str_in[pos] == ' ' ) {
+      ++pos;
+    }
+
+    try {
+      if ( pos == str_in.size() ) {
+        if ( str_in.find('.') == std::string::npos ) {
+          long num = std::stol( str_in );
+          return PyLong_FromLong( num );
+        }
+        else {
+          double num = std::stod( str_in );
+          return PyFloat_FromDouble( num );
+        }
+      }
+    }
+    catch ( const std::exception & ) {
+      return PyUnicode_FromString( str_in.c_str() );
+    }
+
+    return PyUnicode_FromString( str_in.c_str() );
+  }
 
   std::map<int, std::vector<float>> sim_hsspeeds = { { 0, { 30.0, 20.0, 10.0, 1.0 } },
                                                      { 1, { 1.0, 0.1 } } };
@@ -1189,6 +1234,14 @@ namespace Andor {
     }
 
     PyDict_SetItemString( pKwArgs, "IMAGE_SIZE", PyLong_FromLong( simsize ) );
+    for ( const auto &kv : this->sim_kwargs ) {
+      if ( kv.first.empty() ) continue;
+      PyObject* pvalue = pyobj_from_string( kv.second );
+      if ( pvalue ) {
+        PyDict_SetItemString( pKwArgs, kv.first.c_str(), pvalue );
+        Py_XDECREF( pvalue );
+      }
+    }
 
     PyObject* pArgs   = PyTuple_Pack( 2, pHeaderfile, pOutputfile );
 
@@ -1203,10 +1256,6 @@ namespace Andor {
       PyGILState_Release( gstate );                  // Release the GIL
       return ERROR;
     }
-
-#ifdef LOGLEVEL_DEBUG
-    log_python_arguments(pFunction, pArgs, pKwArgs);
-#endif
 
     // Call the Python function here
     //
@@ -1250,66 +1299,5 @@ namespace Andor {
   }
   /***** Andor::SkySim::generate_image ****************************************/
 
-
-  /***** Andor::SkySim::log_python_arguments **********************************/
-  /**
-   * @brief      logs the function name and args before calling a Python function
-   * @param[in]  pFunction  pointer to Python object containing function name
-   * @param[in]  pArgs      pointer to Python object containing positional arguments
-   * @param[in]  pKwArgs    pointer to Python object containing keyword arguments
-   *
-   */
-  void SkySim::log_python_arguments(PyObject* pFunction, PyObject* pArgs, PyObject* pKwArgs) {
-    const std::string function("Andor::SkySim::log_python_arguments");
-    std::stringstream message;
-
-    std::string func("UNKNOWN");
-
-    if (pFunction) {
-      PyObject* nameAttr = PyObject_GetAttrString(pFunction, "__name__");
-      if (nameAttr) {
-        const char* name = PyUnicode_AsUTF8(nameAttr);
-        if (name) func = name;
-        Py_DECREF(nameAttr);
-      }
-    }
-    message << "[DEBUG] func=" << func;
-
-    message << " positional args=";
-    if (pArgs) {
-      for (Py_ssize_t i = 0; i < PyTuple_Size(pArgs); ++i) {
-        PyObject* item = PyTuple_GetItem(pArgs, i); // borrowed reference
-        PyObject* repr = PyObject_Repr(item);       // temporary obj to get string representation
-        if (repr) {
-          message << " " << PyUnicode_AsUTF8(repr);
-          Py_DECREF(repr);                          // decref for temporary obj
-        }
-        else {
-          logwrite(function, "ERROR getting string representation of positional arguments");
-        }
-      }
-    }
-
-    message << " keyword args=";
-    if (pKwArgs) {
-      PyObject* key;
-      PyObject* value;
-      Py_ssize_t pos = 0;
-      while (PyDict_Next(pKwArgs, &pos, &key, &value)) {
-        PyObject* key_repr = PyObject_Repr(key);   // Create temporary repr for key
-        PyObject* value_repr = PyObject_Repr(value); // Create temporary repr for value
-        if (key_repr && value_repr) {
-          message << "  " << PyUnicode_AsUTF8(key_repr) << ": " << PyUnicode_AsUTF8(value_repr);
-          Py_DECREF(key_repr);   // Decrement refcount for key_repr
-          Py_DECREF(value_repr); // Decrement refcount for value_repr
-        }
-        else {
-          logwrite(function, "ERROR getting string representation of keyword argument");
-        }
-      }
-    }
-    logwrite(function, message.str());
-  }
-  /***** Andor::SkySim::log_python_arguments **********************************/
 
 }

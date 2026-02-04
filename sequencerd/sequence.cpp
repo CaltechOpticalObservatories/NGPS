@@ -15,6 +15,8 @@
 
 #include <signal.h>
 #include <cstdlib>
+#include <iomanip>
+#include <random>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -61,6 +63,7 @@ namespace Sequencer {
     this->publish_seqstate();
     this->publish_waitstate();
     this->publish_daemonstate();
+    this->publish_progress();
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
@@ -181,6 +184,37 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::publish_threadstate *****************************/
+
+
+  /***** Sequencer::Sequence::publish_progress ********************************/
+  /**
+   * @brief      publishes sequencer progress events and flags
+   * @details    publishes a JSON message with fine tune / offset / ontarget flags
+   *
+   */
+  void Sequence::publish_progress(const std::string &event) {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = Sequencer::DAEMON_NAME;
+    jmessage_out["ontarget"] = this->progress_ontarget.load();
+    jmessage_out["fine_tune_active"] = this->progress_fine_tune.load();
+    jmessage_out["offset_active"] = this->progress_offset.load();
+    jmessage_out["offset_settle"] = this->progress_offset_settle.load();
+    jmessage_out["obsid"] = this->target.obsid;
+    jmessage_out["target_state"] = std::string(this->target.state);
+    if (!event.empty()) {
+      jmessage_out["event"] = event;
+    }
+
+    try {
+      this->publisher->publish( jmessage_out, "seq_progress" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Sequencer::Sequence::publish_progress",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Sequencer::Sequence::publish_progress ********************************/
 
 
   /***** Sequencer::Sequence::broadcast_daemonstate ***************************/
@@ -464,6 +498,7 @@ namespace Sequencer {
           this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
           break;
         }
+        this->publish_progress("target_start");
 
         // let the world know of the state change
         //
@@ -614,6 +649,8 @@ namespace Sequencer {
         auto run_fine_tune = [&]() -> long {
           if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
           this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
+          this->progress_fine_tune.store(true);
+          this->publish_progress("fine_tune_start");
 
           std::string xterm_bin;
           if ( this->acq_fine_tune_xterm ) {
@@ -653,6 +690,8 @@ namespace Sequencer {
           }
           if ( pid < 0 ) {
             logwrite( function, "ERROR starting fine tune command: "+this->acq_fine_tune_cmd );
+            this->progress_fine_tune.store(false);
+            this->publish_progress("fine_tune_failed");
             return ERROR;
           }
           // Ensure the child is its own process group (best effort).
@@ -665,6 +704,8 @@ namespace Sequencer {
             if ( result == pid ) break;
             if ( result < 0 ) {
               logwrite( function, "ERROR waiting on fine tune command" );
+              this->progress_fine_tune.store(false);
+              this->publish_progress("fine_tune_failed");
               return ERROR;
             }
             if ( this->cancel_flag.load() ) {
@@ -682,6 +723,8 @@ namespace Sequencer {
                 waitpid( pid, &status, 0 );
               }
               this->fine_tune_pid.store( 0 );
+              this->progress_fine_tune.store(false);
+              this->publish_progress("fine_tune_aborted");
               return ERROR;
             }
             std::this_thread::sleep_for( std::chrono::milliseconds(100) );
@@ -690,10 +733,14 @@ namespace Sequencer {
           this->fine_tune_pid.store( 0 );
           if ( WIFEXITED( status ) && WEXITSTATUS( status ) == 0 ) {
             this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+            this->progress_fine_tune.store(false);
+            this->publish_progress("fine_tune_complete");
             return NO_ERROR;
           }
 
           logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
+          this->progress_fine_tune.store(false);
+          this->publish_progress("fine_tune_failed");
           return ERROR;
         };
 
@@ -750,7 +797,11 @@ namespace Sequencer {
                   }
                   if ( this->acq_offset_settle > 0 ) {
                     this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                    this->progress_offset_settle.store(true);
+                    this->publish_progress("offset_settle_start");
                     std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+                    this->progress_offset_settle.store(false);
+                    this->publish_progress("offset_settle_complete");
                   }
                 }
               }
@@ -840,6 +891,7 @@ namespace Sequencer {
       error = this->target.update_state( Sequencer::TARGET_COMPLETE );       // update the active target table
       if (error==NO_ERROR) error = this->target.insert_completed();          // insert into the completed table
       if (error!=NO_ERROR) this->thread_error_manager.set( THR_SEQUENCE_START );     // report any error
+      if (error==NO_ERROR) this->publish_progress("target_complete");
 
       // let the world know of the state change
       //
@@ -2110,6 +2162,8 @@ namespace Sequencer {
 
     // waiting for TCS Operator input (or cancel)
     {
+    this->progress_ontarget.store(false);
+    this->publish_progress("wait_tcsop");
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
     this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
@@ -2128,9 +2182,14 @@ namespace Sequencer {
     //
     if ( this->cancel_flag.load() ) return NO_ERROR;
 
-    // if ontarget (not cancelled) then acquire target
+    // if ontarget (not cancelled) then adjust target coords and acquire
     //
-    if ( !this->cancel_flag.load() ) this->acamd.command( ACAMD_ACQUIRE );
+    if ( !this->cancel_flag.load() ) {
+      if ( this->tcs_which == "sim" ) {
+        this->target.apply_sim_post_slew_adjust();
+      }
+      this->acamd.command( ACAMD_ACQUIRE );
+    }
 
     this->is_ontarget.store(false);
 
@@ -3584,14 +3643,41 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::target_offset");
     long error=NO_ERROR;
 
-    error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
+    this->progress_offset.store(true);
+    this->publish_progress("offset_start");
 
-    std::stringstream cmd;
-    cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+    bool is_guiding = false;
+    std::string reply;
+    if ( this->acamd.command( ACAMD_ACQUIRE, reply ) == NO_ERROR ) {
+      if ( reply.find( "guiding" ) != std::string::npos ) is_guiding = true;
+    }
+    else {
+      logwrite( function, "ERROR reading ACAM guide state, falling back to TCS offset" );
+    }
 
-    error |= this->tcsd.command( cmd.str() );
+    if ( is_guiding ) {
+      // ACAMD_OFFSETGOAL expects degrees; target offsets are arcsec
+      const double dra_deg = this->target.offset_ra / 3600.0;
+      const double ddec_deg = this->target.offset_dec / 3600.0;
+      std::stringstream cmd;
+      cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6)
+          << dra_deg << " " << ddec_deg;
+      error = this->acamd.command( cmd.str() );
+      logwrite( function, "sent "+cmd.str()+" (guiding)" );
+    }
+    else {
+      error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
 
-    logwrite( function, "sent "+cmd.str() );
+      std::stringstream cmd;
+      cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+
+      error |= this->tcsd.command( cmd.str() );
+
+      logwrite( function, "sent "+cmd.str() );
+    }
+
+    this->progress_offset.store(false);
+    this->publish_progress(error == NO_ERROR ? "offset_complete" : "offset_failed");
 
     return error;
   }

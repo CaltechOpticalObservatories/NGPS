@@ -168,6 +168,21 @@ ACQUIRE_TCS_MAX_OFFSET=60     # the maximum allowable offset sent to the TCS, in
 #
 SKYSIM_IMAGE_SIZE=1024
 
+# SkySimulator randomization (emulator only):
+#   SKYSIM_ARGS="key=value"   (one per line)
+SKYSIM_ARGS="SIM_SEEING_FWHM_MIN=0.8"
+SKYSIM_ARGS="SIM_SEEING_FWHM_MAX=1.6"
+SKYSIM_ARGS="SIM_TRANSPARENCY=1.0"
+SKYSIM_ARGS="SIM_PSF_COMA_MAX=0.2"
+SKYSIM_ARGS="SIM_TRACK_JITTER_MAX=0.1"
+SKYSIM_ARGS="SIM_TRAIL_ENABLE=1"
+SKYSIM_ARGS="SIM_TRAIL_MAX_STEPS=100"
+SKYSIM_ARGS="SIM_TRAIL_KERNEL=LINE"
+SKYSIM_ARGS="SIM_TRAIL_WIDTH_PX=AUTO"
+# Optional fixed seed for reproducibility:
+# SKYSIM_ARGS="SIM_SEED=12345"
+# These keys are parsed by Python/acam_skyinfo/skysim.py.
+
 # -----------------------------------------------------------------------------
 # TELEM_PROVIDER=( <name> <port> )
 #
