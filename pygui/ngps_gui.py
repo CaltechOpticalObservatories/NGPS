@@ -198,6 +198,15 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.slit_info_signal.connect(self.layout_service.update_slit_info_fields)
         self.zmq_status_service.system_status_signal.connect(self.layout_service.update_system_status)
 
+        # Initialize the database tab after DB connection is established
+        try:
+            self.layout_service.initialize_database_tab()
+            print("Database tab initialized successfully")
+        except Exception as exc:
+            print(f"Failed to initialize database tab: {exc}")
+            import traceback
+            traceback.print_exc()
+
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
         self.utc_start_time.setText(start_time_utc.strftime('%m/%d/%Y %I:%M %p UTC'))

@@ -5,6 +5,7 @@ from logic_service import LogicService
 from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
+from database_tab import DatabaseTab
 import re
 
 class LayoutService:
@@ -23,9 +24,12 @@ class LayoutService:
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
-        
+
         # Create the instrument status tab instance
         self.instrument_status_tab = InstrumentStatusTab(self.parent)
+
+        # Create the database tab instance
+        self.database_tab = None  # Will be initialized after DB connection
 
         
     def get_screen_size_ratio(self):
@@ -116,10 +120,12 @@ class LayoutService:
         self.parent.tabs = QTabWidget()
         self.parent.control_tab = QWidget()
         self.parent.status_tab = QWidget()
+        self.parent.database_tab = QWidget()
         self.parent.engineering_tab = QWidget()
 
         # Add the tabs to the QTabWidget
         self.parent.tabs.addTab(self.parent.control_tab, "Control")
+        self.parent.tabs.addTab(self.parent.database_tab, "Target Sets")
         # self.parent.tabs.addTab(self.parent.status_tab, "Status")
 
         # Add the QTabWidget to the third column layout
@@ -132,11 +138,39 @@ class LayoutService:
         self.parent.control_tab.setLayout(control_layout)
 
          # Create the Instrument tab
-        self.status_tab = InstrumentStatusTab(self.parent) 
+        self.status_tab = InstrumentStatusTab(self.parent)
         status_layout = QVBoxLayout()
         status_layout.addWidget(self.status_tab)
         self.parent.status_tab.setLayout(status_layout)
+
+        # Database tab will be initialized separately after DB connection
+        database_layout = QVBoxLayout()
+        self.parent.database_tab.setLayout(database_layout)
+
         return third_column_layout
+
+    def initialize_database_tab(self):
+        """Initialize the database tab after DB connection is established."""
+        try:
+            # Create the database tab widget
+            self.database_tab_widget = DatabaseTab(self.parent, self.parent.connection)
+
+            # Add to the database tab layout
+            layout = self.parent.database_tab.layout()
+            if layout:
+                # Clear existing widgets
+                while layout.count():
+                    item = layout.takeAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
+
+                # Add new database tab widget
+                layout.addWidget(self.database_tab_widget)
+
+        except Exception as exc:
+            print(f"Failed to initialize database tab: {exc}")
+            import traceback
+            traceback.print_exc()
 
     def create_top_section(self):
         top_section_layout = QHBoxLayout()
