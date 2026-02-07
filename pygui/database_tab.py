@@ -353,9 +353,9 @@ class DatabaseTableWidget(QWidget):
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self.table, 1)
 
-        if self._allow_reorder:
-            self.table.setContextMenuPolicy(Qt.CustomContextMenu)
-            self.table.customContextMenuRequested.connect(self._show_context_menu)
+        # Enable context menu for all tables
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
 
         # Connect signals
         self.refresh_button.clicked.connect(self.refresh)
@@ -611,8 +611,278 @@ class DatabaseTableWidget(QWidget):
         self.refresh()
 
     def _show_context_menu(self, pos) -> None:
-        """Show context menu (placeholder)."""
-        pass
+        """Show context menu for target operations."""
+        # Get the row at the cursor position
+        row = self.table.rowAt(pos.y())
+        if row < 0:
+            return
+
+        # Select the row
+        self.table.selectRow(row)
+
+        # Get row data
+        row_values = self._current_row_values(row)
+        if not row_values:
+            return
+
+        # Create context menu
+        menu = QMenu(self)
+
+        # Basic operations (all tables)
+        refresh_action = menu.addAction("Refresh")
+        refresh_action.triggered.connect(self.refresh)
+
+        # Targets table specific operations
+        if self._is_targets_table():
+            menu.addSeparator()
+
+            # Reordering operations
+            move_up_action = menu.addAction("Move Up")
+            move_down_action = menu.addAction("Move Down")
+            menu.addSeparator()
+            move_top_action = menu.addAction("Move to Top")
+            move_bottom_action = menu.addAction("Move to Bottom")
+
+            # Disable if first/last row
+            total_rows = self.table.rowCount()
+            move_up_action.setEnabled(row > 0)
+            move_down_action.setEnabled(row < total_rows - 1)
+
+            # Connect reordering actions
+            move_up_action.triggered.connect(lambda: self._move_row(row, -1))
+            move_down_action.triggered.connect(lambda: self._move_row(row, 1))
+            move_top_action.triggered.connect(lambda: self._move_row_to_position(row, 0))
+            move_bottom_action.triggered.connect(lambda: self._move_row_to_position(row, total_rows - 1))
+
+            menu.addSeparator()
+
+            # Edit operations
+            duplicate_action = menu.addAction("Duplicate")
+            duplicate_action.triggered.connect(lambda: self._duplicate_row(row))
+
+            edit_action = menu.addAction("Edit...")
+            edit_action.triggered.connect(lambda: self._edit_row_dialog(row))
+
+            menu.addSeparator()
+
+            # Delete operation
+            delete_action = menu.addAction("Delete")
+            delete_action.triggered.connect(lambda: self._delete_row_with_confirmation(row))
+
+        # Show menu at cursor position
+        menu.exec_(self.table.viewport().mapToGlobal(pos))
+
+    def _move_row(self, row: int, delta: int) -> None:
+        """Move row up (-1) or down (+1)."""
+        target_row = row + delta
+        if target_row < 0 or target_row >= self.table.rowCount():
+            return
+
+        try:
+            # Get OBS_ORDER values for both rows
+            obs_order_col = self._column_index.get("OBS_ORDER")
+            obs_id_col = self._column_index.get("OBSERVATION_ID")
+
+            if obs_order_col is None or obs_id_col is None:
+                return
+
+            current_obs_id = self.table.item(row, obs_id_col).text()
+            target_obs_id = self.table.item(target_row, obs_id_col).text()
+            current_order = int(self.table.item(row, obs_order_col).text())
+            target_order = int(self.table.item(target_row, obs_order_col).text())
+
+            # Swap OBS_ORDER values in database
+            if not self._db.is_open():
+                QMessageBox.warning(self, "Error", "Database not connected")
+                return
+
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._table_name)
+
+            # Update both rows
+            table.update().where("OBSERVATION_ID = :oid").set("OBS_ORDER", target_order).bind("oid", current_obs_id).execute()
+            table.update().where("OBSERVATION_ID = :oid").set("OBS_ORDER", current_order).bind("oid", target_obs_id).execute()
+
+            # Refresh view
+            self.refresh()
+
+            # Reselect the moved row
+            self.table.selectRow(target_row)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to move row: {e}")
+
+    def _move_row_to_position(self, row: int, target_position: int) -> None:
+        """Move row to specific position (0=top, n-1=bottom)."""
+        if row == target_position:
+            return
+
+        try:
+            obs_order_col = self._column_index.get("OBS_ORDER")
+            obs_id_col = self._column_index.get("OBSERVATION_ID")
+
+            if obs_order_col is None or obs_id_col is None:
+                return
+
+            current_obs_id = self.table.item(row, obs_id_col).text()
+
+            if not self._db.is_open():
+                QMessageBox.warning(self, "Error", "Database not connected")
+                return
+
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._table_name)
+
+            # Get all rows sorted by current OBS_ORDER
+            if self._fixed_filter_col and self._fixed_filter_val is not None:
+                results = table.select().where(f"{self._fixed_filter_col} = :val").bind("val", self._fixed_filter_val).order_by("OBS_ORDER").execute()
+            else:
+                results = table.select().order_by("OBS_ORDER").execute()
+
+            rows_data = list(results)
+
+            # Find current row and reorder
+            current_idx = -1
+            for i, r in enumerate(rows_data):
+                if str(r["OBSERVATION_ID"]) == current_obs_id:
+                    current_idx = i
+                    break
+
+            if current_idx < 0:
+                return
+
+            # Remove and reinsert at new position
+            moved_row = rows_data.pop(current_idx)
+            rows_data.insert(target_position, moved_row)
+
+            # Update all OBS_ORDER values
+            for new_order, r in enumerate(rows_data):
+                table.update().where("OBSERVATION_ID = :oid").set("OBS_ORDER", new_order).bind("oid", r["OBSERVATION_ID"]).execute()
+
+            # Refresh view
+            self.refresh()
+
+            # Reselect the moved row
+            self.table.selectRow(target_position)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to move row: {e}")
+
+    def _duplicate_row(self, row: int) -> None:
+        """Duplicate the selected row with new OBSERVATION_ID."""
+        try:
+            row_values = self._current_row_values(row)
+            if not row_values:
+                return
+
+            if not self._db.is_open():
+                QMessageBox.warning(self, "Error", "Database not connected")
+                return
+
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._table_name)
+
+            # Remove OBSERVATION_ID (will be auto-generated)
+            if "OBSERVATION_ID" in row_values:
+                del row_values["OBSERVATION_ID"]
+
+            # Increment OBS_ORDER
+            if "OBS_ORDER" in row_values:
+                try:
+                    current_order = int(row_values["OBS_ORDER"])
+                    row_values["OBS_ORDER"] = str(current_order + 1)
+                except (ValueError, TypeError):
+                    pass
+
+            # Insert new row
+            columns = []
+            values = []
+            for col_name, col_val in row_values.items():
+                if col_name in self._column_by_name:
+                    columns.append(col_name)
+                    # Convert empty strings to None for nullable columns
+                    if col_val == "" and self._column_by_name[col_name].nullable:
+                        values.append(None)
+                    else:
+                        values.append(col_val)
+
+            if columns:
+                table.insert(*columns).values(*values).execute()
+
+            # Refresh view
+            self.refresh()
+
+            # Show success message
+            QMessageBox.information(self, "Success", "Row duplicated successfully")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to duplicate row: {e}")
+
+    def _edit_row_dialog(self, row: int) -> None:
+        """Open full edit dialog for the row."""
+        # TODO: Implement RecordEditorDialog
+        QMessageBox.information(self, "Edit Row", "Full edit dialog will be implemented in the next phase.\n\nFor now, please double-click cells to edit inline.")
+
+    def _delete_row_with_confirmation(self, row: int) -> None:
+        """Delete row after user confirmation."""
+        row_values = self._current_row_values(row)
+        if not row_values:
+            return
+
+        # Get row identifier for confirmation message
+        row_id = row_values.get("OBSERVATION_ID", row_values.get("SET_ID", f"row {row + 1}"))
+
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete {row_id}?\n\nThis action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            if not self._db.is_open():
+                QMessageBox.warning(self, "Error", "Database not connected")
+                return
+
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._table_name)
+
+            # Build WHERE clause using primary keys
+            where_parts = []
+            bind_vals = {}
+            for col in self._columns:
+                if col.is_primary:
+                    col_val = row_values.get(col.name, "")
+                    where_parts.append(f"{col.name} = :{col.name}")
+                    bind_vals[col.name] = col_val
+
+            if not where_parts:
+                QMessageBox.warning(self, "Error", "Cannot determine primary key for deletion")
+                return
+
+            where_clause = " AND ".join(where_parts)
+
+            # Delete row
+            query = table.delete().where(where_clause)
+            for key, val in bind_vals.items():
+                query = query.bind(key, val)
+            query.execute()
+
+            # Refresh view
+            self.refresh()
+
+            # Show success message
+            status_msg = f"Deleted {row_id}"
+            if hasattr(self._parent_window, "statusBar"):
+                self._parent_window.statusBar().showMessage(status_msg, 3000)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to delete row: {e}")
 
     def _current_row_values(self, row: int) -> Dict[str, Any]:
         """Get values for a specific row."""
