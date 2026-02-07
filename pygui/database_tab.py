@@ -110,6 +110,18 @@ except ImportError as e:
     print(f"Warning: Record editor dialog not available: {e}")
     RECORD_EDITOR_AVAILABLE = False
 
+# Import coordinate utilities for grouping
+try:
+    from coordinate_utils import (
+        parse_sexagesimal_ra, parse_sexagesimal_dec, gnomonic_projection,
+        angular_separation_arcsec, compute_coordinate_key, find_nearest_center,
+        DEFAULT_GROUP_TOLERANCE_ARCSEC
+    )
+    COORDINATE_UTILS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Coordinate utilities not available: {e}")
+    COORDINATE_UTILS_AVAILABLE = False
+
 
 class DbClient:
     """Database client with transaction support."""
@@ -339,6 +351,12 @@ class DatabaseTableWidget(QWidget):
         self._column_width_save_timer.setSingleShot(True)
         self._column_width_save_timer.timeout.connect(self._save_column_widths)
 
+        # Grouping state
+        self._grouping_enabled = False
+        self._expanded_groups: Set[str] = set()  # Set of expanded group keys
+        self._manual_ungroup_obs_ids: Set[str] = set()  # Manually ungrouped targets
+        self._group_data: Dict[str, List[int]] = {}  # group_key -> [row_indices]
+
         self._init_ui()
         self._setup_database()
 
@@ -354,6 +372,17 @@ class DatabaseTableWidget(QWidget):
         top.addWidget(self.add_button)
         top.addWidget(self.delete_button)
         top.addWidget(self.refresh_button)
+
+        # Grouping button (only for targets table)
+        if self._is_targets_table() and COORDINATE_UTILS_AVAILABLE:
+            top.addSpacing(12)
+            self.group_button = QPushButton("Enable Grouping", self)
+            self.group_button.setCheckable(True)
+            self.group_button.setToolTip("Group targets by coordinate proximity (1 arcsec tolerance)")
+            top.addWidget(self.group_button)
+            self.group_button.clicked.connect(self._toggle_grouping)
+        else:
+            self.group_button = None
 
         if self._search_column:
             top.addSpacing(12)
@@ -374,6 +403,7 @@ class DatabaseTableWidget(QWidget):
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.itemChanged.connect(self._on_item_changed)
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self.table, 1)
 
         # Enable context menu for all tables
@@ -442,6 +472,10 @@ class DatabaseTableWidget(QWidget):
         where = " AND ".join(where_clauses)
         order_by = self._order_by or ""
         rows = self._db.fetch_rows(self._table_name, where=where, params=tuple(params), order_by=order_by)
+
+        # Apply grouping if enabled
+        if self._grouping_enabled:
+            rows = self._apply_grouping_to_display(rows)
 
         # Populate table
         self._loading = True
@@ -613,6 +647,34 @@ class DatabaseTableWidget(QWidget):
         if values:
             self.selection_changed.emit(values)
 
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        """Handle cell click - check for group header clicks."""
+        if not self._grouping_enabled:
+            return
+
+        # Get row data
+        row_values = self._current_row_values(row)
+        if not row_values:
+            return
+
+        # Check if this is a group header
+        is_header = row_values.get("_IS_GROUP_HEADER", False)
+        if not is_header:
+            return
+
+        # Toggle expansion
+        group_key = row_values.get("_GROUP_KEY", "")
+        if not group_key:
+            return
+
+        if group_key in self._expanded_groups:
+            self._expanded_groups.remove(group_key)
+        else:
+            self._expanded_groups.add(group_key)
+
+        # Refresh to show/hide members
+        self.refresh()
+
     def _on_add_clicked(self) -> None:
         """Handle add button - open dialog to add new record."""
         if not RECORD_EDITOR_AVAILABLE:
@@ -735,6 +797,22 @@ class DatabaseTableWidget(QWidget):
 
             edit_action = menu.addAction("Edit...")
             edit_action.triggered.connect(lambda: self._edit_row_dialog(row))
+
+            # Grouping operations (if grouping enabled)
+            if self._grouping_enabled and COORDINATE_UTILS_AVAILABLE:
+                menu.addSeparator()
+
+                obs_id = row_values.get("OBSERVATION_ID", "")
+                is_ungrouped = obs_id in self._manual_ungroup_obs_ids
+
+                if is_ungrouped:
+                    regroup_action = menu.addAction("Regroup")
+                    regroup_action.setToolTip("Restore automatic grouping for this target")
+                    regroup_action.triggered.connect(lambda: self._regroup_target(obs_id))
+                else:
+                    ungroup_action = menu.addAction("Ungroup")
+                    ungroup_action.setToolTip("Remove this target from automatic grouping")
+                    ungroup_action.triggered.connect(lambda: self._ungroup_target(obs_id))
 
             menu.addSeparator()
 
@@ -1038,6 +1116,185 @@ class DatabaseTableWidget(QWidget):
     def _is_targets_table(self) -> bool:
         """Check if this is the targets table."""
         return "OBSERVATION_ID" in self._column_by_name and "SET_ID" in self._column_by_name
+
+    def _toggle_grouping(self, checked: bool) -> None:
+        """Toggle grouping on/off."""
+        self._grouping_enabled = checked
+
+        if self.group_button:
+            self.group_button.setText("Disable Grouping" if checked else "Enable Grouping")
+
+        # Refresh to apply/remove grouping
+        self.refresh()
+
+    def _compute_groups(self, rows_data: List[Dict[str, Any]]) -> Dict[str, str]:
+        """
+        Compute group assignments for all targets.
+
+        Args:
+            rows_data: List of row dictionaries from database
+
+        Returns:
+            Dictionary mapping OBSERVATION_ID -> group_key
+        """
+        if not COORDINATE_UTILS_AVAILABLE:
+            return {}
+
+        group_assignments = {}
+        science_centers = []  # List of (key, ra_deg, dec_deg)
+
+        # First pass: Identify science centers (targets with science exposures and coordinates)
+        for row in rows_data:
+            obs_id = str(row.get("OBSERVATION_ID", ""))
+            name = str(row.get("NAME", ""))
+            ra_str = str(row.get("RA", ""))
+            dec_str = str(row.get("DECL", ""))
+            offset_ra = float(row.get("OFFSET_RA", 0.0) or 0.0)
+            offset_dec = float(row.get("OFFSET_DEC", 0.0) or 0.0)
+
+            # Skip if manually ungrouped
+            if obs_id in self._manual_ungroup_obs_ids:
+                continue
+
+            # Skip calibration targets (no RA/DEC or name starts with CAL_)
+            if not ra_str or not dec_str or name.upper().startswith("CAL_"):
+                continue
+
+            # Parse coordinates
+            ra_deg = parse_sexagesimal_ra(ra_str)
+            dec_deg = parse_sexagesimal_dec(dec_str)
+
+            if ra_deg is None or dec_deg is None:
+                continue
+
+            # Apply gnomonic projection if offsets present
+            if offset_ra != 0.0 or offset_dec != 0.0:
+                ra_deg, dec_deg = gnomonic_projection(ra_deg, dec_deg, offset_ra, offset_dec)
+
+            # Generate coordinate key
+            coord_key = compute_coordinate_key(ra_deg, dec_deg, DEFAULT_GROUP_TOLERANCE_ARCSEC)
+
+            # Add to science centers if not already present
+            if coord_key not in [c[0] for c in science_centers]:
+                science_centers.append((coord_key, ra_deg, dec_deg))
+
+        # Second pass: Assign all targets to groups
+        for row in rows_data:
+            obs_id = str(row.get("OBSERVATION_ID", ""))
+            name = str(row.get("NAME", ""))
+            ra_str = str(row.get("RA", ""))
+            dec_str = str(row.get("DECL", ""))
+            offset_ra = float(row.get("OFFSET_RA", 0.0) or 0.0)
+            offset_dec = float(row.get("OFFSET_DEC", 0.0) or 0.0)
+
+            # Manually ungrouped
+            if obs_id in self._manual_ungroup_obs_ids:
+                group_assignments[obs_id] = f"UNGROUP:{obs_id}"
+                continue
+
+            # Calibration target (no coordinates)
+            if not ra_str or not dec_str or name.upper().startswith("CAL_"):
+                group_assignments[obs_id] = f"CAL:{obs_id}"
+                continue
+
+            # Parse coordinates
+            ra_deg = parse_sexagesimal_ra(ra_str)
+            dec_deg = parse_sexagesimal_dec(dec_str)
+
+            if ra_deg is None or dec_deg is None:
+                group_assignments[obs_id] = f"OBS:{obs_id}"
+                continue
+
+            # Apply gnomonic projection if offsets present
+            if offset_ra != 0.0 or offset_dec != 0.0:
+                ra_deg, dec_deg = gnomonic_projection(ra_deg, dec_deg, offset_ra, offset_dec)
+
+            # Find nearest science center
+            nearest_key = find_nearest_center(
+                ra_deg, dec_deg, science_centers, DEFAULT_GROUP_TOLERANCE_ARCSEC
+            )
+
+            if nearest_key:
+                group_assignments[obs_id] = nearest_key
+            else:
+                # Create singleton group
+                group_assignments[obs_id] = f"OBS:{obs_id}"
+
+        return group_assignments
+
+    def _apply_grouping_to_display(self, rows_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Apply grouping to rows before display.
+
+        Groups rows by coordinate proximity and adds group header rows.
+        Only shows members of expanded groups.
+
+        Args:
+            rows_data: Original rows from database
+
+        Returns:
+            Modified rows list with group headers and filtered members
+        """
+        if not self._grouping_enabled or not rows_data:
+            return rows_data
+
+        # Compute group assignments
+        group_assignments = self._compute_groups(rows_data)
+
+        # Group rows by assignment
+        groups: Dict[str, List[Dict[str, Any]]] = {}
+        for row in rows_data:
+            obs_id = str(row.get("OBSERVATION_ID", ""))
+            group_key = group_assignments.get(obs_id, f"OBS:{obs_id}")
+
+            if group_key not in groups:
+                groups[group_key] = []
+            groups[group_key].append(row)
+
+        # Build display list with headers
+        display_rows = []
+
+        for group_key, group_rows in groups.items():
+            # Determine if group is expanded
+            is_expanded = group_key in self._expanded_groups
+
+            # Add group header row (first row in group)
+            if group_rows:
+                header_row = group_rows[0].copy()
+
+                # Add expand/collapse indicator to NAME column
+                name_val = str(header_row.get("NAME", ""))
+                icon = "▼" if is_expanded else "▶"
+                header_row["NAME"] = f"{icon} {name_val} [{len(group_rows)}]"
+                header_row["_IS_GROUP_HEADER"] = True
+                header_row["_GROUP_KEY"] = group_key
+
+                display_rows.append(header_row)
+
+                # Add group members if expanded
+                if is_expanded and len(group_rows) > 1:
+                    for member_row in group_rows[1:]:
+                        # Indent member names
+                        member_copy = member_row.copy()
+                        name_val = str(member_copy.get("NAME", ""))
+                        member_copy["NAME"] = f"  {name_val}"
+                        member_copy["_IS_GROUP_MEMBER"] = True
+                        member_copy["_GROUP_KEY"] = group_key
+                        display_rows.append(member_copy)
+
+        return display_rows
+
+    def _ungroup_target(self, obs_id: str) -> None:
+        """Manually ungroup a target."""
+        if obs_id:
+            self._manual_ungroup_obs_ids.add(obs_id)
+            self.refresh()
+
+    def _regroup_target(self, obs_id: str) -> None:
+        """Restore automatic grouping for a target."""
+        if obs_id in self._manual_ungroup_obs_ids:
+            self._manual_ungroup_obs_ids.remove(obs_id)
+            self.refresh()
 
 
 class DatabaseTab(QWidget):
