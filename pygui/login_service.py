@@ -12,11 +12,15 @@ class LoginService:
     def connect_to_db(self):
         """Establish connection to the MySQL database."""
         try:
-            self.parent.logic_service.connect_to_mysql("config/db_config.ini")
+            # Use the parent's existing connection or create a new one
+            if self.parent.connection:
+                self.connection = self.parent.connection
+            else:
+                self.connection = self.parent.logic_service.connect_to_mysql("config/db_config.ini")
         except mysql.connector.Error as err:
             print(f"Error: {err}")
             return False
-        return True
+        return self.connection is not None
 
     def login(self, owner_id, password):
         """Validate user login."""

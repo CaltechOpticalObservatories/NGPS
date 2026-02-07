@@ -139,7 +139,10 @@ class NgpsGUI(QMainWindow):
         main_layout = self.layout_service.create_layout()
 
         self.logic_service = LogicService(self)
-        
+
+        # Read database configuration
+        self.db_config = self.logic_service.read_config("config/db_config.ini")
+
         # Try to connect to the MySQL database
         self.connection = self.logic_service.connect_to_mysql("config/db_config.ini")
 
