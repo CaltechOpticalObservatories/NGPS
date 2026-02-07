@@ -47,6 +47,7 @@ class StatusService(QObject):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(self.heartbeat_timeout)  # Timeout for receiving responses (heartbeat timeout)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.sock.bind(("", self.port))
 
         mreq = struct.pack("4s4s", socket.inet_aton(self.ip), socket.inet_aton("0.0.0.0"))

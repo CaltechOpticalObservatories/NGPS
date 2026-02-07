@@ -161,6 +161,10 @@ class LogicService:
                     if column == "PRIORITY" and (value == '' or value is None):
                         value = "1"  # Default to "1" if empty or None
 
+                    # Special case: OTMslitwidth is NOT NULL in schema, default to 0.0
+                    if column == "OTMslitwidth" and (value == '' or value is None):
+                        value = 0.0  # Default to 0.0 if empty or None
+
                     # Add the column and value to the query
                     insert_columns.append(column)
                     insert_placeholders.append('%s')
@@ -263,12 +267,22 @@ class LogicService:
             for row in data:
                 # Add the SET_ID to the row data before inserting
                 row['SET_ID'] = set_id
-                
+
+                # Handle required NOT NULL columns with defaults
+                if 'OTMslitwidth' in row and (row['OTMslitwidth'] == '' or row['OTMslitwidth'] is None):
+                    row['OTMslitwidth'] = 0.0
+                if 'PRIORITY' in row and (row['PRIORITY'] == '' or row['PRIORITY'] is None):
+                    row['PRIORITY'] = "1"
+                if 'OFFSET_RA' in row and (row['OFFSET_RA'] == '' or row['OFFSET_RA'] is None):
+                    row['OFFSET_RA'] = 0.0
+                if 'OFFSET_DEC' in row and (row['OFFSET_DEC'] == '' or row['OFFSET_DEC'] is None):
+                    row['OFFSET_DEC'] = 0.0
+
                 # Prepare the SQL query for insertion: matching columns
                 columns = ', '.join(row.keys())  # Column names from CSV (and SET_ID)
                 values = ', '.join(['%s'] * len(row))  # Placeholder for values
                 query = f"INSERT INTO targets ({columns}) VALUES ({values})"
-                
+
                 # Execute the insert query
                 cursor.execute(query, tuple(row.values()))
             
