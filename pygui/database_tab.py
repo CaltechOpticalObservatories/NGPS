@@ -102,6 +102,14 @@ except ImportError as e:
     print(f"Warning: OTM integration not available: {e}")
     OTM_AVAILABLE = False
 
+# Import record editor dialog
+try:
+    from record_editor_dialog import RecordEditorDialog
+    RECORD_EDITOR_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Record editor dialog not available: {e}")
+    RECORD_EDITOR_AVAILABLE = False
+
 
 class DbClient:
     """Database client with transaction support."""
@@ -606,8 +614,58 @@ class DatabaseTableWidget(QWidget):
             self.selection_changed.emit(values)
 
     def _on_add_clicked(self) -> None:
-        """Handle add button (placeholder)."""
-        QMessageBox.information(self, "Add", "Add functionality will be implemented next.")
+        """Handle add button - open dialog to add new record."""
+        if not RECORD_EDITOR_AVAILABLE:
+            QMessageBox.information(
+                self,
+                "Add Record",
+                "Record editor dialog not available.\n\n"
+                "Adding new records requires the full editor."
+            )
+            return
+
+        try:
+            # Show add dialog
+            dialog = RecordEditorDialog(self, self._columns, {}, is_new=True)
+
+            if dialog.exec_() == QDialog.Accepted:
+                # Get new record values
+                new_values = dialog.get_values()
+
+                # Insert into database
+                if not self._db.is_open():
+                    QMessageBox.warning(self, "Error", "Database not connected")
+                    return
+
+                schema = self._db.get_schema(self._config.schema)
+                table = schema.get_table(self._table_name)
+
+                # Build INSERT query
+                columns = []
+                values = []
+                for col in self._columns:
+                    # Skip auto-increment columns
+                    if col.is_auto_increment:
+                        continue
+
+                    col_name = col.name
+                    col_val = new_values.get(col_name)
+
+                    columns.append(col_name)
+                    values.append(col_val)
+
+                # Execute insert
+                table.insert(*columns).values(*values).execute()
+
+                # Refresh table
+                self.refresh()
+
+                # Show success message
+                if hasattr(self._parent_window, "statusBar"):
+                    self._parent_window.statusBar().showMessage("Record added successfully", 3000)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add record: {e}")
 
     def _on_delete_clicked(self) -> None:
         """Handle delete button."""
@@ -835,8 +893,76 @@ class DatabaseTableWidget(QWidget):
 
     def _edit_row_dialog(self, row: int) -> None:
         """Open full edit dialog for the row."""
-        # TODO: Implement RecordEditorDialog
-        QMessageBox.information(self, "Edit Row", "Full edit dialog will be implemented in the next phase.\n\nFor now, please double-click cells to edit inline.")
+        if not RECORD_EDITOR_AVAILABLE:
+            QMessageBox.information(
+                self,
+                "Edit Row",
+                "Record editor dialog not available.\n\nPlease double-click cells to edit inline."
+            )
+            return
+
+        try:
+            # Get current row values
+            row_values = self._current_row_values(row)
+            if not row_values:
+                return
+
+            # Show edit dialog
+            dialog = RecordEditorDialog(self, self._columns, row_values, is_new=False)
+
+            if dialog.exec_() == QDialog.Accepted:
+                # Get updated values
+                new_values = dialog.get_values()
+
+                # Update database
+                if not self._db.is_open():
+                    QMessageBox.warning(self, "Error", "Database not connected")
+                    return
+
+                schema = self._db.get_schema(self._config.schema)
+                table = schema.get_table(self._table_name)
+
+                # Build WHERE clause using primary keys
+                where_parts = []
+                bind_vals = {}
+                for col in self._columns:
+                    if col.is_primary:
+                        col_val = row_values.get(col.name, "")
+                        where_parts.append(f"{col.name} = :{col.name}")
+                        bind_vals[col.name] = col_val
+
+                if not where_parts:
+                    QMessageBox.warning(self, "Error", "Cannot determine primary key")
+                    return
+
+                where_clause = " AND ".join(where_parts)
+
+                # Build UPDATE query
+                query = table.update().where(where_clause)
+
+                # Set all non-primary-key columns
+                for col in self._columns:
+                    if not col.is_primary and not col.is_auto_increment:
+                        col_name = col.name
+                        new_val = new_values.get(col_name)
+                        query = query.set(col_name, new_val)
+
+                # Bind primary key values
+                for key, val in bind_vals.items():
+                    query = query.bind(key, val)
+
+                # Execute update
+                query.execute()
+
+                # Refresh table
+                self.refresh()
+
+                # Show success message
+                if hasattr(self._parent_window, "statusBar"):
+                    self._parent_window.statusBar().showMessage("Record updated successfully", 3000)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to update record: {e}")
 
     def _delete_row_with_confirmation(self, row: int) -> None:
         """Delete row after user confirmation."""
