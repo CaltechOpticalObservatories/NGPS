@@ -24,13 +24,14 @@ except ImportError:
     print("Warning: mysqlx module not installed. Database functionality will be limited.")
     mysqlx = None
 
-from PyQt5.QtCore import Qt, pyqtSignal, QSettings, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QSettings, QTimer, QThread
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
     QMessageBox, QDialog, QDialogButtonBox, QFormLayout, QScrollArea,
-    QMenu, QHeaderView
+    QMenu, QHeaderView, QProgressDialog, QInputDialog
 )
+from PyQt5.QtGui import QBrush, QColor
 
 
 # Settings
@@ -86,6 +87,20 @@ except ImportError:
 
     def normalize_target_row(values: Dict[str, Any]) -> Any:
         return type('obj', (object,), {'changed_columns': []})()
+
+
+# Import OTM integration modules
+try:
+    from otm_integration import (
+        OtmSettings, OtmRunner, OtmTimelineRunner,
+        generate_otm_input_csv, parse_otm_output_csv, parse_timeline_json,
+        otm_flag_severity, otm_flag_color
+    )
+    from otm_settings_dialog import OtmSettingsDialog
+    OTM_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: OTM integration not available: {e}")
+    OTM_AVAILABLE = False
 
 
 class DbClient:
@@ -920,6 +935,17 @@ class DatabaseTab(QWidget):
         top = QHBoxLayout()
         self.activate_set_btn = QPushButton("Activate Target Set", self)
         top.addWidget(self.activate_set_btn)
+
+        if OTM_AVAILABLE:
+            top.addSpacing(12)
+            self.otm_settings_btn = QPushButton("OTM Settings...", self)
+            self.otm_settings_btn.setToolTip("Configure OTM scheduler settings")
+            top.addWidget(self.otm_settings_btn)
+
+            self.run_otm_btn = QPushButton("Run OTM", self)
+            self.run_otm_btn.setToolTip("Run Optimal Target scheduler")
+            top.addWidget(self.run_otm_btn)
+
         top.addStretch()
         self.conn_status = QLabel("Not connected", self)
         top.addWidget(self.conn_status)
@@ -931,6 +957,10 @@ class DatabaseTab(QWidget):
 
         # Connect signals
         self.activate_set_btn.clicked.connect(self._activate_set)
+
+        if OTM_AVAILABLE:
+            self.otm_settings_btn.clicked.connect(self._show_otm_settings)
+            self.run_otm_btn.clicked.connect(self._run_otm)
 
     def _init_database(self) -> None:
         """Initialize database connection."""
@@ -1004,3 +1034,257 @@ class DatabaseTab(QWidget):
         """Activate selected target set."""
         # This will be connected to sequencer commands
         QMessageBox.information(self, "Activate Set", "Sequencer integration coming soon.")
+
+    def _show_otm_settings(self) -> None:
+        """Show OTM settings dialog."""
+        if not OTM_AVAILABLE:
+            QMessageBox.warning(self, "OTM Not Available", "OTM integration modules not loaded.")
+            return
+
+        dialog = OtmSettingsDialog(self)
+        dialog.exec_()
+
+    def _run_otm(self) -> None:
+        """Run OTM scheduler on selected target set."""
+        if not OTM_AVAILABLE:
+            QMessageBox.warning(self, "OTM Not Available", "OTM integration modules not loaded.")
+            return
+
+        # Get selected set
+        set_selection = self.sets_table._current_row_values(self.sets_table.table.currentRow())
+        if not set_selection or not set_selection.get("SET_ID"):
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select a target set from the Target Sets tab before running OTM."
+            )
+            return
+
+        set_id = set_selection.get("SET_ID")
+        set_name = set_selection.get("SET_NAME", f"Set {set_id}")
+
+        # Confirm
+        reply = QMessageBox.question(
+            self,
+            "Run OTM",
+            f"Run OTM scheduler for target set: {set_name}?\n\n"
+            "This will:\n"
+            "1. Generate OTM input CSV from targets\n"
+            "2. Run OTM scheduler\n"
+            "3. Generate timeline JSON\n"
+            "4. Import OTM results to database\n\n"
+            "Existing OTM results will be overwritten.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # Get start time from user
+        start_utc, ok = QInputDialog.getText(
+            self,
+            "Start Time",
+            "Enter start time (UTC) in ISO format:\n\nExample: 2024-02-07T18:00:00",
+            QLineEdit.Normal,
+            "2024-02-07T18:00:00"
+        )
+
+        if not ok or not start_utc.strip():
+            return
+
+        try:
+            # Load settings
+            settings = OtmSettings.load()
+
+            # Validate script paths
+            if not settings.otm_script_path or not os.path.exists(settings.otm_script_path):
+                QMessageBox.warning(
+                    self,
+                    "OTM Not Configured",
+                    "OTM script path not configured.\n\n"
+                    "Please click 'OTM Settings' and configure the script paths."
+                )
+                return
+
+            if not settings.timeline_script_path or not os.path.exists(settings.timeline_script_path):
+                QMessageBox.warning(
+                    self,
+                    "Timeline Script Not Configured",
+                    "Timeline script path not configured.\n\n"
+                    "Please click 'OTM Settings' and configure the script paths."
+                )
+                return
+
+            # Get targets for this set
+            targets = self._get_targets_for_otm(set_id)
+            if not targets:
+                QMessageBox.warning(self, "No Targets", "No targets found in selected set.")
+                return
+
+            # Create temporary files
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix="ngps_otm_")
+            input_csv = os.path.join(temp_dir, "otm_input.csv")
+            output_csv = os.path.join(temp_dir, "otm_output.csv")
+            timeline_json = os.path.join(temp_dir, "timeline.json")
+
+            # Generate input CSV
+            generate_otm_input_csv(targets, input_csv)
+
+            # Create progress dialog
+            progress = QProgressDialog("Running OTM scheduler...", "Cancel", 0, 0, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setValue(0)
+
+            # Run OTM in thread
+            self._otm_thread = QThread()
+            self._otm_runner = OtmRunner(settings, input_csv, output_csv, start_utc)
+            self._otm_runner.moveToThread(self._otm_thread)
+
+            # Connect signals
+            self._otm_thread.started.connect(self._otm_runner.run)
+            self._otm_runner.progress.connect(lambda msg: progress.setLabelText(msg))
+            self._otm_runner.finished.connect(
+                lambda success, msg: self._on_otm_finished(
+                    success, msg, input_csv, output_csv, timeline_json, set_id, start_utc, progress
+                )
+            )
+            self._otm_runner.finished.connect(self._otm_thread.quit)
+            progress.canceled.connect(self._otm_runner.cancel)
+            progress.canceled.connect(self._otm_thread.quit)
+
+            # Start
+            self._otm_thread.start()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to run OTM: {e}")
+
+    def _on_otm_finished(self, success: bool, message: str, input_csv: str, output_csv: str,
+                         timeline_json: str, set_id: str, start_utc: str,
+                         progress: QProgressDialog) -> None:
+        """Handle OTM completion."""
+        if not success:
+            progress.cancel()
+            QMessageBox.critical(self, "OTM Failed", f"OTM scheduler failed:\n\n{message}")
+            return
+
+        # Run timeline generation
+        progress.setLabelText("Generating timeline JSON...")
+        settings = OtmSettings.load()
+
+        self._timeline_thread = QThread()
+        self._timeline_runner = OtmTimelineRunner(
+            settings, input_csv, output_csv, timeline_json, start_utc
+        )
+        self._timeline_runner.moveToThread(self._timeline_thread)
+
+        # Connect signals
+        self._timeline_thread.started.connect(self._timeline_runner.run)
+        self._timeline_runner.progress.connect(lambda msg: progress.setLabelText(msg))
+        self._timeline_runner.finished.connect(
+            lambda success, msg, json_path: self._on_timeline_finished(
+                success, msg, output_csv, json_path, set_id, progress
+            )
+        )
+        self._timeline_runner.finished.connect(self._timeline_thread.quit)
+        progress.canceled.connect(self._timeline_runner.cancel)
+        progress.canceled.connect(self._timeline_thread.quit)
+
+        # Start
+        self._timeline_thread.start()
+
+    def _on_timeline_finished(self, success: bool, message: str, output_csv: str,
+                              json_path: str, set_id: str, progress: QProgressDialog) -> None:
+        """Handle timeline generation completion."""
+        progress.cancel()
+
+        if not success:
+            QMessageBox.critical(self, "Timeline Failed", f"Timeline generation failed:\n\n{message}")
+            return
+
+        # Import OTM results to database
+        try:
+            progress.setLabelText("Importing OTM results to database...")
+            progress.show()
+
+            otm_results = parse_otm_output_csv(output_csv)
+            self._import_otm_results(set_id, otm_results)
+
+            progress.cancel()
+
+            # Refresh tables
+            self.targets_table.refresh()
+
+            QMessageBox.information(
+                self,
+                "OTM Complete",
+                f"OTM scheduler completed successfully!\n\n"
+                f"Processed {len(otm_results)} targets.\n"
+                f"Timeline JSON: {json_path}\n\n"
+                f"Results have been imported to the database."
+            )
+
+        except Exception as e:
+            progress.cancel()
+            QMessageBox.critical(self, "Import Failed", f"Failed to import OTM results:\n\n{e}")
+
+    def _get_targets_for_otm(self, set_id: str) -> List[Dict[str, Any]]:
+        """Get all targets for a set in OTM format."""
+        if not self._db.is_open():
+            return []
+
+        try:
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._config.table_targets)
+
+            # Query targets for this set, ordered by OBS_ORDER
+            results = table.select().where(f"SET_ID = :sid").bind("sid", set_id).order_by("OBS_ORDER").execute()
+
+            targets = []
+            for row in results:
+                target = {}
+                for col in row.keys():
+                    target[col] = row[col]
+                targets.append(target)
+
+            return targets
+
+        except Exception as e:
+            print(f"Error fetching targets for OTM: {e}")
+            return []
+
+    def _import_otm_results(self, set_id: str, results: List) -> None:
+        """Import OTM results back to database."""
+        if not self._db.is_open():
+            raise RuntimeError("Database not connected")
+
+        try:
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._config.table_targets)
+
+            # Update each target with OTM results
+            for result in results:
+                obs_id = result.observation_id
+
+                # Build update
+                updates = {
+                    "OTMstart": result.otmstart if result.otmstart else None,
+                    "OTMend": result.otmend if result.otmend else None,
+                    "OTMslewgo": result.otmslewgo if result.otmslewgo else None,
+                    "OTMflag": result.otmflag if result.otmflag else None,
+                    "OTMwait": result.otmwait,
+                    "OTMdead": result.otmdead,
+                    "OTMslew": result.otmslew,
+                    "OBS_ORDER": result.obs_order
+                }
+
+                # Execute update
+                query = table.update().where("OBSERVATION_ID = :oid AND SET_ID = :sid")
+                for key, val in updates.items():
+                    query = query.set(key, val)
+                query.bind("oid", obs_id).bind("sid", set_id).execute()
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to import OTM results: {e}")
