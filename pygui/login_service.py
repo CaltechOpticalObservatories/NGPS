@@ -139,8 +139,8 @@ class LoginDialog(QDialog):
         self.reject()  # Close the dialog without doing anything (cancel)
     
     def on_create_account(self):
-        self.reject() 
-        self.parent.on_create_account()
+        self.reject()
+        self.parent().on_create_account()
 
     def validate_user_credentials(self, username, password):
         """Validate user credentials against the MySQL database using an existing connection."""
