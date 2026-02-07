@@ -257,10 +257,13 @@ class NgpsGUI(QMainWindow):
     def on_create_account(self):
         """ Handle the create account action from the User menu """
         create_account_dialog = CreateAccountDialog(self)
-        
-        # If account creation is successful, handle it (e.g., show success message)
+
+        # If account creation is successful, show success message and open login dialog
         if create_account_dialog.exec_() == QDialog.Accepted:
             print("Account successfully created!")
+            QMessageBox.information(self, "Success", "Account successfully created! Please log in with your new credentials.")
+            # Automatically show login dialog after account creation
+            self.on_login()
 
     def send_command(self, command):
         """ Load data from MySQL after successful login """
