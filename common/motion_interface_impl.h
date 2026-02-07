@@ -9,6 +9,70 @@
 
 namespace MotionController {
 
+  /***** MotionController::Interface::get_axis ********************************/
+  template <typename ControllerType>
+  const AxisInfo* Interface<ControllerType>::get_axis(const std::string &name, int axis) const {
+    auto mot = this->motormap.find(name);
+    if (mot == this->motormap.end()) return nullptr;
+
+    auto ax = mot->second.axes.find(axis);
+    if (ax == mot->second.axes.end()) return nullptr;
+
+    return &ax->second;
+  }
+  /***** MotionController::Interface::get_axis ********************************/
+
+
+  /***** MotionController::Interface::get_posmap ******************************/
+  template <typename ControllerType>
+  const PosInfo* Interface<ControllerType>::get_posmap(const std::string &name, const std::string &posname) const {
+    auto mot = this->motormap.find(name);
+    if (mot == this->motormap.end()) return nullptr;
+
+    auto pos = mot->second.posmap.find(posname);
+    if (pos == mot->second.posmap.end()) return nullptr;
+
+    return &pos->second;
+  }
+  /***** MotionController::Interface::get_posmap ******************************/
+
+
+  /***** MotionController::Interface::get_host ********************************/
+  template <typename ControllerType>
+  std::string Interface<ControllerType>::get_host(const std::string &name) const {
+    auto it = this->motormap.find(name);
+    return (it != this->motormap.end()) ? it->second.host : "";
+  }
+  /***** MotionController::Interface::get_host ********************************/
+
+
+  /***** MotionController::Interface::get_port ********************************/
+  template <typename ControllerType>
+  int Interface<ControllerType>::get_port(const std::string &name) const {
+    auto it = this->motormap.find(name);
+    return (it != this->motormap.end()) ? it->second.port : -1;
+  }
+  /***** MotionController::Interface::get_port ********************************/
+
+
+  /***** MotionController::Interface::get_addr ********************************/
+  template <typename ControllerType>
+  int Interface<ControllerType>::get_addr(const std::string &name) const {
+    auto it = this->motormap.find(name);
+    return (it != this->motormap.end()) ? it->second.addr : -1;
+  }
+  /***** MotionController::Interface::get_addr ********************************/
+
+
+  /***** MotionController::Interface::get_naxes *******************************/
+  template <typename ControllerType>
+  int Interface<ControllerType>::get_naxes(const std::string &name) const {
+    auto it = this->motormap.find(name);
+    return (it != this->motormap.end()) ? it->second.naxes : -1;
+  }
+  /***** MotionController::Interface::get_naxes *******************************/
+
+
   /***** MotionController::Interface::open ************************************/
   /**
    * @brief      open a connection to all controllers
@@ -17,6 +81,10 @@ namespace MotionController {
    *
    */
   template <typename ControllerType>
+  long Interface<ControllerType>::open(const std::string &name) {
+    return this->_open(name);
+  }
+  template <typename ControllerType>
   long Interface<ControllerType>::open() {
     long error=NO_ERROR;
     // loop through motoromap, opening each motor if not already open
@@ -24,7 +92,7 @@ namespace MotionController {
     //
     for ( const auto &pair : this->motormap ) {
       const std::string &motorname = pair.first;
-      if ( !is_connected( motorname ) ) { error |= this->_open( motorname ); }
+      error |= this->_open( motorname );
     }
     return error;
   }
@@ -129,6 +197,36 @@ namespace MotionController {
   /***** MotionController::Interface::close ***********************************/
 
 
+  template <typename ControllerType>
+  long Interface<ControllerType>::home(const std::string &name, std::string* retstring) {
+    const std::string function("MotionController::Interface::home");
+    std::vector<std::string> name_list;
+
+    // if input is empty the build a list of all motor names
+    if (name.empty()) {
+      for ( const auto &mot : this->motormap ) { name_list.push_back(mot.first); }
+    }
+    else name_list.push_back(name);
+
+    // initialize the thread_error state.
+    // threads can modify this atomically to indicate they had an error.
+    //
+    this->thread_error.store(NO_ERROR);
+
+    // loop through the list of names
+    //
+    for (const auto &thisname : name_list) {
+      auto name_found = this->motormap.find(thisname);
+
+      if (name_found == this->motormap.end()) {
+        logwrite(function, "ERROR '"+thisname+"' not found in configuration");
+        if (retstring) *retstring="unknown_motor";
+        return ERROR;
+      }
+    }
+    return NO_ERROR;
+  }
+
   /***** MotionController::Interface::is_connected ****************************/
   /**
    * @brief      is the socket connected for the specified motor controller?
@@ -169,17 +267,14 @@ namespace MotionController {
    *
    */
   template <typename ControllerType>
-  long Interface<ControllerType>::add_posmap( const PosInfo &posinfo ) {
-    auto it = motormap.find( posinfo.motorname );
+  long Interface<ControllerType>::add_posmap(const std::string &name, const PosInfo &posinfo) {
+    const std::string function("MotionController::Interface::add_posmap");
+    auto it = motormap.find( name );
     if ( it != motormap.end() ) {
       it->second.posmap[posinfo.posname] = posinfo;  // posmap indexed by position name
     }
     else {
-      std::string function = "MotionController::Interface::add_posmap";
-      std::stringstream message;
-      message << "ERROR can't add position " << posinfo.posname << " because motor "
-              << posinfo.motorname << " has not been configured";
-      logwrite( function, message.str() );
+      logwrite(function, "ERROR '"+name+"' not found in configuration");
       return ERROR;
     }
     return NO_ERROR;
@@ -195,11 +290,12 @@ namespace MotionController {
    *
    */
   template <typename ControllerType>
-  long Interface<ControllerType>::add_axis( const AxisInfo &axis ) {
+  long Interface<ControllerType>::add_axis(const std::string &name, const AxisInfo &axis) {
+    const std::string function("MotionController::Interface::add_axis");
     // Make sure the motor associated with this axis is already defined
     // in the motormap.
     //
-    auto it = motormap.find( axis.motorname );
+    auto it = motormap.find(name);
 
     // If it is, then push it onto the axes vector for this motor.
     //
@@ -207,11 +303,7 @@ namespace MotionController {
       it->second.axes[axis.axisnum] = axis;
     }
     else {
-      std::string function = "MotionController::Interface::add_axis";
-      std::stringstream message;
-      message << "ERROR can't add axis " << axis.axisnum << " to because motor "
-              << axis.motorname << " has not been configured";
-      logwrite( function, message.str() );
+      logwrite(function, "ERROR '"+name+"' not found in configuration");
       return ERROR;
     }
     return NO_ERROR;

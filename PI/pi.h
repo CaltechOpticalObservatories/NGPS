@@ -141,35 +141,48 @@ namespace Physik_Instrumente {
     public:
       using MotionController::Interface<ControllerType>::Interface;
 
+      // functions defined in the base class must be implemented here
+      //
+      long move_to_default();
+      long enable_motion(bool shouldenable);
+      long enable_motion(const std::string &name, bool shouldenable);
+      long stop(const std::string &name);
+
       // override/implement PI-specific default functions
       //
       void test() override;
+      bool is_home(const std::string &name) override;
+      long moveto(const std::string &name, int axisnum, const std::string &posstr, std::string &retstring) override;
+      long get_pos(const std::string &name, int axisnum, float &position, std::string* posname=nullptr, int addr=-1) override;
+      /***
+      long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname) override;
+      long get_pos(const std::string &name, int axisnum, float &position, std::string &posname) override;
+      long get_pos(const std::string &name, int axisnum, float &position);
+//    long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname);
+//    long get_pos(const std::string &name, int axisnum, float &position, std::string &posname);
+      long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname, float tol_in);
+      ***/
 
       // PI-only
       //
-      long move_to_default();
-      long home(std::string input, std::string &retstring);
       long is_home(std::string input, std::string &retstring);
       long is_home(const std::string &name, int addr, int axis);
       long is_home(const std::string &name, int addr, int axis, bool &state);
-      long moveto(std::string motorname, int axisnum, std::string posname, std::string &retstring);
+//    long moveto(std::string motorname, int axisnum, std::string posname, std::string &retstring);
       long moveto(std::string motorname, int axusnum, float position, std::string &retstring);
       long moveto(std::vector<std::string> motornames, std::vector<int> axisnums,
                   std::vector<std::string> posnames, std::string &retstring);
       long clear_errors();
       long get_error(const std::string &name, int addr, int &errcode);
       long set_servo(bool state);
+      long set_servo(const std::string &name, bool state);
       long set_servo(const std::string &name, int addr, bool state);
       long set_servo(const std::string &name, int addr, int axis, bool state);
       long on_target(const std::string &name, int addr, bool &retstring);
       long on_target(const std::string &name, int addr, int axis, bool &state);
-      long get_pos(const std::string &name, int axisnum, float &position);
-      long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname);
-      long get_pos(const std::string &name, int axisnum, float &position, std::string &posname);
-      long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname, float tol_in);
       long stop_motion(const std::string &name, int addr);
       long send_command(const std::string &motorname, std::string cmd);
-      long send_command(const std::string &motorname, std::string cmd, std::string &retstring, const bool quiet=false);
+      long send_command(const std::string &motorname, std::string cmd, std::string &retstring);
 
       template <typename ReplyType> long parse_reply( int axis, std::string &reply, ReplyType &retval );
   };

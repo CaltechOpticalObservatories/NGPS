@@ -15,6 +15,73 @@ namespace Physik_Instrumente {
   }
 
 
+  template <typename ControllerType>
+  bool Interface<ControllerType>::is_home(const std::string &name) {
+    if (this->motormap.find(name) == this->motormap.end()) {
+      throw std::runtime_error("'"+name+"' not configured");
+    }
+    if (!this->is_connected(name)) {
+      throw std::runtime_error("'"+name+"' not connected");
+    }
+
+    auto addr = this->motormap.at(name).addr;
+    int axis = 1;
+    bool _ishome;
+
+    if (this->is_home( name, addr, axis, _ishome ) != NO_ERROR) {
+      throw std::runtime_error("'"+name+"' communication error");
+    }
+
+    return _ishome;
+  }
+
+
+  /***** Physik_Instrumente::Interface::enable_motion *************************/
+  /**
+   * @brief      enable/disable motion
+   * @details    This sets the servo on/off
+   * @param[in]  shouldenable  true|false
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  template <typename ControllerType>
+  long Interface<ControllerType>::enable_motion(bool shouldenable) {
+    return this->set_servo(shouldenable);
+  }
+  /***** Physik_Instrumente::Interface::enable_motion *************************/
+
+
+  /***** Physik_Instrumente::Interface::stop **********************************/
+  /**
+   * @brief      enable/disable motion
+   * @details    This sets the servo on/off
+   * @param[in]  shouldenable  true|false
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  template <typename ControllerType>
+  long Interface<ControllerType>::stop(const std::string &name) {
+    return this->stop_motion(name, -1);
+  }
+  /***** Physik_Instrumente::Interface::stop **********************************/
+
+
+  /***** Physik_Instrumente::Interface::enable_motion *************************/
+  /**
+   * @brief      enable/disable motion for specified name
+   * @details    This sets the servo on/off
+   * @param[in]  name          motor name
+   * @param[in]  shouldenable  true|false
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  template <typename ControllerType>
+  long Interface<ControllerType>::enable_motion(const std::string &name, bool shouldenable) {
+    return this->set_servo(name, shouldenable);
+  }
+  /***** Physik_Instrumente::Interface::enable_motion *************************/
+
+
   /***** Physik_Instrumente::Interface::clear_errors **************************/
   /**
    * @brief      clear error status of all controllers
@@ -129,6 +196,22 @@ namespace Physik_Instrumente {
     }
 
     return error;
+  }
+  /***** Physik_Instrumente::Interface::set_servo *****************************/
+
+
+  /***** Physik_Instrumente::Interface::set_servo *****************************/
+  /**
+   * @brief      set servos on|off for specified name
+   * @param[in]  name   motor name
+   * @param[in]  state  (true=on, false=off)
+   * @return     ERROR or NO_ERROR
+   *
+   */
+  template <typename ControllerType>
+  long Interface<ControllerType>::set_servo(const std::string &name, bool state) {
+    int addr = this->get_addr(name);
+    return this->set_servo(name, addr, -1, state);
   }
   /***** Physik_Instrumente::Interface::set_servo *****************************/
 
@@ -322,7 +405,7 @@ namespace Physik_Instrumente {
    *             Can be used to move to a position name or a numeric
    *             position. If the posname isn't recognized then will try
    *             to convert the value to a float.
-   * @param[in]  motorname  motor controller name
+   * @param[in]  name       motor controller name
    * @param[in]  axisnum    axis number
    * @param[in]  posname    position name (or number, see details)
    * @param[out] retstring  reference to return string
@@ -332,15 +415,15 @@ namespace Physik_Instrumente {
    *
    */
   template <typename ControllerType>
-  long Interface<ControllerType>::moveto( std::string motorname, int axisnum, std::string posname, std::string &retstring ) {
-    std::string function = "Physik_Instrumente::Interface::moveto";
+  long Interface<ControllerType>::moveto(const std::string &name, int axisnum, const std::string &posstr, std::string &retstring) {
+    const std::string function("Physik_Instrumente::Interface::moveto");
     std::stringstream message;
 
-    // Check that requested motorname is defined in the motormap
+    // Check that requested name is defined in the motormap
     //
-    auto name_found = this->motormap.find( motorname );
+    auto name_found = this->motormap.find( name );
     if ( name_found == this->motormap.end() ) {
-      message.str(""); message << "ERROR actuator \"" << motorname << "\" not found in motormap: {";
+      message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
       for ( const auto &mot : this->motormap ) message << " " << mot.first;
       message << " }";
       logwrite( function, message.str() );
@@ -348,37 +431,37 @@ namespace Physik_Instrumente {
       return ERROR;
     }
 
-    // If the requested posname is defined in the posmap for this motor, then
+    // If the requested posstr is defined in the posmap for this motor, then
     // call the moveto() function with the position.
     //
     float position;
-    auto pos_found = this->motormap[motorname].posmap.find( posname );
-    if ( pos_found != this->motormap[motorname].posmap.end() ) {
-      position = this->motormap[motorname].posmap[posname].position;
+    auto pos_found = this->motormap[name].posmap.find( posstr );
+    if ( pos_found != this->motormap[name].posmap.end() ) {
+      position = this->motormap[name].posmap[posstr].position;
     }
     else {
-      // posname not in posmap.
+      // posstr not in posmap.
       // maybe we were given a string representation of a number?
       //
       bool is_number;
       try {
-        position = std::stof( posname );
+        position = std::stof( posstr );
         is_number=true;
       }
       catch( const std::invalid_argument &e ) { is_number=false; }
       catch( const std::out_of_range &e )     { is_number=false; }
 
       if ( !is_number ) {
-        message.str(""); message << "ERROR position \"" << posname << "\" not in list {";
-        for ( const auto &pos : this->motormap[motorname].posmap ) message << " " << pos.first;
-        message << " } for actuator " << motorname << " and can't be converted to a float";
+        message.str(""); message << "ERROR position \"" << posstr << "\" not in list {";
+        for ( const auto &pos : this->motormap[name].posmap ) message << " " << pos.first;
+        message << " } for actuator " << name << " and can't be converted to a float";
         logwrite( function, message.str() );
         retstring="invalid_position";
         return ERROR;
       }
     }
 
-    return this->moveto( motorname, axisnum, position, retstring );
+    return this->moveto( name, axisnum, position, retstring );
   }
   /***** Physik_Instrumente::Interface::moveto ********************************/
 
@@ -654,6 +737,7 @@ namespace Physik_Instrumente {
    * before returning.
    *
    */
+  /***
   template <typename ControllerType>
   long Interface<ControllerType>::home( std::string input, std::string &retstring ) {
     std::string function = "Physik_Instrumente::Interface::home";
@@ -709,6 +793,7 @@ namespace Physik_Instrumente {
     //
     return( this->thread_error.load() );
   }
+  ***/
   /***** Physik_Instrumente::Interface::home **********************************/
 
 
@@ -1099,9 +1184,7 @@ namespace Physik_Instrumente {
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "FRF? " << axis;
 
-    bool quiet=true;  // keeps send_command quiet
-
-    long error = this->send_command( name, cmd.str(), reply, quiet );          // send the command
+    long error = this->send_command( name, cmd.str(), reply );                 // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1128,12 +1211,11 @@ namespace Physik_Instrumente {
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
-    bool quiet = true;  // keeps send_command quiet
 
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "FRF? " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply, quiet );          // send the command
+    long error = this->send_command( name, cmd.str(), reply );                 // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1179,13 +1261,12 @@ namespace Physik_Instrumente {
     std::stringstream message;
     std::stringstream cmd;
     std::string reply;
-    bool quiet = true;  // keeps send_command quiet
 
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "ONT?";
     if ( axis > 0 ) cmd << " " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply, quiet );          // send the command
+    long error = this->send_command( name, cmd.str(), reply );                 // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1201,80 +1282,44 @@ namespace Physik_Instrumente {
    *             which performs all the safety checks on name, axis, etc.
    * @param[in]  name      controller name
    * @param[in]  axisnum   axis number
-   * @param[in]  addr      address of controller in daisy-chain
    * @param[out] position  reference to position read
-   * @param[out] posname   reference to position name, if one exists for pos
+   * @param[out] posname   optional reference to position name, if one exists for pos
+   * @param[in]  addr      optional address of controller in daisy-chain
    * @return     ERROR or NO_ERROR
    *
    */
   template <typename ControllerType>
-  long Interface<ControllerType>::get_pos( const std::string &name, int axisnum, int addr, float &position, std::string &posname ) {
-    return this->get_pos( name, axisnum, addr, position, posname, this->tolerance );
-  }
-
-  template <typename ControllerType>
-  long Interface<ControllerType>::get_pos( const std::string &name, int axisnum, float &position ) {
-    std::string dontcare;
-    return this->get_pos( name, axisnum, position, dontcare );
-  }
-
-  template <typename ControllerType>
-  long Interface<ControllerType>::get_pos( const std::string &name, int axisnum, float &position, std::string &posname ) {
-    std::string function = "Physik_Instrumente::Interface::get_pos";
-    std::stringstream message;
+  long Interface<ControllerType>::get_pos(const std::string &name, int axisnum, float &position,
+                                          std::string* posname, int addr) {
+    const std::string function("Physik_Instrumente::Interface::get_pos");
 
     // Check that requested name is defined in the motormap
     //
     auto name_found = this->motormap.find( name );
     if ( name_found == this->motormap.end() ) {
-      message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
-      for ( const auto &mot : this->motormap ) message << " " << mot.first;
-      message << " }";
-      logwrite( function, message.str() );
-      posname="unknown_motor";
+      logwrite(function, "ERROR name '"+name+"' not in configuration");
+      if (posname) *posname="unknown_motor";
       return ERROR;
     }
 
-    // Get the addr
+    // Get the addr if not supplied
     //
-    auto addr = this->motormap[name].addr;
-
-    return this->get_pos( name, axisnum, addr, position, posname, this->tolerance );
-  }
-
-  template <typename ControllerType>
-  long Interface<ControllerType>::get_pos( const std::string &name, int axisnum, int addr, float &position, std::string &posname, float tol_in ) {
-    std::string function = "Physik_Instrumente::Interface::get_pos";
-    std::stringstream message;
-
-    // Check that requested name is defined in the motormap
-    //
-    auto name_found = this->motormap.find( name );
-    if ( name_found == this->motormap.end() ) {
-      message.str(""); message << "ERROR actuator \"" << name << "\" not found in motormap: {";
-      for ( const auto &mot : this->motormap ) message << " " << mot.first;
-      message << " }";
-      logwrite( function, message.str() );
-      posname="unknown_motor";
-      return ERROR;
-    }
+    if (addr<0) addr = this->motormap[name].addr;
 
     // Check the axisnum
     //
     auto axis_found = this->motormap[name].axes.find( axisnum );
     if ( axis_found == this->motormap[name].axes.end() ) {
-      message.str(""); message << "ERROR axisnum " << axisnum << " not defined for actuator " << name;
-      logwrite( function, message.str() );
-      posname="invalid_axis";
+      logwrite(function, "ERROR axis '"+std::to_string(axisnum)+"' not in configuration for name '"+name+"'");
+      if (posname) *posname="unknown_axis";
       return ERROR;
     }
 
     // Is this controller connected?
     //
     if ( ! this->is_connected( name ) ) {
-      message.str(""); message << "ERROR not connected to motor controller " << name;
-      logwrite( function, message.str() );
-      posname="not_connected";
+      logwrite(function, "ERROR not connected to motor controller for '"+name+"'");
+      if (posname) *posname="not_connected";
       return ERROR;
     }
 
@@ -1285,10 +1330,9 @@ namespace Physik_Instrumente {
 
     // does this position have a corresponding name in the posmap for this actuator?
     //
-    posname.clear();
     for ( const auto &pos : this->motormap[name].posmap ) {
-      if ( std::abs( pos.second.position - position ) < tol_in ) {
-        posname = pos.second.posname;
+      if ( std::abs( pos.second.position - position ) < this->tolerance ) {
+        if (posname) *posname = pos.second.posname;
         break;
       }
     }
@@ -1435,7 +1479,7 @@ namespace Physik_Instrumente {
    *
    */
   template <typename ControllerType>
-  long Interface<ControllerType>::send_command( const std::string &motorname, std::string cmd, std::string &retstring, const bool quiet ) {
+  long Interface<ControllerType>::send_command( const std::string &motorname, std::string cmd, std::string &retstring ) {
     std::string function = "Physik_Instrumente::Interface::send_command";
     std::stringstream message;
     std::string reply;
@@ -1461,11 +1505,6 @@ namespace Physik_Instrumente {
       logwrite( function, message.str() );
       retstring="not_connected";
       return ERROR;
-    }
-
-    if ( !quiet ) {
-      message.str(""); message << "sending \"" << cmd << "\" to motor " << motorname;
-      logwrite( function, message.str() );
     }
 
     cmd.append( "\n" );                   // add the newline character
@@ -1501,11 +1540,6 @@ namespace Physik_Instrumente {
     }
 
     retstring = reply;
-
-    if ( !quiet && !reply.empty() ) {
-      message.str(""); message << "motor " << motorname << " replied \"" << reply << "\"";
-      logwrite( function, message.str() );
-    }
 
     return error;
   }

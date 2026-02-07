@@ -62,8 +62,15 @@ namespace Galil {
       using MotionController::Interface<Type>::Interface;
 
       void test() override;
+      bool is_home(const std::string &name) override;
+      long moveto(const std::string &name, int axisnum, const std::string &posstr, std::string &retstring) override;
+      long get_pos(const std::string &name, int axisnum, float &position, std::string* posname=nullptr, int addr=-1) override;
 
-      long send_command(const std::string &motorname, std::string cmd, std::string* retstring=nullptr);
+
+      long stop(const std::string &name);
+      long enable_motion(bool shouldenable);
+      long move_to_default();
+      long Xend_command(const std::string &motorname, std::string cmd, std::string* retstring=nullptr);
 
   };
   /***** Galil::Interface *****************************************************/

@@ -45,14 +45,10 @@ namespace Focus {
   class Interface {
     private:
       zmqpp::context context;
-      size_t numdev;
       bool class_initialized;
     public:
       Interface()
         : context(),
-          numdev(-1),
-          pi_interface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ),
-          galil_interface( FOCUS_MOVE_TIMEOUT, FOCUS_HOME_TIMEOUT, FOCUS_POSNAME_TOLERANCE ),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false)
@@ -79,11 +75,20 @@ namespace Focus {
 
       // PI Interface class for the Stepper type
       //
-      Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo> pi_interface;
+      std::unique_ptr<Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo>> pi_interface;
 
       // Galil Interface class for the U-channel controller
       //
-      Galil::Interface<Galil::SingleAxisInfo> galil_interface;
+      std::unique_ptr<Galil::Interface<Galil::SingleAxisInfo>> galil_interface;
+
+      // Container to hold all controllers indexed by name
+      //
+//    std::map<std::string, MotionController::ControllerInterface*> motors;
+
+      std::map<std::string, MotionController::Name> motors;
+
+      template <typename Function>
+      void all_motors(Function f) { for (auto &[name,motor] : motors) f(*motor); };
 
       // publish/subscribe functions
       //
@@ -95,7 +100,6 @@ namespace Focus {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
 
-      long initialize_class();
       long open();                                              ///< opens the PI socket connection
       long close();                                             ///< closes the PI socket connection
       long is_open( std::string arg, std::string &retstring );  ///< are motor controllers connected?

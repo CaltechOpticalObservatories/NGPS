@@ -75,8 +75,8 @@ namespace Focus {
 
     // Clear the motormap map before loading new information from the config file
     //
-    this->interface.pi_interface.clear_motormap();
-    this->interface.galil_interface.clear_motormap();
+    this->interface.pi_interface->clear_motormap();
+    this->interface.galil_interface->clear_motormap();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -176,7 +176,6 @@ namespace Focus {
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
         std::istringstream iss(config.arg[entry]);
-        std::ostringstream oss;
         std::string name, type, host;
         int port, addr, axes;
         long ret=NO_ERROR;
@@ -186,16 +185,30 @@ namespace Focus {
           error=ERROR;
           continue;
         }
-        else {
-          oss << name << " " << host << " " << port << " " << addr << " " << axes;
-        }
 
+        // call the load_controller_config for the appropriate vendor
         if (type=="GALIL") {
-          ret=this->interface.galil_interface.load_controller_config( config.arg[entry] );
+          // initialize a pointer if it doesn't already exist
+          if (!this->interface.galil_interface) {
+            this->interface.galil_interface = std::make_unique<
+            Galil::Interface<Galil::SingleAxisInfo>>(FOCUS_MOVE_TIMEOUT,
+                                                     FOCUS_HOME_TIMEOUT,
+                                                     FOCUS_POSNAME_TOLERANCE);
+          }
+          this->interface.motors.emplace(name, MotionController::Name(this->interface.galil_interface.get(), name));
+          ret = this->interface.galil_interface->load_controller_config(config.arg[entry]);
         }
         else
         if (type=="PI") {
-          ret=this->interface.pi_interface.load_controller_config( config.arg[entry] );
+          if (!this->interface.pi_interface) {
+            // initialize a pointer if it doesn't already exist
+            this->interface.pi_interface = std::make_unique<
+            Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo>>(FOCUS_MOVE_TIMEOUT,
+                                                                            FOCUS_HOME_TIMEOUT,
+                                                                            FOCUS_POSNAME_TOLERANCE);
+          }
+          this->interface.motors.emplace(name, MotionController::Name(this->interface.pi_interface.get(), name));
+          ret = this->interface.pi_interface->load_controller_config(config.arg[entry]);
         }
         else {
           logwrite(function, "ERROR: unknown type. Expected { PI | GALIL }");
@@ -213,68 +226,71 @@ namespace Focus {
       // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
       //
       if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+        std::istringstream iss(config.arg[entry]);
+        std::string name, ref;
+        int axis;
+        double min, max, zero, def;
 
-        Physik_Instrumente::AxisInfo AXIS;
-
-        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+        if (!(iss >> name >> axis >> min >> max >> zero >> ref)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <axis> <min> <max> <zero> <ref> }");
+          error=ERROR;
+          continue;
+        }
+        if (!(iss >> def)) def=NAN;
 
         // Each AXIS is associated with a CONTROLLER by name, so a controller
         // of this name must have already been configured.
         //
-        // loc checks if the motorname for this AXIS is found in the motormap
-        //
-        auto _motormap = this->interface.pi_interface.get_motormap();
-        auto loc = _motormap.find( AXIS.motorname );
-        if ( loc != _motormap.end() ) {
-          this->interface.pi_interface.add_axis( AXIS );
-          message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+        if (this->interface.motors.find(name) == this->interface.motors.end()) {
+          logwrite(function, "ERROR bad config: motor name '"+name+"' has no match in MOTOR_CONTROLLER");
+          error=ERROR;
+          continue;
         }
-        else {
-          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
-                                   << "has no matching name defined by MOTOR_CONTROLLER";
-          logwrite( function, message.str() );
-          message.str(""); message << "valid names are:";
-          for ( auto mot : _motormap ) { message << " " << mot.first; }
-          logwrite( function, message.str() );
-          error = ERROR;
-          break;
-        }
+
+        // parse the axis info into an object
+        Physik_Instrumente::AxisInfo AXIS;
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // add that object to this motor
+        if ( (error=this->interface.motors.at(name).add_axis(AXIS)) != NO_ERROR ) continue;
+        message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
       }
 
       // MOTOR_POS -- position info for nominal focus, the only named position
       //
       if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
+        std::istringstream iss(config.arg[entry]);
+        std::string name, posname;
+        int axis, id;
+        double pos;
 
-        // Create a local PosInfo object,
-        // then use the PosInfo::load_pos_info() function to parse and load it.
+        if (!(iss >> name >> axis >> id >> pos >> posname)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <axis> <ID> <pos> <posname> }");
+          error=ERROR;
+          continue;
+        }
+
+        // Each POS is associated with a CONTROLLER by name, so a controller
+        // of this name must have already been configured.
+        //
+        if (this->interface.motors.find(name) == this->interface.motors.end()) {
+          logwrite(function, "ERROR bad config: motor name '"+name+"' has no match in MOTOR_CONTROLLER");
+          error=ERROR;
+          continue;
+        }
+
+        // parse into a local PosInfo object
         //
         Physik_Instrumente::PosInfo POS;
-
         if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) break;
 
-        // Check that the motorname associated with the position has already been
-        // defined in the motormap. If so, then add the PosInfo to the pi_interface.
-        //
-        auto _motormap = this->interface.pi_interface.get_motormap();
-        auto loc = _motormap.find( POS.motorname );
-
-        if ( loc != _motormap.end() ) {
-          this->interface.pi_interface.add_posmap( POS );  // add the PosInfo to the class here
-          message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
-          interface.async.enqueue_and_log( function, message.str() );
-          applied++;
-        }
-        else {
-          message.str(""); message << "ERROR motor name \"" << POS.motorname << "\" "
-                                   << "has no matching name defined by MOTOR_CONTROLLER";
-          logwrite( function, message.str() );
-          logwrite( function, "valid names are:" );
-          for ( auto mot : _motormap ) { logwrite( function, mot.first); }
-          error = ERROR;
-          break;
-        }
+        // add that object to this motor
+        if ( (error=this->interface.motors.at(name).add_posmap(POS)) != NO_ERROR ) continue;
+        message.str(""); message << "FOCUSD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
       }
 
     } // end loop through the entries in the configuration file
@@ -289,8 +305,6 @@ namespace Focus {
     }
     message << "applied " << applied << " configuration lines to focusd";
     logwrite(function, message.str());
-
-    if ( error == NO_ERROR ) error = this->interface.initialize_class();
 
     return error;
   }
@@ -608,7 +622,8 @@ namespace Focus {
       // default positions
       //
       if ( cmd == FOCUSD_DEFAULTPOS ) {
-                      ret = this->interface.pi_interface.move_to_default();
+                      this->interface.pi_interface->move_to_default();
+                      this->interface.galil_interface->move_to_default();
 
       }
       else

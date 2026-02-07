@@ -11,6 +11,7 @@
 #include "common.h"
 #include "network.h"
 #include "utilities.h"
+#include "motion_controller_interface_base.h"
 
 #include <string>
 #include <vector>
@@ -89,7 +90,7 @@ namespace MotionController {
     public:
       std::string name;                       ///< controller name
       int addr;                               ///< controller address
-      int naxes;
+      int naxes;                              ///< number of axes for this controller's actuator
       std::map<int, AxisInfo> axes;           ///< info for each axis
       std::map<std::string, PosInfo> posmap;  ///< map of positions indexed by position name
 
@@ -125,14 +126,72 @@ namespace MotionController {
   /***** MotionController::ControllerInfo *************************************/
 
 
+  /***** MotionController::Name ***********************************************/
+  /**
+   * @brief   binds a ControllerInterface to a specific name
+   * @details This class implements functions that are name-specific and
+   *          calls them with the name store in the class. This eliminates
+   *          the need to specify the name.
+   */
+  class Name {
+    private:
+      ControllerInterface* _controller;
+      std::string _name;
+
+    public:
+      Name(ControllerInterface* iface, std::string name) :
+        _controller(iface), _name(std::move(name)) { }
+
+      // these functions need the name of the motor
+      //
+      const AxisInfo* axis(int axis) const { return _controller->get_axis(_name, axis); }
+      const PosInfo* posmap(const std::string &posname) const { return _controller->get_posmap(_name, posname); }
+
+      long add_posmap(const PosInfo &posinfo) { return _controller->add_posmap(_name, posinfo); }
+      long add_axis(const AxisInfo &axis) { return _controller->add_axis(_name, axis); }
+      int get_naxes() const { return _controller->get_naxes(_name); }
+      int get_addr() const { return _controller->get_addr(_name); }
+      int get_port() const { return _controller->get_port(_name); }
+      std::string get_host() const { return _controller->get_host(_name); }
+
+      long open() { return _controller->open(_name); }
+      long close() { return _controller->close(_name); }
+      long stop() { return _controller->stop(_name); }
+      long home(std::string* retstring=nullptr) { return _controller->home(_name, retstring); }
+      bool is_home() { return _controller->is_home(_name); }
+      bool is_connected() { return _controller->is_connected(_name); }
+      long enable_motion(bool shouldenable) { return _controller->enable_motion(_name, shouldenable); }
+      long enable_motion() { return _controller->enable_motion(_name, true); }
+
+      long get_pos(int axisnum, float &position) {
+        return _controller->get_pos(_name, axisnum, position); }
+      long get_pos(int axisnum, float &position, std::string &posname) {
+        return _controller->get_pos(_name, axisnum, position, &posname); }
+      long get_pos(int axisnum, int addr, float &position, std::string &posname) {
+        return _controller->get_pos(_name, axisnum, position, &posname, addr); }
+
+      long moveto(int axisnum, const std::string &posstr, std::string &retstring) {
+        return _controller->moveto(_name, axisnum, posstr, retstring); }
+
+      long send_command(const std::string &cmd, std::string* retstring=nullptr) {
+        return _controller->send_command(_name, cmd, retstring); }
+
+      const std::string &name() const { return _name; }
+      ControllerInterface* controller() { return _controller; }
+  };
+  /***** MotionController::Name ***********************************************/
+
+
   /***** MotionController::Interface ******************************************/
   /**
-   * @class  Interface
-   * @brief  MotionController interface class
+   * @brief   MotionController interface class
+   * @details This is the shared implementation layer that inherits the
+   *          ControllerInterface base class and implements the virtual
+   *          functions that are common, shared by all vendors.
    *
    */
   template <typename ControllerType>
-  class Interface {
+  class Interface : public ControllerInterface {
     protected:
       bool is_initialized;
       std::string name;        ///< a name for info purposes
@@ -154,23 +213,43 @@ namespace MotionController {
 
     public:
 
-      // every controller must implement these functions
+      // these must be implemented by vendor Interface<T> specializations
       //
       virtual void test() = 0;
 
-      // these have common implementations
-      //
-      bool get_initialized() { return this->is_initialized; };
-      std::map<std::string, ControllerInfo<ControllerType>> get_motormap() const { return motormap; }
-      inline void clear_motormap() { motormap.clear(); }
+      // these functions override the base class
 
+      // these have defaults, otherwise can be implemented by the vendor
+      //
+      int get_addr(const std::string &name) const override;
+      long enable_motion(const std::string &name, bool shouldenable) override { return NO_ERROR; }
+
+      // these are implemented here
+      //
+      const AxisInfo* get_axis(const std::string &name, int axis) const;
+      const PosInfo* get_posmap(const std::string &name, const std::string &posname) const;
+      int get_naxes(const std::string &name) const;
+      std::string get_host(const std::string &name) const;
+      int get_port(const std::string &name) const;
       long open();
       long close();
-      long close(const std::string &name);
-      bool is_connected(const std::string &motorname);
-      long add_posmap(const PosInfo &posinfo);
-      long add_axis(const AxisInfo &axis);
       long load_controller_config(const std::string &input);
+      inline void clear_motormap() { this->motormap.clear(); }
+
+      long open(const std::string &name) override;
+      long close(const std::string &name) override;
+      long home(const std::string &name, std::string* retstring=nullptr) override;
+      bool is_connected(const std::string &name) override;
+      long add_axis(const std::string &name, const AxisInfo &axis) override;
+      long add_posmap(const std::string &name, const PosInfo &posinfo) override;
+
+      // these have common implementations
+      //
+      long send_command(const std::string &name,
+                        const std::string &cmd,
+                        std::string* retstring=nullptr) override;
+      bool get_initialized() { return this->is_initialized; };
+      std::map<std::string, ControllerInfo<ControllerType>> &get_motormap() const { return motormap; }
 
       Network::TcpSocket &get_socket(const std::string &motorname);
 
