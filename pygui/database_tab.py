@@ -402,6 +402,34 @@ class DatabaseTableWidget(QWidget):
             self.search_input = None
 
         top.addStretch()
+
+        # Bulk operations buttons (right side)
+        top.addSpacing(12)
+        self.bulk_edit_button = QPushButton("Bulk Edit...", self)
+        self.bulk_edit_button.setToolTip("Edit column value for multiple selected rows")
+        self.bulk_edit_button.clicked.connect(self._bulk_edit_dialog)
+        top.addWidget(self.bulk_edit_button)
+
+        self.column_vis_button = QPushButton("Columns...", self)
+        self.column_vis_button.setToolTip("Show/hide columns")
+        self.column_vis_button.clicked.connect(self._column_visibility_dialog)
+        top.addWidget(self.column_vis_button)
+
+        self.filter_button = QPushButton("Filter...", self)
+        self.filter_button.setToolTip("Advanced filtering")
+        self.filter_button.clicked.connect(self._advanced_filter_dialog)
+        top.addWidget(self.filter_button)
+
+        self.export_csv_button = QPushButton("Export CSV...", self)
+        self.export_csv_button.setToolTip("Export table to CSV file")
+        self.export_csv_button.clicked.connect(self._export_csv)
+        top.addWidget(self.export_csv_button)
+
+        self.import_csv_button = QPushButton("Import CSV...", self)
+        self.import_csv_button.setToolTip("Import data from CSV file")
+        self.import_csv_button.clicked.connect(self._import_csv)
+        top.addWidget(self.import_csv_button)
+
         layout.addLayout(top)
 
         # Table widget
@@ -805,6 +833,12 @@ class DatabaseTableWidget(QWidget):
 
             edit_action = menu.addAction("Edit...")
             edit_action.triggered.connect(lambda: self._edit_row_dialog(row))
+
+            # ETC operation
+            menu.addSeparator()
+            etc_action = menu.addAction("Calculate Exposure Time (ETC)...")
+            etc_action.setToolTip("Calculate exposure time using ETC for selected target(s)")
+            etc_action.triggered.connect(lambda: self._launch_etc_dialog())
 
             # Grouping operations (if grouping enabled)
             if self._grouping_enabled and COORDINATE_UTILS_AVAILABLE:
@@ -1303,6 +1337,523 @@ class DatabaseTableWidget(QWidget):
         if obs_id in self._manual_ungroup_obs_ids:
             self._manual_ungroup_obs_ids.remove(obs_id)
             self.refresh()
+
+    def _launch_etc_dialog(self) -> None:
+        """Launch ETC dialog for selected target(s)."""
+        try:
+            from etc_popup import EtcPopup
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "ETC Not Available",
+                "ETC dialog is not available."
+            )
+            return
+
+        # Get selected rows
+        selected_rows = self.table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select one or more targets to calculate exposure time."
+            )
+            return
+
+        # Get observation IDs
+        obs_id_col = self._column_index.get("OBSERVATION_ID")
+        if obs_id_col is None:
+            QMessageBox.warning(self, "Error", "OBSERVATION_ID column not found")
+            return
+
+        observation_ids = []
+        for index in selected_rows:
+            row = index.row()
+            item = self.table.item(row, obs_id_col)
+            if item:
+                observation_ids.append(item.text())
+
+        if not observation_ids:
+            return
+
+        # Get initial values from first selected row (for pre-filling form)
+        first_row = selected_rows[0].row()
+        initial_values = self._current_row_values(first_row)
+
+        # Get logic service from parent
+        logic_service = None
+        if hasattr(self._parent_window, 'logic_service'):
+            logic_service = self._parent_window.logic_service
+
+        # Launch ETC dialog
+        dialog = EtcPopup(
+            parent=self,
+            logic_service=logic_service,
+            initial_values=initial_values,
+            observation_ids=observation_ids
+        )
+
+        # If dialog is accepted, refresh table to show updated values
+        if dialog.exec_() == QDialog.Accepted:
+            self.refresh()
+
+    def _bulk_edit_dialog(self) -> None:
+        """Launch bulk edit dialog for selected rows."""
+        try:
+            from bulk_operations_dialog import BulkEditDialog
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Feature Not Available",
+                "Bulk edit dialog is not available."
+            )
+            return
+
+        # Get selected rows
+        selected_rows = self.table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select one or more rows to bulk edit."
+            )
+            return
+
+        # Ask user which column to edit
+        column_names = list(self._column_index.keys())
+        column_name, ok = QInputDialog.getItem(
+            self,
+            "Select Column",
+            "Choose column to bulk edit:",
+            column_names,
+            0,
+            False
+        )
+
+        if not ok or not column_name:
+            return
+
+        # Get column metadata
+        column_meta = None
+        for col in self._columns:
+            if col.name == column_name:
+                column_meta = col
+                break
+
+        if not column_meta:
+            QMessageBox.warning(self, "Error", f"Column metadata not found for {column_name}")
+            return
+
+        # Launch bulk edit dialog
+        dialog = BulkEditDialog(
+            parent=self,
+            column_name=column_name,
+            column_type=column_meta.type,
+            num_rows=len(selected_rows)
+        )
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        # Apply the bulk edit operation
+        operation = dialog.get_operation()
+        self._apply_bulk_edit(selected_rows, column_name, operation)
+
+    def _apply_bulk_edit(self, selected_rows, column_name: str, operation: Dict[str, Any]) -> None:
+        """Apply bulk edit operation to selected rows."""
+        if not self._db.is_open():
+            QMessageBox.warning(self, "Error", "Database not connected")
+            return
+
+        try:
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._table_name)
+
+            # Get primary key column
+            pk_col = None
+            pk_col_name = None
+            for col in self._columns:
+                if col.is_primary:
+                    pk_col = self._column_index.get(col.name)
+                    pk_col_name = col.name
+                    break
+
+            if pk_col is None:
+                QMessageBox.warning(self, "Error", "Primary key column not found")
+                return
+
+            # Process each selected row
+            updates = 0
+            for index in selected_rows:
+                row = index.row()
+                pk_item = self.table.item(row, pk_col)
+                if not pk_item:
+                    continue
+
+                pk_value = pk_item.text()
+
+                # Determine new value based on operation
+                new_value = None
+
+                if operation["type"] == "set":
+                    new_value = operation["value"]
+                elif operation["type"] == "null":
+                    new_value = None
+                elif operation["type"] == "append":
+                    # Get current value and append
+                    current_item = self.table.item(row, self._column_index[column_name])
+                    if current_item:
+                        current_value = current_item.text()
+                        new_value = current_value + operation["value"]
+                elif operation["type"] == "prepend":
+                    # Get current value and prepend
+                    current_item = self.table.item(row, self._column_index[column_name])
+                    if current_item:
+                        current_value = current_item.text()
+                        new_value = operation["value"] + current_value
+                elif operation["type"] == "add":
+                    # Get current value and add
+                    current_item = self.table.item(row, self._column_index[column_name])
+                    if current_item:
+                        try:
+                            current_value = float(current_item.text())
+                            add_value = float(operation["value"])
+                            new_value = str(current_value + add_value)
+                        except ValueError:
+                            continue
+                elif operation["type"] == "multiply":
+                    # Get current value and multiply
+                    current_item = self.table.item(row, self._column_index[column_name])
+                    if current_item:
+                        try:
+                            current_value = float(current_item.text())
+                            mult_value = float(operation["value"])
+                            new_value = str(current_value * mult_value)
+                        except ValueError:
+                            continue
+
+                # Update database
+                if new_value is None:
+                    table.update().set(column_name, None).where(f"{pk_col_name} = '{pk_value}'").execute()
+                else:
+                    table.update().set(column_name, new_value).where(f"{pk_col_name} = '{pk_value}'").execute()
+
+                updates += 1
+
+            QMessageBox.information(
+                self,
+                "Bulk Edit Complete",
+                f"Successfully updated {updates} rows."
+            )
+
+            # Refresh table
+            self.refresh()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Bulk Edit Failed",
+                f"Error applying bulk edit:\n{e}"
+            )
+
+    def _column_visibility_dialog(self) -> None:
+        """Launch column visibility dialog."""
+        try:
+            from bulk_operations_dialog import ColumnVisibilityDialog
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Feature Not Available",
+                "Column visibility dialog is not available."
+            )
+            return
+
+        # Get current visible columns (all columns are visible by default)
+        visible_columns = set(self._column_index.keys())
+
+        # Launch dialog
+        dialog = ColumnVisibilityDialog(
+            parent=self,
+            columns=list(self._column_index.keys()),
+            visible_columns=visible_columns
+        )
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        # Apply column visibility changes
+        new_visible = dialog.get_visible_columns()
+
+        for col_name, col_index in self._column_index.items():
+            if col_name in new_visible:
+                self.table.showColumn(col_index)
+            else:
+                self.table.hideColumn(col_index)
+
+    def _advanced_filter_dialog(self) -> None:
+        """Launch advanced filter dialog."""
+        try:
+            from bulk_operations_dialog import AdvancedFilterDialog
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Feature Not Available",
+                "Advanced filter dialog is not available."
+            )
+            return
+
+        # Launch dialog
+        dialog = AdvancedFilterDialog(
+            parent=self,
+            columns=list(self._column_index.keys())
+        )
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        filters = dialog.get_filters()
+
+        if not filters:
+            # Clear filters - just refresh to show all rows
+            self.refresh()
+            return
+
+        # Apply filters by hiding rows that don't match
+        self._apply_filters(filters)
+
+    def _apply_filters(self, filters: List[Dict[str, Any]]) -> None:
+        """Apply filter conditions to table rows."""
+        # Show all rows first
+        for row in range(self.table.rowCount()):
+            self.table.showRow(row)
+
+        # Apply each filter (AND logic - all must match)
+        for row in range(self.table.rowCount()):
+            matches = True
+
+            for f in filters:
+                col_index = self._column_index.get(f["column"])
+                if col_index is None:
+                    continue
+
+                item = self.table.item(row, col_index)
+                cell_value = item.text() if item else ""
+
+                # Check filter condition
+                operator = f["operator"]
+                filter_value = f["value"]
+
+                if operator == "equals":
+                    if cell_value != filter_value:
+                        matches = False
+                        break
+                elif operator == "not equals":
+                    if cell_value == filter_value:
+                        matches = False
+                        break
+                elif operator == "contains":
+                    if filter_value.lower() not in cell_value.lower():
+                        matches = False
+                        break
+                elif operator == "starts with":
+                    if not cell_value.lower().startswith(filter_value.lower()):
+                        matches = False
+                        break
+                elif operator == "ends with":
+                    if not cell_value.lower().endswith(filter_value.lower()):
+                        matches = False
+                        break
+                elif operator == "greater than":
+                    try:
+                        if float(cell_value) <= float(filter_value):
+                            matches = False
+                            break
+                    except ValueError:
+                        matches = False
+                        break
+                elif operator == "less than":
+                    try:
+                        if float(cell_value) >= float(filter_value):
+                            matches = False
+                            break
+                    except ValueError:
+                        matches = False
+                        break
+                elif operator == "is NULL":
+                    if cell_value.strip() != "":
+                        matches = False
+                        break
+                elif operator == "is not NULL":
+                    if cell_value.strip() == "":
+                        matches = False
+                        break
+
+            # Hide row if it doesn't match all filters
+            if not matches:
+                self.table.hideRow(row)
+
+    def _export_csv(self) -> None:
+        """Export table data to CSV file."""
+        try:
+            from bulk_operations_dialog import export_to_csv
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Feature Not Available",
+                "CSV export is not available."
+            )
+            return
+
+        # Get file path from user
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export to CSV",
+            f"{self._table_name}.csv",
+            "CSV Files (*.csv);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        # Collect column names
+        columns = list(self._column_index.keys())
+
+        # Collect visible rows (respecting filters)
+        rows = []
+        for row in range(self.table.rowCount()):
+            if self.table.isRowHidden(row):
+                continue
+
+            row_data = []
+            for col_idx in range(self.table.columnCount()):
+                item = self.table.item(row, col_idx)
+                row_data.append(item.text() if item else "")
+
+            rows.append(row_data)
+
+        # Export
+        success = export_to_csv(file_path, columns, rows)
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Export Successful",
+                f"Exported {len(rows)} rows to:\n{file_path}"
+            )
+        else:
+            QMessageBox.critical(
+                self,
+                "Export Failed",
+                "Failed to export data to CSV."
+            )
+
+    def _import_csv(self) -> None:
+        """Import data from CSV file."""
+        try:
+            from bulk_operations_dialog import import_from_csv
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Feature Not Available",
+                "CSV import is not available."
+            )
+            return
+
+        # Get file path from user
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import from CSV",
+            "",
+            "CSV Files (*.csv);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        # Import data
+        result = import_from_csv(file_path)
+
+        if not result:
+            QMessageBox.critical(
+                self,
+                "Import Failed",
+                "Failed to import data from CSV."
+            )
+            return
+
+        csv_columns, csv_rows = result
+
+        # Confirm import
+        reply = QMessageBox.question(
+            self,
+            "Confirm Import",
+            f"Import {len(csv_rows)} rows with {len(csv_columns)} columns?\n\n"
+            f"Columns: {', '.join(csv_columns[:5])}{'...' if len(csv_columns) > 5 else ''}\n\n"
+            f"This will INSERT new rows into the database.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # Perform import
+        self._perform_csv_import(csv_columns, csv_rows)
+
+    def _perform_csv_import(self, csv_columns: List[str], csv_rows: List[List[Any]]) -> None:
+        """Perform CSV import into database."""
+        if not self._db.is_open():
+            QMessageBox.warning(self, "Error", "Database not connected")
+            return
+
+        try:
+            schema = self._db.get_schema(self._config.schema)
+            table = schema.get_table(self._table_name)
+
+            # Map CSV columns to database columns
+            db_columns = {col.name for col in self._columns}
+            valid_columns = [col for col in csv_columns if col in db_columns]
+
+            if not valid_columns:
+                QMessageBox.warning(
+                    self,
+                    "Import Failed",
+                    "No matching columns found between CSV and database table."
+                )
+                return
+
+            # Insert rows
+            inserted = 0
+            for row_data in csv_rows:
+                # Build insert values dict
+                values = {}
+                for i, col_name in enumerate(csv_columns):
+                    if col_name in valid_columns and i < len(row_data):
+                        value = row_data[i]
+                        # Convert empty strings to None for nullable columns
+                        if value == "":
+                            value = None
+                        values[col_name] = value
+
+                if values:
+                    table.insert(valid_columns).values([values[col] for col in valid_columns]).execute()
+                    inserted += 1
+
+            QMessageBox.information(
+                self,
+                "Import Successful",
+                f"Successfully imported {inserted} rows."
+            )
+
+            # Refresh table
+            self.refresh()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Import Failed",
+                f"Error importing data:\n{e}"
+            )
 
 
 class DatabaseTab(QWidget):

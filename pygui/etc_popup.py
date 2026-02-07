@@ -1,13 +1,35 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpacerItem, QSizePolicy, QFrame
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpacerItem, QSizePolicy, QFrame, QMessageBox
 from PyQt5.QtCore import Qt
 import subprocess
 import re
+from typing import Dict, Any, List, Optional
 
 class EtcPopup(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, logic_service=None, initial_values: Optional[Dict[str, Any]] = None,
+                 observation_ids: Optional[List[str]] = None):
+        """
+        Initialize ETC dialog.
+
+        Args:
+            parent: Parent widget
+            logic_service: Logic service for database updates
+            initial_values: Dictionary of initial field values to pre-fill
+            observation_ids: List of observation IDs to update (for bulk operations)
+        """
         super().__init__(parent)
-        
-        self.setWindowTitle("ETC")
+
+        self.logic_service = logic_service
+        self.observation_ids = observation_ids or []
+        self.initial_values = initial_values or {}
+
+        # Set window title based on mode
+        if len(self.observation_ids) > 1:
+            self.setWindowTitle(f"ETC - Calculate for {len(self.observation_ids)} targets")
+        elif len(self.observation_ids) == 1:
+            self.setWindowTitle("ETC - Calculate Exposure Time")
+        else:
+            self.setWindowTitle("ETC")
+
         self.setFixedSize(600, 600)  # Increased width for better alignment
 
         # Main layout for the dialog
@@ -19,6 +41,10 @@ class EtcPopup(QDialog):
         self.init_widgets()
         self.init_layout()
         self.setLayout(self.main_layout)
+
+        # Populate initial values if provided
+        if self.initial_values:
+            self.set_values(self.initial_values)
 
     def init_widgets(self):
         """Initialize all the widgets needed for the form."""
@@ -50,6 +76,67 @@ class EtcPopup(QDialog):
         self.run_button = QPushButton("Run ETC")
         self.save_button = QPushButton("Save")
         self.save_button.setEnabled(False)  # Initially disable the Save button
+
+    def set_values(self, values: Dict[str, Any]):
+        """
+        Populate form fields from database values.
+
+        Expected keys:
+        - MAGNITUDE: Target magnitude
+        - CHANNEL: Filter (U, G, R, I)
+        - WRANGE_LOW: Wavelength range start
+        - WRANGE_HIGH: Wavelength range end
+        - AIRMASS_MAX: Maximum airmass
+        - SEEING: Seeing value
+        - SKY_MAG: Sky magnitude
+        - SNR: Signal-to-noise ratio
+        - SLITWIDTH: Slit width
+        """
+        # Set magnitude
+        if "MAGNITUDE" in values and values["MAGNITUDE"]:
+            self.magnitude_input.setText(str(values["MAGNITUDE"]))
+
+        # Set filter/channel
+        if "CHANNEL" in values and values["CHANNEL"]:
+            channel = str(values["CHANNEL"]).upper()
+            index = self.filter_dropdown.findText(channel)
+            if index >= 0:
+                self.filter_dropdown.setCurrentIndex(index)
+
+        # Set wavelength range
+        if "WRANGE_LOW" in values and values["WRANGE_LOW"]:
+            self.range_input_start.setText(str(values["WRANGE_LOW"]))
+        if "WRANGE_HIGH" in values and values["WRANGE_HIGH"]:
+            self.range_input_end.setText(str(values["WRANGE_HIGH"]))
+
+        # Set airmass
+        if "AIRMASS_MAX" in values and values["AIRMASS_MAX"]:
+            self.airmass_input.setText(str(values["AIRMASS_MAX"]))
+
+        # Set seeing
+        if "SEEING" in values and values["SEEING"]:
+            self.seeing_input.setText(str(values["SEEING"]))
+
+        # Set sky mag
+        if "SKY_MAG" in values and values["SKY_MAG"]:
+            self.sky_mag_input.setText(str(values["SKY_MAG"]))
+
+        # Set SNR (default to 10 if not provided)
+        if "SNR" in values and values["SNR"]:
+            self.snr_input.setText(str(values["SNR"]))
+        elif not self.snr_input.text():
+            self.snr_input.setText("10")
+
+        # Set slit width
+        if "SLITWIDTH" in values and values["SLITWIDTH"]:
+            self.slit_width_input.setText(str(values["SLITWIDTH"]))
+
+        # Set slit option (default to SET if not provided)
+        if "SLIT_MODE" in values and values["SLIT_MODE"]:
+            mode = str(values["SLIT_MODE"]).upper()
+            index = self.slit_dropdown.findText(mode)
+            if index >= 0:
+                self.slit_dropdown.setCurrentIndex(index)
 
     def init_layout(self):
         """Add widgets to the layout."""
@@ -331,10 +418,56 @@ class EtcPopup(QDialog):
         self.save_button.setEnabled(True)
 
     def save_etc(self):
+        """Save ETC results to database for all selected observation IDs."""
+        if not self.logic_service:
+            QMessageBox.warning(
+                self,
+                "No Logic Service",
+                "Cannot save: Logic service not available."
+            )
+            return
+
         exptime = self.exptime_input.text()
         resolution = self.resolution_input.text()
-        if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exptime)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exptime)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMres", resolution)
+
+        if not exptime or not resolution:
+            QMessageBox.warning(
+                self,
+                "Missing Results",
+                "Please run ETC calculation first."
+            )
+            return
+
+        if not self.observation_ids:
+            QMessageBox.warning(
+                self,
+                "No Target Selected",
+                "No observation IDs to update."
+            )
+            return
+
+        try:
+            # Update all selected observation IDs
+            for obs_id in self.observation_ids:
+                self.logic_service.send_update_to_db(obs_id, "OTMexpt", exptime)
+                self.logic_service.send_update_to_db(obs_id, "exptime", exptime)
+                self.logic_service.send_update_to_db(obs_id, "OTMres", resolution)
+
+            # Show success message
+            if len(self.observation_ids) > 1:
+                msg = f"Successfully updated {len(self.observation_ids)} targets with:\nEXPTIME={exptime}s\nRESOLUTION={resolution}"
+            else:
+                msg = f"Successfully updated target with:\nEXPTIME={exptime}s\nRESOLUTION={resolution}"
+
+            QMessageBox.information(self, "ETC Results Saved", msg)
             self.save_button.setEnabled(False)
+
+            # Close dialog after successful save
+            self.accept()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Save Failed",
+                f"Error updating database:\n{e}"
+            )
