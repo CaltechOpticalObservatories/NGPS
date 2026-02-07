@@ -122,6 +122,14 @@ except ImportError as e:
     print(f"Warning: Coordinate utilities not available: {e}")
     COORDINATE_UTILS_AVAILABLE = False
 
+# Import timeline canvas
+try:
+    from timeline_canvas import TimelineCanvas
+    TIMELINE_CANVAS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Timeline canvas not available: {e}")
+    TIMELINE_CANVAS_AVAILABLE = False
+
 
 class DbClient:
     """Database client with transaction support."""
@@ -1396,6 +1404,14 @@ class DatabaseTab(QWidget):
             self.tabs.addTab(self.sets_table, "Target Sets")
             self.tabs.addTab(self.targets_table, "Targets")
 
+            # Add Timeline tab if available
+            if TIMELINE_CANVAS_AVAILABLE:
+                self.timeline_canvas = TimelineCanvas(self)
+                self.timeline_canvas.target_selected.connect(self._on_timeline_target_selected)
+                self.tabs.addTab(self.timeline_canvas, "Timeline")
+            else:
+                self.timeline_canvas = None
+
             # Connect signals
             self.sets_table.selection_changed.connect(self._on_set_selected)
 
@@ -1412,6 +1428,16 @@ class DatabaseTab(QWidget):
         set_id = values.get("SET_ID")
         if set_id is not None and set_id != "":
             self.targets_table.set_fixed_filter("SET_ID", set_id)
+
+    def _on_timeline_target_selected(self, obs_id: str) -> None:
+        """Handle target selection from timeline."""
+        # Update timeline canvas
+        if self.timeline_canvas:
+            self.timeline_canvas.set_selected_obs_id(obs_id)
+
+        # TODO: Sync selection with targets table
+        # This would require finding the row with matching OBSERVATION_ID
+        # and selecting it in the targets_table
 
     def _activate_set(self) -> None:
         """Activate selected target set."""
@@ -1600,13 +1626,29 @@ class DatabaseTab(QWidget):
             # Refresh tables
             self.targets_table.refresh()
 
+            # Load timeline visualization
+            if self.timeline_canvas and TIMELINE_CANVAS_AVAILABLE:
+                try:
+                    timeline_data = parse_timeline_json(json_path)
+                    self.timeline_canvas.set_data(timeline_data)
+
+                    # Switch to timeline tab
+                    for i in range(self.tabs.count()):
+                        if self.tabs.widget(i) == self.timeline_canvas:
+                            self.tabs.setCurrentIndex(i)
+                            break
+
+                except Exception as e:
+                    print(f"Warning: Failed to load timeline visualization: {e}")
+
             QMessageBox.information(
                 self,
                 "OTM Complete",
                 f"OTM scheduler completed successfully!\n\n"
                 f"Processed {len(otm_results)} targets.\n"
                 f"Timeline JSON: {json_path}\n\n"
-                f"Results have been imported to the database."
+                f"Results have been imported to the database.\n"
+                f"Timeline visualization is now available in the Timeline tab."
             )
 
         except Exception as e:
