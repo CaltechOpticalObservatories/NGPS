@@ -25,11 +25,11 @@ T_dark=10000
 
 ### Nominal exposure counts. These should be command line or parameter
 ## file inputs, etc.
-N_thar=2
-N_fear=2
+N_thar=3
+N_fear=3
 N_cont=3
 N_etalon=0
-N_dome=5
+N_dome=0
 N_bias=7
 N_dark=0
 
@@ -52,12 +52,12 @@ echo "Current slit width =  $slitwidth arcsec"
 ### This binning stuff below should be replaced 
 
 ### Get spectral binning
-xbin=(`camera bin col`[1])
+xbin=(`camera bin spec`[1])
 
 
 
 ### Get spatial binning
-ybin=(`camera bin row`[1])
+ybin=(`camera bin spat`[1])
 
 
 
@@ -98,23 +98,23 @@ T_etalon=`/usr/bin/python3.9 -c "print(int($T_etalon_nom * $contmultiplier))"`
 #
 
 # close the cover, open the door
-./fake calib set cover=close door=open
+bash calib/fake calib set cover=close door=open
 
 # close the lollipops
 
 for i in $(/usr/bin/seq 1 6);
 do
-  ./fake calib lampmod $i 0 1000
+  sh calib/fake calib lampmod $i 0 1000
   # calib lampmod $i 0 1000
   sleep 0.5
 done
 
 if [ $dolamps -ne 0 ]; then
 # turn on the lamps
-./fake power LAMPTHAR on
-./fake power LAMPFEAR on
-./fake power LAMPREDC on
-./fake turn on dome hilamp here
+bash calib/fake power LAMPTHAR on
+bash calib/fake power LAMPFEAR on
+bash calib/fake power LAMPREDC on
+bash calib/fake turn on dome hilamp here
 fi
 
 ####### THAR
@@ -129,16 +129,16 @@ basename=(`camera basename`[1])
 
 echo "First exposure: $firstex. Basename: $basename"
 
-./fake camera key IMGTYPE=THAR//Calibration. ThAr lamp
-./fake calib lampmod $tharmod 1 1000
-./fake camera exptime $T_thar
-./fake exposen $N_thar
+bash calib/fake camera key IMGTYPE=THAR//Calibration. ThAr lamp
+bash calib/fake calib lampmod $tharmod 1 1000
+bash calib/fake camera exptime $T_thar
+bash calib/fake exposen $N_thar
 
 # turn off the ThAr lamp 
-./fake calib lampmod $tharmod 0 1000
+bash calib/fake calib lampmod $tharmod 0 1000
 
 if [ $dolamps -ne 0 ]; then
-./fake power LAMPTHAR off
+bash calib/fake power LAMPTHAR off
 fi
 fi
 
@@ -153,17 +153,17 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $fistex. Basename: $basename"
 
-./fake camera key IMGTYPE=FEAR//Calibration. FeAr lamp
-./fake calib lampmod $fearmod 1 1000
+bash calib/fake camera key IMGTYPE=FEAR//Calibration. FeAr lamp
+bash calib/fake calib lampmod $fearmod 1 1000
 
-./fake camera exptime $T_fear
-./fake exposen $N_fear
+bash calib/fake camera exptime $T_fear
+bash calib/fake exposen $N_fear
 
 # turn off the FeAr lamp 
-./fake calib lampmod $fearmod 0 1000
+bash calib/fake calib lampmod $fearmod 0 1000
 
 if [ $dolamps -ne 0 ]; then
-./fake power LAMPFEAR off
+bash calib/fake power LAMPFEAR off
 fi
 fi
 
@@ -181,14 +181,14 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $firstex. Basename: $basename"
 
-./fake camera key IMGTYPE=CONT//Calibration. Internal Continuum
-./fake calib lampmod $redccont 1 1000
+bash calib/fake camera key IMGTYPE=CONT//Calibration. Internal Continuum
+bash calib/fake calib lampmod $redccont 1 1000
 
-./fake camera exptime $T_cont
-./fake exposen $N_cont
+bash calib/fake camera exptime $T_cont
+bash calib/fake exposen $N_cont
 
 # close the cont lollipop
-./fake calib lampmod $redccont 0 1000
+bash calib/fake calib lampmod $redccont 0 1000
 fi
 
 
@@ -203,19 +203,19 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $firstex. Basename: $basename"
 
-./fake camera key IMGTYPE=ETALON//Calibration. Internal Etalon
-./fake calib lampmod $redcetalon 1 1000
+bash calib/fake camera key IMGTYPE=ETALON//Calibration. Internal Etalon
+bash calib/fake calib lampmod $redcetalon 1 1000
 
-./fake camera exptime $T_etalon
-./fake exposen $N_etalon
+bash calib/fake camera exptime $T_etalon
+bash calib/fake exposen $N_etalon
 
 # close the cont lollipop
-./fake calib lampmod $redcetalon 0 1000
+bash calib/fake calib lampmod $redcetalon 0 1000
 fi
 
 ### shut down the internal continuum lamp after etalons
 if [ $dolamps -ne 0 ]; then
-./fake power LAMPREDC off
+bash calib/fake power LAMPREDC off
 fi
 
 ####### Dome flats!!!!
@@ -231,20 +231,20 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $firstex. Basename: $basename"
 
-./fake camera key IMGTYPE=DOMEFLAT//Calibration. Dome Flat
-./fake calib set door=close cover=open
+bash calib/fake camera key IMGTYPE=DOMEFLAT//Calibration. Dome Flat
+bash calib/fake calib set door=close cover=open
 
-./fake camera exptime $T_dome
-./fake exposen $N_dome
+bash calib/fake camera exptime $T_dome
+bash calib/fake exposen $N_dome
 
 
 # close cover after domes here, for safety.
-./fake calib cover=close
+bash calib/fake calib cover=close
 fi
 
 ### shut down the dome lamp, if required.
 if [ $dolamps -ne 0 ]; then
-./fake Turn off dome hilamp here.
+bash calib/fake Turn off dome hilamp here.
 fi
 
 #### Done with illuminated testing
@@ -260,13 +260,13 @@ firstex=(`camera imnum`[1])
 basename=(`camera basename`[1])
 echo "First exposure: $fistex. Basename: $basename"
 
-./fake camera key IMGTYPE=BIAS//Calibration. Dome Flat
-./fake calib set cover=close door=close
-./fake camera shutter disable
+bash calib/fake camera key IMGTYPE=BIAS//Calibration. Bias
+bash calib/fake calib set cover=close door=close
+bash calib/fake camera shutter disable
 
 
-./fake camera exptime 0
-./fake exposen $N_bias
+bash calib/fake camera exptime 0
+bash calib/fake exposen $N_bias
 fi
 
 
@@ -282,20 +282,20 @@ echo "First exposure: $firstex. Basename: $basename"
 
 
 
-./fake camera key IMGTYPE=DARK//Calibration. Dome Flat
-./fake calib set cover=close door=close
-./fake camera shutter disable
-./fake camera exptime $T_dark
-./fake exposen $N_dark
+bash calib/fake camera key IMGTYPE=DARK//Calibration. Dome Flat
+bash calib/fake calib set cover=close door=close
+bash calib/fake camera shutter disable
+bash calib/fake camera exptime $T_dark
+bash calib/fake exposen $N_dark
 fi
 
 
 echo
 echo "--- WRAP UP ---"
 
-./fake camera shutter enable
-./fake camera key IMGTYPE=SCI//Science
-./fake camera exptime $origexptime
+bash calib/fake camera shutter enable
+bash calib/fake camera key IMGTYPE=SCI//Science
+bash calib/fake camera exptime $origexptime
 
 
 echo "Done with cal set at `date`"

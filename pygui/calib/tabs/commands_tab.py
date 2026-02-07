@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
-from tabs.power_tab import PowerTab
-from tabs.calib_tab import CalibTab  
-from tabs.focus_cmd_tab import FocusCmdTab
+from calib.tabs.power_tab import PowerTab
+from calib.tabs.calib_tab import CalibTab  
+from calib.tabs.focus_cmd_tab import FocusCmdTab
 
 class CommandsTab(QWidget):
     def __init__(self):
