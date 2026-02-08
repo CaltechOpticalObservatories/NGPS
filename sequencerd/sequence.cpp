@@ -725,8 +725,11 @@ namespace Sequencer {
         else {
           // Check if target coordinates match the last target (same logic as in move_to_target)
           // If so, skip acquisition for repeat target
+          // Only skip if we have valid last coordinates (not empty)
           //
-          bool is_repeat_target = ( this->target.ra_hms == this->last_ra_hms &&
+          bool is_repeat_target = ( !this->last_ra_hms.empty() &&
+                                    !this->last_dec_dms.empty() &&
+                                    this->target.ra_hms == this->last_ra_hms &&
                                     this->target.dec_dms == this->last_dec_dms );
 
           if ( is_repeat_target ) {
@@ -993,8 +996,10 @@ namespace Sequencer {
         break;
       case Sequencer::VSM_ACQUIRE:
         // uses virtual-mode width and offset for acquire,
-        // but only for new targets
-        if ( this->target.ra_hms == this->last_ra_hms &&
+        // but only for new targets (skip if repeat target with valid last coords)
+        if ( !this->last_ra_hms.empty() &&
+             !this->last_dec_dms.empty() &&
+             this->target.ra_hms == this->last_ra_hms &&
              this->target.dec_dms == this->last_dec_dms ) {
           return NO_ERROR;
         }
