@@ -156,27 +156,14 @@ class LayoutService:
             # Create the database tab widget
             self.database_tab_widget = DatabaseTab(self.parent, self.parent.connection)
 
-            # Add to the main center column (database_tab_container) instead of right side panel
+            # Add to the main center column container
             layout = self.database_tab_container.layout()
             if layout:
-                # Clear existing widgets
-                while layout.count():
-                    item = layout.takeAt(0)
-                    if item.widget():
-                        item.widget().deleteLater()
-
-                # Add new database tab widget
                 layout.addWidget(self.database_tab_widget)
 
-            # Hide the legacy target list display and related buttons
-            if self.target_list_display:
-                self.target_list_display.setVisible(False)
-            if hasattr(self, 'load_target_button'):
-                self.load_target_button.setVisible(False)
-            if hasattr(self, 'add_row_button'):
-                self.add_row_button.setVisible(False)
-            if hasattr(self, 'column_toggle_button'):
-                self.column_toggle_button.setVisible(False)
+            # Show the database tab, hide the login prompt
+            self.database_tab_container.setVisible(True)
+            self.load_target_button.setVisible(False)
 
         except Exception as exc:
             print(f"Failed to initialize database tab: {exc}")
@@ -607,67 +594,11 @@ class LayoutService:
 
     def create_target_list_group(self):
         target_list_group = QGroupBox()
-        bottom_section_layout = QVBoxLayout()
-        bottom_section_layout.setSpacing(5)
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(2, 2, 2, 2)
 
-        # Create a horizontal layout for the label and the (+) button
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(10)  # Set the space between the label and the button
-
-        # Create the label with the "Target List" text
-        target_list_label = QLabel("Target List")
-        header_layout.addWidget(target_list_label)
-
-        # Create the (+) button to add a new row (small button)
-        self.add_row_button = QPushButton("+")
-        self.add_row_button.setToolTip("Add a new row")
-        self.add_row_button.setFixedSize(25, 25)  # Make the button small
-        self.add_row_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                border: none;
-                color: white;
-                font-weight: bold;
-                font-size: 18px;
-                border-radius: 12px;
-            }
-            QPushButton:hover {
-                background-color: #388E3C;
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;
-            }
-            QPushButton:disabled {
-                background-color: #D3D3D3;  /* Grey background when disabled */
-                color: #A9A9A9;  /* Grey text color when disabled */
-            }
-        """)
-        self.add_row_button.clicked.connect(self.add_new_row)  # Connect to function to add a new row
-        self.add_row_button.setEnabled(False)
-        # Add the (+) button next to the label
-        header_layout.addWidget(self.add_row_button)
-
-        self.column_toggle_button = QPushButton("⚙")
-        self.column_toggle_button.setToolTip("Show / hide target list fields")
-        self.column_toggle_button.setFixedSize(22, 22)
-        self.column_toggle_button.setStyleSheet("""
-            QPushButton {
-                border: 1px solid #888;
-                border-radius: 3px;
-                padding: 0px;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #f0f0f0;
-            }
-        """)
-        self.column_toggle_button.clicked.connect(self.show_column_toggle_dialog)
-        header_layout.addWidget(self.column_toggle_button)
-            
-        # Add the header layout to the main layout
-        bottom_section_layout.addLayout(header_layout)
-
-        # Create the button to load the target list
+        # ── Login prompt (shown before DB connection, hidden after) ──
         self.load_target_button = QPushButton("Please login or load your target list to start")
         self.load_target_button.setStyleSheet("""
             QPushButton {
@@ -677,122 +608,33 @@ class LayoutService:
                 font-weight: bold;
                 padding: 10px;
             }
-            QPushButton:hover {
-                background-color: #FF9900;
-            }
-            QPushButton:pressed {
-                background-color: #FF6600;
-            }
+            QPushButton:hover { background-color: #FF9900; }
+            QPushButton:pressed { background-color: #FF6600; }
         """)
+        self.load_target_button.clicked.connect(self.parent.on_login)
+        main_layout.addWidget(self.load_target_button)
 
-        # Center the button by using a QHBoxLayout
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.load_target_button)
-        button_layout.setAlignment(self.load_target_button, Qt.AlignCenter)
-
-        self.load_target_button.clicked.connect(self.parent.on_login)  # Connect to load CSV functionality
-        bottom_section_layout.addWidget(self.load_target_button)
-
-        # Create placeholder for DatabaseTab widget (will be initialized after DB connection)
+        # ── DatabaseTab container (fills entire panel) ──
         self.database_tab_widget = None
         self.database_tab_container = QWidget()
-        database_tab_layout = QVBoxLayout()
-        database_tab_layout.setContentsMargins(0, 0, 0, 0)
-        self.database_tab_container.setLayout(database_tab_layout)
-        bottom_section_layout.addWidget(self.database_tab_container, 1)  # Stretch to fill space
+        db_layout = QVBoxLayout()
+        db_layout.setContentsMargins(0, 0, 0, 0)
+        self.database_tab_container.setLayout(db_layout)
+        self.database_tab_container.setVisible(False)  # Hidden until DB connects
+        main_layout.addWidget(self.database_tab_container, 1)
 
-        # Create the QTableWidget for the target list (legacy - will be hidden when DatabaseTab loads)
+        # ── Legacy target_list_display (kept for backward compatibility, never shown) ──
         self.target_list_display = QTableWidget()
-        self.target_list_display.setStyleSheet("""
-            /* PyQt Table Styling */
-            QTableWidget, QTableView {
-                background-color: #444444;  /* Dark gray background for the table */
-                color: #e0e0e0;  /* Light gray text */
-                font-size: 14pt;
-                font-weight: bold;
-            }
-
-            /* Table Header */
-            QHeaderView {
-                background-color: #555555;  /* Slightly lighter gray for the header */
-                color: #e0e0e0;
-                border: 1px solid #888888;  /* Border around the header */
-                font-weight: bold;
-                font-size: 16pt;
-            }
-
-            QHeaderView::section {
-                padding: 2px;
-                border: 1px solid #888888;
-                background-color: #555555;
-            }
-            QScrollBar:vertical, QScrollBar:horizontal {
-                border: 2px solid grey;
-                background: #F0F0F0;
-                width: 16px;
-                height: 16px;
-            }
-            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-                background: #FFCC40;
-                border-radius: 10px;
-            }
-            QScrollBar::add-line, QScrollBar::sub-line {
-                border: none;
-                background: none;
-            }
-            
-            * Highlighting the focus item with a subtle border */
-            QTableWidget::item:focus, QTableView::item:focus {
-                border: 1px solid #00ccff;  /* Light cyan border for focused item */
-                background-color: #005b99;  /* Slightly darker blue for focused row */
-            }
-            /* Ensure selected row color covers the entire row */
-            QTableWidget::item:selected:active, QTableView::item:selected:active {
-                background-color: #0066cc;  /* Blue background for the entire selected row */
-            }
-        """)
-        self.target_list_display.setRowCount(0)  # Set to 0 initially
-        self.target_list_display.setColumnCount(0)  # Set column count to 0 initially
-
-        # Create a placeholder column for the target data
-        self.target_list_display.setHorizontalHeaderLabels([])  # Initially no headers
-
-        # Remove the bold font from headers
-        header = self.target_list_display.horizontalHeader()
-        header.setFont(QFont("Arial", 9, QFont.Normal))  # Set font to normal (non-bold)
-
-        # Enable sorting on column headers
-        self.target_list_display.setSortingEnabled(True)
-
-        # Enable horizontal scrolling if the content exceeds the available width
-        self.target_list_display.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.target_list_display.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        # Allow manual resizing of the columns (on the horizontal header)
-        header.setSectionResizeMode(QHeaderView.Interactive)
-
-        # Disable editing of table cells
-        self.target_list_display.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
-        # Set selection mode to select entire rows when a cell is clicked
-        self.target_list_display.setSelectionBehavior(QAbstractItemView.SelectRows)
-
-        # Enable horizontal scrolling by adding the table to a scroll area
-        scroll_area = QScrollArea()
-        scroll_area.setWidget(self.target_list_display)
-        scroll_area.setWidgetResizable(True)  # Ensure that the scroll area resizes with the window
-
-        # Add the scroll area to the layout instead of the table directly
-        bottom_section_layout.addWidget(scroll_area)
-
-        # Initially, hide the table
+        self.target_list_display.setRowCount(0)
+        self.target_list_display.setColumnCount(0)
         self.target_list_display.setVisible(False)
+        # Keep add_row_button and column_toggle_button as no-op attributes for legacy code
+        self.add_row_button = QPushButton()
+        self.add_row_button.setVisible(False)
+        self.column_toggle_button = QPushButton()
+        self.column_toggle_button.setVisible(False)
 
-        # Connect the selectionChanged signal to the update_target_info function in LogicService
-        self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
-
-        target_list_group.setLayout(bottom_section_layout)
-
+        target_list_group.setLayout(main_layout)
         return target_list_group
 
     def show_column_toggle_dialog(self):
