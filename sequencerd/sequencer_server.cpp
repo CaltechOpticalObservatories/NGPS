@@ -422,14 +422,14 @@ namespace Sequencer {
         applied++;
       }
 
-      // ACQ_FINE_TUNE_XTERM
-      if (config.param[entry] == "ACQ_FINE_TUNE_XTERM") {
+      // ACQ_FINE_TUNE_LOG
+      if (config.param[entry] == "ACQ_FINE_TUNE_LOG") {
         try {
           int val = std::stoi( config.arg[entry] );
-          this->sequence.acq_fine_tune_xterm = ( val != 0 );
+          this->sequence.acq_fine_tune_log = ( val != 0 );
         }
         catch (const std::exception &e) {
-          message.str(""); message << "ERROR parsing ACQ_FINE_TUNE_XTERM: " << e.what();
+          message.str(""); message << "ERROR parsing ACQ_FINE_TUNE_LOG: " << e.what();
           this->sequence.async.enqueue_and_log( function, message.str() );
           return ERROR;
         }
