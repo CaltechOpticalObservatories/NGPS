@@ -1859,9 +1859,9 @@ class DatabaseTableWidget(QWidget):
 class DatabaseTab(QWidget):
     """Main database tab widget with target sets and targets."""
 
-    def __init__(self, parent: QWidget, db_connection: Any) -> None:
+    def __init__(self, parent: QWidget, db_connection: Any, main_window: QWidget = None) -> None:
         super().__init__(parent)
-        self._parent_window = parent
+        self._parent_window = main_window or parent
         self._db_connection = db_connection
         self._db = DbClient()
         self._config = None

@@ -153,8 +153,10 @@ class LayoutService:
     def initialize_database_tab(self):
         """Initialize the database tab after DB connection is established."""
         try:
-            # Create the database tab widget
-            self.database_tab_widget = DatabaseTab(self.parent, self.parent.connection)
+            # Create the database tab widget (parented to container, main window ref passed separately)
+            self.database_tab_widget = DatabaseTab(
+                self.database_tab_container, self.parent.connection, main_window=self.parent
+            )
 
             # Add to the main center column container
             layout = self.database_tab_container.layout()
