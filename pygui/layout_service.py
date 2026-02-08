@@ -120,12 +120,13 @@ class LayoutService:
         self.parent.tabs = QTabWidget()
         self.parent.control_tab = QWidget()
         self.parent.status_tab = QWidget()
-        self.parent.database_tab = QWidget()
+        self.parent.database_tab = QWidget()  # Keep for legacy compatibility but don't add to tabs
         self.parent.engineering_tab = QWidget()
 
         # Add the tabs to the QTabWidget
         self.parent.tabs.addTab(self.parent.control_tab, "Control")
-        self.parent.tabs.addTab(self.parent.database_tab, "Target Sets")
+        # DatabaseTab widget is now in the center column, not in right side panel
+        # self.parent.tabs.addTab(self.parent.database_tab, "Target Sets")
         # self.parent.tabs.addTab(self.parent.status_tab, "Status")
 
         # Add the QTabWidget to the third column layout
@@ -155,8 +156,8 @@ class LayoutService:
             # Create the database tab widget
             self.database_tab_widget = DatabaseTab(self.parent, self.parent.connection)
 
-            # Add to the database tab layout
-            layout = self.parent.database_tab.layout()
+            # Add to the main center column (database_tab_container) instead of right side panel
+            layout = self.database_tab_container.layout()
             if layout:
                 # Clear existing widgets
                 while layout.count():
@@ -166,6 +167,16 @@ class LayoutService:
 
                 # Add new database tab widget
                 layout.addWidget(self.database_tab_widget)
+
+            # Hide the legacy target list display and related buttons
+            if self.target_list_display:
+                self.target_list_display.setVisible(False)
+            if hasattr(self, 'load_target_button'):
+                self.load_target_button.setVisible(False)
+            if hasattr(self, 'add_row_button'):
+                self.add_row_button.setVisible(False)
+            if hasattr(self, 'column_toggle_button'):
+                self.column_toggle_button.setVisible(False)
 
         except Exception as exc:
             print(f"Failed to initialize database tab: {exc}")
@@ -682,7 +693,15 @@ class LayoutService:
         self.load_target_button.clicked.connect(self.parent.on_login)  # Connect to load CSV functionality
         bottom_section_layout.addWidget(self.load_target_button)
 
-        # Create the QTableWidget for the target list
+        # Create placeholder for DatabaseTab widget (will be initialized after DB connection)
+        self.database_tab_widget = None
+        self.database_tab_container = QWidget()
+        database_tab_layout = QVBoxLayout()
+        database_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.database_tab_container.setLayout(database_tab_layout)
+        bottom_section_layout.addWidget(self.database_tab_container, 1)  # Stretch to fill space
+
+        # Create the QTableWidget for the target list (legacy - will be hidden when DatabaseTab loads)
         self.target_list_display = QTableWidget()
         self.target_list_display.setStyleSheet("""
             /* PyQt Table Styling */
