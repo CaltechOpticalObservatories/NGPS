@@ -825,30 +825,32 @@ namespace Sequencer {
             }
 
             if ( fine_tune_ok ) {
+              // acqmode 2: wait for user before offset
               if ( this->acq_automatic_mode == 2 ) {
-                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose" ) ) {
+                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose" ) ) {
                   this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
                   return;
                 }
               }
-              else if ( this->acq_automatic_mode == 3 ) {
-                if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
-                  this->async.enqueue_and_log( function, "NOTICE: applying target offset automatically" );
-                  this->offset_active.store(true);
-                  this->publish_progress();  // Publish offset_active=true
-                  error |= this->target_offset();
-                  this->offset_active.store(false);
-                  if ( error != NO_ERROR ) {
-                    this->thread_error_manager.set( THR_ACQUISITION );
-                    this->publish_progress();  // Publish with offset error state
-                    return;
-                  }
-                  if ( this->acq_offset_settle > 0 ) {
-                    this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
-                    std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
-                  }
-                  this->publish_progress();  // Publish offset complete
+
+              // Apply offset for both acqmode 2 and 3
+              if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+                std::string mode_str = (this->acq_automatic_mode == 3 ? "automatically " : "");
+                this->async.enqueue_and_log( function, "NOTICE: applying target offset " + mode_str );
+                this->offset_active.store(true);
+                this->publish_progress();  // Publish offset_active=true
+                error |= this->target_offset();
+                this->offset_active.store(false);
+                if ( error != NO_ERROR ) {
+                  this->thread_error_manager.set( THR_ACQUISITION );
+                  this->publish_progress();  // Publish with offset error state
+                  return;
                 }
+                if ( this->acq_offset_settle > 0 ) {
+                  this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                  std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+                }
+                this->publish_progress();  // Publish offset complete
               }
             }
           }
