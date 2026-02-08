@@ -326,12 +326,18 @@ class SeqProgressGui {
     compute_layout();
 
     bool use_udp = options_.sub_endpoint.empty();
+    std::cerr << "DEBUG: use_udp=" << use_udp << " msgport=" << options_.msgport
+              << " msggroup=" << options_.msggroup << "\n";
     if (use_udp && options_.msgport > 0 && !options_.msggroup.empty() && to_upper_copy(options_.msggroup) != "NONE") {
       udp_fd_ = udp_.Listener();
       if (udp_fd_ < 0) {
         std::cerr << "ERROR starting UDP listener\n";
         return false;
       }
+      std::cerr << "DEBUG: UDP listener started on port " << options_.msgport
+                << " group " << options_.msggroup << " fd=" << udp_fd_ << "\n";
+    } else {
+      std::cerr << "DEBUG: UDP listener NOT started\n";
     }
 
     init_zmq();
