@@ -605,11 +605,16 @@ class SeqProgressGui {
     int label_y = bar_.y + bar_.h + 16;
     for (int i = 0; i < kPhaseCount; ++i) {
       int tx = segments_[i].x + 6;
-      // Add percentage to EXPOSURE label when active
-      if (i == PHASE_EXPOSE && state_.phase_active[PHASE_EXPOSE] && state_.exposure_progress > 0.0) {
+      // Add info to EXPOSURE label when active
+      if (i == PHASE_EXPOSE && state_.phase_active[PHASE_EXPOSE]) {
         char exp_label[64];
         int percent = static_cast<int>(state_.exposure_progress * 100.0);
-        snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d%%", percent);
+        if (state_.nexp > 1) {
+          snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d/%d %d%%",
+                   state_.current_frame, state_.nexp, percent);
+        } else {
+          snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d%%", percent);
+        }
         XDrawString(display_, window_, gc_, tx, label_y, exp_label, std::strlen(exp_label));
       } else {
         XDrawString(display_, window_, gc_, tx, label_y, labels[i], std::strlen(labels[i]));
