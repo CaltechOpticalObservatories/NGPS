@@ -1110,8 +1110,14 @@ class SeqProgressGui {
             int elapsed_ms = total_ms - remaining_ms;
             state_.exposure_elapsed = elapsed_ms / 1000.0;
             state_.exposure_total = total_ms / 1000.0;
-            // Use the percentage directly from camerad (already averaged across cameras)
-            state_.exposure_progress = std::min(1.0, percent / 100.0);
+            // Smooth the percentage (exponential moving average to handle multiple cameras)
+            // Prevents jumps when different cameras report slightly different percentages
+            double new_progress = std::min(1.0, percent / 100.0);
+            if (state_.exposure_progress > 0.0) {
+              state_.exposure_progress = 0.7 * state_.exposure_progress + 0.3 * new_progress;
+            } else {
+              state_.exposure_progress = new_progress;
+            }
             set_phase(PHASE_EXPOSE);
           }
         } catch (...) {
