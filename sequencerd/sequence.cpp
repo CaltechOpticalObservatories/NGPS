@@ -213,6 +213,9 @@ namespace Sequencer {
     jmessage_out["offset_ra"] = this->target.offset_ra;
     jmessage_out["offset_dec"] = this->target.offset_dec;
 
+    // Number of exposures for this target
+    jmessage_out["nexp"] = this->target.nexp;
+
     try {
       this->publisher->publish( jmessage_out, "seq_progress" );
     }
@@ -366,11 +369,30 @@ namespace Sequencer {
 
         // ---------------------------------------------
         // clear READOUT flag on the end-of-frame signal
+        // Parse and publish frame count for seq-progress GUI
         // ---------------------------------------------
         //
         if ( statstr.compare( 0, 10, "FRAMECOUNT" ) == 0 ) {                        // async message tag FRAMECOUNT
           if ( seq.wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
             seq.wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+          }
+          // Parse frame number from "FRAMECOUNT_<dev>:<framenum> rows=X cols=Y"
+          size_t colon_pos = statstr.find(':');
+          if (colon_pos != std::string::npos) {
+            size_t space_pos = statstr.find(' ', colon_pos);
+            try {
+              std::string frame_str = statstr.substr(colon_pos + 1,
+                                                     space_pos == std::string::npos ? std::string::npos : space_pos - colon_pos - 1);
+              int framenum = std::stoi(frame_str);
+              // Publish frame count to seq_progress topic
+              nlohmann::json jmessage;
+              jmessage["source"] = Sequencer::DAEMON_NAME;
+              jmessage["current_frame"] = framenum;
+              jmessage["nexp"] = seq.target.nexp;
+              seq.publisher->publish(jmessage, "seq_progress");
+            } catch (...) {
+              // Ignore parse errors
+            }
           }
         }
 
