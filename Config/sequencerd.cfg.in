@@ -163,7 +163,7 @@ ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the 
 ACQ_AUTOMATIC_MODE=1                 # 1=legacy, 2=semi-auto, 3=auto
 ACQ_FINE_TUNE_CMD=ngps_acq           # command to run after guiding for final fine tune
 ACQ_FINE_TUNE_LOG=1                  # log fine tune output to /tmp/ngps_acq.log (0/1)
-ACQ_OFFSET_SETTLE=0                  # seconds to wait after automatic offset
+ACQ_OFFSET_SETTLE=3                  # seconds to wait after automatic offset
 
 # Calibration Settings
 # CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
