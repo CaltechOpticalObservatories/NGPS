@@ -82,9 +82,9 @@ if (X11_FOUND)
           )
   target_link_libraries(seq_progress_gui PRIVATE
           ${STDCXXFS_LIB}
-          utilities
           logentry
           network
+          utilities
           ${ZMQPP_LIB}
           ${ZMQ_LIB}
           ${X11_LIBRARIES}
