@@ -4771,13 +4771,16 @@ namespace Sequencer {
     else
 
     // ---------------------------------------------------------
-    // clearlasttarget -- clear the last target name, allowing repointing
-    //                    to the same target (otherwise move_to_target won't
-    //                    repoint the telescope if the name is the same)
+    // clearlasttarget -- clear the last target name and coordinates, allowing
+    //                    full re-acquisition of the same target (otherwise
+    //                    move_to_target and acquisition will skip if coords match)
     // ---------------------------------------------------------
     //
     if ( testname == "clearlasttarget" ) {
       this->last_target="";
+      this->last_ra_hms="";
+      this->last_dec_dms="";
+      this->async.enqueue_and_log( function, "cleared last target coordinates" );
       error=NO_ERROR;
     }
     else
